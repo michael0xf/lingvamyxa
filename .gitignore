@@ -54,3 +54,10 @@ compile_commands.json
 *creator.user*
 
 *_qmlcache.qrc
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+*.user
+*.autosave
+.DS_Store
