@@ -1,0 +1,1337 @@
+﻿Lingvamyxa v0.5 — черновик спецификации
+1. Главная идея
+В Lingvamyxa почти всё сводится к одной форме:
+
+frame
+Frame может быть записан компактно:
+
+f(a, b, c)
+или вертикально:
+
+f
+    a
+    b
+    c
+end f
+То же относится к аргументам функций, возвращаемым значениям, структурам, конфигурациям, сообщениям и описаниям операторов.
+
+Формула языка:
+
+assembler executes
+mathematics computes
+frames structure data
+proc/func are called
+levels restrict visibility
+По-русски:
+
+ассемблер исполняет
+математика вычисляет
+frame-структуры описывают данные
+proc/func вызываются
+уровни ограничивают видимость
+2. Уровни
+L1 — CPU / machine code
+L2 — assembler
+L3 — низкоуровневый строгий язык: память, указатели, структуры, proc/func, низкоуровневая многопоточность
+L4 — математический/алгоритмический слой: массивы, вычисления, query-like логика
+L5 — модели, типы, протоколы, контракты, ограничения
+L6 — объекты, сообщения, конфигурации, регистрация операторов
+Синтаксис уровней:
+
+L4:
+    proc main
+        print Hello world
+    end main
+3. Минимальное синтаксическое ядро
+В ядре остаются:
+
+proc
+func
+:
+=
+.
+[]
+()
+end
+L2/L3/L4/L5/L6
+^ & *
+Смысл:
+
+proc       определение процедуры
+func       определение функции
+:          типизация / объявление структурного имени
+=          присваивание / именованный аргумент / значение поля
+.          доступ к полю
+[]         массив / индекс
+()         compact frame / вызов / группировка выражения
+end        закрытие frame или runtime-выход
+^T         указатель на данные типа T
+&T / &x    адрес типа или значения
+*T         ссылка на функцию/thunk, возвращающий T
+-> не нужен.
+
+{} не используются.
+
+type и obj не являются обязательными синтаксическими конструкциями. Их роль заменяется : и frame-структурами.
+
+4. Compact frame и vertical frame
+Компактная форма:
+
+operator(while, callableFrom = L4, implementation(while_func, level = L3))
+Вертикальная форма:
+
+operator
+    while
+    callableFrom = L4
+
+    implementation
+        while_func
+        level = L3
+    end implementation
+end operator
+Они эквивалентны.
+
+Общее правило:
+
+f(a, b, c)
+равно:
+
+f
+    a
+    b
+    c
+end f
+Поэтому end end допустим. Если есть:
+
+end estimateHarvest(...)
+то вертикальная форма может быть:
+
+end
+    estimateHarvest
+    harvest = 12.0
+    redApples = 7.0
+    greenApples = 5.0
+end end
+Это такое же нормальное вложенное закрытие, как )) в компактной форме.
+
+5. Строковая форма вызова
+Строковая форма:
+
+print Hello world
+означает:
+
+print(Hello, world)
+Перевод строки закрывает вызов. Концептуально компилятор может считать это короткой формой:
+
+print
+    Hello
+    world
+end print
+или:
+
+print(Hello, world)
+Но строковая форма не угадывает вложенность.
+
+Поэтому:
+
+print getTypedValue values[i]
+означает:
+
+print(getTypedValue, values[i])
+а не:
+
+print(getTypedValue(values[i]))
+Правильно:
+
+print getTypedValue(values[i])
+или:
+
+print
+    getTypedValue values[i]
+end print
+или:
+
+print
+    getTypedValue
+        values[i]
+    end getTypedValue
+end print
+Запрещённая полувложенность:
+
+print getTypedValue
+    values[i]
+end getTypedValue
+Она запрещена, потому что непонятно, чьи аргументы находятся ниже: print или getTypedValue.
+
+6. Структуры через ()
+Структурный тип:
+
+(harvest: f32, redApples: f32, greenApples: f32)
+Именованный structural alias:
+
+Harvest: (harvest: f32, redApples: f32, greenApples: f32)
+Вертикальная форма:
+
+Harvest:
+    harvest: f32
+    redApples: f32
+    greenApples: f32
+end Harvest
+То есть:
+
+Name: (...)
+и:
+
+Name:
+    ...
+end Name
+— две формы объявления структурного имени через :.
+
+7. Функции
+Функция со структурным результатом:
+
+func estimateHarvest: (harvest: f32, redApples: f32, greenApples: f32)
+    bed: PlantBed
+
+    if bed.crop == Apples
+        end estimateHarvest(bed.area * 1.7, bed.area * 1.7, bed.area * 1.1)
+    end if
+
+    end estimateHarvest(bed.area, 0, 0)
+end estimateHarvest
+Через именованный alias:
+
+Harvest: (harvest: f32, redApples: f32, greenApples: f32)
+
+func estimateHarvest: Harvest
+    bed: PlantBed
+    end estimateHarvest(bed.area, 0, 0)
+end estimateHarvest
+Функция с аргументами:
+
+func toEat(filter: FoodFilter, day: DayOfWeek): Harvest
+    ...
+end toEat
+Сигнатура фактически состоит из двух frame-структур:
+
+input:  (filter: FoodFilter, day: DayOfWeek)
+output: Harvest
+Короткая функция без тела:
+
+func main2x2: int
+end main2x2(2 * 2)
+или строково:
+
+func main2x2: int
+end main2x2 2 * 2
+8. Процедуры
+Процедура:
+
+proc main
+    print Hello world
+end main
+proc открывает определение процедуры, но закрывается имя сущности:
+
+end main
+а не:
+
+end proc
+Потому что main — имя runtime-frame.
+
+9. Runtime end
+end имеет два контекстных применения.
+
+Закрытие определения или frame:
+
+proc main
+    print Hello world
+end main
+Runtime-выход из функции:
+
+end estimateHarvest(bed.area, 0, 0)
+Вертикальный runtime-выход:
+
+end
+    estimateHarvest
+    bed.area
+    0
+    0
+end end
+Именованный runtime-выход:
+
+end
+    estimateHarvest
+    harvest = bed.area
+    redApples = 0
+    greenApples = 0
+end end
+Компактно:
+
+end estimateHarvest(harvest = bed.area, redApples = 0, greenApples = 0)
+10. Позиционные и именованные формы
+Каждый frame имеет:
+
+порядок полей
+имена полей
+Позиционная форма краткая:
+
+toEat(myFilter, Monday)
+Именованная форма явная:
+
+toEat(filter = myFilter, day = Monday)
+Позиционный возврат:
+
+end toEat(120.0, 70.0, 50.0)
+Именованный возврат:
+
+end toEat(harvest = 120.0, redApples = 70.0, greenApples = 50.0)
+Позиционная распаковка:
+
+harvest, redApples, greenApples = toEat(myFilter, Monday)
+означает:
+
+tmp = toEat(myFilter, Monday)
+harvest = tmp[0]
+redApples = tmp[1]
+greenApples = tmp[2]
+Или, если известны имена полей:
+
+harvest = tmp.harvest
+redApples = tmp.redApples
+greenApples = tmp.greenApples
+Но по умолчанию это именно позиционная распаковка по порядку полей.
+
+Порядок полей является частью типа/ABI.
+
+Если нужно безопаснее, используется именованный доступ:
+
+result = toEat(filter = myFilter, day = Monday)
+print result.harvest
+print result.redApples
+print result.greenApples
+11. L5 без отдельного type
+Вместо:
+
+type PlantBed
+    ...
+end PlantBed
+можно писать:
+
+L5:
+PlantBed:
+    id: u32
+    crop: Text
+    area: f64
+    soilWater: f64
+    harvest: f64 = 0.0
+
+    where
+        area > 0.0
+        soilWater >= 0.0
+        soilWater <= 100.0
+    end where
+end PlantBed
+Здесь PlantBed: — объявление структурной модели.
+
+where ... end where — обычный frame/call внутри модели.
+
+Компактный вариант:
+
+PlantBed: (
+    id: u32,
+    crop: Text,
+    area: f64,
+    soilWater: f64,
+    harvest: f64 = 0.0,
+    where(area > 0.0, soilWater >= 0.0, soilWater <= 100.0)
+)
+12. L6 без отдельного obj
+Объект можно описывать как именованный frame:
+
+L6:
+NorthGreenhouse:
+    controller: GreenhouseController
+    config:
+        batchSize = 500
+        reportMode = Daily
+    end config
+end NorthGreenhouse
+Компактно:
+
+NorthGreenhouse: (
+    controller: GreenhouseController,
+    config(batchSize = 500, reportMode = Daily)
+)
+То есть объект — это не специальная синтаксическая коробка, а именованная frame-структура L6.
+
+13. Описание операторов в L6
+Важно: L6-описание while — это не сам цикл.
+
+Правильно:
+
+L6:
+operator
+    while
+    callableFrom = L4
+
+    implementation
+        while_func
+        level = L3
+    end implementation
+end operator
+Компактно:
+
+operator(while, callableFrom = L4, implementation(while_func, level = L3))
+Здесь:
+
+operator ... end operator
+— описание оператора.
+
+while — первый аргумент, имя описываемого оператора.
+
+implementation ... end implementation — вложенное описание реализации.
+
+Настоящий вызов while в L4 выглядит иначе:
+
+L4:
+while (i < beds.len)
+    print beds[i].crop
+    i = i + 1
+end while
+Тут уже открыт frame while, поэтому закрытие:
+
+end while
+14. Массивы
+[] остаются массивами и индексами.
+
+Тип массива:
+
+Array[PlantBed]
+Литерал массива:
+
+[bed1, bed2, bed3]
+Индекс:
+
+beds[i]
+В L3 массив из L4 может быть представлен не как голый указатель, а как структура:
+
+(len: usize, ptr: ^T)
+Если L3 получает голый указатель:
+
+^T
+индексация может быть raw-безопасности.
+
+Если L3 получает массив-frame:
+
+(len: usize, ptr: ^T)
+индексация может проверять границы.
+
+15. Указатели и ссылки на функции
+^T      указатель на данные T
+^void   нетипизированный указатель
+&x      адрес значения x
+*T      ссылка на функцию/thunk, возвращающий T
+Пример:
+
+L4:
+while(condition: *bool, body: Block)
+Здесь condition: *bool — ссылка на функцию/выражение, возвращающее bool.
+
+L3 может иметь более низкоуровневые формы:
+
+L3:
+while(flag: ^bool, body: Block)
+forever(expression: bool, body: Block)
+16. Голые имена
+В L3 язык строгий:
+
+неизвестное имя = ошибка компиляции
+Поэтому:
+
+L3:
+proc main
+    print Hello world
+end main
+ошибка, если Hello и world не объявлены.
+
+В L4 голые слова могут быть типизированными атомами/структурами, если сигнатура процедуры это допускает:
+
+L4:
+proc main
+    print Hello world
+end main
+может означать:
+
+print(Atom("Hello"), Atom("world"))
+или другой стандартный структурный вариант.
+
+17. Code tree
+Код после разбора — обычная L3-структура.
+
+Специальный RawTree не нужен.
+
+Пример структурного описания:
+
+TreeNode:
+    kind: NodeKind
+    level: Level
+    name: Symbol
+    children: Array[^TreeNode]
+    procRef: ^ProcDef
+    funcRef: ^FuncDef
+end TreeNode
+quote, splice, match, emit — обычные proc/func над Tree.
+
+Структуры не выполняются сами.
+
+Указатели на функции не выполняются сами.
+
+Выполнение начинается только через явный вызов:
+
+call procRef
+или через L2-инструкцию.
+
+18. BNF-скелет
+program        ::= { top_item }
+
+top_item       ::= level_block
+                 | definition
+                 | binding
+                 | call_item
+
+level_block    ::= level_name ":" suite
+
+level_name     ::= "L" digit { digit }
+
+suite          ::= newline indent { item } dedent
+
+item           ::= definition
+                 | binding
+                 | assignment
+                 | vertical_call
+                 | line_call
+                 | expr_line
+                 | empty_line
+                 | comment_line
+Определения:
+
+definition     ::= proc_def
+                 | func_def
+
+proc_def       ::= "proc" identifier [ param_frame ] suite "end" identifier
+
+func_def       ::= "func" identifier [ param_frame ] ":" type_expr suite "end" identifier [ return_frame ]
+
+param_frame    ::= "(" [ field_type_list ] ")"
+Структурные объявления через ::
+
+binding        ::= identifier ":" type_expr newline
+                 | identifier ":" suite "end" identifier
+
+type_expr      ::= named_type
+                 | frame_type
+                 | array_type
+                 | pointer_type
+                 | func_ref_type
+
+named_type     ::= identifier
+
+frame_type     ::= "(" [ field_type_list ] ")"
+
+field_type_list ::= field_type { "," field_type }
+
+field_type     ::= identifier ":" type_expr [ "=" expr ]
+
+array_type     ::= identifier "[" type_expr { "," type_expr } "]"
+
+pointer_type   ::= "^" type_expr
+                 | "^void"
+
+func_ref_type  ::= "*" type_expr
+Вызовы:
+
+paren_call     ::= identifier "(" [ arg_list ] ")"
+
+arg_list       ::= arg { "," arg }
+
+arg            ::= named_arg
+                 | expr
+
+named_arg      ::= identifier "=" expr
+
+line_call      ::= identifier [ line_args ] newline
+
+line_args      ::= line_arg { line_separator line_arg }
+
+line_separator ::= ","
+                 | whitespace_boundary
+
+line_arg       ::= named_arg
+                 | expr
+
+vertical_call  ::= identifier [ line_args ] suite "end" identifier
+Условие:
+
+для vertical_call closing identifier must equal callee identifier
+То есть:
+
+print
+    Hello
+end print
+корректно.
+
+А:
+
+print getText
+    args
+end getText
+некорректно.
+
+Присваивание и распаковка:
+
+assignment     ::= lhs "=" expr newline
+
+lhs            ::= identifier
+                 | identifier_list
+                 | field_access
+                 | indexed_access
+
+identifier_list ::= identifier { "," identifier }
+Семантика:
+
+a, b, c = expr
+если expr возвращает frame, распаковывается позиционно по порядку полей.
+
+19. Итоговая таблица
+proc main ... end main
+    определение процедуры
+
+func f: T ... end f
+    определение функции
+
+Name: (a: A, b: B)
+    структурный alias
+
+Name:
+    a: A
+    b: B
+end Name
+    вертикальный структурный alias/model/config
+
+f(a, b)
+    compact call-frame
+
+f
+    a
+    b
+end f
+    vertical call-frame
+
+a, b = expr
+    позиционная распаковка frame
+
+a = expr.field
+    именованный доступ
+
+operator ... end operator
+    L6-описание оператора
+
+while ... end while
+    runtime/control вызов while
+Коротко:
+
+() = compact frame
+newline + indent + end = vertical frame
+: = тип / структурное имя
+= = значение / именованный аргумент
+[] = массив / индекс
+. = поле
+proc/func = executable definitions
+L5 = модели как frame-композиции
+L6 = объекты/сообщения/конфигурации как frame-композиции
+Главный принцип:
+
+Определение закрывается именем определяемой сущности.
+Вызов закрывается именем вызываемой формы.
+Описание оператора закрывается operator, потому что while там только аргумент.
+То есть:
+
+proc main ... end main
+func estimateHarvest ... end estimateHarvest
+Harvest: ... end Harvest
+operator ... end operator
+implementation ... end implementation
+while ... end while
+end ... end end
+
+
+Appendix A — Frames, Expressions and Compiler Receiver Functions
+A.1. Core principle
+Surface syntax in Lingvamyxa does not directly define final semantics.
+
+Surface syntax builds generic frame structures.
+Final meaning is assigned by the compiler/runtime function that receives the frame.
+
+In short:
+
+surface syntax → generic frame → receiver function → typed semantic structure
+Or:
+
+frame meaning is defined by the Lingvamyxa function that consumes it
+This is the central rule that allows the language to remain syntactically small while supporting many high-level abstractions.
+
+A.2. Frames are neutral structures
+Parentheses, vertical blocks and line forms create frames.
+
+Compact frame:
+
+f(a, b, c)
+Vertical frame:
+
+f
+    a
+    b
+    c
+end f
+Line frame:
+
+f a b c
+All three forms can describe the same generic structure:
+
+Frame(
+    callee = f,
+    args = [a, b, c]
+)
+The frame itself is not executed merely by existing.
+It becomes meaningful only when it is consumed by a compiler/runtime receiver function.
+
+A.3. Same shape, different receivers
+The same surface shape may be interpreted differently depending on which Lingvamyxa compiler function receives it.
+
+Example:
+
+(a + b)
+If consumed by the mathematical expression parser:
+
+parseExpression(frame)
+it becomes:
+
+Expression(+, a, b)
+Example:
+
+(a: int, b: int)
+If consumed by the signature/type parser:
+
+parseSignature(frame)
+it becomes:
+
+Signature(args = (a: int, b: int))
+Example:
+
+(a = 1, b = 2)
+If consumed by the value/config parser:
+
+parseNamedValues(frame)
+it becomes:
+
+ValueFrame(a = 1, b = 2)
+Example:
+
+f(a, b)
+If consumed as a call:
+
+compileCallFrame(f, frame)
+it becomes a call to f.
+
+Thus the language does not rely on many unrelated syntactic constructs.
+It relies on generic frames and typed receiver functions.
+
+A.4. Mathematical expressions are structures
+Mathematical expressions are not exceptions to the frame model.
+
+An expression such as:
+
+(a + b) * c
+is parsed into an expression structure:
+
+Expression
+    op = *
+    left:
+        Expression
+            op = +
+            left = a
+            right = b
+        end Expression
+    right = c
+end Expression
+Compactly:
+
+Expression(*, Expression(+, a, b), c)
+The difference from Lisp is not that Lisp is tree-like and Lingvamyxa is not.
+Both are tree-like internally.
+
+The difference is that Lingvamyxa builds expression trees using normal mathematical precedence and grouping rules, rather than requiring prefix notation.
+
+Lisp:        (* (+ a b) c)
+Lingvamyxa:  (a + b) * c
+Internal:    Expression(*, Expression(+, a, b), c)
+So mathematical syntax is simply syntactic sugar for constructing Expression structures.
+
+A.5. Structures are not executed
+A structure in memory is not executed merely because it contains names, operators, function references or code-like data.
+
+For example:
+
+Expression(+, a, b)
+is data.
+
+TreeNode(...)
+is data.
+
+ProcDef(...)
+is data.
+
+A function pointer/reference is also data until explicitly called.
+
+Execution starts only when a Lingvamyxa compiler/runtime function consumes the structure as executable input.
+
+Examples:
+
+evalExpression(expr)
+compileCallFrame(frame)
+call(procRef, args)
+emit(tree)
+This follows the same basic idea as C/Pascal structures: a structure can describe executable things, but the structure itself does not run.
+
+A.6. Operators as receiver registrations
+High-level operators are not necessarily built into the syntax.
+
+An operator may be described in L6 as a registration of a receiver function.
+
+Example:
+
+L6:
+operator
+    while
+    callableFrom = L4
+
+    implementation
+        while_func
+        level = L3
+    end implementation
+end operator
+Compact form:
+
+operator(while, callableFrom = L4, implementation(while_func, level = L3))
+This means:
+
+The name while is visible from L4.
+Frames addressed to while are consumed by while_func.
+while_func is implemented at L3.
+The L6 description itself is not a loop. It is consumed by a registration function, conceptually:
+
+registerOperator(operatorFrame)
+A real runtime/control use of while is a different frame:
+
+L4:
+while (i < beds.len)
+    print beds[i].crop
+    i = i + 1
+end while
+This frame is consumed by the registered receiver:
+
+while_func(conditionFrame, bodyFrame)
+A.7. Why operator ... end operator is correct
+In the L6 description:
+
+operator
+    while
+    callableFrom = L4
+
+    implementation
+        while_func
+        level = L3
+    end implementation
+end operator
+the opened frame is operator, so it closes as:
+
+end operator
+while is only an argument inside the operator-description frame.
+
+But in runtime/control code:
+
+while (i < beds.len)
+    ...
+end while
+the opened frame is while, so it closes as:
+
+end while
+General rule:
+
+A frame closes with the name of the receiver/callee that opened it.
+A.8. Why the syntax is extensible
+A new abstraction does not require a new family of syntax.
+
+It requires a new receiver function and a registration/visibility rule.
+
+Conceptually:
+
+new abstraction =
+    name
+    expected frame shape
+    receiver function
+    visibility level
+    implementation level
+Example:
+
+operator
+    match
+    callableFrom = L4
+
+    implementation
+        match_func
+        level = L3
+    end implementation
+end operator
+After registration, the language can accept:
+
+match packet
+    case Header(type = Ping)
+        handlePing(packet)
+    end case
+
+    case Header(type = Data)
+        handleData(packet)
+    end case
+end match
+The surface syntax still builds frames.
+The registered receiver function defines the meaning.
+
+A.9. Summary
+Lingvamyxa surface syntax is frame construction.
+Compiler/runtime receiver functions assign semantics.
+Mathematical expressions are Expression structures.
+Type signatures are Signature structures.
+Calls are CallFrame structures.
+Configurations are ConfigFrame structures.
+Messages are MessageFrame structures.
+Operator descriptions are registration frames.
+Final compact formula:
+
+syntax builds frames;
+receiver functions give frames meaning;
+structures do not execute themselves.
+
+
+Appendix B — Logical Relations and Search
+B.1. Purpose
+Lingvamyxa supports a relational/logical semantic mode in addition to executable and structural modes.
+
+The three fundamental modes are:
+
+executable mode:
+    proc / func / call / end
+    “perform computation”
+
+structural mode:
+    frame / type / config / message
+    “describe data or configuration”
+
+relational mode:
+    relation / fact / rule / query
+    “find values for which a relation is true”
+Relational mode is inspired by logic programming, but it is not a separate Prolog syntax. It is expressed through ordinary Lingvamyxa frames and receiver functions.
+
+B.2. Core principle
+A logical relation is a named frame whose arguments are interpreted as terms in a logical predicate.
+
+Example:
+
+parent(Astra, NyufNyuf)
+This is structurally a frame:
+
+Frame(
+    callee = parent,
+    args = [Astra, NyufNyuf]
+)
+In executable mode it could mean a call.
+
+In relational mode it means a proposition:
+
+parent(Astra, NyufNyuf) is true
+The semantic mode is determined by the receiver function that consumes the frame.
+
+B.3. Where relational mode lives in the levels
+Recommended placement:
+
+L5:
+    typed relation signatures, term types, contracts
+
+L6:
+    relation registries, knowledge bases, facts, rules, query messages
+
+L4:
+    ordinary code may call query/solve and consume results
+
+L3:
+    implementation of indexing, unification, search, backtracking, caches
+So relational mode is primarily visible as an L6-level knowledge/query system, typed by L5 and implemented below.
+
+B.4. Relation signatures
+A relation may be declared as a typed frame.
+
+L5:
+Parent:
+    parent: Animal
+    child: Animal
+end Parent
+or compactly:
+
+Parent: (parent: Animal, child: Animal)
+A relation registry may then associate a logical name with this frame type:
+
+L6:
+relation
+    parent
+    signature = Parent
+end relation
+Compact form:
+
+relation(parent, signature = Parent)
+Here relation ... end relation is not the relation itself being queried.
+It is a registration frame consumed by a relational receiver, conceptually:
+
+registerRelation(frame)
+B.5. Facts
+A fact asserts that a relation is true for a concrete argument frame.
+
+L6:
+fact
+    parent(Astra, NyufNyuf)
+end fact
+Compact form:
+
+fact(parent(Astra, NyufNyuf))
+Multiple facts:
+
+L6:
+fact
+    parent(Astra, NyufNyuf)
+end fact
+
+fact
+    parent(NyufNyuf, LittleOne)
+end fact
+A fact frame is consumed by a receiver such as:
+
+assertFact(frame)
+The structure:
+
+parent(Astra, NyufNyuf)
+does not execute itself.
+It becomes a logical assertion only because it is passed to fact.
+
+B.6. Unknowns and logic variables
+A query may contain unknowns.
+
+Recommended notation:
+
+?who
+?x
+?y
+Example:
+
+query
+    parent(Astra, ?who)
+end query
+Meaning:
+
+Find all ?who such that parent(Astra, ?who) is true.
+Compact form:
+
+query(parent(Astra, ?who))
+The result is a frame/array of bindings:
+
+[
+    (?who = NyufNyuf)
+]
+If multiple answers exist:
+
+[
+    (?who = NyufNyuf),
+    (?who = LittleOne),
+    (?who = BlueChild)
+]
+Unknowns are not ordinary uninitialized variables.
+They are logical variables interpreted only by relational receivers.
+
+B.7. Rules
+A rule defines a relation in terms of other relations.
+
+Simple rule:
+
+L6:
+rule
+    ancestor(?x, ?y)
+
+    if
+        parent(?x, ?y)
+    end if
+end rule
+Compact form:
+
+rule(ancestor(?x, ?y), if(parent(?x, ?y)))
+Recursive rule:
+
+L6:
+rule
+    ancestor(?x, ?y)
+
+    if
+        parent(?x, ?z)
+        ancestor(?z, ?y)
+    end if
+end rule
+Meaning:
+
+ancestor(x, y) is true if there exists z such that:
+    parent(x, z)
+    ancestor(z, y)
+rule ... end rule is a registration frame.
+It is consumed by a rule receiver, conceptually:
+
+registerRule(frame)
+B.8. Query execution
+A query asks the relational engine to search for bindings.
+
+query
+    ancestor(Astra, ?descendant)
+end query
+Possible result:
+
+[
+    (?descendant = NyufNyuf),
+    (?descendant = LittleOne)
+]
+A query may be called from L4 code:
+
+L4:
+descendants = query(ancestor(Astra, ?who))
+
+for result in descendants
+    print result.?who
+end for
+The exact result representation is a normal Lingvamyxa structure:
+
+QueryResult:
+    bindings: Array[BindingFrame]
+    status: QueryStatus
+    confidence: f32 = 1.0
+end QueryResult
+B.9. Unification
+Relational search is based on unification.
+
+Unification attempts to make two relation frames structurally compatible by assigning unknowns.
+
+Example:
+
+parent(Astra, ?who)
+unifies with fact:
+
+parent(Astra, NyufNyuf)
+producing binding:
+
+?who = NyufNyuf
+It does not unify with:
+
+parent(Other, NyufNyuf)
+unless Other is equal to Astra or can be related by another rule.
+
+Unification respects:
+
+relation name
+argument count
+argument order
+argument names, when named form is used
+types declared in L5
+where/contracts, if attached
+B.10. Positional and named relation arguments
+Since all Lingvamyxa frames have both order and names, relation calls may be positional or named.
+
+Positional:
+
+parent(Astra, NyufNyuf)
+Named:
+
+parent(parent = Astra, child = NyufNyuf)
+Both refer to the same relation frame if the signature is:
+
+Parent: (parent: Animal, child: Animal)
+Queries also support both forms:
+
+query(parent(Astra, ?who))
+or:
+
+query(parent(parent = Astra, child = ?who))
+Named form is preferred for public knowledge bases, complex relations or relations with many arguments.
+Positional form is valid and concise.
+
+B.11. Search control
+The relational engine may support explicit search policies.
+
+Example:
+
+query
+    ancestor(Astra, ?who)
+
+    search
+        limit = 100
+        order = depthFirst
+        timeout = 50 ms
+    end search
+end query
+Compact form:
+
+query(ancestor(Astra, ?who), search(limit = 100, order = depthFirst, timeout = 50 ms))
+Search policy is a normal frame consumed by the query receiver.
+
+Possible fields:
+
+limit       maximum number of answers
+timeout     maximum search time
+order       depthFirst / breadthFirst / indexed / costBased
+unique      remove duplicate bindings
+confidence  minimum confidence for uncertain knowledge
+B.12. Typed relations
+L5 relation signatures constrain valid facts, rules and queries.
+
+Example:
+
+L5:
+Route:
+    from: Station
+    to: Station
+    distance: f32
+
+    where
+        distance >= 0
+    end where
+end Route
+
+L6:
+relation
+    route
+    signature = Route
+end relation
+Valid fact:
+
+fact(route(NorthStation, RiverStation, 12.5))
+Invalid fact:
+
+fact(route(NorthStation, RiverStation, -4.0))
+because it violates:
+
+distance >= 0
+Typed unknowns may be explicit:
+
+query(route(NorthStation, ?target: Station, ?distance: f32))
+or inferred from the relation signature.
+
+B.13. Relations and ordinary functions
+A relation is not the same as a function.
+
+Function:
+
+func parentOf(child: Animal): Animal
+returns one value or fails.
+
+Relation:
+
+parent(parent: Animal, child: Animal)
+can be queried in multiple directions:
+
+query(parent(Astra, ?child))
+query(parent(?parent, NyufNyuf))
+query(parent(?parent, ?child))
+This is why relational mode is fundamental: it supports reversible search over structured facts.
+
+B.14. Relations and SQL-like data
+SQL-like queries can be treated as a specialized relational backend.
+
+For example, table rows:
+
+Field:
+    id: u32
+    region: Region
+    crop: Crop
+    area: f64
+end Field
+can expose relations:
+
+field(id, region, crop, area)
+Then:
+
+query
+    field(?id, NorthRegion, Apples, ?area)
+
+    where
+        ?area > 100.0
+    end where
+end query
+The query receiver may compile this to:
+
+SQL
+index lookup
+in-memory relation search
+hybrid search
+depending on available implementation.
+
+B.15. Relations and L6 messages
+L6 objects may receive relational queries as messages.
+
+Example:
+
+send
+    GreenhouseKnowledge
+    query(parent(Astra, ?who))
+end send
+or:
+
+GreenhouseKnowledge.query(parent(Astra, ?who))
+The knowledge base object may answer with a QueryResult frame.
+
+This fits the L6 model:
+
+object/config/message frame + relational receiver
+B.16. Relations are not executed structures
+A relation frame by itself does nothing:
+
+parent(Astra, NyufNyuf)
+It becomes meaningful only when consumed by a relational receiver:
+
+fact(parent(Astra, NyufNyuf))
+query(parent(Astra, ?who))
+rule(ancestor(?x, ?y), if(parent(?x, ?y)))
+This follows the general Lingvamyxa rule:
+
+structures do not execute themselves;
+receiver functions give frames meaning.
+B.17. Summary
+Relational mode adds one fundamental capability:
+
+find bindings that make structured propositions true
+It does not add a separate Prolog syntax.
+
+It uses ordinary Lingvamyxa frames:
+
+relation(...)   register relation
+fact(...)       assert fact
+rule(...)       register logical rule
+query(...)      search for bindings
+Final formula:
+
+relation frames describe possible truths;
+facts assert truths;
+rules derive truths;
+queries search for bindings;
+unification connects them.
