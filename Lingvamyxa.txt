@@ -1,4 +1,4 @@
-﻿Lingvamyxa v0.5 — черновик спецификации
+﻿Lingvamyxa v0.6 — черновик спецификации
 1. Главная идея
 В Lingvamyxa почти всё сводится к одной форме:
 
@@ -30,18 +30,19 @@ frame-структуры описывают данные
 proc/func вызываются
 уровни ограничивают видимость
 2. Уровни
-L1 — CPU / machine code
-L2 — assembler
-L3 — низкоуровневый строгий язык: память, указатели, структуры, proc/func, низкоуровневая многопоточность
-L4 — математический/алгоритмический слой: массивы, вычисления, query-like логика
-L5 — модели, типы, протоколы, контракты, ограничения
-L6 — объекты, сообщения, конфигурации, регистрация операторов
+L0 — CPU / machine code
+L1 — assembler
+L2 — низкоуровневый строгий язык: память, указатели, структуры, proc/func, низкоуровневая многопоточность
+L3 — математический/алгоритмический слой: массивы, вычисления, query-like логика
+L4 — модели, типы, протоколы, контракты, ограничения
+L5 — объекты, сообщения, конфигурации, регистрация операторов
 Синтаксис уровней:
 
-L4:
+L3:
     proc main
         print Hello world
     end main
+
 3. Минимальное синтаксическое ядро
 В ядре остаются:
 
@@ -53,7 +54,7 @@ func
 []
 ()
 end
-L2/L3/L4/L5/L6
+L2/L3/L4/L5
 ^ & *
 Смысл:
 
@@ -77,16 +78,16 @@ type и obj не являются обязательными синтаксич�
 4. Compact frame и vertical frame
 Компактная форма:
 
-operator(while, callableFrom = L4, implementation(while_func, level = L3))
+operator(while, callableFrom = L3, implementation(while_func, level = L2))
 Вертикальная форма:
 
 operator
     while
-    callableFrom = L4
+    callableFrom = L3
 
     implementation
         while_func
-        level = L3
+        level = L2
     end implementation
 end operator
 Они эквивалентны.
@@ -309,7 +310,7 @@ result = toEat(filter = myFilter, day = Monday)
 print result.harvest
 print result.redApples
 print result.greenApples
-11. L5 без отдельного type
+11. L4 без отдельного type
 Вместо:
 
 type PlantBed
@@ -317,7 +318,7 @@ type PlantBed
 end PlantBed
 можно писать:
 
-L5:
+L4:
 PlantBed:
     id: u32
     crop: Text
@@ -345,10 +346,10 @@ PlantBed: (
     harvest: f64 = 0.0,
     where(area > 0.0, soilWater >= 0.0, soilWater <= 100.0)
 )
-12. L6 без отдельного obj
+12. L5 без отдельного obj
 Объект можно описывать как именованный frame:
 
-L6:
+L5:
 NorthGreenhouse:
     controller: GreenhouseController
     config:
@@ -362,26 +363,26 @@ NorthGreenhouse: (
     controller: GreenhouseController,
     config(batchSize = 500, reportMode = Daily)
 )
-То есть объект — это не специальная синтаксическая коробка, а именованная frame-структура L6.
+То есть объект — это не специальная синтаксическая коробка, а именованная frame-структура L5.
 
-13. Описание операторов в L6
-Важно: L6-описание while — это не сам цикл.
+13. Описание операторов в L5
+Важно: L5-описание while — это не сам цикл.
 
 Правильно:
 
-L6:
+L5:
 operator
     while
-    callableFrom = L4
+    callableFrom = L3
 
     implementation
         while_func
-        level = L3
+        level = L2
     end implementation
 end operator
 Компактно:
 
-operator(while, callableFrom = L4, implementation(while_func, level = L3))
+operator(while, callableFrom = L3, implementation(while_func, level = L2))
 Здесь:
 
 operator ... end operator
@@ -391,9 +392,9 @@ while — первый аргумент, имя описываемого опе�
 
 implementation ... end implementation — вложенное описание реализации.
 
-Настоящий вызов while в L4 выглядит иначе:
+Настоящий вызов while в L3 выглядит иначе:
 
-L4:
+L3:
 while (i < beds.len)
     print beds[i].crop
     i = i + 1
@@ -413,15 +414,15 @@ Array[PlantBed]
 Индекс:
 
 beds[i]
-В L3 массив из L4 может быть представлен не как голый указатель, а как структура:
+В L2 массив из L3 может быть представлен не как голый указатель, а как структура:
 
 (len: usize, ptr: ^T)
-Если L3 получает голый указатель:
+Если L2 получает голый указатель:
 
 ^T
 индексация может быть raw-безопасности.
 
-Если L3 получает массив-frame:
+Если L2 получает массив-frame:
 
 (len: usize, ptr: ^T)
 индексация может проверять границы.
@@ -433,30 +434,30 @@ beds[i]
 *T      ссылка на функцию/thunk, возвращающий T
 Пример:
 
-L4:
+L3:
 while(condition: *bool, body: Block)
 Здесь condition: *bool — ссылка на функцию/выражение, возвращающее bool.
 
-L3 может иметь более низкоуровневые формы:
+L2 может иметь более низкоуровневые формы:
 
-L3:
+L2:
 while(flag: ^bool, body: Block)
 forever(expression: bool, body: Block)
 16. Голые имена
-В L3 язык строгий:
+В L2 язык строгий:
 
 неизвестное имя = ошибка компиляции
 Поэтому:
 
-L3:
+L2:
 proc main
     print Hello world
 end main
 ошибка, если Hello и world не объявлены.
 
-В L4 голые слова могут быть типизированными атомами/структурами, если сигнатура процедуры это допускает:
+В L3 голые слова могут быть типизированными атомами/структурами, если сигнатура процедуры это допускает:
 
-L4:
+L3:
 proc main
     print Hello world
 end main
@@ -466,7 +467,7 @@ print(Atom("Hello"), Atom("world"))
 или другой стандартный структурный вариант.
 
 17. Code tree
-Код после разбора — обычная L3-структура.
+Код после разбора — обычная L2-структура.
 
 Специальный RawTree не нужен.
 
@@ -489,7 +490,7 @@ quote, splice, match, emit — обычные proc/func над Tree.
 Выполнение начинается только через явный вызов:
 
 call procRef
-или через L2-инструкцию.
+или через L1-инструкцию.
 
 18. BNF-скелет
 program        ::= { top_item }
@@ -634,7 +635,7 @@ a = expr.field
     именованный доступ
 
 operator ... end operator
-    L6-описание оператора
+    L5-описание оператора
 
 while ... end while
     runtime/control вызов while
@@ -647,8 +648,8 @@ newline + indent + end = vertical frame
 [] = массив / индекс
 . = поле
 proc/func = executable definitions
-L5 = модели как frame-композиции
-L6 = объекты/сообщения/конфигурации как frame-композиции
+L4 = модели как frame-композиции
+L5 = объекты/сообщения/конфигурации как frame-композиции
 Главный принцип:
 
 Определение закрывается именем определяемой сущности.
@@ -806,34 +807,34 @@ This follows the same basic idea as C/Pascal structures: a structure can describ
 A.6. Operators as receiver registrations
 High-level operators are not necessarily built into the syntax.
 
-An operator may be described in L6 as a registration of a receiver function.
+An operator may be described in L5 as a registration of a receiver function.
 
 Example:
 
-L6:
+L5:
 operator
     while
-    callableFrom = L4
+    callableFrom = L3
 
     implementation
         while_func
-        level = L3
+        level = L2
     end implementation
 end operator
 Compact form:
 
-operator(while, callableFrom = L4, implementation(while_func, level = L3))
+operator(while, callableFrom = L3, implementation(while_func, level = L2))
 This means:
 
-The name while is visible from L4.
+The name while is visible from L3.
 Frames addressed to while are consumed by while_func.
-while_func is implemented at L3.
-The L6 description itself is not a loop. It is consumed by a registration function, conceptually:
+while_func is implemented at L2.
+The L5 description itself is not a loop. It is consumed by a registration function, conceptually:
 
 registerOperator(operatorFrame)
 A real runtime/control use of while is a different frame:
 
-L4:
+L3:
 while (i < beds.len)
     print beds[i].crop
     i = i + 1
@@ -842,15 +843,15 @@ This frame is consumed by the registered receiver:
 
 while_func(conditionFrame, bodyFrame)
 A.7. Why operator ... end operator is correct
-In the L6 description:
+In the L5 description:
 
 operator
     while
-    callableFrom = L4
+    callableFrom = L3
 
     implementation
         while_func
-        level = L3
+        level = L2
     end implementation
 end operator
 the opened frame is operator, so it closes as:
@@ -886,11 +887,11 @@ Example:
 
 operator
     match
-    callableFrom = L4
+    callableFrom = L3
 
     implementation
         match_func
-        level = L3
+        level = L2
     end implementation
 end operator
 After registration, the language can accept:
@@ -964,23 +965,23 @@ The semantic mode is determined by the receiver function that consumes the frame
 B.3. Where relational mode lives in the levels
 Recommended placement:
 
-L5:
+L4:
     typed relation signatures, term types, contracts
 
-L6:
+L5:
     relation registries, knowledge bases, facts, rules, query messages
 
-L4:
+L3:
     ordinary code may call query/solve and consume results
 
-L3:
+L2:
     implementation of indexing, unification, search, backtracking, caches
-So relational mode is primarily visible as an L6-level knowledge/query system, typed by L5 and implemented below.
+So relational mode is primarily visible as an L5-level knowledge/query system, typed by L4 and implemented below.
 
 B.4. Relation signatures
 A relation may be declared as a typed frame.
 
-L5:
+L4:
 Parent:
     parent: Animal
     child: Animal
@@ -990,7 +991,7 @@ or compactly:
 Parent: (parent: Animal, child: Animal)
 A relation registry may then associate a logical name with this frame type:
 
-L6:
+L5:
 relation
     parent
     signature = Parent
@@ -1005,7 +1006,7 @@ registerRelation(frame)
 B.5. Facts
 A fact asserts that a relation is true for a concrete argument frame.
 
-L6:
+L5:
 fact
     parent(Astra, NyufNyuf)
 end fact
@@ -1014,7 +1015,7 @@ Compact form:
 fact(parent(Astra, NyufNyuf))
 Multiple facts:
 
-L6:
+L5:
 fact
     parent(Astra, NyufNyuf)
 end fact
@@ -1070,7 +1071,7 @@ A rule defines a relation in terms of other relations.
 
 Simple rule:
 
-L6:
+L5:
 rule
     ancestor(?x, ?y)
 
@@ -1083,7 +1084,7 @@ Compact form:
 rule(ancestor(?x, ?y), if(parent(?x, ?y)))
 Recursive rule:
 
-L6:
+L5:
 rule
     ancestor(?x, ?y)
 
@@ -1113,9 +1114,9 @@ Possible result:
     (?descendant = NyufNyuf),
     (?descendant = LittleOne)
 ]
-A query may be called from L4 code:
+A query may be called from L3 code:
 
-L4:
+L3:
 descendants = query(ancestor(Astra, ?who))
 
 for result in descendants
@@ -1153,7 +1154,7 @@ relation name
 argument count
 argument order
 argument names, when named form is used
-types declared in L5
+types declared in L4
 where/contracts, if attached
 B.10. Positional and named relation arguments
 Since all Lingvamyxa frames have both order and names, relation calls may be positional or named.
@@ -1203,11 +1204,11 @@ order       depthFirst / breadthFirst / indexed / costBased
 unique      remove duplicate bindings
 confidence  minimum confidence for uncertain knowledge
 B.12. Typed relations
-L5 relation signatures constrain valid facts, rules and queries.
+L4 relation signatures constrain valid facts, rules and queries.
 
 Example:
 
-L5:
+L4:
 Route:
     from: Station
     to: Station
@@ -1218,7 +1219,7 @@ Route:
     end where
 end Route
 
-L6:
+L5:
 relation
     route
     signature = Route
@@ -1286,8 +1287,8 @@ in-memory relation search
 hybrid search
 depending on available implementation.
 
-B.15. Relations and L6 messages
-L6 objects may receive relational queries as messages.
+B.15. Relations and L5 messages
+L5 objects may receive relational queries as messages.
 
 Example:
 
@@ -1300,7 +1301,7 @@ or:
 GreenhouseKnowledge.query(parent(Astra, ?who))
 The knowledge base object may answer with a QueryResult frame.
 
-This fits the L6 model:
+This fits the L5 model:
 
 object/config/message frame + relational receiver
 B.16. Relations are not executed structures
