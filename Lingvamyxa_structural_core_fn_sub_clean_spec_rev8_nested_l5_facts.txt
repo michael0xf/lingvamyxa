@@ -2495,3 +2495,1125 @@ L3+ indexing lowers to checked access through array metadata such as `len`.
 
 The language does not define C slot counting, hidden runtime pointers, hidden output pointers or C storage ownership rules. Those are translator/runtime design choices.
 ---ANSI C---
+
+
+
+Lingvamyxa Structural Core Specification
+Part II: Control Operators, Thread Context and L5 Event Delivery
+
+Status
+
+Revision 8 continuation draft.
+
+This document continues the Revision 8 structural core specification. It defines section 26 and section 27. It does not restate sections 0-25.
+
+Marker convention is inherited from Part I.
+
+    !!!
+    This block marks an actual ambiguity, contradiction or unresolved rule in syntax or source semantics.
+    !!!
+
+    ?
+    This block marks a future or external specification area.
+    ?
+
+    variant 1:
+    variant 2:
+    variant 3:
+
+    Variant blocks list possible designs for an unresolved or external area.
+
+    ---ANSI C---
+    This block gives possible implementation or lowering strategies for an ANSI C based translator/runtime. It is not source semantics unless explicitly stated by a selected runtime profile.
+    ---ANSI C---
+
+
+26. L3 Control Operators
+
+26.0. Scope of This Section
+
+This section defines the normative L3 control-flow receiver set for executable bodies.
+
+The operators in this section are source-level control receivers. They are not raw low-level jumps. A translator may lower them to branches, labels, hidden control-result Structures, cleanup-stack operations or other implementation artifacts.
+
+Unless stated otherwise, these operators are L3 operators. Some of them may also be exposed in L2 by an implementation profile, but this section specifies the L3 semantics.
+
+Operator summary:
+
+    0.  if / then / else                                  L3
+    1.  match / case / default                            L3
+    2.  while                                             L3
+    3.  until                                             L3
+    4.  for                                               L3
+    5.  each                                              L3
+    6.  return                                            L3 executable body
+    7.  break                                             L3 loop frame
+    8.  continue                                          L3 loop frame
+    9.  finally                                           L3 executable/scope frame cleanup
+    10. guard / fail / throws / failure labels / handlers  L3 recoverable failure flow
+    11. retry / retryable                                 L3 retry frame
+    12. assert                                            L3 diagnostic failure flow
+    13. redo                                              L3 loop frame
+    14. yield                                             L3 iterator function
+    15. labelled break / labelled continue                L3 labelled loop frame
+
+The following namespaces are distinct:
+
+    normal lexical namespace:
+        models, types, variables, fn, sub, receivers and ordinary names
+
+    control-label namespace:
+        loop labels, retry labels and failure labels
+
+Normal names and control labels do not shadow each other. A control label may not be ambiguous inside its control-label scope.
+
+26.1. `if`, `then` and `else`
+
+`if` consumes a condition and one or two body Structures.
+
+Semantic form:
+
+    if(condition, thenBody, elseBody?)
+
+Explicit form:
+
+    if condition
+      then
+        thenBody
+      ---
+      else
+        elseBody
+      ---
+    ---
+
+Short structural form:
+
+    if condition
+        thenBody
+      ---
+        elseBody
+      ---
+    ---
+
+Single-line form:
+
+    if condition doSomething
+
+The condition is evaluated once before branch selection.
+
+Only the selected body is executed.
+
+If no `else` body is provided and the condition is false, `if` completes normally without executing a body.
+
+`then` and `else` are structural section markers inside `if`. They are not ordinary runtime calls when consumed by the `if` receiver.
+
+26.2. `match`, `case` and `default`
+
+`match` selects one body from a set of cases.
+
+Example:
+
+    match value
+      case 1
+        print one
+      ---
+      case 2
+        print two
+      ---
+      default
+        print other
+      ---
+    ---
+
+There is no automatic fallthrough from one `case` to the next.
+
+A `case` body is a closed Structure. Completion of one `case` completes the `match` unless another control operator such as `break`, `return`, `fail`, `retry`, `redo` or `assert` transfers control.
+
+For union values, a `match` may destructure the active variant.
+
+Example:
+
+    match shape
+      case Circle c
+        drawCircle c
+      ---
+      case Square s
+        drawSquare s
+      ---
+    ---
+
+If the matched value is a closed union and no `default` is present, an implementation may require exhaustive cases.
+
+?
+The exact pattern syntax for `case`, including guards, nested destructuring, constants, model names, union variants and relation patterns, is not specified in this section.
+?
+
+26.3. `while`
+
+`while` is a pre-condition loop.
+
+Semantic form:
+
+    while(condition, body)
+
+Example:
+
+    while i < n
+      print i
+      i i + 1
+    ---
+
+The condition is evaluated before each iteration.
+
+If the condition is false before the first iteration, the body is not executed.
+
+A `while` body is a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
+
+26.4. `until`
+
+`until` is a post-condition loop with the argument order reversed relative to `while`.
+
+Semantic form:
+
+    until(body, condition)
+
+Example:
+
+    until
+      readNext record
+      process record
+    ---
+      endOfInput record
+    ---
+
+The body is executed first. The condition is evaluated after the body.
+
+The loop repeats until the condition is true.
+
+Equivalent informal form:
+
+    do
+      body
+    while not condition
+
+`until` creates a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
+
+26.5. `for`
+
+`for` is a controlled loop receiver for numeric ranges, counters, index ranges or other bounded iteration policies.
+
+Example form:
+
+    for i 0 n
+      print i
+    ---
+
+Semantic requirement:
+
+    `for` creates one or more loop-local iteration bindings.
+    `for` advances those bindings according to the selected control policy.
+    `for` executes the body once for each produced iteration state.
+
+`for` creates a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
+
+?
+The exact canonical source forms for numeric ranges, inclusive/exclusive bounds, step values, reverse iteration, index/value pairs and destructuring of iteration bindings are not specified in this section.
+?
+
+variant 1:
+Use compact positional forms such as `for i 0 n`.
+
+variant 2:
+Use named structural forms such as `for i from 0 to n step 1`.
+
+variant 3:
+Treat all range policies as ordinary receiver Structures consumed by `for`.
+
+26.6. `each`
+
+`each` iterates over a container or iterator-compatible Structure.
+
+Array-like example:
+
+    each item in items
+      draw item
+    ---
+
+Receiver-like example:
+
+    each items item
+      draw item
+    ---
+
+Semantic requirement:
+
+    `each` obtains a sequence of values from its source.
+    For each value, `each` binds the iteration variable or variables.
+    `each` executes the body once for that value.
+
+`each` creates a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
+
+For arrays or array-like containers, `each` may lower to an index loop.
+
+For iterator-compatible Structures, `each` repeatedly calls the iterator `next(env)` implementation until no value is produced.
+
+Iterator consumption by `each` is specified in section 26.14.
+
+26.7. `return`
+
+`return` exits the current `fn` or `sub` executable body.
+
+Bare form:
+
+    return
+
+Value form:
+
+    return value
+
+Structural value form:
+
+    return a b c
+
+For an `fn`, a bare `return` returns the current return binding.
+
+For an `fn` with a single primitive return value, `return value` sets that value and exits.
+
+For an `fn` with a structured return, `return a b c` fills the declared return Structure using the same structural return rules as ordinary return-binding assignment.
+
+For a `sub`, `return` exits the `sub` body. A `sub` does not produce a normal return value.
+
+Before control leaves the current executable frame, all `finally` cleanups registered for the exited scopes are executed in reverse registration order.
+
+26.8. `break`
+
+`break` exits the nearest active loop frame.
+
+Example:
+
+    while running
+      if stopRequested
+        break
+      ---
+      step
+    ---
+
+`break` is valid only inside a loop frame unless a labelled form is used as described in section 26.15.
+
+Before control leaves the exited loop body scopes, all affected `finally` cleanups are executed in reverse registration order.
+
+`break` is not a source-level raw jump. It is a structured loop-frame exit.
+
+26.9. `continue`
+
+`continue` starts the next iteration of the nearest active loop frame.
+
+Example:
+
+    each item in items
+      if skip item
+        continue
+      ---
+      process item
+    ---
+
+For `while`, `continue` transfers control to the next condition check.
+
+For `until`, `continue` transfers control to the post-body condition check for the current iteration.
+
+For `for`, `continue` transfers control to the next iteration-state update.
+
+For `each`, `continue` transfers control to the next container or iterator value.
+
+Before control leaves the current loop body scopes, all affected `finally` cleanups are executed in reverse registration order.
+
+26.10. `finally`
+
+`finally` registers cleanup code in the current execution context.
+
+Block form:
+
+    finally
+      cleanupBody
+    ---
+
+Single-line form:
+
+    finally cleanupCall
+
+`finally` is not part of a `try` block in this specification. It is a standalone cleanup registration operator.
+
+A cleanup registered by `finally` is associated with the current executable/scope frame.
+
+Cleanups are executed when their associated frame or scope is exited by:
+
+    normal completion;
+    return;
+    break;
+    continue;
+    labelled break;
+    labelled continue;
+    fail;
+    retry;
+    redo;
+    assert diagnostic exit;
+    thread/task termination in the default runtime profile.
+
+Cleanups are executed in reverse registration order.
+
+A cleanup body is executed outside the registration operation. It is not executed at the point where `finally` is encountered, except when the frame exits immediately after registration.
+
+`finally` cleanups are part of the execution context model defined in section 27.
+
+!!!
+The exact semantics of a cleanup failure are not fixed. A final runtime specification must define what happens if a cleanup itself executes `fail`, `assert`, `return`, `break`, `continue`, `retry`, `redo` or another `finally` registration while cleanup processing is already active.
+!!!
+
+26.11. `guard`, `fail`, `throws`, failure labels and handlers
+
+`guard` and `fail` define declared recoverable failure flow.
+
+They are distinct from `assert`.
+
+    guard / fail:
+        declared, expected, recoverable failure path
+
+    assert:
+        diagnostic invariant violation
+
+26.11.1. `throws`
+
+An executable definition may declare failure labels with `throws`.
+
+Example:
+
+    fn parseInt
+      Text text
+    ---
+      int
+    ---
+      throws
+        ParseError
+      ---
+
+      guard validInteger text
+        fail ParseError text
+      ---
+
+      parseInt parseInteger text
+    ---
+
+`throws` lists the failure labels that may leave the executable body as recoverable failures.
+
+A caller must handle, propagate or remap a declared failure.
+
+26.11.2. `guard`
+
+`guard` executes its failure body when its condition is false.
+
+Example:
+
+    guard radius > 0.0
+      fail InvalidRadius radius
+    ---
+
+Semantic form:
+
+    if not condition
+      failureBody
+    ---
+
+`guard` is a convenience control receiver. It does not itself define the failure transport mechanism. That is defined by `fail`.
+
+26.11.3. `fail`
+
+`fail` exits the current executable body with a declared failure label and optional payload.
+
+Example:
+
+    fail ParseError text
+
+Semantic effect:
+
+    set failure label to ParseError;
+    set failure payload from the remaining arguments;
+    execute affected finally cleanups for the current frame exit;
+    return a structured failure result to the caller or visible handler.
+
+`fail` is part of the declared `throws` set. It is not a diagnostic abort.
+
+`fail` does not transfer to the thread diagnostic root.
+
+`fail` does not use the `assert` channel.
+
+26.11.4. Failure labels and handlers
+
+Failure labels belong to the control-label namespace, not to the normal lexical namespace.
+
+A handler consumes a failure label and payload.
+
+The exact handler surface syntax is not finalized in this section.
+
+variant 1:
+Use label-like handler syntax:
+
+    ParseError:
+      Text badText
+    ---
+      print badText
+    ---
+
+variant 2:
+Use explicit receiver syntax:
+
+    handler ParseError
+      Text badText
+    ---
+      print badText
+    ---
+
+variant 3:
+Represent handlers as L5 event/message handlers for failure events.
+
+!!!
+The exact source syntax, placement, visibility and lifetime of failure handlers are not fixed. A final source specification must define whether handlers are lexical Structures, executable labels, L5 event handlers, caller-side receivers or a combination of these forms.
+!!!
+
+26.11.5. Failure propagation
+
+If a failure is not handled in the current body, it must be propagated by an enclosing or calling executable whose `throws` declaration includes the failure label.
+
+Failure propagation is structured. It is not a raw jump through arbitrary stack frames in the source semantics.
+
+---ANSI C---
+A translator may lower declared failures using:
+
+variant 1:
+Return-status wrappers.
+
+variant 2:
+Status return plus output parameters.
+
+variant 3:
+A hidden control-result channel.
+
+variant 4:
+A non-local transfer mechanism for a selected runtime profile, provided that Lingvamyxa `finally` semantics are preserved.
+
+The strict default for this draft is structured failure propagation, not root-level `longjmp`.
+---ANSI C---
+
+26.12. `retry` and `retryable`
+
+`retryable` defines a restartable frame.
+
+`retry` restarts the nearest or named retryable frame.
+
+Example:
+
+    loadAttempt:
+      retryable
+        loadNetworkData
+      ---
+
+Possible failure-handler use:
+
+    NetworkError:
+      reconnect
+      retry loadAttempt
+    ---
+
+A `retry` transfer executes the affected `finally` cleanups for the abandoned attempt before re-entering the retryable frame.
+
+`retry` does not roll back external side effects. It only repeats the source frame according to the retryable-frame semantics.
+
+Local bindings declared inside the retryable frame are re-created when the frame is re-entered.
+
+Outer bindings keep their current values unless the retryable receiver defines a stronger rollback policy.
+
+`retry` without a label targets the nearest active retryable frame.
+
+`retry labelName` targets the named retryable frame.
+
+!!!
+The exact interaction between `retry`, failure handlers, iterator frames, partially executed cleanups and mutable outer bindings requires a final rule. This draft defines retry as re-execution, not as transactional rollback.
+!!!
+
+26.13. `assert`
+
+`assert` checks a diagnostic invariant.
+
+Example:
+
+    assert index >= 0
+    assert index < values.len
+
+If the condition is true, execution continues normally.
+
+If the condition is false, the current execution/checking phase fails with an `AssertionViolation` diagnostic.
+
+`assert` is not recoverable `fail` control flow.
+
+`assert` is not part of the declared `throws` set.
+
+`assert` is not caught by failure labels or failure handlers.
+
+Default L3 runtime semantics in the thread profile defined in section 27:
+
+    record AssertionViolation diagnostic;
+    execute all active `finally` cleanups in the current thread ExecutionContext;
+    transfer control to the thread diagnostic root;
+    terminate the current thread/task by default after reporting the diagnostic.
+
+Default L4 model-time use, if exposed by a level profile:
+
+    an assertion violation terminates the current model-loading or translation pass with a diagnostic error.
+
+`assert` is intended for impossible states, broken invariants, corrupted internal assumptions or translator/model errors. Expected input failure must use `guard` and `fail`.
+
+26.14. `redo`
+
+`redo` repeats the current loop iteration without advancing the loop source.
+
+For `each`, `redo` repeats the body with the same current element.
+
+For iterator-based `each`, `redo` does not call `next(env)` before repeating the body.
+
+For `for`, `redo` repeats the body with the same loop bindings.
+
+For `while`, `redo` repeats the body without re-evaluating the condition first.
+
+For `until`, `redo` repeats the body without evaluating the post-condition first.
+
+Before the current iteration is restarted, all `finally` cleanups registered inside the abandoned iteration attempt are executed.
+
+`redo` is dangerous because it can create non-progressing loops. It is valid only inside a loop frame.
+
+26.15. `yield`
+
+`yield` is valid only inside an iterator function.
+
+An iterator function declares a return model compatible with `Iterator T`.
+
+Calling an iterator function does not execute its body to completion. It creates an iterator state Structure.
+
+The translator lowers the iterator body into a `next(env)` implementation.
+
+Each `yield` emits one value compatible with `T` from `next(env)` and records the resume state in `env`.
+
+The `each` receiver consumes iterator-compatible Structures by repeatedly calling their `next(env)` implementation until no value is produced.
+
+26.15.1. Iterator function
+
+Example:
+
+    fn makePoints
+    ---
+      Iterator Point
+    ---
+      yield 1.0 2.0
+      yield 3.0 4.0
+      yield 5.0 6.0
+    ---
+
+Calling:
+
+    makePoints
+
+creates an iterator state Structure. It does not return an `Array Point` and does not execute all `yield` statements immediately.
+
+26.15.2. Iterator state Structure
+
+An iterator state Structure contains enough state to resume execution after each `yield`.
+
+For a simple iterator, generated state may include:
+
+    state index;
+    captured arguments;
+    local variables that survive across yields;
+    cleanup registrations owned by the iterator frame;
+    a reference to the generated `next(env)` implementation.
+
+Source-level code does not depend on the physical layout of this state Structure.
+
+26.15.3. `next(env)`
+
+The generated `next(env)` implementation executes the iterator until it either reaches a `yield` or terminates.
+
+At a `yield`, `next(env)` returns a produced value and records where execution must resume.
+
+When the iterator terminates, `next(env)` returns a no-value result.
+
+Conceptual result model:
+
+    Next T
+      boolean hasValue
+      T value
+    ---
+
+?
+The exact standard name and structural layout for the result of `next(env)` is not specified. A final iterator specification must choose canonical names and fields, such as `Next T`, `Option T`, `Some/None` or another equivalent representation.
+?
+
+26.15.4. `yield` value construction
+
+If `T` is a primitive, `yield value` emits that primitive.
+
+If `T` is a Structure, the arguments of `yield` fill that Structure according to the same structural rules used by `return`.
+
+Example:
+
+    yield 1.0 2.0
+
+inside an `Iterator Point` function emits one `Point` value if `Point` has two positional fields such as `x` and `y`.
+
+26.15.5. Iterator consumption by `each`
+
+Example:
+
+    each point in makePoints
+      draw point
+    ---
+
+Semantic form:
+
+    iterator makePoints
+
+    while true
+      result next iterator.env
+      if not result.hasValue
+        break
+      ---
+      point result.value
+      body
+    ---
+
+This is semantic pseudocode. A translator may lower it to a direct state machine or inline loop.
+
+26.15.6. Iterator termination
+
+A bare `return` inside an iterator function terminates the iterator.
+
+A `yield` after termination is unreachable.
+
+`break` and `continue` inside an iterator body operate on the nearest active loop frame inside the iterator body, not on the consumer's `each` loop.
+
+!!!
+Iterator close semantics are not fully specified. A final specification must define when iterator-owned `finally` cleanups run if an iterator is abandoned before exhaustion, discarded, moved to another thread or terminated by diagnostic failure.
+!!!
+
+26.16. Labelled `break` and labelled `continue`
+
+A control label may be attached to a loop frame.
+
+Example:
+
+    outerLoop:
+      for row in rows
+        for cell in row
+          if found cell
+            break outerLoop
+          ---
+        ---
+      ---
+
+`labelName:` belongs to the control-label namespace.
+
+`break labelName` exits the labelled loop frame.
+
+`continue labelName` continues the labelled loop frame if the target label names a loop frame.
+
+Before the transfer, all `finally` cleanups registered in scopes exited by the transfer are executed in reverse registration order.
+
+It is a compile-time error for `break labelName` or `continue labelName` to target a label that is not visible in the control-label scope.
+
+It is a compile-time error for `continue labelName` to target a non-loop frame.
+
+?
+The exact grammar rule for attaching labels to frames is not specified beyond the form `labelName:` before a frame. A final grammar must define whether labels can attach to retryable frames, blocks, handlers, iterator frames and arbitrary Structures.
+?
+
+
+27. L2 Thread Context and L5 Event Delivery Profile
+
+27.0. Scope of This Section
+
+This section defines a default runtime profile for:
+
+    L2 execution threads;
+    thread-local ExecutionContext;
+    `finally` cleanup storage;
+    `assert` diagnostic exit;
+    Java-style synchronized inbox/outbox event delivery;
+    L5 object/message event dispatch.
+
+This profile is intentionally simple. It is based on cooperative thread loops that periodically check inbound messages and flush outbound messages. It does not define blocking request/reply as a primitive operation.
+
+27.1. ExecutionContext
+
+Each L2 execution thread owns one current ExecutionContext.
+
+The ExecutionContext is thread-local.
+
+Conceptual Structure:
+
+    ExecutionContext
+      Thread currentThread
+      CleanupStack cleanupStack
+      DiagnosticRoot diagnosticRoot
+      Diagnostic currentDiagnostic
+      FrameDepth currentDepth
+    ---
+
+The ExecutionContext is not an ordinary user data model. It is runtime infrastructure.
+
+The ExecutionContext stores active `finally` cleanup registrations for the current thread.
+
+The ExecutionContext stores the diagnostic root used by `assert`.
+
+27.2. CleanupStack
+
+A cleanup stack is a LIFO stack of active cleanup entries.
+
+Conceptual entry:
+
+    CleanupEntry
+      cleanupSub
+      cleanupEnv
+      frameDepth
+      scopeDepth
+    ---
+
+`finally` pushes a cleanup entry into the current thread ExecutionContext.
+
+Normal frame/scope exit runs cleanup entries owned by the exited frame/scope.
+
+Diagnostic thread exit runs all remaining cleanup entries in the current thread.
+
+Cleanup entries are removed when they are executed. A cleanup must not execute twice.
+
+27.3. L2Thread
+
+An L2 thread owns:
+
+    thread id;
+    thread-local ExecutionContext;
+    synchronized inbox;
+    synchronized outbox;
+    running/stopping state;
+    body step or thread entry procedure.
+
+Conceptual Structure:
+
+    L2Thread
+      ThreadId id
+      ExecutionContext context
+      Inbox inbox
+      Outbox outbox
+      ThreadState state
+      BodyStep body
+    ---
+
+The inbox and outbox are synchronized FIFO containers.
+
+This profile describes them as Java-style synchronized Vectors. A translator/runtime may implement them as ring buffers, queues or other FIFO containers if the observable semantics are preserved.
+
+27.4. Thread loop
+
+Canonical thread loop:
+
+    initialize ExecutionContext
+    establish diagnostic root
+
+    while running
+      checkInbox
+      body
+      flushOutbox
+    ---
+
+    run all remaining finally cleanups
+    terminate thread
+
+Java-style pseudocode:
+
+    class L2Runnable implements Runnable {
+        Vector<Message> inbox;
+        Vector<Message> outbox;
+        ExecutionContext context;
+
+        public void run() {
+            try {
+                while (running) {
+                    checkInbox();
+                    body();
+                    flushOutbox();
+                }
+            } catch (AssertException e) {
+                context.currentDiagnostic = e.diagnostic;
+                report(e);
+            } finally {
+                closeAllFinally(context);
+            }
+        }
+    }
+
+ANSI C style profile:
+
+    initialize ExecutionContext;
+    setjmp(context.diagnosticRoot);
+    run thread loop;
+    on assert longjmp, report diagnostic;
+    run all remaining cleanups;
+    terminate thread;
+
+The Java-style and ANSI C-style profiles are implementation strategies for the same source-level thread model.
+
+27.5. Assertion failure in the thread profile
+
+When an L3 `assert` condition is false:
+
+    an AssertionViolation diagnostic is created;
+    all active cleanups in the current thread ExecutionContext are executed;
+    control transfers to the thread diagnostic root;
+    the current thread/task terminates by default after diagnostic reporting.
+
+In a Java runtime, the transfer may be implemented by throwing an internal `AssertException` caught by the thread root.
+
+In an ANSI C runtime, the transfer may be implemented by `setjmp` at the thread root and `longjmp` from the assertion failure path.
+
+---ANSI C---
+Conceptual implementation:
+
+    typedef struct ExecutionContext {
+        CleanupStack cleanupStack;
+        jmp_buf diagnosticRoot;
+        Diagnostic currentDiagnostic;
+    } ExecutionContext;
+
+    _Thread_local ExecutionContext *LX_CTX;
+
+    void lx_assert_fail(Diagnostic d) {
+        ExecutionContext *ctx = LX_CTX;
+        ctx->currentDiagnostic = d;
+        run_all_cleanups(ctx);
+        longjmp(ctx->diagnosticRoot, 1);
+    }
+
+This implementation note does not define ordinary `fail`. Declared `fail` remains structured recoverable control flow.
+---ANSI C---
+
+!!!
+The policy for assertion failure during cleanup is not fixed. A final runtime specification must define whether the runtime continues cleanup, stops cleanup, records secondary diagnostics or terminates immediately.
+!!!
+
+27.6. L2Message
+
+A message is an event envelope delivered between threads or active L5 objects.
+
+Conceptual Structure:
+
+    L2Message
+      target
+      selector
+      sender
+      args
+      replyTo
+      correlation
+      flags
+    ---
+
+Fields:
+
+    target:
+        object, service or behavior target
+
+    selector:
+        message name / L5 selector
+
+    sender:
+        sender object or thread, if present
+
+    args:
+        argument Structure
+
+    replyTo:
+        optional inbox or target for asynchronous replies
+
+    correlation:
+        optional id used to match request and reply
+
+    flags:
+        runtime delivery metadata
+
+`L2Message` is a transport envelope. The target's L5 behavior table decides which implementation consumes the selector.
+
+27.7. Inbox and outbox operations
+
+Sending a message appends it to a synchronized FIFO container and returns.
+
+Basic operation:
+
+    send target message
+
+Semantic effect:
+
+    append message to target thread inbox;
+    do not execute the handler in the sender thread;
+    return immediately.
+
+Outbox operation:
+
+    enqueue message into current thread outbox;
+    later `flushOutbox` appends queued messages to target inboxes.
+
+The outbox is optional as a physical layer. The source-level event model requires asynchronous delivery, not a particular buffering strategy.
+
+variant 1:
+Direct asynchronous send appends immediately to the target inbox.
+
+variant 2:
+The current thread appends to its outbox, and `flushOutbox` performs delivery.
+
+variant 3:
+The runtime combines both strategies according to scheduling and batching policy.
+
+27.8. Inbox checking
+
+`checkInbox` drains or checks the inbox periodically.
+
+Handlers must not execute while the inbox synchronization lock is held.
+
+Safe pattern:
+
+    localMessages drain inbox under lock
+
+    each message in localMessages
+      dispatchMessage message
+    ---
+
+Unsafe pattern:
+
+    synchronized inbox
+      dispatchMessage message
+    ---
+
+The unsafe pattern is forbidden by this profile because it executes user/L5 behavior while holding the inbox lock.
+
+27.9. L5 event dispatch
+
+L5 behavior dispatch for a delivered message uses the target object's behavior descriptor.
+
+Conceptual dispatch:
+
+    model = target.model
+    behavior = lookupBehavior model
+    method = lookup behavior.messageTable selector
+    call method target args
+
+If the target belongs to the current thread and the source form is a local L5 message, the translator/runtime may use direct Smalltalk-style synchronous dispatch.
+
+If the target belongs to another thread or the source form is an explicit event send, delivery is asynchronous through the target inbox.
+
+This profile distinguishes:
+
+    local L5 message:
+        receiver selector args
+        direct behavior lookup and call in the current thread
+
+    L5 event send:
+        send receiver selector args
+        asynchronous inbox delivery
+
+    L5 request:
+        request receiver selector args replyTo/correlation
+        asynchronous inbox delivery with a later reply message
+
+There is no blocking `ask` primitive in this profile.
+
+27.10. Request and reply
+
+A request is an asynchronous send with a correlation id and reply target.
+
+A reply is an ordinary message carrying the same correlation id.
+
+Request flow:
+
+    requester sends request message to target inbox;
+    requester continues executing its thread loop;
+    target eventually handles request;
+    target sends reply message to requester inbox;
+    requester eventually handles reply during `checkInbox`.
+
+No thread blocks waiting for a reply in the base profile.
+
+A thread may store pending request ids in ordinary state and inspect them during its body step or message handlers.
+
+Blocking request/reply is outside this profile.
+
+?
+A future profile may define blocking wait, timeout, inbox-pumping wait, futures, promises or structured async/await. Those are not part of this section.
+?
+
+27.11. Deadlock and progress properties
+
+The synchronized inbox/outbox model avoids ordinary lock-order deadlocks if:
+
+    inbox/outbox locks are held only for short append/drain operations;
+    user code and L5 message handlers do not execute while holding those locks;
+    the base profile does not block while waiting for replies.
+
+This does not prove protocol termination.
+
+A message protocol may still fail to make useful progress, send messages forever, exhaust memory or starve some tasks. Those are architecture/protocol properties, not synchronization-lock deadlocks in the mailbox mechanism.
+
+27.12. Atomic operations and L5 messages
+
+L5 message dispatch is not the universal mechanism for all computation.
+
+L2 and L3 ordinary computation remains direct:
+
+    primitive arithmetic;
+    comparisons;
+    field access;
+    array access;
+    direct fn/sub calls;
+    loops and branches;
+    generated low-level operations.
+
+L5 messages are used for behavior, configuration, object/service interaction, active objects and high-level event delivery.
+
+Lingvamyxa does not require Smalltalk-style message dispatch for every atomic operation.
+
+27.13. Open points for the thread/event profile
+
+?
+The scheduling policy is not specified. A final runtime specification must define fairness, inbox drain limits, body step frequency, outbox flush timing and priority rules.
+?
+
+?
+Inbox capacity, backpressure, message dropping, overflow diagnostics and memory limits are not specified.
+?
+
+?
+Message ordering across multiple senders is not specified beyond FIFO order inside one synchronized target inbox after messages have been appended.
+?
+
+?
+Object ownership, migration between threads, shared immutable objects and cross-thread object references require a separate runtime specification.
+?
+
+?
+The exact source forms for `send`, `request`, `reply`, `checkInbox`, `flushOutbox`, thread creation and thread shutdown are not specified in this section.
+?
+
+?
+The interaction between L5 fact registries, persistent event logs and runtime inbox messages is not specified.
+?
+
+
+
+
+
+
+
+
