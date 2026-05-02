@@ -401,9 +401,11 @@ This builds:
       b
     )
 
-If a receiver has more than one argument and the first argument is itself a Structure in short form without parentheses and commas, that first Structure must be a named Structure. Otherwise the source is visually and structurally indistinguishable from a flat argument body.
+A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
 
-If the receiver has exactly one argument and that argument is a Structure, the short form is syntactically indistinguishable from the ordinary case where several items form the body of the receiver argument Structure. This is an intentional property of the short syntax. Parentheses, commas or an explicit named Structure must be used when the distinction matters.
+This is an intentional property of the language, not an accidental ambiguity. In short forms without parentheses and commas, `f a b c` and the corresponding vertical form build one argument Structure containing `a`, `b` and `c`. A receiver with one structural parameter may consume that whole Structure. A receiver with several parameters may consume the same Structure by positional fields.
+
+If a receiver has more than one argument and the first argument is itself a nested Structure in short form without parentheses and commas, that first nested Structure must be written as a named Structure. Otherwise the same surface form is reserved for the ordinary flat argument Structure of the enclosing receiver.
 
 4.7. No Native `=` Assignment or Named-Field Operator
 
@@ -734,7 +736,7 @@ Example:
 
 Inside the body, `factorial 1` updates the return binding of the current function. The expression `factorial(n - 1)` is a recursive function call because it appears in expression position.
 
-7.4. Body Names7.4. Body Names
+7.4. Body Names
 
 Variables or names used inside an `fn` or `sub` body do not become arguments automatically. Arguments are defined only by the argument Structure consumed by the definition receiver.
 
@@ -909,13 +911,13 @@ A style guide may still require explicit `return` in some contexts, but the sour
 
 8.5. Return Source Semantics
 
-At the source-semantic level, a multi-value return is a return Structure.
+At the source-semantic level, every `fn` has one logical return value. That value may be a primitive value or a return Structure. A return signature with several fields defines one return Structure, not a separate non-structural mechanism.
 
-A single primitive return returns one primitive value. A return signature with multiple fields returns a Structure. A return signature with one structural field returns that Structure or a handle/reference to it according to the language-level value model.
+Returning several values positionally and returning one Structure value are the same source-semantic operation when the produced Structure matches the declared return Structure. A caller may consume the returned value as one Structure or, through receiver-defined destructuring/update forms, bind or update separate variables from its fields.
 
 Multiple named return fields are ordinary declared return variables inside the executable body. An empty `return` returns their current values as the declared return Structure.
 
-A non-empty `return` first fills the declared return fields positionally and then exits the executable body.
+A non-empty `return` first fills the declared return Structure positionally and then exits the executable body. A single primitive return is the degenerate case where the declared return Structure has one primitive result according to the active return-value model.
 
 Physical return strategy, storage ownership and low-level runtime representation are translator/runtime implementation details. They are not part of the source-semantic core.
 
@@ -1384,6 +1386,8 @@ Binding, mutability, scope, initialization, reassignment and shadowing rules are
 
 16.2. Return Structures
 
+A function return value is one logical source-level value. That value may be primitive or structural. If the return value is structural, returning a list of values and returning a Structure with the same layout are source-semantically equivalent under the receiver-defined return signature.
+
 A function may return a Structure with ordered and/or semantic named fields.
 
 Example return signature:
@@ -1407,7 +1411,7 @@ The current function name may also update the whole current return binding in he
 
 Destructuring syntax using `=` is not part of the current native structural core.
 
-The semantic operation still exists: a produced Structure may be stored in a temporary service binding, and target bindings may be updated from its fields by name or by position.
+The semantic operation still exists: a produced Structure may be assigned or bound as one value, stored in a temporary service binding, or used to update target bindings from its fields by name or by position.
 
 Possible explicit receiver form:
 
