@@ -2,6 +2,8 @@ Lingvamyxa Structural Core Specification
 
 Status
 
+Revision 8 draft.
+
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
 The document is descriptive and semantic. Surface syntax builds Structures. Receivers and subroutines consume Structures and assign typed meaning to them.
@@ -96,7 +98,9 @@ L4 may update or check the compiler/runtime model. L4 does not perform ordinary 
 
 1.6. L5
 
-L5 is the level of messages, configuration, objects, build/run/query/startup receivers, operator registration and high-level dispatch.
+L5 is the level of messages, configuration, behavior descriptors, fact registries, build/run/query/startup receivers and high-level dispatch.
+
+L5 may attach message behavior to L4 structural models. L5 may also represent registry data as typed facts and rules. This draft places that fact/behavior layer in L5. A later level split may move part of it to L6. This document treats the L5 fact/behavior model as source-semantic infrastructure, not as ordinary runtime I/O.
 
 1.7. Level Receivers
 
@@ -464,7 +468,7 @@ Field order is part of the logical Structure. When a receiver supports positiona
 Semantic field names may be assigned by receiver normalization. A receiver may reject a Structure that contains unknown child Structures, missing required fields or incompatible field ordering.
 
 
-5. Receiver-Based Semantics5. Receiver-Based Semantics
+5. Receiver-Based Semantics
 
 5.1. Core Rule
 
@@ -711,11 +715,15 @@ Explicit nested-source form:
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
 
-7.3.1. Single Namespace
+7.3.1. Single Namespace and No Silent Shadowing
 
-Variables, functions, subroutines, types, receivers, model names and local bindings share one lexical namespace within the relevant scope.
+Types, variables, functions, subroutines, receivers, model names, generic operation names and local executable definitions share one lexical namespace within a lexical scope chain.
 
-A name cannot be declared twice in the same scope. A local variable cannot reuse the name of a visible type or receiver unless a later shadowing policy explicitly allows it.
+A new binding may be introduced only if the same name is not already visible in the active lexical scope chain. This includes names introduced by declarations, nested `fn` definitions, nested `sub` definitions, imports and model/type constructors.
+
+A local variable cannot reuse the name of a visible type. A local `fn` or `sub` cannot reuse the name of a visible variable, type, receiver, model or executable definition. Imports must not silently shadow visible names. Conflict resolution must be explicit through a future import/qualification rule.
+
+L5 message selectors are looked up through a receiver object's behavior table. A selector is not automatically a lexical binding unless it is also imported or registered as an ordinary receiver/generic operation. The implementation name attached to a message is a lexical executable binding and follows the single-namespace rule.
 
 In expression position, a visible `fn` name is callable. In head/update position inside its own body, the current `fn` name denotes the current return binding.
 
@@ -735,6 +743,54 @@ Example:
     end factorial
 
 Inside the body, `factorial 1` updates the return binding of the current function. The expression `factorial(n - 1)` is a recursive function call because it appears in expression position.
+
+7.3.2. Nested `fn` and `sub` Definitions
+
+Nested `fn` and `sub` definitions are allowed inside executable bodies. A nested definition creates a local executable binding in the current lexical scope.
+
+Example:
+
+    fn outer
+      int x
+    ---
+      int
+    ---
+      fn addX
+        int y
+      ---
+        int
+      ---
+        addX x + y
+      end addX
+
+      outer addX(10)
+    end outer
+
+The nested `fn` `addX` is visible inside the body of `outer` after its definition and inside its own body for recursion. It is not visible outside `outer`.
+
+A nested executable has its own local scope. It may read visible outer bindings according to lexical lookup. Mutation of outer bindings from a nested executable is not part of the minimal semantics unless a later execution-model specification defines explicit capture, reference or closure rules.
+
+A nested `fn` or `sub` may not escape its defining scope unless a later closure/environment specification defines how its environment is represented. Returning a nested executable as a value, storing it in a longer-lived Structure or passing it to a context that may outlive the defining scope requires such closure semantics.
+
+Because names are shared across types, variables, models and executables, nested definitions do not introduce shadowing. The following is invalid if `helper` is already visible as a variable, type, receiver, model or executable binding:
+
+    fn outer
+      int helper
+    ---
+      int
+    ---
+      fn helper
+        int x
+      ---
+        int
+      ---
+        helper x
+      end helper
+    end outer
+
+?
+Closure representation, explicit capture, mutation of outer bindings and escaping nested executables are not specified in this document. They belong to a future execution-model and runtime specification.
+?
 
 7.4. Body Names
 
@@ -1049,41 +1105,228 @@ Define models through an `autoModel` receiver with explicit child Structures suc
 variant 3:
 Allow both forms and define one as canonical normalization for the other.
 
+9.4. Normalized Model Descriptor
 
-10. Objects, Configuration and Messages10. Objects, Configuration and Messages
+A model receiver may normalize its input into a model descriptor. This document uses the term `ModelSpec` for that normalized descriptor. `ModelSpec` is not a magical built-in source keyword; it is the conventional semantic result produced by receivers such as `model`, `autoModel`, imported schema receivers or future mapping receivers.
 
-10.1. Objects as Structures
+A minimal `ModelSpec` contains:
 
-An object is a Structure or a handle/reference to a Structure. Object declarations, object instances, configuration records and messages are receiver-defined Structures.
+    name
+    vars
+    defaults
+    conditions or validator
+    layout policy
+    derivation requests
+    source/provenance metadata
 
-10.2. L5 Configuration Example
+`name` is the model name registered in the shared namespace.
+
+`vars` is the ordered Structure of slots/bindings. Field order is part of the logical model and may be used for positional construction, return Structures, destructuring, layouts, relation signatures and serialization.
+
+`defaults` are default initial values for slots. They may be represented directly in `vars`, for example `f64 harvest 0.0`, or materialized as a separate descriptor view.
+
+`conditions` or `validator` define which values are valid instances of the model. Conditions may be listed as expression Structures or delegated to a boolean function.
+
+`layout policy` describes how stable or externally constrained the slot order/representation is. The physical representation is still a lowering decision unless an explicit layout receiver fixes it.
+
+`derivation requests` describe which artifacts may be derived from the model, such as constructors, validators, accessors, relation signatures, serializers or documentation schemas.
+
+`source/provenance metadata` records the source receiver, file, line, import or external origin of the descriptor for diagnostics and incremental rebuilds.
+
+9.5. Union Descriptors and Variant Membership
+
+A `union` receiver defines a closed set of allowed model variants.
+
+Example:
+
+    L4
+      union Shape
+        Circle
+        Square
+        Triangle
+      ---
+    ---
+
+Conceptual normalized descriptor:
+
+    UnionSpec
+      name Shape
+      variants
+        Circle
+        Square
+        Triangle
+      ---
+    ---
+
+At source-semantic level, a value of `Shape` is a value whose concrete variant is one of the listed model names. A concrete variant value may be injected into the union when the expected type is the union.
+
+Example:
+
+    Circle 10.0
+
+creates a `Circle` value through the `Circle` constructor. If the expected type is `Shape`, the translator/receiver may inject that value into `Shape` by attaching the variant name `Circle` and the concrete `Circle` value.
+
+Conceptual source meaning:
+
+    Shape
+      tag Circle
+      payload
+        Circle
+          radius 10.0
+        ---
+      ---
+    ---
+
+`tag` is the variant name. `payload` is the concrete value produced by the variant constructor. The union does not create the payload by itself.
+
+The physical representation of a union value is not defined by this structural core. A translator may use tagged inline storage, tagged handles, model-id plus value-handle pairs, pointer-based payloads or another representation.
+
+9.6. Registry Facts Generated by Structural Descriptors
+
+Model, union, operator and behavior descriptors may be represented internally as typed facts. For example, a model descriptor for `Circle` may materialize facts such as:
+
+    model Circle
+    slot Circle radius f64
+
+A union descriptor may materialize facts such as:
+
+    union Shape
+    variant Shape Circle
+    variant Shape Square
+    variant Shape Triangle
+
+These facts are registry facts. They are not ordinary runtime assertions unless a receiver exposes them to a runtime query system. The fact representation gives one uniform way to index, query, validate and derive registry information.
+
+9.7. Model Extension and Conflict Policy
+
+A model name has one structural `ModelSpec` unless an explicit extension/refinement receiver defines controlled composition. A second independent structural model definition for the same name is a conflict.
+
+Adding constraints, behavior, generic methods, union membership or documentation to an existing model must be explicit through registered receivers such as `refineModel`, `behavior`, `method`, `variant`, `extendUnion` or future extension forms.
+
+
+10. L5 Behavior, Objects, Messages and Facts
+
+10.1. L4 Model vs L5 Behavior
+
+The word `model` may appear at different levels, but the source semantics must distinguish two roles:
+
+    L4 structural model -> slots, types, defaults, constraints, layout and derivations
+    L5 behavior model   -> messages, selectors, method implementations and object dispatch
+
+The canonical term for the L5 role in this document is `behavior`. If a future L5 profile allows the receiver name `model`, it must consume Structures as an L5 behavior/message descriptor, not as the L4 structural `ModelSpec` receiver.
+
+10.2. Behavior Descriptor
+
+A behavior descriptor attaches message responses to an existing model name.
 
 Example:
 
     L5
-      NorthGreenhouse
-        controller GreenhouseController
-        config
-          batchSize 500
-          reportMode Daily
-        end config
-      end NorthGreenhouse
-    end L5
+      behavior Circle
+        message drawOn drawCircleOn
+        message area circleArea
+      ---
+    ---
 
-Generic structure:
+Conceptual descriptor:
 
-    L5(
-      NorthGreenhouse(
-        controller GreenhouseController,
-        config(
-          batchSize 500,
-          reportMode Daily
-        )
-      )
-    )
+    BehaviorSpec
+      model Circle
+      messages
+        drawOn drawCircleOn
+        area circleArea
+      ---
+    ---
 
-Whether `NorthGreenhouse` is an object definition, an object instance, a message target or a configuration name depends on the L5 receiver registry.
+The implementation names `drawCircleOn` and `circleArea` are ordinary executable bindings and must be visible in the shared namespace. Duplicate message selectors for the same model are conflicts unless an explicit override/refinement receiver defines another policy.
 
+A behavior descriptor does not redefine the structural fields of `Circle`. It attaches message behavior to the structural model already registered under `Circle`.
+
+10.3. Runtime Object Value
+
+An L5 object value is a Structure or handle/reference to a Structure together with enough model information to resolve behavior. Conceptually:
+
+    object
+      model Circle
+      slots
+        radius 10.0
+      ---
+    ---
+
+The `slots` layout and validation come from the L4 `ModelSpec`. The message table comes from the L5 `BehaviorSpec` or from registry facts materialized from it.
+
+10.4. Message Send
+
+A message send has a receiver object, a selector and an argument Structure.
+
+Example source form:
+
+    shape drawOn canvas
+
+Conceptual send fields:
+
+    receiver shape
+    selector drawOn
+    args (canvas)
+
+Resolution:
+
+    model shape.model
+    method lookupMessage(model, drawOn)
+    call method(shape, canvas)
+
+The receiver object is passed as the first semantic argument to the selected implementation.
+
+If `shape.model` is `Circle`, and the behavior registry contains:
+
+    message Circle drawOn drawCircleOn
+
+then the send lowers or interprets as:
+
+    drawCircleOn(shape, canvas)
+
+10.5. Message Lookup Strategies
+
+The source semantics require lookup by `(model, selector)`. The implementation may use dictionaries, selector indexes, method tables, inline caches or static lowering when the receiver model is known.
+
+If no message exists for `(model, selector)`, the behavior is not fixed by this document. A strict profile may report an error. A dynamic L5 profile may route the send to a `doesNotUnderstand` receiver.
+
+!!!
+L5 message-missing behavior is not fixed. A final L5 behavior specification must decide whether missing messages are compile-time errors, runtime errors, `doesNotUnderstand` sends, receiver-defined diagnostics or query failures.
+!!!
+
+10.6. L5 Facts and Rules
+
+L5 may store registry information as typed facts and rules. Examples:
+
+    fact model Circle
+    fact slot Circle radius f64
+    fact behavior Circle
+    fact message Circle drawOn drawCircleOn
+    fact variant Shape Circle
+    fact method draw Circle drawCircle
+
+The same information may also be materialized as descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec` or `GenericMethodSpec`. Descriptors and facts are two views of one registry model.
+
+L5 rules may derive registry facts from other facts. For example, a rule may derive that a generic operation is complete for a union when every union variant has a registered method implementation.
+
+10.7. L5 Configuration and Build Example
+
+Example:
+
+    L5
+      target
+        app
+        kind executable
+        sources ("src/hello.lm3")
+        entry hello
+        output "build/bin/hello.lm0.exe"
+      ---
+
+      build app
+    ---
+
+The `target` and `build` receivers define build semantics. They may also emit registry facts used by the builder. The structural core only creates Structures and specifies that L5 receivers consume them as messages, configuration, behavior descriptors, facts, rules or build/query requests.
 
 11. Operators and Receiver Registration
 
@@ -1142,6 +1385,96 @@ Example registrations may define:
     if callable from L5 -> l5_if
 
 The active level determines which receiver implementation consumes the Structure.
+
+11.4. Generic Operations and Method Registration
+
+A generic operation is a registered receiver whose implementation is selected by a dispatch rule rather than by one fixed executable definition.
+
+Example:
+
+    L4
+      operator draw
+        callableFrom L3
+        dispatchBy firstArgumentModel
+        domain Shape
+      ---
+
+      method draw Circle drawCircle
+      method draw Square drawSquare
+      method draw Triangle drawTriangle
+    ---
+
+The `operator draw` frame registers `draw` as a callable generic receiver. The child Structure `dispatchBy firstArgumentModel` says that the concrete implementation is selected by the model of the first argument. The child Structure `domain Shape` restricts or documents the generic domain.
+
+Each `method` frame registers one dispatch entry:
+
+    method <generic-name> <model-name> <implementation-name>
+
+Example semantic facts:
+
+    generic draw
+    dispatchBy draw firstArgumentModel
+    domain draw Shape
+    method draw Circle drawCircle
+    method draw Square drawSquare
+    method draw Triangle drawTriangle
+
+The implementation names are ordinary `fn` or `sub` bindings and must satisfy the signature contract of the generic operation. For example, if `draw` returns no value, each drawing implementation is normally a `sub`. If `draw` returns a `DrawCommand`, each implementation must return a compatible value.
+
+11.5. Dispatch from Union Domain
+
+If a generic operation has a union domain, the union variants and method facts together define complete dispatch.
+
+Example union facts:
+
+    variant Shape Circle
+    variant Shape Square
+    variant Shape Triangle
+
+Example method facts:
+
+    method draw Circle drawCircle
+    method draw Square drawSquare
+    method draw Triangle drawTriangle
+
+At a call site:
+
+    Shape shape
+    draw shape
+
+translation may derive:
+
+    match shape
+      case Circle c
+        drawCircle c
+      ---
+      case Square s
+        drawSquare s
+      ---
+      case Triangle t
+        drawTriangle t
+      ---
+    ---
+
+The `match` form checks the union tag/variant name, extracts the payload as the concrete model and calls the registered implementation. If the first argument is statically known to be `Circle`, the call `draw c` may lower directly to `drawCircle c`.
+
+Completeness for a union domain is a registry check: for every `variant(Shape, V)`, there must be a compatible `method(draw, V, Impl)` unless a default or fallback method is explicitly registered.
+
+11.6. Generic Operation vs L5 Message
+
+A generic operation such as `draw shape` dispatches through a generic operation registry:
+
+    (generic name, first argument model) -> implementation
+
+An L5 message send such as:
+
+    shape drawOn canvas
+
+dispatches through the receiver object's behavior table:
+
+    (receiver.model, selector) -> implementation
+
+Both mechanisms may be represented as registry facts. They are different source-semantic forms. A generic operation is centered on the operation name. A message send is centered on the receiver object.
 
 
 12. Conditional Structures
@@ -1445,7 +1778,7 @@ For handle-based Structures, generated code reads fields through generated acces
 ---ANSI C---
 
 
-17. L4 Non-Executive Semantics17. L4 Non-Executive Semantics
+17. L4 Non-Executive Semantics
 
 L4 consumes Structures as model/type/contract/registry input. It may:
 
@@ -1465,15 +1798,31 @@ Runtime effect receivers such as file I/O, network send, process launch, databas
 A diagnostic receiver visible from L4 is not the same as L3 runtime `print`.
 
 
-18. L5 Message and Build Semantics
+18. L5 Message, Fact and Build Semantics
 
 18.1. L5 Input
 
-An L5 file is a file containing L5 messages and configuration Structures. It is not a special `project` file unless a project receiver is explicitly registered.
+An L5 file contains messages, configuration Structures, behavior descriptors, registry facts, rules and build/query/startup receivers. It is not a special `project` file unless a project receiver is explicitly registered.
 
 The builder may be given a `.lm5`, `.lm3`, `.lmx` or other Lingvamyxa source file. It handles the top-level Structures through active receivers.
 
-18.2. Target Example
+18.2. Registry-as-Facts Model
+
+L5 may treat registry information as a typed fact store. Structural declarations from L4 can materialize facts. L5 behavior/configuration receivers can add facts. L5 query/build receivers can ask questions over those facts.
+
+Examples:
+
+    fact model Circle
+    fact slot Circle radius f64
+    fact variant Shape Circle
+    fact behavior Circle
+    fact message Circle drawOn drawCircleOn
+    fact generic draw
+    fact method draw Circle drawCircle
+
+The registry may also expose materialized descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec`, `GenericMethodSpec` and `RelationSpec`. These descriptors are derived views over facts or the facts are derived views over descriptors. The source semantics only require consistency between these views.
+
+18.3. Target Example
 
 Possible L5 build input:
 
@@ -1484,23 +1833,22 @@ Possible L5 build input:
         sources ("src/hello.lm3")
         entry hello
         output "build/bin/hello.lm0.exe"
-      end target
+      ---
 
       build app
-    end L5
+    ---
 
 The `target` and `build` receivers define the build semantics. The core only creates Structures.
 
-18.3. Entry Resolution
+18.4. Entry Resolution
 
-The builder either finds an entry/target through receivers, messages and signatures, or reports:
+The builder either finds an entry/target through receivers, messages, facts and signatures, or reports:
 
     no entry point
 
 An executable entry wrapper is created from build/target/entry information or from an implicit L3 top-level entry. It is not derived from a source file name.
 
 The symbol `main` may be a conventional entry symbol, but it is not a required startup-file convention.
-
 
 19. Compilation and Lowering
 
@@ -1615,88 +1963,160 @@ This shape is only an implementation option. The language does not know about `L
 
 21. Facts, Rules, Relations and Query
 
-21.1. Relation Mode
+21.1. Relation Signatures
 
-Relational mode is a receiver-based semantic mode over Structures. It does not introduce a separate Prolog-like syntax.
+Relational mode is a receiver-based semantic mode over Structures. It does not introduce a separate Prolog-like surface syntax.
 
-A relation frame describes a proposition shape.
-
-Example:
-
-    parent(Astra, NyufNyuf)
-
-As generic Structure:
-
-    parent(Astra, NyufNyuf)
-
-As a fact assertion only when consumed by `fact`:
-
-    fact(parent(Astra, NyufNyuf))
-
-As a query only when consumed by `query`:
-
-    query(parent(Astra, ?who))
-
-21.2. Recommended Level Placement
-
-Recommended placement:
-
-    L4 -> relation signatures, term types, contracts
-    L5 -> relation registries, knowledge bases, facts, rules, query messages
-    L3 -> ordinary code calls query/solve and consumes results
-    L2 -> indexing, unification, search, backtracking, caches
-
-21.3. Facts
-
-Facts may accumulate faster than source modules. Persistent fact storage should be separate from source files.
-
-Recommended division:
-
-    rules/signatures/contracts -> .lm4 / .lm5 / .lmx modules
-    accumulating facts         -> persistent store or database backend
-    query/relation engine      -> receiver layer over Structures and storage backend
-
-SQLite may be used as a backend, but it is not part of the core syntax.
-
-21.4. Unknowns
-
-A query may contain unknowns such as:
-
-    ?who
-    ?x
-    ?y
+A relation signature describes the shape and types of a relation. Relation signatures belong primarily to L4.
 
 Example:
 
-    query(parent(Astra, ?who))
+    L4
+      relation variant
+        Symbol unionName
+        Symbol modelName
+      ---
 
-Meaning:
+      relation method
+        Symbol genericName
+        Symbol modelName
+        Symbol implementationName
+      ---
+    ---
 
-    find bindings for ?who such that parent(Astra, ?who) is true
+The relation receiver registers relation signatures. It does not assert facts by itself.
 
-Unknowns are not ordinary uninitialized variables. They are logical variables interpreted by relational receivers.
+21.2. Facts
 
-21.5. Rules
+A fact assertion is an ordinary Structure consumed by a `fact` receiver or another fact-producing receiver.
+
+Examples:
+
+    fact variant Shape Circle
+    fact method draw Circle drawCircle
+    fact message Circle drawOn drawCircleOn
+
+A relation frame such as:
+
+    parent(Astra, NyufNyuf)
+
+is a fact only when consumed by a fact receiver. It is a query only when consumed by a query receiver.
+
+21.3. Registry as Typed Fact Store
+
+The compiler/runtime registry may be modeled as a typed fact store. The following are examples of registry facts:
+
+    model Circle
+    slot Circle radius f64
+    union Shape
+    variant Shape Circle
+    behavior Circle
+    message Circle drawOn drawCircleOn
+    generic draw
+    dispatchBy draw firstArgumentModel
+    domain draw Shape
+    method draw Circle drawCircle
+
+Descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec` and `GenericMethodSpec` may be materialized views over these facts. Conversely, source receivers may first produce descriptors and then materialize facts from them.
+
+21.4. Rules
 
 A rule defines a relation in terms of other relations.
 
+Example conceptual form:
+
+    rule
+      completeGeneric draw Shape
+    if
+      variant Shape ?model
+      method draw ?model ?implementation
+    ---
+
+The exact syntax for rule heads, rule bodies, conjunction, disjunction, negation and aggregation is not specified by this document.
+
+Rules are useful for deriving registry-level information, for example:
+
+    a generic operation is complete for a union
+    a model has a slot inherited from a refinement
+    an object responds to a message
+    a build target has all required sources
+
+21.5. Query
+
+A query asks for bindings that satisfy relation Structures.
+
 Example:
 
-    rule(
-      ancestor(?x, ?y),
-      if(parent(?x, ?y))
-    )
+    query
+      method draw ?model ?implementation
+    ---
 
-Recursive example:
+Meaning:
 
-    rule(
-      ancestor(?x, ?y),
-      if(parent(?x, ?z), ancestor(?z, ?y))
-    )
+    find model and implementation pairs for generic operation draw
 
-The `rule` receiver registers a logical rule. The inner relation Structures do not execute themselves.
+A query may contain unknowns such as:
 
-21.6. Unification
+    ?model
+    ?implementation
+    ?who
+
+Unknowns are logical variables interpreted by relational receivers. They are not ordinary uninitialized variables.
+
+21.6. Generic Dispatch as Query
+
+Generic dispatch can be derived by querying registry facts.
+
+For a call:
+
+    draw shape
+
+where `shape` has type `Shape`, the translator may query:
+
+    variant Shape ?model
+    method draw ?model ?implementation
+
+For each result, the translator can generate a `match` case over the union variant.
+
+For a concrete call:
+
+    Circle c
+    draw c
+
+the translator may query:
+
+    method draw Circle ?implementation
+
+and lower directly to the returned implementation.
+
+21.7. Message Lookup as Query
+
+L5 message lookup can also be represented as a query over facts.
+
+For a send:
+
+    shape drawOn canvas
+
+where `shape.model` is `Circle`, the runtime or translator queries:
+
+    message Circle drawOn ?implementation
+
+and calls the returned implementation with the receiver object and message arguments.
+
+21.8. Fact Persistence
+
+Facts may accumulate faster than source modules. Persistent fact storage may be separate from source files.
+
+Recommended division:
+
+    signatures/contracts/rules       -> L4/L5 source modules
+    generated registry facts         -> compiler/runtime registry
+    accumulating domain facts        -> persistent store or database backend
+    query/relation engine            -> receiver layer over Structures and storage backend
+
+SQLite or another database may be used as a backend, but it is not part of the core syntax.
+
+21.9. Unification
 
 Relational search is based on unification. Unification attempts to make two relation Structures compatible by assigning unknowns.
 
@@ -1705,26 +2125,25 @@ It respects:
     relation name
     argument count
     positional order
-    named fields when used
+    semantic named fields when used
     L4 relation signatures
     contracts and constraints when attached
 
-21.7. Query Result
+21.10. Query Result
 
 A query returns a Structure, for example:
 
-    QueryResult(
-      bindings(
-        binding(?who, NyufNyuf)
-      ),
-      status(success),
-      confidence(1.0)
-    )
+    QueryResult
+      bindings
+        binding ?model Circle
+        binding ?implementation drawCircle
+      ---
+      status success
+    ---
 
 ?
-The exact syntax and core status of `?name` logical variables, list literals and query result Structures belong to the relation/query specification. That specification must define these forms or map them to registered receivers.
+The exact syntax and core status of `?name` logical variables, list literals, rule bodies, negation, aggregation and query result Structures belong to the relation/query specification. That specification must define these forms or map them to registered receivers.
 ?
-
 
 22. Structural Grammar Sketch
 
@@ -1941,6 +2360,11 @@ Conceptual form:
     .                          built-in parser form for field access
     ^ & *                      L2 pointer/address/callable-reference operators
     relation/fact/rule/query   receiver-defined relational Structures
+    union                      receiver that registers a closed set of variants
+    method                     receiver that registers a generic dispatch entry
+    behavior                   L5 receiver that attaches message behavior to a model
+    message                    L5 behavior child Structure / registry fact
+    nested fn/sub              local executable definitions with lexical scope
 
 Core invariant:
 
@@ -1949,7 +2373,10 @@ Core invariant:
     Structures do not execute themselves;
     return exits executable bodies;
     function name in head/update position updates the current return binding inside its own body;
+    nested fn/sub definitions create local executable bindings;
+    visible names share one lexical namespace and do not silently shadow;
     `=` is not native assignment or native named-field syntax;
+    L4 structural descriptors and L5 behavior/fact descriptors may materialize registry facts;
     end closes source Structures.
 
 
@@ -1993,8 +2420,22 @@ The execution-model specification must define binding update, mutability, scope,
 ?
 
 ?
-The relation/query specification must define `?name` logical variables, list literals, query result Structures, fact persistence, indexes, transactions and external database integration.
+The relation/query specification must define `?name` logical variables, list literals, rule bodies, query result Structures, fact persistence, indexes, transactions and external database integration.
 ?
+
+?
+Closure representation for nested `fn` and `sub`, explicit capture, mutation of outer bindings and escaping nested executables are not specified.
+?
+
+?
+L5 behavior/message semantics require a final rule for missing messages, method overriding, dynamic message addition, selector identity and method-table consistency.
+?
+
+?
+The final level placement of the persistent fact/rule/configuration layer is not fixed. This draft places it in L5; a later specification may move some high-level fact, policy or live-configuration receivers to L6.
+
+?
+Generic operation signatures and method compatibility rules are not fully specified. A final specification must define how return types, argument Structures, domains and defaults are checked for `method` registrations.
 
 ?
 The general error/status system is not specified. Until specified, erroneous results may be represented as ordinary values allowed by the declared return type or by receiver-defined diagnostics.
