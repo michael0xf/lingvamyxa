@@ -1,0 +1,1428 @@
+Lingvamyxa Structural Core Specification
+
+Status
+
+This document specifies the structural core of Lingvamyxa as a self-contained language model.
+
+The document is descriptive and semantic. Surface syntax produces Structures. Receivers and procedures consume Structures and assign typed meaning to them.
+
+Design points that are not fully specified are marked explicitly.
+
+
+0. Core Formula
+
+Lingvamyxa is based on the following model:
+
+    L0 binaries run.
+    L1 ANSI/ISO C implements, bootstraps and targets.
+    L2-L5 are Lingvamyxa levels.
+    Source syntax builds Structures.
+    Receivers/procedures consume Structures.
+    Mathematical expressions are parsed by a second built-in parser and also produce Structures.
+    Levels restrict the active receiver/operator set.
+
+The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver/procedure consumes a Structure and assigns typed semantics to it.
+
+Canonical semantic pipeline:
+
+    source text
+        -> structural parse
+        -> generic Structure values
+        -> receiver/procedure consumption
+        -> typed semantic structures
+        -> interpretation or lowering
+
+A Structure does not execute merely because it exists. Execution, translation, registration, validation or query processing starts only when a receiver/procedure consumes the Structure under a defined mode.
+
+
+1. Levels
+
+1.1. L0
+
+L0 is a native binary artifact or machine-code artifact. It is the level that is actually executed by the CPU and operating system.
+
+Examples of L0 artifacts:
+
+    app.lm0.exe
+    app.lm0
+    core.lm0.dll
+    core.lm0.so
+    core.lm0.dylib
+    core.lm0.a
+    core.lm0.lib
+
+1.2. L1
+
+L1 is the ANSI/ISO C layer. It is the portable bootstrap and target layer. Initial parsers, translators, runtime components and receivers may be written in L1.
+
+Editable Lingvamyxa-owned L1 files may use:
+
+    *.lm1.c
+    *.lm1.h
+
+Ordinary external C files remain ordinary C files:
+
+    *.c
+    *.h
+
+1.3. L2
+
+L2 is the low-level unsafe Lingvamyxa level. It is closest to C. It may expose memory, pointers, handles, structures, explicit low-level operations and low-level concurrency.
+
+L2 is compiled. It is not executed as a casual script.
+
+1.4. L3
+
+L3 is the algorithmic and computational Lingvamyxa level. It supports safe top-level actions, computations and procedure calls. L3 code may be interpreted by the core runtime or compiled through the lowering pipeline.
+
+1.5. L4
+
+L4 is the non-executive model level. It describes models, types, protocols, contracts, constraints, relation signatures and registry metadata.
+
+L4 may update or check the compiler/runtime model. L4 does not perform ordinary runtime actions by default.
+
+1.6. L5
+
+L5 is the level of messages, configuration, objects, build/run/query/startup receivers, operator registration and high-level dispatch.
+
+1.7. Level Receivers
+
+`L2`, `L3`, `L4` and `L5` are level receivers. A level receiver consumes its nested Structure and sets the active receiver/operator set for that body.
+
+Example:
+
+    L4
+      operator
+        if
+        callableFrom = L5
+        implementation l5_if
+      end operator
+    end L4
+
+Semantic normal form:
+
+    L4(
+      operator(
+        if,
+        callableFrom = L5,
+        implementation(l5_if)
+      )
+    )
+
+The receiver `L4` consumes its body as model and registry input.
+
+
+2. Value Ontology
+
+The minimal core has two classes of values:
+
+    1. primitive/scalar/reference/handle values
+    2. Structure / Frame values
+
+Primitive/scalar/reference/handle values include numbers, booleans, atoms, symbols, enum-like values, handles, references, pointers and procedure/function references.
+
+All non-primitive values are Structures or handles/references to Structures. This includes arrays, text, objects, call frames, bodies, configurations, expressions and model fragments.
+
+A Structure can contain fields. A field can be positional, named or derived during normalization from a receiver signature.
+
+At L3 and above, Structures are normally passed by reference/handle. They are not copied by value at every call unless a receiver explicitly defines copy semantics.
+
+At L2, Structures may be lowered to C pointers, handles, layout structures or primitive representations.
+
+There is no fundamental keyword `Struct` in the minimal source syntax.
+
+
+3. Structures and Frames
+
+3.1. Structure
+
+A Structure is a value containing an ordered set of fields. Fields may have names. Field order is part of the logical structure and may become part of ABI, layout or signature semantics.
+
+A Structure may contain nested Structures. Tree-shaped data is represented as nested Structures.
+
+3.2. Frame
+
+A Frame is a Structure with a receiver/callee name and an argument Structure.
+
+Example source:
+
+    f(a, b, c)
+
+Generic logical form:
+
+    Frame(
+      name = f,
+      args = (
+        field0 = a,
+        field1 = b,
+        field2 = c
+      )
+    )
+
+In ordinary prose this document may write `f(a, b, c)` as a Structure or Frame. The exact internal representation is implementation-defined as long as receiver semantics are preserved.
+
+3.3. Structures Do Not Execute Themselves
+
+A Structure is data. It may describe code, a call, a model, an expression, a relation, a query or a configuration. It does not execute merely by existing.
+
+Execution starts only through explicit receiver/procedure consumption, for example:
+
+    compileCallFrame(frame)
+    evalExpression(expr)
+    call(procRef, args)
+    registerOperator(frame)
+    query(relationFrame)
+
+A function reference or procedure reference is also data until explicitly called or consumed by a receiver that calls it.
+
+
+4. Surface Forms and Normalization
+
+4.1. Compact Call Form
+
+Compact call form:
+
+    f(a, b, c)
+
+It creates a Frame named `f` with one logical argument Structure containing three positional fields.
+
+Normal form:
+
+    f(
+      field0 = a,
+      field1 = b,
+      field2 = c
+    )
+
+4.2. Line Command Form
+
+Line command form:
+
+    f a b c
+
+It creates the same logical Frame as:
+
+    f(a, b, c)
+
+A newline terminates the line command unless the parser is inside a parenthesized Structure or another explicitly open form.
+
+Line command form does not infer hidden nesting.
+
+Critical rule:
+
+    print getTypedValue values[i]
+
+normalizes as:
+
+    print(getTypedValue, values[i])
+
+It does not normalize as:
+
+    print(getTypedValue(values[i]))
+
+Explicit nesting must be written with parentheses or vertical structure.
+
+4.3. Vertical Frame Form
+
+Vertical frame form:
+
+    f
+      a
+      b
+      c
+    end f
+
+It creates a Frame named `f` with the same logical argument Structure as:
+
+    f(a, b, c)
+
+The explicit closing name must match the opened receiver/callee name.
+
+4.4. Parenthesized Bounded Structure
+
+Parentheses create a bounded Structure:
+
+    (a, b, c)
+
+Inside parentheses, arguments are separated by comma or by the matching closing parenthesis.
+
+Line command form inside parentheses continues until a comma or the matching closing parenthesis.
+
+Example:
+
+    if( i == 1, print choose hello, print choose world )
+
+Logical argument sections:
+
+    condition = expr(==(i, 1))
+    then      = (print(choose, hello))
+    else      = (print(choose, world))
+
+The names `condition`, `then` and `else` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `if` receiver.
+
+4.5. Indentation Structures
+
+An indented block after a line opens a vertical Structure. A newline at the same indentation level separates elements of the current Structure. A dedent closes the current indentation Structure.
+
+Explicit `end name` remains the preferred canonical close for named vertical frames because it allows the parser and formatter to verify that the intended receiver has been closed.
+
+4.6. Structural Separator `---`
+
+A standalone line:
+
+    ---
+
+is a structural separator/closer. It is not a receiver, not an operator and not a runtime action.
+
+Inside a vertical frame, `---` closes the current expanded structural section at the current level and moves normalization to the next section according to the active receiver/procedure signature.
+
+Example:
+
+    if mode == debug
+      build debugTarget
+    ---
+      build releaseTarget
+    end if
+
+If the active `if` signature is:
+
+    if(condition, then, else)
+
+then the normal form is:
+
+    if(
+      condition = expr(==(mode, debug)),
+      then = (
+        build(debugTarget)
+      ),
+      else = (
+        build(releaseTarget)
+      )
+    )
+
+The fields `then` and `else` contain branch Structures.
+
+A trailing `---` before `end name` is allowed as an analogue of a trailing comma. It closes the last current section and does not create a new empty section.
+
+Repeated `---` may close several nested sections. Canonical readable source uses explicit `end name` for named frames.
+
+4.7. Named Fields
+
+A named field has the form:
+
+    name = value
+
+It creates a field named `name` inside the current argument Structure.
+
+The value of a named field may be primitive, reference/handle or Structure.
+
+Example:
+
+    then = (
+      build debugTarget
+    )
+
+This means that the field `then` contains a Structure.
+
+4.8. Positional and Named Fields
+
+A Structure may contain positional fields and named fields.
+
+After the first named field in the same argument Structure, additional positional fields are not allowed.
+
+Valid form:
+
+    f(a, b, c = c1, d = d1)
+
+Invalid form:
+
+    f(a, b = b1, c)
+
+This restriction prevents unstable binding between positional order and named-field mapping.
+
+4.9. Field Order
+
+Field order is part of the logical Structure. When a receiver supports positional arguments, positional fields are mapped to receiver signature fields in order.
+
+Named fields are mapped by name. A receiver may reject a Structure that contains unknown fields, missing required fields or incompatible field ordering.
+
+
+5. Receiver-Based Semantics
+
+5.1. Core Rule
+
+Surface syntax builds Structures. Receivers/procedures give those Structures meaning.
+
+Semantic formula:
+
+    surface syntax -> generic Structure -> receiver/procedure -> typed semantic structure
+
+A receiver has a signature. The signature defines how positional fields, named fields, `---` sections, expression fields and body fields are interpreted.
+
+5.2. Receiver Consumption Modes
+
+A receiver may consume a field as one of the following semantic modes:
+
+    primitive value
+    expression
+    body Structure
+    declaration
+    model fragment
+    configuration message
+    data Structure
+    delayed branch
+    relation frame
+    query frame
+
+The mode is receiver-defined. The parser does not decide that a field is executable merely because it looks like code.
+
+5.3. Example: `if`
+
+For a computational L3 `if`, the receiver may define fields:
+
+    condition
+    then
+    else
+
+and consume them as:
+
+    condition -> boolean-producing expression
+    then      -> body Structure
+    else      -> body Structure
+
+During translation, the receiver lowers these fields into target control flow. During interpretation, the receiver evaluates the condition and then interprets only the selected body.
+
+5.4. Example: `func`
+
+For a function-definition receiver, fields may be consumed as:
+
+    name -> function name
+    args -> argument Structure
+    ret  -> return Structure
+    body -> function body Structure
+
+The receiver creates or registers an executable definition. The `func` frame itself is not the function call.
+
+5.5. Same Shape, Different Receivers
+
+The same surface shape can have different semantics under different receivers.
+
+Example:
+
+    (a, b)
+
+As a function argument Structure, it may mean two positional arguments.
+
+As a return layout Structure, it may mean two return fields.
+
+As a model fragment, it may mean a structural model.
+
+As query input, it may mean a tuple of terms.
+
+The receiver defines the interpretation.
+
+
+6. Mathematical Expression Parser
+
+6.1. Second Built-In Parser
+
+Lingvamyxa has a structural parser and a mathematical expression parser.
+
+The mathematical parser is invoked from argument positions when mathematical operator tokens are encountered, for example:
+
+    ==
+    !=
+    <
+    >
+    <=
+    >=
+    +
+    -
+    *
+    /
+
+The mathematical parser is built in as an invocation point because infix precedence and grouping must be resolved before ordinary receiver dispatch.
+
+6.2. Expression Output
+
+The mathematical parser returns a Structure.
+
+Example source:
+
+    j == 1
+
+Possible normal form:
+
+    ==(j, 1)
+
+Another possible implementation form:
+
+    expr(op = ==, left = j, right = 1)
+
+Both are Structures. The minimal core does not require a separate `Tree` type for expressions.
+
+!!! needs clarification !!!
+
+The exact canonical expression Structure is not fixed. A final specification must choose one canonical representation, such as `==(j, 1)` or `expr(op=..., left=..., right=...)`, or define a required equivalence layer.
+
+6.3. Expressions Are Data Before Consumption
+
+An expression Structure is data until a receiver consumes it as an expression.
+
+For example, the `if` receiver consumes its `condition` field as an expression. A configuration receiver might instead store the same Structure as data.
+
+
+7. Procedure and Function Definitions
+
+7.1. `proc` and `func` Are Receivers
+
+`proc` and `func` are definition receivers. Each consumes a Structure and registers an executable definition. During bootstrap they may be present in an L1 prelude table or parser switch.
+
+A `func` frame consumes a Structure and registers or creates a function definition.
+
+A `proc` frame consumes a Structure and registers or creates a procedure definition.
+
+7.2. Function Definition Form
+
+Example source:
+
+    func myFunc (int i, int j = 1, p1, p2) (int r1, int r2)
+      print i
+      print j
+      p1
+      p2
+    end func
+
+Strict normal form:
+
+    func(
+      name = myFunc,
+      args = (
+        int(i),
+        int(j = 1),
+        p1,
+        p2
+      ),
+      ret = (
+        int(r1),
+        int(r2)
+      ),
+      body = (
+        print(i),
+        print(j),
+        p1,
+        p2
+      )
+    )
+
+The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set.
+
+7.3. Procedure Definition Form
+
+Example source:
+
+    proc l5_if (boolean condition) then else
+      ...
+    end proc
+
+Strict normal form:
+
+    proc(
+      name = l5_if,
+      args = (
+        boolean(condition),
+        then,
+        else
+      ),
+      body = (...)
+    )
+
+The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
+
+7.4. Function Body Names
+
+Variables or names used inside a function or procedure body do not become arguments automatically. Arguments are defined only by the argument Structure consumed by the definition receiver.
+
+7.5. Closing Definition Frames
+
+The canonical closing rule for an explicit named vertical frame is:
+
+    a frame closes with the receiver/callee name that opened it
+
+Therefore a `func` definition frame closes as:
+
+    end func
+
+and a `proc` definition frame closes as:
+
+    end proc
+
+!!! needs clarification !!!
+
+The definition-closing rule is not fully specified. A final specification must decide whether definition frames close by receiver name, declared entity name, or a receiver-defined aliasing rule. This document uses receiver-name closure as the strict structural rule.
+
+
+8. Runtime Return and `end`
+
+8.1. Syntactic `end name`
+
+`end name` is the explicit close of a named vertical frame. It belongs to the structural parser.
+
+Example:
+
+    if condition
+      bodyCall
+    end if
+
+The parser verifies that `if` is the currently open named frame.
+
+8.2. Executable Return Receiver
+
+In executable body mode, a line such as:
+
+    end estimateHarvest(bed.area, 0, 0)
+
+is treated as a standard executable return/exit receiver, distinct from the syntactic frame closer `end name`.
+
+It terminates the current executable entity named `estimateHarvest` and supplies a return Structure.
+
+Possible normal form:
+
+    end(
+      target = estimateHarvest,
+      ret = (bed.area, 0, 0)
+    )
+
+Named return form:
+
+    end estimateHarvest(harvest = bed.area, redApples = 0, greenApples = 0)
+
+Possible normal form:
+
+    end(
+      target = estimateHarvest,
+      ret = (
+        harvest = bed.area,
+        redApples = 0,
+        greenApples = 0
+      )
+    )
+
+8.3. Return Type Matching
+
+The return Structure must match the return Structure declared or inferred for the current function. Positional fields are matched by order. Named fields are matched by name.
+
+!!! needs clarification !!!
+
+Executable `end target(...)` is not fully specified. A final specification must define whether it is a built-in executable receiver, a registered receiver, or special parser syntax. This document treats it as a standard executable receiver with reserved parser interaction only where necessary to avoid ambiguity with structural closing.
+
+
+9. Type and Model Forms
+
+9.1. Type and Model Information
+
+Type and model information is expressed by registered receivers and Structures.
+
+Example receiver-level form:
+
+    model Harvest
+      field harvest f32
+      field redApples f32
+      field greenApples f32
+    end model
+
+9.2. Type Constructors
+
+A form such as:
+
+    int i
+
+or:
+
+    PlantBed bed
+
+is meaningful only if `int` or `PlantBed` is a registered primitive/type/model constructor receiver in the active level.
+
+Possible normal form:
+
+    int(i)
+    PlantBed(bed)
+
+A receiver such as `func` may consume these Structures as typed argument declarations.
+
+9.3. Model Definitions
+
+A model definition is a Structure consumed by a model receiver.
+
+Possible form:
+
+    model PlantBed
+      field id u32
+      field crop Text
+      field area f64
+      field soilWater f64
+      field harvest f64 default = 0.0
+      where area > 0.0
+      where soilWater >= 0.0
+      where soilWater <= 100.0
+    end model
+
+This is only a possible receiver-level convention. The core only guarantees that it builds a `model(...)` Structure and that the active model receiver may consume it.
+
+!!! needs clarification !!!
+
+The model/type declaration syntax is not fully specified. A final specification must define canonical model/type receiver forms, field declaration forms, default-value forms and constraint forms.
+
+
+10. Objects, Configuration and Messages
+
+10.1. Objects as Structures
+
+An object is a Structure or a handle/reference to a Structure. Object declarations, object instances, configuration records and messages are receiver-defined Structures.
+
+10.2. L5 Configuration Example
+
+Example:
+
+    L5
+      NorthGreenhouse
+        controller = GreenhouseController
+        config
+          batchSize = 500
+          reportMode = Daily
+        end config
+      end NorthGreenhouse
+    end L5
+
+Generic structure:
+
+    L5(
+      NorthGreenhouse(
+        controller = GreenhouseController,
+        config(
+          batchSize = 500,
+          reportMode = Daily
+        )
+      )
+    )
+
+Whether `NorthGreenhouse` is an object definition, an object instance, a message target or a configuration name depends on the L5 receiver registry.
+
+
+11. Operators and Receiver Registration
+
+11.1. Operator as Receiver Registration
+
+`operator` is a receiver/procedure used during bootstrap or model loading. It registers receiver names, visibility levels and implementations.
+
+Example:
+
+    L4
+      operator
+        while
+        callableFrom = L3
+        implementation
+          while_func
+          level = L2
+        end implementation
+      end operator
+    end L4
+
+Semantic meaning:
+
+    Register a receiver/operator named `while`.
+    Make it callable from L3.
+    Use implementation `while_func`.
+    Treat that implementation as L2-level implementation.
+
+The `operator` frame is not the runtime/control operation being registered.
+
+11.2. Runtime Use of Registered Operators
+
+After registration, runtime/control source may contain:
+
+    L3
+      while i < beds.len
+        print beds[i].crop
+        i = i + 1
+      end while
+    end L3
+
+Here `while` is the opened frame and therefore closes as `end while`.
+
+The active L3 `while` receiver consumes its argument Structure according to its registered signature, typically as:
+
+    condition -> expression
+    body      -> body Structure
+
+11.3. Multiple Level-Specific Implementations
+
+The same surface receiver name may have different implementations at different levels.
+
+Example registrations may define:
+
+    if callable from L3 -> l3_if
+    if callable from L4 -> l4_model_if
+    if callable from L5 -> l5_if
+
+The active level determines which receiver implementation consumes the Structure.
+
+
+12. Conditional Structures
+
+12.1. L3 `if`
+
+L3 `if` is a computational control-flow receiver. It consumes:
+
+    condition -> boolean-producing expression
+    then      -> executable body Structure
+    else      -> executable body Structure
+
+At interpretation time, only the selected body is interpreted.
+
+At translation time, the receiver lowers the condition and body Structures into target control flow.
+
+12.2. L4 `if`
+
+L4 `if` is a model-conditional receiver. It does not execute runtime effects. It may conditionally include, exclude or normalize model Structures, registry entries and constraints.
+
+12.3. L5 `if`
+
+L5 `if` is a message/configuration dispatch receiver. It may conditionally dispatch build, run, query, startup or configuration messages.
+
+12.4. Canonical Vertical Conditional Form
+
+Canonical readable form:
+
+    if mode == debug
+      build debugTarget
+    ---
+      build releaseTarget
+    end if
+
+Normal form under signature `if(condition, then, else)`:
+
+    if(
+      condition = expr(==(mode, debug)),
+      then = (build(debugTarget)),
+      else = (build(releaseTarget))
+    )
+
+
+13. Pointers, References and Handles
+
+13.1. L3 Passing Model
+
+At L3, explicit pointer syntax is usually unnecessary. Structures, arrays, text, objects and other non-primitive values are passed as references or handles by default.
+
+13.2. L2 Pointer Constructor
+
+At L2, `^` may be a low-level pointer/reference constructor.
+
+Examples:
+
+    ^p
+    ^ PlantBed bed
+
+Possible meanings:
+
+    ^p              untyped reference / void* / pointer to structure
+    ^ PlantBed bed  typed pointer/reference if the type model is known
+
+The name `^` may be handled as a parser-level constructor or as a primitive receiver during bootstrap.
+
+13.3. Function and Procedure References
+
+Procedure/function references are primitive/reference-like values. They are not executed until a receiver explicitly calls them.
+
+!!! needs clarification !!!
+
+Pointer, address and function-reference forms are not fully specified. A final specification must define the status of `^`, `&` and `*`, including whether they are parser forms, registered constructors or level-specific operators.
+
+
+14. Arrays, Text and Indexing
+
+14.1. Logical Model
+
+At L3, an array is a Structure or handle/reference to a Structure. Text is also a Structure or handle/reference to a Structure.
+
+The logical model may include fields such as length, capacity, encoding, element type and storage handle.
+
+14.2. L2 Lowering
+
+At L2, arrays and text may lower to C pointers, length-plus-pointer records or other layout-specific representations.
+
+Example conceptual lowering for an array:
+
+    (len: usize, ptr: ^T)
+
+Lowering does not change source semantics.
+
+14.3. Indexing
+
+Indexing syntax may be represented structurally.
+
+Possible structural interpretation:
+
+    beds[i]
+
+normalizes to an indexing Structure such as:
+
+    index(beds, i)
+
+or to a receiver-defined field/index access form.
+
+!!! needs clarification !!!
+
+The final structural-core specification must define whether `[]` is built into the structural parser, implemented by the mathematical parser, or treated as a registered receiver/operator. It must also define bounds-checking semantics by level.
+
+
+15. Field Access
+
+Named field access may use dotted syntax:
+
+    result.harvest
+
+Possible normal form:
+
+    field(result, harvest)
+
+A receiver or expression parser may lower this to direct field access, handle lookup or model-dependent accessor code.
+
+!!! needs clarification !!!
+
+The final structural-core specification must define whether `.` is a built-in parser form, a mathematical-expression operator, or a registered receiver/operator. It must also define behavior for missing fields, unknown models and dynamic Structures.
+
+
+16. Positional Return and Destructuring
+
+16.1. Positional Return
+
+A function may return a Structure with ordered fields.
+
+Example:
+
+    end estimateHarvest(bed.area, 0, 0)
+
+If the declared return Structure is:
+
+    (harvest, redApples, greenApples)
+
+then fields are matched by position.
+
+16.2. Named Return
+
+A return Structure may also use named fields:
+
+    end estimateHarvest(harvest = bed.area, redApples = 0, greenApples = 0)
+
+Named fields are matched by name.
+
+16.3. Destructuring
+
+Positional destructuring has the form:
+
+    harvest, redApples, greenApples = toEat(myFilter, Monday)
+
+Semantic meaning:
+
+    tmp = toEat(myFilter, Monday)
+    harvest = tmp.field0
+    redApples = tmp.field1
+    greenApples = tmp.field2
+
+If the model provides field names, the implementation may expose named access:
+
+    tmp.harvest
+    tmp.redApples
+    tmp.greenApples
+
+!!! needs clarification !!!
+
+Assignment and destructuring are not fully specified. A final specification must define assignment, binding, destructuring and mutability rules under the Structure/receiver model.
+
+
+17. L4 Non-Executive Semantics
+
+L4 consumes Structures as model/type/contract/registry input. It may:
+
+    register models
+    register relation signatures
+    check contracts
+    normalize schemas
+    derive layouts
+    derive validators
+    update the internal compiler/runtime model
+    prepare compilation or self-compilation metadata
+
+L4 does not directly perform ordinary runtime effects by default.
+
+Runtime effect receivers such as file I/O, network send, process launch, database write, ordinary runtime print and thread start are not visible from L4 unless a special compile-time diagnostic or model receiver explicitly exposes a non-runtime effect.
+
+A diagnostic receiver visible from L4 is not the same as L3 runtime `print`.
+
+
+18. L5 Message and Build Semantics
+
+18.1. L5 Input
+
+An L5 file is a file containing L5 messages and configuration Structures. It is not a special `project` file unless a project receiver is explicitly registered.
+
+The builder may be given a `.lm5`, `.lm3`, `.lmx` or other Lingvamyxa source file. It processes the top-level Structures through active receivers.
+
+18.2. Target Example
+
+Possible L5 build input:
+
+    L5
+      target
+        app
+        kind = executable
+        sources = ("src/hello.lm3")
+        entry = hello
+        output = "build/bin/hello.lm0.exe"
+      end target
+
+      build app
+    end L5
+
+The `target` and `build` receivers define the build semantics. The core only creates Structures.
+
+18.3. Entry Resolution
+
+The builder either finds an entry/target through receivers, messages and signatures, or reports:
+
+    no entry point
+
+A generated C `main()` for an executable is created from build/target/entry information or from an implicit L3 top-level entry. It is not derived from a source file name.
+
+The symbol `main` may be a conventional entry symbol, but it is not a required startup-file convention.
+
+
+19. Compilation and Lowering
+
+19.1. Compilation Pipeline
+
+Compilation means:
+
+    Lingvamyxa source
+        -> Structures
+        -> semantic receiver processing
+        -> L1 ANSI C projection
+        -> platform C compiler/linker
+        -> L0 artifact
+
+19.2. Source File Extensions
+
+Lingvamyxa source files may use:
+
+    *.lm2    L2-only source
+    *.lm3    L3-only source
+    *.lm4    L4-only source
+    *.lm5    L5-only source
+    *.lmx    mixed Lingvamyxa source
+
+Generated/debuggable L1 projections may use:
+
+    *.lm2.c
+    *.lm2.h
+    *.lm3.c
+    *.lm3.h
+    *.lm4.c
+    *.lm4.h
+    *.lm5.c
+    *.lm5.h
+    *.lmx.c
+    *.lmx.h
+
+Generated `.lm*.c` and `.lm*.h` files are not garbage. They are readable L1 projections used for debugging, diagnostics and translator verification.
+
+A debug build may preserve source mapping using `#line` directives:
+
+    #line 42 "parser.lm2"
+
+or human-readable comments for larger blocks.
+
+19.3. Per-Level Build Semantics
+
+L2 sources are unsafe modules/libraries/objects. They are compiled, not interpreted as scripts.
+
+L3 sources may be interpreted or compiled. A top-level L3 sequence may become an implicit executable entry.
+
+L4 sources are checked, loaded and registered as model/contract/registry input. They are not launched as programs.
+
+L5 sources are message/configuration/build/startup/query inputs consumed by L5 receivers.
+
+Mixed `.lmx` sources are processed according to level receivers and entry rules. L5 entry messages take precedence if present; otherwise an L3 top-level sequence may become an implicit entry if the builder allows it.
+
+
+20. L1 ABI and Call Lowering
+
+20.1. Logical Argument Structure
+
+Every source call has one logical argument Structure.
+
+Example:
+
+    myProc(1, 2, 3, 4)
+
+Logical source semantics:
+
+    myProc(
+      field0 = 1,
+      field1 = 2,
+      field2 = 3,
+      field3 = 4
+    )
+
+20.2. Internal Optimized ABI
+
+Internal whole-target lowering may optimize physical argument passing.
+
+Recommended principle:
+
+    up to three primitive/reference fields may be passed directly;
+    if more logical fields exist, an args-structure pointer/handle is used;
+    the translator may generate adapters for concrete call sites.
+
+References and handles count as primitive scalar values for this purpose.
+
+20.3. Public/Exported ABI
+
+For exported `.lm0` libraries, a frame-based ABI is preferred:
+
+    runtime/context pointer
+    input argument Structure pointer/handle
+    output/result Structure pointer/handle or status return
+
+Example C shape:
+
+    LmStatus f(LmRuntime *rt, const F_Args *in, F_Ret *out)
+
+20.4. Source Semantics vs Physical Optimization
+
+The logical Structure always exists at source-semantic level. The physical Structure may be optimized away by the translator.
+
+!!! needs clarification !!!
+
+The ABI does not yet define whether the runtime/context pointer counts against the internal four-slot convention. A final ABI specification must define slot counting precisely.
+
+
+21. Facts, Rules, Relations and Query
+
+21.1. Relation Mode
+
+Relational mode is a receiver-based semantic mode over Structures. It does not introduce a separate Prolog-like syntax.
+
+A relation frame describes a proposition shape.
+
+Example:
+
+    parent(Astra, NyufNyuf)
+
+As generic Structure:
+
+    parent(Astra, NyufNyuf)
+
+As a fact assertion only when consumed by `fact`:
+
+    fact(parent(Astra, NyufNyuf))
+
+As a query only when consumed by `query`:
+
+    query(parent(Astra, ?who))
+
+21.2. Recommended Level Placement
+
+Recommended placement:
+
+    L4 -> relation signatures, term types, contracts
+    L5 -> relation registries, knowledge bases, facts, rules, query messages
+    L3 -> ordinary code calls query/solve and consumes results
+    L2 -> indexing, unification, search, backtracking, caches
+
+21.3. Facts
+
+Facts may accumulate faster than source modules. Persistent fact storage should be separate from source files.
+
+Recommended division:
+
+    rules/signatures/contracts -> .lm4 / .lm5 / .lmx modules
+    accumulating facts         -> persistent store or database backend
+    query/relation engine      -> receiver layer over Structures and storage backend
+
+SQLite may be used as a backend, but it is not part of the core syntax.
+
+21.4. Unknowns
+
+A query may contain unknowns such as:
+
+    ?who
+    ?x
+    ?y
+
+Example:
+
+    query(parent(Astra, ?who))
+
+Meaning:
+
+    find bindings for ?who such that parent(Astra, ?who) is true
+
+Unknowns are not ordinary uninitialized variables. They are logical variables interpreted by relational receivers.
+
+21.5. Rules
+
+A rule defines a relation in terms of other relations.
+
+Example:
+
+    rule(
+      ancestor(?x, ?y),
+      if(parent(?x, ?y))
+    )
+
+Recursive example:
+
+    rule(
+      ancestor(?x, ?y),
+      if(parent(?x, ?z), ancestor(?z, ?y))
+    )
+
+The `rule` receiver registers a logical rule. The inner relation Structures do not execute themselves.
+
+21.6. Unification
+
+Relational search is based on unification. Unification attempts to make two relation Structures compatible by assigning unknowns.
+
+It respects:
+
+    relation name
+    argument count
+    positional order
+    named fields when used
+    L4 relation signatures
+    contracts and constraints when attached
+
+21.7. Query Result
+
+A query returns a Structure, for example:
+
+    QueryResult(
+      bindings = [
+        (?who = NyufNyuf)
+      ],
+      status = success,
+      confidence = 1.0
+    )
+
+!!! needs clarification !!!
+
+The exact syntax and core status of `?name` logical variables, list literals and query result Structures are not fully specified. A final relation specification must define these forms or map them to registered receivers.
+
+
+22. Structural Grammar Sketch
+
+This grammar sketch describes the structural parser only. It does not define final receiver semantics.
+
+    program             ::= { item }
+
+    item                ::= empty_line
+                          | comment_line
+                          | line_frame
+                          | vertical_frame
+                          | expr_line
+
+    compact_frame       ::= name "(" [ argument_list ] ")"
+
+    line_frame          ::= name [ line_arguments ] newline
+
+    vertical_frame      ::= name [ line_arguments ] newline indent
+                              { vertical_item }
+                            dedent "end" name newline
+
+    vertical_item       ::= item
+                          | separator_line
+
+    separator_line      ::= "---" newline
+
+    argument_list       ::= argument { "," argument } [ "," ]
+
+    argument            ::= named_field
+                          | expression_or_structure
+
+    named_field         ::= name "=" expression_or_structure
+
+    bounded_structure   ::= "(" [ argument_list ] ")"
+
+    expression_or_structure
+                         ::= mathematical_expression
+                          | compact_frame
+                          | bounded_structure
+                          | atom_or_value
+
+    mathematical_expression
+                         ::= parsed by the mathematical expression parser
+
+This grammar is intentionally incomplete around assignment, indexing, field access, type constructors, literals and return forms because those areas require final design decisions.
+
+
+23. Canonical Examples
+
+23.1. Hello World
+
+Source:
+
+    L3
+      print Hello World
+    end L3
+
+Normal form:
+
+    L3(
+      print(Hello, World)
+    )
+
+`Hello` and `World` are accepted only if the active L3 `print` receiver and lexical rules allow bare atoms/symbols in that position.
+
+23.2. Function with Structural Return
+
+Source:
+
+    func estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
+      if bed.crop == Apples
+        end estimateHarvest(bed.area * 1.7, bed.area * 1.7, bed.area * 1.1)
+      end if
+
+      end estimateHarvest(bed.area, 0, 0)
+    end func
+
+Semantic outline:
+
+    `func` consumes a definition Structure.
+    `PlantBed bed` is a typed/model constructor Structure if `PlantBed` is registered.
+    The return Structure has three fields.
+    `if` consumes condition and body Structures.
+    `end estimateHarvest(...)` returns from the current function with a return Structure.
+
+23.3. L5 Conditional Build
+
+Source:
+
+    L5
+      if mode == debug
+        build debugTarget
+      ---
+        build releaseTarget
+      end if
+    end L5
+
+Normal form:
+
+    L5(
+      if(
+        condition = expr(==(mode, debug)),
+        then = (build(debugTarget)),
+        else = (build(releaseTarget))
+      )
+    )
+
+23.4. Operator Registration
+
+Source:
+
+    L4
+      operator
+        if
+        callableFrom = L5
+        implementation l5_if
+      end operator
+    end L4
+
+Semantic outline:
+
+    `L4` consumes the body as model/registry input.
+    `operator` registers the receiver name `if`.
+    `callableFrom = L5` sets visibility.
+    `implementation l5_if` names the implementation receiver/procedure.
+
+23.5. L5-if Implementation Procedure
+
+Source:
+
+    proc l5_if (boolean condition) then else
+      ...
+    end proc
+
+Normal form:
+
+    proc(
+      name = l5_if,
+      args = (
+        boolean(condition),
+        then,
+        else
+      ),
+      body = (...)
+    )
+
+
+24. Summary Table
+
+    f(a, b)                    compact Frame named f
+    f a b                      line command Frame named f
+    f ... end f                vertical Frame named f
+    (a, b)                     bounded Structure
+    name = value               named field in current Structure
+    ---                        structural section separator/closer
+    L2/L3/L4/L5                level receiver frames
+    proc                       receiver that registers procedure definitions
+    func                       receiver that registers function definitions
+    operator                   receiver that registers receivers/operators
+    if                         registered receiver, semantics depend on level
+    while                      registered receiver, semantics depend on level
+    end name                   syntactic close of named vertical frame
+    end target(...)            executable return/exit receiver in body mode
+    mathematical infix         parsed by built-in math parser into Structure
+    relation/fact/rule/query   receiver-defined relational Structures
+
+Core invariant:
+
+    syntax builds Structures;
+    receivers give Structures meaning;
+    Structures do not execute themselves.
+
+
+25. Consolidated Open Points
+
+!!! needs clarification !!!
+
+Definition-frame closing must be finalized. This document uses `end func` and `end proc` for strict structural consistency, but the language must define whether definition frames close by receiver name, declared entity name, or receiver-defined alias.
+
+!!! needs clarification !!!
+
+The canonical expression Structure must be finalized: operator-call form such as `==(j, 1)`, explicit expression frames such as `expr(op=..., left=..., right=...)`, or a required equivalence rule between both.
+
+!!! needs clarification !!!
+
+The final model/type declaration syntax must be specified. This includes fields, defaults, constraints, aliases, layouts and relation signatures.
+
+!!! needs clarification !!!
+
+The exact status of `[]`, `.`, `&`, `*`, list literals, string/text literals and `?name` logical variables must be defined under the structural-core parser.
+
+!!! needs clarification !!!
+
+Executable return syntax must be finalized. This document treats `end target(...)` as a standard executable return receiver, distinct from syntactic `end name`, but the boundary is not fully defined.
+
+!!! needs clarification !!!
+
+Assignment, binding, destructuring, mutability and scope rules are not fully defined.
+
+!!! needs clarification !!!
+
+ABI slot counting must be finalized, especially whether runtime/context counts against the direct-slot convention.
+
+!!! needs clarification !!!
+
+The formal persistence model for facts, rules, query indexes, transactions and external databases must be defined separately from the core syntax.
