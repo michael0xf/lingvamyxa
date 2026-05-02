@@ -107,7 +107,7 @@ Example:
     L4
       operator
         if
-        callableFrom = L5
+        callableFrom L5
         implementation l5_if
       end operator
     end L4
@@ -117,7 +117,7 @@ Semantic normal form:
     L4(
       operator(
         if,
-        callableFrom = L5,
+        callableFrom L5,
         implementation(l5_if)
       )
     )
@@ -164,11 +164,11 @@ Example source:
 Generic logical form:
 
     Frame(
-      name = f,
-      args = (
-        field0 = a,
-        field1 = b,
-        field2 = c
+      name: f,
+      args: (
+        field0: a,
+        field1: b,
+        field2: c
       )
     )
 
@@ -202,9 +202,9 @@ It creates a Frame named `f` with one logical argument Structure containing thre
 Normal form:
 
     f(
-      field0 = a,
-      field1 = b,
-      field2 = c
+      field0: a,
+      field1: b,
+      field2: c
     )
 
 4.2. Line Command Form
@@ -267,9 +267,15 @@ Example:
 
 Logical argument sections:
 
-    condition = <expression Structure for `i == 1`>
-    then      = (print(choose, hello))
-    else      = (print(choose, world))
+    field0: <expression Structure for `i == 1`>
+    field1: (print(choose, hello))
+    field2: (print(choose, world))
+
+Receiver-signature roles:
+
+    field0 -> condition
+    field1 -> then
+    field2 -> else
 
 The names `condition`, `then` and `else` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `if` receiver. The internal layout of the expression Structure is outside this structural-core document.
 
@@ -279,88 +285,184 @@ An indented block after a line opens a vertical Structure. A newline at the same
 
 Explicit `end` forms remain preferred for readable named vertical frames because they allow the parser, translator and formatter to verify intended closure.
 
-4.6. Structural Separator `---`
+4.6. Bare `end` and `---`
 
-A standalone line:
+The form:
+
+    end
+
+closes the current open vertical Structure.
+
+The standalone line:
 
     ---
 
-is a structural separator/closer. It is not a receiver, not an operator and not a runtime action.
+is a visual alias for bare `end`. It is not a receiver, not an operator, not a runtime action and not a separate section-separator construct.
 
-Inside a vertical frame, `---` closes the current expanded structural section at the current level and moves normalization to the next section according to the active receiver/subroutine signature.
+A closing line is aligned with the block that it closes. For a named vertical Structure, the closing line is aligned with the header line of that Structure.
 
 Example:
 
-    if mode == debug
-      build debugTarget
+    match value
+      case 1
+        print one
+      ---
+      case 2
+        print two
+      ---
+      default
+        print other
+      ---
     ---
-      build releaseTarget
-    end if
 
-If the active `if` signature is:
+This is equivalent to:
 
-    if(condition, then, else)
+    match value
+      case 1
+        print one
+      end
+      case 2
+        print two
+      end
+      default
+        print other
+      end
+    end
 
-then the normal form is:
+The first three `---` lines close the current `case` or `default` Structures. The final `---` closes the enclosing `match` Structure.
+
+The same form may be written with explicit validation tokens:
+
+    match value
+      case 1
+        print one
+      end case
+      case 2
+        print two
+      end case
+      default
+        print other
+      end default
+    end match
+
+A closing line whose indentation does not match the current open block is a syntax error. Indentation is exact; source formatting must not rely on visually ambiguous one-space differences.
+
+4.6.1. Ultra-short Anonymous Positional Structures
+
+Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written in ultra-short anonymous form.
+
+Example:
+
+    if a
+        doSomething
+      ---
+        doOtherThing
+      ---
+    ---
+
+Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
 
     if(
-      condition = <expression Structure for `mode == debug`>,
-      then = (
-        build(debugTarget)
+      a,
+      (
+        doSomething
       ),
-      else = (
-        build(releaseTarget)
+      (
+        doOtherThing
       )
     )
 
-The fields `then` and `else` contain branch Structures.
+The names `thenBody` and `elseBody` are assigned by the `if` receiver signature. They are not surface keywords in this form.
 
-A trailing `---` before an `end` form is allowed as an analogue of a trailing comma. It closes the last current section and does not create a new empty section.
+A one-line form is also possible when the receiver defines it:
 
-Repeated `---` may close several nested sections if the receiver signature and current nesting state make the closure unambiguous. Canonical readable source uses explicit `end` forms for named frames.
+    if a doSomething
 
-4.7. Named Fields
+This is a Frame whose final meaning is assigned by the active `if` receiver.
 
-A named field has the form:
-
-    name = value
-
-It creates a field named `name` inside the current argument Structure.
-
-The value of a named field may be primitive, reference/handle or Structure.
+Ultra-short anonymous Structures are intended for positional Structure arguments whose meaning is given by the enclosing receiver. If a nested Structure argument has its own semantic receiver/name, that receiver/name must be written explicitly.
 
 Example:
 
-    then = (
-      build debugTarget
+    f
+      structName
+        aa
+        ab
+      ---
+      a
+      b
+    ---
+
+This builds:
+
+    f(
+      structName(aa, ab),
+      a,
+      b
     )
 
-This means that the field `then` contains a Structure.
+If a receiver has more than one argument and the first argument is itself a Structure in short form without parentheses and commas, that first Structure must be a named Structure. Otherwise the source is visually and structurally indistinguishable from a flat argument body.
 
-4.8. Positional and Named Fields
+If the receiver has exactly one argument and that argument is a Structure, the short form is syntactically indistinguishable from the ordinary case where several items form the body of the receiver argument Structure. This is an intentional property of the short syntax. Parentheses, commas or an explicit named Structure must be used when the distinction matters.
 
-A Structure may contain positional fields and named fields.
+4.7. No Native `=` Assignment or Named-Field Operator
 
-After the first named field in the same argument Structure, additional positional fields are not allowed.
+The structural syntax does not use `=` for assignment and does not use `=` as a native named-field operator.
 
-Valid form:
+A semantic field name may still exist after receiver normalization. It is produced by receiver signatures, positional conventions, explicit nested Structures, declaration forms or model/type constructors.
 
-    f(a, b, c = c1, d = d1)
+Explicit source-level naming is written as an ordinary Structure, not as `name = value`.
 
-Invalid form:
+Example source:
 
-    f(a, b = b1, c)
+    model
+      name PlantBed
+      condition plantBedCondition
+    end model
 
-This restriction prevents unstable binding between positional order and named-field mapping.
+Conceptual receiver-level interpretation:
+
+    model(
+      name(PlantBed),
+      condition(plantBedCondition)
+    )
+
+The receiver `model` may interpret `name(PlantBed)` as semantic field `name` and `condition(plantBedCondition)` as semantic field `condition`.
+
+The token `=` belongs only to the mathematical expression syntax if that syntax chooses to use it, for example as equality/comparison. It is not native structural assignment.
+
+4.8. Positional Fields and Semantic Named Fields
+
+A Structure may contain positional fields. A receiver may assign semantic names to those fields through its signature.
+
+Example:
+
+    if a
+        doSomething
+      ---
+        doOtherThing
+      ---
+    ---
+
+With an `if(condition, thenBody, elseBody)` receiver signature, the second and third positional Structure arguments receive semantic names `thenBody` and `elseBody`.
+
+Explicit semantic field-like input should be represented by nested Structures:
+
+    config
+      batchSize 500
+      reportMode Daily
+    end config
+
+This builds ordinary nested Structures such as `batchSize(500)` and `reportMode(Daily)`. The active `config` receiver decides whether those Structures are interpreted as settings, fields, messages or ordinary child items.
 
 4.9. Field Order
 
 Field order is part of the logical Structure. When a receiver supports positional arguments, positional fields are mapped to receiver signature fields in order.
 
-Named fields are mapped by name. A receiver may reject a Structure that contains unknown fields, missing required fields or incompatible field ordering.
+Semantic field names may be assigned by receiver normalization. A receiver may reject a Structure that contains unknown child Structures, missing required fields or incompatible field ordering.
 
 
-5. Receiver-Based Semantics
+5. Receiver-Based Semantics5. Receiver-Based Semantics
 
 5.1. Core Rule
 
@@ -370,7 +472,7 @@ Semantic formula:
 
     surface syntax -> generic Structure -> receiver/subroutine -> typed semantic structure
 
-A receiver has a signature. The signature defines how positional fields, named fields, `---` sections, expression fields and body fields are interpreted.
+A receiver has a signature. The signature defines how positional fields, semantic field names, anonymous positional Structures, expression fields and body fields are interpreted.
 
 5.2. Receiver Consumption Modes
 
@@ -448,6 +550,7 @@ Native structural syntax builds ordinary receiver Frames and bounded Structures.
 
 Mathematical expression syntax is entered when the parser detects mathematical expression indicators in an argument position. Indicators include explicit numeric literals and mathematical/operator tokens such as:
 
+    =
     ==
     !=
     <
@@ -459,7 +562,7 @@ Mathematical expression syntax is entered when the parser detects mathematical e
     *
     /
 
-The parser does not need to reinterpret forms such as `i == 1` as ordinary Lingvamyxa receiver syntax first. It detects the mathematical operator token and parses the expression with the expression rules.
+The parser does not need to reinterpret forms such as `i == 1` or `i = 1` as ordinary Lingvamyxa receiver syntax first. It detects the mathematical operator token and parses the expression with the expression rules. The token `=` is not assignment in native structural syntax.
 
 6.2. Expression Output
 
@@ -515,28 +618,28 @@ A `sub` frame consumes a Structure and registers or creates a subroutine definit
 
 Example source:
 
-    fn myFunc (int i, int j = 1, p1, p2) (int r1, int r2)
+    fn myFunc (int i, int j 1, p1, p2) (int r1, int r2)
       print i
       print j
       p1
       p2
-    end fn
+    end myFunc
 
-Strict normal form:
+Strict conceptual form:
 
     fn(
-      name = myFunc,
-      args = (
+      name(myFunc),
+      args(
         int(i),
-        int(j = 1),
+        int(j, 1),
         p1,
         p2
       ),
-      ret = (
+      ret(
         int(r1),
         int(r2)
       ),
-      body = (
+      body(
         print(i),
         print(j),
         p1,
@@ -544,27 +647,31 @@ Strict normal form:
       )
     )
 
-Equivalent named-field form:
+Explicit nested-source form:
 
-    fn name = myFunc args = (int i, int j = 1, p1, p2) ret = (int r1, int r2)
-      print i
-      print j
-      p1
-      p2
+    fn
+      name myFunc
+      args
+        int i
+        int j 1
+        p1
+        p2
+      ---
+      ret
+        int r1
+        int r2
+      ---
+      body
+        print i
+        print j
+        p1
+        p2
+      ---
     end myFunc
 
-Equivalent reordered named-field form:
+The receiver `fn` consumes its child Structures by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures consumed by `fn`. They are not `=` named fields.
 
-    fn args = (int i, int j = 1, p1, p2) name = myFunc ret = (int r1, int r2)
-      print i
-      print j
-      p1
-      p2
-    end myFunc
-
-The receiver `fn` consumes named fields by name after normalization. Therefore the relative source order of explicitly named fields such as `name`, `args`, `ret` and `body` is not semantically significant unless the `fn` receiver explicitly defines an order-dependent convention.
-
-The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set.
+The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set. In declaration context, a type/constructor receiver consumes the following raw identifier as a new binding name. If that name already exists in the current namespace, the declaration is invalid.
 
 7.3. Subroutine Definition Form
 
@@ -572,37 +679,62 @@ Example source:
 
     sub l5_if (boolean condition) then else
       ...
-    end sub
+    end l5_if
 
-Strict normal form:
+Strict conceptual form:
 
     sub(
-      name = l5_if,
-      args = (
+      name(l5_if),
+      args(
         boolean(condition),
         then,
         else
       ),
-      body = (...)
+      body(...)
     )
 
-Equivalent named-field form:
+Explicit nested-source form:
 
-    sub name = l5_if args = (boolean condition, then, else)
-      ...
+    sub
+      name l5_if
+      args
+        boolean condition
+        then
+        else
+      ---
+      body
+        ...
+      ---
     end l5_if
 
-Equivalent reordered named-field form:
+The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
 
-    sub args = (boolean condition, then, else) name = l5_if
-      ...
-    end l5_if
+7.3.1. Single Namespace
 
-The receiver `sub` consumes named fields by name after normalization. Therefore the relative source order of explicitly named fields such as `name`, `args` and `body` is not semantically significant unless the `sub` receiver explicitly defines an order-dependent convention.
+Variables, functions, subroutines, types, receivers, model names and local bindings share one lexical namespace within the relevant scope.
 
-The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
+A name cannot be declared twice in the same scope. A local variable cannot reuse the name of a visible type or receiver unless a later shadowing policy explicitly allows it.
 
-7.4. Body Names
+In expression position, a visible `fn` name is callable. In head/update position inside its own body, the current `fn` name denotes the current return binding.
+
+Example:
+
+    fn factorial
+      int n
+    ---
+      int
+    ---
+      if n <= 1
+          factorial 1
+          return
+        ---
+      ---
+      factorial n * factorial(n - 1)
+    end factorial
+
+Inside the body, `factorial 1` updates the return binding of the current function. The expression `factorial(n - 1)` is a recursive function call because it appears in expression position.
+
+7.4. Body Names7.4. Body Names
 
 Variables or names used inside an `fn` or `sub` body do not become arguments automatically. Arguments are defined only by the argument Structure consumed by the definition receiver.
 
@@ -610,19 +742,21 @@ Variables or names used inside an `fn` or `sub` body do not become arguments aut
 
 `end` is a syntactic closing element. It is analogous to a closing parenthesis for vertical Structures. It has no runtime-return meaning by itself.
 
-The parser recognizes these structural closing and separator forms:
+The parser recognizes these closing forms:
 
     end
     ---
     end <node-name>
-    end <arg0-name>
+    end <entity-name>
 
 The forms:
 
     end
     ---
 
-carry no explicit argument. `end` closes the current vertical Structure. `---` closes or separates the current structural section according to the current nesting state and receiver signature.
+carry no explicit validation token. They close the current open vertical Structure. `---` is only a visual alias for bare `end`.
+
+The closing line is aligned with the current block being closed. For a named Structure, this means the closing line is aligned with the Structure header. For an ultra-short anonymous positional Structure, the closing line is aligned with the implicit anonymous block level established by the enclosing receiver form.
 
 The form:
 
@@ -632,7 +766,7 @@ closes the current vertical Structure and validates the closing token against th
 
 The form:
 
-    end <arg0-name>
+    end <entity-name>
 
 closes the current vertical Structure and validates the closing token against the normalized `name` field of the current Structure, if such a field exists. If no normalized `name` field exists, the closing policy may fall back to the first positional field when that field is a string-like name, atom or symbol.
 
@@ -656,32 +790,48 @@ Here `fn` validates against the node/receiver name.
 
 Here `myFunc` validates against the normalized `name` field of the current `fn` Structure. In this form the normalized `name` field is derived from the first positional argument.
 
-    fn name = myFunc args = (int i) ret = (int r)
-      return i
+    fn
+      name myFunc
+      args
+        int i
+      ---
+      ret
+        int r
+      ---
+      body
+        return i
+      ---
     end myFunc
 
-Here `myFunc` also validates against the normalized `name` field, but that field is written explicitly.
+Here `myFunc` also validates against the normalized semantic `name` field, but that field is written as an ordinary nested Structure.
 
-    fn args = (int i) name = myFunc ret = (int r)
-      return i
+    fn
+      args
+        int i
+      ---
+      name myFunc
+      ret
+        int r
+      ---
+      body
+        return i
+      ---
     end myFunc
 
-This is also valid because validation uses the normalized `name` field rather than the raw first source argument.
+This is also valid because validation uses the normalized semantic `name` field rather than the raw first source argument.
 
-All four forms are valid structural surface forms. A style guide may prefer one form for readability, but the structural core allows all of them.
+All four forms are valid structural surface forms. A style guide may prefer explicit named closure for long or deeply nested Structures, but the structural core allows all of them.
 
-A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure or section is closed and that invalid closing tokens are rejected according to the active closing policy.
+A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
 
-8. Runtime Return
+8. Runtime Return and Return-Binding Updates
 
 8.1. `return` Receiver
 
 Runtime exit from an `fn` or method-like executable body is represented by the `return` receiver/operator.
 
 `return` is not the same as `end`. `end` closes source structure. `return` exits the current executable body.
-
-During bootstrap and lowering, `return` may be implemented as an L1/L2 parser/translator subroutine that receives an argument Structure.
 
 8.2. Return Forms
 
@@ -697,28 +847,26 @@ Line-command form:
 
     return bed.area 0 0
 
-Return with named values:
-
-    return(harvest = bed.area, redApples = 0, greenApples = 0)
-
 All forms build or imply a return argument Structure consumed by the active executable-body receiver.
 
-8.3. Named Return Variables
+There is no native `return(harvest = value)` form because `=` is not a structural named-field operator. Named return fields are updated as ordinary bindings before `return`, or by receiver-defined nested Structures if a later return syntax adds them.
+
+8.3. Named Return Variables and Function-Name Return Binding
 
 Return values are ordinary declared return variables inside the executable body when the return signature gives them names.
 
 Example:
 
     fn estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
-      harvest = bed.area
-      redApples = 0
-      greenApples = 0
+      harvest bed.area
+      redApples 0
+      greenApples 0
       return
-    end fn
+    end estimateHarvest
 
 The empty `return` returns the current values of the declared return variables.
 
-A non-empty `return` fills the declared return variables before exiting.
+A non-empty `return` fills the declared return variables positionally before exiting.
 
 Example:
 
@@ -734,9 +882,32 @@ then the positional return values fill:
     redApples
     greenApples
 
-If the return fields are unnamed, `return` can still fill them positionally before exiting.
+Inside an `fn` body, the current function name may be used in head/update position as the current return binding. This update does not call the function.
 
-8.4. Return Source Semantics
+Example:
+
+    fn factorial
+      int n
+    ---
+      int
+    ---
+      if n <= 1
+          factorial 1
+          return
+        ---
+      ---
+      factorial n * factorial(n - 1)
+    end factorial
+
+The line `factorial 1` writes the current return binding. The expression `factorial(n - 1)` calls the function recursively.
+
+8.4. Implicit Return at Function End
+
+If execution reaches the end of an `fn` body and the function has a return binding, the current value of that return binding is returned implicitly.
+
+A style guide may still require explicit `return` in some contexts, but the source semantics allow an implicit final return of the current return binding.
+
+8.5. Return Source Semantics
 
 At the source-semantic level, a multi-value return is a return Structure.
 
@@ -744,7 +915,7 @@ A single primitive return returns one primitive value. A return signature with m
 
 Multiple named return fields are ordinary declared return variables inside the executable body. An empty `return` returns their current values as the declared return Structure.
 
-A non-empty `return` first fills the declared return fields positionally or by name and then exits the executable body.
+A non-empty `return` first fills the declared return fields positionally and then exits the executable body.
 
 Physical return strategy, storage ownership and low-level runtime representation are translator/runtime implementation details. They are not part of the source-semantic core.
 
@@ -779,15 +950,21 @@ These variants are implementation strategies only. The language-level rule remai
 
 Type and model information is expressed by registered receivers and Structures.
 
-Example receiver-level form:
+The structural core does not require a separate `field` receiver. In declaration context, a type or model constructor consumes a raw identifier token and creates a binding/slot.
 
-    model Harvest
-      field harvest f32
-      field redApples f32
-      field greenApples f32
-    end model
+Example:
 
-The parser only builds Structures. The active model receiver defines what `model`, `field`, type names and constraints mean.
+    u32 id
+    Text crop
+    f64 harvest 0.0
+
+Conceptual meaning:
+
+    declare binding/slot `id` with type `u32`
+    declare binding/slot `crop` with type `Text`
+    declare binding/slot `harvest` with type `f64` and default/initial value `0.0`
+
+The token after the type constructor is not evaluated as an existing value. It is a raw name introduced by the declaration. If the name already exists in the current namespace, the declaration is invalid.
 
 9.2. Type Constructors
 
@@ -801,61 +978,77 @@ or:
 
 is meaningful only if `int` or `PlantBed` is a registered primitive/type/model constructor receiver in the active level.
 
-Possible normal form:
-
-    int(i)
-    PlantBed(bed)
-
-A receiver such as `fn` may consume these Structures as typed argument declarations.
+A receiver such as `fn`, `sub`, `autoModel` or `args` may consume these Structures as typed declarations.
 
 9.3. Model Definitions
 
-A model definition is a Structure consumed by a model receiver.
+A model definition is a Structure consumed by a model receiver. One possible direction is to derive a model from a condition function:
 
-Possible form:
+    L4
+      model
+        name PlantBed
+        condition plantBedCondition
+      end model
+    end L4
 
-    model PlantBed
-      field id u32
-      field crop Text
-      field area f64
-      field soilWater f64
-      field harvest f64 default = 0.0
-      where area > 0.0
-      where soilWater >= 0.0
-      where soilWater <= 100.0
-    end model
+    L3
+      fn plantBedCondition
+        u32 id
+        Text crop
+        f64 area
+        f64 soilWater
+        f64 harvest 0.0
+      ---
+        boolean
+      ---
+        return
+          area > 0.0 &&
+          soilWater >= 0.0 &&
+          soilWater <= 100.0
+        ---
+      end plantBedCondition
+    end L3
 
-Conceptual structural form:
+In this direction, the input binding section of `plantBedCondition` defines the model slots and defaults. The boolean body defines the validation predicate.
 
-    model(
-      PlantBed,
-      field(id, u32),
-      field(crop, Text),
-      field(area, f64),
-      field(soilWater, f64),
-      field(harvest, f64, default = 0.0),
-      where(<expression Structure for `area > 0.0`>),
-      where(<expression Structure for `soilWater >= 0.0`>),
-      where(<expression Structure for `soilWater <= 100.0`>)
-    )
+Another possible direction is an `autoModel` receiver that receives a model name and two Structure arguments: one declaration Structure and one condition Structure.
 
-This section does not define a final type language. It only states that model declarations are ordinary Structures consumed by a model receiver. The receiver may interpret `field id u32` as a field named `id` with type `u32`, and `where area > 0.0` as a constraint expression.
+Example:
+
+    L4
+      autoModel PlantBed
+        vars
+          u32 id
+          Text crop
+          f64 area
+          f64 soilWater
+          f64 harvest 0.0
+        ---
+        condition
+          area > 0.0
+          soilWater >= 0.0
+          soilWater <= 100.0
+        ---
+      end PlantBed
+    end L4
+
+This section does not define a final type/model language. It only states that model declarations are ordinary Structures consumed by model receivers.
 
 ?
-The model/type declaration syntax is not specified in full in this document. A model/type specification must define canonical model/type receiver forms, field declaration forms, default-value forms, constraint forms, aliases, layouts and relation signatures.
+The model/type declaration syntax is only partially specified. The preferred direction avoids a separate `field` receiver and uses declaration-context type constructors such as `u32 id` and `f64 harvest 0.0`. Still unspecified: canonical alias syntax, explicit layout syntax, relation signature syntax, and whether canonical model definitions use condition functions, `autoModel`, or both.
 ?
 
 variant 1:
-Use explicit receiver forms such as `model`, `field`, `where`, `default` and `layout`.
+Define models through condition functions. Function input bindings define model slots and the boolean body defines validation.
 
 variant 2:
-Use compact structural declarations where field declarations are ordinary constructor Structures.
+Define models through an `autoModel` receiver with explicit child Structures such as `vars(...)` and `condition(...)`.
 
 variant 3:
-Use L4 registry tables as the primary model syntax and treat source declarations as table-construction sugar.
+Allow both forms and define one as canonical normalization for the other.
 
 
-10. Objects, Configuration and Messages
+10. Objects, Configuration and Messages10. Objects, Configuration and Messages
 
 10.1. Objects as Structures
 
@@ -867,10 +1060,10 @@ Example:
 
     L5
       NorthGreenhouse
-        controller = GreenhouseController
+        controller GreenhouseController
         config
-          batchSize = 500
-          reportMode = Daily
+          batchSize 500
+          reportMode Daily
         end config
       end NorthGreenhouse
     end L5
@@ -879,10 +1072,10 @@ Generic structure:
 
     L5(
       NorthGreenhouse(
-        controller = GreenhouseController,
+        controller GreenhouseController,
         config(
-          batchSize = 500,
-          reportMode = Daily
+          batchSize 500,
+          reportMode Daily
         )
       )
     )
@@ -901,10 +1094,10 @@ Example:
     L4
       operator
         while
-        callableFrom = L3
+        callableFrom L3
         implementation
           while_func
-          level = L2
+          level L2
         end implementation
       end operator
     end L4
@@ -925,7 +1118,7 @@ After registration, runtime/control source may contain:
     L3
       while i < beds.len
         print beds[i].crop
-        i = i + 1
+        i i + 1
       end while
     end L3
 
@@ -971,23 +1164,45 @@ L4 `if` is a model-conditional receiver. It does not execute runtime effects. It
 
 L5 `if` is a message/configuration dispatch receiver. It may conditionally dispatch build, run, query, startup or configuration messages.
 
-12.4. Canonical Vertical Conditional Form
+12.4. Conditional Forms
 
-Canonical readable form:
+Ultra-short conditional form:
 
     if mode == debug
-      build debugTarget
+        build debugTarget
+      ---
+        build releaseTarget
+      ---
     ---
-      build releaseTarget
-    end if
 
-Normal form under signature `if(condition, then, else)`:
+Normal form under signature `if(condition, thenBody, elseBody)`:
 
     if(
-      condition = <expression Structure for `mode == debug`>,
-      then = (build(debugTarget)),
-      else = (build(releaseTarget))
+      <expression Structure for `mode == debug`>,
+      (build(debugTarget)),
+      (build(releaseTarget))
     )
+
+The same conditional may be written with explicit named branch Structures:
+
+    if mode == debug
+      then
+        build debugTarget
+      ---
+      else
+        build releaseTarget
+      ---
+    ---
+
+This builds:
+
+    if(
+      <expression Structure for `mode == debug`>,
+      then(build(debugTarget)),
+      else(build(releaseTarget))
+    )
+
+The ultra-short form is valid when the active `if` receiver assigns semantic roles to the anonymous positional Structure arguments.
 
 
 13. Pointers, References and Callable References
@@ -1136,25 +1351,40 @@ Dynamic Structures lower to checked runtime lookup or generated accessor calls.
 ---ANSI C---
 
 
-16. Assignment, Return Structures and Destructuring
+16. Update, Return Structures and Destructuring
 
-16.1. Assignment
+16.1. Binding Update Instead of `=` Assignment
 
-Assignment syntax has the form:
+The native structural core does not use `=` for assignment.
 
-    target = value
+A declaration with initialization is written through a declaration-context constructor:
 
-At L2, `=` may lower to direct storage assignment according to the L2 memory model.
+    int a 3
 
-At L3 and above, assignment is receiver/operator-defined over variables, fields, handles and Structures.
+A later update to an existing mutable binding is written by placing the binding in head/update position:
+
+    a 4
+
+Example:
+
+    int a 3
+    print a
+    a 4
+    print a
+
+The first `print` observes `3`. The second `print` observes `4`.
+
+The update form is valid only if the head name resolves to an existing mutable binding or to a receiver that explicitly accepts such a call. Because Lingvamyxa uses one lexical namespace, a binding name and a receiver/type/function name cannot silently mean different things in the same scope.
+
+At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
 ?
-Assignment, binding, mutability, scope, initialization and reassignment rules are not specified in full in this document. They require a dedicated execution-model specification.
+Binding, mutability, scope, initialization, reassignment and shadowing rules are not specified in full in this document. They require a dedicated execution-model specification.
 ?
 
 16.2. Return Structures
 
-A function may return a Structure with ordered and/or named fields.
+A function may return a Structure with ordered and/or semantic named fields.
 
 Example return signature:
 
@@ -1164,48 +1394,54 @@ A return expression may fill this Structure by position:
 
     return(bed.area, 0, 0)
 
-or by name:
+Named return variables may also be updated before an empty return:
 
-    return(harvest = bed.area, redApples = 0, greenApples = 0)
+    harvest bed.area
+    redApples 0
+    greenApples 0
+    return
+
+The current function name may also update the whole current return binding in head/update position.
 
 16.3. Destructuring
 
-Destructuring has the form:
+Destructuring syntax using `=` is not part of the current native structural core.
 
-    harvest, redApples, greenApples = toEat(myFilter, Monday)
+The semantic operation still exists: a produced Structure may be stored in a temporary service binding, and target bindings may be updated from its fields by name or by position.
 
-If the produced value is a Structure with fields named `harvest`, `redApples` and `greenApples`, the semantic meaning is name-based:
+Possible explicit receiver form:
 
-    tmp = toEat(myFilter, Monday)
-    harvest = tmp.harvest
-    redApples = tmp.redApples
-    greenApples = tmp.greenApples
+    unpack toEat(myFilter, Monday)
+      harvest
+      redApples
+      greenApples
+    end unpack
 
-The same rule applies when the right-hand side explicitly produces a Structure rather than a named function result. The destructuring target receives fields from the produced Structure.
+Conceptual meaning:
 
-If the produced Structure has no field names, destructuring may use positional mapping:
+    tmp receives toEat(myFilter, Monday)
+    harvest receives tmp.harvest
+    redApples receives tmp.redApples
+    greenApples receives tmp.greenApples
 
-    harvest = tmp.field0
-    redApples = tmp.field1
-    greenApples = tmp.field2
+If the produced Structure has no field names, a receiver-defined positional unpack form may map fields by order.
 
-If the produced Structure has field names and a left-hand variable name does not match any field, the assignment is invalid unless an explicit receiver-defined positional destructuring form is used.
+?
+The canonical destructuring/update syntax is not specified. A final execution-model specification must define whether destructuring is written through an `unpack` receiver, through target-list syntax without `=`, or through another explicit structural form.
+?
 
 ---ANSI C---
-A translator may implement destructuring by assigning the produced Structure or handle to a temporary service variable and then generating field assignments one by one.
+A translator may implement destructuring by assigning the produced Structure or handle to a temporary service variable and then generating field updates one by one.
 
 variant 1:
 For known static layouts, generated code reads fields directly from the temporary Structure.
 
 variant 2:
 For handle-based Structures, generated code reads fields through generated accessors or runtime lookup.
-
-variant 3:
-For unnamed Structures, generated code reads fields by fixed positional offsets.
 ---ANSI C---
 
 
-17. L4 Non-Executive Semantics
+17. L4 Non-Executive Semantics17. L4 Non-Executive Semantics
 
 L4 consumes Structures as model/type/contract/registry input. It may:
 
@@ -1240,10 +1476,10 @@ Possible L5 build input:
     L5
       target
         app
-        kind = executable
-        sources = ("src/hello.lm3")
-        entry = hello
-        output = "build/bin/hello.lm0.exe"
+        kind executable
+        sources ("src/hello.lm3")
+        entry hello
+        output "build/bin/hello.lm0.exe"
       end target
 
       build app
@@ -1329,10 +1565,10 @@ Example:
 Logical source semantics:
 
     mySub(
-      field0 = 1,
-      field1 = 2,
-      field2 = 3,
-      field3 = 4
+      field0: 1,
+      field1: 2,
+      field2: 3,
+      field3: 4
     )
 
 20.2. Physical Optimization
@@ -1474,11 +1710,11 @@ It respects:
 A query returns a Structure, for example:
 
     QueryResult(
-      bindings = [
-        (?who = NyufNyuf)
-      ],
-      status = success,
-      confidence = 1.0
+      bindings(
+        binding(?who, NyufNyuf)
+      ),
+      status(success),
+      confidence(1.0)
     )
 
 ?
@@ -1504,21 +1740,21 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     vertical_frame      ::= name [ line_arguments ] newline indent
                               { vertical_item }
-                            dedent end_form newline
+                            dedent close_form newline
 
     vertical_item       ::= item
-                          | separator_line
+                          | close_form
 
-    end_form            ::= "end" [ name ]
+    close_form          ::= end_form
+                          | dash_end_form
 
-    separator_line      ::= "---" newline
+    end_form            ::= "end" [ name ] newline
+
+    dash_end_form       ::= "---" newline
 
     argument_list       ::= argument { "," argument } [ "," ]
 
-    argument            ::= named_field
-                          | expression_or_structure
-
-    named_field         ::= name "=" expression_or_structure
+    argument            ::= expression_or_structure
 
     bounded_structure   ::= "(" [ argument_list ] ")"
 
@@ -1531,7 +1767,7 @@ This grammar sketch describes the structural parser only. It does not define fin
     mathematical_expression
                          ::= parsed by the mathematical expression syntax
 
-This grammar is intentionally incomplete around full assignment, full indexing, full field access, type constructors, literals and relation forms because those areas require final design decisions.
+This grammar is intentionally incomplete around full update semantics, full indexing, full field access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment or `=` named-field syntax.
 
 
 23. Canonical Examples
@@ -1561,8 +1797,8 @@ Source:
         return(bed.area * 1.7, bed.area * 1.7, bed.area * 1.1)
       end if
 
-      return(bed.area, 0, 0)
-    end fn
+      estimateHarvest bed.area 0 0
+    end estimateHarvest
 
 Semantic outline:
 
@@ -1571,23 +1807,49 @@ Semantic outline:
     The return Structure has three named fields.
     `if` consumes condition and body Structures.
     `return(...)` fills the return Structure and exits the current function.
-    `end fn` closes the definition Structure.
+    `estimateHarvest bed.area 0 0` updates the current function return binding.
+    Reaching the end of the function returns the current return binding implicitly.
+    `end estimateHarvest` closes the definition Structure by normalized entity name.
 
 23.3. Empty Return with Named Return Variables
 
 Source:
 
     fn estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
-      harvest = bed.area
-      redApples = 0
-      greenApples = 0
+      harvest bed.area
+      redApples 0
+      greenApples 0
       return
-    end fn
+    end estimateHarvest
 
 Semantic outline:
 
     Named return fields are local return variables.
-    Empty `return` returns their current values.
+    Head/update position updates existing bindings.
+    Empty `return` exits and returns their current values.
+
+23.3.1. Recursive Function with Function-Name Return Binding
+
+Source:
+
+    fn factorial
+      int n
+    ---
+      int
+    ---
+      if n <= 1
+          factorial 1
+          return
+        ---
+      ---
+      factorial n * factorial(n - 1)
+    end factorial
+
+Semantic outline:
+
+    In head/update position, `factorial` denotes the current return binding.
+    In expression position, `factorial(n - 1)` is a recursive call.
+    The final line updates the return binding, and the end of the function returns it implicitly.
 
 23.4. L5 Conditional Build
 
@@ -1601,15 +1863,17 @@ Source:
       end if
     end L5
 
-Normal form:
+Conceptual form:
 
     L5(
       if(
-        condition = <expression Structure for `mode == debug`>,
-        then = (build(debugTarget)),
-        else = (build(releaseTarget))
+        <expression Structure for `mode == debug`>,
+        (build(debugTarget)),
+        (build(releaseTarget))
       )
     )
+
+The semantic roles `condition`, `then` and `else` are assigned by the active `if` receiver signature.
 
 23.5. Operator Registration
 
@@ -1618,7 +1882,7 @@ Source:
     L4
       operator
         if
-        callableFrom = L5
+        callableFrom L5
         implementation l5_if
       end operator
     end L4
@@ -1627,7 +1891,7 @@ Semantic outline:
 
     `L4` consumes the body as model/registry input.
     `operator` registers the receiver name `if`.
-    `callableFrom = L5` sets visibility.
+    `callableFrom L5` sets visibility.
     `implementation l5_if` names the implementation receiver/subroutine.
 
 23.6. L5-if Implementation Subroutine
@@ -1638,16 +1902,16 @@ Source:
       ...
     end sub
 
-Normal form:
+Conceptual form:
 
     sub(
-      name = l5_if,
-      args = (
+      name(l5_if),
+      args(
         boolean(condition),
         then,
         else
       ),
-      body = (...)
+      body(...)
     )
 
 
@@ -1657,8 +1921,8 @@ Normal form:
     f a b                      line command Frame named f
     f ... end f                vertical Frame named f
     (a, b)                     bounded Structure
-    name = value               named field in current Structure
-    ---                        structural section separator/closer
+    name value                 ordinary nested Structure, often consumed as a setting/semantic field by receiver
+    ---                        visual alias for bare `end`
     end                        close current vertical Structure
     end name                   close current vertical Structure with validation token
     L2/L3/L4/L5                level receiver frames
@@ -1680,6 +1944,8 @@ Core invariant:
     receivers give Structures meaning;
     Structures do not execute themselves;
     return exits executable bodies;
+    function name in head/update position updates the current return binding inside its own body;
+    `=` is not native assignment or native named-field syntax;
     end closes source Structures.
 
 
@@ -1707,11 +1973,11 @@ variant 3:
 Allow profiles so the active level or module can select a mathematical grammar.
 
 ?
-Model/type syntax is not specified in full. It must define model receivers, field declarations, defaults, constraints, aliases, layouts and relation signatures.
+Model/type syntax is not specified in full. It must define model receivers, slot declarations, defaults, constraints, aliases, layouts and relation signatures.
 ?
 
 ?
-The L2 memory/operator specification must define exact syntax and semantics for `^`, `&`, `*`, low-level assignment and raw indexing.
+The L2 memory/operator specification must define exact syntax and semantics for `^`, `&`, `*`, low-level binding update and raw indexing.
 ?
 
 ?
@@ -1719,7 +1985,7 @@ The array/text specification must define indexing, slicing, bounds errors, multi
 ?
 
 ?
-The execution-model specification must define assignment, binding, mutability, scope, initialization and reassignment rules.
+The execution-model specification must define binding update, mutability, scope, initialization and reassignment rules without native `=` assignment.
 ?
 
 ?
@@ -1763,7 +2029,7 @@ Return handles/pointers to runtime-managed Structures for dynamic or large resul
 Destructuring lowering:
 
 variant 1:
-Store the returned Structure or handle in a temporary service variable and assign target variables from its fields.
+Store the returned Structure or handle in a temporary service variable and update target variables from its fields.
 
 variant 2:
 For known layouts, generate direct field access.
