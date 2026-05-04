@@ -477,6 +477,79 @@ Field order is part of the logical Structure. When a receiver supports positiona
 
 Semantic field names may be assigned by receiver normalization. A receiver may reject a Structure that contains unknown child Structures, missing required fields or incompatible field ordering.
 
+4.10. Comments and Disabled Blocks
+
+The line-comment marker is:
+
+    #
+
+Outside string/text literals and other literal syntaxes that define their own character rules, `#` starts a comment that continues to the end of the current physical line. The comment text is ignored by the source parser.
+
+If `#` follows source text on the same line, the source text before `#` is parsed normally and the rest of the physical line is ignored.
+
+Examples:
+
+print count # print the current value of count
+# this whole physical line is a comment
+
+The disabled-block marker is:
+
+    $
+
+`$` may appear at the start of a source item, immediately after that item's dot indentation prefix. The parser removes `$` for the purpose of parsing the item, but marks the item as disabled.
+
+If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser still parses the disabled item and its body, tracks dot indentation, validates closing forms and parses mathematical expressions. Therefore disabled code may still produce syntax errors.
+
+Disabled code does not build source-semantic Structures for receiver consumption, does not register definitions, does not update models or registries and does not lower to executable/runtime behavior.
+
+The `$` marker does not contribute to dot indentation depth. The dot depth of a disabled item is computed exactly as if `$` were absent. Child lines are written at the same dot depths they would use for the enabled form.
+
+Example:
+
+$if mode = debug
+.then
+..print debug branch
+.---
+.else
+..print release branch
+.---
+---
+
+This whole `if` Structure is disabled, but the parser still verifies the syntax and closing structure.
+
+Example inside an enabled block:
+
+if mode = debug
+.$then
+..print disabled then branch
+.---
+.else
+..print active else branch
+.---
+---
+
+Here only the `then` Structure is disabled. Its body is still parsed and syntax-checked.
+
+The `$` marker is not a receiver, not an operator and not a runtime action. It is a source-control marker handled before receiver consumption.
+
+The raw file-comment fence is:
+
+    ===
+
+A raw file-comment fence is recognized only when the physical line begins at column 0 with `===` and is followed only by optional spaces or tabs before the line ending. No dot indentation, leading spaces, title text or other non-whitespace characters are allowed on the fence line.
+
+The first fence opens a raw file comment block. The next fence closes it. All physical lines between the fences are ignored completely by the Lingvamyxa parser. Dot indentation is not tracked inside the raw file comment block, mathematical expressions are not parsed, closing forms are not validated and source syntax errors inside the block are not reported.
+
+Raw file comment blocks do not nest. A fence inside an open raw file comment block closes that block. An unclosed raw file comment block is a file-level syntax error.
+
+Example:
+
+===
+This text is ignored by the parser.
+Broken Lingvamyxa source may appear here:
+.if (
+===
+
 
 5. Receiver-Based Semantics
 
@@ -1604,6 +1677,44 @@ print @tree\branch
 print root\branch\branch
 print \root\branch\branch
 
+Meanings under the declarations in section 13.2:
+
+    print @count
+        Print the address of the primitive storage location `count`.
+        To print the primitive value `5`, write `print count`.
+
+    print \leafs
+        Raw-load and print the first primitive cell/element at address `leafs`.
+        This bypasses typed array/string rendering.
+
+    print leafs[3]
+        Print the indexed element at address/index position `3` under the active `[]` profile.
+
+    print \(leafs + 3)
+        Compute address `leafs + 3`, raw-load the primitive cell/element at that address, then print it.
+
+    tree\branch branch
+        Store the typed address value `branch` into the field slot `branch` inside the storage addressed by `tree`.
+
+    root\branch tree
+        Store the typed address value `tree` into the field slot `branch` inside the storage addressed by `root`.
+
+    print tree\branch
+        Read the field `branch` through typed address `tree`.
+        If that field contains a typed `PlantBed` address, `print` may render the whole object/tree addressed by that field.
+
+    print @tree\branch
+        Print the address of the field slot `branch` inside the storage addressed by `tree`.
+        This is parsed as `print @(tree\branch)`.
+
+    print root\branch\branch
+        Follow `root\branch` to the typed address stored there, then follow its `branch` field.
+        If the final result is a typed `PlantBed` address, `print` may render that whole nested object/tree.
+
+    print \root\branch\branch
+        Follow `root\branch\branch`, then raw-load the primitive cell/element at the resulting address.
+        This is parsed as `print \(root\branch\branch)` and bypasses typed object rendering.
+
 Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
 
 Therefore:
@@ -2215,18 +2326,44 @@ This grammar sketch describes the structural parser only. It does not define fin
     program             ::= { item }
 
     item                ::= empty_line
+                          | raw_file_comment_block
                           | comment_line
+                          | disabled_item
                           | line_frame
                           | vertical_frame
                           | expr_line
 
+    raw_file_comment_block
+                        ::= "===" trailing_horizontal_space newline
+                              raw_ignored_line*
+                            "===" trailing_horizontal_space newline
+
+    trailing_horizontal_space
+                        ::= { " " | tab }
+
+    comment_line        ::= [ dot_prefix ] "#" ignored_until_newline newline
+
+    disabled_item       ::= dot_prefix "$" item_body
+
+    item_body           ::= line_frame_body
+                          | vertical_frame_body
+                          | expr_line_body
+
     compact_frame       ::= name "(" [ argument_list ] ")"
 
-    line_frame          ::= name [ line_arguments ] newline
+    line_frame          ::= dot_prefix line_frame_body
 
-    vertical_frame      ::= dot_prefix name [ line_arguments ] newline
+    line_frame_body     ::= name [ line_arguments ] newline
+
+    vertical_frame      ::= dot_prefix vertical_frame_body
+
+    vertical_frame_body ::= name [ line_arguments ] newline
                               dot_child_prefix { vertical_item }
                             dot_prefix close_form newline
+
+    expr_line           ::= dot_prefix expr_line_body
+
+    expr_line_body      ::= expression newline
 
     dot_prefix          ::= { "." }
 
@@ -2417,6 +2554,9 @@ Conceptual form:
     (a, b)                     bounded Structure
     name value                 ordinary nested Structure, often consumed as a setting/semantic field by receiver
     leading .                  source indentation unit at logical line start
+    #                          line comment marker; ignores text to the end of the physical line
+    $                          disabled item/block marker; syntax is still parsed and checked
+    ===                        column-0 raw file comment fence; syntax inside is ignored
     ---                        visual alias for bare `end`
     end                        close current vertical Structure
     end name                   close current vertical Structure with validation token
@@ -2441,6 +2581,9 @@ Conceptual form:
 Core invariant:
 
     leading dots, not spaces or tabs, define source block depth;
+    # comments are ignored to end of physical line;
+    $ disables an item/block semantically while preserving syntax checking;
+    === raw file comment fences ignore all enclosed text without syntax checking;
     syntax builds Structures;
     receivers give Structures meaning;
     Structures do not execute themselves;
