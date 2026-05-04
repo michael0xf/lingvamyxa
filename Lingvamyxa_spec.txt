@@ -1054,6 +1054,8 @@ The parser recognizes these closing forms:
     end <node-name>
     end <entity-name>
 
+Profiles may add receiver-specific closing forms. A receiver-specific closing form must still use the same dot indentation prefix as the block it closes and must be valid only for the receiver/frame that defines it. For example, section 28 defines `until condition` as the close-and-condition form for an open L2 `do` loop.
+
 The forms:
 
     end
@@ -2546,10 +2548,13 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     close_form          ::= end_form
                           | dash_end_form
+                          | profile_close_form
 
     end_form            ::= "end" [ name ] newline
 
     dash_end_form       ::= "---" newline
+
+    profile_close_form  ::= profile-defined close token [ line_arguments ] newline
 
     argument_list       ::= argument { "," argument } [ "," ]
 
@@ -2902,9 +2907,9 @@ Part II: Control Operators, Thread Context and L5 Event Delivery
 
 Status
 
-Revision 8 continuation draft.
+Revision 9 continuation draft.
 
-This document continues the Revision 8 structural core specification. It defines section 26 and section 27. It does not restate sections 0-25.
+This document continues the structural core specification. It defines sections 26, 27 and 28. It does not restate sections 0-25.
 
 Marker convention is inherited from Part I.
 
@@ -4018,6 +4023,242 @@ The exact source forms for `send`, `request`, `reply`, `checkInbox`, `flushOutbo
 ?
 The interaction between L5 fact registries, persistent event logs and runtime inbox messages is not specified.
 ?
+
+
+28. L2 Primitive, Address and Parser Operators
+
+28.0. Scope of This Section
+
+This section defines the minimal L2 operator/parser-form set.
+
+L2 has primitive values, typed address values and Structures/descriptors. Aggregate model names denote layouts or descriptors. Storage and allocation forms produce typed address values. Receiver signatures and parser profiles assign final semantics to the Structures built from source syntax.
+
+This section is deliberately smaller than the L3 control set in section 26. L2 is low-level and unsafe, but it does not need every L3 convenience operator by default.
+
+28.1. Pointer and Field Syntax Exclusions
+
+L2 does not use `*`, `&`, `^`, `.`, or `->` as pointer/field syntax.
+
+This rule should be stated once as an L2 invariant instead of repeated at every address example.
+
+Consequences:
+
+    `*`  remains available for multiplication in mathematical expression syntax.
+    `&`  is not address-of.
+    `^`  is not pointer dereference and is not a field-follow marker.
+    `.`  is source indentation only when it appears in the leading dot prefix; it is not field access.
+    `->` is not a Lingvamyxa field-follow operator.
+
+L2 address and field forms are:
+
+    @x          address of storage location `x`
+    \x          raw load from address expression `x`
+    x\field     typed field-follow through address/reference `x`
+    x[i]        indexed access through address/reference/container `x`
+
+Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
+
+28.2. Storage, Address and Indexed Forms
+
+Minimal L2 storage/allocation forms:
+
+    stack Layout name
+    heap Layout name
+    static Layout name
+    Primitive name [initialValue]
+    [] name size
+
+Examples:
+
+stack PlantBed branch
+heap PlantBed tree
+static PlantBed root
+int count 5
+[] leafs count
+
+Meanings:
+
+    branch  typed address of stack storage with layout `PlantBed`
+    tree    typed address of heap storage with layout `PlantBed`
+    root    typed address of static storage with layout `PlantBed`
+    count   primitive storage/value initialized to `5`
+    leafs   typed address/container descriptor for `count` primitive cells, according to the active L2 profile
+
+Address-producing and address-consuming forms:
+
+    @count              address of the primitive storage location `count`
+    \leafs              raw load of the first primitive cell at address `leafs`
+    leafs[3]            indexed access at index `3`
+    \(leafs + 3)        raw load after address arithmetic
+    tree\branch         typed field-follow through `tree`
+    @tree\branch        address of the field slot `branch` inside `tree`
+    \root\branch\branch raw load after the typed field-follow chain
+
+The exact primitive cell size, address arithmetic unit, alignment, bounds checking policy, allocation failure behavior and metadata representation belong to the L2 memory profile.
+
+28.3. Primitive Expression Operators
+
+The minimal L2 mathematical expression profile includes:
+
+    grouping        (expr)
+    unary numeric   +expr, -expr
+    arithmetic      +, -, *, /, %
+    comparison      =, !=, <, <=, >, >=
+    boolean words   not, and, or
+
+The token `=` is comparison/equality in mathematical expression syntax. It is not native assignment.
+
+Bitwise operators, shifts, overflow rules, integer division rules, floating-point rules and conversion rules are L2 profile details unless a later specification selects a mandatory set.
+
+28.4. Update and Callable Consumption
+
+L2 uses the same head/update surface form as the rest of the structural core:
+
+    target value
+
+Examples:
+
+    count 6
+    tree\branch branch
+    leafs[3] 10
+
+After resolution, the form may update mutable storage, update an addressable field/index slot, or consume a callable/receiver binding. This is compile-time resolution, not a separate assignment syntax.
+
+Parser methods such as `++i`, `--i`, `i++` and `i--` are not mandatory source syntax in the minimal L2 set. A profile may register them as compact parser forms that lower to ordinary read-update-write sequences using the same head/update form.
+
+28.5. Minimal L2 Control Receivers
+
+The minimal L2 executable-body control set is:
+
+    if / then / else
+    while
+    do / until
+    for(init, condition, step)
+    return
+    break
+    continue
+
+These are source-level control receivers/parser forms. They are not raw jumps in the source semantics, even if a translator lowers them to labels and branches.
+
+28.5.1. `if`, `then` and `else`
+
+L2 `if` consumes:
+
+    condition -> boolean-producing expression
+    then      -> executable body Structure
+    else      -> optional executable body Structure
+
+Example:
+
+if count > 0
+.print count
+---
+
+Explicit branch example:
+
+if count > 0
+.then
+..print count
+.---
+.else
+..print 0
+.---
+---
+
+28.5.2. `while`
+
+L2 `while` is a pre-condition loop.
+
+Semantic form:
+
+    while(condition, body)
+
+Example:
+
+while i < n
+.print i
+.i (i + 1)
+---
+
+28.5.3. `do` / `until`
+
+L2 `do` opens a post-condition loop body. The line `until condition` at the same dot depth closes the `do` body and supplies the post-condition.
+
+Example:
+
+do
+.readNext record
+.process record
+until endOfInput record
+
+Semantic form:
+
+    until(body, condition)
+
+The body executes first. The loop repeats until the condition is true.
+
+The `until condition` close form is valid only for an open `do` loop. It is not a general replacement for `---` or `end`.
+
+28.5.4. `for(init, condition, step)`
+
+L2 `for` consumes:
+
+    init      -> initialization Structure
+    condition -> boolean-producing expression
+    step      -> iteration-step executable Structure
+    body      -> executable body Structure
+
+Vertical body form:
+
+for int(i, 0) (i < n) (i (i + 1))
+.print i
+---
+
+Compact body form:
+
+    for int(i, 0) (i < n) (i++) (print i)
+
+The token form `i++` is valid only in profiles that register it as a parser method. Without that parser method, the step can be written as `(i (i + 1))`.
+
+28.5.5. `return`
+
+L2 `return` exits the current executable body.
+
+Bare form:
+
+    return
+
+For an `fn`, `return` returns the current return binding. Return fields or the whole current return binding must be updated before `return`.
+
+For a `sub`, `return` exits without producing a normal return value.
+
+28.5.6. `break` and `continue`
+
+`break` exits the nearest active L2 loop frame.
+
+`continue` starts the next iteration of the nearest active L2 loop frame.
+
+For `while`, `continue` transfers control to the next condition check.
+
+For `do` / `until`, `continue` transfers control to the post-condition check for the current iteration.
+
+For `for`, `continue` transfers control to the iteration-step Structure, then to the next condition check.
+
+28.6. Outside the Minimal L2 Set
+
+The following section 26 operators are not part of the minimal L2 control set unless an L2 profile explicitly imports or redefines them:
+
+    match / case / default
+    each
+    finally
+    guard / fail / throws / handlers
+    retry / retryable
+    assert
+    redo
+    yield
+    labelled break / labelled continue
+
+They may still exist in L3 or higher levels, or in a richer L2 profile.
 
 
 
