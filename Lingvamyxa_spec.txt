@@ -598,7 +598,9 @@ A receiver may consume a field as one of the following semantic modes:
 
     primitive value
     expression
+    value-producing Structure
     body Structure
+    callable/executable value
     declaration
     model fragment
     configuration message
@@ -609,7 +611,38 @@ A receiver may consume a field as one of the following semantic modes:
 
 The mode is receiver-defined. The parser does not decide that a field is executable merely because it looks like code.
 
-5.3. Example: `if`
+5.3. Expected Field Positions and Anonymous Bodies
+
+Parentheses create ordinary bounded Structures. A bounded Structure is not executable merely because it is parenthesized.
+
+A receiver signature assigns an expected role to each field. If a field position is defined as a body, the receiver consumes the supplied Structure as an executable body Structure. This is the ordinary rule used by control receivers and definition receivers; it does not require a separate body keyword or separate anonymous-function syntax.
+
+If a field position expects a callable/executable value and the source supplies a bounded Structure or vertical body Structure, the receiver consumes that Structure as an anonymous executable/callable value. Its argument and return profile come from the expected field position.
+
+If a field position expects a primitive/scalar value and the source supplies a bounded Structure that is not already a direct primitive/scalar value, the receiver consumes that Structure as a value producer for the expected type. A mathematical expression Structure is the usual compact case of this rule.
+
+If the expected type is boolean, the value producer must produce a boolean value. If the expected type is numeric or another primitive/scalar type, the value producer must produce that type or be convertible according to the active profile.
+
+Example:
+
+for int(i, 0) (i < n) (i (i + 1))
+.print i
+---
+
+The `for` receiver consumes:
+
+    field0 -> initialization Structure
+    field1 -> boolean-producing condition expression
+    field2 -> iteration-step executable Structure
+    body   -> vertical executable body Structure
+
+Compact body example:
+
+    for int(i, 0) (i < n) (i++) (print i)
+
+Here `(print i)` is just the last argument Structure of `for`. The `for` receiver signature names that position as `body` and consumes it as the executable loop body.
+
+5.4. Example: `if`
 
 For a computational L3 `if`, the receiver may define fields:
 
@@ -625,7 +658,7 @@ and consume them as:
 
 During translation, the receiver lowers these fields into target control flow. During interpretation, the receiver evaluates the condition and then interprets only the selected body.
 
-5.4. Example: `fn`
+5.5. Example: `fn`
 
 For an `fn` definition receiver, fields may be consumed as:
 
@@ -636,7 +669,7 @@ For an `fn` definition receiver, fields may be consumed as:
 
 The receiver creates or registers an executable definition. The `fn` frame itself is not a function call.
 
-5.5. Same Shape, Different Receivers
+5.6. Same Shape, Different Receivers
 
 The same surface shape can have different semantics under different receivers.
 
@@ -719,6 +752,8 @@ A translator may lower expression Structures to ANSI C expressions when preceden
 An expression Structure is data until a receiver consumes it as an expression.
 
 For example, the `if` receiver consumes its `condition` field as an expression. A configuration receiver might instead store the same Structure as data.
+
+When consumed in a primitive/scalar field position, an expression Structure is a value producer for that expected type. A comparison or logical expression may satisfy a boolean field. A numeric expression may satisfy a numeric field, subject to the active profile's conversion rules.
 
 6.4. Parser Methods for Registered Operator Forms
 
@@ -2021,6 +2056,8 @@ The update form is valid only if the head resolves to an existing mutable bindin
 
 The same surface form is used for callable consumption. For example, `i 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable/receiver binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
 
+A bounded Structure in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for int(i, 0) (i < n) (i++) (print i)`, the final `(print i)` is the `body` argument consumed by `for`.
+
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
 ?
@@ -2537,6 +2574,8 @@ This grammar is intentionally incomplete around full update semantics, full inde
 Line arguments are flat. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
 Inside a bounded Structure, comma separates elements at the bounded Structure's current level. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
+
+Structural grammar has no separate anonymous-function syntax. A bounded Structure or vertical body becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
 
 23. Canonical Examples
@@ -3062,7 +3101,27 @@ Equivalent informal form:
 
 `for` is a controlled loop receiver for numeric ranges, counters, index ranges or other bounded iteration policies.
 
-Example form:
+Compact counter/triplet form:
+
+for int(i, 0) (i < n) (i (i + 1))
+.print i
+---
+
+The first three arguments are consumed as loop-control fields:
+
+    init      -> initialization Structure
+    condition -> boolean-producing expression
+    step      -> iteration-step executable Structure
+
+The vertical child Structure is consumed as the loop body.
+
+Single-line compact body form:
+
+    for int(i, 0) (i < n) (i++) (print i)
+
+In this form, `(print i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as a parser method.
+
+Range-style example:
 
 for i 0 n
 .print i
@@ -3077,7 +3136,7 @@ Semantic requirement:
 `for` creates a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
 
 ?
-The exact canonical source forms for numeric ranges, inclusive/exclusive bounds, step values, reverse iteration, index/value pairs and destructuring of iteration bindings are not specified in this section.
+The compact counter/triplet form is specified above. Other source forms for numeric ranges, inclusive/exclusive bounds, step values, reverse iteration, index/value pairs and destructuring of iteration bindings are not specified in this section.
 ?
 
 variant 1:
