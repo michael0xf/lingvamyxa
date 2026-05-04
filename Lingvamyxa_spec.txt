@@ -1,14 +1,14 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.1 rewrite preserves the full Rev.12 document body where possible and updates the return mechanism plus the structural local namespace overlay model.
+This Rev.12.2 rewrite preserves the full Rev.12.1 document body where possible and adds the reserved L2 address-depth operator family `@ⁿ`.
 
 Status
 
-Revision 12.1 draft. Comma tail, phrase signatures, dot-tree vertical syntax, terminal return and local namespace overlay update.
+Revision 12.2 draft. Comma tail, phrase signatures, dot-tree vertical syntax, terminal return, local namespace overlay and reserved L2 address-depth operator update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
-Revision 12.1 note:
+Revision 12.2 note:
 
     Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
 
@@ -19,6 +19,8 @@ Revision 12.1 note:
     `case` is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
 
     `return` has two structural positions. Inside an executable body, `return` is ordinary runtime control. At the source level of the open executable definition, `return` is terminal return: it supplies or returns the current result and structurally closes that executable definition, like a checked executable-specific close.
+
+    The token sequences `@`, `@@`, `@@@`, ... form the reserved L2 address-depth operator family `@ⁿ`. In head position, `@ⁿ: BaseType, name` declares a typed address slot of depth n. Comma separates the base type from the binding name, so `@@@: int, ppp` is a three-level address slot to `int`, while `@@@: int ppp` would be one non-numeric phrase segment. Ordinary source cannot rebind `@ⁿ` as user procedure names.
 
     The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is not part of Lingvamyxa syntax.
 
@@ -2040,6 +2042,15 @@ static: PlantBed, root
 int: count, 5
 []: leafs, count
 
+int: x, 5
+@: int, p
+@@: int, pp
+@@@: int, ppp
+
+p: @x
+pp: @p
+ppp: @pp
+
 Meanings:
 
     branch  address of stack storage with layout `PlantBed`
@@ -2047,12 +2058,73 @@ Meanings:
     root    address of static storage with layout `PlantBed`
     count   primitive value/storage initialized to `5`
     leafs   address of array/byte storage sized by `count`, according to the active `[]` receiver/profile
+    x       primitive storage/value initialized to `5`
+    p       address-depth-1 slot whose base type is `int`
+    pp      address-depth-2 slot whose base type is `int`
+    ppp     address-depth-3 slot whose base type is `int`
+    p: @x   stores the address of storage location `x` into `p`
+    pp: @p  stores the address of storage location `p` into `pp`
+    ppp: @pp stores the address of storage location `pp` into `ppp`
 
 The receivers `stack`, `heap`, `static`, primitive constructors such as `int`, and allocation constructors such as `[]` are parser/bootstrap constructors in the same broad sense as type constructors: they consume layout/type information and a raw binding name, then introduce that binding with type metadata.
 
 An L2 address value is not necessarily a source-level integer. It may carry, or be statically associated with, layout/type metadata. Receivers and L1 lowering may use that metadata to treat an address as a typed reference rather than as a printable numeric address.
 
-The core L2 syntax does not use a separate `*` or `^` marker for address types. Address-ness is introduced by storage/allocation forms, by address-producing expressions, and by typed field or index operations.
+The core L2 syntax does not use a separate `*` or `^` marker for address types. Address-ness is introduced by storage/allocation forms, by the reserved address-depth operator family `@ⁿ`, by address-producing expressions, and by typed field or index operations.
+
+13.2.1. Reserved Address-Depth Operator Family `@ⁿ`
+
+The token sequences:
+
+    @
+    @@
+    @@@
+    ...
+
+form the reserved L2 address-depth operator family `@ⁿ`. They are reserved operator heads, not ordinary user-defined identifiers. Ordinary source cannot bind procedures, functions, receivers or variables named `@`, `@@`, `@@@` and so on, unless a privileged core/prelude profile explicitly defines the reserved operator metadata.
+
+In head position before `:`, `@ⁿ:` declares an address/reference slot of depth n:
+
+    @: BaseType, name
+    @@: BaseType, name
+    @@@: BaseType, name
+
+Examples:
+
+    @: int, p
+    @@: int, pp
+    @@@: int, ppp
+
+Meanings:
+
+    p    address-depth-1 slot whose base type is `int`
+    pp   address-depth-2 slot whose base type is `int`
+    ppp  address-depth-3 slot whose base type is `int`
+
+Comma is required between the base type and the binding name under the Rev.12 comma-tail rule. Therefore:
+
+    @@@: int, ppp
+
+has two fields, `int` and `ppp`, while:
+
+    @@@: int ppp
+
+has one non-numeric phrase segment `int ppp` and is not the canonical address-depth declaration form.
+
+The prefix expression form `@x` remains the depth-1 address-of operation. Higher address depth is expressed by declaring deeper address slots and storing ordinary depth-1 addresses of those slots:
+
+    int: x, 5
+    @: int, p
+    @@: int, pp
+    @@@: int, ppp
+
+    p: @x
+    pp: @p
+    ppp: @pp
+
+This keeps prefix address-of simple while preserving arbitrary address depth in declarations.
+
+The implementation of `@ⁿ` may be represented by reserved operator descriptors in the L2 operator table. The source semantics only require that `@ⁿ` is parsed as a reserved operator family and that its declaration form produces typed address slots compatible with the active L2 memory profile.
 
 13.3. Address-of, Raw Load and Callable References
 
@@ -2062,7 +2134,7 @@ The prefix form:
 
 returns the address of the storage location `x`.
 
-If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object.
+If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object. This is the expression-side companion of the declaration-side `@ⁿ:` family: `@@: int, pp` declares an address-depth-2 slot, while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
 
 The prefix form:
 
@@ -2160,7 +2232,7 @@ The exact L2 memory profile must define primitive cell size, address arithmetic,
 ?
 
 variant 1:
-Treat `@`, prefix `\`, field-follow `\field` and `[]` as built-in L2 parser forms.
+Treat `@ⁿ`, prefix `@`, prefix `\`, field-follow `\field` and `[]` as built-in L2 parser forms.
 
 variant 2:
 Treat them as bootstrap-registered L2 operators with parser support only for tokenization and precedence.
@@ -4335,6 +4407,7 @@ Consequences:
 
 L2 address and field forms are:
 
+    @ⁿ: T, x    reserved address-depth declaration head, for example `@@@: int, ppp`
     @x          address of storage location `x`
     \x          raw load from address expression `x`
     x\field     typed field-follow through address/reference `x`
@@ -4344,13 +4417,14 @@ Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
 
 28.2. Storage, Address and Indexed Forms
 
-Minimal L2 storage/allocation forms:
+Minimal L2 storage/allocation and address-slot forms:
 
     stack: Layout, name
     heap: Layout, name
     static: Layout, name
     Primitive: name, [initialValue]
     []: name, size
+    @ⁿ: BaseType, name
 
 Examples:
 
@@ -4359,6 +4433,9 @@ heap: PlantBed, tree
 static: PlantBed, root
 int: count, 5
 []: leafs, count
+@: int, p
+@@: int, pp
+@@@: int, ppp
 
 Meanings:
 
@@ -4367,6 +4444,9 @@ Meanings:
     root    typed address of static storage with layout `PlantBed`
     count   primitive storage/value initialized to `5`
     leafs   typed address/container descriptor for `count` primitive cells, according to the active L2 profile
+    p       address-depth-1 slot to base type `int`
+    pp      address-depth-2 slot to base type `int`
+    ppp     address-depth-3 slot to base type `int`
 
 Name phrases may contain spaces when separated by comma from other fields:
 
@@ -4374,9 +4454,17 @@ stack: PlantBed, branch 2
 
 This allocates stack storage with layout `PlantBed` and introduces the single name phrase `branch 2`. The whitespace between `branch` and `2` does not create a third argument because the segment is not a pure numeric run.
 
+The same comma-tail rule applies to address-depth declarations:
+
+@@@: int, ppp
+
+This declares `ppp` as an address-depth-3 slot with base type `int`. Without the comma, `@@@: int ppp` would be one non-numeric phrase segment rather than the canonical two-field declaration.
+
 Address-producing and address-consuming forms:
 
     @count              address of the primitive storage location `count`
+    p: @count           store that address into an address-depth-1 slot
+    pp: @p              store the address of `p` into an address-depth-2 slot
     \leafs              raw load of the first primitive cell at address `leafs`
     leafs[3]            indexed access at index `3`
     \(leafs + 3)        raw load after address arithmetic
