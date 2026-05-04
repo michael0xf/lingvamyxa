@@ -243,6 +243,33 @@ It does not normalize as:
 
 Explicit nesting must be written with parentheses or vertical structure.
 
+Flat argument rule:
+
+    head a b c
+
+builds `head(a, b, c)`. The parser does not use the receiver signature to decide that `a b c` should be grouped into one nested Structure.
+
+If a receiver argument must itself be one Structure, the source must make that nesting explicit with a bounded Structure or compact Frame.
+
+Examples:
+
+    args int v j
+
+normalizes as:
+
+    args(int, v, j)
+
+It does not normalize as:
+
+    args(int(v, j))
+
+To pass one declaration Structure to `args`, write one of:
+
+    args (int v j)
+    args int(v, j)
+
+The first form gives `args` one bounded Structure containing the line-command declaration `int v j`. The second form gives `args` one compact declaration Frame `int(v, j)`.
+
 4.3. Vertical Frame Form
 
 Vertical frame form:
@@ -760,6 +787,67 @@ end myFunc
 The receiver `fn` consumes its child Structures by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures consumed by `fn`. They are not `=` named fields.
 
 The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set. In declaration context, a type/constructor receiver consumes the following raw identifier as a new binding name. If that name already exists in the current namespace, the declaration is invalid.
+
+Compact definition form:
+
+fn i(
+  args (int v j),
+  ret int,
+  body (j v / 2, i v)
+)
+
+This parses as a line Frame `fn(...)` whose first argument is a compact Frame named `i`.
+
+The `fn` receiver may define this as a compact definition form. In that form, the compact Frame name `i` becomes the function name, and the compact Frame arguments become definition child Structures.
+
+Conceptual receiver-level interpretation:
+
+    fn(
+      name(i),
+      args(
+        int(v, j)
+      ),
+      ret(
+        int
+      ),
+      body(
+        j(v / 2),
+        i(v)
+      )
+    )
+
+The `args` child receives one bounded Structure containing the declaration:
+
+    int v j
+
+In declaration context, this means an `int` binding named `v` whose default/initial value is `j`.
+
+The same `args` child may be written with a compact declaration Frame:
+
+fn i(
+  args int(v, j),
+  ret int,
+  body (j v / 2, i v)
+)
+
+Both forms are distinct from:
+
+    args int v j
+
+which parses as a flat line-command argument Structure `args(int, v, j)`.
+
+Inside the `body` bounded Structure, comma separates body items in the same way that newlines separate vertical body items. The body above is equivalent to:
+
+fn i(
+  args int(v, j),
+  ret int,
+  body (
+    j v / 2,
+    i v
+  )
+)
+
+Here `j v / 2` updates the visible binding `j`, and `i v` updates the current function return binding named `i`.
 
 7.3. Subroutine Definition Form
 
@@ -2355,6 +2443,9 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     line_frame_body     ::= name [ line_arguments ] newline
 
+    line_arguments      ::= flat argument Structure parsed from the rest of the line
+                            or, inside a bounded Structure, until comma or ")"
+
     vertical_frame      ::= dot_prefix vertical_frame_body
 
     vertical_frame_body ::= name [ line_arguments ] newline
@@ -2381,7 +2472,10 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     argument_list       ::= argument { "," argument } [ "," ]
 
-    argument            ::= expression_or_structure
+    argument            ::= inline_line_frame
+                          | expression_or_structure
+
+    inline_line_frame   ::= name line_arguments
 
     bounded_structure   ::= "(" [ argument_list ] ")"
 
@@ -2395,6 +2489,10 @@ This grammar sketch describes the structural parser only. It does not define fin
                          ::= parsed by the mathematical expression syntax
 
 This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment or `=` named-field syntax.
+
+Line arguments are flat. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
+
+Inside a bounded Structure, comma separates elements at the bounded Structure's current level. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
 
 
 23. Canonical Examples
