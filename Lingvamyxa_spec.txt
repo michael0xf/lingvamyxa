@@ -86,7 +86,7 @@ This document does not specify the L1 target language, physical calling conventi
 
 1.3. L2
 
-L2 is the low-level unsafe Lingvamyxa level. It is the low-level systems layer. It may expose memory, pointers, handles, structures, explicit low-level operations and low-level concurrency.
+L2 is the low-level unsafe Lingvamyxa level. It is the low-level systems layer. It may expose memory, typed addresses, handles, layout-based storage, explicit low-level operations and low-level concurrency.
 
 L2 is compiled. It is not executed as a casual script.
 
@@ -140,7 +140,7 @@ The minimal core has two classes of values:
     1. primitive/scalar/reference/handle values
     2. Structure / Frame values
 
-Primitive/scalar/reference/handle values include numbers, booleans, atoms, symbols, enum-like values, handles, references, pointers and L2-level callable references.
+Primitive/scalar/reference/handle values include numbers, booleans, atoms, symbols, enum-like values, handles, references, typed addresses and L2-level callable references.
 
 All non-primitive values are Structures or handles/references to Structures. This includes arrays, text, objects, call frames, bodies, configurations, expressions and model fragments.
 
@@ -148,7 +148,7 @@ A Structure can contain fields. A field can be positional, named or derived duri
 
 At L3 and above, Structures are normally passed by reference/handle. They are not copied by value at every call unless a receiver explicitly defines copy semantics.
 
-At L2, Structures may be lowered to pointers, handles, layout structures or primitive representations.
+At L2, aggregate layouts do not have to be source-level value objects. They may be represented by typed addresses to storage, handles, layout structures or primitive representations according to the translator profile.
 
 There is no fundamental keyword `Struct` in the minimal source syntax.
 
@@ -271,11 +271,11 @@ Line command form inside parentheses continues until a comma or the matching clo
 
 Example:
 
-    if( i == 1, print choose hello, print choose world )
+    if( i = 1, print choose hello, print choose world )
 
 Logical argument sections:
 
-    field0: <expression Structure for `i == 1`>
+    field0: <expression Structure for `i = 1`>
     field1: (print(choose, hello))
     field2: (print(choose, world))
 
@@ -289,7 +289,7 @@ The names `condition`, `then` and `else` are not created by the parser alone. Th
 
 4.5. Dot-Indentation Structures
 
-A dot-indented block after a line opens a vertical Structure. A source indentation prefix is a run of one or more `.` characters at the logical start of a source line. Only the maximal leading dot run before the first non-dot source character is indentation; dots after a token remain ordinary syntax, such as field access.
+A dot-indented block after a line opens a vertical Structure. A source indentation prefix is a run of one or more `.` characters at the logical start of a source line. Only the maximal leading dot run before the first non-dot source character is indentation; dots after a token remain ordinary expression syntax when another grammar rule assigns them meaning, for example in decimal literals.
 
 Spaces and tabs are not indentation in Lingvamyxa source. In strict source mode, leading spaces or tabs before a source token are invalid outside comments and literals. A document renderer may add presentation padding around examples, but the language indentation depth is computed only from leading dots.
 
@@ -445,7 +445,7 @@ Conceptual receiver-level interpretation:
 
 The receiver `model` may interpret `name(PlantBed)` as semantic field `name` and `condition(plantBedCondition)` as semantic field `condition`.
 
-The token `=` belongs only to the mathematical expression syntax if that syntax chooses to use it, for example as equality/comparison. It is not native structural assignment.
+The token `=` belongs to mathematical expression syntax as equality/comparison. It is not native structural assignment and not native named-field syntax.
 
 4.8. Positional Fields and Semantic Named Fields
 
@@ -567,7 +567,6 @@ Native structural syntax builds ordinary receiver Frames and bounded Structures.
 Mathematical expression syntax is entered when the parser detects mathematical expression indicators in an argument position. Indicators include explicit numeric literals and mathematical/operator tokens such as:
 
     =
-    ==
     !=
     <
     >
@@ -578,7 +577,7 @@ Mathematical expression syntax is entered when the parser detects mathematical e
     *
     /
 
-The parser does not need to reinterpret forms such as `i == 1` or `i = 1` as ordinary Lingvamyxa receiver syntax first. It detects the mathematical operator token and parses the expression with the expression rules. The token `=` is not assignment in native structural syntax.
+The parser does not need to reinterpret forms such as `i = 1` as ordinary Lingvamyxa receiver syntax first. It detects the mathematical operator token and parses the expression with the expression rules. The token `=` is equality/comparison in mathematical expression syntax, not assignment in native structural syntax.
 
 6.2. Expression Output
 
@@ -586,11 +585,11 @@ The mathematical syntax returns an expression Structure. This expression Structu
 
 Example source:
 
-    i == 1
+    i = 1
 
-The parser detects this as mathematical syntax because of the `==` token. The exact internal expression-tree layout is not specified in this document. It belongs to the separate mathematical-syntax specification.
+The parser detects this as mathematical syntax because of the `=` token. The exact internal expression-tree layout is not specified in this document. It belongs to the separate mathematical-syntax specification.
 
-The native structural syntax described by this document is not the canonical representation of mathematical expressions. A form such as a receiver call with the name `==` is not defined here as the canonical expression output. It may be omitted entirely from the native receiver set if that makes lexical separation between native syntax and mathematical syntax simpler.
+The native structural syntax described by this document is not the canonical representation of mathematical expressions. A form such as a receiver call with the name `=` is not defined here as the canonical expression output. It may be omitted entirely from the native receiver set if that makes lexical separation between native syntax and mathematical syntax simpler.
 
 The important semantic rule is that mathematical syntax produces an expression Structure, not a separate fundamental AST type and not an ordinary runtime action.
 
@@ -926,7 +925,7 @@ Return values are ordinary declared return variables inside the executable body 
 Example:
 
 fn estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
-.harvest bed.area
+.harvest bed\area
 .redApples 0
 .greenApples 0
 .return
@@ -984,13 +983,13 @@ variant 1:
 A single primitive source return lowers to a direct C primitive return.
 
 variant 2:
-A multi-field source return lowers to a caller-provided output Structure passed through a hidden or explicit implementation-level pointer.
+A multi-field source return lowers to a caller-provided output Structure passed through a hidden or explicit implementation-level address.
 
 variant 3:
 A small return Structure lowers to a C struct returned by value if the translator/runtime profile allows it.
 
 variant 4:
-A structural return lowers to a handle/pointer allocated or managed by a runtime arena, heap, region or other implementation-owned storage.
+A structural return lowers to a handle/address allocated or managed by a runtime arena, heap, region or other implementation-owned storage.
 
 These variants are implementation strategies only. The language-level rule remains that `return` returns the declared primitive value or return Structure.
 ---ANSI C---
@@ -1265,13 +1264,13 @@ Conceptual send fields:
 
 Resolution:
 
-    model shape.model
+    model shape\model
     method lookupMessage(model, drawOn)
     call method(shape, canvas)
 
 The receiver object is passed as the first semantic argument to the selected implementation.
 
-If `shape.model` is `Circle`, and the behavior registry contains:
+If `shape\model` is `Circle`, and the behavior registry contains:
 
     message Circle drawOn drawCircleOn
 
@@ -1355,7 +1354,7 @@ The `operator` frame is not the runtime/control operation being registered.
 After registration, runtime/control source may contain:
 
 L3
-.while i < beds.len
+.while i < beds\len
 ..print beds[i].crop
 ..i i + 1
 .end while
@@ -1466,7 +1465,7 @@ An L5 message send such as:
 
 dispatches through the receiver object's behavior table:
 
-    (receiver.model, selector) -> implementation
+    (receiver\model, selector) -> implementation
 
 Both mechanisms may be represented as registry facts. They are different source-semantic forms. A generic operation is centered on the operation name. A message send is centered on the receiver object.
 
@@ -1497,7 +1496,7 @@ L5 `if` is a message/configuration dispatch receiver. It may conditionally dispa
 
 Ultra-short conditional form:
 
-if mode == debug
+if mode = debug
 ..build debugTarget
 .---
 ..build releaseTarget
@@ -1507,14 +1506,14 @@ if mode == debug
 Normal form under signature `if(condition, thenBody, elseBody)`:
 
     if(
-      <expression Structure for `mode == debug`>,
+      <expression Structure for `mode = debug`>,
       (build(debugTarget)),
       (build(releaseTarget))
     )
 
 The same conditional may be written with explicit named branch Structures:
 
-if mode == debug
+if mode = debug
 .then
 ..build debugTarget
 .---
@@ -1526,7 +1525,7 @@ if mode == debug
 This builds:
 
     if(
-      <expression Structure for `mode == debug`>,
+      <expression Structure for `mode = debug`>,
       then(build(debugTarget)),
       else(build(releaseTarget))
     )
@@ -1534,44 +1533,111 @@ This builds:
 The ultra-short form is valid when the active `if` receiver assigns semantic roles to the anonymous positional Structure arguments.
 
 
-13. Pointers, References and Callable References
+13. L2 Addresses, References and Callable References
 
 13.1. L3 Passing Model
 
-At L3 and above, explicit pointer syntax is usually unnecessary. Structures, arrays, text, objects and other non-primitive values are passed as references or handles by default.
+At L3 and above, explicit address syntax is usually unnecessary. Structures, arrays, text, objects and other non-primitive values are passed as references or handles by default.
 
-At L3 and above, ordinary names denote primitives, symbols, handles or Structures according to the active semantic environment. They are not raw function pointers.
+At L3 and above, ordinary names denote primitives, symbols, handles or Structures according to the active semantic environment. They are not raw L2 addresses to executable code.
 
-13.2. L2 Pointer Constructor
+13.2. L2 Address Values and Storage Allocation
 
-At L2, `^` may be a low-level pointer/reference constructor.
+At L2, the source model uses primitive values and typed address values. Aggregate model names such as `PlantBed` denote storage layouts, not ordinary source-level aggregate values.
+
+Allocation and storage receivers create storage and bind the requested name to the address of that storage.
 
 Examples:
 
-    ^p
-    ^ PlantBed bed
+stack PlantBed branch
+heap PlantBed tree
+static PlantBed root
+int count 5
+[] leafs count
 
-Possible meanings:
+Meanings:
 
-    ^p              untyped reference / void* / pointer to structure
-    ^ PlantBed bed  typed pointer/reference if the type model is known
+    branch  address of stack storage with layout `PlantBed`
+    tree    address of heap storage with layout `PlantBed`
+    root    address of static storage with layout `PlantBed`
+    count   primitive value/storage initialized to `5`
+    leafs   address of array/byte storage sized by `count`, according to the active `[]` receiver/profile
 
-The name `^` may be handled as a parser-level constructor or as a primitive L2 receiver during bootstrap.
+The receivers `stack`, `heap`, `static`, primitive constructors such as `int`, and allocation constructors such as `[]` are parser/bootstrap constructors in the same broad sense as type constructors: they consume layout/type information and a raw binding name, then introduce that binding with type metadata.
 
-13.3. Fn and Sub References
+An L2 address value is not necessarily a source-level integer. It may carry, or be statically associated with, layout/type metadata. Receivers and L1 lowering may use that metadata to treat an address as a typed reference rather than as a printable numeric address.
 
-Function/subroutine reference operators are strictly L2 operators.
+The core L2 syntax does not use a separate `*` or `^` marker for address types. Address-ness is introduced by storage/allocation forms, by address-producing expressions, and by typed field or index operations.
 
-At L2, reference forms such as `&` and `*` may be used for address-taking and callable-reference construction if they are defined by the L2 operator set.
+13.3. Address-of, Raw Load and Callable References
 
-At L3 and above, names are references to Structures, handles or primitive values. Calls are expressed as receiver Frames and resolved by the active receiver/operator registry, not by raw callable pointers.
+The prefix form:
+
+    @x
+
+returns the address of the storage location `x`.
+
+If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object.
+
+The prefix form:
+
+    \a
+
+performs a raw L2 load at address expression `a`. It reads the primitive cell, word or value defined by the active L2 memory profile. It does not perform typed structural rendering by itself.
+
+The field-follow form:
+
+    a\field
+
+follows typed address/reference `a` to the named field `field`. It uses the known layout/type metadata of `a`, reads or writes the field slot, and returns the field content as either a primitive value or another typed address/reference.
+
+Examples:
+
+print @count
+print \leafs
+print leafs[3]
+print \(leafs + 3)
+tree\branch branch
+root\branch tree
+print tree\branch
+print @tree\branch
+print root\branch\branch
+print \root\branch\branch
+
+Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
+
+Therefore:
+
+    @tree\branch
+
+is parsed as:
+
+    @(tree\branch)
+
+and means the address of the field slot `branch` inside the storage addressed by `tree`.
+
+Likewise:
+
+    \root\branch\branch
+
+is parsed as:
+
+    \(root\branch\branch)
+
+and means a raw load from the address produced by the typed field-follow chain.
+
+At L1 lowering time, a receiver such as `print` receives typed values or typed references when the source expression preserves type metadata. For example, `leafs` may be printed as a whole array/string/buffer when its allocation metadata is known, and `tree\branch` may lower to a `PlantBed*`-like reference or an equivalent `(layout, address)` pair, so `print tree\branch` may render a whole object/tree according to the active print receiver. The prefix raw-load form `\expr` bypasses that structural interpretation and produces the primitive cell/value loaded at the computed address, so `print \leafs` prints the first primitive cell/element under the active L2 memory profile.
+
+Function/subroutine address forms are strictly L2. A static L2 executable binding may be addressable through `@name` if the active L2 profile exposes it as storage or callable-address metadata.
+
+At L3 and above, calls are expressed as receiver Frames and resolved by the active receiver/operator registry, not by raw callable addresses. L5 message selectors and behavior-table entries are not automatically L2 callable addresses.
 
 ?
-The exact L2 forms for `^`, `&` and `*` are specified by the L2 memory and callable-reference specification. The structural core only states that raw pointer/address/callable-reference syntax belongs to L2, not to the general high-level source model.
+The exact L2 memory profile must define primitive cell size, address arithmetic, alignment, storage duration, allocation failure, callable-address representation and which bindings are addressable through `@`.
 ?
 
 variant 1:
-Treat `^`, `&` and `*` as built-in L2 parser forms.
+Treat `@`, prefix `\`, field-follow `\field` and `[]` as built-in L2 parser forms.
 
 variant 2:
 Treat them as bootstrap-registered L2 operators with parser support only for tokenization and precedence.
@@ -1590,11 +1656,11 @@ The logical array model includes at least a length field and an indirect storage
 
 14.2. L2 Lowering
 
-At L2, arrays and text may lower to pointers, length-plus-pointer records or other layout-specific representations.
+At L2, arrays and text may lower to typed addresses, length-plus-address records or other layout-specific representations.
 
 Example conceptual lowering for an array:
 
-    (len, ptr)
+    (len, addr)
 
 Lowering does not change source semantics.
 
@@ -1602,21 +1668,21 @@ Lowering does not change source semantics.
 
 The mathematical expression parser is specified separately. Indexing is treated as a level-dependent operator/form.
 
-At L2, `[]` is a low-level operator, similar in status to `=`. It uses a computed address and is governed by the L2 memory model.
+At L2, `[]` is a low-level index operator. It uses a typed or computed address and is governed by the L2 memory model.
 
 Example conceptual L2 meaning:
 
-    beds[i] -> element at computed address
+    beds[i] means the element at the computed address
 
-subject to the actual L2 layout and pointer rules.
+subject to the actual L2 layout and address rules.
 
 At L3 and above, `[]` accesses an array Structure indirectly and performs bounds checking through the array metadata, at minimum the `len` field.
 
 Example conceptual L3 meaning:
 
-    beds[i] -> index(beds, i)
+    beds[i] means index(beds, i)
 
-where `index` receives the array Structure or handle, checks `0 <= i < beds.len`, and returns the element or reports a bounds error.
+where `index` receives the array Structure or handle, checks `0 <= i < beds\len`, and returns the element or reports a bounds error.
 
 ?
 The final array/text specification must define exact index result semantics, slicing, negative indexes if any, multidimensional arrays, text encoding and the boundary between parser form and receiver/operator form.
@@ -1629,51 +1695,58 @@ variant 1:
 L2 array access lowers to computed-address access with no automatic bounds check.
 
 variant 2:
-L3+ array access lowers to a length-plus-pointer or length-plus-handle Structure with generated bounds checks.
+L3+ array access lowers to a length-plus-address or length-plus-handle Structure with generated bounds checks.
 
 variant 3:
 Dynamic arrays lower to runtime handles with accessor calls when layout is not statically known.
 ---ANSI C---
 
 
-15. Field Access
+15. Typed Field Follow
 
-15.1. Dot Form
+15.1. Backslash Field-Follow Form
 
-Named field access uses dotted syntax:
+Named field follow/access uses backslash syntax:
 
-    result.harvest
+    result\harvest
 
-The dot form is a built-in parser form. It exists so the translator can generate direct field access through known Structures and layouts.
+The field-follow form is a built-in parser form. It exists so the translator can generate direct field-follow access through known Structures, typed addresses, handles and layouts.
+
+At L2, the left side is normally a typed address. At L3 and above, the left side may be a Structure, handle or reference according to the active semantic environment.
+
+The same `\` character also has a prefix L2 raw-load form, described in section 13.3. These forms are distinguished by position:
+
+    \address      raw L2 load from an address expression
+    value\field   typed field follow/access
 
 Possible normal form:
 
     field(result, harvest)
 
-or an internal field-access expression Structure equivalent to it.
+or an internal field-follow expression Structure equivalent to it.
 
 15.2. Lowering
 
 If the model/layout of `result` is known, the translator may lower:
 
-    result.harvest
+    result\harvest
 
-into direct structure access, pointer access or generated accessor code.
+into direct structure access, typed-address field-follow access or generated accessor code.
 
 If the model/layout is dynamic, the receiver/runtime may perform a checked lookup.
 
 !!!
-Field-access failure semantics are not fixed. A final source-semantic rule must define behavior for missing fields, unknown models, dynamic Structures and nullable handles, including whether such cases are compile-time errors, runtime errors or receiver-defined diagnostics.
+Field-follow failure semantics are not fixed. A final source-semantic rule must define behavior for missing fields, unknown models, dynamic Structures and nullable handles, including whether such cases are compile-time errors, runtime errors or receiver-defined diagnostics.
 !!!
 
 ---ANSI C---
-Possible field-access lowering variants:
+Possible field-follow lowering variants:
 
 variant 1:
 Known static layouts lower to direct C struct-field access.
 
 variant 2:
-Known pointer layouts lower to direct pointer-field access.
+Known typed-address layouts lower to direct pointer-field access in ANSI C.
 
 variant 3:
 Dynamic Structures lower to checked runtime lookup or generated accessor calls.
@@ -1690,7 +1763,7 @@ A declaration with initialization is written through a declaration-context const
 
     int a 3
 
-A later update to an existing mutable binding is written by placing the binding in head/update position:
+A later update to an existing mutable binding or addressable field/index location is written by placing that location in head/update position:
 
     a 4
 
@@ -1703,7 +1776,7 @@ Example:
 
 The first `print` observes `3`. The second `print` observes `4`.
 
-The update form is valid only if the head name resolves to an existing mutable binding or to a receiver that explicitly accepts such a call. Because Lingvamyxa uses one lexical namespace, a binding name and a receiver/type/function name cannot silently mean different things in the same scope.
+The update form is valid only if the head resolves to an existing mutable binding, addressable field/index location, or receiver that explicitly accepts such a call. Because Lingvamyxa uses one lexical namespace, a binding name and a receiver/type/function name cannot silently mean different things in the same scope.
 
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
@@ -1723,7 +1796,7 @@ Example return signature:
 
 Named return variables may be updated before a bare return:
 
-    harvest bed.area
+    harvest bed\area
     redApples 0
     greenApples 0
     return
@@ -1747,9 +1820,9 @@ end unpack
 Conceptual meaning:
 
     tmp receives toEat(myFilter, Monday)
-    harvest receives tmp.harvest
-    redApples receives tmp.redApples
-    greenApples receives tmp.greenApples
+    harvest receives tmp\harvest
+    redApples receives tmp\redApples
+    greenApples receives tmp\greenApples
 
 If the produced Structure has no field names, a receiver-defined positional unpack form may map fields by order.
 
@@ -1938,7 +2011,7 @@ variant 1:
 Pass up to three primitive/reference source fields directly to an internal generated C function. References and handles may be treated as primitive scalar values for this implementation convention.
 
 variant 2:
-If more logical fields exist, generate an args Structure and pass a pointer/handle to it.
+If more logical fields exist, generate an args Structure and pass an address/handle to it.
 
 variant 3:
 Generate specialized adapters for concrete call sites, including direct calls, temporary args Structures, inlining or whole-program specialization.
@@ -2087,7 +2160,7 @@ For a send:
 
     shape drawOn canvas
 
-where `shape.model` is `Circle`, the runtime or translator queries:
+where `shape\model` is `Circle`, the runtime or translator queries:
 
     message Circle drawOn ?implementation
 
@@ -2184,7 +2257,7 @@ This grammar sketch describes the structural parser only. It does not define fin
     mathematical_expression
                          ::= parsed by the mathematical expression syntax
 
-This grammar is intentionally incomplete around full update semantics, full indexing, full field access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment or `=` named-field syntax.
+This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment or `=` named-field syntax.
 
 
 23. Canonical Examples
@@ -2210,14 +2283,14 @@ Normal form:
 Source:
 
 fn estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
-.if bed.crop == Apples
-..harvest bed.area * 1.7
-..redApples bed.area * 1.7
-..greenApples bed.area * 1.1
+.if bed\crop = Apples
+..harvest bed\area * 1.7
+..redApples bed\area * 1.7
+..greenApples bed\area * 1.1
 ..return
 .end if
 
-.estimateHarvest bed.area 0 0
+.estimateHarvest bed\area 0 0
 end estimateHarvest
 
 Semantic outline:
@@ -2228,7 +2301,7 @@ Semantic outline:
     `if` consumes condition and body Structures.
     The named return variables update fields of the current return Structure.
     `return` exits the current function and returns the current return binding.
-    `estimateHarvest bed.area 0 0` updates the current function return binding.
+    `estimateHarvest bed\area 0 0` updates the current function return binding.
     Reaching the end of the function returns the current return binding implicitly.
     `end estimateHarvest` closes the definition Structure by normalized entity name.
 
@@ -2237,7 +2310,7 @@ Semantic outline:
 Source:
 
 fn estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
-.harvest bed.area
+.harvest bed\area
 .redApples 0
 .greenApples 0
 .return
@@ -2277,7 +2350,7 @@ Semantic outline:
 Source:
 
 L5
-.if mode == debug
+.if mode = debug
 ..build debugTarget
 .---
 ..build releaseTarget
@@ -2288,7 +2361,7 @@ Conceptual form:
 
     L5(
       if(
-        <expression Structure for `mode == debug`>,
+        <expression Structure for `mode = debug`>,
         (build(debugTarget)),
         (build(releaseTarget))
       )
@@ -2355,9 +2428,9 @@ Conceptual form:
     if                         registered receiver, semantics depend on level
     while                      registered receiver, semantics depend on level
     mathematical infix         parsed into expression Structure
-    []                         L2 address operator; L3+ checked array-Structure access
-    .                          built-in parser form for field access when not in line-prefix position
-    ^ & *                      L2 pointer/address/callable-reference operators
+    []                         L2 indexed address access; L3+ checked array-Structure access
+    @                          L2 address-of storage location
+    \                          L2 prefix raw load, and typed field-follow separator in `a\field`
     relation/fact/rule/query   receiver-defined relational Structures
     union                      receiver that registers a closed set of variants
     method                     receiver that registers a generic dispatch entry
@@ -2385,7 +2458,7 @@ Core invariant:
 25.1. Source-Semantic or Syntax Uncertainties
 
 !!!
-Field-access failure semantics are not fixed. A final source-semantic rule must define behavior for missing fields, unknown models, dynamic Structures and nullable handles, including whether these cases are compile-time errors, runtime errors or receiver-defined diagnostics.
+Field-follow failure semantics are not fixed. A final source-semantic rule must define behavior for missing fields, unknown models, dynamic Structures and nullable handles, including whether these cases are compile-time errors, runtime errors or receiver-defined diagnostics.
 !!!
 
 25.2. External or Undescribed Specification Areas
@@ -2408,7 +2481,7 @@ Model/type syntax is not specified in full. It must define model receivers, slot
 ?
 
 ?
-The L2 memory/operator specification must define exact syntax and semantics for `^`, `&`, `*`, low-level binding update and raw indexing.
+The L2 memory/operator specification must define exact semantics for `@`, prefix `\`, field-follow `\field`, low-level binding update, raw loads, raw indexing and address arithmetic.
 ?
 
 ?
@@ -2452,7 +2525,7 @@ variant 1:
 Pass a small number of primitive/reference fields directly in internal generated C functions.
 
 variant 2:
-Pass an args Structure pointer/handle when the logical argument Structure is large or dynamic.
+Pass an args Structure address/handle when the logical argument Structure is large or dynamic.
 
 variant 3:
 Generate specialized adapters, inline calls or eliminate physical args Structures when observable source semantics are preserved.
@@ -2469,7 +2542,7 @@ variant 3:
 Return small Structures by value where the implementation profile allows it.
 
 variant 4:
-Return handles/pointers to runtime-managed Structures for dynamic or large results.
+Return handles/addresses to runtime-managed Structures for dynamic or large results.
 
 Destructuring lowering:
 
@@ -2477,7 +2550,7 @@ variant 1:
 Store the returned Structure or handle in a temporary service variable and update target variables from its fields.
 
 variant 2:
-For known layouts, generate direct field access.
+For known layouts, generate direct field-follow access.
 
 variant 3:
 For dynamic layouts, generate checked accessors or runtime lookup.
@@ -2485,7 +2558,7 @@ For dynamic layouts, generate checked accessors or runtime lookup.
 Field and array lowering:
 
 variant 1:
-Known field access lowers to direct C struct or pointer access.
+Known field-follow access lowers to direct C struct or pointer access.
 
 variant 2:
 L2 indexing lowers to computed-address access under the L2 memory model.
@@ -2493,7 +2566,7 @@ L2 indexing lowers to computed-address access under the L2 memory model.
 variant 3:
 L3+ indexing lowers to checked access through array metadata such as `len`.
 
-The language does not define C slot counting, hidden runtime pointers, hidden output pointers or C storage ownership rules. Those are translator/runtime design choices.
+The language does not define C slot counting, hidden runtime addresses, hidden output addresses or C storage ownership rules. Those are translator/runtime design choices.
 ---ANSI C---
 
 
@@ -3036,7 +3109,7 @@ The exact interaction between `retry`, failure handlers, iterator frames, partia
 Example:
 
     assert index >= 0
-    assert index < values.len
+    assert index < values\len
 
 If the condition is true, execution continues normally.
 
@@ -3170,11 +3243,11 @@ Semantic form:
 iterator makePoints
 
 while true
-.result next iterator.env
-.if not result.hasValue
+.result next iterator\env
+.if not result\hasValue
 ..break
 .---
-.point result.value
+.point result\value
 .body
 ---
 
@@ -3495,9 +3568,9 @@ L5 behavior dispatch for a delivered message uses the target object's behavior d
 
 Conceptual dispatch:
 
-    model = target.model
+    model = target\model
     behavior = lookupBehavior model
-    method = lookup behavior.messageTable selector
+    method = lookup behavior\messageTable selector
     call method target args
 
 If the target belongs to the current thread and the source form is a local L5 message, the translator/runtime may use direct Smalltalk-style synchronous dispatch.
@@ -3564,7 +3637,7 @@ L2 and L3 ordinary computation remains direct:
 
     primitive arithmetic;
     comparisons;
-    field access;
+    field-follow access;
     array access;
     direct fn/sub calls;
     loops and branches;
