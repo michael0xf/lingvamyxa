@@ -1,14 +1,14 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12 rewrite preserves the full Rev.11 document body where possible and updates the structural syntax rules and examples touched by the comma-tail and dot-tree changes.
+This Rev.12.1 rewrite preserves the full Rev.12 document body where possible and updates the return mechanism plus the structural local namespace overlay model.
 
 Status
 
-Revision 12 draft. Comma tail, phrase signatures and dot-tree vertical syntax update.
+Revision 12.1 draft. Comma tail, phrase signatures, dot-tree vertical syntax, terminal return and local namespace overlay update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
-Revision 12 note:
+Revision 12.1 note:
 
     Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
 
@@ -16,7 +16,9 @@ Revision 12 note:
 
     Vertical composition is dot-tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A line at level N starts a sibling of the frame or closes the frame through root/parent separation. Dot-only lines act as anonymous Structure delimiters at their own source level; at root level the corresponding delimiter is a physical empty line.
 
-    `case` (not structural syntax) is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
+    `case` is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
+
+    `return` has two structural positions. Inside an executable body, `return` is ordinary runtime control. At the source level of the open executable definition, `return` is terminal return: it supplies or returns the current result and structurally closes that executable definition, like a checked executable-specific close.
 
     The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is not part of Lingvamyxa syntax.
 
@@ -1106,15 +1108,14 @@ fn: i(
   )
 )
 
-Here `j: v / 2` updates the visible binding `j`, and `i: v` updates the current function return binding named `i`.
+Here `j: v / 2` updates the visible binding `j`. The final result should normally be returned with `return: v`; using `i: v` as a function-name return binding is optional/profile-defined in this revision.
 
 7.3. Subroutine Definition Form
 
 Example source:
 
 sub: l5_if, (boolean: condition), then, else
-. return
-end: l5_if
+return
 
 Strict conceptual form:
 
@@ -1154,19 +1155,16 @@ A local variable cannot reuse the name of a visible type. A local `fn` or `sub` 
 
 L5 message selectors are looked up through a receiver object's behavior table. A selector is not automatically a lexical binding unless it is also imported or registered as an ordinary receiver/generic operation. The implementation name attached to a message is a lexical executable binding and follows the single-namespace rule.
 
-In expression position, a visible `fn` name is callable. In head/update position inside its own body, the current `fn` name denotes the current return binding.
+In expression position, a visible `fn` name is callable. The canonical way to return a value is `return: value`, including terminal return at the source level of the current function. A profile may optionally allow Pascal-style function-name return binding, but it is not the canonical return mechanism in this revision.
 
 Example:
 
 fn: factorial, (int: n), (int)
 .if: n <= 1
-..factorial: 1
-..return
-.
-.factorial: n * factorial(n - 1)
-end: factorial
+..return: 1
+return: n * factorial(n - 1)
 
-Inside the body, `factorial: 1` updates the return binding of the current function. The expression `factorial(n - 1)` is a recursive function call because it appears in expression position.
+Inside the body, `return: 1` exits with value `1` when the condition holds. The expression `factorial(n - 1)` is a recursive function call because it appears in expression position. The final `return:` line is terminal return and closes the function.
 
 7.3.2. Callable Values and Binding Updates
 
@@ -1310,72 +1308,161 @@ All named forms above are valid structural surface forms. A style guide may pref
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
 
-8. Runtime Return and Return-Binding Updates
+8. Runtime Return and Terminal Return
 
 8.1. `return` Receiver
 
-Runtime exit from an `fn` or method-like executable body is represented by the `return` receiver/operator.
+Runtime exit from an `fn`, `sub`, iterator-like executable body or method-like executable body is represented by the `return` receiver/operator.
 
-`return` is not the same as `end`. `end` closes source structure. `return` exits the current executable body.
+`return` is not the same as the general structural close receiver `end:`. `end:` closes source structure by visible target name. `return` exits executable control flow. In one terminal position inside an open executable definition, `return` may also serve as the structural close of that executable definition.
 
 8.2. Return Forms
 
-The core return form has no explicit value arguments:
+The core return forms are:
 
     return
+    return: value
 
-`return` exits the current executable body. In an `fn`, it returns the current return binding. In a `sub`, it exits without producing a normal return value.
+Inside an executable body, `return` exits the current executable body.
 
-The `return` line has no argument tail and no parenthesized argument list. Any non-empty argument tail after the `return` token is a syntax error in this core specification.
+For an `fn`, `return` without tail returns the current return binding. For a `sub`, `return` without tail exits without producing a normal return value.
 
-Return values are established before `return`, either by updating declared named return variables or by using the current function name in head/update position inside its own body.
+For an `fn`, `return: value` evaluates or consumes `value` as one logical value compatible with the declared return model, stores that value in the current return binding, and exits the current executable body. If the function return model is structural, the tail of `return:` is consumed as one return Structure. Comma-separated fields may be mapped positionally to the return Structure by the `return` receiver signature.
 
-There is no native named-field variant of the `return` receiver because `=` is not a structural named-field operator. Named return fields are updated as ordinary bindings before `return`, or by receiver-defined nested Structures if a later return syntax explicitly adds them.
+For a `sub`, `return: value` is invalid unless a later profile defines a status/result convention for subroutines.
 
-8.3. Named Return Variables and Function-Name Return Binding
+`return` is a receiver. It consumes the Structure supplied by its tail. It is not assignment syntax and does not introduce `=` as a native assignment or named-field operator.
 
-Return values are ordinary declared return variables inside the executable body when the return signature gives them names.
+Examples:
 
-Example:
+fn: square, (int: x), (int)
+return: x * x
 
-fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
-.harvest: bed\area
-.redApples: 0
-.greenApples: 0
-.return
-end: estimateHarvest
+Conceptual executable body:
 
-The empty `return` returns the current values of the declared return variables.
+    return(x * x)
 
-Inside an `fn` body, the current function name may be used in head/update position as the current return binding. This update does not call the function.
-
-Example:
+Example with early runtime return and terminal return:
 
 fn: factorial, (int: n), (int)
 .if: n <= 1
-..factorial: 1
-..return
-.
-.factorial: n * factorial(n - 1)
-end: factorial
+..return: 1
+return: n * factorial(n - 1)
 
-The line `factorial: 1` writes the current return binding. The expression `factorial(n - 1)` calls the function recursively.
+The inner `..return: 1` is an ordinary runtime return inside the `if` body. The final `return: n * factorial(n - 1)` is terminal return for the surrounding `fn` definition.
 
-8.4. Implicit Return at Function End
+8.3. Terminal Return as Executable Structural Close
 
-If execution reaches the end of an `fn` body and the function has a return binding, the current value of that return binding is returned implicitly.
+A terminal return is a `return` source item written at the source level of the open executable definition itself, where a structural close of that executable definition is expected.
 
-A style guide may still require explicit `return` in some contexts, but the source semantics allow an implicit final return of the current return binding.
+If an executable definition is opened at source level N, then its ordinary vertical body items are normally written at level N + 1. A `return` line at level N is not a sibling root item. It is parsed as terminal return for the currently open executable definition, provided that the current open executable target is visible and compatible with `return`.
 
-8.5. Return Source Semantics
+Terminal return is equivalent to appending the corresponding runtime `return` as the final body item and then closing the executable definition by its visible executable name.
+
+Example:
+
+fn: square, (int: x), (int)
+return: x * x
+
+is source-semantically equivalent to:
+
+fn: square, (int: x), (int)
+.return: x * x
+end: square
+
+The first form is the canonical compact form for a short function. The second form is an explicit expanded explanation of the same source semantics.
+
+Terminal return may close the open executable tail in the same checked way as `end: <currentExecutableName>`. It is not a general close form for arbitrary Structures. It is valid only for executable definitions or executable-like receivers that explicitly admit terminal return.
+
+Invalid examples:
+
+return: 1
+
+at root level with no open executable is invalid.
+
+config: app
+return: 1
+
+is invalid unless `config` is an executable-like receiver that explicitly admits terminal return. `return` does not replace `end:` for ordinary data, model, configuration or registry Structures.
+
+8.4. Runtime Return vs Terminal Return
+
+The source level separates the two roles.
+
+Runtime return inside a body:
+
+fn: abs, (int: x), (int)
+.if: x < 0
+..return: -x
+return: x
+
+Here `..return: -x` is runtime control inside the `if` body. It does not structurally close the `fn` source item. The final `return: x` is terminal return at the function level and closes the function.
+
+Terminal empty return is also valid when a return binding has already been prepared:
+
+fn: estimate harvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+.harvest: bed\area
+.redApples: 0
+.greenApples: 0
+return
+
+This is equivalent to appending a body-level empty `return` and closing the function.
+
+8.5. Named Return Variables
+
+Return values may be represented by declared return variables inside an executable body when the return signature gives them names.
+
+Example:
+
+fn: estimate harvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+.harvest: bed\area
+.redApples: 0
+.greenApples: 0
+return
+
+The terminal empty `return` returns the current values of the declared return variables and closes the function definition.
+
+A function return signature with several fields defines one return Structure. Updating several declared return fields and returning one Structure-compatible value are source-semantically equivalent when the produced Structure matches the declared return Structure.
+
+Example positional structural return:
+
+fn: split harvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+return: bed\area, 0, 0
+
+Here the `return:` tail is one logical return Structure with three fields consumed by the return signature.
+
+8.6. Function-Name Return Binding
+
+The old Pascal-style function-name return binding is not the canonical return form in this revision.
+
+A profile may still allow the current function name in head/update position to denote the current return binding inside that function body:
+
+fn: square, (int: x), (int)
+.square: x * x
+return
+
+However, this form is optional/profile-defined and should not be used as the primary return mechanism. The canonical forms are `return: value` and terminal `return`.
+
+This restriction keeps the function name available for ordinary callable lookup, recursion and future local namespace overlay operations, where a callable binding may be locally replaced by another compatible callable value.
+
+8.7. Implicit Return at Function End
+
+Implicit return at function end is not the canonical source form in this revision.
+
+A profile may still allow implicit final return of the current return binding when execution reaches the end of an `fn` body. A stricter profile may require either terminal `return`, `return: value`, or explicit `end: name` plus a previously established return binding.
+
+The preferred style is:
+
+fn: f, (int: x), (int)
+return: x + 1
+
+rather than relying on an implicit return binding update.
+
+8.8. Return Source Semantics
 
 At the source-semantic level, every `fn` has one logical return value. That value may be a primitive value or a return Structure. A return signature with several fields defines one return Structure, not a separate non-structural mechanism.
 
-Updating several declared return fields and updating one Structure-compatible return binding are source-semantically equivalent when the produced Structure matches the declared return Structure. A caller may consume the returned value as one Structure or, through receiver-defined destructuring/update forms, bind or update separate variables from its fields.
-
-Multiple named return fields are ordinary declared return variables inside the executable body. An empty `return` returns their current values as the declared return Structure.
-
-The `return` receiver itself does not fill the declared return Structure. It only exits the executable body after the current return binding has already been updated. A single primitive return is the degenerate case where the declared return Structure has one primitive result according to the active return-value model.
+The `return:` receiver fills or updates the current return binding from its tail and exits. The empty `return` exits and returns the current return binding. Terminal return additionally closes the current executable definition in source structure.
 
 Physical return strategy, storage ownership and low-level runtime representation are translator/runtime implementation details. They are not part of the source-semantic core.
 
@@ -1389,7 +1476,7 @@ The general error/status system is not specified in this document. It may be def
 Possible return-lowering variants for an ANSI C implementation:
 
 variant 1:
-A single primitive source return lowers to a direct C primitive return.
+A single primitive `return: value` lowers to a direct C primitive return.
 
 variant 2:
 A multi-field source return lowers to a caller-provided output Structure passed through a hidden or explicit implementation-level address.
@@ -1400,9 +1487,11 @@ A small return Structure lowers to a C struct returned by value if the translato
 variant 4:
 A structural return lowers to a handle/address allocated or managed by a runtime arena, heap, region or other implementation-owned storage.
 
-These variants are implementation strategies only. The language-level rule remains that `return` returns the declared primitive value or return Structure.
----ANSI C---
+variant 5:
+Terminal return lowers as an ordinary body-level return followed by no further generated body statements. Source-level structural closure is resolved before lowering.
 
+These variants are implementation strategies only. The language-level rule remains that `return` returns the declared primitive value or return Structure, and terminal return also closes the current executable definition.
+---ANSI C---
 
 9. Type and Model Forms
 
@@ -2224,7 +2313,7 @@ Binding, mutability, scope, initialization, reassignment and shadowing rules are
 
 16.2. Return Structures
 
-A function return value is one logical source-level value. That value may be primitive or structural. If the return value is structural, updating its declared fields and updating a Structure-compatible return binding are source-semantically equivalent under the receiver-defined return signature.
+A function return value is one logical source-level value. That value may be primitive or structural. If the return value is structural, updating its declared fields and returning one Structure-compatible value are source-semantically equivalent under the receiver-defined return signature.
 
 A function may return a Structure with ordered and/or semantic named fields.
 
@@ -2232,14 +2321,18 @@ Example return signature:
 
     (f32 harvest, f32 redApples, f32 greenApples)
 
-Named return variables may be updated before a bare return:
+Canonical structural return:
+
+    return: bed\area, 0, 0
+
+Named return variables may also be updated before an empty terminal return:
 
     harvest: bed\area
     redApples: 0
     greenApples: 0
     return
 
-The current function name may also update the whole current return binding in head/update position.
+The old Pascal-style current function-name return binding is optional/profile-defined. The canonical return mechanism is `return: value` or terminal empty `return` after updating named return variables.
 
 16.3. Destructuring
 
@@ -2784,14 +2877,8 @@ Source:
 
 fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
 .if: bed\crop = Apples
-..harvest: bed\area * 1.7
-..redApples: bed\area * 1.7
-..greenApples: bed\area * 1.1
-..return
-end: if
-
-.estimateHarvest: bed\area, 0, 0
-end: estimateHarvest
+..return: bed\area * 1.7, bed\area * 1.7, bed\area * 1.1
+return: bed\area, 0, 0
 
 Semantic outline:
 
@@ -2799,11 +2886,8 @@ Semantic outline:
     `PlantBed: bed` is a typed/model constructor Structure if `PlantBed` is registered.
     The return Structure has three named fields.
     `if` consumes condition and body Structures.
-    The named return variables update fields of the current return Structure.
-    `return` exits the current function and returns the current return binding.
-    `estimateHarvest: bed\area, 0, 0` updates the current function return binding.
-    Reaching the end of the function returns the current return binding implicitly.
-    `end: estimateHarvest` closes the definition Structure by normalized entity name.
+    The inner `return:` exits with the Apple-specific structural result.
+    The final `return:` is terminal return. It supplies the default structural result and closes the function definition.
 
 23.3. Empty Return with Named Return Variables
 
@@ -2813,32 +2897,28 @@ fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenA
 .harvest: bed\area
 .redApples: 0
 .greenApples: 0
-.return
-end: estimateHarvest
+return
 
 Semantic outline:
 
     Named return fields are local return variables.
     Head/update position updates existing bindings.
-    Empty `return` exits and returns their current values.
+    Terminal empty `return` exits, returns their current values and closes the function definition.
 
-23.3.1. Recursive Function with Function-Name Return Binding
+23.3.1. Recursive Function with Terminal Return
 
 Source:
 
 fn: factorial, (int: n), (int)
 .if: n <= 1
-..factorial: 1
-..return
-.
-.factorial: n * factorial(n - 1)
-end: factorial
+..return: 1
+return: n * factorial(n - 1)
 
 Semantic outline:
 
-    In head/update position, `factorial` denotes the current return binding.
+    `return: 1` is a runtime return inside the `if` branch.
     In expression position, `factorial(n - 1)` is a recursive call.
-    The final line updates the return binding, and the end of the function returns it implicitly.
+    The final `return:` supplies the recursive result and closes the function definition.
 
 23.4. L5 Conditional Build
 
@@ -2887,8 +2967,7 @@ Semantic outline:
 Source:
 
 sub: l5_if, (boolean: condition), then, else
-.return
-end: sub
+return
 
 Conceptual form:
 
@@ -2924,7 +3003,7 @@ Conceptual form:
     L2/L3/L4/L5                level receiver frames
     sub                        receiver that registers subroutine definitions
     fn                         receiver that registers function definitions
-    return                     executable-body return receiver/operator
+    return                     executable-body return receiver/operator; terminal executable close at definition level
     operator                   receiver that registers receivers/operators
     if                         registered receiver, semantics depend on level
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
@@ -3106,7 +3185,7 @@ Operator summary:
     3.  until                                             L3
     4.  for                                               L3
     5.  each                                              L3
-    6.  return                                            L3 executable body
+    6.  return                                            L3 executable body; terminal executable close at definition level
     7.  break                                             L3 loop frame
     8.  continue                                          L3 loop frame
     9.  finally                                           L3 executable/scope frame cleanup
@@ -3379,17 +3458,28 @@ Iterator consumption by `each` is specified in section 26.14.
 
 26.7. `return`
 
-`return` exits the current `fn` or `sub` executable body.
+`return` exits the current `fn`, `sub` or executable-like body.
 
-Bare form:
+Runtime forms inside an executable body:
 
     return
+    return: value
 
-For an `fn`, `return` returns the current return binding.
+For an `fn`, `return` returns the current return binding. `return: value` fills the current return binding with a compatible primitive or Structure value and exits.
 
-For an `fn`, `return` does not accept value arguments and does not fill the declared return Structure. Return fields or the whole current return binding must be updated before `return`.
+For a `sub`, `return` exits the `sub` body. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
-For a `sub`, `return` exits the `sub` body. A `sub` does not produce a normal return value.
+At the source level of the open executable definition, `return` is terminal return. It appends the corresponding runtime return as the final body item and closes the executable definition. This is an executable-specific close, not a general replacement for `end: name`.
+
+Examples:
+
+fn: square, (int: x), (int)
+return: x * x
+
+fn: factorial, (int: n), (int)
+.if: n <= 1
+..return: 1
+return: n * factorial(n - 1)
 
 Before control leaves the current executable frame, all `finally` cleanups registered for the exited scopes are executed in reverse registration order.
 
@@ -4430,13 +4520,24 @@ The token form `i++` is valid only in profiles that register it as a parser meth
 
 L2 `return` exits the current executable body.
 
-Bare form:
+Bare runtime form inside a body:
 
     return
 
-For an `fn`, `return` returns the current return binding. Return fields or the whole current return binding must be updated before `return`.
+Value runtime form inside a body:
 
-For a `sub`, `return` exits without producing a normal return value.
+    return: value
+
+For an `fn`, `return` returns the current return binding. `return: value` fills the current return binding with a compatible primitive or Structure value and exits.
+
+For a `sub`, `return` exits without producing a normal return value. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
+
+At the source level of an open executable definition, `return` may be terminal return. Terminal return appends the corresponding runtime return as the final body item and closes the executable definition, in the same checked close position where `end: <functionName>` would otherwise be expected.
+
+Example:
+
+fn: square, (int: x), (int)
+return: x * x
 
 28.5.6. `break` and `continue`
 
@@ -4465,3 +4566,127 @@ The following section 26 operators are not part of the minimal L2 control set un
     labelled break / labelled continue
 
 They may still exist in L3 or higher levels, or in a richer L2 profile.
+
+29. Structural Operation on a Local Copy of Namespace-Structure
+
+29.1. Namespace as Structure
+
+A namespace is a Structure.
+
+Before translation or receiver consumption, a namespace may be represented as a typed dictionary-like Structure whose entries bind names, phrase signatures, receiver names, type/model descriptors, callable values, behavior descriptors and ordinary values.
+
+Conceptual example:
+
+namespace:
+.factorial: Callable(int -> int)
+.print: Sub(...)
+.String: TypeDescriptor
+.int: TypeDescriptor
+.
+
+This representation is source-semantic. A translator may lower it to lexical tables, symbol indexes, direct references, C identifiers, dispatch tables, persistent maps or any other implementation representation.
+
+29.2. Local Namespace View
+
+Entering an executable definition creates a local namespace view.
+
+The local view may be implemented as:
+
+    an actual copied Structure
+    a persistent overlay over the outer namespace
+    a copy-on-write dictionary-like Structure
+    a statically resolved lexical environment with no runtime dictionary
+    another representation preserving the same source semantics
+
+A binding update inside an executable body updates the local namespace view unless a future rule explicitly declares the binding external/global/mutable outside the local view.
+
+Local namespace updates do not mutate the outer namespace and do not change the externally visible signature of the executable definition.
+
+29.3. Typed Compatibility of Local Updates
+
+A local namespace entry has a declared slot type, callable signature, receiver contract, model descriptor or other compatibility descriptor.
+
+Updating an entry is valid only if the new value is compatible with that descriptor.
+
+Examples of invalid updates:
+
+    a binding declared as `int` receiving a `String` value
+    a binding declared as `Callable(int -> int)` receiving non-callable text
+    a type descriptor slot receiving an ordinary runtime integer value
+    a receiver implementation slot receiving a callable with incompatible argument or return Structure
+
+Example of valid callable replacement:
+
+    strategy: optimized strategy
+
+is valid when both `strategy` and `optimized strategy` have compatible callable signatures, for example:
+
+    Callable(int -> int)
+
+29.4. Local Callable Replacement
+
+Because callable values are Structures or handles/references to Structures, local replacement of a callable binding is just a typed update of the local namespace Structure.
+
+Example:
+
+fn: compute, (int: x), (int)
+.fn: slow path, (int: v), (int)
+.return: v * v
+.fn: fast path, (int: v), (int)
+.return: v << 1
+.strategy: slow path
+.if: x < 10
+..strategy: fast path
+return: strategy(x)
+
+Here `strategy` is a local callable binding. The update `strategy: fast path` is valid only if `fast path` is compatible with the declared or inferred signature of `strategy`.
+
+This operation does not replace `slow path`, `fast path`, `compute`, or any outer namespace binding. It only changes the local namespace view used inside the current executable body.
+
+29.5. Difference from Dynamic Untyped Rebinding
+
+This model is not Python-like unrestricted rebinding.
+
+The namespace may be dictionary-like, but it is typed. A name may be locally rebound only to a value compatible with its declared slot type or contract.
+
+Therefore:
+
+    x: 1
+    x: "hello"
+
+is invalid if `x` is an `int` binding.
+
+And:
+
+    factorial: "hello"
+
+is invalid if `factorial` is a callable slot with signature `Callable(int -> int)`.
+
+29.6. Interaction with Return and Function Names
+
+The canonical return mechanism is `return: value` or terminal `return`. The current function name is not the primary return binding syntax in this revision.
+
+This avoids overloading a function name with too many roles. The same visible name may participate in ordinary callable lookup, recursion and local namespace overlay operations without also being the canonical way to write the function result.
+
+A compatibility profile may allow Pascal-style function-name return binding, but such a profile must define how it interacts with local namespace overlays and callable replacement.
+
+29.7. Translation and Optimization
+
+The source semantics allow a local namespace copy or overlay, but implementations do not have to allocate an actual dictionary at runtime.
+
+A translator may optimize local namespace operations by:
+
+    avoiding a copy when no local updates occur
+    using copy-on-write for a small number of updates
+    representing the overlay as a persistent map
+    replacing lookups by direct references when types and bindings are static
+    inlining locally replaced callable values when the replacement is non-escaping
+    lowering compatible callable replacement to a simple local function pointer or descriptor update
+    rejecting or de-optimizing cases that escape the local namespace view beyond the executable lifetime
+
+The source rule is structural and typed: local updates modify a local namespace Structure view, and every update must preserve the declared type/signature/contract of the target entry.
+
+?
+Escaping local namespace overlays, closure capture of locally replaced callables, mutation of outer bindings and explicit global/external update syntax are not specified in this document. They belong to a future execution-model and runtime specification.
+?
+
