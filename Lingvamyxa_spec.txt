@@ -2,13 +2,15 @@ Lingvamyxa Structural Core Specification
 
 Status
 
-Revision 9 draft. Dot-indent syntax update.
+Revision 10 draft. Vertical syntax update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
-Revision 9 note:
+Revision 10 note:
 
-    Lingvamyxa source indentation is now represented by leading dot characters (`.`), not by spaces or tab characters. Spaces and tabs may be used by this document for prose layout, but they do not define source block depth.
+    Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
+
+    The standalone source line `---` is no longer part of Lingvamyxa syntax. Named `end <name>`, dot-only level marker lines, dot-dedent and EOF/root separation define vertical closure.
 
 The document is descriptive and semantic. Surface syntax builds Structures. Receivers and subroutines consume Structures and assign typed meaning to them.
 
@@ -174,11 +176,11 @@ Example source:
 Generic logical form:
 
     Frame(
-      name: f,
-      args: (
-        field0: a,
-        field1: b,
-        field2: c
+      name(f),
+      args(
+        field0(a),
+        field1(b),
+        field2(c)
       )
     )
 
@@ -212,9 +214,9 @@ It creates a Frame named `f` with one logical argument Structure containing thre
 Normal form:
 
     f(
-      field0: a,
-      field1: b,
-      field2: c
+      field0(a),
+      field1(b),
+      field2(c)
     )
 
 4.2. Line Command Form
@@ -286,7 +288,7 @@ It creates a Frame named `f` with the same logical argument Structure as:
 
     f(a, b, c)
 
-The explicit closing marker must be valid for the currently open vertical Structure. Closing validation is defined in section 7.5.
+The explicit closing marker must be named and valid for the vertical Structure it closes. Closing validation is defined in section 7.5.
 
 4.4. Parenthesized Bounded Structure
 
@@ -304,9 +306,9 @@ Example:
 
 Logical argument sections:
 
-    field0: <expression Structure for `i = 1`>
-    field1: (print(choose, hello))
-    field2: (print(choose, world))
+    field0 -> <expression Structure for `i = 1`>
+    field1 -> (print(choose, hello))
+    field2 -> (print(choose, world))
 
 Receiver-signature roles:
 
@@ -316,94 +318,99 @@ Receiver-signature roles:
 
 The names `condition`, `then` and `else` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `if` receiver. The internal layout of the expression Structure is outside this structural-core document.
 
-4.5. Dot-Indentation Structures
+4.5. Dot-Level Vertical Structures
 
-A dot-indented block after a line opens a vertical Structure. A source indentation prefix is a run of one or more `.` characters at the logical start of a source line. Only the maximal leading dot run before the first non-dot source character is indentation; dots after a token remain ordinary expression syntax when another grammar rule assigns them meaning, for example in decimal literals.
+Vertical form is line command form spread across physical lines.
 
-Spaces and tabs are not indentation in Lingvamyxa source. In strict source mode, leading spaces or tabs before a source token are invalid outside comments and literals. A document renderer may add presentation padding around examples, but the language indentation depth is computed only from leading dots.
+The leading indentation zone of a source line is the run of dots, spaces and tab characters before the first non-indentation source token. The source level of the line is the number of dot characters in that zone. Spaces and tab characters in the indentation zone are ignored for source block depth.
 
-A newline at the same dot depth separates elements of the current Structure. A dot-dedent closes the current dot-indentation Structure by returning to a previous dot depth.
+Examples of equal level:
 
-Explicit `end` forms remain preferred for readable named vertical frames because they allow the parser, translator and formatter to verify intended closure.
+    ....call
+    . . . . call
+    .	. .	.     call
 
-4.6. Bare `end` and `---`
+Only dots and physical newlines define vertical structure. Spaces and tabs may improve readability, but they never change source level.
 
-The form:
+A line at the same level as the previous source item starts the next sibling item in the current parent Structure.
 
-    end
+A line at a deeper level starts or continues the body/block Structure of the immediately preceding line. It does not create a sequence of additional arguments to the preceding receiver merely because it is indented. Receiver signatures still decide whether that nested Structure is consumed as a positional field, named field, executable body, declaration body or data Structure.
 
-closes the current open vertical Structure.
+A line at a lower level closes all open Structures above that level and then starts the next item at the lower level.
 
-The standalone line:
-
-    ---
-
-is a visual alias for bare `end`. It is not a receiver, not an operator, not a runtime action and not a separate section-separator construct.
-
-A closing line uses the same dot indentation prefix as the block that it closes. For a named vertical Structure, the closing line has exactly the same number of leading dots as the header line of that Structure.
-
-A standalone `---` at dot depth N closes the current open Structure whose header is at dot depth N. It does not close the previous sibling merely because it follows a deeper child line.
+A dot-only level marker line contains only dots, spaces and tabs before the newline and contains at least one dot. It closes all open Structures above the marker level and resumes parsing at that marker level. It does not add a source item and does not become the previous item for the next deeper line. This is the ordinary way to end one nested positional field/body and continue the still-open parent at the marker level.
 
 Example:
 
-match value
-.case 1
-..print one
-.---
-.case 2
-..print two
-.---
-.default
-..print other
-.---
----
+outerLoop:
+. for (int i 1) (i <= 3) (i++)
+. . for (int j 1) (j <= 3) (j++)
+. . . if (i = 2 && j = 2)
+. . . . System/out/println "--- continue outerLoop ---"
+. . . . continue outerLoop
+. . .
+. . . System/out/println "i: " + i + ", j: " + j
+end outerLoop
 
-This is equivalent to:
+The `. . .` marker closes the level-4 body of `if` and resumes the level-3 body of the inner `for`. The following `System/out/println` line is the next statement of that `for` body, not an `else` argument.
 
-match value
-.case 1
-..print one
-.end
-.case 2
-..print two
-.end
-.default
-..print other
-.end
-end
+A physical empty line contains no dots and no source token. Empty lines are allowed only at root level. A root empty line is a root-level marker: it closes all open Structures above root level, resumes parsing at root level, and does not add a source item. Empty lines are not allowed inside an open non-root body. To close to a non-root level, use a dot-only level marker line.
 
-The first three `---` lines close the current `case` or `default` Structures. The final `---` closes the enclosing `match` Structure.
+The root block is opened by the source file itself. It has no source-level opening line and no closing line. EOF closes the root block.
 
-The same form may be written with explicit validation tokens:
+4.6. Named `end`
 
-match value
-.case 1
-..print one
-.end case
-.case 2
-..print two
-.end case
-.default
-..print other
-.end default
-end match
+Bare `end` is not valid Lingvamyxa source syntax.
 
-A closing line whose dot depth does not match the current open block is a syntax error. Dot indentation is exact. Spaces and tabs do not adjust depth and must not be used to repair alignment.
+The only source-level `end` form is:
 
-4.6.1. Ultra-short Anonymous Positional Structures
+    end <name>
 
-Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written in ultra-short anonymous form.
+`end <name>` closes a visible named frame, label block or entity block with a matching validation name. It may close several currently open implicit vertical levels at once, as long as `<name>` matches a visible open named target at or above the current level and no receiver-specific rule forbids that jump.
+
+This makes `end <name>` a readable tail-cutter for deeply nested vertical code.
 
 Example:
+
+outerLoop:
+. for (int i 1) (i <= 3) (i++)
+. . for (int j 1) (j <= 3) (j++)
+. . . if (i = 2 && j = 2)
+. . . . continue outerLoop
+end outerLoop
+
+The final line closes the labelled block `outerLoop` directly. The intermediate vertical levels are closed implicitly by the named close.
+
+The standalone source line `---` is not part of Lingvamyxa syntax.
+
+4.6.1. Vertical Positional Structures
+
+Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as sibling items at the same child level of the receiver frame.
+
+Single-body example:
 
 if a
-..doSomething
-.---
-..doOtherThing
-.---
----
+. doSomething
 
 Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
+
+    if(
+      a,
+      (
+        doSomething
+      )
+    )
+
+The name `thenBody` is assigned by the `if` receiver signature. It is not a surface keyword in this form.
+
+Two-body positional example at root level:
+
+if a
+.doSomething
+
+.doOtherThing
+
+Under the same `if(condition, thenBody, elseBody)` receiver signature, this builds:
 
     if(
       a,
@@ -415,40 +422,40 @@ Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
       )
     )
 
-The names `thenBody` and `elseBody` are assigned by the `if` receiver signature. They are not surface keywords in this form.
+The empty root-level marker line after `.doSomething` closes the first child body and resumes root level while keeping the current root-level `if` frame available for its next child field. The next level-1 item `.doOtherThing` is therefore the next positional field of `if`.
+
+Nested two-body positional example:
+
+parent
+.if a
+..doSomething
+.
+..doOtherThing
+.
+end parent
+
+The `.` marker closes the previous level-2 child and resumes level 1. The following level-2 item is the next positional field of the still-open `.if a` frame.
+
+The same branches may also be written as explicit named argument Structures:
+
+if a
+. then
+. . doSomething
+. else
+. . doOtherThing
+end if
+
+The names `then` and `else` are ordinary nested Structures consumed by the active `if` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
 
 A one-line form is also possible when the receiver defines it:
 
     if a doSomething
 
-This is a Frame whose final meaning is assigned by the active `if` receiver.
-
-Ultra-short anonymous Structures are intended for positional Structure arguments whose meaning is given by the enclosing receiver. If a nested Structure argument has its own semantic receiver/name, that receiver/name must be written explicitly.
-
-Example:
-
-f
-.structName
-..aa
-..ab
-.---
-.a
-.b
----
-
-This builds:
-
-    f(
-      structName(aa, ab),
-      a,
-      b
-    )
+This builds a Frame whose final meaning is assigned by the active `if` receiver.
 
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
 
 This is an intentional property of the language, not an accidental ambiguity. In short forms without parentheses and commas, `f a b c` and the corresponding vertical form build one argument Structure containing `a`, `b` and `c`. A receiver with one structural parameter may consume that whole Structure. A receiver with several parameters may consume the same Structure by positional fields.
-
-If a receiver has more than one argument and the first argument is itself a nested Structure in short form without parentheses and commas, that first nested Structure must be written as a named Structure. Otherwise the same surface form is reserved for the ordinary flat argument Structure of the enclosing receiver.
 
 4.7. No Native `=` Assignment or Named-Field Operator
 
@@ -483,13 +490,22 @@ A Structure may contain positional fields. A receiver may assign semantic names 
 Example:
 
 if a
-..doSomething
-.---
-..doOtherThing
-.---
----
+.doSomething
 
-With an `if(condition, thenBody, elseBody)` receiver signature, the second and third positional Structure arguments receive semantic names `thenBody` and `elseBody`.
+.doOtherThing
+
+With an `if(condition, thenBody, elseBody)` receiver signature, the two level-1 child Structures are consumed positionally as `thenBody` and `elseBody`.
+
+Named vertical form:
+
+if a
+.then
+..doSomething
+.else
+..doOtherThing
+end if
+
+Here `then` and `else` are explicit nested Structures consumed as named semantic fields.
 
 Explicit semantic field-like input should be represented by nested Structures:
 
@@ -525,24 +541,24 @@ The disabled-block marker is:
 
     $
 
-`$` may appear at the start of a source item, immediately after that item's dot indentation prefix. The parser removes `$` for the purpose of parsing the item, but marks the item as disabled.
+`$` may appear at the start of a source item, immediately after that item's indentation zone. The parser removes `$` for the purpose of parsing the item, but marks the item as disabled.
 
-If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser still parses the disabled item and its body, tracks dot indentation, validates closing forms and parses mathematical expressions. Therefore disabled code may still produce syntax errors.
+If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser still parses the disabled item and its body, tracks source levels, validates closing forms and parses mathematical expressions. Therefore disabled code may still produce syntax errors.
 
 Disabled code does not build source-semantic Structures for receiver consumption, does not register definitions, does not update models or registries and does not lower to executable/runtime behavior.
 
-The `$` marker does not contribute to dot indentation depth. The dot depth of a disabled item is computed exactly as if `$` were absent. Child lines are written at the same dot depths they would use for the enabled form.
+The `$` marker does not contribute to source level. The dot count of a disabled item is computed exactly as if `$` were absent. Child lines are written at the same source levels they would use for the enabled form.
 
 Example:
 
 $if mode = debug
 .then
 ..print debug branch
-.---
+.
 .else
 ..print release branch
-.---
----
+.
+
 
 This whole `if` Structure is disabled, but the parser still verifies the syntax and closing structure.
 
@@ -551,11 +567,11 @@ Example inside an enabled block:
 if mode = debug
 .$then
 ..print disabled then branch
-.---
+.
 .else
 ..print active else branch
-.---
----
+.
+
 
 Here only the `then` Structure is disabled. Its body is still parsed and syntax-checked.
 
@@ -565,9 +581,9 @@ The raw file-comment fence is:
 
     ===
 
-A raw file-comment fence is recognized only when the physical line begins at column 0 with `===` and is followed only by optional spaces or tabs before the line ending. No dot indentation, leading spaces, title text or other non-whitespace characters are allowed on the fence line.
+A raw file-comment fence is recognized only when the physical line begins at column 0 with `===` and is followed only by optional spaces or tabs before the line ending. No source indentation, leading spaces, title text or other non-whitespace characters are allowed on the fence line.
 
-The first fence opens a raw file comment block. The next fence closes it. All physical lines between the fences are ignored completely by the Lingvamyxa parser. Dot indentation is not tracked inside the raw file comment block, mathematical expressions are not parsed, closing forms are not validated and source syntax errors inside the block are not reported.
+The first fence opens a raw file comment block. The next fence closes it. All physical lines between the fences are ignored completely by the Lingvamyxa parser. Source levels are not tracked inside the raw file comment block, mathematical expressions are not parsed, closing forms are not validated and source syntax errors inside the block are not reported.
 
 Raw file comment blocks do not nest. A fence inside an open raw file comment block closes that block. An unclosed raw file comment block is a file-level syntax error.
 
@@ -627,7 +643,7 @@ Example:
 
 for int(i, 0) (i < n) (i (i + 1))
 .print i
----
+
 
 The `for` receiver consumes:
 
@@ -828,17 +844,17 @@ fn
 ..int j 1
 ..p1
 ..p2
-.---
+.
 .ret
 ..int r1
 ..int r2
-.---
+.
 .body
 ..print i
 ..print j
 ..p1
 ..p2
-.---
+.
 end myFunc
 
 The receiver `fn` consumes its child Structures by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures consumed by `fn`. They are not `=` named fields.
@@ -934,10 +950,10 @@ sub
 ..boolean condition
 ..then
 ..else
-.---
+.
 .body
 ..return
-.---
+.
 end l5_if
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
@@ -956,16 +972,11 @@ In expression position, a visible `fn` name is callable. In head/update position
 
 Example:
 
-fn factorial
-.int n
----
-.int
----
+fn factorial (int n) (int)
 .if n <= 1
-...factorial 1
-...return
-..---
-.---
+..factorial 1
+..return
+.
 .factorial n * factorial(n - 1)
 end factorial
 
@@ -999,14 +1010,14 @@ Example:
 
 fn outer
 .int x
----
+
 .int
----
+
 .fn addX
 ..int y
-.---
+.
 ..int
-.---
+.
 ..addX x + y
 .end addX
 
@@ -1023,14 +1034,14 @@ Because names are shared across types, variables, models and executables, nested
 
 fn outer
 .int helper
----
+
 .int
----
+
 .fn helper
 ..int x
-.---
+.
 ..int
-.---
+.
 ..helper x
 .end helper
 end outer
@@ -1043,39 +1054,19 @@ Closure representation, explicit capture, mutation of outer bindings and escapin
 
 Variables or names used inside an `fn` or `sub` body do not become arguments automatically. Arguments are defined only by the argument Structure consumed by the definition receiver.
 
-7.5. `end` as General Closing Syntax
+7.5. Named `end` as General Closing Syntax
 
 `end` is a syntactic closing element. It is analogous to a closing parenthesis for vertical Structures. It has no runtime-return meaning by itself.
 
-The parser recognizes these closing forms:
+The parser recognizes only the named closing form:
 
-    end
-    ---
-    end <node-name>
-    end <entity-name>
+    end <name>
 
-Profiles may add receiver-specific closing forms. A receiver-specific closing form must still use the same dot indentation prefix as the block it closes and must be valid only for the receiver/frame that defines it. For example, section 28 defines `until condition` as the close-and-condition form for an open L2 `do` loop.
+The bare form `end` is not valid Lingvamyxa source syntax.
 
-The forms:
+`end <name>` validates `<name>` against a visible open frame, labelled block or entity block. The name may match the current node/receiver name, the normalized `name` field of the current Structure, or a visible control label according to the active closing policy.
 
-    end
-    ---
-
-carry no explicit validation token. They close the current open vertical Structure. `---` is only a visual alias for bare `end`.
-
-The closing line uses the same dot indentation prefix as the current block being closed. For a named Structure, this means the closing line has the same dot depth as the Structure header. For an ultra-short anonymous positional Structure, the closing line has the same dot depth as the implicit anonymous block level established by the enclosing receiver form.
-
-The form:
-
-    end <node-name>
-
-closes the current vertical Structure and validates the closing token against the current node/receiver name.
-
-The form:
-
-    end <entity-name>
-
-closes the current vertical Structure and validates the closing token against the normalized `name` field of the current Structure, if such a field exists. If no normalized `name` field exists, the closing policy may fall back to the first positional field when that field is a string-like name, atom or symbol.
+The closing line has its own source level. It may close several currently open implicit vertical levels at once if the named target is visible at or above that level. This allows a long tail of nested blocks to be cut with one named close. A parser must reject `end <name>` if the target is ambiguous, not visible or not valid for closing from that position.
 
 Examples:
 
@@ -1103,14 +1094,13 @@ fn
 .name myFunc
 .args
 ..int i
-.---
+.
 .ret
 ..int r
-.---
+.
 .body
 ..myFunc i
 ..return
-.---
 end myFunc
 
 Here `myFunc` also validates against the normalized semantic `name` field, but that field is written as an ordinary nested Structure.
@@ -1118,20 +1108,19 @@ Here `myFunc` also validates against the normalized semantic `name` field, but t
 fn
 .args
 ..int i
-.---
+.
 .name myFunc
 .ret
 ..int r
-.---
+.
 .body
 ..myFunc i
 ..return
-.---
 end myFunc
 
 This is also valid because validation uses the normalized semantic `name` field rather than the raw first source argument.
 
-All four forms are valid structural surface forms. A style guide may prefer explicit named closure for long or deeply nested Structures, but the structural core allows all of them.
+All named forms above are valid structural surface forms. A style guide may prefer closing by the normalized entity name for long definitions and by receiver name for short local Structures.
 
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
@@ -1177,16 +1166,11 @@ Inside an `fn` body, the current function name may be used in head/update positi
 
 Example:
 
-fn factorial
-.int n
----
-.int
----
+fn factorial (int n) (int)
 .if n <= 1
-...factorial 1
-...return
-..---
-.---
+..factorial 1
+..return
+.
 .factorial n * factorial(n - 1)
 end factorial
 
@@ -1289,14 +1273,14 @@ L3
 ..f64 area
 ..f64 soilWater
 ..f64 harvest 0.0
-.---
+.
 ..boolean
-.---
+.
 ..return
 ...area > 0.0 &&
 ...soilWater >= 0.0 &&
 ...soilWater <= 100.0
-..---
+..
 .end plantBedCondition
 end L3
 
@@ -1314,12 +1298,12 @@ L4
 ...f64 area
 ...f64 soilWater
 ...f64 harvest 0.0
-..---
+..
 ..condition
 ...area > 0.0
 ...soilWater >= 0.0
 ...soilWater <= 100.0
-..---
+..
 .end PlantBed
 end L4
 
@@ -1377,8 +1361,8 @@ L4
 ..Circle
 ..Square
 ..Triangle
-.---
----
+.
+
 
 Conceptual normalized descriptor:
 
@@ -1388,8 +1372,8 @@ UnionSpec
 ..Circle
 ..Square
 ..Triangle
-.---
----
+.
+
 
 At source-semantic level, a value of `Shape` is a value whose concrete variant is one of the listed model names. A concrete variant value may be injected into the union when the expected type is the union.
 
@@ -1406,9 +1390,9 @@ Shape
 .payload
 ..Circle
 ...radius 10.0
-..---
-.---
----
+..
+.
+
 
 `tag` is the variant name. `payload` is the concrete value produced by the variant constructor. The union does not create the payload by itself.
 
@@ -1458,8 +1442,8 @@ L5
 .behavior Circle
 ..message drawOn drawCircleOn
 ..message area circleArea
-.---
----
+.
+
 
 Conceptual descriptor:
 
@@ -1468,8 +1452,8 @@ BehaviorSpec
 .messages
 ..drawOn drawCircleOn
 ..area circleArea
-.---
----
+.
+
 
 The implementation names `drawCircleOn` and `circleArea` are ordinary executable bindings and must be visible in the shared namespace. Duplicate message selectors for the same model are conflicts unless an explicit override/refinement receiver defines another policy.
 
@@ -1483,8 +1467,8 @@ object
 .model Circle
 .slots
 ..radius 10.0
-.---
----
+.
+
 
 The `slots` layout and validation come from the L4 `ModelSpec`. The message table comes from the L5 `BehaviorSpec` or from registry facts materialized from it.
 
@@ -1554,10 +1538,10 @@ L5
 ..sources ("src/hello.lm3")
 ..entry hello
 ..output "build/bin/hello.lm0.exe"
-.---
+.
 
 .build app
----
+
 
 The `target` and `build` receivers define build semantics. They may also emit registry facts used by the builder. The structural core only creates Structures and specifies that L5 receivers consume them as messages, configuration, behavior descriptors, facts, rules or build/query requests.
 
@@ -1630,12 +1614,12 @@ L4
 ..callableFrom L3
 ..dispatchBy firstArgumentModel
 ..domain Shape
-.---
+.
 
 .method draw Circle drawCircle
 .method draw Square drawSquare
 .method draw Triangle drawTriangle
----
+
 
 The `operator draw` frame registers `draw` as a callable generic receiver. The child Structure `dispatchBy firstArgumentModel` says that the concrete implementation is selected by the model of the first argument. The child Structure `domain Shape` restricts or documents the generic domain.
 
@@ -1680,14 +1664,14 @@ translation may derive:
 match shape
 .case Circle c
 ..drawCircle c
-.---
+.
 .case Square s
 ..drawSquare s
-.---
+.
 .case Triangle t
 ..drawTriangle t
-.---
----
+.
+
 
 The `match` form checks the union tag/variant name, extracts the payload as the concrete model and calls the registered implementation. If the first argument is statically known to be `Circle`, the call `draw c` may lower directly to `drawCircle c`.
 
@@ -1734,14 +1718,13 @@ L5 `if` is a message/configuration dispatch receiver. It may conditionally dispa
 
 12.4. Conditional Forms
 
-Ultra-short conditional form:
+Short positional conditional form:
 
 if mode = debug
-..build debugTarget
-.---
-..build releaseTarget
-.---
----
+.build debugTarget
+
+.build releaseTarget
+
 
 Normal form under signature `if(condition, thenBody, elseBody)`:
 
@@ -1756,11 +1739,9 @@ The same conditional may be written with explicit named branch Structures:
 if mode = debug
 .then
 ..build debugTarget
-.---
 .else
 ..build releaseTarget
-.---
----
+
 
 This builds:
 
@@ -1770,7 +1751,7 @@ This builds:
       else(build(releaseTarget))
     )
 
-The ultra-short form is valid when the active `if` receiver assigns semantic roles to the anonymous positional Structure arguments.
+The short positional form is valid when the active `if` receiver assigns sibling child Structures to semantic fields by signature order. Named vertical form remains available for readability or when a style/profile requires explicit names.
 
 
 13. L2 Addresses, References and Callable References
@@ -2178,10 +2159,10 @@ L5
 ..sources ("src/hello.lm3")
 ..entry hello
 ..output "build/bin/hello.lm0.exe"
-.---
+.
 
 .build app
----
+
 
 The `target` and `build` receivers define the build semantics. The core only creates Structures.
 
@@ -2262,10 +2243,10 @@ Example:
 Logical source semantics:
 
     mySub(
-      field0: 1,
-      field1: 2,
-      field2: 3,
-      field3: 4
+      field0(1),
+      field1(2),
+      field2(3),
+      field3(4)
     )
 
 20.2. Physical Optimization
@@ -2320,14 +2301,14 @@ L4
 .relation variant
 ..Symbol unionName
 ..Symbol modelName
-.---
+.
 
 .relation method
 ..Symbol genericName
 ..Symbol modelName
 ..Symbol implementationName
-.---
----
+.
+
 
 The relation receiver registers relation signatures. It does not assert facts by itself.
 
@@ -2375,7 +2356,7 @@ rule
 if
 .variant Shape ?model
 .method draw ?model ?implementation
----
+
 
 The exact syntax for rule heads, rule bodies, conjunction, disjunction, negation and aggregation is not specified by this document.
 
@@ -2394,7 +2375,7 @@ Example:
 
 query
 .method draw ?model ?implementation
----
+
 
 Meaning:
 
@@ -2482,9 +2463,9 @@ QueryResult
 .bindings
 ..binding ?model Circle
 ..binding ?implementation drawCircle
-.---
+.
 .status success
----
+
 
 ?
 The exact syntax and core status of `?name` logical variables, list literals, rule bodies, negation, aggregation and query result Structures belong to the relation/query specification. That specification must define these forms or map them to registered receivers.
@@ -2494,15 +2475,10 @@ The exact syntax and core status of `?name` logical variables, list literals, ru
 
 This grammar sketch describes the structural parser only. It does not define final receiver semantics.
 
-    program             ::= { item }
+    program             ::= { root_empty_line | physical_item }
 
-    item                ::= empty_line
-                          | raw_file_comment_block
-                          | comment_line
-                          | disabled_item
-                          | line_frame
-                          | vertical_frame
-                          | expr_line
+    physical_item       ::= raw_file_comment_block
+                          | logical_line
 
     raw_file_comment_block
                         ::= "===" trailing_horizontal_space newline
@@ -2512,49 +2488,51 @@ This grammar sketch describes the structural parser only. It does not define fin
     trailing_horizontal_space
                         ::= { " " | tab }
 
-    comment_line        ::= [ dot_prefix ] "#" ignored_until_newline newline
+    logical_line        ::= indentation line_content newline
 
-    disabled_item       ::= dot_prefix "$" item_body
+    indentation         ::= { "." | " " | tab }
 
-    item_body           ::= line_frame_body
-                          | vertical_frame_body
+    source_level        ::= count of "." characters in indentation
+
+    root_empty_line     ::= trailing_horizontal_space newline
+                            valid only at root level
+
+    line_content        ::= level_marker
+                          | comment_body
+                          | disabled_body
+                          | label_body
+                          | named_close_body
+                          | line_frame_body
                           | expr_line_body
+
+    level_marker        ::= empty content after indentation
+                            valid only if source_level > 0
+
+    comment_body        ::= "#" ignored_until_newline
+
+    disabled_body       ::= "$" enabled_line_body
+
+    enabled_line_body   ::= label_body
+                          | named_close_body
+                          | line_frame_body
+                          | expr_line_body
+
+    label_body          ::= name ":"
+
+    named_close_body    ::= "end" name
 
     compact_frame       ::= name "(" [ argument_list ] ")"
 
-    line_frame          ::= dot_prefix line_frame_body
+    line_frame          ::= indentation line_frame_body newline
 
-    line_frame_body     ::= name [ line_arguments ] newline
+    line_frame_body     ::= name [ line_arguments ]
 
     line_arguments      ::= flat argument Structure parsed from the rest of the line
                             or, inside a bounded Structure, until comma or ")"
 
-    vertical_frame      ::= dot_prefix vertical_frame_body
+    expr_line           ::= indentation expr_line_body newline
 
-    vertical_frame_body ::= name [ line_arguments ] newline
-                              dot_child_prefix { vertical_item }
-                            dot_prefix close_form newline
-
-    expr_line           ::= dot_prefix expr_line_body
-
-    expr_line_body      ::= expression newline
-
-    dot_prefix          ::= { "." }
-
-    dot_child_prefix    ::= dot_prefix "." { "." }
-
-    vertical_item       ::= item
-                          | close_form
-
-    close_form          ::= end_form
-                          | dash_end_form
-                          | profile_close_form
-
-    end_form            ::= "end" [ name ] newline
-
-    dash_end_form       ::= "---" newline
-
-    profile_close_form  ::= profile-defined close token [ line_arguments ] newline
+    expr_line_body      ::= expression
 
     argument_list       ::= argument { "," argument } [ "," ]
 
@@ -2574,13 +2552,17 @@ This grammar sketch describes the structural parser only. It does not define fin
     mathematical_expression
                          ::= parsed by the mathematical expression syntax
 
-This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment or `=` named-field syntax.
+The vertical Structure tree is produced by comparing `source_level` values between consecutive logical lines. A deeper level attaches to the immediately preceding source item at the current open level as that item's body/block Structure. The same level creates the next sibling item. A lower level closes all open Structures above that level. A level-marker line closes all open Structures above its own level without adding a runtime/source item. A root empty line behaves as a root-level marker.
+
+This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, or standalone `---`.
 
 Line arguments are flat. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
 Inside a bounded Structure, comma separates elements at the bounded Structure's current level. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
 
 Structural grammar has no separate anonymous-function syntax. A bounded Structure or vertical body becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
+
+Label lines belong to the control-label namespace or another profile-defined label namespace. A label line does not occupy the normal lexical/operator namespace.
 
 
 23. Canonical Examples
@@ -2649,16 +2631,11 @@ Semantic outline:
 
 Source:
 
-fn factorial
-.int n
----
-.int
----
+fn factorial (int n) (int)
 .if n <= 1
-...factorial 1
-...return
-..---
-.---
+..factorial 1
+..return
+.
 .factorial n * factorial(n - 1)
 end factorial
 
@@ -2674,9 +2651,10 @@ Source:
 
 L5
 .if mode = debug
-..build debugTarget
-.---
-..build releaseTarget
+..then
+...build debugTarget
+..else
+...build releaseTarget
 .end if
 end L5
 
@@ -2739,13 +2717,12 @@ Conceptual form:
     f ... end f                vertical Frame named f
     (a, b)                     bounded Structure
     name value                 ordinary nested Structure, often consumed as a setting/semantic field by receiver
-    leading .                  source indentation unit at logical line start
+    leading dots               source level units in the leading indentation zone
+    dot-only line              level marker; closes deeper vertical Structures
     #                          line comment marker; ignores text to the end of the physical line
     $                          disabled item/block marker; syntax is still parsed and checked
     ===                        column-0 raw file comment fence; syntax inside is ignored
-    ---                        visual alias for bare `end`
-    end                        close current vertical Structure
-    end name                   close current vertical Structure with validation token
+    end name                   named close for a visible frame/entity/label block
     L2/L3/L4/L5                level receiver frames
     sub                        receiver that registers subroutine definitions
     fn                         receiver that registers function definitions
@@ -2766,7 +2743,8 @@ Conceptual form:
 
 Core invariant:
 
-    leading dots, not spaces or tabs, define source block depth;
+    leading dots define source block depth;
+    spaces and tabs inside the leading indentation zone do not define source block depth;
     # comments are ignored to end of physical line;
     $ disables an item/block semantically while preserving syntax checking;
     === raw file comment fences ignore all enclosed text without syntax checking;
@@ -2781,7 +2759,9 @@ Core invariant:
     visible names share one lexical namespace and do not silently shadow;
     `=` is not native assignment or native named-field syntax;
     L4 structural descriptors and L5 behavior/fact descriptors may materialize registry facts;
-    end closes source Structures.
+    bare end is not valid source syntax;
+    end name closes visible named source Structures or label blocks;
+    standalone --- is not part of Lingvamyxa source syntax.
 
 
 25. Consolidated Open Points
@@ -2907,7 +2887,7 @@ Part II: Control Operators, Thread Context and L5 Event Delivery
 
 Status
 
-Revision 9 continuation draft.
+Revision 10 continuation draft.
 
 This document continues the structural core specification. It defines sections 26, 27 and 28. It does not restate sections 0-25.
 
@@ -2982,22 +2962,28 @@ Semantic form:
 Explicit form:
 
 if condition
-.then
-..thenBody
-.---
-.else
-..elseBody
-.---
----
+. then
+. . thenBody
+. else
+. . elseBody
+end if
 
-Short structural form:
+
+Short positional form:
 
 if condition
+. thenBody
+
+. elseBody
+
+Nested short positional form:
+
+.if condition
 ..thenBody
-.---
+.
 ..elseBody
-.---
----
+.
+
 
 Single-line form:
 
@@ -3009,7 +2995,7 @@ Only the selected body is executed.
 
 If no `else` body is provided and the condition is false, `if` completes normally without executing a body.
 
-`then` and `else` are structural section markers inside `if`. They are not ordinary runtime calls when consumed by the `if` receiver.
+In named form, `then` and `else` are structural section markers inside `if`. They are not ordinary runtime calls when consumed by the `if` receiver. In positional form, sibling child Structures are mapped to `thenBody` and `elseBody` by receiver signature order.
 
 26.2. `match`, `case` and `default`
 
@@ -3020,14 +3006,14 @@ Example:
 match value
 .case 1
 ..print one
-.---
+.
 .case 2
 ..print two
-.---
+.
 .default
 ..print other
-.---
----
+.
+
 
 There is no automatic fallthrough from one `case` to the next.
 
@@ -3040,11 +3026,11 @@ Example:
 match shape
 .case Circle c
 ..drawCircle c
-.---
+.
 .case Square s
 ..drawSquare s
-.---
----
+.
+
 
 If the matched value is a closed union and no `default` is present, an implementation may require exhaustive cases.
 
@@ -3065,7 +3051,7 @@ Example:
 while i < n
 .print i
 .i i + 1
----
+
 
 The condition is evaluated before each iteration.
 
@@ -3075,30 +3061,24 @@ A `while` body is a loop frame. `break`, `continue`, `redo` and labelled loop tr
 
 26.4. `until`
 
-`until` is a post-condition loop with the argument order reversed relative to `while`.
+`until` is a conditional close for the current executable block. It closes the current block, executes that block as a post-condition loop body, then evaluates its condition.
 
 Semantic form:
 
-    until(body, condition)
+    until(currentBody, condition)
 
-Example:
+Labelled example:
 
-until
+readLoop:
 .readNext record
 .process record
----
-.endOfInput record
----
+until endOfInput record
+
+In this example, `until` closes the labelled executable block `readLoop`. The condition is the boolean-producing Structure `endOfInput record`.
 
 The body is executed first. The condition is evaluated after the body.
 
-The loop repeats until the condition is true.
-
-Equivalent informal form:
-
-    do
-      body
-    while not condition
+The loop repeats until the condition is true. If the condition is false, control transfers to the beginning of the block closed by `until`.
 
 `until` creates a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
 
@@ -3110,7 +3090,7 @@ Compact counter/triplet form:
 
 for int(i, 0) (i < n) (i (i + 1))
 .print i
----
+
 
 The first three arguments are consumed as loop-control fields:
 
@@ -3130,7 +3110,7 @@ Range-style example:
 
 for i 0 n
 .print i
----
+
 
 Semantic requirement:
 
@@ -3161,13 +3141,13 @@ Array-like example:
 
 each item in items
 .draw item
----
+
 
 Receiver-like example:
 
 each items item
 .draw item
----
+
 
 Semantic requirement:
 
@@ -3208,9 +3188,9 @@ Example:
 while running
 .if stopRequested
 ..break
-.---
+.
 .step
----
+
 
 `break` is valid only inside a loop frame unless a labelled form is used as described in section 26.15.
 
@@ -3227,9 +3207,9 @@ Example:
 each item in items
 .if skip item
 ..continue
-.---
+.
 .process item
----
+
 
 For `while`, `continue` transfers control to the next condition check.
 
@@ -3249,7 +3229,7 @@ Block form:
 
 finally
 .cleanupBody
----
+
 
 Single-line form:
 
@@ -3303,19 +3283,19 @@ Example:
 
 fn parseInt
 .Text text
----
+
 .int
----
+
 .throws
 ..ParseError
-.---
+.
 
 .guard validInteger text
 ..fail ParseError text
-.---
+.
 
 .parseInt parseInteger text
----
+
 
 `throws` lists the failure labels that may leave the executable body as recoverable failures.
 
@@ -3329,13 +3309,13 @@ Example:
 
 guard radius > 0.0
 .fail InvalidRadius radius
----
+
 
 Semantic form:
 
 if not condition
 .failureBody
----
+
 
 `guard` is a convenience control receiver. It does not itself define the failure transport mechanism. That is defined by `fail`.
 
@@ -3373,18 +3353,18 @@ Use label-like handler syntax:
 
 ParseError:
 .Text badText
----
+
 .print badText
----
+
 
 variant 2:
 Use explicit receiver syntax:
 
 handler ParseError
 .Text badText
----
+
 .print badText
----
+
 
 variant 3:
 Represent handlers as L5 event/message handlers for failure events.
@@ -3428,14 +3408,14 @@ Example:
 loadAttempt:
 .retryable
 ..loadNetworkData
-.---
+.
 
 Possible failure-handler use:
 
 NetworkError:
 .reconnect
 .retry loadAttempt
----
+
 
 A `retry` transfer executes the affected `finally` cleanups for the abandoned attempt before re-entering the retryable frame.
 
@@ -3522,13 +3502,13 @@ The `each` receiver consumes iterator-compatible Structures by repeatedly callin
 Example:
 
 fn makePoints
----
+
 .Iterator Point
----
+
 .yield 1.0 2.0
 .yield 3.0 4.0
 .yield 5.0 6.0
----
+
 
 Calling:
 
@@ -3563,7 +3543,7 @@ Conceptual result model:
 Next T
 .boolean hasValue
 .T value
----
+
 
 ?
 The exact standard name and structural layout for the result of `next(env)` is not specified. A final iterator specification must choose canonical names and fields, such as `Next T`, `Option T`, `Some/None` or another equivalent representation.
@@ -3587,7 +3567,7 @@ Example:
 
 each point in makePoints
 .draw point
----
+
 
 Semantic form:
 
@@ -3597,10 +3577,10 @@ while true
 .result next iterator\env
 .if not result\hasValue
 ..break
-.---
+.
 .point result\value
 .body
----
+
 
 This is semantic pseudocode. A translator may lower it to a direct state machine or inline loop.
 
@@ -3627,9 +3607,9 @@ outerLoop:
 ..for cell in row
 ...if found cell
 ....break outerLoop
-...---
-..---
-.---
+...
+..
+.
 
 `labelName:` belongs to the control-label namespace.
 
@@ -3677,7 +3657,7 @@ ExecutionContext
 .DiagnosticRoot diagnosticRoot
 .Diagnostic currentDiagnostic
 .FrameDepth currentDepth
----
+
 
 The ExecutionContext is not an ordinary user data model. It is runtime infrastructure.
 
@@ -3696,7 +3676,7 @@ CleanupEntry
 .cleanupEnv
 .frameDepth
 .scopeDepth
----
+
 
 `finally` pushes a cleanup entry into the current thread ExecutionContext.
 
@@ -3726,7 +3706,7 @@ L2Thread
 .Outbox outbox
 .ThreadState state
 .BodyStep body
----
+
 
 The inbox and outbox are synchronized FIFO containers.
 
@@ -3743,7 +3723,7 @@ while running
 .checkInbox
 .body
 .flushOutbox
----
+
 
 run all remaining finally cleanups
 terminate thread
@@ -3834,29 +3814,29 @@ L2Message
 .replyTo
 .correlation
 .flags
----
+
 
 Fields:
 
-    target:
+    target ->
         object, service or behavior target
 
-    selector:
+    selector ->
         message name / L5 selector
 
-    sender:
+    sender ->
         sender object or thread, if present
 
-    args:
+    args ->
         argument Structure
 
-    replyTo:
+    replyTo ->
         optional inbox or target for asynchronous replies
 
-    correlation:
+    correlation ->
         optional id used to match request and reply
 
-    flags:
+    flags ->
         runtime delivery metadata
 
 `L2Message` is a transport envelope. The target's L5 behavior table decides which implementation consumes the selector.
@@ -3903,13 +3883,13 @@ localMessages drain inbox under lock
 
 each message in localMessages
 .dispatchMessage message
----
+
 
 Unsafe pattern:
 
 synchronized inbox
 .dispatchMessage message
----
+
 
 The unsafe pattern is forbidden by this profile because it executes user/L5 behavior while holding the inbox lock.
 
@@ -4132,7 +4112,7 @@ The minimal L2 executable-body control set is:
 
     if / then / else
     while
-    do / until
+    until
     for(init, condition, step)
     return
     break
@@ -4152,18 +4132,18 @@ Example:
 
 if count > 0
 .print count
----
+
 
 Explicit branch example:
 
 if count > 0
-.then
-..print count
-.---
-.else
-..print 0
-.---
----
+. then
+. . print count
+.
+. else
+. . print 0
+.
+
 
 28.5.2. `while`
 
@@ -4178,26 +4158,35 @@ Example:
 while i < n
 .print i
 .i (i + 1)
----
 
-28.5.3. `do` / `until`
 
-L2 `do` opens a post-condition loop body. The line `until condition` at the same dot depth closes the `do` body and supplies the post-condition.
+28.5.3. `until`
+
+L2 `until` is a conditional close for the current executable block.
 
 Example:
 
-do
+readLoop:
 .readNext record
 .process record
 until endOfInput record
 
-Semantic form:
+In this example, `record` is not a separate operator. The `until` line consumes the whole tail `endOfInput record` as a boolean-producing condition Structure. The condition producer is `endOfInput`, and `record` is its argument. The parser may still build a flat argument Structure for `until`; the `until` operator consumes that Structure in condition mode.
 
-    until(body, condition)
+More explicit condition form:
+
+readLoop:
+.readNext record
+.process record
+until (endOfInput record)
+
+Conceptual semantic form:
+
+    until(currentBody, condition)
 
 The body executes first. The loop repeats until the condition is true.
 
-The `until condition` close form is valid only for an open `do` loop. It is not a general replacement for `---` or `end`.
+If the condition is false, control transfers to the beginning of the executable block closed by `until`. If the condition is true, the block completes and execution continues after the `until` line.
 
 28.5.4. `for(init, condition, step)`
 
@@ -4212,7 +4201,7 @@ Vertical body form:
 
 for int(i, 0) (i < n) (i (i + 1))
 .print i
----
+
 
 Compact body form:
 
@@ -4240,7 +4229,7 @@ For a `sub`, `return` exits without producing a normal return value.
 
 For `while`, `continue` transfers control to the next condition check.
 
-For `do` / `until`, `continue` transfers control to the post-condition check for the current iteration.
+For `until`, `continue` transfers control to the post-condition check for the current iteration.
 
 For `for`, `continue` transfers control to the iteration-step Structure, then to the next condition check.
 
@@ -4259,12 +4248,3 @@ The following section 26 operators are not part of the minimal L2 control set un
     labelled break / labelled continue
 
 They may still exist in L3 or higher levels, or in a richer L2 profile.
-
-
-
-
-
-
-
-
-
