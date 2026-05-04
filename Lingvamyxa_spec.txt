@@ -142,7 +142,9 @@ The minimal core has two classes of values:
 
 Primitive/scalar/reference/handle values include numbers, booleans, atoms, symbols, enum-like values, handles, references, typed addresses and L2-level callable references.
 
-All non-primitive values are Structures or handles/references to Structures. This includes arrays, text, objects, call frames, bodies, configurations, expressions and model fragments.
+All non-primitive values are Structures or handles/references to Structures. This includes arrays, text, objects, call frames, bodies, configurations, expressions, model fragments and executable/callable descriptors.
+
+At source-semantic level, executable definitions are ordinary values bound in the shared namespace. A translator may lower such a value to any implementation-level callable representation, such as a descriptor Structure, registry index, trampoline, closure record or target-language callable primitive. That lowering choice is not a separate source-level kind.
 
 A Structure can contain fields. A field can be positional, named or derived during normalization from a receiver signature.
 
@@ -718,16 +720,36 @@ An expression Structure is data until a receiver consumes it as an expression.
 
 For example, the `if` receiver consumes its `condition` field as an expression. A configuration receiver might instead store the same Structure as data.
 
+6.4. Parser Methods for Registered Operator Forms
+
+A parser profile may recognize compact operator forms and lower them to parser methods before ordinary receiver consumption. This document does not define a final operator set for increment, decrement or similar forms, but it defines the expected source-semantic shape for such parser methods.
+
+For example, if a profile registers prefix decrement:
+
+    --i
+
+the parser may split it into an operator method and a source target name:
+
+    decBefore("i")
+
+The parser method resolves `i` in the same shared namespace used by ordinary source. It may lower the operation as a read-update-write sequence. The write/update step uses the ordinary head/update form:
+
+    i newValue
+
+If `i` resolves to mutable storage, the sequence may lower to a direct storage update. If `i` resolves to a callable value that can be consumed as a zero-argument read and one-argument update, the sequence may lower to generated temporary code that calls/consumes `i` to read, computes the new value, then calls/consumes `i newValue` to write.
+
+The exact parser methods, temporary names, evaluation order, numeric rules and diagnostics belong to the mathematical/operator specification. The core point is that parser methods do not introduce a separate assignment syntax; they compose with the same namespace resolution and head/update form as ordinary source.
+
 
 7. `fn`, `sub` and Structural Closure
 
 7.1. `fn` and `sub` Are Receivers
 
-`fn` and `sub` are definition receivers. Each consumes a Structure and registers an executable definition. During bootstrap they may be present in an L1 prelude table or parser switch.
+`fn` and `sub` are definition receivers. Each consumes a Structure, builds an executable/callable value and binds that value in the shared namespace. During bootstrap they may be present in an L1 prelude table or parser switch.
 
-An `fn` frame consumes a Structure and registers or creates a function definition.
+An `fn` frame consumes a Structure and creates a function callable value.
 
-A `sub` frame consumes a Structure and registers or creates a subroutine definition.
+A `sub` frame consumes a Structure and creates a subroutine callable value.
 
 7.2. Function Definition Form
 
@@ -914,7 +936,27 @@ end factorial
 
 Inside the body, `factorial 1` updates the return binding of the current function. The expression `factorial(n - 1)` is a recursive function call because it appears in expression position.
 
-7.3.2. Nested `fn` and `sub` Definitions
+7.3.2. Callable Values and Binding Updates
+
+Executable definitions do not create a separate source-semantic category that must be distinguished from ordinary values before resolution. A function or subroutine name denotes a callable value in the same shared namespace that also holds primitive values, Structures, model names, receivers and other bindings.
+
+The line form:
+
+    i 5
+
+has one surface shape. After name resolution, it may mean an update to a mutable value binding `i`, or a call/consumption of a callable/receiver binding `i` with argument `5`. The language does not use `=` assignment to distinguish these cases.
+
+If a callable binding is mutable, it may be updated by the same head/update form as other bindings:
+
+    i otherCallable
+
+When `otherCallable` resolves to a callable value with a compatible callable Structure/signature, the binding `i` receives that callable value. Source semantics does not require a separate function-pointer syntax for this operation.
+
+For a callable with no required arguments, value-like consumption may be receiver/profile-defined. For example, a parser method or receiver may lower a read of `i` to a zero-argument call `i()`, and a write/update of `i` to a one-argument call or binding update `i(newValue)`, depending on the resolved binding and active profile.
+
+The exact mutability, compatibility and callable-signature rules are part of the execution-model and type/model specifications. The structural core only requires that callable values are ordinary namespace values and that the same head/update surface form is used after resolution.
+
+7.3.3. Nested `fn` and `sub` Definitions
 
 Nested `fn` and `sub` definitions are allowed inside executable bodies. A nested definition creates a local executable binding in the current lexical scope.
 
@@ -1977,6 +2019,8 @@ The first `print` observes `3`. The second `print` observes `4`.
 
 The update form is valid only if the head resolves to an existing mutable binding, addressable field/index location, or receiver that explicitly accepts such a call. Because Lingvamyxa uses one lexical namespace, a binding name and a receiver/type/function name cannot silently mean different things in the same scope.
 
+The same surface form is used for callable consumption. For example, `i 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable/receiver binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
+
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
 ?
@@ -2687,6 +2731,8 @@ Core invariant:
     Structures do not execute themselves;
     return exits executable bodies;
     function name in head/update position updates the current return binding inside its own body;
+    executable definitions bind ordinary callable values in the shared namespace;
+    callable bindings may be updated through the same head/update surface form when compatible;
     nested fn/sub definitions create local executable bindings;
     visible names share one lexical namespace and do not silently shadow;
     `=` is not native assignment or native named-field syntax;
