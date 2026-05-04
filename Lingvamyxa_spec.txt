@@ -1,18 +1,24 @@
 Lingvamyxa Structural Core Specification
 
+This Rev.12 rewrite preserves the full Rev.11 document body where possible and updates the structural syntax rules and examples touched by the comma-tail and dot-tree changes.
+
 Status
 
-Revision 11 draft. Colon line-form and vertical syntax update.
+Revision 12 draft. Comma tail, phrase signatures and dot-tree vertical syntax update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
-Revision 11 note:
+Revision 12 note:
 
     Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
 
-    Line command form is `head: tail`. A source line whose head phrase is followed by `:` must have an inline tail, a same-level vertical argument continuation, or a deeper body/block attached to that source item. A bare line without `:` is not a non-nullary receiver call; in executable statement position a bare receiver/callable line is valid only when the resolved binding can be consumed with zero arguments, such as `return`, `break`, nullary `continue`, a registered nullary receiver, or a visible zero-argument `fn`/`sub`.
+    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a non-numeric tail segment belongs to the phrase/signature/name. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the name phrase `branch 2`.
 
-    The standalone source line `---` is no longer part of Lingvamyxa syntax. The ordinary receiver form `end: <target>`, dot-only level marker lines, dot-dedent and EOF/root separation define vertical closure. Bare `end` and `end <target>` are not Lingvamyxa source syntax.
+    Vertical composition is dot-tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A line at level N starts a sibling of the frame or closes the frame through root/parent separation. Dot-only lines act as anonymous Structure delimiters at their own source level; at root level the corresponding delimiter is a physical empty line.
+
+    `case` (not structural syntax) is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
+
+    The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is not part of Lingvamyxa syntax.
 
 The document is descriptive and semantic. Surface syntax builds Structures. Receivers and subroutines consume Structures and assign typed meaning to them.
 
@@ -117,10 +123,10 @@ L5 may attach message behavior to L4 structural models. L5 may also represent re
 Example:
 
 L4:
-.operator:
-..if
-..callableFrom: L5
-..implementation: l5_if
+. operator:
+. . if
+. . callableFrom: L5
+. . implementation: l5_if
 end: L4
 
 Semantic normal form:
@@ -224,7 +230,7 @@ Normal form:
 
 Line command form:
 
-    f: a b c
+    f: a, b, c
 
 It creates the same logical Frame as:
 
@@ -232,11 +238,91 @@ It creates the same logical Frame as:
 
 The token sequence before `:` is the head phrase. The tail after `:` is the line argument Structure. A newline terminates the line command unless the parser is inside a parenthesized Structure or another explicitly open form.
 
-Line command form does not infer hidden nesting.
+The head phrase may contain spaces. This allows receiver/procedure signatures and entity names that are not single lexical words. The parser does not split the head phrase into arguments merely because it contains spaces.
+
+Example:
+
+    []: my 2d example
+    . 1 2
+    . 3 4
+
+The head is the `[]` receiver/procedure. The first inline tail field is the name phrase `my 2d example`. The vertical lines are child fields of that frame.
+
+4.2.1. Comma Tail Rule
+
+In short linear tail form, comma is the explicit field separator.
+
+Example:
+
+    head: arg0, arg1, arg2
+
+normalizes as:
+
+    head(arg0, arg1, arg2)
+
+Whitespace inside a non-numeric segment is part of that segment. Therefore:
+
+    stack: PlantBed, branch 2
+
+normalizes as:
+
+    stack(PlantBed, branch 2)
+
+where `branch 2` is one name/phrase field. It does not normalize as:
+
+    stack(PlantBed, branch, 2)
+
+and it does not allocate `branch` with an extra numeric argument `2`.
+
+A receiver may later interpret a phrase field as a name, signature, selector, atom sequence, message phrase or another semantic object. The parser only builds the field.
+
+4.2.2. Numeric-Run Shortcut
+
+Whitespace may act as a shorthand field separator only inside a pure numeric run.
+
+Example:
+
+    print: 1 2 3 4 5
+
+is equivalent to:
+
+    print: 1, 2, 3, 4, 5
+
+and normalizes as:
+
+    print(1, 2, 3, 4, 5)
+
+A pure numeric run is a tail segment whose tokens are all numeric literals accepted by the active numeric lexer. Once a non-numeric token appears in the same comma segment, whitespace no longer separates fields in that segment.
+
+Example:
+
+    print: abc d 3 e
+
+normalizes as one phrase/signature field:
+
+    print(abc d 3 e)
+
+or, in an implementation that materializes phrase values explicitly:
+
+    print(phrase("abc d 3 e"))
+
+To pass separate fields, use commas:
+
+    print: abc d, 3, e
+
+normalizes as:
+
+    print(abc d, 3, e)
+
+The numeric-run shortcut is local to the current linear item. It does not flatten through parentheses, compact Frames or vertical anonymous Structures.
+
+4.2.3. No Hidden Receiver-Signature Grouping
+
+Line command form does not infer hidden nesting from receiver signatures.
 
 Critical rule:
 
-    print: getTypedValue values[i]
+    print: getTypedValue, values[i]
 
 normalizes as:
 
@@ -246,36 +332,18 @@ It does not normalize as:
 
     print(getTypedValue(values[i]))
 
-Explicit nesting must be written with parentheses or vertical structure.
+Explicit nesting must be written with parentheses, compact Frame form or vertical anonymous Structure form.
 
-Flat argument rule:
+If a receiver argument must itself be one Structure, the source must make that nesting explicit with a bounded Structure, compact Frame or anonymous vertical Structure.
 
-    head: a b c
+Examples:
 
-builds `head(a, b, c)`. The parser does not use the receiver signature to decide that `a b c` should be grouped into one nested Structure.
-
-If a receiver argument must itself be one Structure, the source must make that nesting explicit with a bounded Structure or compact Frame.
-
-Example:
-
-    head: int v j
-
-normalizes as:
-
-    head(int, v, j)
-
-It does not normalize as:
-
-    head(int(v, j))
-
-To pass one declaration Structure to `args`, write one of:
-
-    args: (int: v j)
+    args: (int: v, j)
     args: int(v, j)
 
-The first form gives `args` one bounded Structure containing the line-command declaration `int: v j`. The second form gives `args` one compact declaration Frame `int(v, j)`.
+The first form gives `args` one bounded Structure containing the line-command declaration `int: v, j`. The second form gives `args` one compact declaration Frame `int(v, j)`.
 
-A head phrase followed by `:` must have a continuation. The continuation may be an inline tail on the same physical line, a same-level vertical argument sequence, or a deeper body/block attached to that source item. A line `head:` with no inline tail and no following same-level or deeper continuation is a syntax error.
+A head phrase followed by `:` must have a continuation. The continuation may be an inline tail on the same physical line, vertical child fields at source level N + 1, or an explicit close through `end: <target>` when allowed by the open target policy. A line `head:` with no inline tail and no following vertical child fields is a syntax error unless the receiver/profile explicitly defines an empty Structure form for that head.
 
 A line without `:` is not a non-nullary receiver call. In executable statement position, a bare receiver/callable line is valid only when the resolved binding can be consumed with zero arguments. This includes registered nullary line operators such as `return`, `break` and nullary `continue`, registered nullary receivers, and visible `fn`/`sub` bindings whose signature has zero required arguments.
 
@@ -286,9 +354,9 @@ A bare atom/expression line may still appear as a value item inside a Structure;
 Vertical frame form:
 
 f:
-a
-b
-c
+. a
+. b
+. c
 end: f
 
 It creates a Frame named `f` with the same logical argument Structure as:
@@ -297,13 +365,26 @@ It creates a Frame named `f` with the same logical argument Structure as:
 
 The explicit close is an ordinary receiver form `end: f`. Closing validation is defined in section 7.5.
 
+A compact first field may still appear in the opening line:
+
+    f: a
+    . b
+    . c
+    end: f
+
+This creates:
+
+    f(a, b, c)
+
+The inline tail contributes initial fields. The vertical child lines at level N + 1 contribute following fields.
+
 4.4. Parenthesized Bounded Structure
 
 Parentheses create a bounded Structure:
 
     (a, b, c)
 
-Inside parentheses, arguments are separated by comma or by the matching closing parenthesis.
+Inside parentheses, arguments are separated by comma or by the matching closing parenthesis. A pure numeric run inside one parenthesized item may use whitespace as numeric shorthand when the numeric-run rule applies.
 
 Line command form inside parentheses continues until a comma or the matching closing parenthesis.
 
@@ -327,7 +408,7 @@ The names `condition`, `then` and `else` are not created by the parser alone. Th
 
 4.5. Dot-Level Vertical Structures
 
-Vertical form is line command form spread across physical lines.
+Vertical composition is dot-tree composition.
 
 The leading indentation zone of a source line is the run of dots, spaces and tab characters before the first non-indentation source token. The source level of the line is the number of dot characters in that zone. Spaces and tab characters in the indentation zone are ignored for source block depth.
 
@@ -339,48 +420,121 @@ Examples of equal level:
 
 Only dots and physical newlines define vertical structure. Spaces and tabs may improve readability, but they never change source level.
 
-A line at the same level as an open vertical frame is the next vertical argument/item of that frame.
+A source item at level N may open a frame/Structure. Its vertical child arguments are written at level N + 1.
 
-A line at the same level when no vertical frame is open starts the next sibling item in the current parent Structure.
+A physical source line at level N + 1 is one positional child item of the open frame/Structure at level N.
 
-A line at a deeper level starts or continues the body/block Structure of the immediately preceding source item. It does not create a sequence of additional arguments to the preceding receiver merely because it is indented. Receiver signatures still decide whether that nested Structure is consumed as an executable body, declaration body, data Structure or another semantic field.
+A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. Scalar literals and ordinary phrase/value items do not become headers merely because a deeper line follows them.
 
-A line at a lower level closes all open Structures above that level and then starts the next item at the lower level.
-
-A dot-only level marker line contains only dots, spaces and tabs before the newline and contains at least one dot. It closes all open Structures above the marker level and resumes parsing at that marker level. It does not add a source item and does not become the previous item for the next deeper line. This is the ordinary way to end one nested positional field/body and continue the still-open parent at the marker level.
+A physical source line at level N or lower does not become another argument of the still-open frame. It resumes the parent level and starts a sibling item, unless an explicit close receiver cuts a visible named target earlier.
 
 Example:
 
 outerLoop:
-for: (int: i 1) (i <= 3) (i++)
-. for: (int: j 1) (j <= 3) (j++)
-. . if: i = 2 && j = 2
-. . . System/out/println: "--- continue outerLoop ---"
-. . . continue: outerLoop
-. .
-. . System/out/println: "i: " + i + ", j: " + j
+. for: (int: i, 1), (i <= 3), (i++)
+. . for: (int: j, 1), (j <= 3), (j++)
+. . . if: i = 2 && j = 2
+. . . . System/out/println: "--- continue outerLoop ---"
+. . . . continue: outerLoop
+. . .
+. . . System/out/println: "i: " + i + ", j: " + j
 end: outerLoop
 
-The `. .` marker closes the level-3 body of `if` and resumes the level-2 body of the inner `for`. The following `System/out/println` line is the next statement of that `for` body, not an `else` argument.
+The dot-only marker `. . .` closes or delimits the nested body/anonymous Structure at level 3 and resumes parsing at that level. The following `System/out/println` line is the next statement of the inner `for` body, not an `else` argument of the `if`.
 
-Same-level vertical argument examples:
+4.5.1. Dot-Only Anonymous Structure Delimiters
 
-2d_array:
-1, 2
-3, 4
+A dot-only line contains only dots, spaces and tabs before the newline and contains at least one dot.
+
+A dot-only line at level K may serve as an anonymous positional Structure delimiter at level K.
+
+If a dot-only line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
+
+The anonymous Structure continues until the next dot-only line at level K, an explicit `end: <target>` that closes a visible target, EOF, or root empty-line separation when K is root-equivalent.
+
+A dot-only line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
+
+At root level there is no dot-only marker. A physical empty line is the root-level structural delimiter. Empty lines are allowed only at root level. A root empty line closes all open Structures above root level, resumes parsing at root level, and does not add a source item.
+
+Example with anonymous Structures:
 
 match: value
-case 1:
-.print: World
-case 2:
-.print: Hello
+.
+. . 1
+. . print: World
+.
+. . 2
+. . print: Hello
+.
 end: match
 
-In the matrix-like example, `1, 2` and `3, 4` are same-level vertical arguments/items consumed by `2d_array`. In the `match` example, `case 1:` and `case 2:` are same-level vertical arguments/items consumed by `match`; their deeper `.print` lines are bodies attached to the corresponding `case` items.
+Conceptual normal form:
 
-A physical empty line contains no dots and no source token. Empty lines are allowed only at root level. A root empty line is a root-level marker: it closes all open Structures above root level, resumes parsing at root level, and does not add a source item. Empty lines are not allowed inside an open non-root body. To close to a non-root level, use a dot-only level marker line.
+    match(
+      value,
+      (
+        1,
+        print(World)
+      ),
+      (
+        2,
+        print(Hello)
+      )
+    )
 
-The root block is opened by the source file itself. It has no source-level opening line and no closing line. EOF closes the root block.
+The dot-only lines at level 1 delimit anonymous branch Structures. No source keyword `case` (not structural syntax) is involved.
+
+A shorter positional `match` form may avoid anonymous branch Structures:
+
+match: value
+. 1
+. print: World
+. 2
+. print: Hello
+end: match
+
+Conceptual normal form:
+
+    match(value, 1, print(World), 2, print(Hello))
+
+The `match` receiver assigns pattern/body roles by position.
+
+4.5.2. Matrix and Nested Array Examples
+
+Matrix-like data does not require a special table context. It follows ordinary dot-tree and line-item rules.
+
+Example:
+
+[]: my 2d example
+. 1 2
+. 3 4
+
+Conceptual normal form:
+
+    [](my 2d example, (1, 2), (3, 4))
+
+The rows are ordinary child items. The numeric-run shortcut makes `1 2` equivalent to `1, 2` inside each row item.
+
+Mixed symbolic/numeric rows require commas for non-numeric segments:
+
+[]: my 2d example
+. a, b
+. 3 4
+
+Conceptual normal form:
+
+    [](my 2d example, (a, b), (3, 4))
+
+Named nested rows may be written with nested `[]` frames:
+
+[]: matrix
+. []: row1
+. . 1 2
+. []: row2
+. . 3 4
+end: matrix
+
+The close target is `matrix`, the visible entity name introduced by the frame. The close form is not `end: [] matrix`.
 
 4.6. `end:` Close Receiver
 
@@ -390,31 +544,37 @@ The source-level close form is the ordinary colon receiver form:
 
     end: <target>
 
-`end:` consumes its tail as a close target. The target may name a visible frame, label block or entity block. It may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current level and no receiver-specific rule forbids that jump.
+`end:` consumes its tail as a close target. The target names a visible frame, label block or entity block. If an opening form such as `[]: matrix` introduces the visible name `matrix`, then the close form is:
 
-This makes `end:` a readable tail-cutter for deeply nested vertical code.
+    end: matrix
+
+not:
+
+    end: [] matrix
+
+`end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
 Example:
 
 outerLoop:
-for: (int: i 1) (i <= 3) (i++)
-. for: (int: j 1) (j <= 3) (j++)
-. . if: i = 2 && j = 2
-. . . continue: outerLoop
+. for: (int: i, 1), (i <= 3), (i++)
+. . for: (int: j, 1), (j <= 3), (j++)
+. . . if: i = 2 && j = 2
+. . . . continue: outerLoop
 end: outerLoop
 
-The final line closes the labelled block `outerLoop` directly. The intermediate vertical levels are closed implicitly by the named close.
+The final line closes the labelled block `outerLoop` directly. The intermediate vertical levels are closed by the named close.
 
 The standalone source line `---` is not part of Lingvamyxa syntax.
 
 4.6.1. Vertical Positional Structures
 
-Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as same-level items of the open receiver frame. If a positional item is itself a body/section item, its body is written at the next deeper dot level.
+Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as child items at the next dot level of the open receiver frame.
 
 Single-body example:
 
 if: a
-doSomething
+. doSomething
 end: if
 
 Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
@@ -428,11 +588,11 @@ Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
 
 The name `thenBody` is assigned by the `if` receiver signature. It is not a surface keyword in this form.
 
-Two-body positional example at root level:
+Two-body positional example:
 
 if: a
-doSomething
-doOtherThing
+. doSomething
+. doOtherThing
 end: if
 
 Under the same `if(condition, thenBody, elseBody)` receiver signature, this builds:
@@ -447,38 +607,40 @@ Under the same `if(condition, thenBody, elseBody)` receiver signature, this buil
       )
     )
 
-The same-level lines `doSomething` and `doOtherThing` are the next positional fields/items of the still-open `if` frame.
+The level-1 lines `. doSomething` and `. doOtherThing` are child items of the open `if` frame.
 
 Nested two-body positional example:
 
 parent:
-.if: a
-.doSomething
-.doOtherThing
+. if: a
+. . doSomething
+. . doOtherThing
 end: parent
 
-The level-1 lines `.doSomething` and `.doOtherThing` are same-level vertical fields/items of the still-open `.if: a` frame.
+The level-2 lines `. . doSomething` and `. . doOtherThing` are child items of the open `. if: a` frame.
 
 The same branches may also be written as explicit named argument Structures:
 
 if: a
-then:
-.doSomething
-else:
-.doOtherThing
+. then:
+. . doSomething
+. else:
+. . doOtherThing
 end: if
 
 The names `then` and `else` are ordinary nested Structures consumed by the active `if` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
 
 A one-line form is also possible when the receiver defines it:
 
-    if: a doSomething
+    if: a, doSomething
 
 This builds a Frame whose final meaning is assigned by the active `if` receiver.
 
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
 
-This is an intentional property of the language, not an accidental ambiguity. In colon line forms without parentheses and commas, `f: a b c` and the corresponding vertical form build one argument Structure containing `a`, `b` and `c`. A receiver with one structural parameter may consume that whole Structure. A receiver with several parameters may consume the same Structure by positional fields.
+This is an intentional property of the language, not an accidental ambiguity. In colon line forms, commas and numeric-run shortcuts create fields. In vertical form, child items at the next dot level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
+
+4.7. No Native `=` Assignment or Named-Field Operator
 
 4.7. No Native `=` Assignment or Named-Field Operator
 
@@ -513,19 +675,19 @@ A Structure may contain positional fields. A receiver may assign semantic names 
 Example:
 
 if: a
-doSomething
+. doSomething
+. doOtherThing
+end: if
 
-doOtherThing
-
-With an `if(condition, thenBody, elseBody)` receiver signature, the two same-level vertical items are consumed positionally as `thenBody` and `elseBody`.
+With an `if(condition, thenBody, elseBody)` receiver signature, the two vertical child items are consumed positionally as `thenBody` and `elseBody`.
 
 Named vertical form:
 
 if: a
-then:
-.doSomething
-else:
-.doOtherThing
+. then:
+. . doSomething
+. else:
+. . doOtherThing
 end: if
 
 Here `then` and `else` are explicit nested Structures consumed as named semantic fields.
@@ -533,11 +695,13 @@ Here `then` and `else` are explicit nested Structures consumed as named semantic
 Explicit semantic field-like input should be represented by nested Structures:
 
 config:
-.batchSize: 500
-.reportMode: Daily
+. batchSize: 500
+. reportMode: Daily
 end: config
 
 This builds ordinary nested Structures such as `batchSize(500)` and `reportMode(Daily)`. The active `config` receiver decides whether those Structures are interpreted as settings, fields, messages or ordinary child items.
+
+4.9. Field Order
 
 4.9. Field Order
 
@@ -664,7 +828,7 @@ If the expected type is boolean, the value producer must produce a boolean value
 
 Example:
 
-for: (int: i 0) (i < n) (i: i + 1)
+for: (int: i, 0), (i < n), (i: i + 1)
 .print: i
 
 
@@ -677,7 +841,7 @@ The `for` receiver consumes:
 
 Compact body example:
 
-    for: (int: i 0) (i < n) (i++) (print: i)
+    for: (int: i, 0), (i < n), (i++), (print: i)
 
 Here `(print: i)` is just the last argument Structure of `for`. The `for` receiver signature names that position as `body` and consumes it as the executable loop body.
 
@@ -829,11 +993,11 @@ A `sub` frame consumes a Structure and creates a subroutine callable value.
 
 Example source:
 
-fn: myFunc (int: i, int: j 1, p1, p2) (int: r1, int: r2)
-.print: i
-.print: j
-.p1()
-.p2()
+fn: myFunc, (int: i, int: j, 1, p1, p2), (int: r1, int: r2)
+. print: i
+. print: j
+. p1()
+. p2()
 end: myFunc
 
 Strict conceptual form:
@@ -861,33 +1025,30 @@ Strict conceptual form:
 Explicit nested-source form:
 
 fn:
-.name: myFunc
-.args:
-..int: i
-..int: j 1
-..p1
-..p2
-.
-.ret:
-..int: r1
-..int: r2
-.
-.body:
-..print: i
-..print: j
-..p1()
-..p2()
-.
+. name: myFunc
+. args:
+. . int: i
+. . int: j, 1
+. . p1
+. . p2
+. ret:
+. . int: r1
+. . int: r2
+. body:
+. . print: i
+. . print: j
+. . p1()
+. . p2()
 end: myFunc
 
 The receiver `fn` consumes its child Structures by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures consumed by `fn`. They are not `=` named fields.
 
-The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set. In declaration context, a type/constructor receiver consumes the following raw identifier as a new binding name. If that name already exists in the current namespace, the declaration is invalid.
+The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set. In declaration context, a type/constructor receiver consumes the following raw identifier/name phrase as a new binding name. If that name already exists in the current namespace, the declaration is invalid.
 
 Compact definition form:
 
 fn: i(
-  args: (int: v j),
+  args: (int: v, j),
   ret: int,
   body: (j: v / 2, i: v)
 )
@@ -914,7 +1075,7 @@ Conceptual receiver-level interpretation:
 
 The `args` child receives one bounded Structure containing the declaration:
 
-    int: v j
+    int: v, j
 
 In declaration context, this means an `int` binding named `v` whose default/initial value is `j`.
 
@@ -930,9 +1091,11 @@ Both forms are distinct from:
 
     args: int v j
 
-which parses as a flat line-command argument Structure `args(int, v, j)`.
+which now parses as one phrase/signature field `int v j`, not as `args(int, v, j)`. To pass three fields, write:
 
-Inside the `body` bounded Structure, comma separates body items in the same way that newlines separate vertical body items. The body above is equivalent to:
+    args: int, v, j
+
+Inside the `body` bounded Structure, comma separates body items in the same way that child lines separate vertical body items. The body above is equivalent to:
 
 fn: i(
   args: int(v, j),
@@ -949,8 +1112,8 @@ Here `j: v / 2` updates the visible binding `j`, and `i: v` updates the current 
 
 Example source:
 
-sub: l5_if (boolean: condition) then else
-.return
+sub: l5_if, (boolean: condition), then, else
+. return
 end: l5_if
 
 Strict conceptual form:
@@ -968,18 +1131,18 @@ Strict conceptual form:
 Explicit nested-source form:
 
 sub:
-.name: l5_if
-.args:
-..boolean: condition
-..then
-..else
-.
-.body:
-..return
-.
+. name: l5_if
+. args:
+. . boolean: condition
+. . then
+. . else
+. body:
+. . return
 end: l5_if
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
+
+7.3.1. Single Namespace
 
 7.3.1. Single Namespace and No Silent Shadowing
 
@@ -995,7 +1158,7 @@ In expression position, a visible `fn` name is callable. In head/update position
 
 Example:
 
-fn: factorial (int: n) (int)
+fn: factorial, (int: n), (int)
 .if: n <= 1
 ..factorial: 1
 ..return
@@ -1098,14 +1261,14 @@ end: if
 
 Here `if` validates against the node/receiver name.
 
-fn: myFunc (int: i) (int: r)
+fn: myFunc, (int: i), (int: r)
 .myFunc: i
 .return
 end: fn
 
 Here `fn` validates against the node/receiver name.
 
-fn: myFunc (int: i) (int: r)
+fn: myFunc, (int: i), (int: r)
 .myFunc: i
 .return
 end: myFunc
@@ -1175,7 +1338,7 @@ Return values are ordinary declared return variables inside the executable body 
 
 Example:
 
-fn: estimateHarvest (PlantBed: bed) (f32: harvest, f32: redApples, f32: greenApples)
+fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
 .harvest: bed\area
 .redApples: 0
 .greenApples: 0
@@ -1188,7 +1351,7 @@ Inside an `fn` body, the current function name may be used in head/update positi
 
 Example:
 
-fn: factorial (int: n) (int)
+fn: factorial, (int: n), (int)
 .if: n <= 1
 ..factorial: 1
 ..return
@@ -1253,7 +1416,7 @@ Example:
 
     u32: id
     Text: crop
-    f64: harvest 0.0
+    f64: harvest, 0.0
 
 Conceptual meaning:
 
@@ -1288,12 +1451,12 @@ L4:
 end: L4
 
 L3:
-.fn: plantBedCondition
+. fn: plantBedCondition
 ..u32: id
 ..Text: crop
 ..f64: area
 ..f64: soilWater
-..f64: harvest 0.0
+..f64: harvest, 0.0
 .
 ..boolean
 .
@@ -1308,13 +1471,13 @@ Another possible direction is an `autoModel` receiver that receives a model name
 Example:
 
 L4:
-.autoModel: PlantBed
+. autoModel: PlantBed
 ..vars:
 ...u32: id
 ...Text: crop
 ...f64: area
 ...f64: soilWater
-...f64: harvest 0.0
+...f64: harvest, 0.0
 ..
 ..condition:
 ...area > 0.0
@@ -1326,7 +1489,7 @@ end: L4
 This section does not define a final type/model language. It only states that model declarations are ordinary Structures consumed by model receivers.
 
 ?
-The model/type declaration syntax is only partially specified. The preferred direction avoids a separate `field` receiver and uses declaration-context type constructors such as `u32: id` and `f64: harvest 0.0`. Still unspecified: canonical alias syntax, explicit layout syntax, relation signature syntax, and whether canonical model definitions use condition functions, `autoModel`, or both.
+The model/type declaration syntax is only partially specified. The preferred direction avoids a separate `field` receiver and uses declaration-context type constructors such as `u32: id` and `f64: harvest, 0.0`. Still unspecified: canonical alias syntax, explicit layout syntax, relation signature syntax, and whether canonical model definitions use condition functions, `autoModel`, or both.
 ?
 
 variant 1:
@@ -1356,7 +1519,7 @@ A minimal `ModelSpec` contains:
 
 `vars` is the ordered Structure of slots/bindings. Field order is part of the logical model and may be used for positional construction, return Structures, destructuring, layouts, relation signatures and serialization.
 
-`defaults` are default initial values for slots. They may be represented directly in `vars`, for example `f64: harvest 0.0`, or materialized as a separate descriptor view.
+`defaults` are default initial values for slots. They may be represented directly in `vars`, for example `f64: harvest, 0.0`, or materialized as a separate descriptor view.
 
 `conditions` or `validator` define which values are valid instances of the model. Conditions may be listed as expression Structures or delegated to a boolean function.
 
@@ -1373,7 +1536,7 @@ A `union` receiver defines a closed set of allowed model variants.
 Example:
 
 L4:
-.union: Shape
+. union: Shape
 ..Circle
 ..Square
 ..Triangle
@@ -1419,14 +1582,14 @@ The physical representation of a union value is not defined by this structural c
 Model, union, operator and behavior descriptors may be represented internally as typed facts. For example, a model descriptor for `Circle` may materialize facts such as:
 
     model: Circle
-    slot: Circle radius f64
+    slot: Circle, radius, f64
 
 A union descriptor may materialize facts such as:
 
     union: Shape
-    variant: Shape Circle
-    variant: Shape Square
-    variant: Shape Triangle
+    variant: Shape, Circle
+    variant: Shape, Square
+    variant: Shape, Triangle
 
 These facts are registry facts. They are not ordinary runtime assertions unless a receiver exposes them to a runtime query system. The fact representation gives one uniform way to index, query, validate and derive registry information.
 
@@ -1456,8 +1619,8 @@ Example:
 
 L5:
 .behavior: Circle
-..message: drawOn drawCircleOn
-..message: area circleArea
+..message: drawOn, drawCircleOn
+..message: area, circleArea
 .
 
 
@@ -1512,7 +1675,7 @@ The receiver object is passed as the first semantic argument to the selected imp
 
 If `shape\model` is `Circle`, and the behavior registry contains:
 
-    message: Circle drawOn drawCircleOn
+    message: Circle, drawOn, drawCircleOn
 
 then the send lowers or interprets as:
 
@@ -1532,12 +1695,12 @@ L5 message-missing behavior is not fixed. A final L5 behavior specification must
 
 L5 may store registry information as typed facts and rules. Examples:
 
-    fact: model Circle
-    fact: slot Circle radius f64
-    fact: behavior Circle
-    fact: message Circle drawOn drawCircleOn
-    fact: variant Shape Circle
-    fact: method draw Circle drawCircle
+    fact: model, Circle
+    fact: slot, Circle, radius, f64
+    fact: behavior, Circle
+    fact: message, Circle, drawOn, drawCircleOn
+    fact: variant, Shape, Circle
+    fact: method, draw, Circle, drawCircle
 
 The same information may also be materialized as descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec` or `GenericMethodSpec`. Descriptors and facts are two views of one registry model.
 
@@ -1548,7 +1711,7 @@ L5 rules may derive registry facts from other facts. For example, a rule may der
 Example:
 
 L5:
-.target:
+. target:
 ..app
 ..kind: executable
 ..sources: ("src/hello.lm3")
@@ -1556,7 +1719,7 @@ L5:
 ..output: "build/bin/hello.lm0.exe"
 .
 
-.build: app
+. build: app
 
 
 The `target` and `build` receivers define build semantics. They may also emit registry facts used by the builder. The structural core only creates Structures and specifies that L5 receivers consume them as messages, configuration, behavior descriptors, facts, rules or build/query requests.
@@ -1629,9 +1792,9 @@ L4:
 ..domain: Shape
 .
 
-.method: draw Circle drawCircle
-.method: draw Square drawSquare
-.method: draw Triangle drawTriangle
+.method: draw, Circle, drawCircle
+.method: draw, Square, drawSquare
+.method: draw, Triangle, drawTriangle
 
 
 The `operator: draw` frame registers `draw` as a callable generic receiver. The child Structure `dispatchBy: firstArgumentModel` says that the concrete implementation is selected by the model of the first argument. The child Structure `domain: Shape` restricts or documents the generic domain.
@@ -1643,11 +1806,11 @@ Each `method` frame registers one dispatch entry:
 Example semantic facts:
 
     generic: draw
-    dispatchBy: draw firstArgumentModel
-    domain: draw Shape
-    method: draw Circle drawCircle
-    method: draw Square drawSquare
-    method: draw Triangle drawTriangle
+    dispatchBy: draw, firstArgumentModel
+    domain: draw, Shape
+    method: draw, Circle, drawCircle
+    method: draw, Square, drawSquare
+    method: draw, Triangle, drawTriangle
 
 The implementation names are ordinary `fn` or `sub` bindings and must satisfy the signature contract of the generic operation. For example, if `draw` returns no value, each drawing implementation is normally a `sub`. If `draw` returns a `DrawCommand`, each implementation must return a compatible value.
 
@@ -1657,15 +1820,15 @@ If a generic operation has a union domain, the union variants and method facts t
 
 Example union facts:
 
-    variant: Shape Circle
-    variant: Shape Square
-    variant: Shape Triangle
+    variant: Shape, Circle
+    variant: Shape, Square
+    variant: Shape, Triangle
 
 Example method facts:
 
-    method: draw Circle drawCircle
-    method: draw Square drawSquare
-    method: draw Triangle drawTriangle
+    method: draw, Circle, drawCircle
+    method: draw, Square, drawSquare
+    method: draw, Triangle, drawTriangle
 
 At a call site:
 
@@ -1675,14 +1838,15 @@ At a call site:
 translation may derive:
 
 match: shape
-.case: Circle c
-..drawCircle: c
 .
-.case: Square s
-..drawSquare: s
+. . Circle, c
+. . drawCircle: c
 .
-.case: Triangle t
-..drawTriangle: t
+. . Square, s
+. . drawSquare: s
+.
+. . Triangle, t
+. . drawTriangle: t
 .
 
 
@@ -1734,10 +1898,8 @@ L5 `if` is a message/configuration dispatch receiver. It may conditionally dispa
 Short positional conditional form:
 
 if: mode = debug
-.build: debugTarget
-
-.build: releaseTarget
-
+. build: debugTarget
+. build: releaseTarget
 
 Normal form under signature `if(condition, thenBody, elseBody)`:
 
@@ -1750,11 +1912,10 @@ Normal form under signature `if(condition, thenBody, elseBody)`:
 The same conditional may be written with explicit named branch Structures:
 
 if: mode = debug
-.then:
-..build: debugTarget
-.else:
-..build: releaseTarget
-
+. then:
+. . build: debugTarget
+. else:
+. . build: releaseTarget
 
 This builds:
 
@@ -1766,6 +1927,7 @@ This builds:
 
 The short positional form is valid when the active `if` receiver assigns sibling child Structures to semantic fields by signature order. Named vertical form remains available for readability or when a style/profile requires explicit names.
 
+13. L2 Addresses
 
 13. L2 Addresses, References and Callable References
 
@@ -1783,11 +1945,11 @@ Allocation and storage receivers create storage and bind the requested name to t
 
 Examples:
 
-stack: PlantBed branch
-heap: PlantBed tree
-static: PlantBed root
-int: count 5
-[]: leafs count
+stack: PlantBed, branch
+heap: PlantBed, tree
+static: PlantBed, root
+int: count, 5
+[]: leafs, count
 
 Meanings:
 
@@ -2033,7 +2195,7 @@ The native structural core does not use `=` for assignment.
 
 A declaration with initialization is written through a declaration-context constructor:
 
-    int: a 3
+    int: a, 3
 
 A later update to an existing mutable binding or addressable field/index location is written by placing that location in head/update position:
 
@@ -2041,7 +2203,7 @@ A later update to an existing mutable binding or addressable field/index locatio
 
 Example:
 
-    int: a 3
+    int: a, 3
     print: a
     a: 4
     print: a
@@ -2052,7 +2214,7 @@ The update form is valid only if the head resolves to an existing mutable bindin
 
 The same surface form is used for callable consumption. For example, `i: 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable/receiver binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
 
-A bounded Structure in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: (int: i 0) (i < n) (i++) (print: i)`, the final `(print: i)` is the `body` argument consumed by `for`.
+A bounded Structure in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: (int: i, 0), (i < n), (i++), (print: i)`, the final `(print: i)` is the `body` argument consumed by `for`.
 
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
@@ -2151,13 +2313,13 @@ L5 may treat registry information as a typed fact store. Structural declarations
 
 Examples:
 
-    fact: model Circle
-    fact: slot Circle radius f64
-    fact: variant Shape Circle
-    fact: behavior Circle
-    fact: message Circle drawOn drawCircleOn
-    fact: generic draw
-    fact: method draw Circle drawCircle
+    fact: model, Circle
+    fact: slot, Circle, radius, f64
+    fact: variant, Shape, Circle
+    fact: behavior, Circle
+    fact: message, Circle, drawOn, drawCircleOn
+    fact: generic, draw
+    fact: method, draw, Circle, drawCircle
 
 The registry may also expose materialized descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec`, `GenericMethodSpec` and `RelationSpec`. These descriptors are derived views over facts or the facts are derived views over descriptors. The source semantics only require consistency between these views.
 
@@ -2166,7 +2328,7 @@ The registry may also expose materialized descriptors such as `ModelSpec`, `Unio
 Possible L5 build input:
 
 L5:
-.target:
+. target:
 ..app
 ..kind: executable
 ..sources: ("src/hello.lm3")
@@ -2174,7 +2336,7 @@ L5:
 ..output: "build/bin/hello.lm0.exe"
 .
 
-.build: app
+. build: app
 
 
 The `target` and `build` receivers define the build semantics. The core only creates Structures.
@@ -2331,9 +2493,9 @@ A fact assertion is an ordinary Structure consumed by a `fact` receiver or anoth
 
 Examples:
 
-    fact: variant Shape Circle
-    fact: method draw Circle drawCircle
-    fact: message Circle drawOn drawCircleOn
+    fact: variant, Shape, Circle
+    fact: method, draw, Circle, drawCircle
+    fact: message, Circle, drawOn, drawCircleOn
 
 A relation frame such as:
 
@@ -2346,15 +2508,15 @@ is a fact only when consumed by a fact receiver. It is a query only when consume
 The compiler/runtime registry may be modeled as a typed fact store. The following are examples of registry facts:
 
     model: Circle
-    slot: Circle radius f64
+    slot: Circle, radius, f64
     union: Shape
-    variant: Shape Circle
+    variant: Shape, Circle
     behavior: Circle
-    message: Circle drawOn drawCircleOn
+    message: Circle, drawOn, drawCircleOn
     generic: draw
-    dispatchBy: draw firstArgumentModel
-    domain: draw Shape
-    method: draw Circle drawCircle
+    dispatchBy: draw, firstArgumentModel
+    domain: draw, Shape
+    method: draw, Circle, drawCircle
 
 Descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec` and `GenericMethodSpec` may be materialized views over these facts. Conversely, source receivers may first produce descriptors and then materialize facts from them.
 
@@ -2365,10 +2527,10 @@ A rule defines a relation in terms of other relations.
 Example conceptual form:
 
 rule:
-.completeGeneric: draw Shape
+.completeGeneric: draw, Shape
 .if:
-..variant: Shape ?model
-..method: draw ?model ?implementation
+..variant: Shape, ?model
+..method: draw, ?model, ?implementation
 
 
 The exact syntax for rule heads, rule bodies, conjunction, disjunction, negation and aggregation is not specified by this document.
@@ -2387,7 +2549,7 @@ A query asks for bindings that satisfy relation Structures.
 Example:
 
 query:
-.method: draw ?model ?implementation
+.method: draw, ?model, ?implementation
 
 
 Meaning:
@@ -2412,8 +2574,8 @@ For a call:
 
 where `shape` has type `Shape`, the translator may query:
 
-    variant: Shape ?model
-    method: draw ?model ?implementation
+    variant: Shape, ?model
+    method: draw, ?model, ?implementation
 
 For each result, the translator can generate a `match` case over the union variant.
 
@@ -2424,7 +2586,7 @@ For a concrete call:
 
 the translator may query:
 
-    method: draw Circle ?implementation
+    method: draw, Circle, ?implementation
 
 and lower directly to the returned implementation.
 
@@ -2438,7 +2600,7 @@ For a send:
 
 where `shape\model` is `Circle`, the runtime or translator queries:
 
-    message: Circle drawOn ?implementation
+    message: Circle, drawOn, ?implementation
 
 and calls the returned implementation with the receiver object and message arguments.
 
@@ -2474,8 +2636,8 @@ A query returns a Structure, for example:
 
 QueryResult
 .bindings
-..binding: ?model Circle
-..binding: ?implementation drawCircle
+..binding: ?model, Circle
+..binding: ?implementation, drawCircle
 .
 .status: success
 
@@ -2510,17 +2672,19 @@ This grammar sketch describes the structural parser only. It does not define fin
     source_level        ::= count of "." characters in indentation
 
     root_empty_line     ::= trailing_horizontal_space newline
-                            valid only at root level
+                            valid only at root level;
+                            root-level delimiter for open root children
 
-    line_content        ::= level_marker
+    line_content        ::= dot_only_marker
                           | comment_body
                           | disabled_body
                           | colon_frame_body
                           | nullary_line_body
                           | expr_line_body
 
-    level_marker        ::= empty content after indentation
-                            valid only if source_level > 0
+    dot_only_marker     ::= empty content after indentation
+                            valid only if source_level > 0;
+                            may delimit/open an anonymous Structure at that level
 
     comment_body        ::= "#" ignored_until_newline
 
@@ -2545,8 +2709,14 @@ This grammar sketch describes the structural parser only. It does not define fin
                             `name` resolves to a zero-argument consumable binding:
                             registered nullary operator/receiver or visible zero-argument fn/sub
 
-    line_arguments      ::= flat argument Structure parsed from the rest of the line
-                            or, inside a bounded Structure, until comma or ")"
+    line_arguments      ::= comma_argument_list | numeric_run | phrase_field
+
+    comma_argument_list ::= line_argument { "," line_argument } [ "," ]
+
+    numeric_run         ::= numeric_literal { horizontal_space numeric_literal }
+                            valid as shorthand for comma-separated numeric fields
+
+    phrase_field        ::= non-comma tail segment not parsed as numeric_run or expression
 
     expr_line           ::= indentation expr_line_body newline
 
@@ -2570,20 +2740,25 @@ This grammar sketch describes the structural parser only. It does not define fin
     mathematical_expression
                          ::= parsed by the mathematical expression syntax
 
-The vertical Structure tree is produced by comparing `source_level` values between consecutive logical lines. For an open vertical frame, the same level creates the next vertical argument/item of that frame. A deeper level attaches to the immediately preceding source item at the current open level as that item's body/block Structure. A lower level closes all open Structures above that level. A level-marker line closes all open Structures above its own level without adding a runtime/source item. A root empty line behaves as a root-level marker.
+The vertical Structure tree is produced by source levels and explicit dot-only delimiters.
 
-A `colon_frame_body` whose tail is empty must be followed by a same-level vertical argument continuation or by a deeper body/block attached to that source item. Otherwise it is a syntax error. This rule applies equally to labels such as `outerLoop:`, definition receivers such as `fn:`, and close receivers if someone accidentally writes `end:` without a target.
+For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and phrase fields do not become headers merely because a deeper line follows.
 
-This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls, or standalone `---`.
+A dot-only marker at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next dot-only marker at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A root empty line is the root-level equivalent delimiter.
 
-Line arguments are flat. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
+A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a dot-only anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
+
+This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls, `case` (not structural syntax) as syntax, or standalone `---`.
+
+Line arguments are comma-separated except for the numeric-run shortcut. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
 Inside a bounded Structure, comma separates elements at the bounded Structure's current level. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
 
-Structural grammar has no separate anonymous-function syntax. A bounded Structure or vertical body becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
+Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
 Labels are not a separate structural grammar category. A source line such as `outerLoop:` is a colon frame with an empty inline tail and a required following vertical block. The active receiver/profile decides whether that frame introduces a control label, an ordinary binding, both, or an error.
 
+23. Canonical Examples
 
 23. Canonical Examples
 
@@ -2592,7 +2767,7 @@ Labels are not a separate structural grammar category. A source line such as `ou
 Source:
 
 L3:
-.print: Hello World
+. print: Hello World
 end: L3
 
 Normal form:
@@ -2607,7 +2782,7 @@ Normal form:
 
 Source:
 
-fn: estimateHarvest (PlantBed: bed) (f32: harvest, f32: redApples, f32: greenApples)
+fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
 .if: bed\crop = Apples
 ..harvest: bed\area * 1.7
 ..redApples: bed\area * 1.7
@@ -2615,7 +2790,7 @@ fn: estimateHarvest (PlantBed: bed) (f32: harvest, f32: redApples, f32: greenApp
 ..return
 end: if
 
-.estimateHarvest: bed\area 0 0
+.estimateHarvest: bed\area, 0, 0
 end: estimateHarvest
 
 Semantic outline:
@@ -2626,7 +2801,7 @@ Semantic outline:
     `if` consumes condition and body Structures.
     The named return variables update fields of the current return Structure.
     `return` exits the current function and returns the current return binding.
-    `estimateHarvest: bed\area 0 0` updates the current function return binding.
+    `estimateHarvest: bed\area, 0, 0` updates the current function return binding.
     Reaching the end of the function returns the current return binding implicitly.
     `end: estimateHarvest` closes the definition Structure by normalized entity name.
 
@@ -2634,7 +2809,7 @@ Semantic outline:
 
 Source:
 
-fn: estimateHarvest (PlantBed: bed) (f32: harvest, f32: redApples, f32: greenApples)
+fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
 .harvest: bed\area
 .redApples: 0
 .greenApples: 0
@@ -2651,7 +2826,7 @@ Semantic outline:
 
 Source:
 
-fn: factorial (int: n) (int)
+fn: factorial, (int: n), (int)
 .if: n <= 1
 ..factorial: 1
 ..return
@@ -2694,10 +2869,10 @@ The semantic roles `condition`, `then` and `else` are assigned by the active `if
 Source:
 
 L4:
-.operator:
-..if
-..callableFrom: L5
-..implementation: l5_if
+. operator:
+. . if
+. . callableFrom: L5
+. . implementation: l5_if
 end: L4
 
 Semantic outline:
@@ -2711,7 +2886,7 @@ Semantic outline:
 
 Source:
 
-sub: l5_if (boolean: condition) then else
+sub: l5_if, (boolean: condition), then, else
 .return
 end: sub
 
@@ -2731,24 +2906,28 @@ Conceptual form:
 24. Summary Table
 
     f(a, b)                    compact Frame named f
-    f: a b                     line command Frame named f
-    f: / same-level items / end: f
-                                vertical Frame named f
+    f: a, b                    line command Frame named f with comma-separated fields
+    f: a b                     line command Frame named f with one phrase/signature field `a b`
+    f: 1 2                     numeric-run shorthand for f(1, 2)
+    f: / child lines at . / end: f
+                                vertical Frame named f; vertical fields are at source level N + 1
     (a, b)                     bounded Structure
     name: value                ordinary nested Structure, often consumed as a setting/semantic field by receiver
-    name:                      colon frame with required same-level continuation or deeper body
+    name:                      colon frame with required vertical child continuation or profile-defined empty form
     leading dots               source level units in the leading indentation zone
-    dot-only line              level marker; closes deeper vertical Structures
+    dot-only line              anonymous Structure delimiter / level delimiter at non-root level
+    root empty line            root-level delimiter for open root children
     #                          line comment marker; ignores text to the end of the physical line
     $                          disabled item/block marker; syntax is still parsed and checked
     ===                        column-0 raw file comment fence; syntax inside is ignored
-    end: name                  close receiver for a visible frame/entity/label block
+    end: name                  close receiver for a visible frame/entity/label block by name
     L2/L3/L4/L5                level receiver frames
     sub                        receiver that registers subroutine definitions
     fn                         receiver that registers function definitions
     return                     executable-body return receiver/operator
     operator                   receiver that registers receivers/operators
     if                         registered receiver, semantics depend on level
+    match                      registered receiver; no built-in `case` (not structural syntax) syntax
     while                      registered receiver, semantics depend on level
     mathematical infix         parsed into expression Structure
     []                         L2 indexed address access; L3+ checked array-Structure access
@@ -2758,32 +2937,8 @@ Conceptual form:
     union                      receiver that registers a closed set of variants
     method                     receiver that registers a generic dispatch entry
     behavior                   L5 receiver that attaches message behavior to a model
-    message                    L5 behavior child Structure / registry fact
-    nested fn/sub              local executable definitions with lexical scope
 
-Core invariant:
-
-    leading dots define source block depth;
-    spaces and tabs inside the leading indentation zone do not define source block depth;
-    # comments are ignored to end of physical line;
-    $ disables an item/block semantically while preserving syntax checking;
-    === raw file comment fences ignore all enclosed text without syntax checking;
-    syntax builds Structures;
-    receivers give Structures meaning;
-    Structures do not execute themselves;
-    return exits executable bodies;
-    function name in head/update position updates the current return binding inside its own body;
-    executable definitions bind ordinary callable values in the shared namespace;
-    callable bindings may be updated through the same head/update surface form when compatible;
-    nested fn/sub definitions create local executable bindings;
-    visible names share one lexical namespace and do not silently shadow;
-    `=` is not native assignment or native named-field syntax;
-    L4 structural descriptors and L5 behavior/fact descriptors may materialize registry facts;
-    bare end is not valid source syntax;
-    end name is not valid source syntax;
-    end: name closes visible named source Structures or label blocks;
-    standalone --- is not part of Lingvamyxa source syntax.
-
+25.
 
 25. Consolidated Open Points
 
@@ -3000,7 +3155,7 @@ Nested short positional form:
 
 Single-line form:
 
-    if: condition doSomething
+    if: condition, doSomething
 
 The condition is evaluated once before branch selection.
 
@@ -3010,46 +3165,92 @@ If no `else` body is provided and the condition is false, `if` completes normall
 
 In named form, `then` and `else` are structural section markers inside `if`. They are not ordinary runtime calls when consumed by the `if` receiver. In positional form, sibling child Structures are mapped to `thenBody` and `elseBody` by receiver signature order.
 
-26.2. `match`, `case` and `default`
+26.2. `match` and default-pattern receivers
 
-`match` selects one body from a set of cases.
+`match` selects one body from a set of positional pattern/body pairs or from anonymous branch Structures. `case` (not structural syntax) is not structural syntax.
 
-Example:
+Simple positional example:
 
 match: value
-.case: 1
-..print: one
-.
-.case: 2
-..print: two
-.
-.default:
-..print: other
+. 1
+. print: one
+. 2
+. print: two
+. default
+. print: other
 .
 
+Conceptual argument stream:
 
-There is no automatic fallthrough from one `case` to the next.
+    match(value, 1, print(one), 2, print(two), default, print(other))
 
-A `case` body is a closed Structure. Completion of one `case` completes the `match` unless another control operator such as `break`, `return`, `fail`, `retry`, `redo` or `assert` transfers control.
+The `match` receiver may interpret the tail after `value` as repeating `(pattern, branch)` pairs. `default` is an ordinary atom/receiver-defined pattern value, not a parser keyword.
 
-For union values, a `match` may destructure the active variant.
+Block branch example:
+
+match: value
+. 1
+.
+. . print: one
+. . log: matched one
+.
+. 2
+.
+. . print: two
+. . log: matched two
+.
+
+Conceptual argument stream:
+
+    match(
+      value,
+      1,
+      (print(one), log(matched one)),
+      2,
+      (print(two), log(matched two))
+    )
+
+Anonymous branch Structure example:
+
+match: value
+.
+. . 1
+. . print: one
+.
+. . 2
+. . print: two
+.
+. . default
+. . print: other
+.
+
+Conceptual argument stream:
+
+    match(
+      value,
+      (1, print(one)),
+      (2, print(two)),
+      (default, print(other))
+    )
+
+There is no automatic fallthrough from one branch to the next unless the active `match` receiver explicitly defines such behavior.
+
+For union values, a `match` may destructure the active variant by ordinary pattern Structures.
 
 Example:
 
 match: shape
-.case: Circle c
-..drawCircle: c
 .
-.case: Square s
-..drawSquare: s
+. . Circle, c
+. . drawCircle: c
+.
+. . Square, s
+. . drawSquare: s
 .
 
+If the matched value is a closed union and no default pattern is present, an implementation may require exhaustive patterns.
 
-If the matched value is a closed union and no `default` is present, an implementation may require exhaustive cases.
-
-?
-The exact pattern syntax for `case`, including guards, nested destructuring, constants, model names, union variants and relation patterns, is not specified in this section.
-?
+26.3.
 
 26.3. `while`
 
@@ -3101,7 +3302,7 @@ The loop repeats until the condition is true. If the condition is false, control
 
 Compact counter/triplet form:
 
-for: (int: i 0) (i < n) (i: i + 1)
+for: (int: i, 0), (i < n), (i: i + 1)
 .print: i
 
 
@@ -3115,13 +3316,13 @@ The vertical child Structure is consumed as the loop body.
 
 Single-line compact body form:
 
-    for: (int: i 0) (i < n) (i++) (print: i)
+    for: (int: i, 0), (i < n), (i++), (print: i)
 
 In this form, `(print: i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as a parser method.
 
 Range-style example:
 
-for: i 0 n
+for: i, 0, n
 .print: i
 
 
@@ -3141,7 +3342,7 @@ variant 1:
 Use compact positional forms such as `for i 0 n`.
 
 variant 2:
-Use named structural forms such as `for: i from 0 to n step 1`.
+Use named/signature phrase forms such as `for: i from 0 to n step 1` only when the `for` receiver explicitly consumes that phrase as one semantic field; otherwise write explicit comma fields such as `for: i, 0, n, 1`.
 
 variant 3:
 Treat all range policies as ordinary receiver Structures consumed by `for`.
@@ -3158,7 +3359,7 @@ each: item in items
 
 Receiver-like example:
 
-each: items item
+each: items, item
 .draw: item
 
 
@@ -3303,11 +3504,11 @@ fn: parseInt
 ..ParseError
 .
 
-.guard: validInteger text
-..fail: ParseError text
+.guard: validInteger, text
+..fail: ParseError, text
 .
 
-.parseInt: parseInteger text
+.parseInt: parseInteger, text
 
 
 `throws` lists the failure labels that may leave the executable body as recoverable failures.
@@ -3321,7 +3522,7 @@ A caller must handle, propagate or remap a declared failure.
 Example:
 
 guard: radius > 0.0
-.fail: InvalidRadius radius
+.fail: InvalidRadius, radius
 
 
 Semantic form:
@@ -3338,7 +3539,7 @@ if: not condition
 
 Example:
 
-    fail: ParseError text
+    fail: ParseError, text
 
 Semantic effect:
 
@@ -3860,7 +4061,7 @@ Sending a message appends it to a synchronized FIFO container and returns.
 
 Basic operation:
 
-    send: target message
+    send: target, message
 
 Semantic effect:
 
@@ -3913,9 +4114,9 @@ L5 behavior dispatch for a delivered message uses the target object's behavior d
 Conceptual dispatch:
 
     model: target\model
-    behavior: lookupBehavior model
-    method: lookup behavior\messageTable selector
-    call: method target args
+    behavior: lookupBehavior, model
+    method: lookup, behavior\messageTable, selector
+    call: method, target, args
 
 If the target belongs to the current thread and the source form is a local L5 message, the translator/runtime may use direct Smalltalk-style synchronous dispatch.
 
@@ -3924,15 +4125,15 @@ If the target belongs to another thread or the source form is an explicit event 
 This profile distinguishes:
 
     local L5 message:
-        receiver: selector args
+        receiver: selector, args
         direct behavior lookup and call in the current thread
 
     L5 event send:
-        send: receiver selector args
+        send: receiver, selector, args
         asynchronous inbox delivery
 
     L5 request:
-        request: receiver selector args replyTo/correlation
+        request: receiver, selector, args, replyTo/correlation
         asynchronous inbox delivery with a later reply message
 
 There is no blocking `ask` primitive in this profile.
@@ -4055,19 +4256,19 @@ Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
 
 Minimal L2 storage/allocation forms:
 
-    stack: Layout name
-    heap: Layout name
-    static: Layout name
-    Primitive: name [initialValue]
-    []: name size
+    stack: Layout, name
+    heap: Layout, name
+    static: Layout, name
+    Primitive: name, [initialValue]
+    []: name, size
 
 Examples:
 
-stack: PlantBed branch
-heap: PlantBed tree
-static: PlantBed root
-int: count 5
-[]: leafs count
+stack: PlantBed, branch
+heap: PlantBed, tree
+static: PlantBed, root
+int: count, 5
+[]: leafs, count
 
 Meanings:
 
@@ -4077,17 +4278,20 @@ Meanings:
     count   primitive storage/value initialized to `5`
     leafs   typed address/container descriptor for `count` primitive cells, according to the active L2 profile
 
+Name phrases may contain spaces when separated by comma from other fields:
+
+stack: PlantBed, branch 2
+
+This allocates stack storage with layout `PlantBed` and introduces the single name phrase `branch 2`. The whitespace between `branch` and `2` does not create a third argument because the segment is not a pure numeric run.
+
 Address-producing and address-consuming forms:
 
     @count              address of the primitive storage location `count`
     \leafs              raw load of the first primitive cell at address `leafs`
     leafs[3]            indexed access at index `3`
     \(leafs + 3)        raw load after address arithmetic
-    tree\branch         typed field-follow through `tree`
-    @tree\branch        address of the field slot `branch` inside `tree`
-    \root\branch\branch raw load after the typed field-follow chain
 
-The exact primitive cell size, address arithmetic unit, alignment, bounds checking policy, allocation failure behavior and metadata representation belong to the L2 memory profile.
+28.3.
 
 28.3. Primitive Expression Operators
 
@@ -4212,13 +4416,13 @@ L2 `for` consumes:
 
 Vertical body form:
 
-for: (int: i 0) (i < n) (i: i + 1)
+for: (int: i, 0), (i < n), (i: i + 1)
 .print: i
 
 
 Compact body form:
 
-    for: (int: i 0) (i < n) (i++) (print: i)
+    for: (int: i, 0), (i < n), (i++), (print: i)
 
 The token form `i++` is valid only in profiles that register it as a parser method. Without that parser method, the step can be written as `(i: i + 1)`.
 
