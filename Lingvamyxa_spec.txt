@@ -10,7 +10,7 @@ Revision 11 note:
 
     Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
 
-    Line command form is `head: tail`. A source line whose head is followed by `:` must have an inline tail or a following deeper vertical block. A bare line without `:` is not a non-nullary receiver call; in executable statement position a bare receiver/callable line is valid only when the resolved binding can be consumed with zero arguments, such as `return`, `break`, nullary `continue`, a registered nullary receiver, or a visible zero-argument `fn`/`sub`.
+    Line command form is `head: tail`. A source line whose head phrase is followed by `:` must have an inline tail, a same-level vertical argument continuation, or a deeper body/block attached to that source item. A bare line without `:` is not a non-nullary receiver call; in executable statement position a bare receiver/callable line is valid only when the resolved binding can be consumed with zero arguments, such as `return`, `break`, nullary `continue`, a registered nullary receiver, or a visible zero-argument `fn`/`sub`.
 
     The standalone source line `---` is no longer part of Lingvamyxa syntax. The ordinary receiver form `end: <target>`, dot-only level marker lines, dot-dedent and EOF/root separation define vertical closure. Bare `end` and `end <target>` are not Lingvamyxa source syntax.
 
@@ -275,7 +275,7 @@ To pass one declaration Structure to `args`, write one of:
 
 The first form gives `args` one bounded Structure containing the line-command declaration `int: v j`. The second form gives `args` one compact declaration Frame `int(v, j)`.
 
-A head followed by `:` must have an argument. The argument may be an inline tail on the same physical line or a vertical block on the following deeper level. A line `head:` with no inline tail and no following deeper block is a syntax error.
+A head phrase followed by `:` must have a continuation. The continuation may be an inline tail on the same physical line, a same-level vertical argument sequence, or a deeper body/block attached to that source item. A line `head:` with no inline tail and no following same-level or deeper continuation is a syntax error.
 
 A line without `:` is not a non-nullary receiver call. In executable statement position, a bare receiver/callable line is valid only when the resolved binding can be consumed with zero arguments. This includes registered nullary line operators such as `return`, `break` and nullary `continue`, registered nullary receivers, and visible `fn`/`sub` bindings whose signature has zero required arguments.
 
@@ -286,9 +286,9 @@ A bare atom/expression line may still appear as a value item inside a Structure;
 Vertical frame form:
 
 f:
-.a
-.b
-.c
+a
+b
+c
 end: f
 
 It creates a Frame named `f` with the same logical argument Structure as:
@@ -339,9 +339,11 @@ Examples of equal level:
 
 Only dots and physical newlines define vertical structure. Spaces and tabs may improve readability, but they never change source level.
 
-A line at the same level as the previous source item starts the next sibling item in the current parent Structure.
+A line at the same level as an open vertical frame is the next vertical argument/item of that frame.
 
-A line at a deeper level starts or continues the body/block Structure of the immediately preceding line. It does not create a sequence of additional arguments to the preceding receiver merely because it is indented. Receiver signatures still decide whether that nested Structure is consumed as a positional field, named field, executable body, declaration body or data Structure.
+A line at the same level when no vertical frame is open starts the next sibling item in the current parent Structure.
+
+A line at a deeper level starts or continues the body/block Structure of the immediately preceding source item. It does not create a sequence of additional arguments to the preceding receiver merely because it is indented. Receiver signatures still decide whether that nested Structure is consumed as an executable body, declaration body, data Structure or another semantic field.
 
 A line at a lower level closes all open Structures above that level and then starts the next item at the lower level.
 
@@ -350,16 +352,31 @@ A dot-only level marker line contains only dots, spaces and tabs before the newl
 Example:
 
 outerLoop:
-. for: (int: i 1) (i <= 3) (i++)
-. . for: (int: j 1) (j <= 3) (j++)
-. . . if: i = 2 && j = 2
-. . . . System/out/println: "--- continue outerLoop ---"
-. . . . continue: outerLoop
-. . .
-. . . System/out/println: "i: " + i + ", j: " + j
+for: (int: i 1) (i <= 3) (i++)
+. for: (int: j 1) (j <= 3) (j++)
+. . if: i = 2 && j = 2
+. . . System/out/println: "--- continue outerLoop ---"
+. . . continue: outerLoop
+. .
+. . System/out/println: "i: " + i + ", j: " + j
 end: outerLoop
 
-The `. . .` marker closes the level-4 body of `if` and resumes the level-3 body of the inner `for`. The following `System/out/println` line is the next statement of that `for` body, not an `else` argument.
+The `. .` marker closes the level-3 body of `if` and resumes the level-2 body of the inner `for`. The following `System/out/println` line is the next statement of that `for` body, not an `else` argument.
+
+Same-level vertical argument examples:
+
+2d_array:
+1, 2
+3, 4
+
+match: value
+case 1:
+.print: World
+case 2:
+.print: Hello
+end: match
+
+In the matrix-like example, `1, 2` and `3, 4` are same-level vertical arguments/items consumed by `2d_array`. In the `match` example, `case 1:` and `case 2:` are same-level vertical arguments/items consumed by `match`; their deeper `.print` lines are bodies attached to the corresponding `case` items.
 
 A physical empty line contains no dots and no source token. Empty lines are allowed only at root level. A root empty line is a root-level marker: it closes all open Structures above root level, resumes parsing at root level, and does not add a source item. Empty lines are not allowed inside an open non-root body. To close to a non-root level, use a dot-only level marker line.
 
@@ -380,10 +397,10 @@ This makes `end:` a readable tail-cutter for deeply nested vertical code.
 Example:
 
 outerLoop:
-. for: (int: i 1) (i <= 3) (i++)
-. . for: (int: j 1) (j <= 3) (j++)
-. . . if: i = 2 && j = 2
-. . . . continue: outerLoop
+for: (int: i 1) (i <= 3) (i++)
+. for: (int: j 1) (j <= 3) (j++)
+. . if: i = 2 && j = 2
+. . . continue: outerLoop
 end: outerLoop
 
 The final line closes the labelled block `outerLoop` directly. The intermediate vertical levels are closed implicitly by the named close.
@@ -392,12 +409,13 @@ The standalone source line `---` is not part of Lingvamyxa syntax.
 
 4.6.1. Vertical Positional Structures
 
-Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as sibling items at the same child level of the receiver frame.
+Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as same-level items of the open receiver frame. If a positional item is itself a body/section item, its body is written at the next deeper dot level.
 
 Single-body example:
 
 if: a
-. doSomething
+doSomething
+end: if
 
 Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
 
@@ -413,9 +431,9 @@ The name `thenBody` is assigned by the `if` receiver signature. It is not a surf
 Two-body positional example at root level:
 
 if: a
-.doSomething
-
-.doOtherThing
+doSomething
+doOtherThing
+end: if
 
 Under the same `if(condition, thenBody, elseBody)` receiver signature, this builds:
 
@@ -429,27 +447,25 @@ Under the same `if(condition, thenBody, elseBody)` receiver signature, this buil
       )
     )
 
-The empty root-level marker line after `.doSomething` closes the first child body and resumes root level while keeping the current root-level `if` frame available for its next child field. The next level-1 item `.doOtherThing` is therefore the next positional field of `if`.
+The same-level lines `doSomething` and `doOtherThing` are the next positional fields/items of the still-open `if` frame.
 
 Nested two-body positional example:
 
 parent:
 .if: a
-..doSomething
-.
-..doOtherThing
-.
+.doSomething
+.doOtherThing
 end: parent
 
-The `.` marker closes the previous level-2 child and resumes level 1. The following level-2 item is the next positional field of the still-open `.if: a` frame.
+The level-1 lines `.doSomething` and `.doOtherThing` are same-level vertical fields/items of the still-open `.if: a` frame.
 
 The same branches may also be written as explicit named argument Structures:
 
 if: a
-. then:
-. . doSomething
-. else:
-. . doOtherThing
+then:
+.doSomething
+else:
+.doOtherThing
 end: if
 
 The names `then` and `else` are ordinary nested Structures consumed by the active `if` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
@@ -497,19 +513,19 @@ A Structure may contain positional fields. A receiver may assign semantic names 
 Example:
 
 if: a
-.doSomething
+doSomething
 
-.doOtherThing
+doOtherThing
 
-With an `if(condition, thenBody, elseBody)` receiver signature, the two level-1 child Structures are consumed positionally as `thenBody` and `elseBody`.
+With an `if(condition, thenBody, elseBody)` receiver signature, the two same-level vertical items are consumed positionally as `thenBody` and `elseBody`.
 
 Named vertical form:
 
 if: a
-.then:
-..doSomething
-.else:
-..doOtherThing
+then:
+.doSomething
+else:
+.doOtherThing
 end: if
 
 Here `then` and `else` are explicit nested Structures consumed as named semantic fields.
@@ -2554,9 +2570,9 @@ This grammar sketch describes the structural parser only. It does not define fin
     mathematical_expression
                          ::= parsed by the mathematical expression syntax
 
-The vertical Structure tree is produced by comparing `source_level` values between consecutive logical lines. A deeper level attaches to the immediately preceding source item at the current open level as that item's body/block Structure. The same level creates the next sibling item. A lower level closes all open Structures above that level. A level-marker line closes all open Structures above its own level without adding a runtime/source item. A root empty line behaves as a root-level marker.
+The vertical Structure tree is produced by comparing `source_level` values between consecutive logical lines. For an open vertical frame, the same level creates the next vertical argument/item of that frame. A deeper level attaches to the immediately preceding source item at the current open level as that item's body/block Structure. A lower level closes all open Structures above that level. A level-marker line closes all open Structures above its own level without adding a runtime/source item. A root empty line behaves as a root-level marker.
 
-A `colon_frame_body` whose tail is empty must be followed by a deeper vertical block. Otherwise it is a syntax error. This rule applies equally to labels such as `outerLoop:`, definition receivers such as `fn:`, and close receivers if someone accidentally writes `end:` without a target.
+A `colon_frame_body` whose tail is empty must be followed by a same-level vertical argument continuation or by a deeper body/block attached to that source item. Otherwise it is a syntax error. This rule applies equally to labels such as `outerLoop:`, definition receivers such as `fn:`, and close receivers if someone accidentally writes `end:` without a target.
 
 This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls, or standalone `---`.
 
@@ -2716,10 +2732,11 @@ Conceptual form:
 
     f(a, b)                    compact Frame named f
     f: a b                     line command Frame named f
-    f: ... end: f              vertical Frame named f
+    f: / same-level items / end: f
+                                vertical Frame named f
     (a, b)                     bounded Structure
     name: value                ordinary nested Structure, often consumed as a setting/semantic field by receiver
-    name:                      colon frame with required following deeper vertical block
+    name:                      colon frame with required same-level continuation or deeper body
     leading dots               source level units in the leading indentation zone
     dot-only line              level marker; closes deeper vertical Structures
     #                          line comment marker; ignores text to the end of the physical line
