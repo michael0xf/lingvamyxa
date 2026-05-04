@@ -847,13 +847,15 @@ end if
 Here `if` validates against the node/receiver name.
 
 fn myFunc (int i) (int r)
-.return i
+.myFunc i
+.return
 end fn
 
 Here `fn` validates against the node/receiver name.
 
 fn myFunc (int i) (int r)
-.return i
+.myFunc i
+.return
 end myFunc
 
 Here `myFunc` validates against the normalized `name` field of the current `fn` Structure. In this form the normalized `name` field is derived from the first positional argument.
@@ -867,7 +869,8 @@ fn
 ..int r
 .---
 .body
-..return i
+..myFunc i
+..return
 .---
 end myFunc
 
@@ -882,7 +885,8 @@ fn
 ..int r
 .---
 .body
-..return i
+..myFunc i
+..return
 .---
 end myFunc
 
@@ -903,21 +907,17 @@ Runtime exit from an `fn` or method-like executable body is represented by the `
 
 8.2. Return Forms
 
-Return without explicit values:
+The core return form has no explicit value arguments:
 
     return
 
-Return with positional values:
+`return` exits the current executable body. In an `fn`, it returns the current return binding. In a `sub`, it exits without producing a normal return value.
 
-    return(bed.area, 0, 0)
+The `return` line has no argument tail and no parenthesized argument list. Any non-empty argument tail after the `return` token is a syntax error in this core specification.
 
-Line-command form:
+Return values are established before `return`, either by updating declared named return variables or by using the current function name in head/update position inside its own body.
 
-    return bed.area 0 0
-
-All forms build or imply a return argument Structure consumed by the active executable-body receiver.
-
-There is no native `return(harvest = value)` form because `=` is not a structural named-field operator. Named return fields are updated as ordinary bindings before `return`, or by receiver-defined nested Structures if a later return syntax adds them.
+There is no native named-field variant of the `return` receiver because `=` is not a structural named-field operator. Named return fields are updated as ordinary bindings before `return`, or by receiver-defined nested Structures if a later return syntax explicitly adds them.
 
 8.3. Named Return Variables and Function-Name Return Binding
 
@@ -933,22 +933,6 @@ fn estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
 end estimateHarvest
 
 The empty `return` returns the current values of the declared return variables.
-
-A non-empty `return` fills the declared return variables positionally before exiting.
-
-Example:
-
-    return(bed.area, 0, 0)
-
-If the return signature is:
-
-    (f32 harvest, f32 redApples, f32 greenApples)
-
-then the positional return values fill:
-
-    harvest
-    redApples
-    greenApples
 
 Inside an `fn` body, the current function name may be used in head/update position as the current return binding. This update does not call the function.
 
@@ -979,11 +963,11 @@ A style guide may still require explicit `return` in some contexts, but the sour
 
 At the source-semantic level, every `fn` has one logical return value. That value may be a primitive value or a return Structure. A return signature with several fields defines one return Structure, not a separate non-structural mechanism.
 
-Returning several values positionally and returning one Structure value are the same source-semantic operation when the produced Structure matches the declared return Structure. A caller may consume the returned value as one Structure or, through receiver-defined destructuring/update forms, bind or update separate variables from its fields.
+Updating several declared return fields and updating one Structure-compatible return binding are source-semantically equivalent when the produced Structure matches the declared return Structure. A caller may consume the returned value as one Structure or, through receiver-defined destructuring/update forms, bind or update separate variables from its fields.
 
 Multiple named return fields are ordinary declared return variables inside the executable body. An empty `return` returns their current values as the declared return Structure.
 
-A non-empty `return` first fills the declared return Structure positionally and then exits the executable body. A single primitive return is the degenerate case where the declared return Structure has one primitive result according to the active return-value model.
+The `return` receiver itself does not fill the declared return Structure. It only exits the executable body after the current return binding has already been updated. A single primitive return is the degenerate case where the declared return Structure has one primitive result according to the active return-value model.
 
 Physical return strategy, storage ownership and low-level runtime representation are translator/runtime implementation details. They are not part of the source-semantic core.
 
@@ -1729,7 +1713,7 @@ Binding, mutability, scope, initialization, reassignment and shadowing rules are
 
 16.2. Return Structures
 
-A function return value is one logical source-level value. That value may be primitive or structural. If the return value is structural, returning a list of values and returning a Structure with the same layout are source-semantically equivalent under the receiver-defined return signature.
+A function return value is one logical source-level value. That value may be primitive or structural. If the return value is structural, updating its declared fields and updating a Structure-compatible return binding are source-semantically equivalent under the receiver-defined return signature.
 
 A function may return a Structure with ordered and/or semantic named fields.
 
@@ -1737,11 +1721,7 @@ Example return signature:
 
     (f32 harvest, f32 redApples, f32 greenApples)
 
-A return expression may fill this Structure by position:
-
-    return(bed.area, 0, 0)
-
-Named return variables may also be updated before an empty return:
+Named return variables may be updated before a bare return:
 
     harvest bed.area
     redApples 0
@@ -2231,7 +2211,10 @@ Source:
 
 fn estimateHarvest (PlantBed bed) (f32 harvest, f32 redApples, f32 greenApples)
 .if bed.crop == Apples
-..return(bed.area * 1.7, bed.area * 1.7, bed.area * 1.1)
+..harvest bed.area * 1.7
+..redApples bed.area * 1.7
+..greenApples bed.area * 1.1
+..return
 .end if
 
 .estimateHarvest bed.area 0 0
@@ -2243,7 +2226,8 @@ Semantic outline:
     `PlantBed bed` is a typed/model constructor Structure if `PlantBed` is registered.
     The return Structure has three named fields.
     `if` consumes condition and body Structures.
-    `return(...)` fills the return Structure and exits the current function.
+    The named return variables update fields of the current return Structure.
+    `return` exits the current function and returns the current return binding.
     `estimateHarvest bed.area 0 0` updates the current function return binding.
     Reaching the end of the function returns the current return binding implicitly.
     `end estimateHarvest` closes the definition Structure by normalized entity name.
@@ -2783,19 +2767,9 @@ Bare form:
 
     return
 
-Value form:
+For an `fn`, `return` returns the current return binding.
 
-    return value
-
-Structural value form:
-
-    return a b c
-
-For an `fn`, a bare `return` returns the current return binding.
-
-For an `fn` with a single primitive return value, `return value` sets that value and exits.
-
-For an `fn` with a structured return, `return a b c` fills the declared return Structure using the same structural return rules as ordinary return-binding assignment.
+For an `fn`, `return` does not accept value arguments and does not fill the declared return Structure. Return fields or the whole current return binding must be updated before `return`.
 
 For a `sub`, `return` exits the `sub` body. A `sub` does not produce a normal return value.
 
