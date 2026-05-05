@@ -6918,6 +6918,18 @@ The absence of a route-level mapping uses the service profile default.
 
 A failure response should preserve a typed code and a diagnostic Structure where possible.
 
+33.19.1 Module-loaded service endpoints
+
+A Lingvamyxa service host may derive REST endpoints from loaded *.lmx modules.
+Loaded modules materialize typed registry facts. Route descriptors may be
+explicitly declared or derived by deterministic query receivers from public
+service/method descriptors. Endpoint activation is transactional: a new endpoint
+map becomes visible only after parsing, type checking, route derivation and
+validation succeed.
+              
+JSON/REST exposure is never implied by procedure existence alone.
+Only descriptors visible to the REST adapter profile may be exposed.
+
 33.15. Security and Capabilities
 
 HTTP server and client access should be capability-controlled.
@@ -7039,15 +7051,3 @@ Lingvamyxa-to-Lingvamyxa services communicate by standard Lingvamyxa messages ov
 Direct cross-service raw references are forbidden.
 
 Service boundaries obey the L5 memory and message model.
-
-33.19. Module-loaded service endpoints
-
-A Lingvamyxa service host may derive REST endpoints from loaded *.lmx modules.
-Loaded modules materialize typed registry facts. Route descriptors may be
-explicitly declared or derived by deterministic query receivers from public
-service/method descriptors. Endpoint activation is transactional: a new endpoint
-map becomes visible only after parsing, type checking, route derivation and
-validation succeed.
-              
-JSON/REST exposure is never implied by procedure existence alone.
-Only descriptors visible to the REST adapter profile may be exposed.
