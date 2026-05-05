@@ -1485,6 +1485,344 @@ If `i` resolves to mutable storage, the sequence may lower to a direct storage u
 
 The exact parser methods, temporary names, evaluation order, numeric rules and diagnostics belong to the mathematical/operator specification. The core point is that parser methods do not introduce a separate assignment syntax; they compose with the same namespace resolution and head/update form as ordinary source.
 
+6.5. Basic Array Operations
+
+An array is a typed Structure whose value is described by element type, shape,
+rank, storage and optional stride metadata.
+
+An array is not a special execution object. It is ordinary structured data.
+Operations over arrays are ordinary typed procedure/function/operator calls
+resolved through the same registry/query mechanism as other operations.
+
+A scalar value may be treated as a rank-0 array for array-expression purposes.
+A vector is a rank-1 array, a matrix is a rank-2 array, and higher-dimensional
+arrays are rank-N arrays.
+
+Minimal array descriptor:
+
+array:
+. elementType = T
+. rank = N
+. shape = [d0, d1, ... dN-1]
+. storage = contiguous | view | external | arena
+. stride = optional byte strides
+. data = implementation-defined storage reference
+end: array
+
+The canonical constructor receiver is [].
+
+Examples:
+
+[]: values
+. 1
+. 2
+. 3
+end: values
+
+[]: matrix
+. []: row
+.. 1
+.. 2
+.. 3
+. []: row
+.. 4
+.. 5
+.. 6
+end: matrix
+
+The exact compact literal form is implementation-defined at early bootstrap
+levels, but the resulting value must be a typed array Structure.
+
+6.5.1. Indexing
+
+Indexing selects an element or a subview.
+
+For a rank-N array, a full index has N integer coordinates.
+
+Example:
+
+matrix[0, 2]
+
+A partial index may produce a view rather than a copy.
+
+Example:
+
+matrix[0]
+
+may produce the first row as a rank-1 array view.
+
+Bounds checking is profile-dependent.
+
+L2 may allow unchecked raw pointer indexing.
+L3 and higher should use checked indexing unless the operation is explicitly
+marked unsafe.
+
+6.5.2. Views and Copies
+
+Array operations may produce either a view or a copy.
+
+A view shares storage with another array and carries shape/stride metadata.
+A copy owns independent storage.
+
+Examples of view-producing operations:
+
+slice
+reshape, when compatible with storage layout
+transpose
+broadcast
+partial indexing
+
+Examples of copy-producing operations:
+
+explicit clone/copy
+materialize view
+result of elementwise arithmetic unless assigned into an existing output buffer
+
+A view is borrowed by default. To retain it beyond the owner lifetime, handler
+frame or message boundary, it must be copied into an owned array/branch according
+to the L5 memory model.
+
+6.5.3. Shape
+
+shape(array) returns the array dimensions as a rank-1 integer array or shape
+Structure.
+
+rank(array) returns the number of dimensions.
+
+length(array) returns the size of the first dimension for rank greater than zero.
+
+size(array) returns the total number of elements:
+
+size = d0 * d1 * ... * dN-1
+
+6.5.4. Reshape
+
+reshape changes the shape descriptor without changing element values.
+
+reshape is valid only if the total element count remains unchanged, unless the
+operation is explicitly defined as a copy/fill/truncate operation.
+
+Example:
+
+reshape(values, shape = [3, 1])
+
+A reshape may return a view if the underlying storage layout permits it.
+Otherwise it may materialize a copy.
+
+6.5.5. Transpose and Permute
+
+transpose(array) swaps the two last dimensions for rank >= 2, or follows the
+profile-defined matrix convention.
+
+permute(array, axes) returns a view with reordered axes when possible.
+
+Example:
+
+permute(tensor, axes = [1, 0, 2])
+
+These operations normally modify shape and stride metadata only. They do not
+copy data unless materialization is requested or required by the target backend.
+
+6.5.6. Elementwise Operations
+
+Arithmetic and comparison operators over arrays are elementwise by default.
+
+Examples:
+
+array + array
+array - array
+array * array
+array / array
+array == array
+array < array
+
+For numeric arrays, the operator is resolved by element type.
+
+Example:
+
++(array<i64>, array<i64>)
+  -> elementwise i64 addition
+
++(array<decimal>, array<decimal>)
+  -> elementwise decimal addition using the decimal backend
+
+Elementwise operations return an array whose shape is derived from the operand
+shapes by the broadcasting rules.
+
+6.5.7. Broadcasting
+
+Broadcasting is a shape-compatibility rule for elementwise operations.
+
+It does not require copying data.
+
+Two shapes are broadcast-compatible if, after aligning dimensions from the
+right, every corresponding dimension pair satisfies one of the following:
+
+1. the dimensions are equal;
+2. one dimension is 1;
+3. one side has no dimension there and is treated as dimension 1.
+
+The result dimension is the maximum of the two dimensions.
+
+Examples:
+
+[3] + []
+  -> result shape [3]
+
+[2, 3] + [3]
+  -> [2, 3] + [1, 3]
+  -> result shape [2, 3]
+
+[2, 3] + [2, 1]
+  -> result shape [2, 3]
+
+A broadcasted dimension may be represented as stride = 0 in an array view.
+This means that the same element is read repeatedly along that dimension.
+
+Example:
+
+[1, 2, 3] + 4
+
+is semantically equivalent to:
+
+[1 + 4, 2 + 4, 3 + 4]
+
+but the scalar 4 is not copied into [4, 4, 4]. It is read through a rank-0 or
+stride-0 broadcast view.
+
+6.5.8. Reduction
+
+A reduction collapses one or more dimensions using an associative or explicitly
+ordered operation.
+
+Examples:
+
+reduce(+, values)
+reduce(+, matrix, axis = 0)
+reduce(max, matrix, axis = 1)
+
+If no axis is provided, the reduction applies to all elements and returns a
+scalar/rank-0 result.
+
+If an axis is provided, only that axis is collapsed.
+
+The operation must define:
+
+identity value, if required;
+element operation;
+result type;
+ordering guarantees.
+
+For floating/real/decimal values, deterministic profiles should define stable
+reduction order to avoid profile-dependent rounding differences.
+
+6.5.9. Scan
+
+scan is a prefix reduction.
+
+Example:
+
+scan(+, [1, 2, 3, 4])
+  -> [1, 3, 6, 10]
+
+scan may be inclusive or exclusive according to its descriptor.
+
+6.5.10. Map
+
+map applies a function/procedure to every element.
+
+Example:
+
+map(sin, values)
+
+For pure functions, map may be vectorized, parallelized or lowered to a backend
+array operation.
+
+For impure procedures, ordering and side effects must be explicit. The default
+array map profile should require pure functions.
+
+6.5.11. Filter
+
+filter selects elements according to a boolean predicate.
+
+Example:
+
+filter(values, predicate = isPositive)
+
+The result is normally a new owned array, because the selected elements are not
+guaranteed to form a regular strided view.
+
+6.5.12. Concatenation
+
+concat joins arrays along a selected axis.
+
+Example:
+
+concat(a, b, axis = 0)
+
+All dimensions except the concatenation axis must match.
+
+concat normally materializes a new owned array.
+
+6.5.13. Matrix and Tensor Operations
+
+Elementwise multiplication and matrix multiplication are distinct operations.
+
+The * operator remains elementwise for arrays.
+
+Matrix multiplication, tensor contraction and dot products should be represented
+by explicit receivers/operators such as:
+
+matmul(a, b)
+dot(a, b)
+contract(a, b, axes = ...)
+outer(a, b)
+
+A profile may define a symbolic operator for matrix multiplication, but it must
+not overload elementwise * ambiguously.
+
+6.5.14. C99 Lowering
+
+A simple C99 lowering may represent arrays as descriptors:
+
+LmArray:
+. elementType
+. rank
+. shape
+. stride
+. data
+. owner/borrow metadata
+end: LmArray
+
+Elementwise operations lower to loops over the broadcast result shape.
+
+Broadcasting is lowered by computed strides. A broadcasted dimension uses
+stride = 0.
+
+Scalar plus array may therefore lower to the same generic loop as matrix plus
+vector or tensor plus lower-rank array.
+
+The implementation may later replace generic loops with specialized kernels,
+SIMD kernels, BLAS calls or external numeric backends. This optimization must
+not change the observable typed array semantics.
+
+6.5.15. Minimal Bootstrap Profile
+
+The bootstrap profile may support only:
+
+rank-1 arrays;
+rank-2 arrays;
+contiguous owned storage;
+checked indexing;
+shape;
+copy;
+elementwise + - * /;
+scalar-array broadcasting;
+array-array elementwise operations with equal shape;
+reduce over all elements.
+
+Full broadcasting, slicing views, transpose, permute, scan, filter and tensor
+contraction may be added later without changing the core array model.
 
 7. `fn`, `sub` and Structural Closure
 
