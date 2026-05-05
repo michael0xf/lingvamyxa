@@ -1,10 +1,10 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.8 revision preserves the full Rev.12.5 document body where possible and adds explicit conventions for numeric literals, bare phrase identifiers, exact quoted identifiers and C99-style string literals.
+This Rev.12.9 revision preserves the full Rev.12.8 document body where possible and adds the general language-role principle, external lexical standards boundary and structural-semantic definition in Section 1.
 
 Status
 
-Revision 12.7 draft. Identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
+Revision 12.9 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
@@ -79,6 +79,41 @@ A Structure does not execute merely because it exists. Execution, translation, r
 
 
 1. Levels
+
+1.0. General Language Role and External Lexical Standards
+
+Lingvamyxa is a cross-platform structural language built above an external procedural L1 layer. In the default bootstrap and lowering model, that L1 layer is ANSI C / C99. Lingvamyxa is not a replacement spelling of C. It is a structural-semantic superstructure over L1: source text builds Structures; registered receivers, functions, subroutines, operators, model descriptors, behavior descriptors and query receivers consume those Structures and assign typed meaning to them.
+
+A compact description is:
+
+    Lingvamyxa is an object-oriented, functional and logical structural superlanguage over a procedural ANSI C / C99 lowering layer.
+
+More precisely:
+
+    * L1 supplies the procedural, portable, implementation-facing substrate.
+    * L2 exposes low-level typed storage, addresses, layouts and unsafe operations.
+    * L3 supplies ordinary algorithmic computation and executable definitions.
+    * L4 describes structural models, types, contracts, unions, constraints and registry descriptors.
+    * L5 describes behavior, messages, configuration, facts, rules, build/query/startup receivers and high-level dispatch.
+
+The object-oriented side is structural, not class-magical. A model descriptor defines slots, types, defaults, constraints and layout information. A behavior descriptor attaches message selectors and implementations to a model. A runtime object is a Structure or handle/reference to a Structure together with enough model information to resolve behavior. Message lookup may lower to tables, dictionaries, inline caches, static calls or query over registry facts.
+
+The functional side is also structural. A function or subroutine definition is a Structure consumed by the `fn` or `sub` receiver. A call is a Frame. A callable value is data until explicitly called or consumed by a receiver that calls it. Function return is represented by `return` receivers and terminal return, not by a separate assignment syntax.
+
+The logical side is represented by facts, rules, relations and query receivers. Model, union, operator, method and behavior descriptors may materialize typed registry facts. Generic dispatch, message lookup, completeness checks and validation may be expressed as queries over this registry model. This gives one uniform way to index, validate, derive and lower structural information.
+
+The source syntax itself does not hard-code object semantics, functional semantics or logic semantics. It builds generic Structures. The active level and the active receiver/operator registry determine which semantic domain consumes a Structure. The same surface form may describe a low-level storage declaration, a function definition, a model descriptor, a behavior descriptor, a fact, a rule, a query or a build configuration, depending on receiver consumption.
+
+Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
+
+This reuse applies only to lexical atoms. It does not import C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, dot-tree composition, compact calls, short colon source items, comma/numeric/string separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
+
+The practical rule is:
+
+    Lingvamyxa owns structure.
+    External standards may own selected lexical atoms.
+
+Consequently, an ANSI C numeric or string literal may often be preserved as text during L1 lowering, while its surrounding Lingvamyxa Structure is still parsed, typed and consumed by Lingvamyxa receivers. Likewise, an exact quoted identifier may preserve an external SQLite name without forcing that name into the narrower bare Lingvamyxa phrase-identifier grammar.
 
 1.1. L0
 
