@@ -1,14 +1,14 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.10 revision preserves the uploaded Rev.12.9 document body where possible and adds the relaxed indentation / `---` separator model, the local namespace overlay model and the L5 memory model while keeping canonical dotted syntax valid.
+This Rev.12.11 revision preserves the uploaded Rev.12.10 document body where possible and adds the logical registry/query layer summary to section 21 while keeping canonical dotted syntax valid.
 
 Status
 
-Revision 12.10 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update and L5 branch-arena memory model.
+Revision 12.11 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model and logical registry/query layer summary.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
-Revision 12.10 note:
+Revision 12.11 note:
 
     Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
 
@@ -3166,6 +3166,69 @@ This shape is only an implementation option. The language does not know about `L
 
 
 21. Facts, Rules, Relations and Query
+
+21.0. Logical Registry and Query Layer
+
+The logical layer is represented by facts, rules, relations and query receivers.
+It is not a separate runtime language and it does not introduce a separate
+Prolog-like surface syntax. It is a structured query-and-derivation mechanism
+over typed Lingvamyxa Structures and registry facts.
+
+A fact is a typed Structure stored in a registry model. A rule is a typed
+derivation procedure over facts and Structures. A relation defines a searchable
+logical connection between typed Structures. A query receiver consumes a query
+Structure and returns an iterator-compatible result Structure or another
+receiver-defined result Structure.
+
+The registry model may contain source facts, generated facts and materialized
+descriptor facts. Model, union, operator, method, behavior, protocol, type,
+object, relation and build descriptors may materialize typed registry facts.
+Conversely, a receiver may derive descriptors as views over existing facts. The
+source semantics require consistency between the descriptor view and the fact
+view, not one privileged physical storage form.
+
+The same registry/query mechanism may be used for:
+
+    generic dispatch
+    message lookup
+    operator resolution
+    method selection
+    protocol satisfaction
+    model completeness checks
+    union exhaustiveness checks
+    validation
+    documentation generation
+    build target derivation
+    lowering rule selection
+
+This gives Lingvamyxa one uniform mechanism to index, validate, derive and lower
+structural information. A translator or runtime does not need a separate hidden
+mechanism for every registry-like task. It can ask the registry model questions
+and consume the query result.
+
+Example conceptual operator-resolution query:
+
+query:
+    operator: +, decimal, decimal, ?implementation, ?resultType
+
+Possible result bindings:
+
+    ?implementation -> decNumberAdd
+    ?resultType     -> decimal
+
+Example conceptual method-dispatch query:
+
+query:
+    method: draw, Circle, ?implementation
+
+Possible result binding:
+
+    ?implementation -> drawCircle
+
+The logical layer may support search, backtracking, unification and constraint
+checking, but these are receiver/query-engine semantics over Structures. They do
+not make every Structure executable and they do not change the core rule that
+source syntax first builds data.
 
 21.1. Relation Signatures
 
