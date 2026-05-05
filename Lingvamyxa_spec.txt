@@ -1,22 +1,22 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.9 revision preserves the full Rev.12.8 document body where possible and adds the general language-role principle, external lexical standards boundary and structural-semantic definition in Section 1.
+This Rev.12.10 revision preserves the uploaded Rev.12.9 document body where possible and adds the relaxed indentation / `---` separator model while keeping canonical dotted syntax valid.
 
 Status
 
-Revision 12.9 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
+Revision 12.10 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
-Revision 12.2 note:
+Revision 12.10 note:
 
-    Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
+    Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
 
     Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a bare phrase identifier is normalized to one ASCII space and leading/trailing whitespace is trimmed. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the bare phrase name `branch 2`. Exact quoted identifiers in backticks are a separate second identifier form for SQLite/external names and preserve their contents exactly. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
-    Vertical composition is dot-tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A line at level N starts a sibling of the frame or closes the frame through root/parent separation. Dot-only lines act as anonymous Structure delimiters at their own source level; at root level the corresponding delimiter is a physical empty line.
+    Vertical composition is source-level tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A line at level N starts a sibling of the frame only after the necessary visible close/separator has been supplied. Canonical dotted delimiter lines and relaxed `---` lines act as anonymous Structure delimiters / nameless closes; at root level the corresponding delimiter is a physical empty line.
 
     `case` is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
 
@@ -24,7 +24,7 @@ Revision 12.2 note:
 
     The token sequences `@`, `@@`, `@@@`, ... form the reserved L2 address-depth operator family `@ⁿ`. In head position, `@ⁿ: BaseType, name` declares a typed address slot of depth n. Comma separates the base type from the binding name, so `@@@: int, ppp` is a three-level address slot to `int`, while `@@@: int ppp` would be one non-numeric phrase segment. Ordinary source cannot rebind `@ⁿ` as user procedure names.
 
-    The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is not part of Lingvamyxa syntax.
+    The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is a nameless structural separator / close form. It may replace a canonical dotted delimiter line, and it may replace `end: <name>` only when the current close target is unambiguous and the receiver/profile permits nameless close.
 
 The document is descriptive and semantic. Surface syntax builds Structures. Receivers and subroutines consume Structures and assign typed meaning to them.
 
@@ -106,7 +106,7 @@ The source syntax itself does not hard-code object semantics, functional semanti
 
 Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
 
-This reuse applies only to lexical atoms. It does not import C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, dot-tree composition, compact calls, short colon source items, comma/numeric/string separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
+This reuse applies only to lexical atoms. It does not import C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, source-level tree composition, compact calls, short colon source items, comma/numeric/string separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
 
 The practical rule is:
 
@@ -287,7 +287,7 @@ is equivalent to:
 
     print: 1, 2, 3
 
-Numbers are separated by space, comma, newline, closing parenthesis or dot-level boundary.
+Numbers are separated by space, comma, newline, closing parenthesis or source-level boundary.
 
 3.4.2. Bare Identifiers and Phrase Identifiers
 
@@ -304,7 +304,7 @@ Structural separators for bare phrases are:
     comma,
     newline,
     closing parenthesis of the current bounded Structure,
-    dot-level boundary.
+    source-level boundary.
 
 Ordinary horizontal whitespace does not split a bare phrase identifier into separate fields. It separates phrase words only inside the phrase. The parser normalizes all repeated horizontal whitespace between phrase words to one ASCII space and trims leading and trailing whitespace from the phrase.
 
@@ -417,7 +417,7 @@ Examples:
 
 The string spelling and escape rules follow the ANSI C / C99 string-literal model. However, Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
 
-In structural syntax, string literals are separated like numeric literals: by space, comma, newline, closing parenthesis or dot-level boundary. This makes manual table and list declarations compact.
+In structural syntax, string literals are separated like numeric literals: by space, comma, newline, closing parenthesis or source-level boundary. This makes manual table and list declarations compact.
 
 Examples:
 
@@ -497,7 +497,7 @@ A form such as:
 
 is not a YAML key-value pair by syntax alone. It is the receiver/head `name` consuming the argument field `Alice`; a model/configuration receiver may later interpret that child Structure as a semantic field.
 
-Compact call form and colon form are two surface ways to build Frames/Structures. The compact form makes the bounded argument list explicit with parentheses. The colon form makes the governing head explicit through valence/government and then uses the short tail or vertical dot-tree children as its argument Structure.
+Compact call form and colon form are two surface ways to build Frames/Structures. The compact form makes the bounded argument list explicit with parentheses. The colon form makes the governing head explicit through valence/government and then uses the short tail or vertical source-level children as its argument Structure.
 
 4.1. Compact Call Form
 
@@ -583,7 +583,7 @@ The last form is invalid because `int: a, b` is a short colon-form placed direct
 
     call(int(a, b))
 
-To use short colon-form inside parentheses, write it as a vertical source item on its own physical line. Parentheses do not disable dot-level composition:
+To use short colon-form inside parentheses, write it as a vertical source item on its own physical line. Parentheses do not disable source-level composition:
 
     call(
     . int: a, b
@@ -707,9 +707,9 @@ Parentheses create a bounded Structure:
 
     (a, b, c)
 
-Inside parentheses, fields may be separated by comma, by physical newline/dot-level composition, by the matching closing parenthesis, or by the numeric-run shortcut when the current item is a pure numeric run.
+Inside parentheses, fields may be separated by comma, by physical newline/source-level composition, by the matching closing parenthesis, or by the numeric-run shortcut when the current item is a pure numeric run.
 
-Parentheses do not disable the dot-level system. Vertical child items inside parentheses are still written with dots.
+Parentheses do not disable the source-level system. Vertical child items inside parentheses are still written with dots.
 
 A short colon-form is not allowed as an inline argument inside parentheses. It must be the main source item of its physical line. Therefore `call(int: a, b)` is invalid. Use `call(int(a, b))` for a compact constructor Frame, or write the short colon-form vertically:
 
@@ -717,7 +717,7 @@ A short colon-form is not allowed as an inline argument inside parentheses. It m
     . int: a, b
     )
 
-Numeric literals are separated by space, comma, newline, closing parenthesis or dot-level boundary. Bare phrase fields are separated by comma, newline, closing parenthesis or dot-level boundary; whitespace alone remains part of the phrase/signature and is normalized according to Section 3.4. Exact quoted identifiers are atomic name tokens.
+Numeric literals are separated by space, comma, newline, closing parenthesis or source-level boundary. Bare phrase fields are separated by comma, newline, closing parenthesis or source-level boundary; whitespace alone remains part of the phrase/signature and is normalized according to Section 3.4. Exact quoted identifiers are atomic name tokens.
 
 Example:
 
@@ -737,19 +737,54 @@ Receiver-signature roles:
 
 The names `condition`, `then` and `else` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `if` receiver. The internal layout of the expression Structure is outside this structural-core document.
 
-4.5. Dot-Level Vertical Structures
+4.5. Vertical Source Levels: Canonical Dotted Form and Relaxed Indentation Form
 
-Vertical composition is dot-tree composition.
+Vertical composition is source-level tree composition.
 
-The leading indentation zone of a source line is the run of dots, spaces and tab characters before the first non-indentation source token. The source level of the line is the number of dot characters in that zone. Spaces and tab characters in the indentation zone are ignored for source block depth.
+The canonical and always valid notation is the visible dotted form. In dotted form, the leading indentation zone of a source line is the run of dots, spaces and tab characters before the first non-indentation source token. The source level of the line is the number of dot characters in that zone. Spaces and tab characters in the indentation zone are ignored for source block depth.
 
-Examples of equal level:
+Examples of equal dotted source level:
 
     ....call
     . . . . call
     .	. .	.     call
 
-Only dots and physical newlines define vertical structure. Spaces and tabs may improve readability, but they never change source level.
+The relaxed notation may replace leading dots before ordinary source items with ordinary indentation. In relaxed notation, the source level is computed from leading spaces/tabs before the first non-space character by the implementation's indentation-stack rule. Internal spaces remain ordinary source characters and may still participate in phrase identifiers, numeric runs and manual alignment.
+
+General rule:
+
+    A source line has an indentation level.
+
+    Indentation is computed only from leading spaces/tabs before the first
+    non-space character.
+
+    Internal spaces remain ordinary source characters and may still participate
+    in phrase identifiers, numeric runs and manual alignment.
+
+    A line indented deeper than the previous structural head is a child item of
+    that head.
+
+    A line dedented to an earlier level closes all open structures above that
+    level.
+
+    `end: name` closes a visible named target explicitly.
+
+    `---` is a structural separator/nameless close at its own indentation level.
+
+This rule is not a Python-like license to hide every close in whitespace. The indentation stack can compute the tree shape, but Lingvamyxa still requires a visible structural event in every place where the canonical dotted source contained a textless structural delimiter or a checked close.
+
+Visible closing/separation forms are:
+
+    end: name
+    return
+    return: value
+    ---
+    a canonical dotted delimiter line
+    a root empty line, at root level only
+
+Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed or separated by a canonical dotted delimiter line or by `---` in relaxed form.
+
+Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical dotted notation for an anonymous/nameless structural delimiter. Named closure is normally `end: name`.
 
 A source item at level N may open a frame/Structure. Its vertical child arguments are written at level N + 1.
 
@@ -757,37 +792,25 @@ A physical source line at level N + 1 is one positional child item of the open f
 
 A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. Scalar literals and ordinary phrase/value items do not become headers merely because a deeper line follows them.
 
-A physical source line at level N or lower does not become another argument of the still-open frame. It resumes the parent level and starts a sibling item, unless an explicit close receiver cuts a visible named target earlier.
+A physical source line at level N or lower resumes the parent level and starts a sibling item only after the necessary structural close has been made visible. Ordinary dedent after a visible close may close layout scopes, but dedent plus a following text line is not by itself a replacement for a nameless delimiter.
 
-Example:
+A root empty line is not meaningless whitespace. It is the root-level structural delimiter. It closes the current open root-level ladder, resumes parsing at root level and does not add a source item. In the same position, an explicit `end: name`, a terminal `return`, a terminal `return: value` or `---` may be used instead when the current open frame allows it.
 
-outerLoop:
-. for: int(i, 1), (i <= 3), i++
-. . for: int(j, 1), (j <= 3), j++
-. . . if: i = 2 && j = 2
-. . . . System/out/println: "--- continue outerLoop ---"
-. . . . continue: outerLoop
-. . .
-. . . System/out/println: "i: " + i + ", j: " + j
-end: outerLoop
+4.5.1. Canonical Dotted Delimiters
 
-The dot-only marker `. . .` closes or delimits the nested body/anonymous Structure at level 3 and resumes parsing at that level. The following `System/out/println` line is the next statement of the inner `for` body, not an `else` argument of the `if`.
+A canonical dotted delimiter line contains only dots, spaces and tabs before the newline and contains at least one dot.
 
-4.5.1. Dot-Only Anonymous Structure Delimiters
+A canonical dotted delimiter line at level K may serve as an anonymous positional Structure delimiter or nameless close at level K.
 
-A dot-only line contains only dots, spaces and tabs before the newline and contains at least one dot.
+If a canonical dotted delimiter line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
 
-A dot-only line at level K may serve as an anonymous positional Structure delimiter at level K.
+The anonymous Structure continues until the next canonical dotted delimiter line at level K, an explicit `end: <target>` that closes a visible target, terminal `return` / `return: value` where valid, EOF, or root empty-line separation when K is root-equivalent.
 
-If a dot-only line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
+A canonical dotted delimiter line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
 
-The anonymous Structure continues until the next dot-only line at level K, an explicit `end: <target>` that closes a visible target, EOF, or root empty-line separation when K is root-equivalent.
+Every source line written with leading dots remains valid in the relaxed language profile. A canonical dotted delimiter line may therefore still be used instead of `---` as the visible nameless close/delimiter.
 
-A dot-only line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
-
-At root level there is no dot-only marker. A physical empty line is the root-level structural delimiter. Empty lines are allowed only at root level. A root empty line closes all open Structures above root level, resumes parsing at root level, and does not add a source item.
-
-Example with anonymous Structures:
+Canonical anonymous-branch example:
 
 match: value
 .
@@ -813,7 +836,7 @@ Conceptual normal form:
       )
     )
 
-The dot-only lines at level 1 delimit anonymous branch Structures. No source keyword `case` (not structural syntax) is involved.
+The canonical dotted delimiter lines at level 1 delimit anonymous branch Structures. No source keyword `case` (not structural syntax) is involved.
 
 A shorter positional `match` form may avoid anonymous branch Structures:
 
@@ -828,17 +851,147 @@ Conceptual normal form:
 
     match(value, 1, print(World), 2, print(Hello))
 
-The `match` receiver assigns pattern/body roles by position.
+4.5.2. Relaxed Indentation Form and `---`
 
-4.5.2. Matrix and Nested Array Examples
+Relaxed indentation form is a readability shorthand for the same source-level tree. It replaces leading dots before ordinary source items with spaces/tabs indentation. It does not remove the requirement for visible nameless delimiters.
 
-Matrix-like data does not require a special table context. It follows ordinary dot-tree and line-item rules.
+The simple replacement rule is:
 
-Example:
+    leading dots before source text may be replaced by indentation;
+    a textless dotted delimiter line must remain visible either as that dotted
+    delimiter line or as `---` at the corresponding indentation level.
+
+A standalone line:
+
+    ---
+
+at source level K is a structural separator / nameless close at level K.
+
+If `---` at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next `---` at level K, an explicit `end: <target>`, terminal `return` / `return: value` where valid, EOF, or root empty-line separation when K is root-equivalent.
+
+If `---` at level K is not followed by deeper source items, it closes or cuts the current open anonymous/implicit section at that level and resumes parsing at level K.
+
+A separator-prefixed line:
+
+    ---else:
+
+is equivalent to a `---` separator at that source level followed immediately by the source item `else:` at the same level. This form is only a spelling convenience for control-continuation receivers such as `else:`; it does not make `else` a global keyword.
+
+`---` may be used instead of `end: name` only when the close target is unambiguous and the receiver/profile permits a nameless close. For checked public examples and long blocks, `end: name` remains clearer.
+
+Example with two anonymous branch Structures:
+
+match: value
+    ---
+        1
+        print: World
+    ---
+        2
+        print: Hello
+---
+
+Conceptual normal form:
+
+    match(
+      value,
+      (
+        1,
+        print(World)
+      ),
+      (
+        2,
+        print(Hello)
+      )
+    )
+
+The final `---` closes the open `match` ladder without naming it. The same position could also use `end: match`.
+
+Example with four positional arguments and no anonymous branch Structures:
+
+match: value
+    1
+    print: World
+    2
+    print: Hello
+---
+
+Conceptual normal form:
+
+    match(value, 1, print(World), 2, print(Hello))
+
+Example with two positional branch Structures in an `if` receiver:
+
+if: condition
+    ---
+        thenBody
+    ---
+        elseBody
+end: if
+
+The two `---` sections are two anonymous Structure arguments of `if` after the condition.
+
+Equivalent named-argument form in canonical dotted notation:
+
+if: a
+. then:
+. . doSomething
+. else:
+. . doOtherThing
+end: if
+
+Relaxed form with separator-prefixed continuation receiver:
+
+if: condition
+    ---
+        # doSomething
+    ---else:
+        # doOtherThing
+end: if
+
+The line `---else:` closes/separates the preceding anonymous section and starts the ordinary nested Structure `else:` at the same source level. The active `if` receiver may consume `else(...)` as a semantic field.
+
+Example with an explicit nameless close after a nested `if`:
+
+outerLoop:
+    for: int(i, 1), (i <= 3), i++
+        for: int(j, 1), (j <= 3), j++
+            if: i = 2 && j = 2
+                System/out/println: "--- continue outerLoop ---"
+                continue: outerLoop
+            ---
+            System/out/println: "i: " + i + ", j: " + j
+end: outerLoop
+
+The `---` at the indentation level of the inner `for` body replaces the canonical dotted delimiter line:
+
+outerLoop:
+. for: int(i, 1), (i <= 3), i++
+. . for: int(j, 1), (j <= 3), j++
+. . . if: i = 2 && j = 2
+. . . . System/out/println: "--- continue outerLoop ---"
+. . . . continue: outerLoop
+. . .
+. . . System/out/println: "i: " + i + ", j: " + j
+end: outerLoop
+
+The shorter relaxed version without this separator is not valid Lingvamyxa, because it hides a required nameless close in indentation alone.
+
+4.5.3. Matrix and Nested Array Examples
+
+Matrix-like data does not require a special table context. It follows ordinary source-level tree and line-item rules.
+
+Canonical dotted example:
 
 []: my 2d example
 . 1 2
 . 3 4
+
+Relaxed indentation example:
+
+[]: my 2d example
+    1 2
+    3 4
+---
 
 Conceptual normal form:
 
@@ -867,11 +1020,11 @@ end: matrix
 
 The close target is `matrix`, the visible entity name introduced by the frame. The close form is not `end: [] matrix`.
 
-4.6. `end:` Close Receiver
+4.6. `end:` Close Receiver and Nameless Close
 
 Bare `end` is not valid Lingvamyxa source syntax. The structural close operation is not bare `end` and is not `end <target>`.
 
-The source-level close form is the ordinary colon receiver form:
+The source-level named close form is the ordinary colon receiver form:
 
     end: <target>
 
@@ -885,7 +1038,9 @@ not:
 
 `end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
-Example:
+The standalone source line `---` is the nameless close / separator form. It does not consume a target. It closes or separates the current open anonymous/implicit section at its own source level. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
+
+Example named close:
 
 outerLoop:
 . for: int(i, 1), (i <= 3), i++
@@ -896,13 +1051,11 @@ end: outerLoop
 
 The final line closes the labelled block `outerLoop` directly. The intermediate vertical levels are closed by the named close.
 
-The standalone source line `---` is not part of Lingvamyxa syntax.
-
 4.6.1. Vertical Positional Structures
 
-Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as child items at the next dot level of the open receiver frame.
+Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as child items at the next source level of the open receiver frame.
 
-Single-body example:
+Canonical dotted single-body example:
 
 if: a
 . doSomething
@@ -919,11 +1072,19 @@ Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
 
 The name `thenBody` is assigned by the `if` receiver signature. It is not a surface keyword in this form.
 
-Two-body positional example:
+Relaxed indentation form:
 
 if: a
-. doSomething
-. doOtherThing
+    doSomething
+end: if
+
+Two-body positional example using relaxed anonymous sections:
+
+if: a
+    ---
+        doSomething
+    ---
+        doOtherThing
 end: if
 
 Under the same `if(condition, thenBody, elseBody)` receiver signature, this builds:
@@ -938,18 +1099,6 @@ Under the same `if(condition, thenBody, elseBody)` receiver signature, this buil
       )
     )
 
-The level-1 lines `. doSomething` and `. doOtherThing` are child items of the open `if` frame.
-
-Nested two-body positional example:
-
-parent:
-. if: a
-. . doSomething
-. . doOtherThing
-end: parent
-
-The level-2 lines `. . doSomething` and `. . doOtherThing` are child items of the open `. if: a` frame.
-
 The same branches may also be written as explicit named argument Structures:
 
 if: a
@@ -957,6 +1106,15 @@ if: a
 . . doSomething
 . else:
 . . doOtherThing
+end: if
+
+or in relaxed indentation form:
+
+if: a
+    then:
+        doSomething
+    else:
+        doOtherThing
 end: if
 
 The names `then` and `else` are ordinary nested Structures consumed by the active `if` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
@@ -969,7 +1127,7 @@ This builds a Frame whose final meaning is assigned by the active `if` receiver.
 
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
 
-This is an intentional property of the language, not an accidental ambiguity. In colon line forms, commas and numeric-run shortcuts create fields. In vertical form, child items at the next dot level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
+This is an intentional property of the language, not an accidental ambiguity. In colon line forms, commas and numeric-run shortcuts create fields. In vertical form, child items at the next source level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
 
 4.7. No Native `=` Assignment or Named-Field Operator
 
@@ -1065,7 +1223,7 @@ If the disabled item opens a vertical Structure, the whole vertical Structure is
 
 Disabled code does not build source-semantic Structures for receiver consumption, does not register definitions, does not update models or registries and does not lower to executable/runtime behavior.
 
-The `$` marker does not contribute to source level. The dot count of a disabled item is computed exactly as if `$` were absent. Child lines are written at the same source levels they would use for the enabled form.
+The `$` marker does not contribute to source level. The source level of a disabled item is computed exactly as if `$` were absent, whether the file uses canonical dotted form or relaxed indentation form. Child lines are written at the same source levels they would use for the enabled form.
 
 Example:
 
@@ -1386,7 +1544,7 @@ fn: i(
 . . return: v
 )
 
-This parses as a colon line Frame named `fn` whose first argument is a compact Frame named `i` with vertical child Structures. Parentheses do not disable dot-level composition.
+This parses as a colon line Frame named `fn` whose first argument is a compact Frame named `i` with vertical child Structures. Parentheses do not disable source-level composition.
 
 The `fn` receiver may define this as a compact definition form. In that form, the compact Frame name `i` becomes the function name, and the compact Frame children become definition child Structures.
 
@@ -3204,14 +3362,14 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     // Short colon-forms are not inline arguments.
     // They may appear inside parentheses only as separate physical
-    // source lines under dot-level composition.
+    // source lines under source-level composition.
 
     bounded_structure   ::= "(" [ argument_list | vertical_argument_list ] ")"
 
     vertical_argument_list
                          ::= newline source_line { source_line }
                             where each contained source_line follows the same
-                            dot-level rules as ordinary vertical composition
+                            source-level rules as ordinary vertical composition
 
     expression_or_structure
                          ::= mathematical_expression
@@ -3222,15 +3380,15 @@ This grammar sketch describes the structural parser only. It does not define fin
     mathematical_expression
                          ::= parsed by the mathematical expression syntax
 
-The vertical Structure tree is produced by source levels and explicit dot-only delimiters.
+The vertical Structure tree is produced by source levels and explicit visible delimiters: canonical dotted delimiter lines, relaxed `---` lines, named `end:` closes, terminal return where valid and root empty-line separation.
 
 For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and phrase fields do not become headers merely because a deeper line follows.
 
-A dot-only marker at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next dot-only marker at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A root empty line is the root-level equivalent delimiter.
+A canonical dotted delimiter line or relaxed `---` line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A root empty line is the root-level equivalent delimiter.
 
-A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a dot-only anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
+A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed `---` anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
 
-This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls, `case` (not structural syntax) as syntax, or standalone `---`.
+This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone `---` line is part of vertical structure syntax as a nameless separator/close.
 
 Line arguments are comma-separated except for the numeric-run shortcut. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
@@ -3378,12 +3536,16 @@ Conceptual form:
     f: a b                     line command Frame named f with one phrase/signature field `a b`
     f: 1 2                     numeric-run shorthand for f(1, 2)
     f: / child lines at . / end: f
-                                vertical Frame named f; vertical fields are at source level N + 1
+                                canonical dotted vertical Frame named f; vertical fields are at source level N + 1
+    f: / indented child lines / end: f
+                                relaxed indentation vertical Frame named f
     (a, b)                     bounded Structure
     name: value                ordinary nested Structure, often consumed as a setting/semantic field by receiver
     name:                      colon frame with required vertical child continuation or profile-defined empty form
-    leading dots               source level units in the leading indentation zone
-    dot-only line              anonymous Structure delimiter / level delimiter at non-root level
+    leading dots               canonical visible source level units in the leading indentation zone
+    indentation                relaxed source level units before ordinary source items
+    dotted delimiter line      canonical anonymous Structure delimiter / nameless close at non-root level
+    ---                        relaxed anonymous Structure delimiter / nameless close at its indentation level
     root empty line            root-level delimiter for open root children
     #                          line comment marker; ignores text to the end of the physical line
     $                          disabled item/block marker; syntax is still parsed and checked
