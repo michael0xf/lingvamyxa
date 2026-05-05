@@ -737,41 +737,43 @@ Receiver-signature roles:
 
 The names `condition`, `then` and `else` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `if` receiver. The internal layout of the expression Structure is outside this structural-core document.
 
-4.5. Vertical Source Levels: Canonical Dotted Form and Relaxed Indentation Form
+4.5. Vertical Source Levels: Canonical Source-Level Notation and Relaxed Indentation Notation
 
-Vertical composition is source-level tree composition.
+Vertical composition is source-level tree composition. Lingvamyxa has one source-level tree model and two surface notations for writing it.
 
-The canonical and always valid notation is the visible dotted form. In dotted form, the leading indentation zone of a source line is the run of dots, spaces and tab characters before the first non-indentation source token. The source level of the line is the number of dot characters in that zone. Spaces and tab characters in the indentation zone are ignored for source block depth.
+The canonical source-level notation is the visible dotted notation. It is always valid and is the reference spelling of source levels. In canonical dotted notation, the leading indentation zone of a source line is the run of dots, spaces and tab characters before the first non-indentation source token. The source level of the line is the number of dot characters in that zone. Spaces and tab characters in the indentation zone are ignored for source block depth.
 
-Examples of equal dotted source level:
+Examples of equal source level in canonical dotted notation:
 
     ....call
     . . . . call
     .	. .	.     call
 
-The relaxed notation may replace leading dots before ordinary source items with ordinary indentation. In relaxed notation, the source level is computed from leading spaces/tabs before the first non-space character by the implementation's indentation-stack rule. Internal spaces remain ordinary source characters and may still participate in phrase identifiers, numeric runs and manual alignment.
+Relaxed indentation notation is a readability notation over the same source-level tree. It may replace leading dots before ordinary source items with ordinary indentation. In relaxed indentation notation, the source level is computed from leading spaces/tabs before the first non-space character by the implementation's indentation-stack rule and then mapped to the same source levels used by canonical dotted notation. Internal spaces remain ordinary source characters and may still participate in phrase identifiers, numeric runs and manual alignment.
 
-General rule:
+Shared source-level rule after either surface notation has been mapped to source levels:
 
-    A source line has an indentation level.
+    A source line has a source level.
 
-    Indentation is computed only from leading spaces/tabs before the first
-    non-space character.
+    In canonical dotted notation, source level is the count of leading dots.
+
+    In relaxed indentation notation, source level is computed from the
+    leading spaces/tabs indentation stack.
 
     Internal spaces remain ordinary source characters and may still participate
     in phrase identifiers, numeric runs and manual alignment.
 
-    A line indented deeper than the previous structural head is a child item of
-    that head.
+    A line at a source level deeper than the previous structural head is a
+    child item of that head.
 
-    A line dedented to an earlier level closes all open structures above that
-    level.
+    A line that returns to an earlier source level closes all open structures
+    above that level.
 
     `end: name` closes a visible named target explicitly.
 
-    `---` is a structural separator/nameless close at its own indentation level.
+    `---` is a structural separator/nameless close at its own source level.
 
-This rule is not a Python-like license to hide every close in whitespace. The indentation stack can compute the tree shape, but Lingvamyxa still requires a visible structural event in every place where the canonical dotted source contained a textless structural delimiter or a checked close.
+This rule is not a Python-like license to hide every close in whitespace. Relaxed indentation notation can compute the tree shape, but Lingvamyxa still requires a visible structural event in every place where canonical source-level notation contains a textless structural delimiter or a checked close.
 
 Visible closing/separation forms are:
 
@@ -779,12 +781,12 @@ Visible closing/separation forms are:
     return
     return: value
     ---
-    a canonical dotted delimiter line
+    a canonical source-level delimiter line
     a root empty line, at root level only
 
-Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed or separated by a canonical dotted delimiter line or by `---` in relaxed form.
+Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed or separated by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
-Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical dotted notation for an anonymous/nameless structural delimiter. Named closure is normally `end: name`.
+Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical source-level notation for an anonymous/nameless structural delimiter. Named closure is normally `end: name`.
 
 A source item at level N may open a frame/Structure. Its vertical child arguments are written at level N + 1.
 
@@ -796,19 +798,19 @@ A physical source line at level N or lower resumes the parent level and starts a
 
 A root empty line is not meaningless whitespace. It is the root-level structural delimiter. It closes the current open root-level ladder, resumes parsing at root level and does not add a source item. In the same position, an explicit `end: name`, a terminal `return`, a terminal `return: value` or `---` may be used instead when the current open frame allows it.
 
-4.5.1. Canonical Dotted Delimiters
+4.5.1. Canonical Source-Level Delimiters
 
-A canonical dotted delimiter line contains only dots, spaces and tabs before the newline and contains at least one dot.
+A canonical source-level delimiter line is a dotted delimiter line. It contains only dots, spaces and tabs before the newline and contains at least one dot.
 
-A canonical dotted delimiter line at level K may serve as an anonymous positional Structure delimiter or nameless close at level K.
+A canonical source-level delimiter line at level K may serve as an anonymous positional Structure delimiter or nameless close at level K.
 
-If a canonical dotted delimiter line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
+If a canonical source-level delimiter line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
 
-The anonymous Structure continues until the next canonical dotted delimiter line at level K, an explicit `end: <target>` that closes a visible target, terminal `return` / `return: value` where valid, EOF, or root empty-line separation when K is root-equivalent.
+The anonymous Structure continues until the next canonical source-level delimiter line at level K, an explicit `end: <target>` that closes a visible target, terminal `return` / `return: value` where valid, EOF, or root empty-line separation when K is root-equivalent.
 
-A canonical dotted delimiter line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
+A canonical source-level delimiter line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
 
-Every source line written with leading dots remains valid in the relaxed language profile. A canonical dotted delimiter line may therefore still be used instead of `---` as the visible nameless close/delimiter.
+Every source line written with leading dots remains valid in the relaxed language profile. A canonical source-level delimiter line may therefore still be used instead of `---` as the visible nameless close/delimiter.
 
 Canonical anonymous-branch example:
 
@@ -836,7 +838,7 @@ Conceptual normal form:
       )
     )
 
-The canonical dotted delimiter lines at level 1 delimit anonymous branch Structures. No source keyword `case` (not structural syntax) is involved.
+The canonical source-level delimiter lines at level 1 delimit anonymous branch Structures. No source keyword `case` (not structural syntax) is involved.
 
 A shorter positional `match` form may avoid anonymous branch Structures:
 
@@ -851,15 +853,15 @@ Conceptual normal form:
 
     match(value, 1, print(World), 2, print(Hello))
 
-4.5.2. Relaxed Indentation Form and `---`
+4.5.2. Relaxed Indentation Notation and `---`
 
-Relaxed indentation form is a readability shorthand for the same source-level tree. It replaces leading dots before ordinary source items with spaces/tabs indentation. It does not remove the requirement for visible nameless delimiters.
+Relaxed indentation notation is a readability shorthand for the same source-level tree. It replaces leading dots before ordinary source items with spaces/tabs indentation. It does not remove the requirement for visible nameless delimiters.
 
 The simple replacement rule is:
 
     leading dots before source text may be replaced by indentation;
-    a textless dotted delimiter line must remain visible either as that dotted
-    delimiter line or as `---` at the corresponding indentation level.
+    a textless canonical source-level delimiter line must remain visible either
+    as that dotted delimiter line or as `---` at the corresponding source level.
 
 A standalone line:
 
@@ -871,7 +873,7 @@ If `---` at level K is followed by source items at level K + 1, it opens an anon
 
 If `---` at level K is not followed by deeper source items, it closes or cuts the current open anonymous/implicit section at that level and resumes parsing at level K.
 
-A `---` separator line must contain no source item other than the separator itself. It may have leading spaces/tabs in relaxed indentation form, leading canonical dots in dotted/automatic-rewrite form, horizontal whitespace after the separator, and an optional trailing `#` line comment. The `#` comment text is ignored by the structural parser, exactly like comments after ordinary source text.
+A `---` separator line must contain no source item other than the separator itself. It may have leading spaces/tabs in relaxed indentation notation, leading canonical dots in canonical source-level / automatic-rewrite notation, horizontal whitespace after the separator, and an optional trailing `#` line comment. The `#` comment text is ignored by the structural parser, exactly like comments after ordinary source text.
 
 Valid separator lines:
 
@@ -943,7 +945,7 @@ end: if
 
 The two `---` sections are two anonymous Structure arguments of `if` after the condition.
 
-Equivalent named-argument form in canonical dotted notation:
+Equivalent named-argument form in canonical source-level notation:
 
 if: a
 . then:
@@ -952,7 +954,7 @@ if: a
 . . doOtherThing
 end: if
 
-Relaxed form with explicit separator followed by a named continuation receiver:
+Relaxed indentation notation with explicit separator followed by a named continuation receiver:
 
 if: condition
     ---
@@ -982,7 +984,7 @@ outerLoop:
             System/out/println: "i: " + i + ", j: " + j
 end: outerLoop
 
-The `---` at the indentation level of the inner `for` body replaces the canonical dotted delimiter line:
+The `---` at the source level of the inner `for` body replaces the canonical source-level delimiter line:
 
 outerLoop:
 . for: int(i, 1), (i <= 3), i++
@@ -994,19 +996,19 @@ outerLoop:
 . . . System/out/println: "i: " + i + ", j: " + j
 end: outerLoop
 
-The shorter relaxed version without this separator is not valid Lingvamyxa, because it hides a required nameless close in indentation alone.
+The shorter relaxed indentation version without this separator is not valid Lingvamyxa, because it hides a required nameless close in indentation alone.
 
 4.5.3. Matrix and Nested Array Examples
 
 Matrix-like data does not require a special table context. It follows ordinary source-level tree and line-item rules.
 
-Canonical dotted example:
+Canonical source-level notation example:
 
 []: my 2d example
 . 1 2
 . 3 4
 
-Relaxed indentation example:
+Relaxed indentation notation example:
 
 []: my 2d example
     1 2
@@ -1044,7 +1046,7 @@ The close target is `matrix`, the visible entity name introduced by the frame. T
 
 Bare `end` is not valid Lingvamyxa source syntax. The structural close operation is not bare `end` and is not `end <target>`.
 
-The source-level named close form is the ordinary colon receiver form:
+The source-level named close form is the ordinary colon receiver form. It is valid in both canonical source-level notation and relaxed indentation notation:
 
     end: <target>
 
@@ -1056,9 +1058,9 @@ not:
 
     end: [] matrix
 
-`end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
+`end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current source level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
-The standalone source line `---` is the nameless close / separator form. It does not consume a target. It closes or separates the current open anonymous/implicit section at its own source level. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
+The standalone source line `---` is the nameless close / separator form used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target. It closes or separates the current open anonymous/implicit section at its own source level. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
 
 Example named close:
 
@@ -1075,7 +1077,7 @@ The final line closes the labelled block `outerLoop` directly. The intermediate 
 
 Some receivers expect positional Structure arguments whose semantic role is assigned by the receiver signature. Such Structure arguments may be written vertically as child items at the next source level of the open receiver frame.
 
-Canonical dotted single-body example:
+Canonical source-level notation single-body example:
 
 if: a
 . doSomething
@@ -1092,7 +1094,7 @@ Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
 
 The name `thenBody` is assigned by the `if` receiver signature. It is not a surface keyword in this form.
 
-Relaxed indentation form:
+Relaxed indentation notation:
 
 if: a
     doSomething
@@ -1128,7 +1130,7 @@ if: a
 . . doOtherThing
 end: if
 
-or in relaxed indentation form:
+or in relaxed indentation notation:
 
 if: a
     then:
@@ -5284,4 +5286,3 @@ The source rule is structural and typed: local updates modify a local namespace 
 ?
 Escaping local namespace overlays, closure capture of locally replaced callables, mutation of outer bindings and explicit global/external update syntax are not specified in this document. They belong to a future execution-model and runtime specification.
 ?
-
