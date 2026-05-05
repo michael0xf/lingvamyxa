@@ -1798,6 +1798,43 @@ All named forms above are valid structural surface forms. A style guide may pref
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
 
+7.6. Label Blocks as Local Nullary Executables
+
+Labels are not a separate source grammar category. A label spelling such as:
+
+readLoop:
+    readNext: record
+    process: record
+end: readLoop
+
+is an ordinary colon Frame with an empty inline tail and a vertical body. When the active executable/control profile consumes this shape as a label block, the label name introduces a local namespace binding for that block.
+
+A label-block binding is a local executable binding with no source arguments and no normal return value:
+
+    Callable(() -> void)
+
+or an equivalent implementation-level contract. It shares the same lexical namespace as variables, functions, subroutines, receivers, model names and other bindings. There is no separate label namespace.
+
+In executable statement position, a bare identifier or phrase identifier may resolve to a visible zero-argument label-block binding. In that context, the bare name is the canonical call/consumption syntax for the label block:
+
+readLoop
+
+This is not a special parser form and it does not require `readLoop()`. The parser builds an identifier/value line. Name resolution in the current executable statement context decides that `readLoop` denotes the local nullary executable block and consumes/calls it with no arguments.
+
+The same visible label binding may also carry a control-target role when the active profile materializes it as a loop/block label. Control-transfer receivers such as `break: readLoop`, `continue: readLoop`, `redo: readLoop`, `retry: readLoop` or failure-control receivers use that control-target role. A plain executable statement `readLoop` uses the callable/nullary-executable role.
+
+Example post-condition loop:
+
+readLoop:
+    readNext: record
+    process: record
+until: endOfInput(record)
+
+Here `readLoop:` opens a labelled executable block. The `until:` receiver closes that block and consumes it as the body of a post-condition loop. The label name `readLoop` is still a local namespace name for the block; the `until` lowering may implement the loop by direct structured control flow, by a generated label and branch, by an inline nullary block, or by another representation preserving the same source semantics.
+
+Calling or consuming a label block does not by itself create a new function namespace, return binding or closure object. A later profile may define escaping label values, addressable label callables or call-frame labels, but the structural core only requires a local nullary executable binding and ordinary namespace resolution.
+
+
 8. Runtime Return and Terminal Return
 
 8.1. `return` Receiver
@@ -3418,7 +3455,7 @@ Inside a bounded Structure, comma separates elements at the bounded Structure's 
 
 Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
-Labels are not a separate structural grammar category. A source line such as `outerLoop:` is a colon frame with an empty inline tail and a required following vertical block. The active receiver/profile decides whether that frame introduces a control label, an ordinary binding, both, or an error.
+Labels are not a separate structural grammar category. A source line such as `outerLoop:` is a colon frame with an empty inline tail and a required following vertical block. The active receiver/profile decides whether that frame introduces a local nullary executable binding, a control label role, both, or an error. A later bare line such as `outerLoop` is also not special label grammar; in executable statement position it may resolve through the ordinary namespace to that zero-argument label-block binding.
 
 23. Canonical Examples
 
@@ -3769,7 +3806,7 @@ Operator summary:
     14. yield                                             L3 iterator function
     15. labelled break / labelled continue                L3 labelled loop frame
 
-Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as an ordinary binding, a control label, or both. Control-transfer receivers such as `break:` and `continue:` must resolve their target to a visible labelled control/block target; the parser does not need a separate label grammar category.
+Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
 26.1. `if`, `then` and `else`
 
@@ -3948,7 +3985,7 @@ readLoop:
     process: record
 until: endOfInput(record)
 
-In this example, `until:` closes the labelled executable block `readLoop`. The condition is the boolean-producing Structure `endOfInput(record)`.
+In this example, `until:` closes the labelled executable block `readLoop`. The condition is the boolean-producing Structure `endOfInput(record)`. The name `readLoop` is also the local nullary executable binding for the block, as described in section 7.6.
 
 The body is executed first. The condition is evaluated after the body.
 
