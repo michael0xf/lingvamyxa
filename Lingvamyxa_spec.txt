@@ -1,6 +1,6 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.7 revision preserves the full Rev.12.5 document body where possible and adds explicit conventions for numeric literals, bare phrase identifiers, exact quoted identifiers and C99-style string literals.
+This Rev.12.8 revision preserves the full Rev.12.5 document body where possible and adds explicit conventions for numeric literals, bare phrase identifiers, exact quoted identifiers and C99-style string literals.
 
 Status
 
@@ -244,7 +244,7 @@ Examples of floating literals:
     0x1.8p+2
     0x1p-4
 
-A translator profile may restrict suffixes, widths and target-specific numeric ranges, but the source numeric lexer follows the C99 shape of integer and floating constants. In Lingvamyxa structural syntax, a pure numeric run may use whitespace as a field separator:
+The source numeric lexer follows the ANSI C / C99 shape of integer and floating constants. In Lingvamyxa structural syntax, a pure numeric run may use whitespace as a field separator:
 
     print: 1 2 3
 
@@ -261,8 +261,6 @@ The first ordinary Lingvamyxa identifier form is the convenient bare form.
 A single bare identifier word uses the ANSI C identifier shape in the portable core profile:
 
     [A-Za-z_][A-Za-z0-9_]*
-
-Future profiles may add Unicode identifier classes, but the portable core does not require them.
 
 A bare phrase identifier is a sequence that starts with a bare ANSI-C-shaped identifier word and then continues as a phrase until a structural separator is reached.
 
@@ -373,7 +371,7 @@ Examples:
     "line one\nline two"
     "tab\tseparated"
     "quote: \""
-    "backslash: \\\"
+    "backslash: \\"
     "question: \?"
     "alert\a backspace\b formfeed\f newline\n carriage\r tab\t vertical\v"
     "octal A: \101"
@@ -381,18 +379,28 @@ Examples:
     "lambda: \u03BB"
     "grinning face: \U0001F600"
     L"wide text"
-    "hello, " "world"
 
-C99-style adjacent string literals are concatenated by the literal lexer before semantic consumption:
+The string spelling and escape rules follow the ANSI C / C99 string-literal model. However, Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
 
-    "hello, " "world"
+In structural syntax, string literals are separated like numeric literals: by space, comma, newline, closing parenthesis or dot-level boundary. This makes manual table and list declarations compact.
 
-is one text value:
+Examples:
 
-    hello, world
+    print: "hello" "world"
+
+is equivalent to:
+
+    print: "hello", "world"
+
+And:
+
+    []: labels
+    . "red" "green" "blue"
+    . "cyan", "magenta", "yellow"
+
+contains two row-like child Structures whose string values are separated by whitespace or commas.
 
 The hexadecimal escape `\x...` consumes hexadecimal digits according to the C string-literal rule. Octal escapes consume up to three octal digits. Universal character names `\uXXXX` and `\UXXXXXXXX` are literal character escapes.
-
 The double-quoted string form is separate from exact quoted identifiers. Therefore:
 
     "hello"
