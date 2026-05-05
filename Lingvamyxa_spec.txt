@@ -1,10 +1,10 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.4 revision preserves the full Rev.12.3 document body where possible and adds a general definition of the colon as the receiver-valence marker of Lingvamyxa surface syntax.
+This Rev.12.7 revision preserves the full Rev.12.5 document body where possible and adds explicit conventions for numeric literals, bare phrase identifiers, exact quoted identifiers and C99-style string literals.
 
 Status
 
-Revision 12.4 draft. Colon receiver-valence definition, comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
+Revision 12.7 draft. Identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
@@ -12,7 +12,7 @@ Revision 12.2 note:
 
     Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
 
-    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a non-numeric tail segment belongs to the phrase/signature/name. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the name phrase `branch 2`. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
+    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a bare phrase identifier is normalized to one ASCII space and leading/trailing whitespace is trimmed. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the bare phrase name `branch 2`. Exact quoted identifiers in backticks are a separate second identifier form for SQLite/external names and preserve their contents exactly. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
@@ -213,6 +213,196 @@ Execution starts only through explicit receiver/subroutine consumption, for exam
 
 A callable reference is also data until explicitly called or consumed by a receiver that calls it.
 
+3.4. Identifiers, Exact Quoted Identifiers, Numeric Literals and Strings
+
+Lingvamyxa distinguishes convenient bare identifiers, exact quoted identifiers and text/string literals. This distinction is required because spaces may participate in phrase names, commas delimit fields, dots define vertical structure, and external systems such as SQLite may contain identifiers that would collide with Lingvamyxa syntax.
+
+3.4.1. Numeric Literals
+
+Numeric literals use the ANSI C / C99 numeric literal model.
+
+Examples of integer literals:
+
+    0
+    123
+    0123
+    0x7B
+    123u
+    123UL
+    123ll
+    0xffULL
+
+Examples of floating literals:
+
+    1.0
+    .5
+    1.
+    1e9
+    1.25e-3
+    1.0f
+    1.0L
+    0x1.8p+2
+    0x1p-4
+
+A translator profile may restrict suffixes, widths and target-specific numeric ranges, but the source numeric lexer follows the C99 shape of integer and floating constants. In Lingvamyxa structural syntax, a pure numeric run may use whitespace as a field separator:
+
+    print: 1 2 3
+
+is equivalent to:
+
+    print: 1, 2, 3
+
+Numbers are separated by space, comma, newline, closing parenthesis or dot-level boundary.
+
+3.4.2. Bare Identifiers and Phrase Identifiers
+
+The first ordinary Lingvamyxa identifier form is the convenient bare form.
+
+A single bare identifier word uses the ANSI C identifier shape in the portable core profile:
+
+    [A-Za-z_][A-Za-z0-9_]*
+
+Future profiles may add Unicode identifier classes, but the portable core does not require them.
+
+A bare phrase identifier is a sequence that starts with a bare ANSI-C-shaped identifier word and then continues as a phrase until a structural separator is reached.
+
+Structural separators for bare phrases are:
+
+    comma,
+    newline,
+    closing parenthesis of the current bounded Structure,
+    dot-level boundary.
+
+Ordinary horizontal whitespace does not split a bare phrase identifier into separate fields. It separates phrase words only inside the phrase. The parser normalizes all repeated horizontal whitespace between phrase words to one ASCII space and trims leading and trailing whitespace from the phrase.
+
+Examples of bare phrase identifiers:
+
+    PlantBed
+    branch
+    branch 2
+    red apples
+    estimate harvest
+    my 2d example
+    very_long_name
+
+The following source spellings denote the same bare phrase identifier:
+
+    red apples
+    red     apples
+    red	 apples
+
+After normalization, all of them denote:
+
+    red apples
+
+The following source spellings also denote one bare phrase identifier each, not multiple arguments:
+
+    branch 2
+    my 2d example
+
+Because each phrase starts with an identifier word, the later numeric-looking words belong to the phrase. By contrast, a pure numeric run starts in numeric mode and is split as numbers:
+
+    1 2 3
+
+normalizes as:
+
+    1, 2, 3
+
+Therefore:
+
+    stack: PlantBed, branch 2
+
+has two fields:
+
+    PlantBed
+    branch 2
+
+and it does not normalize as:
+
+    stack(PlantBed, branch, 2)
+
+A bare phrase identifier is not a text/string literal. It is a namespace name, signature fragment, selector phrase or other receiver-consumed name-like field.
+
+The first bare form is intentionally narrower than SQLite quoted identifiers. If an external name contains punctuation, operator characters, leading/trailing spaces, repeated spaces that must be preserved exactly, newlines, an empty spelling, or any spelling that must round-trip byte-for-byte through an external schema, use the second identifier form: an exact quoted identifier.
+
+3.4.3. Exact Quoted Identifiers
+
+The second identifier form is the exact quoted identifier. It is intended for SQLite names, external schemas, generated bindings and unusual names that are not safe or not intended to be normalized as bare Lingvamyxa phrase identifiers.
+
+An exact quoted identifier is delimited by backtick characters:
+
+    `exact name`
+
+It is a namespace identifier/name, not a text/string literal. Its contents are taken as the exact identifier string after quote unescaping. No bare-phrase whitespace normalization is applied inside backticks. Commas, dots, spaces, numeric-looking text, reserved words and operator characters inside the backticks are part of the identifier.
+
+Examples:
+
+    `a,b`
+    `x.y`
+    `return`
+    `1 2`
+    `a  b`
+    ``
+
+Inside an exact quoted identifier, two consecutive backticks represent one literal backtick character:
+
+    `a``b`
+
+names the exact identifier:
+
+    a`b
+
+Therefore:
+
+    int: `a``b`
+    `a``b`: 10
+
+Declares and updates the binding whose exact name contains a literal backtick.
+
+Exact quoted identifiers behave as atomic name tokens in head position, tail/name position and expression/name position. The quoted spelling does not participate in normal phrase tokenization.
+
+A physical newline is not allowed inside an exact quoted identifier in the portable source profile. External identifiers containing newlines must be imported through an escaping or mapping rule defined by the external integration profile.
+
+3.4.4. Text/String Literals
+
+Text/string literals use ANSI C / C99 string literal syntax. They are values, not identifiers.
+
+Examples:
+
+    "hello"
+    "line one\nline two"
+    "tab\tseparated"
+    "quote: \""
+    "backslash: \\\"
+    "question: \?"
+    "alert\a backspace\b formfeed\f newline\n carriage\r tab\t vertical\v"
+    "octal A: \101"
+    "hex A: \x41"
+    "lambda: \u03BB"
+    "grinning face: \U0001F600"
+    L"wide text"
+    "hello, " "world"
+
+C99-style adjacent string literals are concatenated by the literal lexer before semantic consumption:
+
+    "hello, " "world"
+
+is one text value:
+
+    hello, world
+
+The hexadecimal escape `\x...` consumes hexadecimal digits according to the C string-literal rule. Octal escapes consume up to three octal digits. Universal character names `\uXXXX` and `\UXXXXXXXX` are literal character escapes.
+
+The double-quoted string form is separate from exact quoted identifiers. Therefore:
+
+    "hello"
+
+is a text value, while:
+
+    `hello`
+
+is the exact identifier/name `hello`.
+
 
 4. Surface Forms and Normalization
 
@@ -302,7 +492,7 @@ Example:
     . 1 2
     . 3 4
 
-The head is the `[]` receiver/procedure. The first inline tail field is the name phrase `my 2d example`. The vertical lines are child fields of that frame.
+The head is the `[]` receiver/procedure. The first inline tail field is the bare phrase name `my 2d example`. The vertical lines are child fields of that frame.
 
 4.2.1. Comma Tail Rule
 
@@ -324,7 +514,7 @@ normalizes as:
 
     stack(PlantBed, branch 2)
 
-where `branch 2` is one name/phrase field. It does not normalize as:
+where `branch 2` is one bare phrase name field. It does not normalize as:
 
     stack(PlantBed, branch, 2)
 
@@ -484,7 +674,7 @@ A short colon-form is not allowed as an inline argument inside parentheses. It m
     . int: a, b
     )
 
-Numeric literals are separated by space, comma, newline, closing parenthesis or dot-level boundary. Signature/phrase fields are separated by comma, newline, closing parenthesis or dot-level boundary; whitespace alone remains part of the phrase/signature.
+Numeric literals are separated by space, comma, newline, closing parenthesis or dot-level boundary. Bare phrase fields are separated by comma, newline, closing parenthesis or dot-level boundary; whitespace alone remains part of the phrase/signature and is normalized according to Section 3.4. Exact quoted identifiers are atomic name tokens.
 
 Example:
 
@@ -4544,7 +4734,7 @@ Name phrases may contain spaces when separated by comma from other fields:
 
 stack: PlantBed, branch 2
 
-This allocates stack storage with layout `PlantBed` and introduces the single name phrase `branch 2`. The whitespace between `branch` and `2` does not create a third argument because the segment is not a pure numeric run.
+This allocates stack storage with layout `PlantBed` and introduces the single bare phrase name `branch 2`. Because the phrase starts with an identifier word, the later numeric word belongs to the phrase rather than becoming a numeric field.
 
 The same comma-tail rule applies to address-depth declarations:
 
