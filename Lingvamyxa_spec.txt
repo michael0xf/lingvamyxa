@@ -1,10 +1,10 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.10 revision preserves the uploaded Rev.12.9 document body where possible and adds the relaxed indentation / `---` separator model while keeping canonical dotted syntax valid.
+This Rev.12.10 revision preserves the uploaded Rev.12.9 document body where possible and adds the relaxed indentation / `---` separator model, the local namespace overlay model and the L5 memory model while keeping canonical dotted syntax valid.
 
 Status
 
-Revision 12.10 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
+Revision 12.10 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update and L5 branch-arena memory model.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
@@ -5337,3 +5337,209 @@ The source rule is structural and typed: local updates modify a local namespace 
 ?
 Escaping local namespace overlays, closure capture of locally replaced callables, mutation of outer bindings and explicit global/external update syntax are not specified in this document. They belong to a future execution-model and runtime specification.
 ?
+
+30. Memory Model
+
+30.0. Scope
+
+This section defines the structural memory model used by Lingvamyxa source semantics above the raw L1 implementation layer.
+
+The model is intentionally region-oriented. It is not a global garbage-collected heap model and it is not a Rust-style per-variable ownership calculus. It treats high-level Structures as branch-owned memory regions, uses borrowed references by default when data is obtained from outside the current owner, and isolates L5 Threads from one another.
+
+The memory model is semantic. A translator may lower it to stack allocation, arenas, reference-counted branch handles, local tracing collectors, copy-on-write Structures, immutable value stores, direct C storage, generated cleanup labels or another implementation strategy that preserves the rules below.
+
+30.1. Core Rules
+
+The following rules are normative for the structural memory model:
+
+    1. A branch Structure may own an arena.
+    2. Leaf Structures normally do not own arenas.
+    3. Heap children of a branch are allocated inside the nearest owning branch arena.
+    4. Destroying a branch arena destroys all memory allocated inside it.
+    5. Borrowed references into an arena do not extend the arena lifetime.
+    6. To keep a borrowed branch beyond its owner scope or message frame, the value must be copied into an owned branch of the current owner.
+    7. L5 Threads have isolated arena graphs.
+    8. No raw reference may cross an L5 Thread boundary; shared mutable memory is forbidden at L5.
+    9. Messages cross L5 Thread boundaries only by copy, serialization or whole-branch ownership transfer.
+
+These rules are the high-level memory contract. Lower levels may expose unsafe storage, addresses and explicit buffer operations, but those operations do not weaken the L5 isolation rule.
+
+30.2. Branch Arenas
+
+A branch arena is a memory region owned by a branch Structure or by another owner that plays the same role, such as a frame, handler, module state or L5 Thread root.
+
+The intended shape is:
+
+    root branch
+        branch arena
+            child Structure
+            child array
+            child text
+            child expression tree
+            child decimal storage
+
+Leaf Structures may be stored inline, in their parent arena, or in implementation-defined compact storage. They normally do not own separate arenas because an arena per leaf would add overhead without improving lifetime management.
+
+A branch far from the leaves may own an arena for the whole sub-tree. When the branch is destroyed, detached or locally collected, the arena can be released as one unit. This is the common case for documents, ASTs, message payloads, configuration trees, model descriptors and high-level runtime state.
+
+30.3. Owner, Borrow and Owner-Copy
+
+An owner is a scope, branch, arena, frame, handler, L5 Thread root or other region that is responsible for the lifetime of a Structure.
+
+A borrowed value is a reference or handle into someone else's owned memory. Borrowing does not transfer cleanup responsibility and does not extend the lifetime of the source arena.
+
+Values obtained from outside the current owner are borrowed by default. This includes values read from an incoming message, values obtained from another branch, and views into an existing Structure.
+
+To retain such a value after the current frame, handler or owner lifetime ends, the program must create an owned copy:
+
+    owner saved: incoming payload
+
+Conceptual meaning:
+
+    copy `incoming payload` into an arena owned by the current owner;
+    bind `saved` to that owned copy.
+
+A plain binding of an external value may remain a borrow/view:
+
+    view: incoming payload
+
+Conceptual meaning:
+
+    bind `view` as a borrowed view valid only while the source owner is valid.
+
+A profile may choose a different surface spelling for owner-copy, but it must preserve the semantic distinction between borrowed retention and owned retention.
+
+30.4. No Escaping Borrow
+
+The no-escaping-borrow rule is a consequence of the core rules.
+
+A borrowed reference is valid only inside the frame, handler, arena epoch, branch lifetime or owner lifetime that produced it. It may not be stored in longer-lived state and may not be sent to another L5 Thread as a raw reference.
+
+Invalid conceptual pattern:
+
+    on message m
+        saved: m.payload
+    end: handler
+
+when `saved` outlives the message frame and `m.payload` is borrowed.
+
+Valid conceptual pattern:
+
+    on message m
+        owner saved: m.payload
+    end: handler
+
+Here the payload is copied into an owned branch of the current L5 Thread or current persistent owner.
+
+If a borrowed value must be sent to another L5 Thread, it must be copied, serialized or included in a whole-branch ownership transfer according to the message rules.
+
+30.5. L5 Thread Memory
+
+An L5 Thread owns an isolated memory tree or forest.
+
+Conceptual components:
+
+    L5 Thread
+        root state
+        message queue
+        current handler frame
+        temporary arenas
+        branch arenas
+        immutable value store or intern table
+
+Raw references inside one L5 Thread may point only into memory owned by that same L5 Thread or into explicitly shared immutable storage admitted by the implementation profile. Raw references from one L5 Thread into another L5 Thread are invalid.
+
+This makes the unit of memory management local. Reclaiming memory for one L5 Thread does not require stopping or scanning all L5 Threads in the system.
+
+30.6. Message Boundary
+
+The L5 Thread boundary is a memory boundary.
+
+A message payload may cross the boundary in one of three ways:
+
+    copy
+    serialization
+    whole-branch ownership transfer
+
+Copy means that the receiver receives an owned copy in one of its own arenas or receives a borrowed message-frame value that must be owner-copied before retention.
+
+Serialization means that the sender converts the payload to a byte/text/record representation and the receiver reconstructs its own Structure from that representation.
+
+Whole-branch ownership transfer means that the sender transfers ownership of an entire branch arena to the receiver. After the transfer, the sender no longer owns that branch and must not use raw references into it.
+
+A message must not contain raw borrowed references into the sender's private arena graph unless the receiver is the same L5 Thread and the active profile explicitly treats the message as an intra-thread frame.
+
+30.7. Temporary Arenas, Branch Reclamation and Local Collection
+
+Temporary values may be allocated in a frame arena, handler arena or transaction arena and released as a group when that frame, handler or transaction ends.
+
+Long-lived values must be reachable from an owner such as the L5 Thread root state, a branch root, a module state Structure or another persistent owner.
+
+A branch arena may be reclaimed deterministically when it is detached from its owner and no active borrow can refer to it. If an implementation chooses to track references, it may use a branch/root handle with reference counting. If it chooses a collector, the collector is local to the owning L5 Thread and traces only that Thread's root state, current frames, message queue and active local handles.
+
+The source semantics do not require a global stop-the-world collector. A local collector may pause only the owning L5 Thread at a safe point.
+
+30.8. Immutable Values and Interning
+
+High-level values may be immutable by default. A variable or Structure field may bind a handle to an immutable value rather than owning mutable storage directly.
+
+An implementation may maintain an immutable value store or intern table:
+
+    hash(value) -> canonical immutable object
+
+Equal immutable values may share storage. Since immutable values cannot be changed through any alias, sharing them does not create mutable aliasing problems.
+
+Examples of values suitable for interning or immutable storage:
+
+    atoms
+    symbols
+    strings
+    numeric constants
+    normalized decimal constants
+    small immutable arrays
+    model descriptors
+    expression trees
+
+Interning is an optimization and a representation strategy. The source rule is that mutation of a high-level immutable value creates a new value or a new branch, not an in-place update through an alias.
+
+30.9. Low-Level Interaction
+
+L2 and implementation-facing L3 profiles may expose explicit mutable storage, arrays, buffers, typed addresses and unsafe operations. Such values are not magically immutable and may require explicit cleanup or generated cleanup.
+
+When a low-level mutable buffer is embedded into a high-level Structure, the Structure must declare whether the edge is owned, borrowed or externally managed. An owned edge is cleaned when the owner is destroyed. A borrowed edge is not cleaned and must not outlive the external owner. An externally managed edge follows a profile-defined lifetime contract.
+
+The high-level branch-arena model does not prohibit low-level code. It only requires that raw low-level references do not escape their valid owner lifetime or cross an L5 Thread boundary in violation of the L5 isolation rule.
+
+30.10. ANSI C Lowering Strategy
+
+---ANSI C---
+An ANSI C translator may implement this memory model with the following mechanisms:
+
+    LmArena for branch, frame and handler regions;
+    LmBranch or equivalent root handles for arena-owned branches;
+    generated cleanup labels for L2/L3 resource values;
+    frame/handler arena reset at safe exits;
+    deep-copy functions for owner-copy;
+    serialization functions for message payloads;
+    ownership-transfer functions that detach one LmBranch from a sender and attach it to a receiver;
+    optional per-L5-Thread local tracing or reference counting for branch roots;
+    no global heap scan as a source-semantic requirement.
+
+A generated C function may lower scope cleanup to a single exit label:
+
+    init resources
+    body
+    goto cleanup
+
+    cleanup:
+        clear owned resources in reverse initialization order
+        reset temporary arena
+        return result
+
+For high-level immutable Structures, the translator may represent bindings as handles into an immutable store. For low-level mutable resources, the translator must preserve the declared owned/borrowed/external lifetime edge.
+---ANSI C---
+
+?
+Precise binary layouts of arenas, branch handles, immutable stores, local collector metadata, message serialization formats, thread scheduling and synchronization primitives are not specified in this structural core document. They belong to the runtime and L1 lowering specifications.
+?
+
