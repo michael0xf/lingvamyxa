@@ -6049,3 +6049,481 @@ The core rule is stable:
     dispatch -> logical registry/query layer
     shared mutable memory -> outside default L5, explicit L2/L3/profile construct
 
+32. Reactive Registry, Query Receivers, and Agent Candidates
+
+This section defines the reactive layer of the L5 registry.
+
+The registry is not passive storage. Inserting, updating, or removing a fact or
+rule emits a typed registry event message. Deterministic query receivers may
+react to that event and derive ordinary typed facts, messages, diagnostics, or
+indexes from the accepted registry model. Agent receivers may also react to the
+same events, but their output is always a candidate Structure and is never
+trusted directly.
+
+The core rule is:
+
+    query engine = proof and deterministic search
+    agent        = hypothesis generator
+    validator    = semantic gatekeeper
+    registry     = typed memory
+    message model = reaction mechanism
+
+AI or heuristic agents may propose. The registry validation path disposes.
+
+
+32.1. Core Idea
+
+A registry change has observable typed consequences.
+
+A registry event may be consumed by:
+
+    deterministic query receivers
+    agent receivers
+    diagnostic receivers
+    indexing receivers
+    lowering receivers
+    documentation receivers
+    test-generation receivers
+
+Deterministic query receivers are part of the formal language/runtime
+semantics. They derive only what follows from accepted typed facts, rules, and
+relations.
+
+Agent receivers are advisory. They may use AI, heuristics, pattern matching,
+external tools, or human-assisted tools. Their output is never committed
+directly to the registry. It is always represented as a candidate Structure.
+
+The normal reaction cycle is:
+
+    fact/rule change
+      -> registry event message
+      -> deterministic query receivers
+      -> derived ordinary messages/facts/diagnostics
+      -> optional agent receivers
+      -> candidate Structures
+      -> validation/query/type checking
+      -> accepted ordinary facts/messages or rejected diagnostics
+
+
+32.2. Registry Events
+
+A registry event is an ordinary typed message emitted by the registry.
+
+Minimal event kinds are:
+
+    registryFactAdded
+    registryFactRemoved
+    registryRuleAdded
+    registryRuleRemoved
+    registryFactChanged
+    registryRuleChanged
+    registryTransactionCommitted
+    registryTransactionRejected
+
+Example:
+
+    message:
+    . type = registryFactAdded
+    . transaction = 1842
+    . fact:
+    .. relation = operator
+    .. name = +
+    .. leftType = decimal
+    .. rightType = decimal
+    .. resultType = decimal
+    .. implementation = decNumberAdd
+    end: message
+
+The event is not a special control-flow primitive. It is a typed message
+delivered by the L5 message model.
+
+
+32.3. Deterministic Query Receivers
+
+A deterministic query receiver subscribes to registry events and runs formal
+queries over the accepted registry model.
+
+Example receiver intent:
+
+    receiver:
+    . name = numericDomainCompletenessChecker
+    . on = registryFactAdded
+    . when relation = operator
+    end: receiver
+
+When an operator fact is added, the receiver may ask:
+
+    query:
+    . relation = requiredOperator
+    . domain = decimal
+    . operator = ?op
+    end: query
+
+and:
+
+    query:
+    . relation = operator
+    . domain = decimal
+    . name = ?op
+    end: query
+
+The receiver can then derive a diagnostic:
+
+    diagnostic:
+    . severity = warning
+    . message = decimal numeric domain is incomplete
+    . missing = (-, *, /, compare)
+    end: diagnostic
+
+This requires no AI. It follows from formal facts and rules already present in
+the registry.
+
+
+32.4. Agent Receivers
+
+An agent receiver is also a message receiver, but its output is not trusted.
+
+An agent receiver may observe the same registry events as deterministic
+receivers.
+
+Example:
+
+    agent:
+    . name = numericImplementationAgent
+    . on = registryFactAdded
+    . relation = operator
+    end: agent
+
+After observing:
+
+    operator +(decimal, decimal) -> decNumberAdd
+
+the agent may propose:
+
+    candidate:
+    . kind = fact
+    . fact:
+    .. relation = operator
+    .. name = *
+    .. leftType = decimal
+    .. rightType = decimal
+    .. resultType = decimal
+    .. implementation = decNumberMultiply
+    end: candidate
+
+This is not inserted into the registry yet.
+
+It must pass the ordinary validation path:
+
+    type checking
+    relation validation
+    implementation lookup
+    arity checking
+    level visibility checking
+    conflict checking
+    completeness rules
+    memory/message safety rules
+
+Only after successful validation can the candidate become an ordinary registry
+fact.
+
+
+32.5. Candidate Structures
+
+A candidate Structure is structurally inspectable but semantically untrusted.
+
+Candidate forms include:
+
+    candidate fact
+    candidate rule
+    candidate message
+    candidate diagnostic
+    candidate lowering
+    candidate test
+    candidate documentation
+    candidate index hint
+
+A candidate should carry provenance metadata:
+
+    candidate:
+    . source = agent:numericImplementationAgent
+    . event = 1842
+    . confidence = optional
+    . payload = ...
+    end: candidate
+
+The confidence value is advisory metadata only. It does not affect formal
+acceptance unless a receiver explicitly uses it as non-semantic metadata.
+
+
+32.6. Validation Cycle
+
+Validation converts a candidate into either an ordinary typed Structure or a
+diagnostic.
+
+The validation cycle is:
+
+    candidate received
+      -> parse/check candidate shape
+      -> check declared relation/type
+      -> query registry for conflicts and requirements
+      -> check implementation availability
+      -> check L-level visibility
+      -> check memory/message constraints
+      -> accept or reject
+
+Accepted example:
+
+    accepted:
+    . candidate = 921
+    . becomes = registryFactAdded
+    end: accepted
+
+Rejected example:
+
+    diagnostic:
+    . severity = error
+    . candidate = 921
+    . reason = implementation decNumberMultiply is not visible from L1 profile
+    end: diagnostic
+
+A rejected candidate may be stored for diagnostics, logs, training data,
+explanation, or ignored.
+
+
+32.7. A Simple Implementation Without Full Prolog
+
+The bootstrap implementation does not require a full Prolog engine.
+
+It may start with:
+
+    array/list of facts
+    array/list of rules
+    array/list of receivers
+    simple query matcher
+    simple substitution map
+    message queue
+    candidate validator
+
+Fact:
+
+    typedef struct {
+        LmSymbol relation;
+        LmStruct *data;
+    } LmFact;
+
+Rule:
+
+    typedef struct {
+        LmStruct *head;
+        LmStruct *body;
+    } LmRule;
+
+Message:
+
+    typedef struct {
+        LmSymbol type;
+        LmStruct *payload;
+        uint64_t transaction_id;
+    } LmMessage;
+
+Receiver:
+
+    typedef enum {
+        LM_RECEIVER_QUERY,
+        LM_RECEIVER_AGENT,
+        LM_RECEIVER_VALIDATOR,
+        LM_RECEIVER_DIAGNOSTIC
+    } LmReceiverKind;
+
+    typedef struct {
+        LmReceiverKind kind;
+        LmStruct *subscription_pattern;
+        void (*handle)(LmThread *thread, const LmMessage *message);
+    } LmReceiver;
+
+Candidate:
+
+    typedef enum {
+        LM_CANDIDATE_FACT,
+        LM_CANDIDATE_RULE,
+        LM_CANDIDATE_MESSAGE,
+        LM_CANDIDATE_DIAGNOSTIC
+    } LmCandidateKind;
+
+    typedef struct {
+        LmCandidateKind kind;
+        LmStruct *payload;
+        LmSymbol source;
+        uint64_t source_event;
+    } LmCandidate;
+
+The first query engine may simply scan all facts:
+
+    query relation = operator
+      -> scan registry facts where relation == operator
+      -> match fields
+      -> bind ?variables
+      -> return result bindings
+
+A later implementation may replace this with indexed lookup:
+
+    relation/name/leftType/rightType -> fact list
+
+The observable semantics remains the same.
+
+
+32.8. Processing Order
+
+For one registry transaction, processing order is deterministic.
+
+    1. Commit source fact/rule into a registry transaction.
+    2. Emit a registry event message.
+    3. Run deterministic query receivers in stable registry order.
+    4. Validate and enqueue their derived ordinary messages/facts/diagnostics.
+    5. Run agent receivers, if enabled by profile/configuration.
+    6. Convert agent output into candidate Structures.
+    7. Validate candidates using ordinary validators and query receivers.
+    8. Commit accepted candidates as ordinary facts/rules/messages.
+    9. Store or ignore rejected candidates as diagnostics.
+
+Agent receivers must not mutate registry state directly.
+
+
+32.9. Avoiding Infinite Reaction Loops
+
+Reactive registry systems can loop.
+
+Example:
+
+    fact added
+      -> receiver derives fact
+      -> fact added
+      -> same receiver derives same fact again
+
+The runtime should track:
+
+    transaction id
+    event id
+    candidate id
+    source receiver
+    deduplication hash
+    reaction depth
+
+Minimal safety rules are:
+
+    the same fact is not inserted twice into one registry model
+    the same receiver/event pair is not repeated in one transaction unless explicitly allowed
+    reaction depth may be limited by profile
+    cyclic derivations must converge, be rejected, or produce a diagnostic
+
+
+32.10. Trust Boundary
+
+The trust boundary is simple.
+
+Accepted registry facts and rules are trusted according to the active registry
+profile.
+
+Deterministic query receiver output is trusted only after ordinary validation.
+
+Agent receiver output is never trusted directly.
+
+A candidate Structure is data, not authority.
+
+The validator/query/type system is the authority.
+
+
+32.11. Relationship to AI
+
+AI is optional.
+
+The same mechanism may work with:
+
+    no AI
+    simple heuristic agents
+    static rule generators
+    external analyzers
+    LLM-based agents
+    human-in-the-loop tools
+
+The language semantics depends only on accepted typed registry state,
+deterministic query receivers, accepted facts/rules, and validators.
+
+Agent output is outside trusted semantics until accepted.
+
+Canonical rule:
+
+    AI may propose.
+    Registry validation disposes.
+
+
+32.12. Relationship to Messages and L5 Threads
+
+Registry events are messages.
+
+Query receivers and agent receivers run inside an L5 Thread.
+
+No raw reference from another L5 Thread may be stored in a candidate or accepted
+fact.
+
+Message payloads received from outside are borrowed by default. To retain them,
+the receiver must owner-copy them into the current L5 Thread arena or receive a
+moved whole branch.
+
+This keeps the reactive registry compatible with the L5 memory model.
+
+
+32.13. Minimal Bootstrap Profile
+
+The bootstrap implementation may support only:
+
+    fact insertion
+    registryFactAdded event
+    linear fact scan
+    deterministic query receivers
+    candidate validation
+    diagnostic output
+
+Rules, unification, indexing, AI agents, and compiled query plans may be added
+later.
+
+Bootstrap profile:
+
+    facts: yes
+    rules: optional
+    query variables: simple named placeholders
+    backtracking: optional
+    agent receivers: optional
+    validation: required
+    diagnostics: required
+
+This still preserves the architecture:
+
+    registry event
+      -> deterministic receiver
+      -> candidate/ordinary output
+      -> validation
+      -> accepted structure or diagnostic
+
+
+32.14. Standard Statement
+
+The reactive registry layer defines how structural knowledge changes cause
+typed reactions.
+
+A fact or rule insertion emits a typed registry event message.
+
+Deterministic query receivers may subscribe to registry events and derive
+ordinary typed structures from existing accepted facts and rules.
+
+Agent receivers may also subscribe to registry events, but their output is
+always a candidate Structure and is not trusted.
+
+Every candidate must pass normal type, query, registry, memory, message, and
+validation rules before it can become an ordinary fact, rule, or message.
+
+Rejected candidates are diagnostics, not failed control flow.
+
+The registry, query engine, and validators form the trusted semantic path.
+Agent receivers are advisory producers of candidate Structures only.
