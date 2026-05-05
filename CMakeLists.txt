@@ -22,6 +22,9 @@ option(BUILD_LINGVAMYXA_QT_APP "Build the optional Qt Widgets shell" ON)
 
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(pcre2 CONFIG REQUIRED)
+find_package(civetweb CONFIG REQUIRED)
+find_package(CURL CONFIG REQUIRED)
+find_package(yyjson CONFIG REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 
@@ -75,8 +78,11 @@ target_link_libraries(lingvamyxa_core
     PUBLIC
         unofficial::sqlite3::sqlite3
         PCRE2::8BIT
+        civetweb::civetweb
+        CURL::libcurl
         PkgConfig::gmp
         PkgConfig::mpfr
+        yyjson::yyjson
         decnumber
 )
 

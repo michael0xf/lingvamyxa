@@ -9,7 +9,10 @@
     },
     "sqlite3",
     "pcre2",
+    "civetweb",
+    "curl",
     "gmp",
-    "mpfr"
+    "mpfr",
+    "yyjson"
   ]
 }
