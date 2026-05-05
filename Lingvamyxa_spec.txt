@@ -5082,7 +5082,7 @@ More explicit condition form:
 readLoop:
     readNext: record
     process: record
-until: (endOfInput(record))
+until: endOfInput(record)
 
 Conceptual semantic form:
 
