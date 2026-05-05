@@ -18,6 +18,43 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_LINGVAMYXA_CLI "Build the simple command-line test app" ON)
 option(BUILD_LINGVAMYXA_QT_APP "Build the optional Qt Widgets shell" ON)
 
+# ---- External language/runtime dependencies ----
+
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
+find_package(pcre2 CONFIG REQUIRED)
+
+find_package(PkgConfig REQUIRED)
+
+# bigint -> GMP mpz_t
+pkg_check_modules(gmp REQUIRED IMPORTED_TARGET gmp)
+
+# real -> MPFR mpfr_t
+pkg_check_modules(mpfr REQUIRED IMPORTED_TARGET mpfr)
+
+# decimal -> decNumber
+
+set(DECNUMBER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/decNumber/decNumber-icu-368")
+
+add_library(decnumber STATIC
+    "${DECNUMBER_DIR}/decContext.c"
+    "${DECNUMBER_DIR}/decNumber.c"
+)
+
+target_include_directories(decnumber
+    PUBLIC
+        "${DECNUMBER_DIR}"
+)
+
+target_compile_features(decnumber
+    PUBLIC
+        c_std_99
+)
+
+target_compile_definitions(decnumber
+    PUBLIC
+        DECNUMDIGITS=64
+)
+
 # ---- Pure C language core ----
 # This target must stay independent from Qt, Android, Windows APIs, etc.
 
@@ -27,6 +64,20 @@ add_library(lingvamyxa_core STATIC
 
 target_include_directories(lingvamyxa_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/core
+)
+
+target_compile_definitions(lingvamyxa_core
+    PUBLIC
+        PCRE2_CODE_UNIT_WIDTH=8
+)
+
+target_link_libraries(lingvamyxa_core
+    PUBLIC
+        unofficial::sqlite3::sqlite3
+        PCRE2::8BIT
+        PkgConfig::gmp
+        PkgConfig::mpfr
+        decnumber
 )
 
 if (MSVC)

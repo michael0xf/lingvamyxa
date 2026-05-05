@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "lingvamyxa",
+  "version-string": "0.1.0",
+  "dependencies": [
+    {
+      "name": "pkgconf",
+      "host": true
+    },
+    "sqlite3",
+    "pcre2",
+    "gmp",
+    "mpfr"
+  ]
+}

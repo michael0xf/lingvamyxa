@@ -2022,6 +2022,20 @@ These variants are implementation strategies only. The language-level rule remai
 
 9. Type and Model Forms
 
+9.0. Default C99 Bootstrap Type and Dependency Map
+
+The default ANSI C / C99 bootstrap profile may use the following implementation mapping for primitive and service-level source types. This is an implementation/dependency map, not a separate source grammar.
+
+    i/u      -> C integer          -> no vcpkg
+    bool     -> C int / bool       -> no vcpkg
+    bigint   -> GMP mpz_t          -> vcpkg: gmp,  CMake: PkgConfig::gmp
+    real     -> MPFR mpfr_t        -> vcpkg: mpfr, CMake: PkgConfig::mpfr
+    decimal  -> decNumber         -> third_party\decNumber\decNumber-icu-368\
+    SQL      -> SQLite            -> vcpkg: sqlite3
+    Regex    -> PCRE2             -> vcpkg: pcre2
+
+The `i/u` family denotes implementation-profile integer types over C integer storage. `bigint`, `real`, `decimal`, `SQL` and `Regex` are ordinary names/receivers/descriptors in the shared namespace when the active profile imports them. Their physical representation and linked libraries belong to the selected L1/runtime profile.
+
 9.1. Type and Model Information
 
 Type and model information is expressed by registered receivers and Structures.
