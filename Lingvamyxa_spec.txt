@@ -4,7 +4,7 @@ This Rev.12.2 rewrite preserves the full Rev.12.1 document body where possible a
 
 Status
 
-Revision 12.2 draft. Comma tail, phrase signatures, dot-tree vertical syntax, terminal return, local namespace overlay and reserved L2 address-depth operator update.
+Revision 12.3 draft. Comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
@@ -12,7 +12,7 @@ Revision 12.2 note:
 
     Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
 
-    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a non-numeric tail segment belongs to the phrase/signature/name. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the name phrase `branch 2`.
+    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a non-numeric tail segment belongs to the phrase/signature/name. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the name phrase `branch 2`. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
 
     Vertical composition is dot-tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A line at level N starts a sibling of the frame or closes the frame through root/parent separation. Dot-only lines act as anonymous Structure delimiters at their own source level; at root level the corresponding delimiter is a physical empty line.
 
@@ -240,7 +240,7 @@ It creates the same logical Frame as:
 
     f(a, b, c)
 
-The token sequence before `:` is the head phrase. The tail after `:` is the line argument Structure. A newline terminates the line command unless the parser is inside a parenthesized Structure or another explicitly open form.
+The token sequence before `:` is the head phrase. The tail after `:` is the line argument Structure. A physical newline terminates the short line command. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure also terminates the open continuation, but it does not allow additional inline short colon-forms on the same physical line.
 
 The head phrase may contain spaces. This allows receiver/procedure signatures and entity names that are not single lexical words. The parser does not split the head phrase into arguments merely because it contains spaces.
 
@@ -279,6 +279,32 @@ where `branch 2` is one name/phrase field. It does not normalize as:
 and it does not allocate `branch` with an extra numeric argument `2`.
 
 A receiver may later interpret a phrase field as a name, signature, selector, atom sequence, message phrase or another semantic object. The parser only builds the field.
+
+4.2.1.1. Strict Short-Colon Line Rule
+
+A short colon-form is a physical source-item form.
+
+A physical source line may contain at most one short colon-form.
+
+A short colon-form may appear only as the main source item of that physical line. It may not appear as an inline element inside a parenthesized comma enumeration, a compact call argument list or another short colon-form tail.
+
+Invalid:
+
+    call2(call(int: a, b), call(int: b, c))
+    int: a, int: d
+    call(int: a, b)
+
+The last form is invalid because `int: a, b` is a short colon-form placed directly inside a parenthesized argument list. To pass a compact type-constructor Frame, write:
+
+    call(int(a, b))
+
+To use short colon-form inside parentheses, write it as a vertical source item on its own physical line. Parentheses do not disable dot-level composition:
+
+    call(
+    . int: a, b
+    )
+
+When a short colon-form begins on a physical line, commas on that line belong to that form's own tail. They do not resume an outer comma enumeration. Therefore several short colon-forms must be written as separate physical lines, normally by vertical dot composition.
 
 4.2.2. Numeric-Run Shortcut
 
@@ -342,10 +368,18 @@ If a receiver argument must itself be one Structure, the source must make that n
 
 Examples:
 
-    args: (int: v, j)
     args: int(v, j)
 
-The first form gives `args` one bounded Structure containing the line-command declaration `int: v, j`. The second form gives `args` one compact declaration Frame `int(v, j)`.
+This gives `args` one compact declaration Frame `int(v, j)`.
+
+The following is invalid under the strict short-colon line rule, because the short colon-form `int: v, j` is placed directly inside parentheses:
+
+    args: (int: v, j)
+
+Write either the compact form above or a vertical source form:
+
+    args:
+    . int: v, j
 
 A head phrase followed by `:` must have a continuation. The continuation may be an inline tail on the same physical line, vertical child fields at source level N + 1, or an explicit close through `end: <target>` when allowed by the open target policy. A line `head:` with no inline tail and no following vertical child fields is a syntax error unless the receiver/profile explicitly defines an empty Structure form for that head.
 
@@ -388,9 +422,17 @@ Parentheses create a bounded Structure:
 
     (a, b, c)
 
-Inside parentheses, arguments are separated by comma or by the matching closing parenthesis. A pure numeric run inside one parenthesized item may use whitespace as numeric shorthand when the numeric-run rule applies.
+Inside parentheses, fields may be separated by comma, by physical newline/dot-level composition, by the matching closing parenthesis, or by the numeric-run shortcut when the current item is a pure numeric run.
 
-Line command form inside parentheses continues until a comma or the matching closing parenthesis.
+Parentheses do not disable the dot-level system. Vertical child items inside parentheses are still written with dots.
+
+A short colon-form is not allowed as an inline argument inside parentheses. It must be the main source item of its physical line. Therefore `call(int: a, b)` is invalid. Use `call(int(a, b))` for a compact constructor Frame, or write the short colon-form vertically:
+
+    call(
+    . int: a, b
+    )
+
+Numeric literals are separated by space, comma, newline, closing parenthesis or dot-level boundary. Signature/phrase fields are separated by comma, newline, closing parenthesis or dot-level boundary; whitespace alone remains part of the phrase/signature.
 
 Example:
 
@@ -435,8 +477,8 @@ A physical source line at level N or lower does not become another argument of t
 Example:
 
 outerLoop:
-. for: (int: i, 1), (i <= 3), (i++)
-. . for: (int: j, 1), (j <= 3), (j++)
+. for: int(i, 1), (i <= 3), i++
+. . for: int(j, 1), (j <= 3), j++
 . . . if: i = 2 && j = 2
 . . . . System/out/println: "--- continue outerLoop ---"
 . . . . continue: outerLoop
@@ -561,8 +603,8 @@ not:
 Example:
 
 outerLoop:
-. for: (int: i, 1), (i <= 3), (i++)
-. . for: (int: j, 1), (j <= 3), (j++)
+. for: int(i, 1), (i <= 3), i++
+. . for: int(j, 1), (j <= 3), j++
 . . . if: i = 2 && j = 2
 . . . . continue: outerLoop
 end: outerLoop
@@ -832,7 +874,7 @@ If the expected type is boolean, the value producer must produce a boolean value
 
 Example:
 
-for: (int: i, 0), (i < n), (i: i + 1)
+for: int(i, 0), (i < n), i++
 .print: i
 
 
@@ -845,9 +887,9 @@ The `for` receiver consumes:
 
 Compact body example:
 
-    for: (int: i, 0), (i < n), (i++), (print: i)
+    for: int(i, 0), (i < n), i++, print(i)
 
-Here `(print: i)` is just the last argument Structure of `for`. The `for` receiver signature names that position as `body` and consumes it as the executable loop body.
+Here `print(i)` is the last argument Structure of `for`. The `for` receiver signature names that position as `body` and consumes it as the executable loop body. The compact body example uses only compact Frames and contains no inline short colon-form.
 
 5.4. Example: `if`
 
@@ -997,12 +1039,12 @@ A `sub` frame consumes a Structure and creates a subroutine callable value.
 
 Example source:
 
-fn: myFunc, (int: i, int: j, 1, p1, p2), (int: r1, int: r2)
+fn: myFunc, (int(i), int(j, 1), p1, p2), (int(r1), int(r2))
 . print: i
 . print: j
 . p1()
 . p2()
-end: myFunc
+return: r1, r2
 
 Strict conceptual form:
 
@@ -1049,17 +1091,19 @@ The receiver `fn` consumes its child Structures by receiver-defined semantic rol
 
 The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set. In declaration context, a type/constructor receiver consumes the following raw identifier/name phrase as a new binding name. If that name already exists in the current namespace, the declaration is invalid.
 
-Compact definition form:
+Compact definition form with vertical children inside the bounded argument list:
 
 fn: i(
-  args: (int: v, j),
-  ret: int,
-  body: (j: v / 2, i: v)
+. args: int(v, j)
+. ret: int
+. body:
+. . j: v / 2
+. . return: v
 )
 
-This parses as a colon line Frame named `fn` whose first argument is a compact Frame named `i`.
+This parses as a colon line Frame named `fn` whose first argument is a compact Frame named `i` with vertical child Structures. Parentheses do not disable dot-level composition.
 
-The `fn` receiver may define this as a compact definition form. In that form, the compact Frame name `i` becomes the function name, and the compact Frame arguments become definition child Structures.
+The `fn` receiver may define this as a compact definition form. In that form, the compact Frame name `i` becomes the function name, and the compact Frame children become definition child Structures.
 
 Conceptual receiver-level interpretation:
 
@@ -1073,50 +1117,38 @@ Conceptual receiver-level interpretation:
       ),
       body(
         j(v / 2),
-        i(v)
+        return(v)
       )
     )
 
-The `args` child receives one bounded Structure containing the declaration:
+The `args` child receives one compact declaration Frame:
 
-    int: v, j
+    int(v, j)
 
 In declaration context, this means an `int` binding named `v` whose default/initial value is `j`.
 
-The same `args` child may be written with a compact declaration Frame:
+The following older inline style is invalid under the strict short-colon line rule, because it places short colon-forms directly inside parentheses and also tries to put several short colon-forms on one physical line:
 
-fn: i(
-  args: int(v, j),
-  ret: int,
-  body: (j: v / 2, i: v)
-)
+    fn: i(args: int(v, j), ret: int, body: (j: v / 2, return: v))
+    fn: i(args: (int: v, j), ret: int, body: (j: v / 2, return: v))
 
-Both forms are distinct from:
+Use the vertical form above instead.
+
+The form:
 
     args: int v j
 
-which now parses as one phrase/signature field `int v j`, not as `args(int, v, j)`. To pass three fields, write:
+parses as one phrase/signature field `int v j`, not as `args(int, v, j)`. To pass several fields through short colon-form, use commas:
 
     args: int, v, j
 
-Inside the `body` bounded Structure, comma separates body items in the same way that child lines separate vertical body items. The body above is equivalent to:
-
-fn: i(
-  args: int(v, j),
-  ret: int,
-  body: (
-    j: v / 2,
-    i: v
-  )
-)
-
-Here `j: v / 2` updates the visible binding `j`. The final result should normally be returned with `return: v`; using `i: v` as a function-name return binding is optional/profile-defined in this revision.
+Here `j: v / 2` updates the visible binding `j`. The final result is returned with `return: v`. Using `i: v` as a function-name return binding is optional/profile-defined and is not the canonical form in this revision.
 
 7.3. Subroutine Definition Form
 
 Example source:
 
-sub: l5_if, (boolean: condition), then, else
+sub: l5_if, (boolean(condition)), then, else
 return
 
 Strict conceptual form:
@@ -1161,7 +1193,7 @@ In expression position, a visible `fn` name is callable. The canonical way to re
 
 Example:
 
-fn: factorial, (int: n), (int)
+fn: factorial, (int(n)), (int)
 .if: n <= 1
 ..return: 1
 return: n * factorial(n - 1)
@@ -1203,11 +1235,8 @@ fn: outer
 ..int: y
 .
 ..int
-.
-..addX: x + y
-end: addX
-.outer: addX(10)
-end: outer
+.return: x + y
+return: addX(10)
 
 The nested `fn` `addX` is visible inside the body of `outer` after its definition and inside its own body for recursion. It is not visible outside `outer`.
 
@@ -1226,9 +1255,7 @@ fn: outer
 ..int: x
 .
 ..int
-.
-..helper: x
-end: helper
+.return: x
 end: outer
 
 ?
@@ -1261,16 +1288,14 @@ end: if
 
 Here `if` validates against the node/receiver name.
 
-fn: myFunc, (int: i), (int: r)
-.myFunc: i
-.return
+fn: myFunc, (int(i)), (int(r))
+.return: i
 end: fn
 
 Here `fn` validates against the node/receiver name.
 
-fn: myFunc, (int: i), (int: r)
-.myFunc: i
-.return
+fn: myFunc, (int(i)), (int(r))
+.return: i
 end: myFunc
 
 Here `myFunc` validates against the normalized `name` field of the current `fn` Structure. In this form the normalized `name` field is derived from the first positional argument.
@@ -1284,8 +1309,7 @@ fn:
 ..int: r
 .
 .body:
-..myFunc: i
-..return
+..return: i
 end: myFunc
 
 Here `myFunc` also validates against the normalized semantic `name` field, but that field is written as an ordinary nested Structure.
@@ -1299,8 +1323,7 @@ fn:
 ..int: r
 .
 .body:
-..myFunc: i
-..return
+..return: i
 end: myFunc
 
 This is also valid because validation uses the normalized semantic `name` field rather than the raw first source argument.
@@ -1337,7 +1360,7 @@ For a `sub`, `return: value` is invalid unless a later profile defines a status/
 
 Examples:
 
-fn: square, (int: x), (int)
+fn: square, (int(x)), (int)
 return: x * x
 
 Conceptual executable body:
@@ -1346,7 +1369,7 @@ Conceptual executable body:
 
 Example with early runtime return and terminal return:
 
-fn: factorial, (int: n), (int)
+fn: factorial, (int(n)), (int)
 .if: n <= 1
 ..return: 1
 return: n * factorial(n - 1)
@@ -1363,12 +1386,12 @@ Terminal return is equivalent to appending the corresponding runtime `return` as
 
 Example:
 
-fn: square, (int: x), (int)
+fn: square, (int(x)), (int)
 return: x * x
 
 is source-semantically equivalent to:
 
-fn: square, (int: x), (int)
+fn: square, (int(x)), (int)
 .return: x * x
 end: square
 
@@ -1393,7 +1416,7 @@ The source level separates the two roles.
 
 Runtime return inside a body:
 
-fn: abs, (int: x), (int)
+fn: abs, (int(x)), (int)
 .if: x < 0
 ..return: -x
 return: x
@@ -1402,7 +1425,7 @@ Here `..return: -x` is runtime control inside the `if` body. It does not structu
 
 Terminal empty return is also valid when a return binding has already been prepared:
 
-fn: estimate harvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+fn: estimate harvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
 .harvest: bed\area
 .redApples: 0
 .greenApples: 0
@@ -1416,7 +1439,7 @@ Return values may be represented by declared return variables inside an executab
 
 Example:
 
-fn: estimate harvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+fn: estimate harvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
 .harvest: bed\area
 .redApples: 0
 .greenApples: 0
@@ -1428,7 +1451,7 @@ A function return signature with several fields defines one return Structure. Up
 
 Example positional structural return:
 
-fn: split harvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+fn: split harvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
 return: bed\area, 0, 0
 
 Here the `return:` tail is one logical return Structure with three fields consumed by the return signature.
@@ -1439,7 +1462,7 @@ The old Pascal-style function-name return binding is not the canonical return fo
 
 A profile may still allow the current function name in head/update position to denote the current return binding inside that function body:
 
-fn: square, (int: x), (int)
+fn: square, (int(x)), (int)
 .square: x * x
 return
 
@@ -1455,7 +1478,7 @@ A profile may still allow implicit final return of the current return binding wh
 
 The preferred style is:
 
-fn: f, (int: x), (int)
+fn: f, (int(x)), (int)
 return: x + 1
 
 rather than relying on an implicit return binding update.
@@ -2375,7 +2398,7 @@ The update form is valid only if the head resolves to an existing mutable bindin
 
 The same surface form is used for callable consumption. For example, `i: 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable/receiver binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
 
-A bounded Structure in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: (int: i, 0), (i < n), (i++), (print: i)`, the final `(print: i)` is the `body` argument consumed by `for`.
+A bounded Structure or compact Frame in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: int(i, 0), (i < n), i++, print(i)`, the final `print(i)` is the `body` argument consumed by `for`.
 
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
@@ -2865,6 +2888,9 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     colon_frame_body    ::= head_phrase ":" [ line_arguments ]
 
+    // A physical source line may contain at most one short colon-form.
+    // A short colon-form must be the main source item of that line.
+
     head_phrase         ::= head_token { horizontal_space head_token }
 
     head_token          ::= source token allowed in receiver/head position
@@ -2889,12 +2915,18 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     argument_list       ::= argument { "," argument } [ "," ]
 
-    argument            ::= inline_line_frame
-                          | expression_or_structure
+    argument            ::= expression_or_structure
 
-    inline_line_frame   ::= head_phrase ":" line_arguments
+    // Short colon-forms are not inline arguments.
+    // They may appear inside parentheses only as separate physical
+    // source lines under dot-level composition.
 
-    bounded_structure   ::= "(" [ argument_list ] ")"
+    bounded_structure   ::= "(" [ argument_list | vertical_argument_list ] ")"
+
+    vertical_argument_list
+                         ::= newline source_line { source_line }
+                            where each contained source_line follows the same
+                            dot-level rules as ordinary vertical composition
 
     expression_or_structure
                          ::= mathematical_expression
@@ -2947,7 +2979,7 @@ Normal form:
 
 Source:
 
-fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+fn: estimateHarvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
 .if: bed\crop = Apples
 ..return: bed\area * 1.7, bed\area * 1.7, bed\area * 1.1
 return: bed\area, 0, 0
@@ -2965,7 +2997,7 @@ Semantic outline:
 
 Source:
 
-fn: estimateHarvest, (PlantBed: bed), (f32: harvest, f32: redApples, f32: greenApples)
+fn: estimateHarvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
 .harvest: bed\area
 .redApples: 0
 .greenApples: 0
@@ -2981,7 +3013,7 @@ Semantic outline:
 
 Source:
 
-fn: factorial, (int: n), (int)
+fn: factorial, (int(n)), (int)
 .if: n <= 1
 ..return: 1
 return: n * factorial(n - 1)
@@ -3038,7 +3070,7 @@ Semantic outline:
 
 Source:
 
-sub: l5_if, (boolean: condition), then, else
+sub: l5_if, (boolean(condition)), then, else
 return
 
 Conceptual form:
@@ -3453,7 +3485,7 @@ The loop repeats until the condition is true. If the condition is false, control
 
 Compact counter/triplet form:
 
-for: (int: i, 0), (i < n), (i: i + 1)
+for: int(i, 0), (i < n), i++
 .print: i
 
 
@@ -3467,9 +3499,9 @@ The vertical child Structure is consumed as the loop body.
 
 Single-line compact body form:
 
-    for: (int: i, 0), (i < n), (i++), (print: i)
+    for: int(i, 0), (i < n), i++, print(i)
 
-In this form, `(print: i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as a parser method.
+In this form, `print(i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as a parser method.
 
 Range-style example:
 
@@ -3545,10 +3577,10 @@ At the source level of the open executable definition, `return` is terminal retu
 
 Examples:
 
-fn: square, (int: x), (int)
+fn: square, (int(x)), (int)
 return: x * x
 
-fn: factorial, (int: n), (int)
+fn: factorial, (int(n)), (int)
 .if: n <= 1
 ..return: 1
 return: n * factorial(n - 1)
@@ -4594,15 +4626,15 @@ L2 `for` consumes:
 
 Vertical body form:
 
-for: (int: i, 0), (i < n), (i: i + 1)
+for: int(i, 0), (i < n), i++
 .print: i
 
 
 Compact body form:
 
-    for: (int: i, 0), (i < n), (i++), (print: i)
+    for: int(i, 0), (i < n), i++, print(i)
 
-The token form `i++` is valid only in profiles that register it as a parser method. Without that parser method, the step can be written as `(i: i + 1)`.
+The token form `i++` is valid only in profiles that register it as a parser method. Without that parser method, the step can be written as `i++`.
 
 28.5.5. `return`
 
@@ -4624,7 +4656,7 @@ At the source level of an open executable definition, `return` may be terminal r
 
 Example:
 
-fn: square, (int: x), (int)
+fn: square, (int(x)), (int)
 return: x * x
 
 28.5.6. `break` and `continue`
@@ -4717,10 +4749,10 @@ Because callable values are Structures or handles/references to Structures, loca
 
 Example:
 
-fn: compute, (int: x), (int)
-.fn: slow path, (int: v), (int)
+fn: compute, (int(x)), (int)
+.fn: slow path, (int(v)), (int)
 .return: v * v
-.fn: fast path, (int: v), (int)
+.fn: fast path, (int(v)), (int)
 .return: v << 1
 .strategy: slow path
 .if: x < 10
