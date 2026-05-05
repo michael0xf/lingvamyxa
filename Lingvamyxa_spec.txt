@@ -944,7 +944,14 @@ Relaxed form with separator-prefixed continuation receiver:
 if: condition
     ---
         # doSomething
-    ---else:
+    ---
+        # doOtherThing
+end: if
+
+if: condition
+    ---
+        # doSomething
+    else: # This "else" is at the correct level and therefore automatically closes the previous block.
         # doOtherThing
 end: if
 
