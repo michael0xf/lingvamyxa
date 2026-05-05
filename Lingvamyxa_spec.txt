@@ -1,14 +1,14 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.11 revision preserves the uploaded Rev.12.10 document body where possible and adds the logical registry/query layer summary to section 21 while keeping canonical dotted syntax valid.
+This Rev.12.12 revision preserves the uploaded Rev.12.10 document body where possible and adds the logical registry/query layer summary to section 21, the L5 branch-arena memory model in section 30, and the L5 Thread/message model in section 31 while keeping canonical dotted syntax valid.
 
 Status
 
-Revision 12.11 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model and logical registry/query layer summary.
+Revision 12.12 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model, logical registry/query layer summary, and L5 Thread/message scheduling model.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
-Revision 12.11 note:
+Revision 12.12 note:
 
     Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
 
@@ -5761,3 +5761,291 @@ Therefore:
     L2/L3 explicit   -> shared mutable buffers, atomics, locks and external lifetimes
 
 The long-term bootstrap direction is that L1 should shrink to the target/backend substrate. Language-visible rules for shared resources, memory edges, synchronization and lifetime should move upward into L2, L3, L4 and L5 descriptors/receivers. L1 remains the implementation layer used to lower those rules to C99, platform APIs, libraries and native binaries.
+
+31. L5 Thread and Message Model
+
+31.0. Scope
+
+The L5 Thread model defines the default high-level execution and communication model of Lingvamyxa. It is the companion of the section 30 memory model.
+
+An L5 Thread is not necessarily an operating-system thread. It is a logical execution unit with isolated state, a local arena graph and a message queue. An implementation may lower an L5 Thread to an OS thread, a fiber, a coroutine, an event-loop task, an actor, an embedded scheduler entity or another runtime execution unit.
+
+The semantic requirement is isolation, not a particular scheduler primitive:
+
+    L5 Thread -> isolated execution tree + local memory graph + message queue
+
+No raw reference owned by one L5 Thread may point directly into another L5 Thread. Inter-thread communication is by typed messages, whole-branch transfer, serialization or implementation-approved immutable sharing.
+
+31.1. L5 Thread
+
+An L5 Thread owns:
+
+    root state;
+    current handler frame;
+    message queue;
+    local branch arenas;
+    temporary frame/handler arenas;
+    local immutable value store or intern table, if supplied by the profile;
+    local registry view/cache, if supplied by the profile;
+    local failure/event queue, if supplied by the profile.
+
+An L5 Thread may process one handler at a time by default. This gives the default L5 profile single-threaded reasoning inside each isolated execution tree. Parallelism is obtained by creating multiple L5 Threads and exchanging messages between them.
+
+The implementation may execute several L5 Threads on the same OS thread, or one L5 Thread per OS thread, or use a work-stealing/event-loop implementation. This does not change the source-level rule that L5 Threads do not share mutable raw references.
+
+31.2. Root State
+
+The root state is the durable state of an L5 Thread. Long-lived owned branches that must survive a single message handler are reachable from the root state or from another branch reachable from the root state.
+
+Values created inside a handler are temporary unless they are:
+
+    stored into root state as owned values;
+    copied into an owned branch reachable from root state;
+    transferred as a whole owned branch to another L5 Thread;
+    returned through a reply/future/result mechanism;
+    explicitly retained by a profile-defined persistent store.
+
+A borrowed value received from another owner or another message frame may not be stored in root state as a raw borrow. To retain it, the program must create an owned copy or receive ownership of the whole branch.
+
+31.3. Handler Frame
+
+A handler frame is the dynamic execution frame created when an L5 Thread processes a message. It has its own temporary arena or temporary allocation epoch.
+
+The handler frame may contain:
+
+    parameters and message payload views;
+    local variables;
+    temporary Structures;
+    temporary query results;
+    continuation state for yield/await-like receivers;
+    failure/status state;
+    cleanup records for owned local resources.
+
+When the handler completes normally or by failure, frame-local temporaries are released as a group and owned local resources are cleaned in reverse initialization order. Borrowed payloads do not extend the lifetime of their source.
+
+31.4. Message Structure
+
+A message is a typed Structure. A profile may choose exact field names, but the conceptual fields are:
+
+    receiver          target L5 Thread, object, behavior or service selector;
+    selector          message name / receiver name / operation tag;
+    payload           typed argument Structure;
+    transfer mode     copy, move, serialize, immutable-share or profile-defined mode;
+    reply channel     optional Future/Task/reply receiver;
+    failure channel   optional failure receiver or result sink;
+    priority          optional scheduling priority;
+    ordering key      optional stable ordering key;
+    metadata          profile-defined tracing, security, capability or scheduling data.
+
+The payload is a Structure, not a raw pointer bag. The receiver consumes the Structure according to its registered receiver signature, type model and message descriptor.
+
+31.5. Message Transfer Modes
+
+The standard conceptual transfer modes are:
+
+    copy
+        Deep-copy the payload into the receiver-owned arena, receiver message arena or another receiver-local owner.
+
+    move
+        Transfer ownership of a whole owned branch arena from the sender to the receiver. Sender-side raw references/handles into that branch become invalid after transfer.
+
+    serialize
+        Encode the payload into bytes/text/records, then reconstruct it in the receiver. This is the default safe form across process, machine, storage or untrusted boundaries.
+
+    immutable-share
+        Share an immutable value handle only when the implementation profile guarantees immutability, thread-safe publication and lifetime stability.
+
+    external-handle
+        Pass a descriptor/capability to an explicit low-level or external resource. The resource itself is not an ordinary mutable L5 branch.
+
+The default safe transfer mode is copy or serialization. Move is an optimization and a semantic transfer of ownership. Immutable-share is valid only for values that cannot be mutated through any alias. Shared mutable data is outside the default L5 model and must be represented through explicit L2/L3 synchronization or a checked higher-level abstraction.
+
+31.6. Borrowed Payloads
+
+Received payloads are borrowed by default during handler execution. A borrowed payload is valid only for the current handler frame, message frame, arena epoch or owner lifetime that produced it.
+
+The no-escaping-borrow rule applies:
+
+    a borrowed payload may not be stored in root state;
+    a borrowed payload may not be sent as a raw reference to another L5 Thread;
+    a borrowed payload may not be retained by a continuation unless its owner/arena lifetime covers the continuation;
+    a borrowed payload may not outlive the message or branch that owns it.
+
+To keep received data after the handler returns, the handler must perform owner-copy into its own L5 Thread memory graph or receive/move a whole owned branch.
+
+31.7. Queue and Scheduling
+
+Each L5 Thread owns at least one conceptual message queue. The default scheduling profile is deterministic:
+
+    messages are processed one handler at a time;
+    FIFO ordering is used within equal priority;
+    equal ordering keys preserve stable insertion order;
+    a handler runs until it returns, fails, yields or awaits;
+    no other handler mutates the same L5 Thread root state concurrently.
+
+A profile may add priorities, deadlines, fairness windows, cooperative yields, preemption points or real-time scheduling. Such profiles must specify whether they preserve deterministic ordering.
+
+The default L5 model avoids data races by construction: root state is local to one L5 Thread and is mutated by at most one active handler in the default profile.
+
+31.8. Dispatch as Registry Query
+
+Message dispatch is not special object magic. It is resolved through receiver signatures, descriptors and the logical registry/query layer.
+
+A dispatch query may use facts such as:
+
+    receiver type;
+    selector name;
+    payload type;
+    protocol/behavior descriptor;
+    capability descriptor;
+    visibility level;
+    target implementation;
+    failure contract;
+    transfer policy.
+
+Conceptual query:
+
+query:
+    relation: message_handler
+    receiver: ?receiverType
+    selector: parse
+    payload: SourceText
+    implementation: ?impl
+
+The resulting handler implementation is then invoked by the scheduler with a typed payload Structure. Generic dispatch, behavior lookup, operator/message specialization and validation may all use the same registry facts and relation rules described in section 21.
+
+31.9. Reply, Future and Task Structures
+
+A message may request a reply. The reply mechanism is represented by a typed Structure rather than by hidden control flow.
+
+Conceptual forms:
+
+    Result T E      completed value or failure;
+    Future T E      pending result with a reply channel;
+    Task T E        scheduled computation with continuation state;
+    ReplyChannel    receiver/message target for result delivery.
+
+A synchronous call is a profile-level convenience over message sending plus waiting for a reply inside the same scheduler domain. An asynchronous call sends a message and receives a Future/Task-compatible Structure.
+
+Reply payloads obey the same transfer rules as ordinary message payloads: copy, whole-branch move, serialization or immutable-share.
+
+31.10. Failure Propagation
+
+Failures are not hidden cross-thread exceptions. A failure crossing an L5 Thread boundary is represented as a typed message/result/failure Structure.
+
+Inside one handler, a profile may use local failure control such as guard/fail/throws/handler labels, as described by the failure model. Across L5 Thread boundaries, the failure must be materialized as data:
+
+    Result.Err;
+    failure message;
+    rejected Future/Task;
+    reply-channel failure payload;
+    profile-defined event.
+
+This preserves the no-raw-reference and no-hidden-cross-thread-control-flow rules.
+
+31.11. Await and Continuations
+
+`async` and `await`, if provided by a profile, are surface forms over L5 message scheduling and continuation state. They are not a separate concurrency model.
+
+An async procedure returns a Future/Task-compatible Structure. Calling it schedules or constructs a task rather than necessarily running the body to completion immediately.
+
+An await receiver consumes a Future/Task-compatible Structure. If the value is not ready, the current handler/procedure continuation is stored in a scheduler-visible continuation Structure, control returns to the L5 scheduler, and the continuation resumes when a result message arrives.
+
+Conceptual lowering:
+
+    await future
+        -> store continuation state
+        -> suspend current handler/procedure
+        -> return control to scheduler
+        -> resume by result message
+
+Values that survive across an await boundary must be owned by the continuation, stored in an arena whose lifetime covers the continuation, immutable with stable lifetime, or copied into continuation state. Frame-local borrows may not survive await unless the owner lifetime is statically known to cover the continuation.
+
+Thus await obeys the same memory model as messages:
+
+    borrow before await -> cannot escape await unless lifetime-stable
+    owner value         -> may be stored in continuation state
+    immutable value     -> may be shared if profile permits
+    branch value        -> may be moved or copied
+
+31.12. Yield and Message Scheduling
+
+`yield` and `await` are related but distinct.
+
+    yield
+        emits a value from an iterator-compatible state machine and records resume state.
+
+    await
+        waits for a Future/Task/message result and records resume state.
+
+Both lower to explicit continuation state. Both must respect the same lifetime rules for local values, borrowed payloads and branch arenas. Neither introduces hidden shared mutable state between L5 Threads.
+
+31.13. Determinism Profile
+
+The deterministic profile of L5 execution is:
+
+    one active handler per L5 Thread;
+    stable queue ordering;
+    no shared mutable raw references across L5 Threads;
+    message payload transfer by copy, serialization or whole-branch move;
+    deterministic handler code unless it uses declared nondeterministic receivers;
+    explicit ordering for time, external I/O and scheduler interaction.
+
+A nondeterministic or real-time profile may relax ordering, introduce priorities, interact with external event loops or process messages under deadlines. Such a profile must mark the nondeterministic sources and must not pretend they are ordinary deterministic structural evaluation.
+
+31.14. ANSI C Lowering Strategy
+
+A minimal C99 runtime may represent an L5 Thread as a structure containing root state, queues, arenas and scheduler metadata:
+
+---ANSI C---
+
+typedef struct LmThread LmThread;
+typedef struct LmMessage LmMessage;
+typedef struct LmBranch LmBranch;
+typedef struct LmArena LmArena;
+
+typedef LmStatus (*LmHandlerFn)(LmThread *thread, const LmMessage *message);
+
+struct LmThread {
+    LmArena *state_arena;
+    LmArena *temp_arena;
+    LmQueue *queue;
+    void *root_state;
+    LmRegistryView *registry;
+};
+
+---ANSI C---
+
+A message enqueue operation lowers to:
+
+    construct typed payload;
+    copy/move/serialize according to transfer mode;
+    enqueue message into receiver queue;
+    return status or Future/Task handle.
+
+A scheduler step lowers to:
+
+    pop next message according to scheduling profile;
+    resolve handler by registry/query or precomputed dispatch table;
+    create handler frame / reset temp arena;
+    invoke handler;
+    deliver reply/failure if required;
+    release handler temporaries.
+
+A whole-branch move lowers to detaching an owned LmBranch from the sender and attaching it to the receiver. The sender must not retain valid raw references into the moved branch.
+
+31.15. Boundaries and Non-Goals
+
+The structural core does not define the binary layout of queues, futures, branch handles, registry caches, scheduler locks, wake-up mechanisms, OS-thread mapping, coroutine ABI, serialization format or network transport.
+
+Those belong to runtime profiles and L1/L2 lowering specifications.
+
+The core rule is stable:
+
+    L5 Thread -> isolated state and arena graph
+    communication -> typed messages
+    retention -> owner-copy or ownership transfer
+    waiting -> continuation state
+    dispatch -> logical registry/query layer
+    shared mutable memory -> outside default L5, explicit L2/L3/profile construct
+
