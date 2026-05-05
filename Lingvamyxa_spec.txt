@@ -5660,3 +5660,41 @@ For high-level immutable Structures, the translator may represent bindings as ha
 ?
 Precise binary layouts of arenas, branch handles, immutable stores, local collector metadata, message serialization formats, thread scheduling, synchronization primitives, status/result conventions, generated copy function signatures and ownership-transfer invalidation rules are not specified in this structural core document. They belong to the runtime and L1 lowering specifications.
 ?
+
+30.12. Shared Low-Level Resources and Large Read-Only Data
+
+The L5 memory model is intentionally message- and branch-oriented. It is the default safe model for active objects, behavior dispatch, high-level events, configuration and query handling. It should not be used to pretend that large shared raw buffers are ordinary per-thread message payloads.
+
+If a program needs a large resource that many L5 Threads read directly, such as a large numeric table, shared index, memory-mapped dataset, model-weight array or external database page cache, that resource belongs in an L2 or implementation-facing L3 profile as an explicit low-level/shared resource.
+
+Example conceptual L2 forms:
+
+L2:
+    static: BigArray, table, shared(readonly)
+
+L2:
+    static: BigArray, table, shared(readonly), externalLifetime
+
+The exact receiver names and policy arguments are profile-defined. The semantic point is that the resource is not an ordinary mutable L5 branch. It is a shared immutable or externally managed low-level object with an explicit lifetime contract.
+
+L4 may describe such a resource as a model/descriptor:
+
+L4:
+    model: BigArray
+        field: data, @f64, borrowed
+        field: len, u64
+        access: shared, readonly
+
+The L4 descriptor may record that the data edge is borrowed from low-level storage, shared only under read-only access, externally managed, memory-mapped or protected by another explicit runtime contract. L5 may use the descriptor and receive handles/selectors/facts about the resource, but ordinary L5 message passing does not send raw mutable references to it.
+
+Shared immutable data may be read by many L5 Threads when the implementation profile guarantees immutability and thread-safe publication. Since no thread can mutate the shared value through an alias, this does not violate the L5 no-shared-mutable-memory rule.
+
+Shared mutable data is different. If multiple threads must write or coordinate over the same resource, the resource must be represented through explicit L2/L3 synchronization or atomic constructs such as locks, read-write locks, atomics, barriers, memory-order policies or transactional receivers. Those constructs are unsafe or implementation-facing unless a higher-level profile wraps them in a checked abstraction.
+
+Therefore:
+
+    L5 default       -> copy, serialization, whole-branch ownership transfer
+    L5 shared read   -> immutable / read-only / externally published resource
+    L2/L3 explicit   -> shared mutable buffers, atomics, locks and external lifetimes
+
+The long-term bootstrap direction is that L1 should shrink to the target/backend substrate. Language-visible rules for shared resources, memory edges, synchronization and lifetime should move upward into L2, L3, L4 and L5 descriptors/receivers. L1 remains the implementation layer used to lower those rules to C99, platform APIs, libraries and native binaries.
