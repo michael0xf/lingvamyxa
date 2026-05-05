@@ -1,10 +1,10 @@
 Lingvamyxa Structural Core Specification
 
-This Rev.12.2 rewrite preserves the full Rev.12.1 document body where possible and adds the reserved L2 address-depth operator family `@ⁿ`.
+This Rev.12.4 revision preserves the full Rev.12.3 document body where possible and adds a general definition of the colon as the receiver-valence marker of Lingvamyxa surface syntax.
 
 Status
 
-Revision 12.3 draft. Comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
+Revision 12.4 draft. Colon receiver-valence definition, comma tail, phrase signatures, dot-tree vertical syntax, strict short-colon line rule, terminal return, local namespace overlay and reserved L2 address-depth operator update.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
@@ -13,6 +13,8 @@ Revision 12.2 note:
     Lingvamyxa source block depth is represented only by dot characters (`.`) in the leading indentation zone. Spaces and tab characters may appear between dots or after the last leading dot for readability, but they do not define source block depth.
 
     Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a non-numeric tail segment belongs to the phrase/signature/name. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the name phrase `branch 2`. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
+
+    The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
     Vertical composition is dot-tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A line at level N starts a sibling of the frame or closes the frame through root/parent separation. Dot-only lines act as anonymous Structure delimiters at their own source level; at root level the corresponding delimiter is a physical empty line.
 
@@ -213,6 +215,56 @@ A callable reference is also data until explicitly called or consumed by a recei
 
 
 4. Surface Forms and Normalization
+
+4.0. Colon as Receiver-Valence Marker
+
+The colon `:` is the central valence marker of Lingvamyxa surface syntax. It is not an assignment operator, not a YAML-like key-value separator and not a special type-annotation symbol.
+
+General form:
+
+    head: tail
+
+Source meaning:
+
+    the head phrase governs the following argument Structure;
+    the tail supplies the fields consumed by that head.
+
+In receiver terminology, `head` is a receiver, operator, callable, constructor, updater, model receiver, message receiver or other consuming head. The parser builds the generic Structure; the active receiver signature later assigns semantic roles to its fields.
+
+In linguistic terminology, this colon may be described as a valence colon or a marker of government/rection. It opens a predicate-argument frame: the left side is the governing predicate/head, and the right side or the following vertical children are its actants/arguments.
+
+Therefore:
+
+    fn: ...
+    if: ...
+    return: ...
+    int: ...
+    stack: ...
+    []: ...
+    model: ...
+    operator: ...
+
+all share the same structural rule. They differ only in the receiver that consumes the Structure and in the receiver signature that interprets its fields.
+
+A form such as:
+
+    x: value
+
+is not primitive assignment by syntax alone. After name resolution, it may be a local binding update, a receiver consumption, a callable invocation/update, a message-like consumption, a model/configuration entry or another receiver-defined operation. The colon only says that `x` governs and consumes the following Structure.
+
+A form such as:
+
+    int: x
+
+is not a separate Pascal-like type grammar. It is the same receiver-valence form: the registered `int` constructor receiver consumes the raw name `x` in declaration context and introduces a typed binding.
+
+A form such as:
+
+    name: Alice
+
+is not a YAML key-value pair by syntax alone. It is the receiver/head `name` consuming the argument field `Alice`; a model/configuration receiver may later interpret that child Structure as a semantic field.
+
+Compact call form and colon form are two surface ways to build Frames/Structures. The compact form makes the bounded argument list explicit with parentheses. The colon form makes the governing head explicit through valence/government and then uses the short tail or vertical dot-tree children as its argument Structure.
 
 4.1. Compact Call Form
 
@@ -3335,6 +3387,14 @@ Nested short positional form:
 ..elseBody
 .
 
+Nested explicit `else` form:
+
+.if: condition
+..thenBody
+.else:
+..elseBody
+.
+
 
 Single-line form:
 
@@ -3469,9 +3529,9 @@ Labelled example:
 readLoop:
 .readNext: record
 .process: record
-until: endOfInput record
+until: endOfInput(record)
 
-In this example, `until:` closes the labelled executable block `readLoop`. The condition is the boolean-producing Structure `endOfInput record`.
+In this example, `until:` closes the labelled executable block `readLoop`. The condition is the boolean-producing Structure `endOfInput(record)`.
 
 The body is executed first. The condition is evaluated after the body.
 
@@ -4596,16 +4656,16 @@ Example:
 readLoop:
 .readNext: record
 .process: record
-until: endOfInput record
+until: endOfInput(record)
 
-In this example, `record` is not a separate operator. The `until:` line consumes the whole tail `endOfInput record` as a boolean-producing condition Structure. The condition producer is `endOfInput`, and `record` is its argument. The parser may still build a flat argument Structure for `until`; the `until` operator consumes that Structure in condition mode.
+In this example, `record` is an explicit compact-call argument of `endOfInput`. The `until:` line consumes the whole tail `endOfInput(record)` as a boolean-producing condition Structure. The condition producer is the compact call `endOfInput(record)`, not a space-separated phrase `endOfInput record`.
 
 More explicit condition form:
 
 readLoop:
 .readNext: record
 .process: record
-until: (endOfInput record)
+until: (endOfInput(record))
 
 Conceptual semantic form:
 
