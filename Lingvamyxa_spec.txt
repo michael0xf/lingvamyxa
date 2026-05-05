@@ -2618,7 +2618,6 @@ The token sequences:
     @
     @@
     @@@
-            ---
 
 form the reserved L2 address-depth operator family `@ⁿ`. They are reserved operator heads, not ordinary user-defined identifiers. Ordinary source cannot bind procedures, functions, receivers or variables named `@`, `@@`, `@@@` and so on, unless a privileged core/prelude profile explicitly defines the reserved operator metadata.
 
@@ -5510,7 +5509,67 @@ When a low-level mutable buffer is embedded into a high-level Structure, the Str
 
 The high-level branch-arena model does not prohibit low-level code. It only requires that raw low-level references do not escape their valid owner lifetime or cross an L5 Thread boundary in violation of the L5 isolation rule.
 
-30.10. ANSI C Lowering Strategy
+30.10. Source Receivers and Lifetime Policy Forms
+
+Ownership and lifetime policy should be expressed through ordinary receivers, phrase identifiers and argument Structures. The memory model does not introduce a separate ownership grammar.
+
+L2 storage/allocation receivers remain the low-level unsafe layer:
+
+    stack: T, name
+    heap: T, name
+    static: T, name
+    []: name, size
+    @: T, p
+
+An L2 or implementation-facing profile may allow policy arguments on declaration/allocation receivers:
+
+    heap: Buffer, data, owner(frame)
+    heap: Buffer, data, external(cleanup freeBuffer)
+    []: bytes, n, owner(branch)
+
+These arguments are ordinary Structures consumed by the active receiver signature. They do not create C-like declaration syntax.
+
+L3 profiles may expose safe memory-operation receivers:
+
+    owner: saved, incoming payload
+    borrow: view, incoming payload
+    copy: dst, src
+    move: dst, src
+
+`owner: saved, value` creates an owned copy in the current owner according to the active type/model descriptor. `borrow: view, value` creates a borrowed view whose lifetime is bounded by the source owner. `copy` creates an independent value according to the target context. `move` transfers a value or branch when the active descriptor permits transfer and invalidates or empties the source binding according to the profile.
+
+The phrase-signature spelling:
+
+    owner saved: incoming payload
+
+may be supported by a profile as a readable variant of the same owner-copy operation. The canonical receiver-level meaning is still ordinary Structure consumption, not a new grammar category.
+
+L4 model/type descriptors may attach memory-edge policies to fields and payloads:
+
+    field: payload, MessagePayload, owned
+    field: view, Text, borrowed
+    field: nativeHandle, SQL, external(cleanup close)
+
+Such descriptors may materialize registry facts such as:
+
+    edge(Model, field, owned)
+    cleanup(Model, field, cleanupFn)
+    copyPolicy(Model, field, deep)
+    transferPolicy(Model, field, forbidden)
+
+The exact relation names are registry/profile details. The source rule is that L4 descriptors define the ownership contract used by L3/L5 consumption and by L1 lowering.
+
+L5 message and sharing receivers may select boundary behavior explicitly:
+
+    send: worker, payload, copy
+    send: worker, payload, serialize
+    send: worker, payload, transfer
+    intern: value
+    share: value, immutable
+
+At an L5 Thread boundary, raw mutable references are invalid. `copy`, `serialize` and `transfer` are the ordinary policies for crossing the boundary. Immutable sharing is permitted only when the implementation profile can preserve immutability and thread-safety.
+
+30.11. ANSI C Lowering Strategy
 
 ---ANSI C---
 An ANSI C translator may implement this memory model with the following mechanisms:
@@ -5524,6 +5583,65 @@ An ANSI C translator may implement this memory model with the following mechanis
     ownership-transfer functions that detach one LmBranch from a sender and attach it to a receiver;
     optional per-L5-Thread local tracing or reference counting for branch roots;
     no global heap scan as a source-semantic requirement.
+
+Possible runtime declarations:
+
+    typedef struct LmArena LmArena;
+    typedef struct LmBranch LmBranch;
+    typedef struct LmThread LmThread;
+
+    typedef enum LmEdgeKind {
+        LM_EDGE_OWNED,
+        LM_EDGE_BORROWED,
+        LM_EDGE_EXTERNAL,
+        LM_EDGE_TRANSFERRED
+    } LmEdgeKind;
+
+    typedef struct LmTypeOps {
+        void (*destroy)(void *value);
+        int  (*copy_to)(LmArena *arena, void *dst, const void *src);
+        int  (*serialize)(void *writer, const void *src);
+        void (*trace)(void *collector, void *value);
+    } LmTypeOps;
+
+    struct LmBranch {
+        LmArena *arena;
+        const LmTypeOps *type_ops;
+        void *root;
+        LmThread *owner_thread;
+        unsigned flags;
+    };
+
+Possible arena API:
+
+    void *lm_arena_alloc(LmArena *arena, size_t size, size_t align);
+    void  lm_arena_reset(LmArena *arena);
+    void  lm_arena_destroy(LmArena *arena);
+
+The exact status/result type is implementation-defined. A profile may use `int`, an `LmStatus` enum, receiver diagnostics or another error convention.
+
+Generated type/model operations may be derived from L4 descriptors:
+
+    destroy       clears owned edges and external resources;
+    copy_to       implements owner-copy and ordinary deep copy;
+    serialize     implements message serialization;
+    trace         supports an optional local collector or reference tracker.
+
+An owner-copy form such as:
+
+    owner: saved, incoming payload
+
+may lower to:
+
+    saved = lm_copy_to_owner(current_owner, incoming_payload);
+
+or to inlined field-by-field copy when the type/model layout is statically known.
+
+L5 message crossing may lower as:
+
+    copy       -> deep-copy payload into receiver-owned arena or message-frame arena;
+    serialize  -> encode to bytes/text/records, then reconstruct on receiver side;
+    transfer   -> detach an `LmBranch` from the sender, attach it to the receiver and invalidate sender-side raw references/handles.
 
 A generated C function may lower scope cleanup to a single exit label:
 
@@ -5540,6 +5658,5 @@ For high-level immutable Structures, the translator may represent bindings as ha
 ---ANSI C---
 
 ?
-Precise binary layouts of arenas, branch handles, immutable stores, local collector metadata, message serialization formats, thread scheduling and synchronization primitives are not specified in this structural core document. They belong to the runtime and L1 lowering specifications.
+Precise binary layouts of arenas, branch handles, immutable stores, local collector metadata, message serialization formats, thread scheduling, synchronization primitives, status/result conventions, generated copy function signatures and ownership-transfer invalidation rules are not specified in this structural core document. They belong to the runtime and L1 lowering specifications.
 ?
-
