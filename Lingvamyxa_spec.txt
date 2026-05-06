@@ -5814,16 +5814,16 @@ Values obtained from outside the current owner are borrowed by default. This inc
 
 To retain such a value after the current frame, handler or owner lifetime ends, the program must create an owned copy:
 
-    owner saved: incoming payload
+    owner: saved, m\payload
 
 Conceptual meaning:
 
-    copy `incoming payload` into an arena owned by the current owner;
+    copy `m\payload` into an arena owned by the current owner;
     bind `saved` to that owned copy.
 
 A plain binding of an external value may remain a borrow/view:
 
-    view: incoming payload
+    borrow: view, m\payload
 
 Conceptual meaning:
 
@@ -5837,19 +5837,23 @@ The no-escaping-borrow rule is a consequence of the core rules.
 
 A borrowed reference is valid only inside the frame, handler, arena epoch, branch lifetime or owner lifetime that produced it. It may not be stored in longer-lived state and may not be sent to another L5 Thread as a raw reference.
 
-Invalid conceptual pattern:
+Invalid Lingvamyxa-shaped pattern:
 
-    on message m
-        saved: m.payload
-    end: handler
+L5:
+    handler: retainPayload, m
+        saved: m\payload
+    ---
+end: L5
 
-when `saved` outlives the message frame and `m.payload` is borrowed.
+when `saved` outlives the message frame and `m\payload` is borrowed.
 
-Valid conceptual pattern:
+Valid Lingvamyxa-shaped pattern:
 
-    on message m
-        owner saved: m.payload
-    end: handler
+L5:
+    handler: retainPayload, m
+        owner: saved, m\payload
+    ---
+end: L5
 
 Here the payload is copied into an owned branch of the current L5 Thread or current persistent owner.
 
@@ -5859,15 +5863,19 @@ If a borrowed value must be sent to another L5 Thread, it must be copied, serial
 
 An L5 Thread owns an isolated memory tree or forest.
 
-Conceptual components:
+Source-shaped descriptor of the conceptual components:
 
-    L5 Thread
-        root state
-        message queue
-        current handler frame
-        temporary arenas
-        branch arenas
-        immutable value store or intern table
+L5:
+    Thread:
+        rootState:
+        messageQueue:
+        currentHandlerFrame:
+        temporaryArenas:
+        branchArenas:
+        immutableValueStore:
+        internTable:
+    ---
+end: L5
 
 Raw references inside one L5 Thread may point only into memory owned by that same L5 Thread or into explicitly shared immutable storage admitted by the implementation profile. Raw references from one L5 Thread into another L5 Thread are invalid.
 
@@ -5956,8 +5964,8 @@ These arguments are ordinary Structures consumed by the active receiver signatur
 
 L3 profiles may expose safe memory-operation receivers:
 
-    owner: saved, incoming payload
-    borrow: view, incoming payload
+    owner: saved, m\payload
+    borrow: view, m\payload
     copy: dst, src
     move: dst, src
 
@@ -5965,9 +5973,13 @@ L3 profiles may expose safe memory-operation receivers:
 
 The phrase-signature spelling:
 
-    owner saved: incoming payload
+    owner saved: m\payload
 
-may be supported by a profile as a readable variant of the same owner-copy operation. The canonical receiver-level meaning is still ordinary Structure consumption, not a new grammar category.
+may be supported by a profile as a readable variant of the same owner-copy operation. If `owner` is consumed as the ordinary receiver identifier, the canonical receiver-level form is:
+
+    owner: saved, m\payload
+
+Both spellings consume ordinary Structures. Neither introduces a new grammar category.
 
 The source meaning of an owned edge is an ownership contract, not a mandatory immediate physical deep copy. An implementation may satisfy owner-copy semantics by:
 
@@ -5985,24 +5997,33 @@ Promotion is part of the automatic local tree-cut procedure, not a memory cleanu
 
 L4 model/type descriptors may attach memory-edge policies to fields and payloads:
 
-    field: payload, MessagePayload, owned
-    field: view, Text, borrowed
-    field: nativeHandle, SQL, external(cleanup close)
+L4:
+    model: MessageEnvelope
+        vars:
+            MessagePayload: payload, owned
+            Text: view, borrowed
+            SQL: nativeHandle, external(cleanup close)
+        ---
+    ---
+end: L4
 
 Such descriptors may materialize registry facts such as:
 
-    edge(Model, field, owned)
-    cleanup(Model, field, cleanupFn)
-    copyPolicy(Model, field, deep)
-    transferPolicy(Model, field, forbidden)
+L5:
+    fact: edge, MessageEnvelope, payload, owned
+    fact: edge, MessageEnvelope, view, borrowed
+    fact: cleanup, MessageEnvelope, nativeHandle, close
+    fact: copyPolicy, MessageEnvelope, payload, deep
+    fact: transferPolicy, MessageEnvelope, payload, forbidden
+end: L5
 
 The exact relation names are registry/profile details. The source rule is that L4 descriptors define the ownership contract used by L3/L5 consumption and by L1 lowering.
 
 L5 message and sharing receivers may select boundary behavior explicitly:
 
-    send: worker, payload, copy
-    send: worker, payload, serialize
-    send: worker, payload, transfer
+    send: worker, m\payload, copy
+    send: worker, m\payload, serialize
+    send: worker, m\payload, transfer
     intern: value
     share: value, immutable
 
@@ -6080,17 +6101,17 @@ Generated type/model operations may be derived from L4 descriptors:
 
 An owner-copy form such as:
 
-    owner: saved, incoming payload
+    owner: saved, m\payload
 
 may lower to:
 
-    saved = lm_copy_to_owner(current_owner, incoming_payload);
+    saved = lm_copy_to_owner(current_owner, m_payload);
 
 or to inlined field-by-field copy when the type/model layout is statically known.
 
 If the implementation uses deferred owner-copy, the same form may lower to a lazy-owned edge:
 
-    saved = lm_lazy_owner_edge(current_owner, incoming_payload);
+    saved = lm_lazy_owner_edge(current_owner, m_payload);
 
 The lazy edge is still semantically owned by `current_owner`. During automatic local tree-cut or owner-detach processing, if the source owner would no longer remain reachable, the runtime must either promote the edge:
 
@@ -6106,16 +6127,33 @@ L5 message crossing may lower as:
     serialize  -> encode to bytes/text/records, then reconstruct on receiver side;
     transfer   -> detach an `LmBranch` from the sender, attach it to the receiver and invalidate sender-side raw references/handles.
 
-A generated C function may lower scope cleanup to a single exit label:
+A generated C function may lower scope cleanup to a single C99 exit label:
 
-    init resources
-    body
-    goto cleanup
+    int lm_generated_handler(LmThread *thread, const LmMessage *m)
+    {
+        int status = 0;
+        LmArena *temp_arena = lm_thread_temp_arena(thread);
+        LmResource resource;
+        int resource_initialized = 0;
+
+        status = lm_resource_init(&resource);
+        if (status != 0) {
+            goto cleanup;
+        }
+        resource_initialized = 1;
+
+        status = lm_generated_body(thread, m, &resource);
+        if (status != 0) {
+            goto cleanup;
+        }
 
     cleanup:
-        clear owned resources in reverse initialization order
-        reset temporary arena
-        return result
+        if (resource_initialized) {
+            lm_resource_destroy(&resource);
+        }
+        lm_arena_reset(temp_arena);
+        return status;
+    }
 
 For high-level immutable Structures, the translator may represent bindings as handles into an immutable store. For low-level mutable resources, the translator must preserve the declared owned/borrowed/external lifetime edge.
 ---ANSI C---
