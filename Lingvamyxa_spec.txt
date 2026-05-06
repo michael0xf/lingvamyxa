@@ -7578,6 +7578,147 @@ Rejected candidates are diagnostics, not failed control flow.
 The registry, query engine, and validators form the trusted semantic path.
 Agent receivers are advisory producers of candidate Structures only.
 
+Да. Ниже готовый **32.15 Resume** для вставки после **32.14 Standard Statement**. Он связывает §32 с общей L5 message-моделью: registry events — это сообщения, query receivers работают внутри L5 Thread, candidate не trusted, а dispatch в §31 уже опирается на registry/query facts.  
+
+32.15. Resume
+
+The reactive registry layer is not a separate Prolog-like language, not an AI
+subsystem and not a hidden global object runtime.
+
+It is the message-visible form of structural knowledge.
+
+The compact formula is:
+
+    fact      = accepted typed registry tuple
+    rule      = accepted typed derivation rule
+    query     = deterministic search/proof over accepted registry state
+    event     = message emitted by registry state change
+    candidate = untrusted proposed Structure
+    validator = semantic authority
+    agent     = optional hypothesis producer
+
+A fact is the minimal normal form of registry knowledge.
+
+Examples of fact-like registry knowledge include:
+
+    model descriptors;
+    slot descriptors;
+    union descriptors;
+    behavior descriptors;
+    message selectors;
+    method implementations;
+    route descriptors;
+    operator descriptors;
+    capability descriptors;
+    transfer policies;
+    validation rules;
+    lowering rules;
+    build targets;
+    documentation facts.
+
+Higher-level descriptors such as ModelSpec, BehaviorSpec, OperatorSpec,
+UnionSpec, GenericMethodSpec or route descriptors may either materialize into
+facts or be implemented as typed views over facts. The choice is an
+implementation/profile issue. The semantic rule is the same: accepted registry
+state is typed structural knowledge.
+
+A query is the deterministic way to ask that structural knowledge.
+
+The query engine may be used for:
+
+    message dispatch;
+    generic method lookup;
+    behavior lookup;
+    operator resolution;
+    protocol satisfaction;
+    completeness checking;
+    validation;
+    documentation derivation;
+    build graph derivation;
+    lowering rule selection;
+    route resolution;
+    diagnostic explanation.
+
+This makes registry/query a common semantic substrate instead of many unrelated
+hidden compiler tables.
+
+Registry changes are observable as typed messages.
+
+A fact or rule insertion, removal or update emits a registry event message.
+Deterministic query receivers may subscribe to those messages and derive new
+ordinary facts, messages, diagnostics, indexes or generated structures. These
+receivers are part of the trusted deterministic semantic path only when their
+inputs are accepted registry state and their outputs pass the ordinary type,
+query, registry, memory and validation rules.
+
+Agent receivers are different.
+
+An agent receiver may use heuristics, pattern matching, external tools,
+LLM-based tools or human-assisted tools. Its output is always a candidate
+Structure. A candidate is data, not authority. It becomes an ordinary fact,
+rule, message or descriptor only after validation accepts it.
+
+Canonical trust rule:
+
+    deterministic query may derive;
+    agent may propose;
+    validator disposes;
+    accepted registry state is authority.
+
+The reactive registry layer is therefore a message extension of the normal L5
+model:
+
+    registry state change
+        -> typed registry event message
+        -> deterministic query receiver or advisory agent receiver
+        -> derived Structure or candidate Structure
+        -> validation
+        -> accepted fact/rule/message/descriptor or diagnostic
+
+The registry does not break the L5 memory model.
+
+Registry events are messages.
+
+Query receivers and agent receivers run inside L5 Threads.
+
+No raw reference from a foreign L5 Thread may be stored in a candidate or
+accepted fact.
+
+Payloads received from outside are borrowed by default. To retain them, a
+receiver must owner-copy the data into its own L5 Thread owner graph or receive
+a moved whole branch. If registry data crosses a process, machine, storage or
+untrusted boundary, serialization is the default safe transfer form.
+
+The registry is allowed to have a storage/index backend.
+
+A relational backend such as SQLite is a natural bootstrap implementation for
+facts, relations, indexes, transactions and diagnostic inspection. Such a
+backend is not the source semantics of Lingvamyxa. It is an implementation
+substrate for storing and querying accepted registry tuples.
+
+Therefore:
+
+    Lingvamyxa fact/query semantics belong to Lingvamyxa.
+    SQLite or another relational store may materialize the registry.
+    SQL syntax is not imported as native Lingvamyxa syntax by default.
+    External names may be represented through exact quoted identifiers when
+    an integration profile requires exact round-trip spelling.
+
+The final role of section 32 is to close the gap between structural
+description, message dispatch and runtime reaction.
+
+    L4 describes structural knowledge.
+    L5 stores accepted structural knowledge as facts/rules/descriptors.
+    Query resolves and derives from that knowledge.
+    Registry events turn knowledge changes into messages.
+    L5 Threads execute the resulting reactions.
+    Validators keep advisory or generated structures outside trusted semantics
+    until accepted.
+
+Thus section 32 is not an optional toy logic layer. It is the common registry
+and reaction mechanism behind behavior dispatch, object messages, validation,
+service routing, build derivation, documentation, diagnostics and optional
+agent-assisted generation.
 
 33. REST/JSON Microservice Runtime and Built-in HTTP Client/Server Profile
 
