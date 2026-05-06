@@ -5768,7 +5768,7 @@ This section defines the structural memory model used by Lingvamyxa source seman
 
 The model is intentionally region-oriented. It is not a global garbage-collected heap model and it is not a Rust-style per-variable ownership calculus. It treats high-level Structures as branch-owned memory regions, uses borrowed references by default when data is obtained from outside the current owner, and isolates L5 Threads from one another.
 
-The memory model is semantic. A translator may lower it to stack allocation, arenas, reference-counted branch handles, local owner-tree walkers, copy-on-write Structures, immutable value stores, direct C storage, generated cleanup labels or another implementation strategy that preserves the rules below.
+The memory model is semantic. A translator may lower it to stack allocation, arenas, reference-counted branch handles, local owner-tree walkers, copy-on-write Structures, immutable value stores, direct C storage, generated resource-release paths or another implementation strategy that preserves the rules below.
 
 30.1. Core Rules
 
@@ -5808,7 +5808,7 @@ A branch far from the leaves may own an arena for the whole sub-tree. When the b
 
 An owner is a scope, branch, arena, frame, handler, L5 Thread root or other region that is responsible for the lifetime of a Structure.
 
-A borrowed value is a reference or handle into someone else's owned memory. Borrowing does not transfer cleanup responsibility and does not extend the lifetime of the source arena.
+A borrowed value is a reference or handle into someone else's owned memory. Borrowing does not transfer release responsibility and does not extend the lifetime of the source arena.
 
 Values obtained from outside the current owner are borrowed by default. This includes values read from an incoming message, values obtained from another branch, and views into an existing Structure.
 
@@ -5936,9 +5936,9 @@ Interning is an optimization and a representation strategy. The source rule is t
 
 30.9. Low-Level Interaction
 
-L2 and implementation-facing L3 profiles may expose explicit mutable storage, arrays, buffers, typed addresses and unsafe operations. Such values are not magically immutable and may require explicit cleanup or generated cleanup.
+L2 and implementation-facing L3 profiles may expose explicit mutable storage, arrays, buffers, typed addresses and unsafe operations. Such values are not magically immutable and may require explicit release or generated release code.
 
-When a low-level mutable buffer is embedded into a high-level Structure, the Structure must declare whether the edge is owned, borrowed or externally managed. An owned edge is cleaned when the owner is destroyed. A borrowed edge is not cleaned and must not outlive the external owner. An externally managed edge follows a profile-defined lifetime contract.
+When a low-level mutable buffer is embedded into a high-level Structure, the Structure must declare whether the edge is owned, borrowed or externally managed. An owned edge is released when the owner is destroyed. A borrowed edge is not released by the borrowing owner and must not outlive the external owner. An externally managed edge follows a profile-defined lifetime contract.
 
 The high-level branch-arena model does not prohibit low-level code. It only requires that raw low-level references do not escape their valid owner lifetime or cross an L5 Thread boundary in violation of the L5 isolation rule.
 
@@ -5957,7 +5957,7 @@ L2 storage/allocation receivers remain the low-level unsafe layer:
 An L2 or implementation-facing profile may allow policy arguments on declaration/allocation receivers:
 
     heap: Buffer, data, owner(frame)
-    heap: Buffer, data, external(cleanup freeBuffer)
+    heap: Buffer, data, external(release freeBuffer)
     []: bytes, n, owner(branch)
 
 These arguments are ordinary Structures consumed by the active receiver signature. They do not create C-like declaration syntax.
@@ -5993,7 +5993,7 @@ Deferred owner-copy means that an edge is semantically owned by the target owner
 
 This is valid only when the observable ownership contract is preserved. For mutable values, deferred owner-copy requires a freeze, copy-on-write, explicit mutation barrier or immediate copy; otherwise the target would observe later source mutations instead of the value it retained. For immutable high-level Structures, source text, interned values, model descriptors and parser trees, deferred owner-copy is often a natural implementation strategy.
 
-Promotion is part of the automatic local tree-cut procedure, not a memory cleanup/destructor operation and not a separately invoked source operation. It may allocate new storage, but that allocation belongs to ownership maintenance inside one L5 Thread. Actual memory release is performed later by destroying the L5 Thread memory graph or by destroying explicit L2/external resources with their own lifetime contracts.
+Promotion is part of the automatic local tree-cut procedure, not a memory release/destruction operation and not a separately invoked source operation. It may allocate new storage, but that allocation belongs to ownership maintenance inside one L5 Thread. Actual memory release is performed later by destroying the L5 Thread memory graph or by destroying explicit L2/external resources with their own lifetime contracts.
 
 L4 model/type descriptors may attach memory-edge policies to fields and payloads:
 
@@ -6002,7 +6002,7 @@ L4:
         vars:
             MessagePayload: payload, owned
             Text: view, borrowed
-            SQL: nativeHandle, external(cleanup close)
+            SQL: nativeHandle, external(release close)
         ---
     ---
 end: L4
@@ -6012,7 +6012,7 @@ Such descriptors may materialize registry facts such as:
 L5:
     fact: edge, MessageEnvelope, payload, owned
     fact: edge, MessageEnvelope, view, borrowed
-    fact: cleanup, MessageEnvelope, nativeHandle, close
+    fact: release, MessageEnvelope, nativeHandle, close
     fact: copyPolicy, MessageEnvelope, payload, deep
     fact: transferPolicy, MessageEnvelope, payload, forbidden
 end: L5
@@ -6036,7 +6036,7 @@ An ANSI C translator may implement this memory model with the following mechanis
 
     LmArena for branch, frame and handler regions;
     LmBranch or equivalent root handles for arena-owned branches;
-    generated cleanup labels for L2/L3 resource values;
+    generated resource-release paths for L2/L3 resource values;
     frame/handler arena reset at safe exits;
     deep-copy functions for owner-copy;
     lazy-owned edge tables for deferred owner-copy;
@@ -6127,7 +6127,7 @@ L5 message crossing may lower as:
     serialize  -> encode to bytes/text/records, then reconstruct on receiver side;
     transfer   -> detach an `LmBranch` from the sender, attach it to the receiver and invalidate sender-side raw references/handles.
 
-A generated C function may lower scope cleanup to a single C99 exit label:
+A generated C function may lower scope resource release to a single C99 exit label:
 
     int lm_generated_handler(LmThread *thread, const LmMessage *m)
     {
@@ -6138,16 +6138,16 @@ A generated C function may lower scope cleanup to a single C99 exit label:
 
         status = lm_resource_init(&resource);
         if (status != 0) {
-            goto cleanup;
+            goto exit;
         }
         resource_initialized = 1;
 
         status = lm_generated_body(thread, m, &resource);
         if (status != 0) {
-            goto cleanup;
+            goto exit;
         }
 
-    cleanup:
+    exit:
         if (resource_initialized) {
             lm_resource_destroy(&resource);
         }
@@ -6270,10 +6270,13 @@ rules to C99, platform APIs, libraries and native binaries.
 ```text id="83c9z7"
 30.13. Control Exit, Assert Diagnostics and Thread-Local Collection
 
-The memory model has no separate source-level cleanup operation.
+The memory model has two distinct memory mechanisms:
 
-Memory reclamation is performed by the L5 Thread local collector and by the
-local memory-cutter machinery described in this section.
+    L5 Thread local collection;
+    owner-tree cutting / local memory-cutter machinery.
+
+Memory reclamation is performed by these mechanisms as described in this
+section.
 
 A control operator does not free memory merely because it is a control operator.
 It may, however, leave a frame, handler, retry attempt, transaction arena,
@@ -6341,11 +6344,14 @@ mechanics. Its unit of collection is an owner region:
     branch arena;
     whole L5 Thread arena graph.
 
-30.13.1. No Source-Level Cleanup Operation
+30.13.1. Thread-Local Collection and Owner-Tree Cutting
 
-This document does not define a separate source-level cleanup operation.
+This document does not define a separate source-level memory-release operation.
 
 The term collection means a Thread-local memory collection pass.
+
+The term owner-tree cutting means a local structural update of the current
+L5 Thread owner tree.
 
 A collection pass may include:
 
@@ -6356,10 +6362,9 @@ A collection pass may include:
     branch detachment;
     whole-thread arena destruction.
 
-The word cleanup is avoided in this memory section because in many programming
-languages it denotes finalization code such as finally/destructor logic.
-Lingvamyxa memory reclamation is specified as Thread-local collection and
-owner-tree cutting instead.
+These mechanisms are not finalization code and not ordinary control-flow
+handlers. They are local memory machinery attached to owner lifetime and to the
+current L5 Thread arena graph.
 
 30.13.2. Control Exit and Owner Lifetime
 
@@ -6727,6 +6732,84 @@ Thread may reclaim memory by terminating low-priority or non-responsive L5
 Threads. The memory reclaimed is the memory owned by the selected owner regions
 or by the whole selected L5 Thread arena graph. The runtime does not need to
 find individual unreachable objects inside a global heap.
+
+30.14. Future L2/L1 Low-Level Threads, Shared Blocks and `freemem`
+
+This structural memory model does not define the complete surface language for
+standalone C-like L2 execution threads, raw shared memory blocks, direct
+allocator calls or explicit `freemem`-style memory release.
+
+Those mechanisms belong to future L2 and L1-facing implementation profiles.
+They are lower-level than the default L5 Thread memory model.
+
+The default L5 model remains:
+
+    L5 Thread local collection;
+    owner-tree cutting / local memory-cutter machinery;
+    message-boundary transfer by copy, serialization or whole-branch ownership
+    transfer;
+    no raw mutable reference crossing an L5 Thread boundary.
+
+A future L2/L1 profile may define C-like receivers or operations for:
+
+    creating standalone L2 execution threads;
+    joining, cancelling or terminating those L2 threads;
+    allocating raw memory blocks;
+    allocating shared memory blocks;
+    mapping memory-mapped files or external buffers;
+    synchronizing shared mutable blocks with atomics, locks, barriers or
+    profile-defined memory-order rules;
+    releasing raw/shared blocks with an explicit low-level operation such as
+    `freemem`.
+
+Conceptual future profile sketch:
+
+L2:
+    thread: workerThread, workerEntry, workerArgs
+    mem: sharedBlock, bytes, shared(mutable)
+    freemem: sharedBlock
+end: L2
+
+This sketch is not normative source syntax. It only marks the implementation
+area reserved for future L2/L1 profiles.
+
+An L2 execution thread is not automatically an L5 Thread.
+
+An L2 thread may expose raw addresses, shared mutable buffers and platform
+synchronization because it belongs to the low-level implementation-facing
+domain. Such code must obey the explicit L2/L1 profile rules for lifetime,
+memory ordering, synchronization and release.
+
+Higher Lingvamyxa levels should not directly depend on raw `freemem` or raw
+shared-memory access. L3/L4/L5 code should see typed handles, descriptors,
+capabilities, messages, adapters or checked wrappers. The low-level `freemem`
+operation, when provided, is hidden behind those wrappers and is not part of the
+ordinary high-level owner-copy / collection / memory-cutter model.
+
+Therefore `freemem` is not:
+
+    an L5 Thread local collection pass;
+    an owner-tree cutting operation;
+    a message-boundary memory rule;
+    a high-level destructor/finalization mechanism.
+
+It is an explicit low-level release primitive for memory allocated by the
+matching L2/L1 allocation profile.
+
+Future revisions must define at least:
+
+    exact L2 source spelling;
+    allocation ownership and release contracts;
+    shared block publication rules;
+    memory ordering and synchronization requirements;
+    thread start/join/cancel semantics;
+    interaction with L5 wrapper handles and service adapters;
+    diagnostics for double release, use-after-release and cross-level escape;
+    which operations are unsafe or implementation-facing.
+
+Until such a profile is specified, the normative high-level rule is that L5
+Threads communicate by messages and local owner regions, while standalone L2
+threads and raw shared blocks remain hidden L2/L1 implementation mechanisms.
 
 31. L5 Thread and Message Model
 
