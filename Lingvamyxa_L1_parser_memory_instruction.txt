@@ -1,0 +1,294 @@
+Lingvamyxa L1 Parser Instruction: Initial Memory Style
+
+Status
+
+This file is an implementation instruction for the first L1/C99 structural
+parser. It is not a replacement for Lingvamyxa_spec.txt.
+
+Here "L1 parser" means the bootstrap parser implemented in the external C99
+layer. It does not define a new Lingvamyxa source level.
+
+The goal is to keep the initial parser simple in C while matching the Section 30
+memory model:
+
+    source text and parser output are Structures;
+    parser-owned objects live in local owners/arenas;
+    raw borrowed pointers must not outlive their owner;
+    owner semantics may be implemented by immediate copy or deferred promotion
+    during automatic local tree-cut processing.
+
+
+1. Initial Parser Owners
+
+The first parser should use a small number of explicit owners:
+
+    LmParseContext
+        Owns the whole parse operation.
+
+    LmSourceOwner
+        Owns the loaded source text bytes and line table.
+
+    LmTokenArena
+        Owns token records and temporary scanner data.
+
+    LmTreeArena
+        Owns the P0 Structure tree.
+
+    LmDiagnosticArena
+        Owns diagnostics and source spans.
+
+All owners are local to one parser run and one L5-style execution context.
+The first implementation does not need a global GC. It needs local owner-tree
+bookkeeping inside one parser/L5-thread-like execution context.
+
+
+2. No Raw Escaping Pointers
+
+Do not store long-lived raw pointers into another owner unless the edge is
+explicitly marked.
+
+Allowed edge kinds:
+
+    BORROWED
+        Points into another owner and must not outlive that owner.
+
+    OWNED
+        Physically stored in the target owner.
+
+    LAZY_OWNED
+        Semantically owned by the target owner, but temporarily points into a
+        source owner until promoted or pinned.
+
+    EXTERNAL
+        Lifetime managed outside the parser by an explicit contract.
+
+For P0 parser data, prefer handles or slices that carry owner metadata:
+
+    source text slice -> (source_owner, offset, length)
+    token text        -> exact slice or interned identifier handle
+    AST string/name   -> owned/interned handle or lazy-owned slice
+
+Avoid plain `char *` fields unless their owner is obvious and local.
+
+
+3. Source Text and Slices
+
+The loaded source file should be owned by LmSourceOwner.
+
+Tokens may initially store slices into source text:
+
+    typedef struct LmSlice {
+        LmSourceOwner *owner;
+        size_t offset;
+        size_t length;
+    } LmSlice;
+
+This is BORROWED by default.
+
+When a token/identifier must survive after the source text owner may be
+released, it must become OWNED or LAZY_OWNED by the target owner.
+
+
+4. Identifier Storage
+
+The parser should distinguish:
+
+    bare word identifier
+    phrase identifier
+    exact quoted identifier
+    string literal
+
+Bare phrase normalization may allocate normalized spelling in the target owner,
+or may keep a lazy-owned source slice plus normalization metadata until the
+value is actually needed.
+
+Exact quoted identifiers may preserve:
+
+    original source slice;
+    decoded exact spelling;
+    owner edge kind.
+
+For the first parser, a practical rule is:
+
+    source-span spelling -> borrowed slice
+    normalized identifier value -> tree-owned or interned
+    decoded exact identifier -> tree-owned, interned or lazy-owned
+
+
+5. Lazy-Owned Edges
+
+An owner assignment in Section 30 may be implemented without copying
+immediately.
+
+For the L1 parser:
+
+    LAZY_OWNED edge =
+        target owner promises to retain the value;
+        physical bytes/nodes may still live in the source owner;
+        when the local owner tree is cut or an owner is detached, the edge must
+        be promoted or the source owner must stay pinned.
+
+Possible representation:
+
+    typedef enum LmEdgeKind {
+        LM_EDGE_BORROWED,
+        LM_EDGE_OWNED,
+        LM_EDGE_LAZY_OWNED,
+        LM_EDGE_EXTERNAL
+    } LmEdgeKind;
+
+    typedef struct LmOwnedRef {
+        LmEdgeKind kind;
+        void *source_owner;
+        void *target_owner;
+        const void *ptr;
+        size_t size;
+        void **patch_slot;
+    } LmOwnedRef;
+
+The `patch_slot` lets automatic tree-cut promotion replace a borrowed source
+pointer with the newly copied target-owned pointer.
+
+
+6. Automatic Tree-Cut Promotion
+
+Promotion is ownership maintenance, not memory cleanup.
+
+It runs automatically as part of local owner-tree cutting/detaching inside one
+parser run or one L5 Thread. It is not a separately invoked Lingvamyxa source
+operation and it is not a global GC.
+
+    lm_tree_cut(owner)
+        promote lazy-owned edges that would lose their source storage;
+        or keep the source owner pinned if promotion is not possible;
+        detach or mark the cut subtree according to the local owner policy.
+
+Promotion pseudo-flow:
+
+    for each lazy edge whose source_owner == owner:
+        if target already has stable immutable representation:
+            redirect edge to immutable handle
+        else:
+            copy value into target_owner
+            patch edge slot
+            mark edge OWNED
+
+If promotion fails, the parser should return a diagnostic/status and keep the
+source owner pinned. This does not imply immediate memory release.
+
+Actual memory release is a coarser event. For the first parser, the simplest
+rule is:
+
+    destroy LmParseContext / parser thread owner
+        releases the local parser memory graph.
+
+The analogous later runtime rule is:
+
+    destroy L5 Thread
+        releases that L5 Thread memory graph.
+
+Explicit L2 shared/external resources, when introduced, have separate
+destruction/lifetime contracts.
+
+
+7. Mutability Rule
+
+Lazy ownership is safe by default for immutable or not-yet-mutated data:
+
+    source text bytes
+    token spelling slices
+    normalized immutable identifier values
+    parser tree nodes after parse freeze
+    model descriptors
+
+Lazy ownership is not safe for mutable data unless the implementation uses:
+
+    immediate copy;
+    freeze before sharing;
+    copy-on-write;
+    mutation barrier;
+    explicit exclusive ownership transfer.
+
+The first parser should make parsed P0 Structure nodes immutable after
+construction. Any rewrite/normalization pass should produce new nodes or use a
+separate mutable builder arena.
+
+
+8. Parser Tree Strategy
+
+Recommended first implementation:
+
+    1. Load source text into LmSourceOwner.
+    2. Tokenize using slices into LmSourceOwner.
+    3. Build P0 tree nodes in LmTreeArena.
+    4. Store source spans as offsets, not raw pointers.
+    5. Store normalized identifiers in LmTreeArena or an intern table.
+    6. Freeze the P0 tree after build.
+    7. When the source/text subtree is cut away from the parser tree, automatic
+       tree-cut promotion either copies needed lazy-owned text into the tree
+       owner or keeps the source owner pinned for the tree lifetime.
+
+This keeps the common path fast:
+
+    source slices are cheap;
+    no mass string copying during tokenization;
+    tree ownership remains semantically clear;
+    source memory is retained only as long as needed.
+
+
+9. C99 Style Rules
+
+Use explicit status returns:
+
+    int lm_parse(...);
+    int lm_tree_cut(...);
+    int lm_tree_cut_promote_lazy_edges(...);
+
+Avoid hidden ownership promotion in cleanup functions.
+
+Use one cleanup label per generated/manual C function:
+
+    status = do_work(...);
+    goto cleanup;
+
+    cleanup:
+        lm_parse_context_destroy(ctx);
+        return status;
+
+The cleanup label destroys the whole parser context or releases obvious local
+temporaries. It does not perform the tree-cut promotion algorithm. Promotion is
+part of the automatic local tree-cut/detach machinery.
+
+
+10. Minimal Initial Scope
+
+The first L1 parser does not need:
+
+    global tracing GC;
+    cross-thread owner graphs;
+    arbitrary moving objects;
+    finalizers that allocate freely;
+    shared mutable source buffers.
+
+It does need:
+
+    arenas/owners;
+    source spans by offset;
+    explicit borrowed/owned/lazy-owned edge metadata;
+    automatic tree-cut promotion;
+    immutable parser output after freeze;
+    diagnostics for promotion/copy failure.
+
+
+11. Relationship to Later L5 Runtime
+
+This parser memory style is intentionally compatible with the L5 Thread model:
+
+    local owner graph;
+    no raw cross-thread references;
+    copy/serialize/transfer at boundaries;
+    immutable sharing where safe;
+    no global stop-the-world requirement.
+
+The first parser may be single-threaded, but its data model should not block a
+later L5 Thread implementation.

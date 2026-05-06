@@ -5768,7 +5768,7 @@ This section defines the structural memory model used by Lingvamyxa source seman
 
 The model is intentionally region-oriented. It is not a global garbage-collected heap model and it is not a Rust-style per-variable ownership calculus. It treats high-level Structures as branch-owned memory regions, uses borrowed references by default when data is obtained from outside the current owner, and isolates L5 Threads from one another.
 
-The memory model is semantic. A translator may lower it to stack allocation, arenas, reference-counted branch handles, local tracing collectors, copy-on-write Structures, immutable value stores, direct C storage, generated cleanup labels or another implementation strategy that preserves the rules below.
+The memory model is semantic. A translator may lower it to stack allocation, arenas, reference-counted branch handles, local owner-tree walkers, copy-on-write Structures, immutable value stores, direct C storage, generated cleanup labels or another implementation strategy that preserves the rules below.
 
 30.1. Core Rules
 
@@ -5871,7 +5871,7 @@ Conceptual components:
 
 Raw references inside one L5 Thread may point only into memory owned by that same L5 Thread or into explicitly shared immutable storage admitted by the implementation profile. Raw references from one L5 Thread into another L5 Thread are invalid.
 
-This makes the unit of memory management local. Reclaiming memory for one L5 Thread does not require stopping or scanning all L5 Threads in the system.
+This makes the unit of memory management local. Releasing memory for one L5 Thread does not require stopping or scanning all L5 Threads in the system.
 
 30.6. Message Boundary
 
@@ -5891,15 +5891,17 @@ Whole-branch ownership transfer means that the sender transfers ownership of an 
 
 A message must not contain raw borrowed references into the sender's private arena graph unless the receiver is the same L5 Thread and the active profile explicitly treats the message as an intra-thread frame.
 
-30.7. Temporary Arenas, Branch Reclamation and Local Collection
+30.7. Temporary Arenas, Tree Cutting and Thread Destruction
 
 Temporary values may be allocated in a frame arena, handler arena or transaction arena and released as a group when that frame, handler or transaction ends.
 
 Long-lived values must be reachable from an owner such as the L5 Thread root state, a branch root, a module state Structure or another persistent owner.
 
-A branch arena may be reclaimed deterministically when it is detached from its owner and no active borrow can refer to it. If an implementation chooses to track references, it may use a branch/root handle with reference counting. If it chooses a collector, the collector is local to the owning L5 Thread and traces only that Thread's root state, current frames, message queue and active local handles.
+When a branch or subtree is cut from the local owner tree, an implementation may run an automatic tree-cut procedure for that L5 Thread. This procedure may promote deferred-owned edges, pin source owners that are still needed, detach branch roots, or mark local memory as no longer reachable from the thread root.
 
-The source semantics do not require a global stop-the-world collector. A local collector may pause only the owning L5 Thread at a safe point.
+This procedure is not a general garbage collector in the source semantics and it is not a separately invoked language operation. It is part of the local structural memory machinery of one L5 Thread. Since one L5 Thread processes one handler at a time in the default profile, this procedure does not require cross-thread coordination or global stopping.
+
+Actual memory release is a coarser implementation event. In the default model, memory may remain owned by the L5 Thread until that L5 Thread is destroyed. Explicit shared or externally managed L2 resources, such as large shared arrays, have their own explicit destruction/lifetime contracts. Until such L2 shared resources are introduced, destroying an L5 Thread is the ordinary mechanism that releases its local memory graph.
 
 30.8. Immutable Values and Interning
 
@@ -5967,6 +5969,20 @@ The phrase-signature spelling:
 
 may be supported by a profile as a readable variant of the same owner-copy operation. The canonical receiver-level meaning is still ordinary Structure consumption, not a new grammar category.
 
+The source meaning of an owned edge is an ownership contract, not a mandatory immediate physical deep copy. An implementation may satisfy owner-copy semantics by:
+
+    immediate deep copy;
+    immutable sharing;
+    copy-on-write;
+    source-owner pinning;
+    deferred owner-copy with automatic promotion during local tree-cut / owner-detach processing.
+
+Deferred owner-copy means that an edge is semantically owned by the target owner, but the implementation may temporarily point to storage owned by the source owner. When the local owner tree is cut or an owner is detached, every still-live deferred-owned edge that would otherwise lose its source storage must either be promoted by copying the referenced value into the target owner, redirected to an immutable/shared representation, or keep the source owner pinned inside the same L5 Thread memory graph.
+
+This is valid only when the observable ownership contract is preserved. For mutable values, deferred owner-copy requires a freeze, copy-on-write, explicit mutation barrier or immediate copy; otherwise the target would observe later source mutations instead of the value it retained. For immutable high-level Structures, source text, interned values, model descriptors and parser trees, deferred owner-copy is often a natural implementation strategy.
+
+Promotion is part of the automatic local tree-cut procedure, not a memory cleanup/destructor operation and not a separately invoked source operation. It may allocate new storage, but that allocation belongs to ownership maintenance inside one L5 Thread. Actual memory release is performed later by destroying the L5 Thread memory graph or by destroying explicit L2/external resources with their own lifetime contracts.
+
 L4 model/type descriptors may attach memory-edge policies to fields and payloads:
 
     field: payload, MessagePayload, owned
@@ -6002,6 +6018,8 @@ An ANSI C translator may implement this memory model with the following mechanis
     generated cleanup labels for L2/L3 resource values;
     frame/handler arena reset at safe exits;
     deep-copy functions for owner-copy;
+    lazy-owned edge tables for deferred owner-copy;
+    source-owner pinning or promotion during local tree-cut / owner-detach processing;
     serialization functions for message payloads;
     ownership-transfer functions that detach one LmBranch from a sender and attach it to a receiver;
     optional per-L5-Thread local tracing or reference counting for branch roots;
@@ -6015,6 +6033,7 @@ Possible runtime declarations:
 
     typedef enum LmEdgeKind {
         LM_EDGE_OWNED,
+        LM_EDGE_LAZY_OWNED,
         LM_EDGE_BORROWED,
         LM_EDGE_EXTERNAL,
         LM_EDGE_TRANSFERRED
@@ -6024,8 +6043,17 @@ Possible runtime declarations:
         void (*destroy)(void *value);
         int  (*copy_to)(LmArena *arena, void *dst, const void *src);
         int  (*serialize)(void *writer, const void *src);
-        void (*trace)(void *collector, void *value);
+        void (*trace)(void *owner_walker, void *value);
     } LmTypeOps;
+
+    typedef struct LmEdge {
+        LmEdgeKind kind;
+        LmBranch *source_owner;
+        LmBranch *target_owner;
+        const LmTypeOps *type_ops;
+        void *value;
+        void **patch_slot;
+    } LmEdge;
 
     struct LmBranch {
         LmArena *arena;
@@ -6048,7 +6076,7 @@ Generated type/model operations may be derived from L4 descriptors:
     destroy       clears owned edges and external resources;
     copy_to       implements owner-copy and ordinary deep copy;
     serialize     implements message serialization;
-    trace         supports an optional local collector or reference tracker.
+    trace         supports optional local owner-tree walking or reference tracking.
 
 An owner-copy form such as:
 
@@ -6059,6 +6087,18 @@ may lower to:
     saved = lm_copy_to_owner(current_owner, incoming_payload);
 
 or to inlined field-by-field copy when the type/model layout is statically known.
+
+If the implementation uses deferred owner-copy, the same form may lower to a lazy-owned edge:
+
+    saved = lm_lazy_owner_edge(current_owner, incoming_payload);
+
+The lazy edge is still semantically owned by `current_owner`. During automatic local tree-cut or owner-detach processing, if the source owner would no longer remain reachable, the runtime must either promote the edge:
+
+    lm_tree_cut_promote_lazy_edges(source_owner);
+
+or keep the source owner pinned inside the same L5 Thread memory graph until no lazy-owned edges refer to it.
+
+For immutable values, promotion may be unnecessary if the implementation can prove stable lifetime and immutability. For mutable values, the runtime must use immediate copy, freeze, copy-on-write or a mutation barrier before lazy ownership can preserve source semantics.
 
 L5 message crossing may lower as:
 
@@ -6081,7 +6121,7 @@ For high-level immutable Structures, the translator may represent bindings as ha
 ---ANSI C---
 
 ?
-Precise binary layouts of arenas, branch handles, immutable stores, local collector metadata, message serialization formats, thread scheduling, synchronization primitives, status/result conventions, generated copy function signatures and ownership-transfer invalidation rules are not specified in this structural core document. They belong to the runtime and L1 lowering specifications.
+Precise binary layouts of arenas, branch handles, lazy-owned edge tables, immutable stores, local owner-tree metadata, message serialization formats, thread scheduling, synchronization primitives, status/result conventions, generated copy function signatures, tree-cut promotion policy and ownership-transfer invalidation rules are not specified in this structural core document. They belong to the runtime and L1 lowering specifications.
 ?
 
 30.12. Shared Low-Level Resources and Large Read-Only Data
