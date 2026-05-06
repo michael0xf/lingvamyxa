@@ -1,0 +1,299 @@
+Lingvamyxa Parser P0 Instruction: Trailer Roles
+
+Status
+
+This file is an implementation instruction for the first structural parser.
+It is not a replacement for Lingvamyxa_spec.txt.
+
+This file describes early profile-level trailer roles above the generic
+head/body/trailer envelope parser.
+
+In implementation terms, this is an L1-facing parser/profile layer: it tells the
+bootstrap parser how to shape the tree before later Lingvamyxa receiver
+semantics run. It is not a new Lingvamyxa source level.
+
+These roles are not lexer tokens and not global hard keywords. They are
+operator/receiver roles that the P0 tree builder must recognize early enough to
+decide whether a line closes/completes the current envelope or starts an
+ordinary sibling item.
+
+
+1. Relationship to the Generic Envelope Parser
+
+The generic envelope model is:
+
+    FrameEnvelope =
+        head
+        primary body Structure
+        trailer
+
+The primary body Structure belongs to the opened frame.
+
+A trailer may carry its own argument Structure. The parser must not restrict the
+size or shape of that trailer argument Structure. It may be inline, vertical,
+bounded, anonymous-delimited or otherwise structured according to the ordinary
+P0 source rules and the active profile.
+
+The trailer argument Structure belongs to the trailer receiver, not to the
+primary body of the frame being closed.
+
+
+2. Why Trailer Roles Are a Separate P0 Layer
+
+Most receiver heads can be parsed as ordinary frame heads and understood later
+by receiver consumption.
+
+Some forms must be recognized earlier because they affect tree construction:
+
+    end: target
+        closes a visible named target.
+
+    return / return: value
+        may close an executable envelope in terminal position.
+
+    until: condition
+        closes the current executable/label block and consumes that block as a
+        post-condition loop body.
+
+    ---
+        may act as a nameless close/separator and may replace `end: target`
+        when the current close target is unambiguous and the profile permits it.
+
+This is an implementation/profile layer above tokenization and above the raw
+head/body/trailer shape. It is still below full receiver semantics.
+
+
+3. Generic Trailer Role Shape
+
+A trailer role has:
+
+    spelling
+        The head spelling or marker spelling that triggered the role.
+
+    source level
+        The source level where the trailer appears.
+
+    role kind
+        The early structural role assigned by the active P0 profile.
+
+    argument Structure
+        Optional, unrestricted Structure owned by the trailer receiver.
+
+    target policy
+        Rule for which open envelope is closed/completed.
+
+    validation policy
+        Early structural checks. Full semantic checks remain receiver/profile
+        work.
+
+
+4. P0 Trailer Role Table
+
+    NEWLINE_SHORT
+        Spelling:
+            physical newline
+
+        Meaning:
+            closes a short physical line form.
+
+        Argument Structure:
+            none.
+
+
+    RPAREN_BOUNDED
+        Spelling:
+            )
+
+        Meaning:
+            closes the current bounded/compact form.
+
+        Argument Structure:
+            none.
+
+
+    LEVEL_DROP
+        Spelling:
+            following source item at a smaller source level
+
+        Meaning:
+            closes all open Structures above the smaller source level.
+
+        Argument Structure:
+            none. The following item is not part of the trailer.
+
+
+    DELIM_NAMELESS
+        Spelling:
+            canonical dotted delimiter line
+            ---
+
+        Meaning:
+            same-level anonymous Structure delimiter / nameless close.
+
+        Argument Structure:
+            none.
+
+        Extra rule:
+            May replace `end: target` only when the current close target is
+            unambiguous and the active receiver/profile permits nameless close.
+
+
+    END_NAMED
+        Spelling:
+            end: target
+
+        Meaning:
+            explicit named close.
+
+        Argument Structure:
+            the full `target` Structure consumed by the `end` trailer receiver.
+
+        Target policy:
+            close a visible named frame/entity/label target.
+
+        Early checks:
+            reject if no target is visible;
+            reject if the target is ambiguous;
+            reject bare `end`;
+            reject `end target`.
+
+
+    TERMINAL_RETURN
+        Spelling:
+            return
+            return: value
+
+        Meaning:
+            executable-specific terminal close when it appears in a terminal
+            close position admitted by the active executable receiver.
+
+        Argument Structure:
+            none for `return`;
+            unrestricted Structure for `return: value`.
+
+        Fallback:
+            inside an executable body, the same spelling may be an ordinary
+            runtime return item rather than a trailer.
+
+        Early checks:
+            reject terminal use at root level with no open executable;
+            reject terminal use for non-executable frames unless a profile
+            explicitly admits it.
+
+
+    UNTIL_CLOSE
+        Spelling:
+            until: condition
+
+        Meaning:
+            post-condition close receiver. It closes the current executable or
+            label block and consumes that block as the loop body.
+
+        Argument Structure:
+            unrestricted Structure owned by the `until` trailer receiver.
+
+        Target policy:
+            close the current executable/label block according to the active
+            control profile.
+
+        Important:
+            `until:` is not an ordinary sibling item after the block it closes
+            when it appears in this trailer position.
+
+
+    EOF_ALLOWED
+        Spelling:
+            EOF
+
+        Meaning:
+            closes only Structures that the active P0 profile allows to end at
+            EOF.
+
+        Argument Structure:
+            none.
+
+        Early checks:
+            reject checked named targets that require explicit close;
+            reject unclosed anonymous/implicit sections that require delimiter
+            or trailer close.
+
+
+5. Role Recognition Algorithm
+
+When an ITEM(K, body) has a head spelling that could be a trailer role:
+
+    1. Look at the current open envelope stack.
+    2. Ask the active P0 trailer-role table whether this spelling may act as a
+       trailer at level K in the current position.
+    3. If yes, parse its argument Structure using ordinary P0 Structure rules
+       and attach it as the trailer argument.
+    4. Close/complete the target envelope according to the role's target policy.
+    5. If no trailer role applies, parse the item as an ordinary sibling/body
+       item.
+
+The lexer does not make this decision. The token spelling `until` or `end` is
+just an identifier/head spelling until this role pass resolves it.
+
+
+6. Examples
+
+Named close:
+
+    outerLoop:
+        for: int(i, 1), (i <= 3), i++
+            print: i
+    end: outerLoop
+
+Envelope view:
+
+    outerLoop envelope:
+        primary body:
+            for(...)
+        trailer:
+            end(outerLoop)
+
+
+Post-condition close:
+
+    readLoop:
+        readNext: record
+        process: record
+    until: endOfInput(record)
+
+Envelope view:
+
+    readLoop envelope:
+        primary body:
+            readNext(record)
+            process(record)
+        trailer:
+            until(
+              endOfInput(record)
+            )
+
+
+Trailer with a larger argument Structure:
+
+    readLoop:
+        readNext: record
+        process: record
+    until:
+        endOfInput: record
+        or:
+            timeoutReached
+
+P0 must not reject this shape merely because the trailer argument Structure is
+vertical or multi-field. The `until` receiver/control profile decides whether
+that condition Structure is semantically valid.
+
+
+7. Summary
+
+Trailer-role forms are early profile operators, not lexical keywords.
+
+They live above the generic head/body/trailer envelope rule because they decide
+whether a source item closes/completes an existing envelope or becomes an
+ordinary item in the parent body.
+
+They live below full receiver semantics because they should perform only the
+structural decision needed to build the P0 tree.

@@ -1,0 +1,274 @@
+Lingvamyxa Parser P0 Instruction: Envelope and Close Rules
+
+Status
+
+This file is an implementation instruction for the first structural parser.
+It is not a replacement for Lingvamyxa_spec.txt.
+
+This file describes the generic envelope/tree mechanics only. Profile-level
+trailer forms such as `end:`, terminal `return` and `until:` are described in:
+
+    Lingvamyxa_parser_P0_trailer_roles.txt
+
+
+1. Core Envelope Model
+
+The P0 tree builder treats an opened frame as an envelope:
+
+    FrameEnvelope =
+        head
+        primary body Structure
+        trailer
+
+The primary body Structure is the normal argument/child Structure consumed by
+the frame's receiver.
+
+The head and trailer are not ordinary child fields of that primary body. They
+control how the frame opens, where its primary body is attached, and how the
+frame is closed or completed.
+
+A trailer may be only a marker, or it may be a receiver-like form with its own
+argument Structure. The parser must not restrict the size or shape of a trailer
+argument Structure. Semantic restrictions belong to the trailer receiver/profile.
+
+Examples:
+
+    print: hello
+
+has:
+
+    head            print
+    primary body    (hello)
+    trailer         physical newline
+
+And:
+
+    readLoop:
+        readNext: record
+        process: record
+    until: endOfInput(record)
+
+has:
+
+    head            readLoop
+    primary body    (readNext(record), process(record))
+    trailer         until(endOfInput(record))
+
+The `until` trailer owns its own argument Structure. That argument may be inline,
+vertical or otherwise shaped according to ordinary source Structure rules and
+the active trailer profile.
+
+
+2. Parser Input Events
+
+After source-level normalization, the tree builder consumes generic events:
+
+    ITEM(K, body)
+        Ordinary source item at source level K. It may become a frame envelope,
+        compact frame, atom/value item, expression Structure or other parser
+        item according to the structural and expression scanners.
+
+    DELIM(K, kind)
+        Same-level anonymous delimiter / nameless close at source level K.
+        kind is canonical-dotted or dash.
+
+    TRAILER(K, spelling, argument_structure)
+        A profile-recognized trailer role. The generic parser does not hard-code
+        specific spellings here. See Lingvamyxa_parser_P0_trailer_roles.txt.
+
+    EOF
+        End of file.
+
+Physical empty lines are ignored as formatting whitespace in P0. They are not
+close tokens and do not replace a required same-level delimiter.
+
+
+3. Core Level Rule
+
+A following source item at a smaller source level is a level delimiter.
+
+    ITEM(M), where M < current open child level
+        closes all open Structures above M;
+        then the item is parsed at level M.
+
+This is the ordinary way indentation/dots close a vertical tail.
+
+A visible same-level delimiter is needed when the next structural item starts
+at the same source level and no smaller-level source line appears between the
+two Structures.
+
+
+4. How Structures Start
+
+A primary body Structure may start in several ways:
+
+    after a head line with inline body:
+
+        print: hello
+
+    after a head line followed by children at source level K + 1:
+
+        if: a
+            doSomething
+
+    inside a bounded/compact form:
+
+        print(hello)
+        (a, b, c)
+
+    through a delimiter that opens an anonymous Structure:
+
+        match: value
+            ---
+                1
+                print: World
+
+The delimiter case is important. A DELIM(K) followed by an item at K + 1 opens
+an anonymous Structure at K as the next positional child of the current parent
+frame.
+
+
+5. DELIM(K)
+
+A DELIM(K) event is produced by:
+
+    canonical dotted delimiter line at level K
+    `---` line at level K
+
+P0 rule:
+
+    if next item is at K + 1:
+        close previous anonymous Structure at K if one is open;
+        open a new anonymous Structure at K as the next positional child
+        of the current parent frame.
+
+    if next item is at K:
+        close/cut the current anonymous or implicit section at K;
+        the next item starts a sibling or continuation at K.
+
+    if next item is at K - 1:
+        close/cut the current anonymous or implicit section at K;
+        normal level-delimiter rules close structures above K - 1.
+
+    if next item is lower than K - 1:
+        syntax error unless the skipped open tail has already been closed by
+        a profile-recognized trailer role or by a profile-permitted nameless
+        close.
+
+    if next item is deeper than K + 1:
+        syntax error unless the immediately preceding opened item can legally
+        own that deeper level.
+
+Anonymous Structures opened by delimiter lines remain anonymous in the parser
+tree. Receivers may assign semantic roles by positional signature.
+
+
+6. Anonymous vs Named Children
+
+Delimiter-created branches are anonymous in the parser tree:
+
+    if: a
+    .
+    . . doSomething
+    .
+    . . doOtherThing
+    end: if
+
+P0 tree:
+
+    if(
+      a,
+      anonymous(
+        doSomething
+      ),
+      anonymous(
+        doOtherThing
+      )
+    )
+
+Receiver-normalized semantic view may later treat these positional children as:
+
+    condition -> a
+    thenBody  -> first anonymous Structure
+    elseBody  -> second anonymous Structure
+
+By contrast, a colon frame such as:
+
+    if: a
+    . then:
+    . . doSomething
+    . else:
+    . . doOtherThing
+    end: if
+
+builds named child Frames in the parser tree:
+
+    if(
+      a,
+      then(
+        doSomething
+      ),
+      else(
+        doOtherThing
+      )
+    )
+
+The names `then` and `else` come from the child frame heads. They are not
+created by DELIM(K).
+
+
+7. Generic Trailer Kinds
+
+At the generic envelope level, trailers are described by role shape rather than
+by fixed keyword spelling:
+
+    short-line trailer
+        physical newline closes a short physical line form.
+
+    bounded trailer
+        `)` closes a bounded/compact form.
+
+    source-level trailer
+        a following source item at a smaller level closes all open Structures
+        above that smaller level.
+
+    nameless delimiter trailer
+        `---` or a canonical dotted delimiter may close/cut anonymous or
+        implicit sections at its level.
+
+    receiver trailer
+        a profile-recognized receiver-like form may close or complete the
+        current frame and may carry its own argument Structure.
+
+    EOF trailer
+        EOF may close only Structures that the selected profile permits to end
+        at EOF.
+
+Specific receiver trailer forms are outside this generic file.
+
+
+8. P0 Decision Summary
+
+    smaller source level
+        level delimiter; closes all open Structures above the smaller level.
+
+    dotted delimiter line
+        canonical same-level anonymous delimiter / nameless close.
+
+    ---
+        relaxed same-level anonymous delimiter / nameless close;
+        may also become a nameless trailer where a profile permits it.
+
+    physical newline
+        trailer for a short physical line form.
+
+    )
+        trailer for a bounded/compact form.
+
+    profile trailer receiver
+        closes/completes an envelope and may carry an unrestricted argument
+        Structure.
+
+    empty physical line
+        formatting whitespace; not a close token.
+

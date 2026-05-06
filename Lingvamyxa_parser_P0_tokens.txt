@@ -1,0 +1,365 @@
+Lingvamyxa Parser P0 Instruction: Tokens
+
+Status
+
+This file is an implementation instruction for the first structural parser.
+It is not a replacement for Lingvamyxa_spec.txt.
+
+This file defines tokenization and spelling recognition only. It does not decide
+which receiver heads are normal heads and which receiver heads act as trailer
+roles. Trailer-role recognition is described separately in:
+
+    Lingvamyxa_parser_P0_trailer_roles.txt
+
+P0 tokenization must preserve the central language rule:
+
+    source syntax builds Structures;
+    identifiers are identifier values;
+    receivers and semantic context decide what those identifiers mean.
+
+Therefore the lexer must not decide that an identifier is a variable, binding,
+field, selector, atom, enum value, type, boolean, label, callable or trailer.
+It only recognizes spelling forms and structural separators.
+
+
+1. Tokenization Layers
+
+P0 uses several lightweight modes instead of one flat token stream:
+
+    source-level normalization
+        maps physical lines to source levels and line events.
+
+    structural line scanner
+        recognizes colon frames, delimiters, comments, disabled items and
+        bounded Structures.
+
+    atom scanner
+        recognizes identifiers, exact identifiers, numbers and strings.
+
+    expression scanner
+        recognizes mathematical/operator tokens only in expression positions.
+
+This is intentional. For example `/` may be an expression operator in an
+argument expression, while a profile may allow `System/out/println` as one
+receiver head spelling in head position.
+
+
+2. Source-Level Events
+
+The source-level normalization prepass produces:
+
+    SOURCE_LEVEL(K)
+        Integer source level for a physical line.
+
+    EMPTY_LINE
+        Formatting whitespace. Ignored by P0. Not a close token.
+
+    RAW_COMMENT_BLOCK
+        `===` at column 0 opens/closes a raw ignored block. The contents are
+        not tokenized.
+
+    LINE_TEXT(K, text)
+        Physical source line content after indentation/source-level handling.
+
+    EOF
+        End of file.
+
+Canonical dotted notation:
+
+    leading dots in the indentation zone define SOURCE_LEVEL(K).
+    spaces/tabs in that indentation zone are readability only.
+
+Relaxed indentation notation:
+
+    leading spaces/tabs before ordinary source text are mapped to SOURCE_LEVEL(K)
+    by the indentation-stack rule.
+
+Leading dots outside the indentation zone are ordinary source text only if a
+future profile explicitly admits that form. In P0, dot is not field access.
+
+
+3. Whole-Line Structural Forms
+
+These are recognized after source-level normalization and before ordinary atom
+scanning:
+
+    DELIM_DOTTED(K)
+        A canonical dotted delimiter line. It contains only dots/spaces/tabs
+        before newline and at least one dot.
+
+    DELIM_DASH(K)
+        A `---` line at source level K. The line may contain leading indentation,
+        optional whitespace after `---`, and an optional trailing `#` comment.
+        It may not contain another source item.
+
+    COMMENT_LINE
+        A line whose content begins with `#` after indentation/source-level
+        handling. Ignored by P0.
+
+    DISABLED_ITEM
+        `$` immediately after the source-level zone marks the following source
+        item disabled. The item and its body are still tokenized and syntax
+        checked, but they are not emitted for receiver consumption.
+
+`---` is DELIM_DASH only as a standalone structural line. Inside an expression
+or ordinary text, `-` belongs to expression/operator tokenization or is an error
+according to the active mode.
+
+
+4. Structural Punctuation
+
+P0 structural punctuation tokens:
+
+    COLON       :
+        Separates head spelling from inline body in a physical short colon-form.
+        A physical source line may contain at most one short colon-form.
+
+    COMMA       ,
+        Separates fields in an inline body or bounded Structure.
+
+    LPAREN      (
+    RPAREN      )
+        Compact Frame argument lists, bounded Structures and expression
+        grouping. The active scanner mode decides the role.
+
+    LBRACKET    [
+    RBRACKET    ]
+        Needed for L2 indexing forms and symbolic receiver heads such as `[]`.
+
+    BACKSLASH   \
+        L2 raw-load / field-follow token in L2/expression profiles.
+
+    AT_RUN      @, @@, @@@, ...
+        Reserved L2 address-depth operator family `@^n`.
+
+    HASH        #
+        Starts a line comment outside strings, exact identifiers and other
+        literal forms.
+
+P0 structural syntax does not use:
+
+    =
+        as assignment or named-field syntax.
+
+    .
+        as field access. Leading dots are source-level units only in the
+        indentation zone; inside a number such as `.5` or `1.0`, dot belongs
+        to the numeric literal; inside an exact identifier, dot is data.
+
+    ->
+    &
+    *
+    ^
+        as native pointer/field syntax. Some of these may be expression
+        operators in expression mode.
+
+
+5. Identifier and Literal Tokens
+
+P0 atom tokens:
+
+    NUMERIC_LITERAL
+        ANSI C / C99 numeric literal spelling.
+        Examples: 0, 123, 0x7B, 1.0, .5, 1e9, 0x1.8p+2.
+
+    STRING_LITERAL
+        ANSI C / C99 string literal spelling. It is a value, not an identifier.
+        The P0 lexer may preserve original spelling and decoded value metadata.
+
+    EXACT_IDENTIFIER
+        Backtick-delimited exact identifier.
+        Two backticks inside the spelling represent one literal backtick.
+        Newline inside exact identifier is invalid in the portable P0 profile.
+
+    BARE_WORD
+        Portable core form:
+
+            [A-Za-z_][A-Za-z0-9_]*
+
+        Unicode identifier starts/continues may be admitted by a later profile.
+
+    PHRASE_IDENTIFIER
+        Parser-level value formed from a non-comma body/head segment that starts
+        with a bare word and continues until a structural separator.
+        Repeated horizontal whitespace is normalized to one ASCII space.
+
+Structural separators for phrase identifiers:
+
+    comma
+    newline
+    closing parenthesis of the current bounded Structure
+    source-level boundary
+    colon in head-scanning mode
+
+Whitespace alone does not split a phrase identifier into several fields.
+
+Examples:
+
+    branch 2
+        one PHRASE_IDENTIFIER, not `branch`, `2`
+
+    red     apples
+        one PHRASE_IDENTIFIER normalized as `red apples`
+
+    `properties.lm5`
+        one EXACT_IDENTIFIER whose exact spelling is properties.lm5
+
+    "properties.lm5"
+        one STRING_LITERAL value, not an identifier
+
+
+6. Head Mode
+
+Before the first structural COLON on a physical line, P0 scans in head mode.
+
+Head mode preserves the head spelling as an identifier/receiver spelling. It
+does not decide whether that spelling is a normal frame head, a label head, a
+profile trailer head, a binding, a selector or a callable.
+
+P0 head spellings:
+
+    bare phrase head
+        print:
+        slow path:
+        outerLoop:
+
+    exact identifier head
+        `select`:
+        `properties.lm5`:
+
+    symbolic/reserved head
+        []:
+        @:
+        @@:
+        @@@:
+
+    profile head path
+        System/out/println:
+
+The last form is treated as one head spelling in P0 head mode if the selected
+profile admits slash-separated receiver heads. The slash has no expression
+operator meaning in head mode.
+
+The spellings `end`, `until`, `return`, `if`, `then`, `else`, `for`, `while`,
+`match`, `model`, `route`, `message`, `print` and similar words are not lexical
+keywords. They are head or atom spellings. Their role is assigned by parser
+context, trailer-role profile or receiver consumption.
+
+
+7. Inline Body and Bounded-Structure Mode
+
+After COLON, P0 scans the rest of the physical line as an inline body Structure.
+
+Field separators:
+
+    COMMA
+    physical newline
+    RPAREN closing the current bounded Structure
+    source-level boundary
+
+Whitespace behavior:
+
+    pure numeric run
+        whitespace separates numeric literals:
+
+            print: 1 2 3
+
+        means:
+
+            print(1, 2, 3)
+
+    string run
+        whitespace separates string literal values:
+
+            print: "hello" "world"
+
+        means:
+
+            print("hello", "world")
+
+    phrase segment
+        whitespace is part of the phrase and is normalized:
+
+            stack: PlantBed, branch 2
+
+        means two fields:
+
+            PlantBed
+            branch 2
+
+P0 must not use receiver signatures to insert hidden nesting while parsing the
+inline body. Receiver signatures operate after the parser tree exists.
+
+A short colon-form is a physical source-line form. It may not appear as an
+inline argument inside parentheses:
+
+    call(int: a, b)      invalid in P0
+    call(int(a, b))      compact frame form
+
+
+8. Expression Tokens
+
+Expression scanning is entered only in expression positions or when expression
+indicator tokens are detected in an argument segment.
+
+P0 expression operator tokens:
+
+    grouping
+        ( )
+
+    arithmetic
+        +  -  *  /  %
+
+    comparison
+        =  !=  <  <=  >  >=
+
+    boolean
+        &&  ||
+        not  and  or
+
+    optional parser methods, if the active P0 profile enables them
+        ++  --
+
+The token `=` is equality/comparison in mathematical expression syntax. It is
+not structural assignment and not named-field syntax.
+
+The words `not`, `and` and `or` are expression operators only in expression
+mode. Elsewhere they are ordinary identifier spellings unless a receiver/profile
+assigns another meaning.
+
+The spellings `true` and `false` are not structural keywords in P0. An
+expression profile or receiver may consume them as boolean values when the
+context expects booleans.
+
+
+9. Token Summary
+
+Required P0 token/event names:
+
+    SOURCE_LEVEL
+    EMPTY_LINE
+    LINE_TEXT
+    RAW_COMMENT_BLOCK
+    COMMENT_LINE
+    DISABLED_ITEM
+    DELIM_DOTTED
+    DELIM_DASH
+    COLON
+    COMMA
+    LPAREN
+    RPAREN
+    LBRACKET
+    RBRACKET
+    BACKSLASH
+    AT_RUN
+    NUMERIC_LITERAL
+    STRING_LITERAL
+    EXACT_IDENTIFIER
+    BARE_WORD
+    PHRASE_IDENTIFIER
+    EXPRESSION_OPERATOR
+    EOF
+
+Trailer-role names such as END_NAMED, TERMINAL_RETURN and UNTIL_CLOSE are not
+lexer tokens. They are profile-level roles assigned above tokenization.
+

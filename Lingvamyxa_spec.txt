@@ -16,7 +16,7 @@ Revision 12.12 note:
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
-    Vertical composition is source-level tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A following source line with a smaller source level is a level delimiter: it closes all open structures above that smaller level. When the next structural item starts at the same source level and no smaller-level source line intervenes, a canonical dotted delimiter line or relaxed `---` line supplies the visible same-level anonymous Structure delimiter / nameless close.
+    Vertical composition is source-level tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A following source line with a smaller source level is a level delimiter: it closes all open structures above that smaller level. When the next structural item starts at the same source level and no smaller-level source line intervenes, a canonical dotted delimiter line or relaxed `---` line supplies the visible same-level anonymous Structure delimiter. That delimiter opens an anonymous positional Structure when followed by a deeper source item, and separates or closes the current anonymous/implicit section otherwise. Where a profile permits it and the target is unambiguous, `---` may also act as a nameless close for a named frame.
 
     `case` is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
 
@@ -24,7 +24,7 @@ Revision 12.12 note:
 
     The token sequences `@`, `@@`, `@@@`, ... form the reserved L2 address-depth operator family `@ⁿ`. In head position, `@ⁿ: BaseType, name` declares a typed address slot of depth n. Comma separates the base type from the binding name, so `@@@: int, ppp` is a three-level address slot to `int`, while `@@@: int ppp` would be one non-numeric phrase segment. Ordinary source cannot rebind `@ⁿ` as user procedure names.
 
-    The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is a nameless structural separator / close form. It may replace a canonical dotted delimiter line, and it may replace `end: <name>` only when the current close target is unambiguous and the receiver/profile permits nameless close. A `---` line must contain only the separator as a structural token; leading spaces/tabs, leading canonical dots and an optional trailing `#` comment are ignored for this restriction.
+    The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is a nameless structural delimiter. It may replace a canonical dotted delimiter line, opening an anonymous positional Structure when followed by a deeper source item, or separating/closing the current anonymous/implicit section otherwise. It may replace `end: <name>` only when the current close target is unambiguous and the receiver/profile permits nameless close. A `---` line must contain only the delimiter as a structural token; leading spaces/tabs, leading canonical dots and an optional trailing `#` comment are ignored for this restriction.
 
 The document is descriptive and semantic. Surface syntax builds Structures. Receivers and subroutines consume Structures and assign typed meaning to them.
 
@@ -771,11 +771,14 @@ Shared source-level rule after either surface notation has been mapped to source
 
     `end: name` closes a visible named target explicitly.
 
-    `---` is a structural separator/nameless close at its own source level.
+    `---` is a structural delimiter at its own source level. Like the
+    canonical dotted delimiter, it may open an anonymous positional Structure
+    when followed by a source item at the next deeper level, or separate/close
+    the current anonymous/implicit section otherwise.
 
 This rule is not a Python-like license to hide every same-level anonymous separator in whitespace. A smaller source-level line closes the open structures above that smaller level. But when two anonymous/implicit Structures must be separated at the same source level, no smaller-level line exists between them, so Lingvamyxa requires a visible same-level delimiter: a canonical dotted delimiter line or `---`.
 
-Visible closing/separation forms are:
+Visible structural transition forms are:
 
     end: name
     return
@@ -784,9 +787,27 @@ Visible closing/separation forms are:
     a canonical source-level delimiter line
     a following source item at a smaller source level
 
-Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are separated at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
+Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
 Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical source-level notation for an anonymous/nameless structural delimiter. Named closure is normally `end: name`.
+
+A useful parser view is the head-body-trailer envelope:
+
+    head
+    body Structure
+    trailer
+
+The body Structure is the primary Structure consumed by the opened frame or anonymous positional argument. The head and trailer are structural envelope roles, not ordinary child fields of that body. For a named frame, the head is a source item such as `if: condition`, `fn: name, ...` or `outerLoop:`. For an anonymous positional Structure, the head may be a canonical dotted delimiter line or a relaxed `---` delimiter line.
+
+In canonical dotted notation:
+
+    .                               # head: open anonymous positional Structure
+    . . body1                       # body
+    .                               # trailer of previous + head of next anonymous Structure
+    . . body2                       # body
+    .                               # trailer
+
+The middle dotted delimiter line has both roles: it closes/separates the preceding anonymous Structure and, because it is followed by a deeper source item, opens the next anonymous positional Structure. A relaxed `---` line follows the same head/body/trailer envelope rule.
 
 A source item at level N may open a frame/Structure. Its vertical child arguments are written at level N + 1.
 
@@ -802,7 +823,7 @@ Physical empty lines are formatting whitespace unless a future profile gives the
 
 A canonical source-level delimiter line is a dotted delimiter line. It contains only dots, spaces and tabs before the newline and contains at least one dot.
 
-A canonical source-level delimiter line at level K may serve as an anonymous positional Structure delimiter or nameless close at level K.
+A canonical source-level delimiter line at level K may serve as an anonymous positional Structure delimiter at level K. When followed by source items at level K + 1, it opens an anonymous positional Structure. Otherwise it separates or closes the current anonymous/implicit section at level K.
 
 If a canonical source-level delimiter line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
 
@@ -810,7 +831,7 @@ The anonymous Structure continues until the next canonical source-level delimite
 
 A canonical source-level delimiter line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
 
-Every source line written with leading dots remains valid in the relaxed language profile. A canonical source-level delimiter line may therefore still be used instead of `---` as the visible nameless close/delimiter.
+Every source line written with leading dots remains valid in the relaxed language profile. A canonical source-level delimiter line may therefore still be used instead of `---` as the visible anonymous delimiter / nameless close form.
 
 Canonical anonymous-branch example:
 
@@ -867,22 +888,22 @@ A standalone line:
 
     ---
 
-at source level K is a structural separator / nameless close at level K.
+at source level K is a structural delimiter at level K. It may open an anonymous positional Structure when followed by source items at level K + 1, or separate/close the current anonymous/implicit section otherwise.
 
 If `---` at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next `---` at level K, a following source item at a smaller source level, an explicit `end: <target>`, terminal `return` / `return: value` where valid, or EOF.
 
 If `---` at level K is not followed by deeper source items, it closes or cuts the current open anonymous/implicit section at that level and resumes parsing at level K.
 
-A `---` separator line must contain no source item other than the separator itself. It may have leading spaces/tabs in relaxed indentation notation, leading canonical dots in canonical source-level / automatic-rewrite notation, horizontal whitespace after the separator, and an optional trailing `#` line comment. The `#` comment text is ignored by the structural parser, exactly like comments after ordinary source text.
+A `---` delimiter line must contain no source item other than the delimiter itself. It may have leading spaces/tabs in relaxed indentation notation, leading canonical dots in canonical source-level / automatic-rewrite notation, horizontal whitespace after the delimiter, and an optional trailing `#` line comment. The `#` comment text is ignored by the structural parser, exactly like comments after ordinary source text.
 
-Valid separator lines:
+Valid delimiter lines:
 
     ---
-    --- # close anonymous branch
+    --- # anonymous branch delimiter
     .---
     . --- # automatically rewritten dotted separator
 
-Invalid separator lines:
+Invalid delimiter lines:
 
     ---else:
     --- return: x
@@ -954,7 +975,7 @@ if: a
 . . doOtherThing
 end: if
 
-Relaxed indentation notation with explicit separator followed by a named continuation receiver:
+Relaxed indentation notation with explicit delimiter followed by a named continuation receiver:
 
 if: condition
     ---
@@ -970,7 +991,7 @@ if: condition
         # doOtherThing
 end: if
 
-The line `else:` is at the same source level as the preceding anonymous section. It therefore closes/separates that anonymous section and starts the ordinary nested Structure `else:`. The active `if` receiver may consume `else(...)` as a semantic field. A spelling such as `---else:` is invalid because `---` must be alone on its separator line, except for an optional trailing `#` comment.
+The line `else:` is at the same source level as the preceding anonymous section. It therefore closes/separates that anonymous section and starts the ordinary nested Structure `else:`. The active `if` receiver may consume `else(...)` as a semantic field. A spelling such as `---else:` is invalid because `---` must be alone on its delimiter line, except for an optional trailing `#` comment.
 
 Example with an explicit nameless close after a nested `if`:
 
@@ -996,7 +1017,7 @@ outerLoop:
 . . . System/out/println: "i: " + i + ", j: " + j
 end: outerLoop
 
-The shorter relaxed indentation version without this separator is not valid Lingvamyxa, because it hides a required nameless close in indentation alone.
+The shorter relaxed indentation version without this delimiter is not valid Lingvamyxa, because it hides a required nameless close in indentation alone.
 
 4.5.3. Matrix and Nested Array Examples
 
@@ -1060,7 +1081,7 @@ not:
 
 `end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current source level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
-The standalone source line `---` is the nameless close / separator form used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target. It closes or separates the current open anonymous/implicit section at its own source level. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
+The standalone source line `---` is the nameless delimiter form used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target. When followed by source items at the next deeper level, it opens an anonymous positional Structure at its own source level. Otherwise it separates or closes the current open anonymous/implicit section at that level. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
 
 Example named close:
 
@@ -3867,7 +3888,7 @@ A canonical dotted delimiter line or relaxed `---` line at level K may delimit a
 
 A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed `---` anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
 
-This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone `---` line is part of vertical structure syntax as a nameless separator/close.
+This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone `---` line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 
 Line arguments are comma-separated except for the numeric-run shortcut. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
@@ -4021,8 +4042,8 @@ Conceptual form:
     name:                      colon frame with required vertical child continuation or profile-defined empty form
     leading dots               canonical visible source level units in the leading indentation zone
     indentation                relaxed source level units before ordinary source items
-    dotted delimiter line      canonical anonymous Structure delimiter / nameless close at non-root level
-    ---                        relaxed anonymous Structure delimiter / nameless close at its indentation level
+    dotted delimiter line      canonical anonymous Structure delimiter; may open, separate or close at its source level
+    ---                        relaxed anonymous Structure delimiter; may open, separate, or act as nameless close at its source level
     smaller-level source line  level delimiter; closes all open Structures above the smaller level
     empty line                 formatting whitespace, not a structural close token
     #                          line comment marker; ignores text to the end of the physical line
