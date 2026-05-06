@@ -1427,7 +1427,6 @@ build rules and diagnostics all rely on typed computation.
 
 6.1. Two Syntax Modes in One Parser
 
-A high-level structural runtime without built-in mathematics is incomplete.
 Lingvamyxa has one parsing system with two syntax modes:
 
     native structural syntax
@@ -1849,6 +1848,566 @@ reduce over all elements.
 
 Full broadcasting, slicing views, transpose, permute, scan, filter and tensor
 contraction may be added later without changing the core array model.
+
+6.6. Numerical Types and Built-In Mathematics
+
+A high-level structural runtime without built-in mathematics is incomplete.
+
+The default numeric model has two broad classes:
+
+    native C99-backed numeric types;
+    library-backed mathematical types.
+
+Native C99-backed numeric types are scalar values whose ordinary lowering may
+use C99 arithmetic, C99 storage and C99 call/return conventions.
+
+Library-backed mathematical types are ordinary Lingvamyxa numeric types whose
+operations are resolved through the registry and lowered to registered backend
+functions.
+
+Default bootstrap map:
+
+    char       -> C char
+    schar      -> C signed char
+    uchar      -> C unsigned char
+
+    short      -> C short
+    ushort     -> C unsigned short
+    int        -> C int
+    uint       -> C unsigned int
+    long       -> C long
+    ulong      -> C unsigned long
+    llong      -> C long long
+    ullong     -> C unsigned long long
+
+    i/u        -> implementation-profile C integer family
+
+    i8         -> C99 fixed-width or profile-defined 8-bit signed integer
+    u8         -> C99 fixed-width or profile-defined 8-bit unsigned integer
+    i16        -> C99 fixed-width or profile-defined 16-bit signed integer
+    u16        -> C99 fixed-width or profile-defined 16-bit unsigned integer
+    i32        -> C99 fixed-width or profile-defined 32-bit signed integer
+    u32        -> C99 fixed-width or profile-defined 32-bit unsigned integer
+    i64        -> C99 fixed-width or profile-defined 64-bit signed integer
+    u64        -> C99 fixed-width or profile-defined 64-bit unsigned integer
+
+    isize      -> profile-defined pointer-sized signed integer
+    usize      -> profile-defined pointer-sized unsigned integer
+
+    bool       -> C int / C99 _Bool / stdbool bool according to profile
+
+    f32        -> C float
+    f64        -> C double
+    flong      -> C long double
+
+    bigint     -> GMP mpz_t
+    real       -> MPFR mpfr_t
+    decimal    -> decNumber
+
+The fixed-width aliases are valid only when the selected C99/runtime profile can
+provide the corresponding width. If a target cannot provide an exact-width
+storage type, the profile must reject that alias or define an explicit emulation
+backend.
+
+The `i/u` family denotes implementation-profile integer types over C integer
+storage. A concrete profile may define names such as `i`, `u`, `i32`, `u64`,
+`isize` and `usize` as separate type constructors or as aliases over a smaller
+primitive set.
+
+The special mathematical types are not primitive C values:
+
+    bigint:
+        exact integer arithmetic backed by GMP `mpz_t`;
+
+    real:
+        arbitrary-precision or profile-defined high-precision real arithmetic
+        backed by MPFR `mpfr_t`;
+
+    decimal:
+        decimal arithmetic backed by decNumber and a decimal context.
+
+`bigint`, `real` and `decimal` are ordinary names/receivers/descriptors in the
+shared namespace when the active profile imports them. Their physical
+representation and linked libraries belong to the selected L1/runtime profile.
+
+6.6.1. Mathematics Uses Registry Resolution
+
+Mathematical syntax does not directly call C symbols.
+
+Mathematical syntax produces expression Structures. A receiver that expects an
+expression later consumes that expression Structure. During that consumption,
+operators and function calls are resolved through the active numeric registry.
+
+Canonical pipeline:
+
+    source expression
+        -> expression Structure
+        -> numeric operator/function resolution
+        -> typed numeric semantic Structure
+        -> interpretation or lowering
+
+Example:
+
+    sqrt(x) + y
+
+Conceptual resolution:
+
+    resolve sqrt(type(x))
+    resolve +(resultType(sqrt(x)), type(y))
+    select accepted numeric descriptors
+    lower to L1/backend calls if the profile allows it
+
+The observable Lingvamyxa semantics are defined by registered descriptors, not
+by accidental C symbol spelling.
+
+6.6.2. Native C99 Numeric Operations
+
+Native C99-backed numeric types may lower to direct C99 operations when the
+active profile defines the overflow, conversion, comparison and evaluation
+rules.
+
+Examples:
+
+    i32 + i32        -> i32 or promoted profile-defined integer result
+    u64 * u64        -> u64 or checked/profile-defined result
+    f64 / f64        -> f64
+    bool && bool     -> bool
+
+The mathematical specification must define or reference the active profile's
+rules for:
+
+    integer overflow;
+    signed/unsigned mixing;
+    integer promotion;
+    floating conversion;
+    comparison;
+    boolean conversion;
+    rounding;
+    division by zero;
+    NaN and infinity handling for floating values.
+
+A deterministic profile should avoid silently inheriting target-dependent C
+behavior when that behavior would make Lingvamyxa results platform-dependent.
+
+6.6.3. Library-Backed Numeric Operations
+
+Library-backed numeric operations are normal registered operations.
+
+Example source:
+
+    a + b
+
+If `a` and `b` are `bigint`, the `+` operator resolves to the accepted
+`bigint` addition descriptor and may lower to GMP.
+
+If `a` and `b` are `real`, the `+` operator resolves to the accepted `real`
+addition descriptor and may lower to MPFR using the active real context.
+
+If `a` and `b` are `decimal`, the `+` operator resolves to the accepted
+`decimal` addition descriptor and may lower to decNumber using the active
+decimal context.
+
+Conceptual examples:
+
+    +(bigint, bigint)  -> bigint
+    +(real, real)      -> real
+    +(decimal, decimal)-> decimal
+
+The operator spelling is not tied to one backend function. The registry may
+select a backend-specific implementation according to operand types, precision
+context, rounding policy, target profile and optimization profile.
+
+6.6.4. Destination-First Backend Procedures
+
+Many mathematical C libraries expose procedures rather than value-returning
+functions.
+
+Example backend style:
+
+    result is stored in the first argument;
+    operands are read from following arguments;
+    rounding/context/status may be additional arguments;
+    the C return value may be `void`, `int` status or diagnostic metadata.
+
+Such a C function can still implement a Lingvamyxa value-producing mathematical
+operation.
+
+Example conceptual wrapper:
+
+    C backend:
+        void mpz_add(mpz_t rop, const mpz_t op1, const mpz_t op2)
+
+    Lingvamyxa operation:
+        +(bigint, bigint) -> bigint
+
+Lowering concept:
+
+    allocate or reuse result storage owned by the current owner/arena;
+    initialize backend value if required;
+    call backend destination-first function;
+    return the Lingvamyxa numeric value.
+
+Therefore C `void` does not mean "not mathematical". It may mean "the value is
+written into a destination argument". Lingvamyxa exposes the value operation,
+not necessarily the raw C procedure shape.
+
+6.6.5. Return Models
+
+Every external function descriptor visible to the numeric registry must declare
+a return model.
+
+Return models include:
+
+    ret: T
+        value-producing function;
+
+    ret: Unit
+        effect-only function corresponding to C `void`;
+
+    ret: Status
+        status-only function;
+
+    ret: Status, T
+        status/value pair or profile-defined checked result;
+
+    ret: destinationArg(N), T
+        destination-first backend procedure that produces a Lingvamyxa value;
+
+    ret: pointer / handle / borrowed / owned
+        unsafe or explicitly managed low-level result.
+
+Only value-producing functions may appear in value-required expression
+positions.
+
+Valid:
+
+    x = sqrt(y)
+
+Invalid in a pure value-required mathematical expression:
+
+    x = Lingvamyxa/GMP/raw/mpz_clear(y)
+
+because raw clear is an effect/release operation, not a mathematical value.
+
+A `Unit` function may be callable as a statement-level receiver or namespace
+function if its descriptor allows that level and effect profile.
+
+6.6.6. Shared L1 Descriptor Files
+
+L1 functions are exposed to Lingvamyxa by descriptors, not by automatic symbol
+visibility.
+
+A profile may provide a shared descriptor file such as:
+
+    shared lm1.lm4
+
+Such a file is an ordinary L4 registry descriptor file. It may describe:
+
+    external functions;
+    external constants;
+    external numeric backends;
+    headers;
+    pkg-config / CMake dependencies;
+    type mappings;
+    ownership rules;
+    borrow rules;
+    effect rules;
+    operator implementations;
+    lowering rules;
+    visibility rules;
+    capability requirements.
+
+This is the same mechanism used for other receiver/operator registration.
+
+No special "import C into mathematics" mechanism is required.
+
+Canonical rule:
+
+    .h extraction may discover symbols;
+    L4 descriptors assign meaning;
+    registry validation accepts or rejects descriptors;
+    accepted descriptors enter the shared namespace;
+    expression/operator resolution uses accepted descriptors.
+
+A user or profile may edit an open-source `shared lm1.lm4` file directly.
+
+An L5 system message may also propose a candidate descriptor at runtime. Such a
+candidate is data, not authority. It becomes active only after the ordinary
+registry validators accept it.
+
+6.6.7. Raw External Function Descriptor Example
+
+A raw L1 function may be described in L4.
+
+Example:
+
+L4:
+    externFn: Lingvamyxa/MPFR/raw/mpfr_sqrt
+        sourceLevel: L1
+        sourceName: mpfr_sqrt
+        header: mpfr.h
+        pkg: PkgConfig::mpfr
+        args:
+            mpfr_t: rop, ownedMutable
+            mpfr_srcptr: op, borrowed
+            mpfr_rnd_t: rnd
+        ret:
+            int
+        effects:
+            mutateArg: rop
+            readsArg: op
+        visibleFrom:
+            L2
+            runtimeOnly
+    ---
+end: L4
+
+This descriptor exposes the raw backend shape. It does not automatically make
+`mpfr_sqrt` callable from ordinary mathematical expressions.
+
+The raw function is visible only from the levels and runtime contexts named by
+`visibleFrom`.
+
+A safe value-producing wrapper may be registered separately.
+
+Example conceptual wrapper:
+
+L4:
+    externFn: Lingvamyxa/MPFR/sqrt
+        sourceLevel: L1
+        sourceName: mpfr_sqrt
+        header: mpfr.h
+        pkg: PkgConfig::mpfr
+        args:
+            real: x
+        ret:
+            real
+        backendShape:
+            destinationArg: 0
+            operandArg: 1
+            roundingArg: activeRealContext.rounding
+            statusReturn: int
+        effects:
+            pureWrapper
+        context:
+            activeRealContext
+        implementation:
+            Lingvamyxa/MPFR/raw/mpfr_sqrt
+        callableFrom:
+            L3
+            L4 expression
+            L5 expression
+    ---
+end: L4
+
+Expression use:
+
+    y = sqrt(x)
+
+Conceptual lowering:
+
+    allocate result real in the current owner/arena;
+    initialize MPFR storage according to activeRealContext;
+    call mpfr_sqrt(result.storage, x.storage, activeRealContext.rounding);
+    record status/exactness according to profile;
+    return result.
+
+6.6.8. Namespace Calls Outside Mathematical Expressions
+
+Registered external functions may also be called through ordinary namespace
+receiver/call syntax when their descriptors allow it.
+
+Example safe namespace call:
+
+    Lingvamyxa/MPFR/sqrt: x
+
+Example raw/runtime-only call, allowed only in L2/runtime profile:
+
+    Lingvamyxa/MPFR/raw/mpfr_sqrt: rop, op, rnd
+
+Functions that return `Unit` or perform effects should normally be exposed as
+namespace calls or explicit receivers, not as pure mathematical expression
+functions.
+
+Examples:
+
+    Lingvamyxa/GMP/init: x
+    Lingvamyxa/GMP/clear: x
+    Lingvamyxa/Decimal/setPrecision: ctx, 34
+    Lingvamyxa/Real/setRounding: ctx, nearest
+
+High-level numeric code should not normally call backend initialization and
+clear functions directly. The owner/arena runtime should initialize, retain and
+clear backend storage according to the numeric value's owner lifetime.
+
+6.6.9. Pure Expression Profile
+
+The default mathematical expression profile is pure.
+
+A pure expression may call only functions registered as pure value functions or
+pure wrappers.
+
+Allowed examples:
+
+    sqrt(x)
+    sin(x)
+    cos(x)
+    pow(x, y)
+    abs(x)
+    gcd(a, b)
+    roundDecimal(x)
+    a + b
+    a * b
+
+Not allowed in the default pure expression profile:
+
+    system(...)
+    remove(...)
+    rename(...)
+    fopen(...)
+    fclose(...)
+    printf(...)
+    scanf(...)
+    malloc(...)
+    free(...)
+    memcpy(...)
+    memset(...)
+    exit(...)
+    abort(...)
+
+Such functions may exist in the shared namespace under explicit L2/L3 unsafe or
+effectful profiles. They are not ordinary mathematical functions.
+
+Required rule:
+
+    no descriptor
+        -> no visibility;
+
+    no capability
+        -> no call;
+
+    unsafe descriptor
+        -> not callable from default mathematical expression profile;
+
+    effectful descriptor
+        -> not callable from pure expression profile;
+
+    pointer-bearing descriptor
+        -> requires L2 or an explicitly checked wrapper.
+
+6.6.10. Pointer and Memory Rule
+
+An L1 function with raw pointer parameters or raw pointer return values is not a
+safe mathematical expression function by default.
+
+It must be wrapped by a Lingvamyxa descriptor that defines:
+
+    ownership;
+    borrow duration;
+    null policy;
+    bounds;
+    element type;
+    mutation effects;
+    thread safety;
+    failure behavior;
+    visibility;
+    capability requirements.
+
+Without such a wrapper, the function belongs to L2/L3 unsafe semantics, not to
+ordinary mathematical expression syntax.
+
+6.6.11. Contexts for `real` and `decimal`
+
+`real` and `decimal` operations use explicit or profile-selected numeric
+contexts.
+
+A `real` context may define:
+
+    precision;
+    rounding mode;
+    status flags;
+    trap policy;
+    exactness handling.
+
+A `decimal` context may define:
+
+    precision;
+    exponent limits;
+    rounding mode;
+    status flags;
+    trap policy;
+    quantization policy.
+
+The active context may be lexical, thread-local, receiver-provided or explicit
+in the expression/function call according to the active profile.
+
+Examples:
+
+    withRealContext: precision 256, rounding nearest
+        y = sqrt(x)
+    ---
+
+    withDecimalContext: precision 34, rounding halfEven
+        total = price * quantity
+    ---
+
+The exact context receiver names are profile-defined. The semantic rule is that
+context-dependent numeric operations must not silently depend on hidden
+platform state when the deterministic profile requires reproducible results.
+
+6.6.12. Arrays and Numeric Backends
+
+Array operations over library-backed numeric types use the same numeric
+registry.
+
+Examples:
+
+    +(array<bigint>, array<bigint>)
+        -> elementwise GMP-backed integer addition
+
+    +(array<real>, array<real>)
+        -> elementwise MPFR-backed real addition using activeRealContext
+
+    +(array<decimal>, array<decimal>)
+        -> elementwise decNumber-backed decimal addition using activeDecimalContext
+
+Broadcasting, reduction, map and tensor operations do not introduce separate
+numeric semantics. They repeatedly apply or lower the accepted scalar operation
+over the derived array shape.
+
+For floating, real and decimal values, deterministic profiles should define
+stable reduction order or another explicit reproducibility rule.
+
+6.6.13. Minimal Built-In Mathematics Profile
+
+The minimal built-in mathematics profile should include:
+
+    native integer arithmetic;
+    native floating arithmetic;
+    boolean operations;
+    comparisons;
+    bigint construction and arithmetic;
+    real construction and arithmetic;
+    decimal construction and arithmetic;
+    numeric conversions with explicit loss/rounding policy;
+    selected pure functions such as sqrt, abs, min, max and pow;
+    array elementwise arithmetic over supported numeric types;
+    reduction over supported numeric arrays.
+
+Additional functions may be imported through ordinary L4 descriptors and
+registry validation.
+
+The language core does not require every C library function to be visible.
+
+The source-visible mathematical model is:
+
+    typed numeric values;
+    typed operators;
+    typed function descriptors;
+    explicit contexts;
+    registry-controlled external bindings;
+    safe expression profiles;
+    unsafe L2/L3 escape hatches when deliberately enabled.
 
 7. `fn`, `sub` and Structural Closure
 
