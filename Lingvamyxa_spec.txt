@@ -6200,6 +6200,534 @@ Therefore:
 
 The long-term bootstrap direction is that L1 should shrink to the target/backend substrate. Language-visible rules for shared resources, memory edges, synchronization and lifetime should move upward into L2, L3, L4 and L5 descriptors/receivers. L1 remains the implementation layer used to lower those rules to C99, platform APIs, libraries and native binaries.
 
+Да. Ниже два готовых куска для копипаста. **30.12** лучше оставить как текущий параграф про shared low-level resources, потому что этот номер уже занят в файле; новый материал логично вставить как **30.13** после него. Текущая §30.12 действительно уже стоит перед §31 и описывает shared low-level / read-only resources. 
+
+```text id="sa2w2t"
+30.12. Shared Low-Level Resources and Large Read-Only Data
+
+The L5 memory model is intentionally message- and branch-oriented. It is the
+default safe model for active objects, behavior dispatch, high-level events,
+configuration and query handling. It should not be used to pretend that large
+shared raw buffers are ordinary per-thread message payloads.
+
+If a program needs a large resource that many L5 Threads read directly, such as
+a large numeric table, shared index, memory-mapped dataset, model-weight array
+or external database page cache, that resource belongs in an L2 or
+implementation-facing L3 profile as an explicit low-level/shared resource.
+
+Example conceptual L2 forms:
+
+L2:
+    static: BigArray, table, shared(readonly)
+
+L2:
+    static: BigArray, table, shared(readonly), externalLifetime
+
+The exact receiver names and policy arguments are profile-defined. The semantic
+point is that the resource is not an ordinary mutable L5 branch. It is a shared
+immutable or externally managed low-level object with an explicit lifetime
+contract.
+
+L4 may describe such a resource as a model/descriptor:
+
+L4:
+    model: BigArray
+        field: data, @f64, borrowed
+        field: len, u64
+        access: shared, readonly
+
+The L4 descriptor may record that the data edge is borrowed from low-level
+storage, shared only under read-only access, externally managed, memory-mapped
+or protected by another explicit runtime contract. L5 may use the descriptor and
+receive handles/selectors/facts about the resource, but ordinary L5 message
+passing does not send raw mutable references to it.
+
+Shared immutable data may be read by many L5 Threads when the implementation
+profile guarantees immutability and thread-safe publication. Since no thread
+can mutate the shared value through an alias, this does not violate the L5
+no-shared-mutable-memory rule.
+
+Shared mutable data is different. If multiple threads must write or coordinate
+over the same resource, the resource must be represented through explicit L2/L3
+synchronization or atomic constructs such as locks, read-write locks, atomics,
+barriers, memory-order policies or transactional receivers. Those constructs
+are unsafe or implementation-facing unless a higher-level profile wraps them in
+a checked abstraction.
+
+Therefore:
+
+    L5 default       -> copy, serialization, whole-branch ownership transfer
+    L5 shared read   -> immutable / read-only / externally published resource
+    L2/L3 explicit   -> shared mutable buffers, atomics, locks and external lifetimes
+
+The long-term bootstrap direction is that L1 should shrink to the target/backend
+substrate. Language-visible rules for shared resources, memory edges,
+synchronization and lifetime should move upward into L2, L3, L4 and L5
+descriptors/receivers. L1 remains the implementation layer used to lower those
+rules to C99, platform APIs, libraries and native binaries.
+```
+
+```text id="83c9z7"
+30.13. Control Exit, Assert Diagnostics and Thread-Local Collection
+
+The memory model has no separate source-level cleanup operation.
+
+Memory reclamation is performed by the L5 Thread local collector and by the
+local memory-cutter machinery described in this section.
+
+A control operator does not free memory merely because it is a control operator.
+It may, however, leave a frame, handler, retry attempt, transaction arena,
+branch owner or whole L5 Thread. Such an exit changes the local owner tree and
+creates a collector safe point.
+
+The L5 Thread local collector may run at defined safe points:
+
+    after normal frame completion;
+    after handler completion;
+    after transaction completion;
+    after return;
+    after break;
+    after continue;
+    after labelled break;
+    after labelled continue;
+    after fail;
+    after retry;
+    after redo;
+    after assert diagnostic exit;
+    after owner replacement;
+    after owner removal;
+    after local branch/subtree detachment;
+    before or during L5 Thread termination;
+    under implementation-defined memory pressure.
+
+The collector is local to one L5 Thread.
+
+It does not stop other L5 Threads.
+
+It does not scan foreign arena graphs.
+
+It does not require a global lock in the default L5 model.
+
+It may inspect the current L5 Thread owner tree, local arena graph, branch
+ownership metadata, deferred-owned edges, borrowed edges, local reachability
+metadata and implementation priority metadata.
+
+The collector may:
+
+    cut unreachable local branches;
+    release frame-local arenas;
+    release handler-local arenas;
+    release transaction arenas;
+    release abandoned retry-attempt arenas;
+    release detached branch arenas;
+    promote deferred-owned edges when required;
+    pin source owners when required;
+    copy surviving data into surviving owners when required;
+    detach surviving branch roots as independent owners;
+    destroy the whole L5 Thread arena graph when the L5 Thread terminates.
+
+Actual memory release is implementation-defined. A profile may release memory
+immediately after a local cut, batch releases until the end of the current
+handler, or retain local memory until the whole L5 Thread is destroyed.
+
+This is a technical memory collection mechanism by effect, because it
+automatically reclaims memory. It is not a global tracing collector by
+mechanics. Its unit of collection is an owner region:
+
+    frame arena;
+    handler arena;
+    retry-attempt arena;
+    transaction arena;
+    branch arena;
+    whole L5 Thread arena graph.
+
+30.13.1. No Source-Level Cleanup Operation
+
+This document does not define a separate source-level cleanup operation.
+
+The term collection means a Thread-local memory collection pass.
+
+A collection pass may include:
+
+    owner-tree cutting;
+    arena reclamation;
+    deferred-owner promotion;
+    source-owner pinning;
+    branch detachment;
+    whole-thread arena destruction.
+
+The word cleanup is avoided in this memory section because in many programming
+languages it denotes finalization code such as finally/destructor logic.
+Lingvamyxa memory reclamation is specified as Thread-local collection and
+owner-tree cutting instead.
+
+30.13.2. Control Exit and Owner Lifetime
+
+Control exits are connected to memory only through owner lifetime.
+
+Generic sequence:
+
+    control exit is selected;
+    affected frame, handler, attempt, transaction or branch owners are marked
+    as exited, abandoned, detached or destroyed;
+    the owner tree is updated;
+    the L5 Thread local collector may run at this safe point;
+    unreachable local owner regions may be cut;
+    actual arena release follows the implementation profile.
+
+Therefore:
+
+    return / break / continue:
+        leave ordinary control scopes and may create collection safe points;
+
+    fail:
+        leaves recoverable failure scopes and may create collection safe points;
+
+    retry:
+        abandons the current retry attempt and may create a collection safe point;
+
+    redo:
+        abandons or restarts the current repeatable unit according to receiver
+        semantics and may create a collection safe point;
+
+    assert:
+        exits through the diagnostic path and may create a collection safe point;
+
+    thread termination:
+        destroys the whole L5 Thread owner graph unless the implementation
+        profile preserves selected externally managed resources.
+
+No control operator is a memory operation by itself. Memory is reclaimed because
+the operator changes owner lifetime.
+
+30.13.3. `assert` and Memory
+
+`assert` is diagnostic invariant failure, not recoverable failure flow.
+
+If an `assert` condition is false, the runtime records an
+`AssertionViolation` diagnostic and exits through the diagnostic path defined by
+the execution-context profile.
+
+Default thread-profile sequence:
+
+    assert condition is false;
+    record AssertionViolation diagnostic;
+    transfer control to the thread diagnostic root;
+    terminate the current thread/task by default after reporting the diagnostic;
+    run the L5 Thread local collector;
+    destroy or release the L5 Thread arena graph according to the thread
+    destruction policy.
+
+An `assert` violation is not part of the declared `throws` set.
+
+An `assert` violation is not caught by ordinary failure labels or failure
+handlers.
+
+An `assert` violation does not execute `fail`.
+
+An `assert` violation may still cause memory reclamation because it abandons
+frames, handlers, attempts or the whole current L5 Thread. The reclamation is
+performed by the L5 Thread local collector, not by a special `assert` memory
+rule.
+
+If a runtime profile allows a diagnostic root to keep the L5 Thread alive after
+an assertion violation, then only the owners abandoned by the diagnostic exit
+are cut or released. Persistent state still reachable from the L5 Thread root
+remains owned by that L5 Thread unless the diagnostic policy explicitly
+destroys, resets or detaches it.
+
+30.13.4. `guard`, `fail`, `throws` and Handlers
+
+`guard`, `fail`, `throws` and failure handlers define declared recoverable
+failure flow.
+
+They are distinct from `assert`.
+
+    guard / fail / throws / handlers:
+        declared, expected, recoverable failure path
+
+    assert:
+        diagnostic invariant violation
+
+`guard` may detect an expected failure condition and select a failure path.
+
+`fail` exits the current executable body with a declared failure label and an
+optional payload.
+
+Default failure sequence:
+
+    guard detects an expected failure condition;
+    fail creates a declared failure label and optional payload;
+    control exits to the nearest visible handler or caller failure channel;
+    affected frame, handler or attempt owners are marked as abandoned or exited;
+    the L5 Thread local collector may run at this safe point;
+    a structured failure result is delivered to the handler or caller.
+
+`fail` does not transfer to the thread diagnostic root.
+
+`fail` does not use the `assert` channel.
+
+`fail` does not directly free memory. It creates a collection safe point because
+it exits the current owner context.
+
+A failure payload that must survive the abandoned owner must be owned by a
+surviving owner. If the payload is borrowed from the failing frame, handler or
+attempt, it must be owner-copied into a surviving owner before it is retained
+beyond that owner lifetime.
+
+If a failure payload crosses an L5 Thread boundary, it must cross by copy,
+serialization or whole-branch ownership transfer. A raw reference into the
+failing L5 Thread arena graph must not cross that boundary.
+
+Failure handlers may be lexical handlers, executable labels, caller-side
+receivers or L5 event/message handlers according to the final handler syntax.
+In all variants, memory safety is governed by the same owner, borrow,
+owner-copy and message-boundary rules.
+
+30.13.5. `retryable`, `retry` and Attempt Arenas
+
+`retryable` defines a restartable frame.
+
+`retry` abandons the current attempt and re-enters the nearest or named
+retryable frame.
+
+Default retry sequence:
+
+    select nearest or named retryable frame;
+    abandon the current attempt;
+    mark attempt-local owners as abandoned;
+    run the L5 Thread local collector at the retry safe point;
+    release or retain abandoned attempt arenas according to the implementation
+    profile;
+    recreate local bindings declared inside the retryable frame;
+    re-enter the retryable frame.
+
+`retry` is re-execution, not transactional rollback.
+
+`retry` does not roll back external side effects.
+
+`retry` does not automatically restore outer bindings unless the retryable
+receiver defines a stronger rollback policy.
+
+Values that must survive `retry` must be owned by an outer owner that is not
+abandoned by the retry. A borrowed value or attempt-local branch cannot be
+retained across retry unless it is copied or transferred into such an outer
+owner.
+
+Example conceptual distinction:
+
+    retry attempt-local value:
+        collectible when the attempt is abandoned
+
+    value owner-copied into outer retryable owner:
+        survives the abandoned attempt
+
+    value stored in L5 Thread root:
+        survives retry unless explicitly replaced, removed or cut
+
+Therefore `retry` may free memory repeatedly without invoking a global tracing
+collector. Each abandoned attempt loses its attempt-local owner graph, and the
+next attempt starts with fresh local bindings.
+
+30.13.6. Owner Replacement and Null-Like Removal
+
+When a binding update, owner replacement, explicit removal or profile-defined
+null-like operation cuts a branch from the local owner tree, the implementation
+may run the automatic local tree-cut procedure.
+
+Conceptual sequence:
+
+    old owner edge is removed or replaced;
+    old branch/subtree is no longer reachable from the local owner tree;
+    deferred-owned edges reachable from still-live owners are promoted, pinned
+    or redirected;
+    detached branch roots are preserved only if they became independent owners;
+    otherwise the old branch/subtree becomes locally unreachable;
+    actual arena release occurs according to the implementation profile.
+
+This is the ordinary memory-cutter path for local owner-tree mutation.
+
+It is not required to scan all objects in the process.
+
+It is not required to stop other L5 Threads.
+
+It does not inspect foreign L5 Thread arena graphs.
+
+30.13.7. Emergency Memory Pressure
+
+Emergency memory pressure is an implementation/runtime policy over owner
+destruction.
+
+A runtime may reclaim memory urgently by cancelling, failing, aborting or
+destroying selected L5 Threads, handlers, transactions, retry attempts or branch
+owners according to priority, scheduling policy, diagnostic policy or
+service-level policy.
+
+Default emergency sequence for destroying an L5 Thread:
+
+    select a victim L5 Thread or task;
+    request cancellation, declared failure, diagnostic termination or forced
+    termination according to profile;
+    mark the selected owner graph as abandoned or terminating;
+    run the L5 Thread local collector;
+    destroy the selected owner graph or the whole L5 Thread arena graph;
+    return the memory owned by that graph to the implementation allocator.
+
+This is a technical garbage-collection mechanism by effect, because it
+automatically reclaims memory.
+
+It is not a global tracing collector by mechanics.
+
+Its unit of collection is not an individual object. Its unit of collection is
+an owner region:
+
+    frame arena;
+    handler arena;
+    retry-attempt arena;
+    transaction arena;
+    branch arena;
+    whole L5 Thread arena graph.
+
+30.13.8. Collection Ordering Rule
+
+For every control exit that changes owner lifetime, the owner-state transition
+is ordered before local collection.
+
+Required abstract order:
+
+    1. decide the control exit, failure exit, retry exit, diagnostic exit or
+       termination;
+    2. mark the affected owners as exited, abandoned, detached or destroyed;
+    3. apply failure, retry, return, diagnostic or termination transfer according
+       to the active receiver/profile;
+    4. update the local owner tree;
+    5. run the L5 Thread local collector if this point is selected as a
+       collection safe point;
+    6. release arenas whose owners are destroyed or whose implementation profile
+       permits immediate release.
+
+Borrowed references into a destroyed owner are invalid after that owner is cut
+or released.
+
+A surviving owner may retain data only if that data is already owned by the
+surviving owner, copied into it, serialized through it, or transferred to it as
+a whole branch according to the message and ownership rules.
+
+30.13.9. Mandatory Message-Boundary Collection Policy
+
+The default L5 collector scheduling policy is not profile-arbitrary.
+
+In the default L5 model, the L5 Thread local collector runs at message
+boundaries.
+
+A message boundary is reached when one of the following events is completed:
+
+    an incoming message has been received and its payload has been copied,
+    serialized into, or ownership-transferred into a valid owner of the
+    receiving L5 Thread;
+
+    an outgoing message has been sent and its payload has been copied,
+    serialized into, or ownership-transferred to the target queue, transport or
+    target owner;
+
+    a message handler has completed normally;
+
+    a message handler has exited by return, fail, retry, redo, assert diagnostic
+    exit or thread termination.
+
+At each message boundary, the L5 Thread runtime must run one local collection
+pass before continuing ordinary message processing.
+
+The collection pass may be a cheap no-op when no local owner-tree or arena
+state changed.
+
+The collection pass is local to the current L5 Thread.
+
+It does not stop other L5 Threads.
+
+It does not scan foreign arena graphs.
+
+It does not require a global lock.
+
+It does not perform global tracing collection.
+
+The collection pass may inspect only the current L5 Thread owner tree, local
+arena graph, branch ownership metadata, deferred-owned edges, borrowed edges,
+local reachability metadata and implementation priority metadata.
+
+The collector must preserve:
+
+    owner validity;
+    no-escaping-borrow;
+    no raw cross-thread references;
+    message-boundary ownership rules;
+    copy / serialization / whole-branch-transfer rules for inter-thread data.
+
+This rule deliberately keeps ordinary collection simple and regular:
+
+    receive message
+        -> run local collection pass
+        -> execute or schedule handler work
+
+    send message
+        -> commit payload transfer
+        -> run local collection pass
+        -> continue current handler
+
+    finish handler
+        -> run local collection pass
+        -> wait for or receive next message
+
+30.13.10. Long L5 Computations and Supervisor Termination
+
+An L5 Thread is expected to remain message-responsive.
+
+The default L5 runtime is not required to interrupt arbitrary deep computation
+inside one handler in order to run the collector. If an L5 Thread enters a long
+computation and does not reach a message boundary or another declared yield
+point within the runtime watchdog limit, the supervising L5 Thread may cancel,
+fail, abort or destroy that L5 Thread according to the scheduling and diagnostic
+policy.
+
+This is intentional.
+
+Long computations in L5 must be written as stepwise or resumable computations if
+they need to coexist with message scheduling and regular memory collection.
+
+Valid designs include:
+
+    lazy receiver/operator evaluation;
+    iterator/yield-style computation;
+    query/search receivers that split work into bounded steps;
+    continuation messages sent back to the same or another L5 Thread;
+    retryable frames whose attempts are bounded;
+    explicit handler-level work slicing;
+    profile-defined cooperative yield points.
+
+If a computation must run as a long uninterrupted low-level operation, it should
+be lowered to L2/L3 semantics with explicit threading, memory, synchronization
+and lifetime rules. Such L2/L3 worker threads are not ordinary message-driven L5
+Threads unless wrapped by an L5 owner/message facade.
+
+Therefore the default rule is:
+
+    L5 Thread:
+        message-driven;
+        regularly collected at message boundaries;
+        supervisor may terminate it if it stops reaching boundaries;
+
+    long L5 algorithm:
+        must be split into lazy/stepwise/message-visible units;
+
+    long uninterrupted low-level algorithm:
+        belongs to explicit L2/L3 execution semantics.
+
+Emergency memory pressure uses the same ownership principle. A supervising
+Thread may reclaim memory by terminating low-priority or non-responsive L5
+Threads. The memory reclaimed is the memory owned by the selected owner regions
+or by the whole selected L5 Thread arena graph. The runtime does not need to
+find individual unreachable objects inside a global heap.
+
 31. L5 Thread and Message Model
 
 31.0. Scope
