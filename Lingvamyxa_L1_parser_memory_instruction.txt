@@ -62,13 +62,30 @@ Allowed edge kinds:
     EXTERNAL
         Lifetime managed outside the parser by an explicit contract.
 
-For P0 parser data, prefer handles or slices that carry owner metadata:
+For P0 parser data, simple C-typed pointers are allowed and preferred inside one
+owner/arena:
+
+    LmNode *
+    LmFrame *
+    LmStructure *
+    LmField *
+    LmToken *
+
+These pointers are valid because the whole tree/arena has one clear owner and
+the parser does not move nodes after allocation.
+
+Use handles, slices or explicit edge metadata only when an object crosses an
+owner boundary or points into storage owned elsewhere:
 
     source text slice -> (source_owner, offset, length)
     token text        -> exact slice or interned identifier handle
     AST string/name   -> owned/interned handle or lazy-owned slice
 
 Avoid plain `char *` fields unless their owner is obvious and local.
+
+The first parser should not attach owner metadata to every child pointer in the
+P0 tree. A typed child pointer inside LmTreeArena is enough. Owner metadata
+belongs to arena roots and to cross-owner edges.
 
 
 3. Source Text and Slices
@@ -236,7 +253,81 @@ This keeps the common path fast:
     source memory is retained only as long as needed.
 
 
-9. C99 Style Rules
+9. C-Typed Parser Tree and L1 Struct Projection
+
+The first L1 parser may represent the P0 tree with ordinary C structs and typed
+pointers:
+
+    typedef struct LmNode LmNode;
+    typedef struct LmStructure LmStructure;
+    typedef struct LmFrame LmFrame;
+    typedef struct LmField LmField;
+
+    struct LmStructure {
+        LmField *first_field;
+        LmField *last_field;
+        size_t field_count;
+    };
+
+    struct LmFrame {
+        LmIdentifier head;
+        LmStructure body;
+        LmTrailer trailer;
+    };
+
+    struct LmField {
+        LmNode *value;
+        LmField *next;
+    };
+
+These pointers are not source-level references. They are L1 implementation
+pointers inside one parser-owned arena.
+
+The translator should have a simple L1 projection method that receives a
+Structure/model description and a C name, then emits an ANSI C struct
+declaration.
+
+Conceptual API:
+
+    int lm1_emit_struct_decl(
+        LmWriter *out,
+        const char *c_name,
+        const LmStructure *structure_model);
+
+    int lm1_emit_struct_typedef(
+        LmWriter *out,
+        const char *c_name,
+        const LmStructure *structure_model);
+
+This method belongs to the L1 lowering/projection layer, not to the generic
+P0 tree parser. The parser only builds Structures. The L1 projection consumes a
+typed/normalized Structure and writes ordinary ANSI C declarations.
+
+Example target shape:
+
+    typedef struct LmExample {
+        int count;
+        const char *name;
+        struct LmChild *child;
+    } LmExample;
+
+For the first implementation, the projection may support only a small subset:
+
+    primitive fields;
+    pointers to named generated structs;
+    arrays represented as pointer + length;
+    source spans as offset + length;
+    identifiers as LmIdentifier.
+
+This is enough to bootstrap parser/runtime structs without inventing a separate
+object representation too early.
+
+Detailed type-checking and ANSI C projection rules are specified in:
+
+    Lingvamyxa_L1_ansi_c_type_projection_instruction.txt
+
+
+10. C99 Style Rules
 
 Use explicit status returns:
 
@@ -260,7 +351,7 @@ temporaries. It does not perform the tree-cut promotion algorithm. Promotion is
 part of the automatic local tree-cut/detach machinery.
 
 
-10. Minimal Initial Scope
+11. Minimal Initial Scope
 
 The first L1 parser does not need:
 
@@ -274,13 +365,17 @@ It does need:
 
     arenas/owners;
     source spans by offset;
-    explicit borrowed/owned/lazy-owned edge metadata;
+    C-typed parser tree pointers inside one owner;
+    explicit borrowed/owned/lazy-owned edge metadata only for cross-owner edges;
+    L1 struct projection from normalized Structures to ANSI C declarations;
+    L1 type-checking that separates concrete models, component projection,
+    role/delegation handles, unions and adapters;
     automatic tree-cut promotion;
     immutable parser output after freeze;
     diagnostics for promotion/copy failure.
 
 
-11. Relationship to Later L5 Runtime
+12. Relationship to Later L5 Runtime
 
 This parser memory style is intentionally compatible with the L5 Thread model:
 

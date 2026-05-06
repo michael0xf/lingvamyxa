@@ -1,0 +1,480 @@
+Lingvamyxa L1 Instruction: ANSI C Type Projection and Type Checking
+
+Status
+
+This file is an implementation instruction for the first L1/C99 translator.
+It is not a replacement for Lingvamyxa_spec.txt.
+
+Here "L1" means the external ANSI C / C99 bootstrap and lowering layer. It does
+not define a new Lingvamyxa source level.
+
+This file assumes:
+
+    parser P0 builds generic Structures;
+    receiver/type normalization turns generic Structures into typed descriptors;
+    typed descriptors lower to ordinary ANSI C declarations and functions.
+
+
+1. Main Rule
+
+After L4/L5 normalization, a concrete model is a final concrete type.
+
+    Plant   -> concrete ModelSpec -> ANSI C struct LmPlant
+    Oak     -> concrete ModelSpec -> ANSI C struct LmOak
+    Circle  -> concrete ModelSpec -> ANSI C struct LmCircle
+
+The genesis of a type may be structural and registry-driven, but the normalized
+result is a concrete typed shape.
+
+Therefore the L1 translator should prefer ordinary ANSI C structs and typed
+pointers for concrete normalized types.
+
+Do not make every value a dynamic object unless a field/receiver/profile
+explicitly requires a dynamic/role/message handle.
+
+
+2. Structural Model vs Behavior
+
+The translator must keep two descriptor layers separate:
+
+    L4 ModelSpec
+        data structure, fields, constraints, layout, edge policies.
+
+    L5 BehaviorSpec
+        message selectors, method implementations, delegation and object
+        behavior.
+
+They may be attached to the same registry name, but they do different jobs.
+
+Example registry entry:
+
+    Plant:
+        ModelSpec      fields/layout/constraints
+        BehaviorSpec   messages/delegations, if any
+
+    Oak:
+        ModelSpec      fields/layout/constraints
+        BehaviorSpec   messages/delegations, if any
+
+L4 creates the data type. L5 creates or attaches behavior to values of that
+type. L5 does not silently turn Oak into a subtype of Plant.
+
+
+3. Concrete C Struct Projection
+
+The translator should expose a projection method:
+
+    int lm1_emit_struct_decl(
+        LmWriter *out,
+        const char *c_name,
+        const LmModelSpec *model);
+
+    int lm1_emit_struct_typedef(
+        LmWriter *out,
+        const char *c_name,
+        const LmModelSpec *model);
+
+The input is not raw parser syntax. It is a typed/normalized ModelSpec.
+
+Example:
+
+    model: Plant
+        field: height, f64
+        field: age, i32
+
+may lower to:
+
+    typedef struct LmPlant {
+        double height;
+        int32_t age;
+    } LmPlant;
+
+And:
+
+    model: Oak
+        field: plant, Plant
+        field: acornCount, i32
+
+may lower to:
+
+    typedef struct LmOak {
+        LmPlant plant;
+        int32_t acornCount;
+    } LmOak;
+
+This is composition. It is not inheritance.
+
+
+4. Field Lowering Forms
+
+A field descriptor should lower according to its type and edge policy:
+
+    field: age, i32
+        int32_t age;
+
+    field: plant, Plant
+        LmPlant plant;
+
+    field: plant, @Plant
+        LmPlant *plant;
+
+    field: plant, borrowed @Plant
+        LmPlant *plant;
+        plus edge policy metadata in generated type ops, if needed.
+
+    field: plant, owned @Plant
+        LmPlant *plant;
+        generated destroy/copy/tree-cut ops know this edge is owned.
+
+    field: plants, [] Plant
+        LmPlant *plants;
+        size_t plants_count;
+
+    field: source, TextSlice
+        LmSlice source;
+
+Inside one owner/arena, typed C pointers are fine. Edge metadata belongs to
+generated type operations and cross-owner edges, not necessarily to every
+individual C field.
+
+
+5. Plant, Oak and References
+
+If Plant and Oak are concrete ModelSpecs:
+
+    Plant is a final concrete C type.
+    Oak is a final concrete C type.
+
+An Oak value is not automatically assignable to a Plant value.
+
+Allowed relationships must be explicit:
+
+    composition
+        Oak contains a Plant component.
+
+    component projection
+        oak\plant produces the Plant component.
+
+    role/delegation
+        Oak can be viewed through a PlantRole/PlantRef handle if the registry
+        declares that Oak delegates or implements that role.
+
+    union membership
+        Oak can be wrapped as a member of a union/domain that includes Oak.
+
+    adapter/conversion
+        an explicit conversion or adapter maps Oak to Plant.
+
+No implicit object inheritance is assumed by the L1 C lowering layer.
+
+
+6. Role / Delegation Handles
+
+When a field must hold "something usable as Plant" rather than a concrete Plant
+component, use a role/ref/protocol type instead of concrete Plant.
+
+Conceptual Lingvamyxa descriptor:
+
+    field: plant, PlantRole
+
+Possible C lowering:
+
+    typedef struct LmPlantRef {
+        void *object;
+        LmTypeId concrete_type;
+        const LmBehaviorSpec *behavior;
+    } LmPlantRef;
+
+Then Oak may be stored through PlantRef only if the registry has a BehaviorSpec
+or delegation rule showing that Oak can respond as PlantRole.
+
+Example:
+
+    LmOak *oak;
+    LmPlantRef ref = {
+        oak,
+        LM_TYPE_OAK,
+        &LmOak_as_PlantRole_behavior
+    };
+
+This is L5 delegation/behavior. It is not C struct inheritance.
+
+
+7. Type Check Result API
+
+Use an explicit type-check result. Do not return only boolean; the translator
+must know which lowering path was selected.
+
+    typedef enum LmTypeMatchKind {
+        LM_TYPE_MATCH_EXACT,
+        LM_TYPE_MATCH_NAMED_UNPACK,
+        LM_TYPE_MATCH_COMPONENT_PROJECTION,
+        LM_TYPE_MATCH_ROLE_DELEGATION,
+        LM_TYPE_MATCH_UNION_MEMBER,
+        LM_TYPE_MATCH_ADAPTER,
+        LM_TYPE_MATCH_REJECT
+    } LmTypeMatchKind;
+
+    typedef struct LmTypeCheckResult {
+        LmTypeMatchKind kind;
+        LmTypeId expected;
+        LmTypeId actual;
+        LmSymbol projection_field;
+        LmSymbol adapter_name;
+        LmDiagnostic diagnostic;
+    } LmTypeCheckResult;
+
+Core API:
+
+    LmTypeCheckResult lm_type_check_assign(
+        LmRegistry *registry,
+        LmTypeId expected,
+        LmTypeId actual,
+        const LmAssignContext *ctx);
+
+    LmTypeCheckResult lm_type_check_named_unpack(
+        LmRegistry *registry,
+        LmTypeId expected_model,
+        const LmStructure *source);
+
+    LmTypeCheckResult lm_type_check_component_projection(
+        LmRegistry *registry,
+        LmTypeId expected_model,
+        LmTypeId actual_model);
+
+    LmTypeCheckResult lm_type_check_role_delegation(
+        LmRegistry *registry,
+        LmTypeId expected_role,
+        LmTypeId actual_model);
+
+
+8. Assignment / Consumption Algorithm
+
+When a receiver/field expects type E and source produces type A:
+
+    1. Exact type
+        if E == A:
+            accept LM_TYPE_MATCH_EXACT.
+
+    2. Named unpack into concrete model
+        if E is a concrete ModelSpec and source is a Structure:
+            match source fields to E fields by name;
+            check each field recursively;
+            reject missing required fields;
+            reject unknown fields unless profile permits extras.
+
+    3. Explicit component projection
+        if A is a concrete ModelSpec that contains a field/component of type E:
+            accept only when the source expression explicitly requests that
+            projection, for example oak\plant.
+            Do not silently assign Oak to Plant.
+
+    4. Role/delegation
+        if E is a Role/Protocol/Ref type:
+            query registry for behavior/delegation from A to E;
+            if found, lower to role/ref handle.
+
+    5. Union/domain membership
+        if E is a union/domain and A is a member:
+            wrap A with the union tag/descriptor.
+
+    6. Adapter/conversion
+        if an explicit adapter exists and the active profile permits it:
+            lower through the adapter.
+
+    7. Reject
+        produce a diagnostic with expected type, actual type and available
+        explicit projections/adapters.
+
+
+9. Multiple Assignment / Named Unpack
+
+Multiple assignment in Lingvamyxa is named-field unpacking of a Structure.
+
+Example:
+
+    plant: (
+        height: 10.0
+        age: 5
+    )
+
+If `plant` expects Plant, the type checker:
+
+    finds Plant ModelSpec;
+    matches `height` and `age` by field name;
+    checks f64 and i32 compatibility;
+    generates field assignments or initializer code.
+
+This is not polymorphism and not inheritance. It is construction/update of a
+specific concrete model.
+
+For C lowering:
+
+    LmPlant plant;
+    plant.height = 10.0;
+    plant.age = 5;
+
+or:
+
+    LmPlant plant = { .height = 10.0, .age = 5 };
+
+depending on the selected C99 initializer profile.
+
+
+10. Component Projection
+
+Given:
+
+    model: Oak
+        field: plant, Plant
+        field: acornCount, i32
+
+The expression:
+
+    oak\plant
+
+may lower to:
+
+    &oak->plant
+
+or:
+
+    oak.plant
+
+depending on value/reference context.
+
+But:
+
+    Plant p
+    p: oak
+
+must be rejected unless there is an explicit adapter/conversion rule. The user
+should write:
+
+    p: oak\plant
+
+or:
+
+    p: Plant(oak)
+
+when an adapter is declared.
+
+
+11. Behavior Lookup
+
+Behavior lookup is separate from field layout.
+
+If a message receiver expects a behavior/role:
+
+    send: plantLike, grow
+
+The type checker asks:
+
+    does actual model A have BehaviorSpec for selector grow?
+    or does A delegate/implement expected role R?
+
+Possible C lowering:
+
+    ref.behavior->grow(ref.object, args);
+
+For a known concrete type and known selector, the translator may optimize this
+to a direct static call:
+
+    lm_oak_grow(oak, args);
+
+The observable source semantics is still behavior/dispatch through registry
+facts, not inheritance.
+
+
+12. Generated Type Operations
+
+For every concrete ModelSpec lowered to C, generate or derive type operations:
+
+    destroy
+        clears owned/external edges according to field policies.
+
+    copy_to
+        implements owner-copy for the model.
+
+    tree_cut
+        performs automatic local tree-cut ownership maintenance for lazy-owned
+        edges inside this model.
+
+    serialize
+        optional, for message/service boundaries.
+
+    field_projection
+        optional helpers for component projection.
+
+Conceptual API:
+
+    int lm1_emit_type_ops(
+        LmWriter *out,
+        const char *c_name,
+        const LmModelSpec *model);
+
+    int lm1_emit_component_projection(
+        LmWriter *out,
+        const LmModelSpec *model,
+        const LmFieldSpec *field);
+
+
+13. Registry Queries Needed by Type Checking
+
+Minimal registry queries:
+
+    model_by_name(name) -> ModelSpec
+    field_by_name(model, fieldName) -> FieldSpec
+    contains_component(actualModel, expectedModel) -> FieldSpec
+    role_by_name(name) -> RoleSpec
+    behavior_for(model, roleOrSelector) -> BehaviorSpec
+    union_contains(unionType, actualType) -> bool
+    adapter(expectedType, actualType) -> AdapterSpec
+
+The first implementation can use linear scans over arrays/lists. Indexed lookup
+can come later without changing the API.
+
+
+14. Initial P0/L1 Subset
+
+The first ANSI C implementation should support:
+
+    concrete ModelSpec -> typedef struct;
+    primitive field types;
+    inline concrete component fields;
+    typed pointers for reference fields;
+    source slices as offset + length;
+    named-field unpack into concrete models;
+    explicit component projection;
+    role/ref handle shape for behavior delegation;
+    rejection of implicit Oak-as-Plant assignment.
+
+It does not need:
+
+    dynamic structural object for every value;
+    implicit inheritance;
+    automatic structural subtyping between arbitrary models;
+    runtime reflection for every field access;
+    global object heap.
+
+
+15. Design Summary
+
+    Concrete normalized model
+        -> final C struct type.
+
+    Field with concrete type
+        -> inline C field or typed pointer according to edge policy.
+
+    Generalization
+        -> registry relation: component, role/delegation, union or adapter.
+
+    Memory management
+        -> generated type operations from field edge policies.
+
+    Parser Structures
+        -> birth/genealogy of types and descriptors.
+
+    L1 C projection
+        -> ordinary ANSI C declarations and functions.
+
