@@ -16,7 +16,7 @@ Revision 12.12 note:
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
-    Vertical composition is source-level tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A line at level N starts a sibling of the frame only after the necessary visible close/separator has been supplied. Canonical dotted delimiter lines and relaxed `---` lines act as anonymous Structure delimiters / nameless closes; at root level the corresponding delimiter is a physical empty line.
+    Vertical composition is source-level tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A following source line with a smaller source level is a level delimiter: it closes all open structures above that smaller level. When the next structural item starts at the same source level and no smaller-level source line intervenes, a canonical dotted delimiter line or relaxed `---` line supplies the visible same-level anonymous Structure delimiter / nameless close.
 
     `case` is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
 
@@ -766,14 +766,14 @@ Shared source-level rule after either surface notation has been mapped to source
     A line at a source level deeper than the previous structural head is a
     child item of that head.
 
-    A line that returns to an earlier source level closes all open structures
-    above that level.
+    A line that returns to an earlier source level is a level delimiter and
+    closes all open structures above that level.
 
     `end: name` closes a visible named target explicitly.
 
     `---` is a structural separator/nameless close at its own source level.
 
-This rule is not a Python-like license to hide every close in whitespace. Relaxed indentation notation can compute the tree shape, but Lingvamyxa still requires a visible structural event in every place where canonical source-level notation contains a textless structural delimiter or a checked close.
+This rule is not a Python-like license to hide every same-level anonymous separator in whitespace. A smaller source-level line closes the open structures above that smaller level. But when two anonymous/implicit Structures must be separated at the same source level, no smaller-level line exists between them, so Lingvamyxa requires a visible same-level delimiter: a canonical dotted delimiter line or `---`.
 
 Visible closing/separation forms are:
 
@@ -782,7 +782,7 @@ Visible closing/separation forms are:
     return: value
     ---
     a canonical source-level delimiter line
-    a root empty line, at root level only
+    a following source item at a smaller source level
 
 Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed or separated by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
@@ -794,9 +794,9 @@ A physical source line at level N + 1 is one positional child item of the open f
 
 A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. Scalar literals and ordinary phrase/value items do not become headers merely because a deeper line follows them.
 
-A physical source line at level N or lower resumes the parent level and starts a sibling item only after the necessary structural close has been made visible. Ordinary dedent after a visible close may close layout scopes, but dedent plus a following text line is not by itself a replacement for a nameless delimiter.
+A physical source line at a smaller level than the current open child resumes the parent level and starts a sibling item there. The smaller-level line itself is the level delimiter. If the next item starts at the same level as the current anonymous/implicit section, use a canonical dotted delimiter line or relaxed `---` at that level.
 
-A root empty line is not meaningless whitespace. It is the root-level structural delimiter. It closes the current open root-level ladder, resumes parsing at root level and does not add a source item. In the same position, an explicit `end: name`, a terminal `return`, a terminal `return: value` or `---` may be used instead when the current open frame allows it.
+Physical empty lines are formatting whitespace unless a future profile gives them a diagnostic/style meaning. They are not the general structural close mechanism and they do not replace a required same-level delimiter.
 
 4.5.1. Canonical Source-Level Delimiters
 
@@ -806,7 +806,7 @@ A canonical source-level delimiter line at level K may serve as an anonymous pos
 
 If a canonical source-level delimiter line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
 
-The anonymous Structure continues until the next canonical source-level delimiter line at level K, an explicit `end: <target>` that closes a visible target, terminal `return` / `return: value` where valid, EOF, or root empty-line separation when K is root-equivalent.
+The anonymous Structure continues until the next canonical source-level delimiter line at level K, a following source item at a smaller source level, an explicit `end: <target>` that closes a visible target, terminal `return` / `return: value` where valid, or EOF.
 
 A canonical source-level delimiter line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
 
