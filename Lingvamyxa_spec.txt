@@ -7452,3 +7452,711 @@ Lingvamyxa-to-Lingvamyxa services communicate by standard Lingvamyxa messages ov
 Direct cross-service raw references are forbidden.
 
 Service boundaries obey the L5 memory and message model.
+
+
+34. ANSI C Type Projection and Registry-Class Model
+
+34.0. Scope of This Section
+
+This section describes how the L4/L5 descriptor model may be lowered by an
+ANSI C / C99 implementation.
+
+It is an implementation profile. It does not add new source syntax and it does
+not replace the structural source rules in earlier sections.
+
+The intended pipeline is:
+
+    Lingvamyxa source
+        -> P0 generic Structures
+        -> receiver normalization
+        -> typed registry descriptors
+        -> type checking and relation checking
+        -> ANSI C declarations and functions
+        -> platform C compiler/linker
+
+The parser builds Structures. Receivers and semantic passes decide whether a
+Structure is a model, behavior, message, relation, adapter, service route or
+ordinary value.
+
+34.1. Registry Entry as a Decomposed Class
+
+In an object-oriented language such as Java, a class commonly combines fields
+and methods in one syntactic block.
+
+Lingvamyxa separates these concerns into registry descriptors attached to the
+same registry name.
+
+    L4 ModelSpec
+        describes structural data: slots, field types, defaults, constraints,
+        layout policy and derived operations.
+
+    L5 BehaviorSpec
+        describes object/message behavior: selectors, method implementations,
+        delegation, routing and dynamic object behavior.
+
+    Derivation descriptors
+        may request constructors, validators, accessors, serializers, C layout
+        projection, route schemas or documentation schemas.
+
+Together these descriptors make a registry entry similar to a class, but the
+class-like object is accumulated in the registry rather than declared as one
+monolithic source form.
+
+Example:
+
+L4:
+    model: Circle
+        vars:
+            f64: radius
+        ---
+        condition:
+            radius > 0.0
+        ---
+    ---
+end: L4
+
+L5:
+    behavior: Circle
+        message: drawOn, drawCircleOn
+        message: area, circleArea
+    ---
+end: L5
+
+The registry entry for `Circle` may contain:
+
+    ModelSpec
+        radius: f64
+        validator: radius > 0.0
+
+    BehaviorSpec
+        drawOn -> drawCircleOn
+        area   -> circleArea
+
+    Derivations
+        constructor
+        validator
+        accessors
+        type operations
+
+The structural model says what a `Circle` value is. The behavior descriptor says
+how a `Circle` object responds to messages.
+
+34.2. Concrete ModelSpec as a Final C Type
+
+After receiver normalization, a concrete `ModelSpec` is a final concrete type
+for an ANSI C projection.
+
+    Plant   -> concrete ModelSpec -> ANSI C struct LmPlant
+    Oak     -> concrete ModelSpec -> ANSI C struct LmOak
+    Circle  -> concrete ModelSpec -> ANSI C struct LmCircle
+
+The genesis of the type may be structural, rule-derived or registry-driven, but
+the normalized result has a concrete typed shape.
+
+Therefore a C99 translator should prefer ordinary C structs and typed pointers
+for concrete normalized models.
+
+It should not make every value a dynamic object unless the field, receiver or
+implementation profile explicitly requests a dynamic/role/message handle.
+
+Example model source:
+
+L4:
+    model: Plant
+        vars:
+            f64: height
+            i32: age
+        ---
+    ---
+
+    model: Oak
+        vars:
+            Plant: plant
+            i32: acornCount
+        ---
+    ---
+end: L4
+
+---ANSI C---
+One possible C99 projection:
+
+    typedef struct LmPlant {
+        double height;
+        int32_t age;
+    } LmPlant;
+
+    typedef struct LmOak {
+        LmPlant plant;
+        int32_t acornCount;
+    } LmOak;
+---ANSI C---
+
+This is composition. It is not inheritance.
+
+34.3. ModelSpec vs BehaviorSpec in Lowering
+
+The ANSI C translator must keep the structural model and the behavior model
+separate.
+
+The `ModelSpec` controls:
+
+    C struct fields;
+    field order;
+    primitive lowering;
+    inline components;
+    pointer/reference fields;
+    arrays and slices;
+    generated copy/destroy/tree-cut operations.
+
+The `BehaviorSpec` controls:
+
+    message selector lookup;
+    method table generation;
+    direct static call optimization;
+    role/delegation handles;
+    dynamic dispatch where the profile allows it.
+
+Known concrete calls may lower directly:
+
+---ANSI C---
+    lm_circle_area(&circle);
+---ANSI C---
+
+Role or dynamic behavior calls may lower through a behavior table:
+
+---ANSI C---
+    ref.behavior->area(ref.object, args);
+---ANSI C---
+
+Both forms are implementation choices for the same source-level rule:
+behavior is resolved from registry facts and descriptors, not from implicit C
+struct inheritance.
+
+34.4. Composition, Roles and Explicit Generalization
+
+If `Plant` and `Oak` are concrete models, `Plant` is a final concrete type and
+`Oak` is a final concrete type.
+
+An `Oak` value is not automatically assignable to a `Plant` value.
+
+Allowed relationships must be explicit:
+
+    composition
+        `Oak` contains a `Plant` component.
+
+    component projection
+        `oak\plant` produces the Plant component.
+
+    role/delegation
+        `Oak` may be viewed through a Plant role/reference if registry facts
+        say that `Oak` implements or delegates that role.
+
+    union membership
+        `Oak` may be wrapped as a member of a union/domain that includes Oak.
+
+    adapter/conversion
+        an explicit adapter maps Oak to Plant or to another expected type.
+
+Example explicit registry facts:
+
+L5:
+    fact: role, PlantRole
+    fact: roleMessage, PlantRole, grow
+    fact: implements, Oak, PlantRole
+    fact: delegates, Oak, PlantRole, plant
+end: L5
+
+---ANSI C---
+One possible role/reference lowering:
+
+    typedef struct LmPlantRef {
+        void *object;
+        LmTypeId concrete_type;
+        const LmBehaviorSpec *behavior;
+    } LmPlantRef;
+
+    LmPlantRef ref;
+    ref.object = oak;
+    ref.concrete_type = LM_TYPE_OAK;
+    ref.behavior = &LmOak_as_PlantRole_behavior;
+---ANSI C---
+
+This is L5 delegation/behavior. It is not C struct inheritance.
+
+34.5. Type Reconciliation Algorithm
+
+When a receiver, assignment target or field expects type `E` and the source
+expression produces type `A`, the translator should return a typed match result,
+not just a boolean.
+
+The result must distinguish at least:
+
+    exact match;
+    named-field unpack;
+    explicit component projection;
+    role/delegation match;
+    union/domain membership;
+    explicit adapter/conversion;
+    rejection.
+
+Suggested order:
+
+    1. If E and A are the same concrete type, accept exact match.
+
+    2. If E is a concrete model and the source is a Structure, match source
+       fields to model fields by name, then check each field recursively.
+
+    3. If A contains a component of type E, accept only when the source
+       expression explicitly requests that component, for example `oak\plant`.
+
+    4. If E is a role/protocol/reference type, query the registry for an
+       implementation or delegation relation from A to E.
+
+    5. If E is a union/domain and A is a listed member, wrap A with the union
+       tag/descriptor.
+
+    6. If an explicit adapter exists and the active profile permits it, lower
+       through the adapter.
+
+    7. Otherwise reject and report expected type, actual type and available
+       explicit projections/adapters.
+
+Multiple assignment and Structure consumption are named-field unpacking. They
+are not inheritance and not implicit structural subtyping.
+
+34.6. C99 Projection API Shape
+
+The first C99 translator should have a projection layer that consumes typed
+descriptors, not raw parser nodes.
+
+Conceptual API:
+
+---ANSI C---
+    int lm1_emit_struct_decl(
+        LmWriter *out,
+        const char *c_name,
+        const LmModelSpec *model);
+
+    int lm1_emit_struct_typedef(
+        LmWriter *out,
+        const char *c_name,
+        const LmModelSpec *model);
+
+    int lm1_emit_type_ops(
+        LmWriter *out,
+        const char *c_name,
+        const LmModelSpec *model);
+---ANSI C---
+
+Type checking should also expose the selected lowering path:
+
+---ANSI C---
+    typedef enum LmTypeMatchKind {
+        LM_TYPE_MATCH_EXACT,
+        LM_TYPE_MATCH_NAMED_UNPACK,
+        LM_TYPE_MATCH_COMPONENT_PROJECTION,
+        LM_TYPE_MATCH_ROLE_DELEGATION,
+        LM_TYPE_MATCH_UNION_MEMBER,
+        LM_TYPE_MATCH_ADAPTER,
+        LM_TYPE_MATCH_REJECT
+    } LmTypeMatchKind;
+
+    typedef struct LmTypeCheckResult {
+        LmTypeMatchKind kind;
+        LmTypeId expected;
+        LmTypeId actual;
+        LmSymbol projection_field;
+        LmSymbol adapter_name;
+        LmDiagnostic diagnostic;
+    } LmTypeCheckResult;
+---ANSI C---
+
+The exact ABI is implementation-defined. The important rule is that type
+checking must preserve why a match succeeded.
+
+34.7. Memory Model Connection
+
+The Section 30 memory model lowers naturally to generated type operations.
+
+For every concrete `ModelSpec`, the implementation may derive:
+
+    destroy
+        release owned/external fields according to edge policies.
+
+    copy_to
+        copy a value into another owner/arena.
+
+    tree_cut
+        maintain deferred owner-copy and lazy-owned edges when a local branch
+        is cut or detached.
+
+    serialize
+        materialize messages or service-boundary payloads.
+
+    field_projection
+        provide explicit component projection helpers.
+
+Inside one parser tree, arena or L5 Thread owner, ordinary typed C pointers are
+allowed:
+
+---ANSI C---
+    LmNode *node;
+    LmStructure *body;
+    LmField *field;
+    LmOak *oak;
+---ANSI C---
+
+Owner metadata is needed at owner roots and cross-owner edges, not on every
+local child pointer.
+
+Borrowed source slices, lazy-owned edges and external resources must still obey
+Section 30. No raw reference may cross an L5 Thread or service boundary.
+
+34.8. Minimal Bootstrap Profile
+
+The first ANSI C implementation may support only:
+
+    P0 parser Structures;
+    normalized ModelSpec descriptors;
+    normalized BehaviorSpec descriptors;
+    concrete ModelSpec -> typedef struct;
+    primitive fields;
+    inline component fields;
+    typed pointer fields;
+    source slices;
+    named-field unpack into concrete models;
+    explicit component projection;
+    role/reference handles;
+    rejection of implicit Oak-as-Plant assignment;
+    generated copy/destroy/tree-cut operations for the supported fields.
+
+It does not need:
+
+    dynamic object representation for every value;
+    implicit inheritance;
+    automatic structural subtyping between arbitrary models;
+    global object heap;
+    global tracing garbage collector;
+    runtime reflection for every field access.
+
+34.9. Standard Statement
+
+For an ANSI C implementation, a normalized concrete `ModelSpec` is the source of
+an ordinary final C struct type.
+
+Registry-level generalization is expressed through explicit facts and
+descriptors: component projection, role/delegation, union membership or
+adapter/conversion.
+
+L4 defines what the data is. L5 defines how values respond to messages.
+
+The registry entry may look class-like, but it is a decomposed registry class:
+data layout, behavior, derivations and service descriptors are attached by
+explicit receiver-normalized facts.
+
+34.RU. ANSI C проекция и registry-class модель
+
+34.RU.0. Область раздела
+
+Этот раздел описывает, как модель L4/L5 может быть реализована транслятором в
+ANSI C / C99.
+
+Это профиль реализации. Он не добавляет новый исходный синтаксис.
+
+Рабочая цепочка такая:
+
+    исходник Lingvamyxa
+        -> P0 generic Structures
+        -> нормализация receivers
+        -> типизированные registry descriptors
+        -> сверка типов и отношений
+        -> объявления и функции ANSI C
+        -> C compiler/linker
+
+Парсер строит Structures. Receivers и семантические проходы решают, чем эта
+Structure является: моделью, поведением, сообщением, отношением, adapter-ом,
+route descriptor-ом или обычным значением.
+
+34.RU.1. Registry entry как разобранный class
+
+В Java-подобном языке class обычно сразу содержит и поля, и методы.
+
+В Lingvamyxa это разложено на descriptors, которые прикрепляются к одному имени
+в registry.
+
+    L4 ModelSpec
+        описывает данные: slots, типы полей, defaults, conditions, layout
+        policy и выводимые операции.
+
+    L5 BehaviorSpec
+        описывает поведение: messages/selectors, реализации методов,
+        delegation, routing и object behavior.
+
+    Derivation descriptors
+        могут запросить constructors, validators, accessors, serializers,
+        C layout projection, route schemas или документацию.
+
+Вместе это похоже на class, но class не объявляется одним синтаксическим
+монолитом. Он собирается в registry из явных descriptors.
+
+Пример:
+
+L4:
+    model: Circle
+        vars:
+            f64: radius
+        ---
+        condition:
+            radius > 0.0
+        ---
+    ---
+end: L4
+
+L5:
+    behavior: Circle
+        message: drawOn, drawCircleOn
+        message: area, circleArea
+    ---
+end: L5
+
+Смысл:
+
+    ModelSpec Circle
+        Circle имеет поле radius: f64
+        radius должен быть больше 0.0
+
+    BehaviorSpec Circle
+        Circle понимает drawOn
+        Circle понимает area
+
+L4 говорит, чем значение является структурно. L5 говорит, как объект отвечает
+на messages.
+
+34.RU.2. Конкретный ModelSpec как конечный C-тип
+
+После нормализации конкретный `ModelSpec` становится конечным конкретным типом
+для ANSI C projection.
+
+    Plant   -> concrete ModelSpec -> struct LmPlant
+    Oak     -> concrete ModelSpec -> struct LmOak
+    Circle  -> concrete ModelSpec -> struct LmCircle
+
+Происхождение типа может быть сложным: receiver, registry facts, rules,
+генерация. Но после нормализации это уже конкретная typed shape.
+
+Поэтому C99-транслятору не нужно превращать каждое значение в динамический
+object. Если модель конкретная, нормальный lowering - обычная C struct и
+обычные C-типизированные указатели.
+
+Пример Lingvamyxa:
+
+L4:
+    model: Plant
+        vars:
+            f64: height
+            i32: age
+        ---
+    ---
+
+    model: Oak
+        vars:
+            Plant: plant
+            i32: acornCount
+        ---
+    ---
+end: L4
+
+---ANSI C---
+Возможная C99-проекция:
+
+    typedef struct LmPlant {
+        double height;
+        int32_t age;
+    } LmPlant;
+
+    typedef struct LmOak {
+        LmPlant plant;
+        int32_t acornCount;
+    } LmOak;
+---ANSI C---
+
+Это композиция. Это не наследование.
+
+34.RU.3. Почему Oak не является Plant автоматически
+
+Если `Plant` и `Oak` - конкретные модели, то обе являются конечными типами.
+
+`Oak` не присваивается в `Plant` молча.
+
+Допустимые связи должны быть явными:
+
+    composition
+        Oak содержит компонент Plant.
+
+    component projection
+        `oak\plant` достает компонент Plant.
+
+    role/delegation
+        Oak можно видеть как PlantRole/PlantRef, если registry явно говорит,
+        что Oak реализует или делегирует эту роль.
+
+    union membership
+        Oak можно завернуть как вариант union/domain.
+
+    adapter/conversion
+        явный adapter преобразует Oak в Plant или в ожидаемый тип.
+
+Пример явных facts:
+
+L5:
+    fact: role, PlantRole
+    fact: roleMessage, PlantRole, grow
+    fact: implements, Oak, PlantRole
+    fact: delegates, Oak, PlantRole, plant
+end: L5
+
+Такой подход заменяет объектное наследование делегированием и явными registry
+relations.
+
+34.RU.4. Как поле может ссылаться на Oak, если ожидается обобщение
+
+Если поле имеет тип `Oak`, это простое конкретное поле или указатель:
+
+---ANSI C---
+    LmOak oak;
+    LmOak *oak;
+---ANSI C---
+
+Если поле должно хранить "что-то, что ведет себя как Plant", это не `Plant`.
+Это role/reference/profile type.
+
+Например, C lowering может быть таким:
+
+---ANSI C---
+    typedef struct LmPlantRef {
+        void *object;
+        LmTypeId concrete_type;
+        const LmBehaviorSpec *behavior;
+    } LmPlantRef;
+---ANSI C---
+
+Тогда внутри `LmPlantRef` может лежать адрес `LmOak`, но только потому, что
+registry явно подтвердил: Oak может использоваться как PlantRole.
+
+Это не "Oak наследует Plant". Это "Oak имеет concrete type, а registry дает
+способ смотреть на него через role/delegation".
+
+34.RU.5. Сверка типов
+
+Когда receiver или поле ожидает тип `E`, а выражение дает тип `A`,
+транслятор должен выяснить, каким именно способом это можно совместить.
+
+Порядок:
+
+    1. E и A совпадают - exact match.
+
+    2. E является concrete ModelSpec, а source является Structure -
+       распаковать Structure по именам полей.
+
+    3. A содержит компонент E - разрешить только явный доступ, например
+       `oak\plant`.
+
+    4. E является role/protocol/reference type - спросить registry, есть ли
+       implements/delegates от A к E.
+
+    5. E является union/domain - проверить, входит ли A в варианты.
+
+    6. Есть явный adapter/conversion - применить adapter, если профиль это
+       разрешает.
+
+    7. Иначе ошибка типов.
+
+Множественное присваивание в Lingvamyxa - это распаковка Structure по именам
+полей. Это не polymorphism и не inheritance.
+
+34.RU.6. Связь с memory model
+
+Section 30 хорошо ложится на generated type operations.
+
+Для каждого concrete ModelSpec можно вывести:
+
+    destroy
+        освобождает owned/external edges по policies.
+
+    copy_to
+        копирует значение в другой owner/arena.
+
+    tree_cut
+        обслуживает lazy-owned/deferred owner-copy edges при отсечении ветки.
+
+    serialize
+        материализует message или service payload.
+
+    field_projection
+        дает явные helpers для `oak\plant` и похожих projection-ов.
+
+Внутри одного owner/arena можно использовать простые C-типизированные
+указатели:
+
+---ANSI C---
+    LmNode *node;
+    LmStructure *body;
+    LmField *field;
+    LmOak *oak;
+---ANSI C---
+
+Owner metadata нужна на owner roots и cross-owner edges, а не на каждом
+локальном child pointer.
+
+34.RU.7. Минимальный смысл для первого ANSI C bootstrap
+
+Первый C99-транслятор может поддерживать только:
+
+    P0 parser Structures;
+    normalized ModelSpec;
+    normalized BehaviorSpec;
+    concrete ModelSpec -> typedef struct;
+    primitive fields;
+    inline component fields;
+    typed pointer fields;
+    source slices;
+    named-field unpack;
+    explicit component projection;
+    role/reference handles;
+    запрет неявного Oak-as-Plant;
+    generated copy/destroy/tree-cut operations.
+
+Ему не нужны:
+
+    dynamic object для каждого значения;
+    implicit inheritance;
+    automatic structural subtyping между произвольными models;
+    global object heap;
+    global tracing GC;
+    runtime reflection для каждого field access.
+
+34.RU.8. Короткая формула
+
+L4 ModelSpec отвечает на вопрос:
+
+    какие данные имеет значение?
+
+L5 BehaviorSpec отвечает на вопрос:
+
+    какие messages понимает объект?
+
+ANSI C projection отвечает на вопрос:
+
+    какие structs, pointers, functions и type operations надо сгенерировать?
+
+Concrete model становится final C struct.
+
+Обобщение становится не наследованием, а явной registry-связью:
+
+    component;
+    role/delegation;
+    union;
+    adapter.
+
+Именно поэтому Lingvamyxa может получить class-like модель, но опускать ее в
+очень простой C99 код.
