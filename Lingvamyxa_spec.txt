@@ -1421,8 +1421,13 @@ The receiver defines the interpretation.
 
 6. Mathematical Expression Parser
 
+Mathematics is a core runtime domain because expressions, numeric models,
+arrays, queries, reductions, constraints, validation, scheduling metrics,
+build rules and diagnostics all rely on typed computation.
+
 6.1. Two Syntax Modes in One Parser
 
+A high-level structural runtime without built-in mathematics is incomplete.
 Lingvamyxa has one parsing system with two syntax modes:
 
     native structural syntax
