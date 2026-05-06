@@ -784,7 +784,7 @@ Visible closing/separation forms are:
     a canonical source-level delimiter line
     a following source item at a smaller source level
 
-Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed or separated by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
+Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are separated at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
 Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical source-level notation for an anonymous/nameless structural delimiter. Named closure is normally `end: name`.
 
@@ -869,7 +869,7 @@ A standalone line:
 
 at source level K is a structural separator / nameless close at level K.
 
-If `---` at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next `---` at level K, an explicit `end: <target>`, terminal `return` / `return: value` where valid, EOF, or root empty-line separation when K is root-equivalent.
+If `---` at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next `---` at level K, a following source item at a smaller source level, an explicit `end: <target>`, terminal `return` / `return: value` where valid, or EOF.
 
 If `---` at level K is not followed by deeper source items, it closes or cuts the current open anonymous/implicit section at that level and resumes parsing at level K.
 
@@ -3750,7 +3750,7 @@ The exact syntax and core status of `?name` logical variables, list literals, ru
 
 This grammar sketch describes the structural parser only. It does not define final receiver semantics.
 
-    program             ::= { root_empty_line | physical_item }
+    program             ::= { empty_line | physical_item }
 
     physical_item       ::= raw_file_comment_block
                           | logical_line
@@ -3780,9 +3780,10 @@ This grammar sketch describes the structural parser only. It does not define fin
                             in relaxed indentation notation, source_level is
                             computed by the indentation-stack rule.
 
-    root_empty_line     ::= trailing_horizontal_space newline
-                            valid only at root level;
-                            root-level delimiter for open root children
+    empty_line          ::= trailing_horizontal_space newline
+                            formatting whitespace; not a structural close
+                            token and not a replacement for a required
+                            same-level delimiter
 
     line_content        ::= dot_only_marker
                           | comment_body
@@ -3858,11 +3859,11 @@ This grammar sketch describes the structural parser only. It does not define fin
     mathematical_expression
                          ::= parsed by the mathematical expression syntax
 
-The vertical Structure tree is produced by source levels and explicit visible delimiters: canonical dotted delimiter lines, relaxed `---` lines, named `end:` closes, terminal return where valid and root empty-line separation.
+The vertical Structure tree is produced by source levels and explicit visible delimiters: smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed `---` lines, named `end:` closes and terminal return where valid.
 
 For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and phrase fields do not become headers merely because a deeper line follows.
 
-A canonical dotted delimiter line or relaxed `---` line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A root empty line is the root-level equivalent delimiter.
+A canonical dotted delimiter line or relaxed `---` line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at a smaller source level closes all open Structures above that smaller level.
 
 A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed `---` anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
 
@@ -4022,7 +4023,8 @@ Conceptual form:
     indentation                relaxed source level units before ordinary source items
     dotted delimiter line      canonical anonymous Structure delimiter / nameless close at non-root level
     ---                        relaxed anonymous Structure delimiter / nameless close at its indentation level
-    root empty line            root-level delimiter for open root children
+    smaller-level source line  level delimiter; closes all open Structures above the smaller level
+    empty line                 formatting whitespace, not a structural close token
     #                          line comment marker; ignores text to the end of the physical line
     $                          disabled item/block marker; syntax is still parsed and checked
     ===                        column-0 raw file comment fence; syntax inside is ignored
