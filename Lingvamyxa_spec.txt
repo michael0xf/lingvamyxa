@@ -123,8 +123,8 @@ L3:
         end: each
 
         outerLoop:
-            for: int(i 1) (i <= cfg\maxI) i++
-                for: int(j 1) (j <= cfg\maxJ) j++
+            for: int(i, 1) (i <= cfg\maxI) i++
+                for: int(j, 1) (j <= cfg\maxJ) j++
                     if: i = 2 && j = 2
                         System/out/println: "--- continue outerLoop ---"
                         continue: outerLoop
