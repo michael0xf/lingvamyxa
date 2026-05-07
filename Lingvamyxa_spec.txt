@@ -58,7 +58,11 @@ one file: L4 consumes model/registry descriptors, L5 consumes behavior/fact/buil
 descriptors, and L3 consumes executable definitions and ordinary control
 receivers.
 
-Source:
+Short version of the "hello.lmx" file:
+
+print: "Hello World"
+
+Long version of the "hello.lmx" file:
 
 L4:
     model: HelloConfig
@@ -5114,10 +5118,9 @@ L3(
     print("Hello World")
 )
 
-Short form:
+Shortest form:
 
 print: Hello World
-
 
 `Hello` and `World` are accepted only if the active L3 `print` receiver and lexical rules allow bare atoms/symbols in that position.
 
