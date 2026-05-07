@@ -114,6 +114,7 @@ A primary body Structure may start in several ways:
     inside a bounded/compact form:
 
         print(hello)
+        (a b c)
         (a, b, c)
 
     through a delimiter that opens an anonymous Structure:
@@ -271,4 +272,3 @@ Specific receiver trailer forms are outside this generic file.
 
     empty physical line
         formatting whitespace; not a close token.
-

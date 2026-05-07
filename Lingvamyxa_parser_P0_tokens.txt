@@ -123,8 +123,10 @@ P0 structural punctuation tokens:
         the current short form and lets the scanner continue with the next
         source item at the same current source or bounded level. COMMA does not
         add another field to the current short tail. For simple data elements
-        inside bounded/anonymous block Structures, COMMA may also be conventional
-        list notation.
+        inside bounded/anonymous block Structures, COMMA may also be optional
+        conventional list notation. A trailing COMMA with no following item is
+        accepted as a cosmetic trailer at any block level, including file/root
+        level 0.
 
     LPAREN      (
     RPAREN      )
@@ -254,6 +256,7 @@ Structure unless the line opens a bounded continuation.
 Field separators:
 
     horizontal whitespace in ordinary short-tail form
+    horizontal whitespace between simple bounded fields when no short form is open
     physical newline
     RPAREN closing the current bounded Structure; if a short form is open
         inside that bounded Structure, RPAREN also closes the short form
@@ -290,8 +293,9 @@ Whitespace behavior:
         or bounded level.
 
     comma in bounded or anonymous block context
-        may separate simple data items for conventional notation, and has
-        structural load when it terminates a short form before the next item.
+        may mark simple data item separation for conventional notation, has
+        structural load when it terminates a short form before the next item,
+        and may appear as a trailing cosmetic marker with no following item.
 
 P0 must not use receiver signatures to insert hidden nesting while parsing the
 ordinary short tail or bounded body. Receiver signatures operate after the

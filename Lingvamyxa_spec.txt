@@ -12,7 +12,7 @@ Revision 12.12 note:
 
     Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
 
-    Line command form is `head: tail`. In a short form, whitespace separates tail fields and expression operators may bind neighboring fields into one expression field. A comma is not a way to add another field to that same short tail: in `f: a, b`, `b` is not an argument of `f`. Comma and physical newline are trailers of the current short form. A comma lets the parser continue with the next source item at the same current structural or bounded level; physical newline returns to the ordinary source-level rules. Inside a parenthesized bounded Structure, the matching close parenthesis is both a trailer of the current short form, if one is open, and the trailer of the bounded Structure itself. Inside bounded data lists and anonymous/block Structures, comma may also be a conventional separator for simple fields, so `(1 2 3)` and `(1, 2, 3)` may normalize to the same three fields. The source line `stack: PlantBed` followed by exact identifier `2 dim` has two fields: `PlantBed` and the exact quoted identifier `2 dim`. Exact quoted identifiers in backticks are the SQLite-style identifier form for external names and multi-word names and preserve their contents exactly.
+    Line command form is `head: tail`. In a short form, whitespace separates tail fields and expression operators may bind neighboring fields into one expression field. A comma is not a way to add another field to that same short tail: in `f: a, b`, `b` is not an argument of `f`. Comma and physical newline are trailers of the current short form. A comma lets the parser continue with the next source item at the same current structural or bounded level; physical newline returns to the ordinary source-level rules. Inside a parenthesized bounded Structure, the matching close parenthesis is both a trailer of the current short form, if one is open, and the trailer of the bounded Structure itself. Parenthesized bounded Structures are not comma-list syntax: whitespace, newline/source-level composition and `)` may separate or end ordinary bounded items. Comma remains optional conventional notation for simple fields, a short-form trailer when needed, and a permitted trailing marker at any block level including file/root level 0. Thus `(1 2 3)`, `(1, 2, 3)` and `(1 2 3,)` may normalize to the same three fields. The source line `stack: PlantBed` followed by exact identifier `2 dim` has two fields: `PlantBed` and the exact quoted identifier `2 dim`. Exact quoted identifiers in backticks are the SQLite-style identifier form for external names and multi-word names and preserve their contents exactly.
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
@@ -287,7 +287,7 @@ normalizes as:
 
     print(1, 2, 3)
 
-At ordinary source-line level, comma is not a way to add another numeric field to the same short tail. Inside a bounded Structure or an admitted anonymous block context, comma may act as a conventional element separator for data or as a short-form trailer according to that bounded/block context.
+At ordinary source-line level, comma is not a way to add another numeric field to the same short tail. Inside a bounded Structure or an admitted anonymous block context, comma may act as optional conventional notation for data, as a short-form trailer, or as a trailing marker according to that bounded/block context.
 
 3.4.2. Bare Identifiers
 
@@ -395,7 +395,7 @@ Examples:
 
 The string spelling and escape rules follow the ANSI C / C99 string-literal model. However, Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
 
-In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace. Inside a bounded Structure or an admitted anonymous block context, comma may act as a conventional element separator for data or as a short-form trailer. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
+In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace. Inside a bounded Structure or an admitted anonymous block context, comma may act as optional conventional notation for data, as a short-form trailer, or as a trailing marker. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
 
 Examples:
 
@@ -507,7 +507,7 @@ It creates the same logical Frame as:
 
     f(a, b, c)
 
-The token before `:` is the head identifier or symbolic head. The tail after `:` is the line argument Structure. In an ordinary physical short line, whitespace separates argument fields. A physical newline terminates the short line command. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure also terminates the open continuation, but it does not allow additional inline short colon-forms on the same physical line.
+The token before `:` is the head identifier or symbolic head. The tail after `:` is the line argument Structure. In an ordinary physical short line, whitespace separates argument fields. A physical newline terminates the short line command. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure terminates the open continuation and the parser then resumes according to the surrounding line/block trailer rules.
 
 Bare heads do not contain spaces in the portable profile. A receiver/procedure name or entity name that contains spaces must be written as an exact quoted identifier.
 
@@ -594,7 +594,7 @@ In ordinary physical short-line tail form, comma does not add another field to t
 
 does not normalize as `head(arg0, arg1)`. The comma is a trailer for the current short form. The parser emits `head(arg0)` and then continues with `arg1` as the next source item at the same current structural or bounded level. A later receiver/profile may reject that neighboring item if a value item is not meaningful there, but it is not a short-tail field of `head`.
 
-Inside bounded or anonymous block contexts, comma has two roles. For ordinary data fields it is a conventional separator compatible with familiar data notation, so `(a b c)` and `(a, b, c)` may produce the same three data fields. For short forms, comma is a trailer: it terminates the current short form and lets the following item become the next source item at that same bounded/block level.
+Inside bounded or anonymous block contexts, comma has two roles. For ordinary data fields it is optional conventional separator notation compatible with familiar data notation, so `(a b c)`, `(a, b, c)` and `(a b c,)` may produce the same three data fields. For short forms, comma is a trailer: it terminates the current short form and lets the following item become the next source item at that same bounded/block level. A trailing comma with no following item is accepted as a cosmetic trailer. The file itself is a block at source level 0, so the same trailing-comma rule applies at root level.
 
 A receiver may later interpret an identifier field as a name, signature, selector, atom, message name or another semantic object. The parser only builds the field.
 
@@ -755,9 +755,15 @@ The inline tail contributes initial fields. The vertical child lines at level N 
 
 Parentheses create a bounded Structure:
 
-    (a, b, c)
+    (a b c)
 
-Inside parentheses, bounded elements may be separated by comma, by physical newline/source-level composition, or by the matching closing parenthesis. For ordinary data fields, comma is a conventional separator and may leave the same field sequence as whitespace separation. For short colon-forms, comma carries structural load because it terminates the current short form and lets the next item belong to the same bounded Structure.
+Inside parentheses, bounded elements may be separated by whitespace, by physical newline/source-level composition, by comma, or by the matching closing parenthesis. Comma is not required for ordinary bounded fields. It is optional conventional notation for simple data fields and may leave the same field sequence as whitespace separation:
+
+    (a b c)
+    (a, b, c)
+    (a b c,)
+
+For short colon-forms, comma carries structural load because it terminates the current short form and lets the next item belong to the same bounded Structure.
 
 Parentheses do not disable the source-level system. Vertical child items inside parentheses are still written with dots. Inline short colon-forms are also allowed inside parentheses:
 
@@ -772,7 +778,7 @@ The comma terminates `int: a b`, then `ret: int` starts the next source item ins
 
 In `call(int: a b)`, the closing `)` terminates the short form `int: a b` and closes the bounded argument Structure of `call`.
 
-Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric and string literal fields in ordinary short-tail form are separated by whitespace; bounded Structures may additionally use comma at their own bounded level for conventional data notation or short-form termination.
+Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric and string literal fields in ordinary short-tail form are separated by whitespace. Bounded Structures also use whitespace/newline composition for ordinary fields; comma at the bounded level is optional conventional notation, short-form termination, or a trailing marker.
 
 Example:
 
@@ -3624,7 +3630,7 @@ has two fields, `int` and `ppp`, while:
 
     @@@: int, ppp
 
-terminates the `@@@:` short form after `int`. The following `ppp` is not the binding-name field of that declaration unless an enclosing bounded/block profile explicitly consumes it as a following item.
+terminates the `@@@:` short form after `int`. The following `ppp` is not the binding-name field of that declaration; it is the next source item at the current level.
 
 The prefix expression form `@x` remains the depth-1 address-of operation. Higher address depth is expressed by declaring deeper address slots and storing ordinary depth-1 addresses of those slots:
 
@@ -4484,17 +4490,28 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     expr_line_body      ::= expression
 
-    argument_list       ::= bounded_item { "," bounded_item } [ "," ]
+    argument_list       ::= bounded_item_sequence
+
+    bounded_item_sequence
+                         ::= bounded_item { bounded_item_separator bounded_item }
+                             [ bounded_item_separator ]
+
+    bounded_item_separator
+                         ::= horizontal_space+
+                          | ","
+                          | newline/source-level composition
 
     bounded_item        ::= colon_frame_body
                           | nullary_line_body
                           | expression_or_structure
 
     // Inside bounded Structures, short colon-forms may appear inline.
-    // Comma and newline/source-level composition are trailers of the
-    // current short form at that bounded level. The matching RPAREN is both
-    // a trailer of the current short form, if one is open, and the trailer
-    // of the bounded Structure itself.
+    // Horizontal whitespace separates simple bounded fields only when no
+    // short colon-form is open. Inside an open short colon-form it remains
+    // the short-tail field separator. Comma and newline/source-level
+    // composition are trailers of the current short form at that bounded
+    // level. The matching RPAREN is both a trailer of the current short form,
+    // if one is open, and the trailer of the bounded Structure itself.
 
     bounded_structure   ::= "(" [ argument_list | vertical_argument_list ] ")"
 
@@ -4524,7 +4541,7 @@ This grammar is intentionally incomplete around full update semantics, full inde
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
-Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. The following item is parsed as the next source item at the same current source or bounded level. For simple data elements inside a bounded Structure or anonymous/block Structure, comma may also be conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
+Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. The following item is parsed as the next source item at the same current source or bounded level. For simple data elements inside a bounded Structure or anonymous/block Structure, comma may also be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma with no following item is accepted as a cosmetic trailer at any block level, including file/root level 0. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
 
 Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
@@ -4663,7 +4680,7 @@ Conceptual form:
 
     f(a, b)                    compact Frame named f
     f: a b                     line command Frame named f with whitespace-separated short-tail fields
-    f: a, b                    f receives only a; comma terminates the short form, so b belongs only to an enclosing bounded/block context
+    f: a, b                    f receives only a; comma terminates the short form, so b is the next source item at the current level
     f: 1 2                     ordinary short-tail fields, equivalent to f(1, 2)
     f: / child lines at . / end: f
                                 canonical dotted vertical Frame named f; vertical fields are at source level N + 1
@@ -6074,7 +6091,7 @@ The same short-tail whitespace rule applies to address-depth declarations:
 
 @@@: int ppp
 
-This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration unless an enclosing bounded/block profile explicitly consumes it as a following item.
+This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
 
 Address-producing and address-consuming forms:
 
