@@ -192,10 +192,10 @@ This example should be read with five simple structural rules in mind:
 
    A block does not need an explicit close merely because it is named. The
    ordinary trailer is the source-level cut. Explicit forms such as `end: name`,
-   terminal `return` and `---` are visible or specialized ways to make this
+   terminal return forms and `---` are visible or specialized ways to make this
    tree transition clear.
 
-5. `end: name`, `---` and terminal `return` are not competing block systems.
+5. `end: name`, `---` and terminal return forms are not competing block systems.
 
    `end: name` is an explicit named tail-cutter, useful in long or deeply nested
    blocks and when the close target should be visible.
@@ -205,9 +205,11 @@ This example should be read with five simple structural rules in mind:
    same-level sections where an ordinary source item cannot show the necessary
    down/up level transition.
 
-   A terminal `return` is an executable-specific trailer when it appears at the
-   source level of the executable definition. A `return` written inside the body
-   level is an ordinary runtime return.
+   A terminal return form is an executable-specific trailer when it appears at
+   the source level of the executable definition. For a value-producing `fn`,
+   that form is `return: value`; for a no-value executable profile, a bare
+   `return` may be admitted. A `return` written inside the body level is an
+   ordinary runtime return.
 
 Style convention used by this example:
 
@@ -215,12 +217,12 @@ Style convention used by this example:
     Use `end: name` when the closed target is long, important or not visually
     obvious.
     Use `---` for anonymous same-level sections or visible empty level markers.
-    Use terminal `return` for compact final function returns when the source
-    level makes the target clear.
+    Use terminal `return: value` for compact final function returns when the
+    source level makes the target clear.
 
 These notes are only a reading guide for the example. The exact syntactic and
 semantic rules for Structures, Frames, source levels, short forms, bounded
-Structures, receivers, `end:`, `---` and terminal `return` are specified in the
+Structures, receivers, `end:`, `---` and terminal return forms are specified in the
 following sections.
 
 1. Levels
