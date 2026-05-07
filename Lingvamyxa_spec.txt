@@ -166,6 +166,62 @@ Notes:
     implied by this example. They remain receiver/profile semantics described in
     their own sections.
 
+This example should be read with five simple structural rules in mind:
+
+1. Source text builds Structures.
+
+   A source form does not execute merely because it looks like a statement.
+   It first builds a generic Structure. The active receiver later consumes that
+   Structure and assigns typed meaning to it.
+
+2. `head: tail` means that `head` consumes one argument Structure.
+
+   The colon is a receiver-valence marker, not assignment syntax and not a
+   keyword-specific grammar. Forms such as `fn:`, `if:`, `model:`, `fact:`,
+   `int:` and `return:` share the same surface mechanism. Their meanings differ
+   because their receivers consume their argument Structures differently.
+
+3. Source levels build the tree.
+
+   Indentation in relaxed notation, or dots in canonical notation, determines
+   the source-level tree. Child items are written at the next deeper source
+   level. Returning to the same parent level or to a smaller level completes
+   the currently open Structure before the next source item is parsed.
+
+4. A source-level cut is the ordinary trailer.
+
+   A block does not need an explicit close merely because it is named. The
+   ordinary trailer is the source-level cut. Explicit forms such as `end: name`,
+   terminal `return` and `---` are visible or specialized ways to make this
+   tree transition clear.
+
+5. `end: name`, `---` and terminal `return` are not competing block systems.
+
+   `end: name` is an explicit named tail-cutter, useful in long or deeply nested
+   blocks and when the close target should be visible.
+
+   `---` is an explicit source-level marker. It materializes a level point
+   without adding an ordinary receiver item. It is mainly useful for anonymous
+   same-level sections where an ordinary source item cannot show the necessary
+   down/up level transition.
+
+   A terminal `return` is an executable-specific trailer when it appears at the
+   source level of the executable definition. A `return` written inside the body
+   level is an ordinary runtime return.
+
+Style convention used by this example:
+
+    Use the ordinary source-level cut for short local Structures.
+    Use `end: name` when the closed target is long, important or not visually
+    obvious.
+    Use `---` for anonymous same-level sections or visible empty level markers.
+    Use terminal `return` for compact final function returns when the source
+    level makes the target clear.
+
+These notes are only a reading guide for the example. The exact syntactic and
+semantic rules for Structures, Frames, source levels, short forms, bounded
+Structures, receivers, `end:`, `---` and terminal `return` are specified in the
+following sections.
 
 1. Levels
 
