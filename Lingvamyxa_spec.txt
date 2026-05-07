@@ -247,7 +247,7 @@ L3:
                         continue: outerLoop
                     ---
 
-                    System/out/println: ("i: " + i + ", j: " + j)
+                    System/out/println: ("i: " + factorial(i) + ", j: " + factorial(j))
         end: outerLoop
 
         System/out/println: "Done."
