@@ -953,12 +953,31 @@ Shared source-level rule after either surface notation has been mapped to source
     A line that returns to an earlier source level is a level delimiter and
     closes all open structures above that level.
 
+    A source-level cut is the ordinary structural trailer mechanism.
+
+    For a frame opened at source level N:
+
+        source items at level N + 1 are child/body fields of that frame;
+        a following source item at level N completes the open frame at level N
+        and starts a sibling item at the same parent level;
+        a following source item at level M < N completes all open frames above
+        M before the new item at level M is parsed.
+
+    This rule applies to named frames, anonymous frames and executable
+    definitions. A named frame does not require `end: name` merely because it
+    is named. The receiver later validates whether the completed Structure is
+    semantically valid.
+
+    `end: name` is an explicit named tail-cutter. It is useful for readability,
+    diagnostics and closing a long or deeply nested visible target. It is not
+    the only ordinary close mechanism.
+
     `end: name` closes a visible named target explicitly.
 
-    `---` is a structural delimiter at its own source level. Like the
-    canonical dotted delimiter, it may open an anonymous positional Structure
-    when followed by a source item at the next deeper level, or separate/close
-    the current anonymous/implicit section otherwise.
+    `---` is an explicit source-level marker at its own source level. Like the
+    canonical dotted delimiter, it materializes a source-level point without
+    adding an ordinary receiver item. Open, separate and close behavior follows
+    from the neighboring source levels.
 
 This rule is not a Python-like license to hide every same-level anonymous separator in whitespace. A smaller source-level line closes the open structures above that smaller level. But when two anonymous/implicit Structures must be separated at the same source level, no smaller-level line exists between them, so Lingvamyxa requires a visible same-level delimiter: a canonical dotted delimiter line or `---`.
 
@@ -969,11 +988,30 @@ Visible structural transition forms are:
     return: value
     ---
     a canonical source-level delimiter line
+    a following source item at the same parent level
     a following source item at a smaller source level
 
-Most visible named Structures are closed by `end: name`. Executable definitions may also be closed by an admitted terminal return form: `return: value` for a core `fn`, or bare `return` for no-value executable profiles such as `sub` or labels. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
+Visible named Structures may be completed by the ordinary source-level cut. `end: name` is the explicit named close form, normally used when a visible, checked or long-distance close is clearer than relying on the next smaller-level or same-parent-level source item. Executable definitions may also be closed by an admitted terminal return form: `return: value` for a core `fn`, or bare `return` for no-value executable profiles such as `sub` or labels. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
-Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical source-level notation for an anonymous/nameless structural delimiter. Named closure is normally `end: name`.
+Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical source-level notation for an anonymous/nameless structural delimiter. Explicit named closure is written as `end: name`.
+
+Terminology:
+
+    source-level cut
+        A transition from the current open source item to a source point that
+        cannot remain inside it: a sibling level or a surrounding level. It
+        completes the current open item and any deeper open Structures before
+        the new source item is parsed.
+
+    trailer
+        The structural completion event of an opened frame or anonymous
+        Structure. In ordinary source this is usually a source-level cut.
+        Explicit forms such as `end: name`, terminal `return` and `---` are
+        visible ways to materialize or specialize trailer behavior.
+
+    explicit source-level marker
+        A visible source line, such as a dotted delimiter line or `---`, that
+        materializes a source level without adding an ordinary receiver item.
 
 A useful parser view is the head-body-trailer envelope:
 
@@ -992,6 +1030,30 @@ In canonical dotted notation:
     .                               # trailer
 
 The middle dotted delimiter line has both roles: it closes/separates the preceding anonymous Structure and, because it is followed by a deeper source item, opens the next anonymous positional Structure. A relaxed `---` line follows the same head/body/trailer envelope rule.
+
+Example: ordinary source-level cut after a nested executable definition
+
+fn: outer () (int)
+    fn: inner (int: a) (int)
+        return: a + 1
+    int: a 1
+return: inner(a)
+
+The line `int: a 1` is at the source level of the nested `fn: inner` item. Before `int: a 1` is parsed as the next body item of `outer`, the source-level cut completes the nested `fn: inner` frame.
+
+This is structurally equivalent to:
+
+fn: outer () (int)
+    fn: inner (int: a) (int)
+        return: a + 1
+    end: fn
+
+    int: a 1
+return: inner(a)
+
+In this example, the body-level `return: a + 1` is an ordinary runtime return inside `inner`. It is not the terminal-return trailer of `inner`. The trailer of `inner` is the source-level cut before `int: a 1`.
+
+The final `return: inner(a)` is at the source level of `fn: outer`; therefore it is terminal return for `outer`.
 
 A source item at level N may open a frame/Structure. Its vertical child arguments are written at level N + 1.
 
@@ -1072,7 +1134,25 @@ A standalone line:
 
     ---
 
-at source level K is a structural delimiter at level K. It may open an anonymous positional Structure when followed by source items at level K + 1, or separate/close the current anonymous/implicit section otherwise.
+at source level K is an explicit source-level marker. It materializes level K in the source stream without adding an ordinary receiver item.
+
+Its primary role is to make a level transition visible when ordinary indentation or dots would otherwise hide an empty structural step.
+
+A `---` line performs no receiver call by itself. Its effect is derived from ordinary source-level rules:
+
+    1. If the parser is currently inside a deeper level, the move to `---` at
+       level K performs the ordinary source-level cut/trailer for all open
+       Structures above K.
+
+    2. If the following non-empty source item is at level K + 1, the `---` line
+       acts as the visible head of an anonymous positional Structure at level
+       K.
+
+    3. If both conditions hold, the same `---` line separates two sibling
+       anonymous Structures: it closes the previous deeper Structure and opens
+       the next deeper Structure.
+
+Therefore `---` is not a special close operator, not a special open operator and not a third independent separator syntax. It is the explicit spelling of a structural level point K. Close/open/separator behavior follows from the same source-level cut and child rules used everywhere else.
 
 If `---` at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next `---` at level K, a following source item at a smaller source level, an explicit `end: <target>`, terminal `return` / `return: value` where valid, or EOF.
 
@@ -1125,6 +1205,27 @@ Conceptual normal form:
     )
 
 The final `---` closes the open `match` ladder without naming it. The same position could also use `end: match`.
+
+A separator effect is just a visible down/up level transition.
+
+For example:
+
+if: condition
+    ---
+        thenBody
+    ---
+        elseBody
+end: if
+
+means:
+
+    level 0: if
+    level 1: explicit marker
+    level 2: first anonymous body
+    level 1: explicit marker
+    level 2: second anonymous body
+
+The second `---` is not a special `else` separator. It is the visible level-1 point between two level-2 anonymous bodies. It closes the first anonymous body and, because the next source item is deeper, opens the next anonymous body.
 
 Example with four positional arguments and no anonymous branch Structures:
 
@@ -1265,7 +1366,9 @@ not:
 
 `end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current source level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
-The standalone source line `---` is the nameless delimiter form used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target. When followed by source items at the next deeper level, it opens an anonymous positional Structure at its own source level. Otherwise it separates or closes the current open anonymous/implicit section at that level. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
+`end:` is not the default close mechanism for all named frames. The default structural close is the ordinary source-level cut. `end:` is the explicit named form of that close. It is useful when the source wants to identify the close target directly, close across a long nested tail, or improve diagnostics and readability in long blocks.
+
+The standalone source line `---` is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it separates or closes the current open anonymous/implicit section at that level by ordinary source-level rules. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
 
 Example named close:
 
@@ -2925,6 +3028,8 @@ The bare form `end` and the old-looking form `end <target>` are not valid Lingva
 For `fn`, the canonical explicit close is `end: fn`. A function's value-level name, such as `myFunc`, is not the core closing target for its source frame. A later profile may define semantic-name closing for selected entity descriptors, but that is not the default `fn` rule.
 
 The closing line has its own source level. It may close several currently open implicit vertical levels at once if the named target is visible at or above that level. This allows a long tail of nested blocks to be cut with one named close. A parser must reject `end: <target>` if the target is ambiguous, not visible or not valid for closing from that position.
+
+`end:` is not the default close mechanism for all named frames. The default structural close is the ordinary source-level cut. `end:` is the explicit named form of that close. It is useful when the source wants to identify the close target directly, close across a long nested tail, or improve diagnostics and readability in long blocks.
 
 Examples:
 
@@ -5085,13 +5190,15 @@ Conceptual form:
     leading dots               canonical visible source level units in the leading indentation zone
     indentation                relaxed source level units before ordinary source items
     dotted delimiter line      canonical anonymous Structure delimiter; may open, separate or close at its source level
-    ---                        relaxed anonymous Structure delimiter; may open, separate, or act as nameless close at its source level
-    smaller-level source line  level delimiter; closes all open Structures above the smaller level
+    ---                        explicit source-level marker; materializes level K without an ordinary receiver item;
+                               close/open/separator behavior follows from neighboring source levels
+    smaller-level source line  ordinary source-level cut/trailer; completes all open Structures above the smaller level
+    same-parent-level line     ordinary source-level cut for the previous child frame and start of the next sibling item
     empty line                 formatting whitespace, not a structural close token
     #                          line comment marker; ignores text to the end of the physical line
     $                          disabled item/block marker; syntax is still parsed and checked
     ===...                     column-0 raw file comment fence, 3..80 `=` characters; closing fence must have the same length; syntax inside is ignored
-    end: name                  close receiver for a visible frame/entity/label block by name
+    end: name                  explicit named tail-cutter for a visible frame/entity/label block; not the only close mechanism
     L2/L3/L4/L5                level receiver frames
     sub                        receiver that registers subroutine definitions
     fn                         receiver that registers function definitions

@@ -59,8 +59,10 @@ Some forms must be recognized earlier because they affect tree construction:
         post-condition loop body.
 
     ---
-        may act as a nameless close/separator and may replace `end: target`
-        when the current close target is unambiguous and the profile permits it.
+        is an explicit source-level marker. It may act as a nameless
+        close/separator through ordinary source-level rules and may replace
+        `end: target` when the current close target is unambiguous and the
+        profile permits it.
 
 This is an implementation/profile layer above tokenization and above the raw
 head/body/trailer shape. It is still below full receiver semantics.
@@ -136,7 +138,9 @@ A trailer role has:
             ---
 
         Meaning:
-            same-level anonymous Structure delimiter / nameless close.
+            explicit source-level marker. It materializes its source level
+            without adding an ordinary receiver item. Close/open/separator
+            behavior follows from neighboring source levels.
 
         Argument Structure:
             none.

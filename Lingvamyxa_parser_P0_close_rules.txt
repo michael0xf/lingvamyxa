@@ -70,8 +70,9 @@ After source-level normalization, the tree builder consumes generic events:
         item according to the structural and expression scanners.
 
     DELIM(K, kind)
-        Same-level anonymous delimiter / nameless close at source level K.
-        kind is canonical-dotted or dash.
+        Explicit source-level marker at source level K. It materializes level K
+        without adding an ordinary receiver item. kind is canonical-dotted or
+        dash.
 
     TRAILER(K, spelling, argument_structure)
         A profile-recognized trailer role. The generic parser does not hard-code
@@ -93,13 +94,20 @@ close tokens and do not replace a required same-level delimiter.
 
 3. Core Level Rule
 
-A following source item at a smaller source level is a level delimiter.
+A source-level cut is the ordinary structural trailer mechanism. A following
+source item at the same parent level or at a smaller source level completes
+the current open item before that following item is parsed.
+
+A following source item at a smaller source level is a surrounding-level cut.
 
     ITEM(M), where M < current open child level
         closes all open Structures above M;
         then the item is parsed at level M.
 
 This is the ordinary way indentation/dots close a vertical tail.
+
+A following source item at the same parent level completes the previous child
+frame and starts the next sibling item at the same parent level.
 
 A visible same-level delimiter is needed when the next structural item starts
 at the same source level and no smaller-level source line appears between the
@@ -134,15 +142,15 @@ A primary body Structure may start in several ways:
         (a b c)
         (a, b, c)
 
-    through a delimiter that opens an anonymous Structure:
+    through an explicit source-level marker that opens an anonymous Structure:
 
         match: value
             ---
                 1
                 print: World
 
-The delimiter case is important. A DELIM(K) followed by an item at K + 1 opens
-an anonymous Structure at K as the next positional child of the current parent
+The marker case is important. A DELIM(K) followed by an item at K + 1 opens an
+anonymous Structure at K as the next positional child of the current parent
 frame.
 
 
@@ -152,6 +160,9 @@ A DELIM(K) event is produced by:
 
     canonical dotted delimiter line at level K
     `---` line at level K
+
+It is an explicit source-level marker. It performs no receiver call by itself.
+Its close/open/separator behavior follows from neighboring source levels.
 
 P0 rule:
 
@@ -251,12 +262,14 @@ by fixed keyword spelling:
         bounded/compact context.
 
     source-level trailer
-        a following source item at a smaller level closes all open Structures
-        above that smaller level.
+        a following source item at the same parent level or a smaller level is
+        the ordinary source-level cut. It completes the current open item and
+        any deeper open Structures before parsing the following item.
 
-    nameless delimiter trailer
+    explicit source-level marker trailer
         `---` or a canonical dotted delimiter may close/cut anonymous or
-        implicit sections at its level.
+        implicit sections at its level, and may open the next anonymous
+        Structure when followed by a deeper item.
 
     receiver trailer
         a profile-recognized receiver-like form may close or complete the
@@ -272,14 +285,21 @@ Specific receiver trailer forms are outside this generic file.
 8. P0 Decision Summary
 
     smaller source level
-        level delimiter; closes all open Structures above the smaller level.
+        ordinary source-level cut/trailer; completes all open Structures above
+        the smaller level.
+
+    same-parent source level
+        ordinary source-level cut for the previous child frame and start of the
+        next sibling item.
 
     dotted delimiter line
-        canonical same-level anonymous delimiter / nameless close.
+        canonical explicit source-level marker; close/open/separator behavior
+        follows from neighboring source levels.
 
     ---
-        relaxed same-level anonymous delimiter / nameless close;
-        may also become a nameless trailer where a profile permits it.
+        relaxed explicit source-level marker; close/open/separator behavior
+        follows from neighboring source levels. It may also become a nameless
+        trailer where a profile permits it.
 
     physical newline
         not a trailer by itself; it ends the physical line. The following
