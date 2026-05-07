@@ -51,6 +51,105 @@ Canonical semantic pipeline:
 
 A Structure does not execute merely because it exists. Execution, translation, registration, validation or query handling starts only when a receiver or subroutine consumes the Structure under a defined mode.
 
+0.1. Mixed L4/L5/L3 Smoke Example
+
+The following example defines no new syntax. It illustrates the core formula in
+one file: L4 consumes model/registry descriptors, L5 consumes behavior/fact/build
+descriptors, and L3 consumes executable definitions and ordinary control
+receivers.
+
+Source:
+
+L4:
+    model: HelloConfig
+        vars:
+            Text: greeting owned
+            int: maxI
+            int: maxJ
+        ---
+        condition:
+            maxI > 0 && maxJ > 0
+        ---
+    ---
+
+    relation: entryPoint
+        Symbol: targetName
+        Symbol: implementationName
+    ---
+end: L4
+
+L5:
+    behavior: HelloConfig
+        message: run helloMain
+    ---
+
+    fact: model HelloConfig
+    fact: message HelloConfig run helloMain
+    fact: entryPoint app helloMain
+
+    target:
+        app
+        kind: executable
+        sources: ("src/hello_world.lm3")
+        entry: helloMain
+        output: "build/bin/hello_world.lm0.exe"
+    ---
+
+    build: app
+end: L5
+
+L3:
+    fn: words
+        Iterator: Text
+
+        yield: "Hello"
+        yield: "World"
+    return
+
+    sub: helloMain
+        HelloConfig: cfg
+            greeting: "Hello World"
+            maxI: 3
+            maxJ: 3
+        ---
+
+        System/out/println: cfg\greeting
+
+        each: word in words
+            System/out/println: word
+        end: each
+
+        outerLoop:
+            for: int(i 1) (i <= cfg\maxI) i++
+                for: int(j 1) (j <= cfg\maxJ) j++
+                    if: i = 2 && j = 2
+                        System/out/println: "--- continue outerLoop ---"
+                        continue: outerLoop
+                    ---
+
+                    System/out/println: ("i: " + i + ", j: " + j)
+        end: outerLoop
+
+        System/out/println: "Done."
+    return
+end: L3
+
+Notes:
+
+    `return` at the source level of `fn: words` or `sub: helloMain` is terminal
+    return for that executable definition. It appends the runtime return and
+    closes the executable definition. The enclosing `L3` frame is closed by
+    `end: L3`.
+
+    `each: word in words` gives the identifier `words` to the `each` receiver as
+    an iterator source. The explicit compact call form `words()` is also a valid
+    Frame when a profile/receiver wants the iterator state to be created before
+    `each` consumes it.
+
+    The `match`, `case`, failure-handler and full build-target semantics are not
+    implied by this example. They remain receiver/profile semantics described in
+    their own sections.
+
 
 1. Levels
 
@@ -2847,11 +2946,15 @@ The indented `return: 1` line is an ordinary runtime return inside the `if` body
 
 8.3. Terminal Return as Executable Structural Close
 
-A terminal return is a `return` source item written at the source level of the open executable definition itself, where a structural close of that executable definition is expected.
+A terminal return is a `return` source item written in a structural trailer position for an open executable definition. The common compact position is the source level of the executable definition itself, where a structural close of that executable definition is expected.
 
 If an executable definition is opened at source level N, then its ordinary vertical body items are normally written at level N + 1. A `return` line at level N is not a sibling root item. It is parsed as terminal return for the currently open executable definition, provided that the current open executable target is visible and compatible with `return`.
 
+Here "at the source level of the executable definition" means the level of the opening source item, such as `fn: name` or `sub: name`, not the ordinary body level. A `return` or `return: value` item written at level N + 1 or deeper is a runtime return inside the executable body. It exits the executable at runtime, but it is not the structural trailer of the executable definition.
+
 Terminal return is equivalent to appending the corresponding runtime `return` as the final body item and then closing the executable definition by its visible executable name.
+
+If the terminal `return` item is written at a smaller source level than the executable definition itself, it may still act as the terminal trailer for the visible executable tail when the normal source-level cut reaches that tail and all intervening frames admit such closure. In that case, the `return` role belongs to the executable tail. Enclosing non-executable frames are closed by the source-level cut, not because `return` is a general close receiver for them.
 
 Example:
 
@@ -2866,7 +2969,44 @@ end: square
 
 The first form is the canonical compact form for a short function. The second form is an explicit expanded explanation of the same source semantics.
 
+Example with an enclosing level receiver:
+
+L3:
+    sub: helloMain
+        print: "Hello"
+    return
+end: L3
+
+means:
+
+L3:
+    sub: helloMain
+        print: "Hello"
+        return
+    end: helloMain
+end: L3
+
+The source-level `return` at the level of `sub: helloMain` closes `helloMain`. The following `end: L3` closes only the enclosing level receiver.
+
+Example where the same terminal return item is written at a lower source level:
+
+L3:
+    sub: helloMain
+        print: "Hello"
+return
+
+means, when the active level profile admits this cut:
+
+L3:
+    sub: helloMain
+        print: "Hello"
+        return
+    end: helloMain
+end: L3
+
 Terminal return may close the open executable tail in the same checked way as `end: <currentExecutableName>`. It is not a general close form for arbitrary Structures. It is valid only for executable definitions or executable-like receivers that explicitly admit terminal return.
+
+A terminal `return` may also cut through still-open nested body frames above its target level in the same structural-trailer sense as `end: <name>` or an allowed nameless delimiter, provided all intervening frames admit such closure.
 
 Invalid examples:
 
@@ -5283,7 +5423,20 @@ For arrays or array-like containers, `each` may lower to an index loop.
 
 For iterator-compatible Structures, `each` repeatedly calls the iterator `next(env)` implementation until no value is produced.
 
-Iterator consumption by `each` is specified in section 26.14.
+In the source form:
+
+    each: item in source
+
+the `source` field is consumed by the `each` receiver as an iteration source. If `source` resolves to a container, `each` iterates over that container. If `source` resolves to an iterator-compatible Structure, `each` consumes that iterator-compatible Structure. If `source` resolves to a visible zero-argument iterator function, `each` may consume the callable binding by creating its iterator state, equivalent to the explicit compact form `source()`.
+
+Therefore both forms are valid for a zero-argument iterator source:
+
+    each: word in words
+    each: word in words()
+
+The first form lets `each` consume the callable binding as an iterator source. The second form explicitly creates the iterator state Structure before `each` consumes it. This is receiver consumption of an already parsed field; it is not hidden receiver-signature grouping.
+
+Iterator consumption by `each` is specified in section 26.15.5.
 
 26.7. `return`
 
@@ -5298,7 +5451,9 @@ For an `fn`, `return` returns the current return binding. `return: value` fills 
 
 For a `sub`, `return` exits the `sub` body. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
-At the source level of the open executable definition, `return` is terminal return. It appends the corresponding runtime return as the final body item and closes the executable definition. This is an executable-specific close, not a general replacement for `end: name`.
+At a valid terminal trailer position for the open executable definition, `return` is terminal return. It appends the corresponding runtime return as the final body item and closes the executable definition. This is an executable-specific close, not a general replacement for `end: name`.
+
+For a definition opened by `fn: name` or `sub: name` at level N, the source level of the definition is N. A `return` at level N is the common terminal structural trailer. A `return` at level N + 1 or deeper is an ordinary runtime return inside the body. A `return` at a smaller source level may still be terminal return when the normal source-level cut reaches the visible executable tail and the intervening frames admit that closure. See section 8.3.
 
 Examples:
 
@@ -5701,6 +5856,12 @@ Example:
 each: point in makePoints
     draw: point
 
+For a zero-argument iterator function, the source may also be written as an explicit compact call:
+
+each: point in makePoints()
+    draw: point
+
+Both forms are valid. The bare form gives the callable binding to `each` as an iterator source; the compact-call form creates the iterator state Structure first and gives that Structure to `each`.
 
 Semantic form:
 
@@ -6375,7 +6536,7 @@ For an `fn`, `return` returns the current return binding. `return: value` fills 
 
 For a `sub`, `return` exits without producing a normal return value. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
-At the source level of an open executable definition, `return` may be terminal return. Terminal return appends the corresponding runtime return as the final body item and closes the executable definition, in the same checked close position where `end: <functionName>` would otherwise be expected.
+At a valid terminal trailer position for an open executable definition, `return` may be terminal return. Terminal return appends the corresponding runtime return as the final body item and closes the executable definition, in the same checked close position where `end: <functionName>` would otherwise be expected. The common compact position is the executable definition's own source level; a smaller source level may also be valid when the ordinary source-level cut reaches the visible executable tail and intervening frames admit that closure.
 
 Example:
 

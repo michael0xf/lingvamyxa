@@ -189,6 +189,15 @@ A trailer role has:
             none for `return`;
             unrestricted Structure for `return: value`.
 
+        Target policy:
+            close the visible executable or executable-like envelope admitted
+            by the active profile. The trailer may appear at the executable
+            opening source level or at a smaller source level when the normal
+            source-level cut reaches that executable tail and all intervening
+            frames admit such closure. Intervening non-executable frames are
+            closed by the source-level cut, not by treating `return` as their
+            receiver.
+
         Fallback:
             inside an executable body, the same spelling may be an ordinary
             runtime return item rather than a trailer.
