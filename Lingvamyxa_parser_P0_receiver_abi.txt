@@ -1,0 +1,103 @@
+Lingvamyxa P0 Parser Receiver ABI Instruction
+=============================================
+
+This file is an implementation instruction for the first structural parser.
+It complements:
+
+    Lingvamyxa_parser_P0_tokens.txt
+    Lingvamyxa_parser_P0_close_rules.txt
+    Lingvamyxa_parser_P0_trailer_roles.txt
+
+It does not replace Lingvamyxa_spec.txt.
+
+
+1. Parser-Facing Receiver Model
+
+P0 builds Structures. A registered receiver is then represented by an L1 /
+ANSI C function that consumes the already-built argument Structure.
+
+The first argument of a parser-facing receiver function is always the Structure
+owned by the source frame being consumed.
+
+Conceptual C shape:
+
+    lm_status lm_receiver_name(LmStructure *structure, LmContext *context);
+
+Concrete type names may differ. Parser context, symbol table, diagnostics,
+arena handles and profile tables are implementation arguments after the first
+Structure argument.
+
+
+2. `fn` Receiver
+
+`fn` is a registered receiver. It is not a lexical keyword and it is not a
+special parser production.
+
+When P0 reads:
+
+    fn: factorial (int(n)) (int)
+        if: n <= 1
+            return: 1
+    return: n * factorial(n - 1)
+
+it builds one frame argument Structure for `fn`.
+
+Conceptual Structure:
+
+    fn(
+      factorial,
+      (int(n)),
+      (int),
+      if(...),
+      return(n * factorial(n - 1))
+    )
+
+The L1 `fn` receiver receives that whole Structure as its first argument and
+then normalizes semantic roles:
+
+    name -> field 0
+    args -> field 1
+    ret  -> field 2
+    body -> fields 3..end
+
+The `fn` receiver must validate its own compact signature form. P0 only builds
+the Structure.
+
+
+3. Compact `fn` Signature Requirement
+
+In the compact `fn` definition profile, the formal argument field is a bounded
+argument-list Structure.
+
+Valid:
+
+    fn: factorial (int(n)) (int)
+
+Invalid:
+
+    fn: factorial int(n) (int)
+
+The invalid form passes the declaration Frame `int(n)` directly where the `fn`
+receiver expects the bounded formal argument Structure containing that
+declaration. The empty formal argument list is written as `()`.
+
+The return descriptor field is also a Structure. A primitive return descriptor
+may be written as a bounded one-field Structure such as `(int)`. A descriptor
+Frame such as `iterator(Text)` is already a Structure and may be consumed as
+the return descriptor.
+
+
+4. `yield` Example Remains Receiver Semantics
+
+For an iterator-returning function:
+
+    fn: words () iterator(Text)
+        yield: "Hello"
+        yield: "World"
+    end: fn
+
+P0 still builds ordinary Structures only. `iterator`, `Text` and `yield` are
+not lexer keywords. The `yield` receiver consumes its own argument Structure
+inside the body Structure that the `fn` receiver normalized. Its semantic pass
+may inspect the current function return descriptor, verify that `iterator(Text)`
+declares a yield-protocol and check each produced value against that protocol.

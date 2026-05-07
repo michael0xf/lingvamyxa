@@ -6,7 +6,8 @@ This file is an implementation instruction for the first structural parser.
 It is not a replacement for Lingvamyxa_spec.txt.
 
 This file describes the generic envelope/tree mechanics only. Profile-level
-trailer forms such as `end:`, terminal `return` and `until:` are described in:
+trailer forms such as `end:`, admitted terminal `return` / `return: value`
+forms and `until:` are described in:
 
     Lingvamyxa_parser_P0_trailer_roles.txt
 

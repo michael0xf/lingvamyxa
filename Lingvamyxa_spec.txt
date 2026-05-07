@@ -99,10 +99,15 @@ L5:
 end: L5
 
 L3:
-    fn: words () Iterator(Text)
+    fn: words () iterator(Text)
         yield: "Hello"
         yield: "World"
-    return
+    end: fn
+
+    fn: factorial (int(n)) (int)
+        if: n <= 1
+            return: 1
+    return: n * factorial(n - 1)
 
     sub: helloMain
         HelloConfig: cfg
@@ -129,20 +134,28 @@ L3:
         end: outerLoop
 
         System/out/println: "Done."
-    return
+    end: sub
 end: L3
 
 Notes:
 
-    `return` at the source level of `fn: words () Iterator(Text)` or
-    `sub: helloMain` is terminal return for that executable definition. It
-    appends the runtime return and closes the executable definition. The
-    enclosing `L3` frame is closed by `end: L3`.
+    `end: fn` explicitly closes the `fn: words () iterator(Text)` definition.
+    The `return:` at the source level of `fn: factorial (int(n)) (int)` is
+    terminal return for that function definition. It appends the runtime return
+    and closes the executable definition. The `sub: helloMain` definition is
+    closed explicitly by `end: sub`. The enclosing `L3` frame is closed by
+    `end: L3`.
 
-    `fn: words () Iterator(Text)` gives the `fn` receiver the fields
-    `words`, `()`, `Iterator(Text)` and the following `yield:` fields. The
+    `fn: words () iterator(Text)` gives the `fn` receiver the fields
+    `words`, `()`, `iterator(Text)` and the following `yield:` fields. The
     `fn` receiver consumes them as name, empty formal argument Structure,
     return model and executable body.
+
+    `yield: "Hello"` gives the `yield` receiver one produced value. The
+    receiver inspects the current `fn` return descriptor, verifies that
+    `iterator(Text)` declares a yield-protocol, and checks the produced value
+    against that protocol. Neither `iterator` nor `Text` is a parser keyword;
+    both are ordinary namespace names interpreted by the active L3 profile.
 
     `each: word in words` gives the identifier `words` to the `each` receiver as
     an iterator source. The explicit compact call form `words()` is also a valid
@@ -958,7 +971,7 @@ Visible structural transition forms are:
     a canonical source-level delimiter line
     a following source item at a smaller source level
 
-Most visible named Structures are closed by `end: name`. Executable definitions may be closed by terminal `return` or `return: value` when the executable receiver admits terminal return. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
+Most visible named Structures are closed by `end: name`. Executable definitions may also be closed by an admitted terminal return form: `return: value` for a core `fn`, or bare `return` for no-value executable profiles such as `sub` or labels. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
 Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical source-level notation for an anonymous/nameless structural delimiter. Named closure is normally `end: name`.
 
@@ -2600,6 +2613,14 @@ An `fn` frame consumes a Structure and creates a function callable value.
 
 A `sub` frame consumes a Structure and creates a subroutine callable value.
 
+For the parser-facing L1 / ANSI C bootstrap, a registered receiver such as `fn` is represented as an L1 function whose first argument is the already-built frame argument Structure. Any parser context, symbol table, arena or diagnostic object is an implementation argument after that Structure.
+
+Conceptual L1 shape:
+
+    lm_status lm_receiver_fn(LmStructure *structure, LmContext *context);
+
+The exact C names are implementation details. The important rule is that `fn` receives one Structure value, not several primitive parser arguments.
+
 7.2. Function Definition Form
 
 Example source:
@@ -2629,7 +2650,8 @@ Strict conceptual form:
         print(i),
         print(j),
         p1,
-        p2
+        p2,
+        return(r1, r2)
       )
     )
 
@@ -2650,32 +2672,45 @@ fn:
         print: j
         p1()
         p2()
-end: myFunc
+        return: r1 r2
+end: fn
 
-The receiver `fn` consumes its child Structures by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures consumed by `fn`. They are not `=` named fields.
+The L1 receiver function registered as `fn` receives the whole frame argument Structure as its first argument and consumes that Structure by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures inside that first argument Structure. They are not `=` named fields.
 
 The `fn` frame's logical argument Structure is not the same thing as the formal parameter Structure of the function being defined. In the compact short definition profile, `fn` consumes its fields as:
 
     name -> field 0
-    args -> field 1
-    ret  -> field 2
+    args -> field 1, required bounded formal argument Structure
+    ret  -> field 2, required return descriptor Structure
     body -> fields 3..end as one executable body Structure
 
 P0 does not know these roles. It only builds the field sequence.
 
+The formal argument field must be an argument-list Structure even when there is only one formal argument. Therefore:
+
+    fn: factorial (int(n)) (int)
+
+is valid, while:
+
+    fn: factorial int(n) (int)
+
+is invalid in the compact `fn` definition profile. The second form gives `fn` the declaration Frame `int(n)` directly where the `fn` receiver expects the bounded formal argument Structure that contains it. The empty formal argument list is written as `()`.
+
+The return descriptor field must also be a Structure. A primitive return descriptor may be written as a bounded one-field Structure such as `(int)`. A descriptor Frame such as `iterator(Text)` is already a Structure and may be consumed as the return descriptor.
+
 Example with no required formal parameters:
 
-fn: words () Iterator(Text)
+fn: words () iterator(Text)
     yield: "Hello"
     yield: "World"
-return
+end: fn
 
 Generic structural reading:
 
     fn(
       words,
       (),
-      Iterator(Text),
+      iterator(Text),
       yield("Hello"),
       yield("World")
     )
@@ -2684,25 +2719,25 @@ Receiver-level interpretation:
 
     name -> words
     args -> empty formal parameter Structure
-    ret  -> Iterator(Text)
+    ret  -> iterator(Text)
     body -> yield("Hello"), yield("World")
 
-The physical newline after `Iterator(Text)` does not close the `fn` frame. The following `yield:` lines are at the implicit argument level of the `fn` frame, so they become following fields in the same field sequence. They are body fields only because the `fn` receiver consumes fields 3..end as executable body.
+The physical newline after `iterator(Text)` does not close the `fn` frame. The following `yield:` lines are at the implicit argument level of the `fn` frame, so they become following fields in the same field sequence. They are body fields only because the `fn` receiver consumes fields 3..end as executable body.
 
 If an explicit anonymous Structure is wanted as one field, write a delimiter:
 
-fn: words () Iterator(Text)
+fn: words () iterator(Text)
     ---
         yield: "Hello"
         yield: "World"
-return
+end: fn
 
 Generic structural reading:
 
     fn(
       words,
       (),
-      Iterator(Text),
+      iterator(Text),
       Structure(
         yield("Hello"),
         yield("World")
@@ -2795,7 +2830,7 @@ sub:
         else
     body:
         return
-end: l5_if
+end: sub
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
 
@@ -2865,7 +2900,7 @@ fn: outer () (int)
     int: helper
     fn: helper (int(x)) (int)
     return: x
-end: outer
+return: 0
 
 ?
 Closure representation, explicit capture, mutation of outer bindings and escaping nested executables are not specified in this document. They belong to a future execution-model and runtime specification.
@@ -2885,7 +2920,9 @@ The source-level closing form is:
 
 The bare form `end` and the old-looking form `end <target>` are not valid Lingvamyxa source syntax.
 
-`end:` validates `<target>` against a visible open frame, labelled block or entity block. The target may match the current node/receiver name, the normalized `name` field of the current Structure, or a visible control label according to the active closing policy. Multi-word target names must be written as exact quoted identifiers.
+`end:` validates `<target>` against a visible open frame, labelled block or entity block. In the core structural policy, the target matches the current node/receiver name or a visible control label. Multi-word target names must be written as exact quoted identifiers.
+
+For `fn`, the canonical explicit close is `end: fn`. A function's value-level name, such as `myFunc`, is not the core closing target for its source frame. A later profile may define semantic-name closing for selected entity descriptors, but that is not the default `fn` rule.
 
 The closing line has its own source level. It may close several currently open implicit vertical levels at once if the named target is visible at or above that level. This allows a long tail of nested blocks to be cut with one named close. A parser must reject `end: <target>` if the target is ambiguous, not visible or not valid for closing from that position.
 
@@ -2903,12 +2940,6 @@ end: fn
 
 Here `fn` validates against the node/receiver name.
 
-fn: myFunc (int(i)) (int(r))
-    return: i
-end: myFunc
-
-Here `myFunc` validates against the normalized `name` field of the current `fn` Structure. In this form the normalized `name` field is derived from the first positional argument.
-
 fn:
     name: myFunc
     args:
@@ -2919,9 +2950,9 @@ fn:
     ---
     body:
         return: i
-end: myFunc
+end: fn
 
-Here `myFunc` also validates against the normalized semantic `name` field, but that field is written as an ordinary nested Structure.
+Here `fn` still validates against the receiver/source-frame name, even though the function's value-level name is written as an ordinary nested Structure.
 
 fn:
     args:
@@ -2933,11 +2964,11 @@ fn:
     ---
     body:
         return: i
-end: myFunc
+end: fn
 
-This is also valid because validation uses the normalized semantic `name` field rather than the raw first source argument.
+This is also valid because validation closes the current `fn` frame by receiver/source-frame name rather than by the function's value-level name.
 
-All named forms above are valid structural surface forms. A style guide may prefer closing by the normalized entity name for long definitions and by receiver name for short local Structures.
+All core examples above close by receiver/source-frame name. A future profile may add semantic-name close for long entity definitions, but that must be specified separately and must not make `fn` closing ambiguous.
 
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
@@ -2985,7 +3016,9 @@ Calling or consuming a label block does not by itself create a new function name
 
 Runtime exit from an `fn`, `sub`, iterator-like executable body or method-like executable body is represented by the `return` receiver/operator.
 
-`return` is not the same as the general structural close receiver `end:`. `end:` closes source structure by visible target name. `return` exits executable control flow. In one terminal position inside an open executable definition, `return` may also serve as the structural close of that executable definition.
+`return` is not the same as the general structural close receiver `end:`. `end:` closes source structure by visible target name. `return` exits executable control flow. In a terminal trailer position inside an open executable definition, an admitted `return` form may also serve as the structural close of that executable definition.
+
+For `fn`, the ordinary explicit structural close is `end: fn`. A value return, written as `return: value`, may also close the `fn` when it appears in a valid terminal trailer position. The same spelling inside the body is still an ordinary runtime return and does not structurally close the definition.
 
 8.2. Return Forms
 
@@ -2996,11 +3029,15 @@ The core return forms are:
 
 Inside an executable body, `return` exits the current executable body.
 
-For an `fn`, `return` without tail returns the current return binding. For a `sub`, `return` without tail exits without producing a normal return value.
+For an `fn`, the core profile requires a value-bearing return form. `return: value` evaluates or consumes `value` as one logical value compatible with the declared return model and exits the current executable body. If the function return model is structural, the tail of `return:` is consumed as one return Structure. Whitespace-separated short-tail fields may be mapped positionally to the return Structure by the `return` receiver signature.
 
-For an `fn`, `return: value` evaluates or consumes `value` as one logical value compatible with the declared return model, stores that value in the current return binding, and exits the current executable body. If the function return model is structural, the tail of `return:` is consumed as one return Structure. Whitespace-separated short-tail fields may be mapped positionally to the return Structure by the `return` receiver signature.
+For a `sub`, `return` without tail exits without producing a normal return value.
 
 For a `sub`, `return: value` is invalid unless a later profile defines a status/result convention for subroutines.
+
+For a label/procedure-like executable with no return value, a bare `return` may be valid when the profile admits it.
+
+A bare `return` is not a valid `fn` return in the core profile. A compatibility profile may define a different convention, but that is not the default source semantics of this revision.
 
 `return` is a receiver. It consumes the Structure supplied by its tail. It is not assignment syntax and does not introduce `=` as a native assignment or named-field operator.
 
@@ -3026,11 +3063,11 @@ The indented `return: 1` line is an ordinary runtime return inside the `if` body
 
 A terminal return is a `return` source item written in a structural trailer position for an open executable definition. The common compact position is the source level of the executable definition itself, where a structural close of that executable definition is expected.
 
-If an executable definition is opened at source level N, then its ordinary vertical body items are normally written at level N + 1. A `return` line at level N is not a sibling root item. It is parsed as terminal return for the currently open executable definition, provided that the current open executable target is visible and compatible with `return`.
+If an executable definition is opened at source level N, then its ordinary vertical body items are normally written at level N + 1. A `return` line at level N is not a sibling root item. It is parsed as terminal return for the currently open executable definition, provided that the current open executable target is visible and compatible with that return form.
 
 Here "at the source level of the executable definition" means the level of the opening source item, such as `fn: name` or `sub: name`, not the ordinary body level. A `return` or `return: value` item written at level N + 1 or deeper is a runtime return inside the executable body. It exits the executable at runtime, but it is not the structural trailer of the executable definition.
 
-Terminal return is equivalent to appending the corresponding runtime `return` as the final body item and then closing the executable definition by its visible executable name.
+Terminal return is equivalent to appending the corresponding runtime `return` as the final body item and then closing the executable definition by its admitted executable close target. For an `fn`, this is equivalent to appending `return: value` to the body and closing the source frame with `end: fn`.
 
 If the terminal `return` item is written at a smaller source level than the executable definition itself, it may still act as the terminal trailer for the visible executable tail when the normal source-level cut reaches that tail and all intervening frames admit such closure. In that case, the `return` role belongs to the executable tail. Enclosing non-executable frames are closed by the source-level cut, not because `return` is a general close receiver for them.
 
@@ -3043,7 +3080,7 @@ is source-semantically equivalent to:
 
 fn: square (int(x)) (int)
     return: x * x
-end: square
+end: fn
 
 The first form is the canonical compact form for a short function. The second form is an explicit expanded explanation of the same source semantics.
 
@@ -3061,10 +3098,10 @@ L3:
     sub: helloMain
         print: "Hello"
         return
-    end: helloMain
+    end: sub
 end: L3
 
-The source-level `return` at the level of `sub: helloMain` closes `helloMain`. The following `end: L3` closes only the enclosing level receiver.
+The source-level `return` at the level of `sub: helloMain` closes the `sub: helloMain` definition. The following `end: L3` closes only the enclosing level receiver.
 
 Example where the same terminal return item is written at a lower source level:
 
@@ -3079,10 +3116,10 @@ L3:
     sub: helloMain
         print: "Hello"
         return
-    end: helloMain
+    end: sub
 end: L3
 
-Terminal return may close the open executable tail in the same checked way as `end: <currentExecutableName>`. It is not a general close form for arbitrary Structures. It is valid only for executable definitions or executable-like receivers that explicitly admit terminal return.
+Terminal return may close the open executable tail in the same checked way as the executable's admitted `end:` target. For an `fn`, that target is `end: fn`. It is not a general close form for arbitrary Structures. It is valid only for executable definitions or executable-like receivers that explicitly admit terminal return.
 
 A terminal `return` may also cut through still-open nested body frames above its target level in the same structural-trailer sense as `end: <name>` or an allowed nameless delimiter, provided all intervening frames admit such closure.
 
@@ -3110,15 +3147,15 @@ return: x
 
 Here the indented `return: -x` line is runtime control inside the `if` body. It does not structurally close the `fn` source item. The final `return: x` is terminal return at the function level and closes the function.
 
-Terminal empty return is also valid when a return binding has already been prepared:
+Terminal value return may use values prepared in named return variables:
 
 fn: `estimate harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     harvest: bed\area
     redApples: 0
     greenApples: 0
-return
+return: harvest redApples greenApples
 
-This is equivalent to appending a body-level empty `return` and closing the function.
+This is equivalent to appending a body-level `return: harvest redApples greenApples` and closing the function.
 
 8.5. Named Return Variables
 
@@ -3130,9 +3167,9 @@ fn: `estimate harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenA
     harvest: bed\area
     redApples: 0
     greenApples: 0
-return
+return: harvest redApples greenApples
 
-The terminal empty `return` returns the current values of the declared return variables and closes the function definition.
+The terminal `return:` returns the current values of the declared return variables and closes the function definition.
 
 A function return signature with several fields defines one return Structure. Updating several declared return fields and returning one Structure-compatible value are source-semantically equivalent when the produced Structure matches the declared return Structure.
 
@@ -3151,9 +3188,9 @@ A profile may still allow the current function name in head/update position to d
 
 fn: square (int(x)) (int)
     square: x * x
-return
+return: square
 
-However, this form is optional/profile-defined and should not be used as the primary return mechanism. The canonical forms are `return: value` and terminal `return`.
+However, this form is optional/profile-defined and should not be used as the primary return mechanism. The canonical form for an `fn` is `return: value`. When written in a valid terminal trailer position, `return: value` also closes the function definition.
 
 This restriction keeps the function name available for ordinary callable lookup, recursion and future local namespace overlay operations, where a callable binding may be locally replaced by another compatible callable value.
 
@@ -3161,7 +3198,9 @@ This restriction keeps the function name available for ordinary callable lookup,
 
 Implicit return at function end is not the canonical source form in this revision.
 
-A profile may still allow implicit final return of the current return binding when execution reaches the end of an `fn` body. A stricter profile may require either terminal `return`, `return: value`, or explicit `end: name` plus a previously established return binding.
+In the core profile, `end: fn` is a structural close only. It does not append an implicit runtime return for a value-producing function.
+
+A profile may still allow implicit final return of the current return binding when execution reaches the end of an `fn` body. Such a profile must say how the return binding is established and how this interacts with named return variables. The canonical source form remains explicit `return: value`.
 
 The preferred style is:
 
@@ -3174,7 +3213,7 @@ rather than relying on an implicit return binding update.
 
 At the source-semantic level, every `fn` has one logical return value. That value may be a primitive value or a return Structure. A return signature with several fields defines one return Structure, not a separate non-structural mechanism.
 
-The `return:` receiver fills or updates the current return binding from its tail and exits. The empty `return` exits and returns the current return binding. Terminal return additionally closes the current executable definition in source structure.
+The `return:` receiver consumes its tail as the current function result and exits. For a `sub` or no-value label/procedure executable, a bare `return` exits without producing a value. Terminal return additionally closes the current executable definition in source structure when the active executable receiver admits that return form in a trailer position.
 
 Physical return strategy, storage ownership and low-level runtime representation are translator/runtime implementation details. They are not part of the source-semantic core.
 
@@ -3202,7 +3241,7 @@ A structural return lowers to a handle/address allocated or managed by a runtime
 variant 5:
 Terminal return lowers as an ordinary body-level return followed by no further generated body statements. Source-level structural closure is resolved before lowering.
 
-These variants are implementation strategies only. The language-level rule remains that `return` returns the declared primitive value or return Structure, and terminal return also closes the current executable definition.
+These variants are implementation strategies only. The language-level rule remains that `return: value` returns the declared primitive value or return Structure from an `fn`, bare `return` exits a no-value executable when admitted, and terminal return also closes the current executable definition.
 ---ANSI C---
 
 9. Type and Model Forms
@@ -3266,20 +3305,18 @@ L4:
 end: L4
 
 L3:
-    fn: plantBedCondition
-        u32: id
-        Text: crop
-        f64: area
-        f64: soilWater
-        f64: harvest 0.0
-    ---
-        boolean
-    ---
-        plantBedCondition: area > 0.0 && soilWater >= 0.0 && soilWater <= 100.0
-        return
+    fn: plantBedCondition (
+        u32(id)
+        Text(crop)
+        f64(area)
+        f64(soilWater)
+        f64(harvest 0.0)
+    ) (boolean)
+        return: area > 0.0 && soilWater >= 0.0 && soilWater <= 100.0
+    end: fn
 end: L3
 
-In this direction, the input binding section of `plantBedCondition` defines the model slots and defaults. The boolean body defines the validation predicate.
+In this direction, the formal argument Structure of `plantBedCondition` defines the model slots and defaults. The boolean return descriptor and the explicit `return:` body define the validation predicate.
 
 Another possible direction is an `autoModel` receiver that receives a model name and two Structure arguments: one declaration Structure and one condition Structure.
 
@@ -4120,14 +4157,14 @@ Canonical structural return:
 
     return: bed\area 0 0
 
-Named return variables may also be updated before an empty terminal return:
+Named return variables may also be updated before an explicit terminal value return:
 
     harvest: bed\area
     redApples: 0
     greenApples: 0
-    return
+    return: harvest redApples greenApples
 
-The old Pascal-style current function-name return binding is optional/profile-defined. The canonical return mechanism is `return: value` or terminal empty `return` after updating named return variables.
+The old Pascal-style current function-name return binding is optional/profile-defined. The canonical return mechanism for an `fn` is `return: value`. In a valid terminal trailer position, `return: value` also closes the `fn` source frame.
 
 16.3. Destructuring
 
@@ -4939,7 +4976,7 @@ Semantic outline:
     The inner `return:` exits with the Apple-specific structural result.
     The final `return:` is terminal return. It supplies the default structural result and closes the function definition.
 
-23.3. Empty Return with Named Return Variables
+23.3. Explicit Return with Named Return Variables
 
 Source:
 
@@ -4947,13 +4984,13 @@ fn: estimateHarvest (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenAppl
     harvest: bed\area
     redApples: 0
     greenApples: 0
-return
+return: harvest redApples greenApples
 
 Semantic outline:
 
     Named return fields are local return variables.
     Head/update position updates existing bindings.
-    Terminal empty `return` exits, returns their current values and closes the function definition.
+    Terminal `return:` exits, returns their current values as one return Structure and closes the function definition.
 
 23.3.1. Recursive Function with Terminal Return
 
@@ -5248,7 +5285,7 @@ Operator summary:
     11. retry / retryable                                 L3 retry frame
     12. assert                                            L3 diagnostic failure flow
     13. redo                                              L3 loop frame
-    14. yield                                             L3 iterator function
+    14. yield                                             L3 iterator-profile fn
     15. labelled break / labelled continue                L3 labelled loop frame
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
@@ -5539,13 +5576,15 @@ Runtime forms inside an executable body:
     return
     return: value
 
-For an `fn`, `return` returns the current return binding. `return: value` fills the current return binding with a compatible primitive or Structure value and exits.
+For an `fn`, `return: value` consumes a compatible primitive or Structure value and exits. A bare `return` is not a valid `fn` return in the core profile.
 
 For a `sub`, `return` exits the `sub` body. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
-At a valid terminal trailer position for the open executable definition, `return` is terminal return. It appends the corresponding runtime return as the final body item and closes the executable definition. This is an executable-specific close, not a general replacement for `end: name`.
+For an `fn`, the core profile admits `return: value`, not a bare `return`. A compatibility profile may define a current-return-binding convention, but that is not the canonical form in this revision.
 
-For a definition opened by `fn: name` or `sub: name` at level N, the source level of the definition is N. A `return` at level N is the common terminal structural trailer. A `return` at level N + 1 or deeper is an ordinary runtime return inside the body. A `return` at a smaller source level may still be terminal return when the normal source-level cut reaches the visible executable tail and the intervening frames admit that closure. See section 8.3.
+At a valid terminal trailer position for the open executable definition, an admitted return form is terminal return. It appends the corresponding runtime return as the final body item and closes the executable definition. For an `fn`, this terminal form is `return: value`; for a `sub` or no-value label/procedure executable, this terminal form may be bare `return`. This is an executable-specific close, not a general replacement for `end: name`.
+
+For a definition opened by `fn: name` or `sub: name` at level N, the source level of the definition is N. An admitted return form at level N is the common terminal structural trailer. The same return form at level N + 1 or deeper is an ordinary runtime return inside the body. A return form at a smaller source level may still be terminal return when the normal source-level cut reaches the visible executable tail and the intervening frames admit that closure. See section 8.3.
 
 Examples:
 
@@ -5861,15 +5900,19 @@ Before the current iteration is restarted, all `finally` cleanups registered ins
 
 26.15. `yield`
 
-`yield` is valid only inside an iterator function.
+`yield` is valid only inside an `fn` whose return descriptor defines a yield-protocol.
 
-An iterator function declares a return model compatible with `Iterator T`.
+The standard iterator-like profile is expressed by ordinary namespace names:
 
-Calling an iterator function does not execute its body to completion. It creates an iterator state Structure.
+    iterator(T)
+
+Here `iterator` and `T` are not parser keywords. They are ordinary identifier values resolved in the shared namespace by the active L3/profile receiver set. For example, `Text` or `Point` must be visible type/model names if they are used in `iterator(Text)` or `iterator(Point)`.
+
+Calling a function with an iterator-compatible return descriptor does not execute its body to completion. It creates an iterator state Structure.
 
 The translator lowers the iterator body into a `next(env)` implementation.
 
-Each `yield` emits one value compatible with `T` from `next(env)` and records the resume state in `env`.
+Each `yield` consumes one produced value. It inspects the current function's return descriptor, verifies that the descriptor defines a yield-protocol, checks the produced value against that protocol, emits one value from `next(env)` and records the resume state in `env`.
 
 The `each` receiver consumes iterator-compatible Structures by repeatedly calling their `next(env)` implementation until no value is produced.
 
@@ -5877,10 +5920,18 @@ The `each` receiver consumes iterator-compatible Structures by repeatedly callin
 
 Example:
 
-fn: makePoints () Iterator(Point)
-    yield: 1.0 2.0
-    yield: 3.0 4.0
-    yield: 5.0 6.0
+fn: makePoints () iterator(Point)
+    yield: Point(1.0 2.0)
+    yield: Point(3.0 4.0)
+    yield: Point(5.0 6.0)
+end: fn
+
+Another zero-argument example:
+
+fn: words () iterator(Text)
+    yield: "Hello"
+    yield: "World"
+end: fn
 
 
 Calling:
@@ -5888,6 +5939,19 @@ Calling:
     makePoints()
 
 creates an iterator state Structure. It does not return an `Array Point` and does not execute all `yield` statements immediately.
+
+P0 reads the first definition structurally as a plain `fn` frame:
+
+    fn(
+      makePoints,
+      (),
+      iterator(Point),
+      yield(Point(1.0 2.0)),
+      yield(Point(3.0 4.0)),
+      yield(Point(5.0 6.0))
+    )
+
+The `fn` receiver consumes field 2 as the return descriptor and fields 3..end as the executable body. The `yield` receiver then checks each produced value against the yield-protocol declared by the current function return descriptor.
 
 26.15.2. Iterator state Structure
 
@@ -5924,15 +5988,27 @@ The exact standard name and structural layout for the result of `next(env)` is n
 
 26.15.4. `yield` value construction
 
-If `T` is a primitive, `yield: value` emits that primitive.
+For the `iterator(T)` profile, the canonical source form is:
 
-If `T` is a Structure, the arguments of `yield` fill that Structure according to the same structural rules used by `return`.
+    yield: value
 
-Example:
+The current `fn` return descriptor, such as `iterator(T)`, tells `yield` which yield-protocol is active. The `yield` tail is the produced value. The `yield` receiver checks whether that value is compatible with `T`.
 
-    yield: 1.0 2.0
+There is no hidden flattening. If `value` itself has an iterator type, then `yield: value` yields that iterator value as the produced value when the active protocol admits it. Flattening or forwarding another iterator requires a separate receiver such as `yieldFrom`.
 
-inside an `Iterator Point` function emits one `Point` value if `Point` has two positional fields such as `x` and `y`.
+If `T` is primitive, `value` is checked against that primitive type:
+
+    fn: words () iterator(Text)
+        yield: "Hello"
+    end: fn
+
+If `T` is structural, write the produced Structure explicitly:
+
+    fn: makePoints () iterator(Point)
+        yield: Point(1.0 2.0)
+    end: fn
+
+inside an `iterator(Point)` function emits one `Point` value if `Point(1.0 2.0)` is a valid Point construction in the active profile.
 
 26.15.5. Iterator consumption by `each`
 
@@ -5965,9 +6041,11 @@ This is semantic pseudocode. A translator may lower it to a direct state machine
 
 26.15.6. Iterator termination
 
-A bare `return` inside an iterator function terminates the iterator.
+An iterator-like `fn` terminates when its generated `next(env)` reaches the end of the executable body or reaches a profile-defined completion path.
 
 A `yield` after termination is unreachable.
+
+In the core profile, a bare `return` is not a valid `fn` return. If an iterator profile wants an explicit early iterator-completion operator, it must define that receiver/profile rule separately. `return: value` remains an ordinary `fn` runtime return form when admitted by the function's return descriptor; when written in a terminal trailer position, it may also close the `fn`.
 
 `break` and `continue` inside an iterator body operate on the nearest active loop frame inside the iterator body, not on the consumer's `each` loop.
 
@@ -6617,11 +6695,11 @@ Value runtime form inside a body:
 
     return: value
 
-For an `fn`, `return` returns the current return binding. `return: value` fills the current return binding with a compatible primitive or Structure value and exits.
+For an `fn`, `return: value` consumes a compatible primitive or Structure value and exits. A bare `return` is not a valid `fn` return in the core profile.
 
 For a `sub`, `return` exits without producing a normal return value. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
-At a valid terminal trailer position for an open executable definition, `return` may be terminal return. Terminal return appends the corresponding runtime return as the final body item and closes the executable definition, in the same checked close position where `end: <functionName>` would otherwise be expected. The common compact position is the executable definition's own source level; a smaller source level may also be valid when the ordinary source-level cut reaches the visible executable tail and intervening frames admit that closure.
+At a valid terminal trailer position for an open executable definition, an admitted return form may be terminal return. Terminal return appends the corresponding runtime return as the final body item and closes the executable definition, in the same checked close position where the executable's admitted `end:` target would otherwise be expected. For an `fn`, that target is `end: fn` and the terminal return form is `return: value`. The common compact position is the executable definition's own source level; a smaller source level may also be valid when the ordinary source-level cut reaches the visible executable tail and intervening frames admit that closure.
 
 Example:
 
@@ -6753,7 +6831,7 @@ is invalid if `factorial` is a callable slot with signature `Callable(int -> int
 
 29.6. Interaction with Return and Function Names
 
-The canonical return mechanism is `return: value` or terminal `return`. The current function name is not the primary return binding syntax in this revision.
+The canonical return mechanism for an `fn` is `return: value`. When `return: value` is written in a valid terminal trailer position, it also closes the `fn` source frame. The current function name is not the primary return binding syntax in this revision.
 
 This avoids overloading a function name with too many roles. The same visible name may participate in ordinary callable lookup, recursion and local namespace overlay operations without also being the canonical way to write the function result.
 
@@ -7973,7 +8051,7 @@ Thus await obeys the same memory model as messages:
 `yield` and `await` are related but distinct.
 
     yield
-        emits a value from an iterator-compatible state machine and records resume state.
+        emits a produced value checked by the current function's yield-protocol and records resume state.
 
     await
         waits for a Future/Task/message result and records resume state.

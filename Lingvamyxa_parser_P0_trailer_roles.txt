@@ -49,7 +49,10 @@ Some forms must be recognized earlier because they affect tree construction:
         closes a visible named target.
 
     return / return: value
-        may close an executable envelope in terminal position.
+        may close an executable envelope in terminal position when the active
+        executable receiver admits that return form. For the core `fn`
+        profile this is `return: value`; bare `return` is for no-value
+        executable profiles such as `sub` or label/procedure-like frames.
 
     until: condition
         closes the current executable/label block and consumes that block as a
@@ -171,9 +174,11 @@ A trailer role has:
         Meaning:
             executable-specific terminal close when it appears in a terminal
             close position admitted by the active executable receiver.
+            The same spelling inside the executable body remains an ordinary
+            runtime return item, not a structural trailer.
 
         Argument Structure:
-            none for `return`;
+            none for no-value `return`;
             unrestricted Structure for `return: value`.
 
         Target policy:
@@ -192,7 +197,10 @@ A trailer role has:
         Early checks:
             reject terminal use at root level with no open executable;
             reject terminal use for non-executable frames unless a profile
-            explicitly admits it.
+            explicitly admits it;
+            reject bare terminal `return` for a core `fn` profile;
+            reject `return: value` for no-value executables unless their
+            profile defines a status/result convention.
 
 
     UNTIL_CLOSE
