@@ -251,6 +251,8 @@ More precisely:
     * L4 describes structural models, types, contracts, unions, constraints and registry descriptors.
     * L5 describes behavior, messages, configuration, facts, rules, build/query/startup receivers and high-level dispatch.
 
+Lingvamyxa implementations may also act as service runtimes. The built-in HTTP Lingvamyxa REST profile provides a standard event/message transport between groups of L5 Threads and service instances. HTTP is the transport envelope; Lingvamyxa typed messages and Structures remain the semantic payload.
+
 The object-oriented side is structural, not class-magical. A model descriptor defines slots, types, defaults, constraints and layout information. A behavior descriptor attaches message selectors and implementations to a model. A runtime object is a Structure or handle/reference to a Structure together with enough model information to resolve behavior. Message lookup may lower to tables, dictionaries, inline caches, static calls or query over registry facts.
 
 The functional side is also structural. A function or subroutine definition is a Structure consumed by the `fn` or `sub` receiver. A call is a Frame. A callable value is data until explicitly called or consumed by a receiver that calls it. Function return is represented by `return` receivers and terminal return, not by a separate assignment syntax.
@@ -8921,19 +8923,21 @@ and reaction mechanism behind behavior dispatch, object messages, validation,
 service routing, build derivation, documentation, diagnostics and optional
 agent-assisted generation.
 
-33. REST/JSON Microservice Runtime and Built-in HTTP Client/Server Profile
+33. HTTP Lingvamyxa REST Microservice Runtime and Built-in HTTP Client/Server Profile
 
-This section defines the optional REST/JSON service profile for Lingvamyxa service instances.
+This section defines the built-in HTTP Lingvamyxa REST service profile for Lingvamyxa service instances.
 
-The profile is intentionally external to the core language syntax. REST is not the execution model of Lingvamyxa. JSON is not the native syntax of Lingvamyxa. HTTP is not the native message system of Lingvamyxa.
+The profile is outside the minimal core syntax, but it is a built-in L5 service and transport profile. It is not the execution model of Lingvamyxa and it does not replace the L5 Thread/message model. Instead, it provides a standard HTTP transport for typed Lingvamyxa messages between service instances, service Thread groups and external HTTP clients.
 
-The REST/JSON profile is an adapter layer that maps external HTTP requests into standard typed L5 messages, dispatches them through the ordinary L5 registry/query/message model, and maps reply or failure messages back into HTTP responses.
+HTTP is the transport envelope. REST routes are registry descriptors. The payload model is Lingvamyxa Structure serialization, not JSON by default.
+
+The HTTP Lingvamyxa REST profile maps external or remote HTTP requests into standard typed L5 messages, dispatches them through the ordinary L5 registry/query/message model, and maps reply or failure messages back into HTTP responses.
 
 The compact model is a conceptual summary, not Lingvamyxa source:
 
     REST route = descriptor
-    HTTP request = incoming message
-    JSON = adapter
+    HTTP request = incoming transport event
+    Lingvamyxa payload = serialized Structure/message
     service = L5 Thread bundle
     dispatch = registry/query
     state = isolated L5 memory tree
@@ -8980,17 +8984,17 @@ The service may have an optional storage or event-log component. A simple implem
 
 SQLite may be used as one implementation backend for this service-local persistence, but storage is not part of the core language semantics.
 
-33.3. REST/JSON as an Adapter Profile
+33.3. HTTP Lingvamyxa REST as a Built-in Service Transport Profile
 
-REST/JSON is an adapter profile.
+HTTP Lingvamyxa REST is a built-in service transport profile.
 
-It is not Lingvamyxa syntax. It is not the canonical internal representation of a Structure. It is not the core message model.
+It is not the minimal core syntax and it is not the canonical in-memory representation of a Structure. The canonical internal object is still the typed Lingvamyxa message owned by an L5 Thread.
 
-The profile exists for interoperability with existing tools, web clients, service gateways, tests, external agents and simple deployment environments.
+The profile exists to provide a standard HTTP transport for typed Lingvamyxa messages, route descriptors, service-to-service calls, diagnostics, tests, external clients and deployment environments.
 
-The normative internal object is always the typed Lingvamyxa message.
+External HTTP request data is converted into typed Lingvamyxa Structures before dispatch. Lingvamyxa reply or failure messages are serialized back into HTTP responses after execution.
 
-External REST/JSON data is converted into typed Lingvamyxa Structures before dispatch. Lingvamyxa reply or failure messages are converted back into HTTP responses after execution.
+JSON may exist as an optional external adapter for compatibility, but it is not the default payload model of the HTTP Lingvamyxa REST profile.
 
 33.4. HTTP Request to L5 Message
 
@@ -9022,7 +9026,9 @@ Example abstract message:
     . peer: omitted
     end: message
 
-If the route declares JSON input, the JSON body is parsed by the JSON adapter and converted into a Lingvamyxa Structure before route dispatch.
+If the route declares Lingvamyxa input, the request body is parsed as serialized Lingvamyxa Structure data and converted into a typed L5 message before route dispatch.
+
+If a route explicitly declares a legacy JSON adapter, the JSON body is parsed by that adapter and converted into a Lingvamyxa Structure before route dispatch.
 
 The result of this conversion is a normal L5 message:
 
@@ -9054,12 +9060,12 @@ Example reply message:
     . result: 5
     end: message
 
-Example JSON response produced by the adapter:
+Example Lingvamyxa response body produced by the adapter:
 
-    {
-      "ok": true,
-      "result": 5
-    }
+    response:
+        ok: true
+        result: 5
+    end: response
 
 Example failure message:
 
@@ -9070,21 +9076,21 @@ Example failure message:
     . diagnostic: "field 'a' is required"
     end: message
 
-Example JSON failure response:
+Example Lingvamyxa failure response body produced by the adapter:
 
-    {
-      "ok": false,
-      "error": {
-        "code": "invalidPayload",
-        "diagnostic": "field 'a' is required"
-      }
-    }
+    response:
+        ok: false
+        error:
+            code: invalidPayload
+            diagnostic: "field 'a' is required"
+        ---
+    end: response
 
-The JSON text is external representation only. The internal failure is a typed Lingvamyxa Structure.
+The HTTP text body is external serialized representation. The internal failure is a typed Lingvamyxa Structure.
 
 33.6. L5 Service/Route Descriptor Profile
 
-REST routes belong to the L5 service/route descriptor profile.
+HTTP Lingvamyxa REST routes belong to the L5 service/route descriptor profile.
 
 A route descriptor maps an external HTTP shape to an internal message target.
 
@@ -9093,8 +9099,8 @@ Example:
     route:
     . method: POST
     . path: "/calculator/add"
-    . input: json
-    . output: json
+    . input: lingvamyxa
+    . output: lingvamyxa
     . to: calculator
     . selector: add
     . successStatus: 200
@@ -9102,7 +9108,7 @@ Example:
 
 Equivalent compact descriptor:
 
-    route(method(POST), path("/calculator/add"), input(json), output(json), to(calculator), selector(add), successStatus(200))
+    route(method(POST), path("/calculator/add"), input(lingvamyxa), output(lingvamyxa), to(calculator), selector(add), successStatus(200))
 
 A route descriptor may specify:
 
@@ -9127,7 +9133,7 @@ Route descriptors are ordinary registry facts. They may be indexed, validated, q
 
 33.7. Dispatch Through Registry/Query
 
-A REST request is not dispatched by hard-coded string switches unless the implementation chooses that as a lowering optimization.
+An HTTP Lingvamyxa REST request is not dispatched by hard-coded string switches unless the implementation chooses that as a lowering optimization.
 
 The semantic dispatch path is:
 
@@ -9157,9 +9163,9 @@ Example abstract query:
 
 The query result determines how the adapter constructs the internal message.
 
-33.8. JSON Adapter
+33.8. Lingvamyxa Structure Serialization Adapter
 
-JSON is one external serialization adapter.
+Lingvamyxa Structure serialization is the default payload adapter for the HTTP Lingvamyxa REST profile.
 
 It may be used for:
 
@@ -9171,21 +9177,24 @@ It may be used for:
     external agent input/output;
     debugging dumps.
 
-JSON does not become a native Lingvamyxa syntax. JSON objects are parsed into Lingvamyxa Structures according to adapter rules and route schemas.
+Serialized Lingvamyxa payloads represent ordinary Lingvamyxa Structures. They preserve receiver frames, positional fields, named fields, ordered Structures, typed scalar values and exact quoted identifiers according to the selected serialization profile.
 
-A JSON adapter should preserve:
+A Lingvamyxa serialization adapter should preserve:
 
     string values;
-    integer values where representable;
-    decimal text where declared by schema;
+    integer values;
+    decimal and real values according to declared type;
     boolean values;
-    null markers if allowed by schema;
+    null/none markers if admitted by schema;
     arrays as ordered Structures;
-    objects as named-field Structures.
+    objects/records as named-field Structures;
+    receiver frames;
+    exact quoted identifiers;
+    type descriptors when required by the route schema.
 
-A JSON adapter must reject or mark ambiguous conversions when the route schema requires a type that the JSON value cannot represent safely.
+A Lingvamyxa serialization adapter must reject or mark ambiguous conversions when the route schema requires a type that the serialized payload cannot represent safely.
 
-For example, large integers and decimal numbers may be preserved as strings or explicit typed wrappers if exact numeric fidelity is required by the route descriptor.
+JSON may be supported as a legacy or interoperability adapter, but JSON is not the default payload model of this profile and does not define Lingvamyxa message semantics.
 
 33.9. Built-in HTTP Server Profile
 
@@ -9213,7 +9222,7 @@ Example outgoing service message:
     . payload:
     .. a: 2
     .. b: 3
-    . transport: restJson
+    . transport: httpLingvamyxaRest
     . endpoint: "http://service-b/lm/message"
     end: message
 
@@ -9233,14 +9242,15 @@ The response is converted back into a typed reply/failure message and delivered 
 
 Lingvamyxa services communicate by standard Lingvamyxa messages.
 
-REST/JSON over HTTP is only one transport profile for those messages.
+HTTP Lingvamyxa REST is the standard built-in HTTP transport profile for those messages.
 
 Other transport profiles may include:
 
     local in-process queue;
     SQLite-backed queue;
     file/event-log transport;
-    REST/JSON over HTTP;
+    HTTP Lingvamyxa REST;
+    legacy REST/JSON over HTTP;
     binary Structure over HTTP;
     binary Structure over TCP;
     platform message bus;
@@ -9252,7 +9262,7 @@ A remote Lingvamyxa service must not receive raw pointers, borrowed references o
 
 A message crossing a service boundary must be copied, serialized or transferred as a whole owned branch under a transport that explicitly supports ownership transfer.
 
-The default REST/JSON profile is copy/serialize only.
+The default HTTP Lingvamyxa REST profile is copy/serialize only.
 
 33.12. Service Boundaries and Memory Rules
 
@@ -9276,7 +9286,7 @@ A retained request body, parsed Structure or decoded payload must be copied into
 
 Service state is an isolated L5 memory tree.
 
-The REST adapter does not own domain state. It receives HTTP events and injects typed messages.
+The HTTP Lingvamyxa REST adapter does not own domain state. It receives HTTP events and injects typed messages.
 
 The target L5 Thread owns and updates its own state according to the L5 memory model.
 
@@ -9290,7 +9300,7 @@ Across service instances, communication is by serialized or copied messages only
 
 Internal failures are typed failure messages.
 
-The REST adapter maps them to HTTP status codes and response bodies.
+The HTTP Lingvamyxa REST adapter maps them to HTTP status codes and response bodies.
 
 The route descriptor may define the mapping.
 
@@ -9310,19 +9320,19 @@ The absence of a route-level mapping uses the service profile default.
 
 A failure response should preserve a typed code and a diagnostic Structure where possible.
 
-33.19.1 Module-loaded service endpoints
+33.15. Module-loaded Service Endpoints
 
-A Lingvamyxa service host may derive REST endpoints from loaded *.lmx modules.
+A Lingvamyxa service host may derive HTTP Lingvamyxa REST endpoints from loaded *.lmx modules.
 Loaded modules materialize typed registry facts. Route descriptors may be
 explicitly declared or derived by deterministic query receivers from public
 service/method descriptors. Endpoint activation is transactional: a new endpoint
 map becomes visible only after parsing, type checking, route derivation and
 validation succeed.
               
-JSON/REST exposure is never implied by procedure existence alone.
-Only descriptors visible to the REST adapter profile may be exposed.
+HTTP Lingvamyxa REST exposure is never implied by procedure existence alone.
+Only descriptors visible to the HTTP Lingvamyxa REST service profile may be exposed.
 
-33.15. Security and Capabilities
+33.16. Security and Capabilities
 
 HTTP server and client access should be capability-controlled.
 
@@ -9349,15 +9359,16 @@ Example descriptor:
 
 This keeps HTTP as an explicit service capability rather than hidden global access.
 
-33.16. Implementation Profile: Hosted C99
+33.17. Implementation Profile: Hosted C99
 
-A hosted C99 implementation may provide the REST/JSON service profile by linking external libraries.
+A hosted C99 implementation may provide the HTTP Lingvamyxa REST service profile by linking external libraries.
 
 A typical implementation profile may use:
 
     embedded HTTP server library for incoming HTTP;
     HTTP client library for outgoing HTTP;
-    JSON parser/emitter library for JSON adapter;
+    Lingvamyxa Structure serializer/parser for default payloads;
+    optional JSON parser/emitter library for legacy JSON adapter;
     SQLite for optional registry/event-log persistence;
     PCRE2 for route patterns or text processing if enabled.
 
@@ -9365,21 +9376,22 @@ For example, one possible hosted C99 profile is:
 
     HTTP server: CivetWeb
     HTTP client: libcurl
-    JSON adapter: yyjson
+    Lingvamyxa serializer: implementation-owned
+    legacy JSON adapter: yyjson
     storage: SQLite
     regex: PCRE2
 
 These library choices are non-normative. They are implementation tools, not part of the core language semantics.
 
-33.17. Minimal Bootstrap Service Profile
+33.18. Minimal Bootstrap Service Profile
 
-The minimal REST/JSON service profile may support only:
+The minimal HTTP Lingvamyxa REST service profile may support only:
 
     one service instance;
     one HTTP server adapter;
     one /lm/message endpoint;
-    JSON request body;
-    JSON response body;
+    Lingvamyxa Structure request body;
+    Lingvamyxa Structure response body;
     local message router;
     synchronous request/reply;
     simple failure mapping;
@@ -9392,16 +9404,16 @@ Minimal endpoint:
 
     POST /lm/message
 
-Example request:
+Example request body:
 
-    {
-      "to": "calculator",
-      "selector": "add",
-      "payload": {
-        "a": 2,
-        "b": 3
-      }
-    }
+    message:
+        to: calculator
+        selector: add
+        payload:
+            a: 2
+            b: 3
+        ---
+    end: message
 
 Internal message:
 
@@ -9413,22 +9425,22 @@ Internal message:
     .. b: 3
     end: message
 
-Example response:
+Example response body:
 
-    {
-      "ok": true,
-      "result": 5
-    }
+    response:
+        ok: true
+        result: 5
+    end: response
 
-This minimal profile is enough to expose a Lingvamyxa L5 Thread bundle as a simple REST/JSON microservice.
+This minimal profile is enough to expose a Lingvamyxa L5 Thread bundle as a simple HTTP Lingvamyxa REST microservice.
 
-33.18. Standard Statement
+33.19. Standard Statement
 
 A Lingvamyxa service instance is a bundle of isolated L5 Threads connected by standard typed messages.
 
 The bundle has a registry, a message router and optional storage or event-log components.
 
-REST/JSON is an adapter profile, not a core language syntax.
+HTTP Lingvamyxa REST is a built-in L5 service transport profile, not a core language syntax.
 
 HTTP requests are converted into standard typed L5 messages.
 
@@ -9436,7 +9448,9 @@ HTTP responses are produced from reply or failure messages.
 
 Routes are L5 service/route descriptors stored as typed registry facts.
 
-JSON is only one external serialization adapter.
+Lingvamyxa Structure serialization is the default payload model for this profile.
+
+JSON is only an optional legacy/interoperability adapter.
 
 Lingvamyxa-to-Lingvamyxa services communicate by standard Lingvamyxa messages over a selected transport profile.
 
