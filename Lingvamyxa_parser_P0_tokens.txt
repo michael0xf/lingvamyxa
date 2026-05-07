@@ -113,15 +113,18 @@ P0 structural punctuation tokens:
     COLON       :
         Mandatory visible marker between head spelling and body in a physical
         short colon-form. The head role is positional; COLON is retained for
-        navigation, tooling and a clear head/body boundary. A physical source
-        line may contain at most one short colon-form.
+        navigation, tooling and a clear head/body boundary. A short colon-form
+        continues until a trailer at the current scan depth: COMMA, physical
+        newline/source-level boundary, or, inside a bounded Structure, RPAREN.
+        RPAREN also closes the bounded Structure itself.
 
     COMMA       ,
-        Separates bounded elements or terminates an admitted short form inside
-        a bounded/anonymous block context. In ordinary physical short-line tail
-        form, COMMA does not add another field to the current short form. It can
-        only terminate that form for an enclosing bounded/block context that can
-        consume the following item.
+        Trailer at the current scan depth. For a short form, COMMA terminates
+        the current short form and lets the scanner continue with the next
+        source item at the same current source or bounded level. COMMA does not
+        add another field to the current short tail. For simple data elements
+        inside bounded/anonymous block Structures, COMMA may also be conventional
+        list notation.
 
     LPAREN      (
     RPAREN      )
@@ -252,7 +255,8 @@ Field separators:
 
     horizontal whitespace in ordinary short-tail form
     physical newline
-    RPAREN closing the current bounded Structure
+    RPAREN closing the current bounded Structure; if a short form is open
+        inside that bounded Structure, RPAREN also closes the short form
     source-level boundary
 
 Whitespace behavior:
@@ -282,23 +286,29 @@ Whitespace behavior:
             stack: PlantBed, `2 dim`
 
         means that `stack` receives only `PlantBed`. The exact identifier
-        `2 dim` can be a following item only if an enclosing bounded/anonymous
-        block context admits that comma as a terminator/separator.
+        `2 dim` is parsed as the next source item at the same current source
+        or bounded level.
 
     comma in bounded or anonymous block context
         may separate simple data items for conventional notation, and has
-        structural load when it terminates an admitted short form before the
-        next item.
+        structural load when it terminates a short form before the next item.
 
 P0 must not use receiver signatures to insert hidden nesting while parsing the
 ordinary short tail or bounded body. Receiver signatures operate after the
 parser tree exists.
 
-A short colon-form is a physical source-line form. It may not appear as an
-inline argument inside parentheses:
+A short colon-form is a source-item form. Several short forms may appear on one
+physical line when COMMA closes the earlier source item. Short forms may also
+appear inline inside a bounded Structure:
 
-    call(int: a, b)      invalid in P0
-    call(int(a, b))      compact frame form
+    call(int: a b, ret: int)
+        means call(int(a, b), ret(int))
+
+    call(int: a, b)
+        means call(int(a), b)
+
+The comma after `a` terminates `int: a`; it does not add `b` to the `int`
+tail.
 
 
 8. Expression Tokens

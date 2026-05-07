@@ -4,7 +4,7 @@ This Rev.12.12 revision preserves the uploaded Rev.12.10 document body where pos
 
 Status
 
-Revision 12.12 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, whitespace-separated short tail, exact quoted multi-word names, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model, logical registry/query layer summary, and L5 Thread/message scheduling model.
+Revision 12.12 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, whitespace-separated short tail, exact quoted multi-word names, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, short-form trailer rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model, logical registry/query layer summary, and L5 Thread/message scheduling model.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
@@ -12,7 +12,7 @@ Revision 12.12 note:
 
     Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
 
-    Line command form is `head: tail`. In ordinary physical short-line form, whitespace separates fields. A comma is not a way to add another field to that same short tail: in `f: a, b`, `b` is not an argument of `f`. Comma is meaningful only inside an already-open bounded or anonymous block context/profile. There it may be a conventional data separator for simple fields, and it carries structural load when it terminates or separates neighboring short forms admitted by that bounded/block context. `print: 1 2 3` produces three fields. Inside a bounded data list, `(1 2 3)` and `(1, 2, 3)` may normalize to the same three fields. The source line `stack: PlantBed` followed by exact identifier `2 dim` has two fields: `PlantBed` and the exact quoted identifier `2 dim`. Exact quoted identifiers in backticks are the SQLite-style identifier form for external names and multi-word names and preserve their contents exactly.
+    Line command form is `head: tail`. In a short form, whitespace separates tail fields and expression operators may bind neighboring fields into one expression field. A comma is not a way to add another field to that same short tail: in `f: a, b`, `b` is not an argument of `f`. Comma and physical newline are trailers of the current short form. A comma lets the parser continue with the next source item at the same current structural or bounded level; physical newline returns to the ordinary source-level rules. Inside a parenthesized bounded Structure, the matching close parenthesis is both a trailer of the current short form, if one is open, and the trailer of the bounded Structure itself. Inside bounded data lists and anonymous/block Structures, comma may also be a conventional separator for simple fields, so `(1 2 3)` and `(1, 2, 3)` may normalize to the same three fields. The source line `stack: PlantBed` followed by exact identifier `2 dim` has two fields: `PlantBed` and the exact quoted identifier `2 dim`. Exact quoted identifiers in backticks are the SQLite-style identifier form for external names and multi-word names and preserve their contents exactly.
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
@@ -592,39 +592,48 @@ In ordinary physical short-line tail form, comma does not add another field to t
 
     head: arg0, arg1
 
-does not normalize as `head(arg0, arg1)`. The comma terminates the current short form. Therefore `arg1` can only be consumed by an already-open bounded or anonymous block context that admits a following item; without such an enclosing context, the remaining item is a dangling source item and the line is invalid.
+does not normalize as `head(arg0, arg1)`. The comma is a trailer for the current short form. The parser emits `head(arg0)` and then continues with `arg1` as the next source item at the same current structural or bounded level. A later receiver/profile may reject that neighboring item if a value item is not meaningful there, but it is not a short-tail field of `head`.
 
-Inside bounded or anonymous block contexts, comma has two roles. For ordinary data fields it is a conventional separator compatible with familiar data notation, so `(a b c)` and `(a, b, c)` may produce the same three data fields. For admitted neighboring short forms, comma has structural load: it terminates the current short form and lets the following item become the next element of the enclosing bounded/block Structure.
+Inside bounded or anonymous block contexts, comma has two roles. For ordinary data fields it is a conventional separator compatible with familiar data notation, so `(a b c)` and `(a, b, c)` may produce the same three data fields. For short forms, comma is a trailer: it terminates the current short form and lets the following item become the next source item at that same bounded/block level.
 
 A receiver may later interpret an identifier field as a name, signature, selector, atom, message name or another semantic object. The parser only builds the field.
 
-4.2.1.1. Strict Short-Colon Line Rule
+4.2.1.1. Short-Form Trailer Rule
 
 A short colon-form is a physical source-item form.
 
-A physical source line may contain at most one short colon-form.
+A physical source line may contain several source items when the earlier item is closed by a comma trailer. A short colon-form may appear inside a parenthesized bounded Structure, including several short forms on one physical line.
 
-A short colon-form may appear only as the main source item of that physical line. It may not appear as an inline element inside a parenthesized comma enumeration, a compact call argument list or another short colon-form tail.
+Examples:
 
-Invalid:
+    call(int: a b, ret: int)
 
-    call2(call(int: a, b), call(int: b, c))
+normalizes as a compact `call` Frame whose bounded argument Structure contains two neighboring short-form Frames:
+
+    call(int(a, b), ret(int))
+
+And:
+
     call(int: a, b)
-    int: a, int: d
 
-The `call(int: a, b)` form is invalid because `int: a, b` is a short colon-form placed directly inside a parenthesized argument list. To pass a compact type-constructor Frame, write:
+normalizes as:
 
-    call(int(a, b))
+    call(int(a), b)
 
-The ordinary physical short-line form `f: a, b` does not pass two fields to `f`. It is equivalent to a terminated short form `f: a` followed by `b` as a candidate next item of an enclosing bounded/anonymous context. At ordinary top level, where there is no such context, that trailing item is invalid.
+The comma after `a` terminates `int: a`; it does not add `b` to the `int` tail.
 
-To use short colon-form inside parentheses, write it as a vertical source item on its own physical line. Parentheses do not disable source-level composition:
+The same rule applies outside parentheses:
 
-    call(
-    . int: a b
-    )
+    print: a b, c
 
-When a short colon-form begins on an ordinary physical line, comma is not a tail field separator for that form. In a bounded/block profile, comma may terminate a short form inside an already-open bounded or anonymous Structure, similarly to newline or closing parenthesis.
+normalizes as two neighboring source items at the current source level:
+
+    print(a, b)
+    c
+
+Here `c` is not an argument of `print`. Its later validity depends on the surrounding receiver/profile and statement/value position.
+
+When a short colon-form begins, comma and physical newline close it as trailers. A source-level boundary may also close vertical continuations according to the ordinary level rules. Inside a parenthesized bounded Structure, the matching `)` closes the current short form if one is open and also closes the bounded Structure itself. None of those trailer tokens is a whitespace field separator inside the short form.
 
 4.2.2. Expression Operators in Short Tail
 
@@ -698,11 +707,11 @@ Examples:
 
 This gives `args` one compact declaration Frame `int(v, j)`.
 
-The following is invalid under the strict short-colon line rule, because the short colon-form `int: v j` is placed directly inside parentheses:
+The following is also valid. It gives `args` one bounded Structure containing the short-form Frame `int(v, j)`:
 
     args: (int: v j)
 
-Write either the compact form above or a vertical source form:
+The vertical source form is equivalent at the Structure level:
 
     args:
     . int: v j
@@ -748,15 +757,20 @@ Parentheses create a bounded Structure:
 
     (a, b, c)
 
-Inside parentheses, bounded elements may be separated by comma, by physical newline/source-level composition, or by the matching closing parenthesis. For ordinary data fields, comma is a conventional separator and may leave the same field sequence as whitespace separation. For short colon-forms admitted by a bounded-form profile, comma carries structural load because it terminates the current short form and lets the next item belong to the enclosing bounded Structure.
+Inside parentheses, bounded elements may be separated by comma, by physical newline/source-level composition, or by the matching closing parenthesis. For ordinary data fields, comma is a conventional separator and may leave the same field sequence as whitespace separation. For short colon-forms, comma carries structural load because it terminates the current short form and lets the next item belong to the same bounded Structure.
 
-Parentheses do not disable the source-level system. Vertical child items inside parentheses are still written with dots.
+Parentheses do not disable the source-level system. Vertical child items inside parentheses are still written with dots. Inline short colon-forms are also allowed inside parentheses:
 
-A short colon-form is not allowed as an inline argument inside parentheses. It must be the main source item of its physical line. Therefore `call(int: a, b)` is invalid. Use `call(int(a, b))` for a compact constructor Frame, or write the short colon-form vertically:
+    call(int: a b, ret: int)
+
+The comma terminates `int: a b`, then `ret: int` starts the next source item inside the same bounded Structure. The vertical spelling remains valid:
 
     call(
     . int: a b
+    . ret: int
     )
+
+In `call(int: a b)`, the closing `)` terminates the short form `int: a b` and closes the bounded argument Structure of `call`.
 
 Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric and string literal fields in ordinary short-tail form are separated by whitespace; bounded Structures may additionally use comma at their own bounded level for conventional data notation or short-form termination.
 
@@ -2553,12 +2567,12 @@ The `args` child receives one compact declaration Frame:
 
 In declaration context, this means an `int` binding named `v` whose default/initial value is `j`.
 
-The following older inline style is invalid under the strict short-colon line rule, because it places short colon-forms directly inside parentheses and also tries to put several short colon-forms on one physical line:
+The same declaration may also be written with short forms inside bounded Structures:
 
     fn: i(args: int(v, j), ret: int, body: (j: v / 2, return: v))
-    fn: i(args: (int: v, j), ret: int, body: (j: v / 2, return: v))
+    fn: i(args: (int: v j), ret: int, body: (j: v / 2, return: v))
 
-Use the vertical form above instead.
+In the first spelling, `args: int(v, j)` uses a compact declaration Frame as the `args` tail. In the second spelling, `args: (int: v j)` gives `args` a bounded Structure containing the short-form Frame `int(v, j)`. Inside `body: (j: v / 2, return: v)`, the comma terminates `j: v / 2`; `return: v` is the next short-form item in the same bounded Structure.
 
 The form:
 
@@ -4429,18 +4443,22 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     disabled_body       ::= "$" enabled_line_body
 
-    enabled_line_body   ::= colon_frame_body
-                          | nullary_line_body
-                          | expr_line_body
+    enabled_line_body   ::= line_item_sequence
 
     compact_frame       ::= name "(" [ argument_list ] ")"
 
-    line_frame          ::= source_level colon_frame_body newline
+    line_frame          ::= source_level line_item_sequence newline
+
+    line_item_sequence  ::= source_item { "," source_item } [ "," ]
+
+    source_item         ::= colon_frame_body
+                          | nullary_line_body
+                          | expr_line_body
 
     colon_frame_body    ::= head ":" [ line_arguments ]
 
-    // A physical source line may contain at most one short colon-form.
-    // A short colon-form must be the main source item of that line.
+    // Comma terminates the current source_item at the current scan depth.
+    // It does not add another field to an open short tail.
 
     head                ::= bare_identifier
                           | exact_identifier
@@ -4466,13 +4484,17 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     expr_line_body      ::= expression
 
-    argument_list       ::= argument { "," argument } [ "," ]
+    argument_list       ::= bounded_item { "," bounded_item } [ "," ]
 
-    argument            ::= expression_or_structure
+    bounded_item        ::= colon_frame_body
+                          | nullary_line_body
+                          | expression_or_structure
 
-    // Short colon-forms are not inline arguments.
-    // They may appear inside parentheses only as separate physical
-    // source lines under source-level composition.
+    // Inside bounded Structures, short colon-forms may appear inline.
+    // Comma and newline/source-level composition are trailers of the
+    // current short form at that bounded level. The matching RPAREN is both
+    // a trailer of the current short form, if one is open, and the trailer
+    // of the bounded Structure itself.
 
     bounded_structure   ::= "(" [ argument_list | vertical_argument_list ] ")"
 
@@ -4502,7 +4524,7 @@ This grammar is intentionally incomplete around full update semantics, full inde
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
-Inside a bounded Structure, comma separates elements at the bounded Structure's current level or terminates an admitted short form in that bounded/block context. For simple data elements, comma may be only conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form. In an ordinary physical short-line tail, comma does not add another argument to the current head; it can only terminate the current short form for an enclosing bounded/block context that admits a following item.
+Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. The following item is parsed as the next source item at the same current source or bounded level. For simple data elements inside a bounded Structure or anonymous/block Structure, comma may also be conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
 
 Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
