@@ -4411,9 +4411,7 @@ This grammar sketch describes the structural parser only. It does not define fin
     line_content        ::= dot_only_marker
                           | comment_body
                           | disabled_body
-                          | colon_frame_body
-                          | nullary_line_body
-                          | expr_line_body
+                          | line_item_sequence
 
     dot_only_marker     ::= empty content after indentation
                             valid only if source_level > 0;
@@ -4520,6 +4518,135 @@ Comma is a trailer at the current scan depth. For a short form, comma terminates
 Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
 Labels are not a separate structural grammar category. A source line such as `outerLoop:` is a colon frame with an empty inline tail and a required following vertical block. The active receiver/profile decides whether that frame introduces a local nullary executable binding, a control label role, both, or an error. A later bare line such as `outerLoop` is also not special label grammar; in executable statement position it may resolve through the ordinary namespace to that zero-argument label-block binding.
+
+22.1. Structural Semantics in EBNF Form
+
+The following EBNF describes the structural-semantic normal form produced by the
+parser. It is not a separate surface syntax and it does not assign binding,
+variable, type, field, atom, class, method or execution semantics. Those meanings
+are assigned later by receiver consumption, model/type descriptors and the active
+level/profile.
+
+The notation uses `Structure(...)` and `Frame(...)` as semantic constructors:
+
+    SourceFile
+        ::= RootBlock
+
+    RootBlock
+        ::= Block(0)
+
+    Block(K)
+        ::= Structure({ BlockElement(K) })
+
+    BlockElement(K)
+        ::= FrameElement(K)
+         |  ValueElement(K)
+         |  ExpressionElement(K)
+         |  AnonymousStructure(K)
+
+    FrameElement(K)
+        ::= Frame(Head, BodyStructure, FrameTrailer)
+
+    Head
+        ::= BareIdentifier
+         |  ExactIdentifier
+         |  SymbolicHead
+         |  ProfileHeadPath
+
+    BodyStructure
+        ::= Structure({ Field })
+
+    Field
+        ::= FrameElement(current)
+         |  ValueElement(current)
+         |  ExpressionElement(current)
+         |  BoundedStructure
+         |  CompactFrame
+         |  AnonymousStructure(current)
+
+    ValueElement(K)
+        ::= NumericLiteral
+         |  StringLiteral
+         |  BareIdentifier
+         |  ExactIdentifier
+
+    ExpressionElement(K)
+        ::= ExpressionStructure
+
+    CompactFrame
+        ::= Frame(Head, BoundedBody, RPAREN_BOUNDED)
+
+    BoundedStructure
+        ::= Structure({ BoundedElement })
+
+    BoundedElement
+        ::= FrameElement(bounded)
+         |  ValueElement(bounded)
+         |  ExpressionElement(bounded)
+         |  CompactFrame
+         |  BoundedStructure
+
+    AnonymousStructure(K)
+        ::= Structure({ BlockElement(K + 1) })
+
+This semantic EBNF is read with these structural rules:
+
+    ShortTail
+        ::= Field { HorizontalSpace+ Field }
+
+    BoundedBody
+        ::= [ BoundedElement { BoundedSeparator BoundedElement }
+             [ BoundedSeparator ] ]
+
+    BoundedSeparator
+        ::= HorizontalSpace+
+         |  COMMA_SHORT
+         |  NewlineSourceComposition
+
+    FrameTrailer
+        ::= NEWLINE_SHORT
+         |  COMMA_SHORT
+         |  RPAREN_BOUNDED
+         |  LEVEL_DROP
+         |  DELIM_NAMELESS
+         |  RECEIVER_TRAILER
+         |  EOF_TRAILER
+
+    RECEIVER_TRAILER
+        ::= END_NAMED
+         |  UNTIL_CLOSE
+         |  TERMINAL_RETURN
+         |  ProfileTrailer
+
+Comma semantics:
+
+    COMMA_SHORT never appends a field to the open ShortTail.
+    It terminates the current short form at the current source or bounded level.
+    If another element follows, that element is parsed at the same current level.
+    If no element follows before newline, RPAREN, EOF or another block boundary,
+    the comma is a cosmetic trailing marker.
+
+Parenthesis semantics:
+
+    RPAREN_BOUNDED closes the current BoundedStructure or CompactFrame.
+    If a short form is open inside that bounded form, RPAREN_BOUNDED first
+    terminates the short form and then closes the bounded form itself.
+
+Source-level semantics:
+
+    A line at source level K + 1 is a child field of the current item at level K.
+    A line at a smaller source level closes all open Structures above that level.
+    A delimiter at level K may open an AnonymousStructure(K) when followed by
+    items at K + 1, or close/separate the current anonymous or implicit section
+    at level K.
+
+Receiver semantics:
+
+    Frame(Head, BodyStructure, FrameTrailer) is still only data after parsing.
+    The receiver named by Head consumes BodyStructure and assigns semantic roles
+    to positional fields, anonymous Structures, named child Frames, labels,
+    operators, declarations, model descriptors, behavior descriptors and control
+    trailers. The parser does not infer those meanings from spelling alone.
 
 23. Canonical Examples
 
@@ -4660,7 +4787,7 @@ Conceptual form:
                                 canonical dotted vertical Frame named f; vertical fields are at source level N + 1
     f: / indented child lines / end: f
                                 relaxed indentation vertical Frame named f
-    (a, b)                     bounded Structure
+    (a b), (a, b)              bounded Structure; comma is optional conventional notation
     name: value                ordinary nested Structure, often consumed as a setting/semantic field by receiver
     name:                      colon frame with required vertical child continuation or profile-defined empty form
     leading dots               canonical visible source level units in the leading indentation zone
