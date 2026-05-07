@@ -51,6 +51,115 @@ Canonical semantic pipeline:
 
 A Structure does not execute merely because it exists. Execution, translation, registration, validation or query handling starts only when a receiver or subroutine consumes the Structure under a defined mode.
 
+0.0.1. Language Scope
+
+Lingvamyxa is one structural language with several consumption modes.
+
+The same source mechanism builds Structures. Different receivers and profiles
+consume those Structures as data, executable code, model descriptors, registry
+facts, messages, service routes, build instructions or transport payloads.
+
+First, Lingvamyxa is a general structural data notation.
+
+It can be used for human-readable records, trees, nested configurations,
+schemas, registries, message payloads and table-like data in the same problem
+domain as XML, JSON, YAML and CSV.
+
+Unlike those formats, Lingvamyxa does not have a separate data syntax and
+program syntax. Both are source forms that build Structures.
+
+Example of mixed tree and table-like data:
+
+dataset: harvest
+    meta:
+        title: "Regional harvest report"
+        season: 2026
+        source:
+            organization: `Field Bureau`
+            system: `manual survey`
+        ---
+        location:
+            country: Uruguay
+            region: `north field group`
+        ---
+        note:
+            "This part is XML-like tree data: nested named Structures."
+    ---
+
+    table:
+        columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
+        rows:
+                 1        `north field`       wheat       12.50       0.14
+                 2        `south field`       corn         8.75       0.19
+                 3        `east ridge`        barley      10.00       0.16
+                 4        `river lowland`     rice        21.30       0.22
+        ---
+    ---
+end: harvest
+
+The `meta` section is tree-shaped data, similar in role to an XML/YAML document.
+
+The `columns:` line is a compact schema row. Each schema field is an explicit
+compact Frame such as `int(id)`, `Text(region)`, `real(tons)` or
+`decimal(moisture)`. Horizontal whitespace separates those schema fields.
+
+The `rows:` section is true table-like data. Each physical row is one row
+Structure. Horizontal whitespace separates row fields. Extra horizontal spacing
+is only visual alignment and does not create additional fields.
+
+The row values are visually aligned under the corresponding schema fields from
+`columns:`. This alignment is presentation only; the structural meaning still
+comes from ordinary whitespace-separated row fields.
+
+Exact quoted identifiers such as `north field` and `river lowland` keep
+multi-word field values atomic.
+
+The `dataset`, `meta`, `table`, `columns` and `rows` receivers are not special
+parser syntax. They consume ordinary Structures. A profile may lower this data
+to CSV, SQL rows, binary records, in-memory arrays, Lingvamyxa Structure
+serialization, JSON for legacy interoperability, or another backend
+representation.
+
+Second, Lingvamyxa is a high-level programming language.
+
+The executable layer supplies ordinary algorithmic computation, function and
+subroutine definitions, control receivers, expressions and calls.
+
+The model layer describes structural models, types, contracts, constraints,
+protocols and registry descriptors.
+
+The message and behavior layer describes behavior, messages, configuration,
+facts, rules, build/query/startup receivers and high-level dispatch.
+
+Low-level programming is not a foreign escape hatch. The low-level and
+implementation-facing layers provide controlled access to storage, addresses,
+external functions, unsafe operations and implementation-specific lowering when
+the selected profile admits them.
+
+The exact level names and their boundaries are defined in the next section.
+
+Third, Lingvamyxa is a registry-driven service and message system.
+
+Lingvamyxa treats compiler knowledge, runtime knowledge and service knowledge
+as one structural registry model. Descriptors, models, relations, routes,
+messages, handlers, build targets, validation rules and transport profiles are
+all Structures accepted by receivers and stored, derived, queried or lowered
+through the registry.
+
+For this reason, a Lingvamyxa implementation is not only a compiler in the
+narrow sense. A complete implementation may also act as a runtime, build system,
+registry host and service framework for small and large services.
+
+The built-in HTTP Lingvamyxa REST profile provides a standard HTTP transport
+for typed Lingvamyxa messages between service instances, service thread groups
+and external HTTP clients. HTTP is the transport envelope. REST routes are
+service/route descriptors stored as typed registry facts. Lingvamyxa typed
+messages and serialized Lingvamyxa Structures remain the semantic payload.
+
+JSON may be supported as a legacy or interoperability adapter, but JSON is not
+the default payload model of the HTTP Lingvamyxa REST profile and does not
+define Lingvamyxa message semantics.
+
 0.1. Mixed L4/L5/L3 Smoke Example
 
 The following example defines no new syntax. It illustrates the core formula in
