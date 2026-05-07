@@ -111,13 +111,8 @@ released, it must become OWNED or LAZY_OWNED by the target owner.
 The parser should distinguish:
 
     bare word identifier
-    phrase identifier
     exact quoted identifier
     string literal
-
-Bare phrase normalization may allocate normalized spelling in the target owner,
-or may keep a lazy-owned source slice plus normalization metadata until the
-value is actually needed.
 
 Exact quoted identifiers may preserve:
 

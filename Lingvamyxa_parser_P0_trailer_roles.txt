@@ -240,7 +240,7 @@ just an identifier/head spelling until this role pass resolves it.
 Named close:
 
     outerLoop:
-        for: int(i, 1), (i <= 3), i++
+        for: int(i, 1) (i <= 3) i++
             print: i
     end: outerLoop
 

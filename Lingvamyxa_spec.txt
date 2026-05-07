@@ -4,7 +4,7 @@ This Rev.12.12 revision preserves the uploaded Rev.12.10 document body where pos
 
 Status
 
-Revision 12.12 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, comma tail, phrase signatures, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model, logical registry/query layer summary, and L5 Thread/message scheduling model.
+Revision 12.12 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, whitespace-separated short tail, exact quoted multi-word names, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, strict short-colon line rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model, logical registry/query layer summary, and L5 Thread/message scheduling model.
 
 This document specifies the structural core of Lingvamyxa as a self-contained language model.
 
@@ -12,7 +12,7 @@ Revision 12.12 note:
 
     Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
 
-    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a bare phrase identifier is normalized to one ASCII space and leading/trailing whitespace is trimmed. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, second branch` has two fields: `PlantBed` and the bare phrase name `second branch`. Exact quoted identifiers in backticks are a separate second identifier form for SQLite/external names and preserve their contents exactly. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
+    Line command form is `head: tail`. In ordinary physical short-line form, whitespace separates fields. A comma is not a way to add another field to that same short tail: in `f: a, b`, `b` is not an argument of `f`. Comma is meaningful only inside an already-open bounded or anonymous block context/profile. There it may be a conventional data separator for simple fields, and it carries structural load when it terminates or separates neighboring short forms admitted by that bounded/block context. `print: 1 2 3` produces three fields. Inside a bounded data list, `(1 2 3)` and `(1, 2, 3)` may normalize to the same three fields. The source line `stack: PlantBed` followed by exact identifier `2 dim` has two fields: `PlantBed` and the exact quoted identifier `2 dim`. Exact quoted identifiers in backticks are the SQLite-style identifier form for external names and multi-word names and preserve their contents exactly.
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
@@ -22,7 +22,7 @@ Revision 12.12 note:
 
     `return` has two structural positions. Inside an executable body, `return` is ordinary runtime control. At the source level of the open executable definition, `return` is terminal return: it supplies or returns the current result and structurally closes that executable definition, like a checked executable-specific close.
 
-    The token sequences `@`, `@@`, `@@@`, ... form the reserved L2 address-depth operator family `@ⁿ`. In head position, `@ⁿ: BaseType, name` declares a typed address slot of depth n. Comma separates the base type from the binding name, so `@@@: int, ppp` is a three-level address slot to `int`, while `@@@: int ppp` would be one non-numeric phrase segment. Ordinary source cannot rebind `@ⁿ` as user procedure names.
+    The token sequences `@`, `@@`, `@@@`, ... form the reserved L2 address-depth operator family `@ⁿ`. In head position, `@ⁿ: BaseType name` declares a typed address slot of depth n. Whitespace separates the base type from the binding name, so `@@@: int ppp` is a three-level address slot to `int`. Ordinary source cannot rebind `@ⁿ` as user procedure names.
 
     The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is a nameless structural delimiter. It may replace a canonical dotted delimiter line, opening an anonymous positional Structure when followed by a deeper source item, or separating/closing the current anonymous/implicit section otherwise. It may replace `end: <name>` only when the current close target is unambiguous and the receiver/profile permits nameless close. A `---` line must contain only the delimiter as a structural token; leading spaces/tabs, leading canonical dots and an optional trailing `#` comment are ignored for this restriction.
 
@@ -106,14 +106,14 @@ The source syntax itself does not hard-code object semantics, functional semanti
 
 Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
 
-This reuse applies only to lexical atoms. It does not import C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, source-level tree composition, compact calls, short colon source items, comma/numeric/string separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
+This reuse applies only to lexical atoms. It does not import C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
 
 The practical rule is:
 
     Lingvamyxa owns structure.
     External standards may own selected lexical atoms.
 
-Consequently, an ANSI C numeric or string literal may often be preserved as text during L1 lowering, while its surrounding Lingvamyxa Structure is still parsed, typed and consumed by Lingvamyxa receivers. Likewise, an exact quoted identifier may preserve an external SQLite name without forcing that name into the narrower bare Lingvamyxa phrase-identifier grammar.
+Consequently, an ANSI C numeric or string literal may often be preserved as text during L1 lowering, while its surrounding Lingvamyxa Structure is still parsed, typed and consumed by Lingvamyxa receivers. Likewise, an exact quoted identifier may preserve an external SQLite name without forcing that name into the narrower bare Lingvamyxa identifier grammar.
 
 1.1. L0
 
@@ -250,7 +250,7 @@ A callable reference is also data until explicitly called or consumed by a recei
 
 3.4. Identifiers, Exact Quoted Identifiers, Numeric Literals and Strings
 
-Lingvamyxa distinguishes convenient bare identifiers, exact quoted identifiers and text/string literals. This distinction is required because spaces may participate in phrase names, commas delimit fields, dots define vertical structure, and external systems such as SQLite may contain identifiers that would collide with Lingvamyxa syntax.
+Lingvamyxa distinguishes convenient bare identifiers, exact quoted identifiers and text/string literals. This distinction is required because whitespace may separate fields or format source, commas have a bounded/block trailer role rather than an ordinary short-line field role, dots define vertical structure, and external systems such as SQLite may contain identifiers that would collide with Lingvamyxa syntax.
 
 3.4.1. Numeric Literals
 
@@ -279,17 +279,17 @@ Examples of floating literals:
     0x1.8p+2
     0x1p-4
 
-The source numeric lexer follows the ANSI C / C99 shape of integer and floating constants. In Lingvamyxa structural syntax, a pure numeric run may use whitespace as a field separator:
+The source numeric lexer follows the ANSI C / C99 shape of integer and floating constants. In ordinary physical short-line tail form, whitespace separates numeric literal fields:
 
     print: 1 2 3
 
-is equivalent to:
+normalizes as:
 
-    print: 1, 2, 3
+    print(1, 2, 3)
 
-Numbers are separated by space, comma, newline, closing parenthesis or source-level boundary.
+At ordinary source-line level, comma is not a way to add another numeric field to the same short tail. Inside a bounded Structure or an admitted anonymous block context, comma may act as a conventional element separator for data or as a short-form trailer according to that bounded/block context.
 
-3.4.2. Bare Identifiers and Phrase Identifiers
+3.4.2. Bare Identifiers
 
 The first ordinary Lingvamyxa identifier form is the convenient bare form.
 
@@ -297,76 +297,54 @@ A single bare identifier word uses the ANSI C identifier shape in the portable c
 
     [A-Za-z_][A-Za-z0-9_]*
 
-A bare phrase identifier is a sequence that starts with a bare ANSI-C-shaped identifier word and then continues as a phrase until a structural separator is reached.
-
-Structural separators for bare phrases are:
-
-    comma,
-    newline,
-    closing parenthesis of the current bounded Structure,
-    source-level boundary.
-
-Ordinary horizontal whitespace does not split a bare phrase identifier into separate fields. It separates phrase words only inside the phrase. The parser normalizes all repeated horizontal whitespace between phrase words to one ASCII space and trims leading and trailing whitespace from the phrase.
-
-Examples of bare phrase identifiers:
+Examples of bare identifiers:
 
     PlantBed
     branch
-    second branch
-    red apples
-    estimate harvest
-    my 2d example
     very_long_name
 
-The following source spellings denote the same bare phrase identifier:
-
-    red apples
-    red     apples
-    red	 apples
-
-After normalization, all of them denote:
+Bare identifiers do not contain spaces. A source spelling such as:
 
     red apples
 
-The following source spellings also denote one bare phrase identifier each, not multiple arguments:
+is not one bare identifier in the portable profile.
 
-    second branch
-    my 2d example
+Use an exact quoted identifier for a name that contains spaces:
 
-By contrast, a pure numeric run starts in numeric mode and is split as numbers:
+    `red apples`
+    `estimate harvest`
+    `2 dim example`
+
+Inside exact quoted identifiers, the spelling is preserved exactly except for the defined quote-escaping rule.
+
+By contrast, numeric-looking text outside backticks is tokenized as numeric literals and split by the ordinary short-tail whitespace rule:
 
     1 2 3
 
 normalizes as:
 
-    1, 2, 3
+    fields `1`, `2`, `3`
 
 Therefore:
 
-    stack: PlantBed, second branch
+    stack: PlantBed `2 dim`
 
 has two fields:
 
     PlantBed
-    second branch
+    `2 dim`
 
-and it does not normalize as:
-
-    stack(PlantBed, branch, 2)
-
-A bare phrase identifier is not a text/string literal. It is a namespace name, signature fragment, selector phrase or other receiver-consumed name-like field.
-
-The first bare form is intentionally narrower than SQLite quoted identifiers. If an external name contains punctuation, operator characters, leading/trailing spaces, repeated spaces that must be preserved exactly, newlines, an empty spelling, or any spelling that must round-trip byte-for-byte through an external schema, use the second identifier form: an exact quoted identifier.
+The first bare form is intentionally narrower than SQLite-style exact quoted identifiers. If an identifier contains whitespace, punctuation, operator characters, dots, commas, leading/trailing spaces, repeated spaces that must be preserved exactly, newlines, an empty spelling, or any spelling that must round-trip byte-for-byte through an external schema, use the second identifier form: an exact quoted identifier.
 
 3.4.3. Exact Quoted Identifiers
 
-The second identifier form is the exact quoted identifier. It is intended for SQLite names, external schemas, generated bindings and unusual names that are not safe or not intended to be normalized as bare Lingvamyxa phrase identifiers.
+The second identifier form is the exact quoted identifier. It is intended for SQLite names, external schemas, generated bindings, multi-word names and unusual names that are not representable as bare Lingvamyxa identifiers.
 
 An exact quoted identifier is delimited by backtick characters:
 
     `exact name`
 
-It is a namespace identifier/name, not a text/string literal. Its contents are taken as the exact identifier string after quote unescaping. No bare-phrase whitespace normalization is applied inside backticks. Commas, dots, spaces, numeric-looking text, reserved words and operator characters inside the backticks are part of the identifier.
+It is a namespace identifier/name, not a text/string literal. Its contents are taken as the exact identifier string after quote unescaping. No whitespace normalization is applied inside backticks. Commas, dots, spaces, numeric-looking text, reserved words and operator characters inside the backticks are part of the identifier.
 
 Examples:
 
@@ -392,7 +370,7 @@ Therefore:
 
 Declares and updates the binding whose exact name contains a literal backtick.
 
-Exact quoted identifiers behave as atomic name tokens in head position, tail/name position and expression/name position. The quoted spelling does not participate in normal phrase tokenization.
+Exact quoted identifiers behave as atomic name tokens in head position, tail/name position and expression/name position.
 
 A physical newline is not allowed inside an exact quoted identifier in the portable source profile. External identifiers containing newlines must be imported through an escaping or mapping rule defined by the external integration profile.
 
@@ -417,7 +395,7 @@ Examples:
 
 The string spelling and escape rules follow the ANSI C / C99 string-literal model. However, Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
 
-In structural syntax, string literals are separated like numeric literals: by space, comma, newline, closing parenthesis or source-level boundary. This makes manual table and list declarations compact.
+In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace. Inside a bounded Structure or an admitted anonymous block context, comma may act as a conventional element separator for data or as a short-form trailer. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
 
 Examples:
 
@@ -425,15 +403,15 @@ Examples:
 
 is equivalent to:
 
-    print: "hello", "world"
+    print("hello", "world")
 
 And:
 
     []: labels
     . "red" "green" "blue"
-    . "cyan", "magenta", "yellow"
+    . "cyan" "magenta" "yellow"
 
-contains two row-like child Structures whose string values are separated by whitespace or commas.
+contains two row-like child Structures whose string values are separated by whitespace.
 
 The hexadecimal escape `\x...` consumes hexadecimal digits according to the C string-literal rule. Octal escapes consume up to three octal digits. Universal character names `\uXXXX` and `\UXXXXXXXX` are literal character escapes.
 The double-quoted string form is separate from exact quoted identifiers. Therefore:
@@ -451,7 +429,7 @@ is the exact identifier/name `hello`.
 
 4.0. Colon as Receiver-Valence Marker
 
-The colon `:` is the central valence marker of Lingvamyxa surface syntax. It is not an assignment operator, not a YAML-like key-value separator and not a special type-annotation symbol.
+The colon `:` is the mandatory visible head/tail marker of Lingvamyxa surface syntax. It is required because it makes source navigation and tooling simple, but it does not by itself assign semantic meaning to the head. The head role is positional: the head is the source item before the following argument Structure. The colon is not an assignment operator, not a YAML-like key-value separator and not a special type-annotation symbol.
 
 General form:
 
@@ -459,12 +437,16 @@ General form:
 
 Source meaning:
 
-    the head phrase governs the following argument Structure;
+    the head governs the following argument Structure;
     the tail supplies the fields consumed by that head.
+
+The parser could identify the head by this position, but the source spelling keeps
+the colon as explicit punctuation so humans, editors, formatters and simple
+tools can see the head/tail boundary without receiver-specific knowledge.
 
 In receiver terminology, `head` is a receiver, operator, callable, constructor, updater, model receiver, message receiver or other consuming head. The parser builds the generic Structure; the active receiver signature later assigns semantic roles to its fields.
 
-In linguistic terminology, this colon may be described as a valence colon or a marker of government/rection. It opens a predicate-argument frame: the left side is the governing predicate/head, and the right side or the following vertical children are its actants/arguments.
+In linguistic terminology, this colon may be described as a valence colon or a marker of government/rection. It marks a predicate-argument frame: the left side is the governing predicate/head, and the right side or the following vertical children are its actants/arguments. The predicate/head status still comes from position and receiver consumption, not from a separate colon-specific semantic operator.
 
 Therefore:
 
@@ -519,51 +501,102 @@ Normal form:
 
 Line command form:
 
-    f: a, b, c
+    f: a b c
 
 It creates the same logical Frame as:
 
     f(a, b, c)
 
-The token sequence before `:` is the head phrase. The tail after `:` is the line argument Structure. A physical newline terminates the short line command. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure also terminates the open continuation, but it does not allow additional inline short colon-forms on the same physical line.
+The token before `:` is the head identifier or symbolic head. The tail after `:` is the line argument Structure. In an ordinary physical short line, whitespace separates argument fields. A physical newline terminates the short line command. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure also terminates the open continuation, but it does not allow additional inline short colon-forms on the same physical line.
 
-The head phrase may contain spaces. This allows receiver/procedure signatures and entity names that are not single lexical words. The parser does not split the head phrase into arguments merely because it contains spaces.
+Bare heads do not contain spaces in the portable profile. A receiver/procedure name or entity name that contains spaces must be written as an exact quoted identifier.
+
+Examples:
+
+Canonical source-level notation:
+
+L2:
+. []: `1 dimension variable`
+. . 1 2
+. . 3 4
+. []: `2 dimension variable`
+. . []: 1 2
+. . []: 3 4
+end: L2
+
+Relaxed indentation notation with an explicit same-level separator:
+
+L2:
+    []: `1d variable`
+      1 2
+      3 4
+    ---
+    [][]: `2d variable`
+      []: 1 2
+      []: 3 4
+---
+
+Relaxed indentation notation with a canonical dotted delimiter spelling at the sibling level:
+
+L2:
+    []: `1d variable`
+      1 2
+      3 4
+ .  ---
+    [][]: `2d variable`
+      []: 1 2
+      []: 3 4
+---
+
+Relaxed indentation notation relying on the dedent from row level back to L2-child level:
+
+L2:
+    []: `1d variable`
+      1 2
+      3 4
+    [][]: `2d variable`
+      []: 1 2
+      []: 3 4
+---
+
+
+The head is the `[]` or `[][]` receiver/procedure. The first inline tail field is the exact identifier naming the array value. The vertical lines are child fields of that frame.
+
+In the one-dimensional examples, `1 2` and `3 4` are sibling row/value items. A deeper line under `1 2` would be invalid unless `1 2` were written as a Structure-opening item; scalar/value rows do not become heads merely because a deeper line follows them.
+
+In the relaxed examples, `[][]:` is a sibling of the preceding `[]:` under `L2`. The optional middle delimiter must therefore be written at the same source level as those sibling array frames. It may be written as relaxed `---` with the same indentation, or as a delimiter line whose leading zone contains one canonical dot, such as ` .  ---`. A root-level `---` there would close/cut at the `L2` level instead of merely separating the two array declarations.
+
+4.2.1. Whitespace Short-Tail Rule
+
+In ordinary physical short-line tail form, horizontal whitespace separates fields.
 
 Example:
 
-    []: my 2d example
-    . 1 2
-    . 3 4
-
-The head is the `[]` receiver/procedure. The first inline tail field is the bare phrase name `my 2d example`. The vertical lines are child fields of that frame.
-
-4.2.1. Comma Tail Rule
-
-In short linear tail form, comma is the explicit field separator.
-
-Example:
-
-    head: arg0, arg1, arg2
+    head: arg0 arg1 arg2
 
 normalizes as:
 
     head(arg0, arg1, arg2)
 
-Whitespace inside a non-numeric segment is part of that segment. Therefore:
+Multi-word names are exact quoted identifiers. Therefore:
 
-    stack: PlantBed, second branch
+    stack: PlantBed `2 dim`
 
 normalizes as:
 
-    stack(PlantBed, second branch)
+    stack(PlantBed, `2 dim`)
 
-where `second branch` is one bare phrase name field. It does not normalize as:
+where `2 dim` is one exact identifier field.
 
-    stack(PlantBed, second, branch)
+In ordinary physical short-line tail form, comma does not add another field to the same short tail:
 
-and it does not allocate `branch` with an extra numeric argument `2`.
+    head: arg0, arg1
 
-A receiver may later interpret a phrase field as a name, signature, selector, atom sequence, message phrase or another semantic object. The parser only builds the field.
+does not normalize as `head(arg0, arg1)`. The comma terminates the current short form. Therefore `arg1` can only be consumed by an already-open bounded or anonymous block context that admits a following item; without such an enclosing context, the remaining item is a dangling source item and the line is invalid.
+
+Inside bounded or anonymous block contexts, comma has two roles. For ordinary data fields it is a conventional separator compatible with familiar data notation, so `(a b c)` and `(a, b, c)` may produce the same three data fields. For admitted neighboring short forms, comma has structural load: it terminates the current short form and lets the following item become the next element of the enclosing bounded/block Structure.
+
+A receiver may later interpret an identifier field as a name, signature, selector, atom, message name or another semantic object. The parser only builds the field.
 
 4.2.1.1. Strict Short-Colon Line Rule
 
@@ -576,60 +609,68 @@ A short colon-form may appear only as the main source item of that physical line
 Invalid:
 
     call2(call(int: a, b), call(int: b, c))
-    int: a, int: d
     call(int: a, b)
+    int: a, int: d
 
-The last form is invalid because `int: a, b` is a short colon-form placed directly inside a parenthesized argument list. To pass a compact type-constructor Frame, write:
+The `call(int: a, b)` form is invalid because `int: a, b` is a short colon-form placed directly inside a parenthesized argument list. To pass a compact type-constructor Frame, write:
 
     call(int(a, b))
+
+The ordinary physical short-line form `f: a, b` does not pass two fields to `f`. It is equivalent to a terminated short form `f: a` followed by `b` as a candidate next item of an enclosing bounded/anonymous context. At ordinary top level, where there is no such context, that trailing item is invalid.
 
 To use short colon-form inside parentheses, write it as a vertical source item on its own physical line. Parentheses do not disable source-level composition:
 
     call(
-    . int: a, b
+    . int: a b
     )
 
-When a short colon-form begins on a physical line, commas on that line belong to that form's own tail. They do not resume an outer comma enumeration. Therefore several short colon-forms must be written as separate physical lines, normally by vertical dot composition.
+When a short colon-form begins on an ordinary physical line, comma is not a tail field separator for that form. In a bounded/block profile, comma may terminate a short form inside an already-open bounded or anonymous Structure, similarly to newline or closing parenthesis.
 
-4.2.2. Numeric-Run Shortcut
+4.2.2. Expression Operators in Short Tail
 
-Whitespace may act as a shorthand field separator only inside a pure numeric run.
-
-Example:
-
-    print: 1 2 3 4 5
-
-is equivalent to:
-
-    print: 1, 2, 3, 4, 5
-
-and normalizes as:
-
-    print(1, 2, 3, 4, 5)
-
-A pure numeric run is a tail segment whose tokens are all numeric literals accepted by the active numeric lexer. Once a non-numeric token appears in the same comma segment, whitespace no longer separates fields in that segment.
+Whitespace separates short-tail fields, but expression operators may bind neighboring fields into one expression Structure.
 
 Example:
 
-    print: abc d 3 e
+    print: a+b c
 
-normalizes as one phrase/signature field:
+normalizes as two fields:
 
-    print(abc d 3 e)
+    print((a + b), c)
 
-or, in an implementation that materializes phrase values explicitly:
+The binary operator `+` consumes its left and right operands and the resulting expression becomes one argument field.
 
-    print(phrase("abc d 3 e"))
+Whitespace around operators is permitted, but the preferred formatting is to keep compact mathematical operators tight because ordinary whitespace is also the short-tail field separator:
 
-To pass separate fields, use commas:
+    print: a+b c
 
-    print: abc d, 3, e
+rather than:
 
-normalizes as:
+    print: a + b c
 
-    print(abc d, 3, e)
+Both are parsed as:
 
-The numeric-run shortcut is local to the current linear item. It does not flatten through parentheses, compact Frames or vertical anonymous Structures.
+    print((a + b), c)
+
+The unary `-` operator consumes its right operand and produces one expression field. Binary `-` consumes both sides.
+
+Therefore:
+
+    print: -1-2
+
+is one expression field:
+
+    print((-1) - 2)
+
+To pass two negative values as two fields, write:
+
+    print: -1 (-2)
+
+which normalizes as:
+
+    print((-1), (-2))
+
+The expression parser is context-sensitive. It is used when expression operators are present or when a receiver/profile expects an expression. It does not make receiver calls or binding meanings by itself; it only builds expression Structures from visible operands and operators.
 
 4.2.3. No Hidden Receiver-Signature Grouping
 
@@ -637,7 +678,7 @@ Line command form does not infer hidden nesting from receiver signatures.
 
 Critical rule:
 
-    print: getTypedValue, values[i]
+    print: getTypedValue values[i]
 
 normalizes as:
 
@@ -657,16 +698,16 @@ Examples:
 
 This gives `args` one compact declaration Frame `int(v, j)`.
 
-The following is invalid under the strict short-colon line rule, because the short colon-form `int: v, j` is placed directly inside parentheses:
+The following is invalid under the strict short-colon line rule, because the short colon-form `int: v j` is placed directly inside parentheses:
 
-    args: (int: v, j)
+    args: (int: v j)
 
 Write either the compact form above or a vertical source form:
 
     args:
-    . int: v, j
+    . int: v j
 
-A head phrase followed by `:` must have a continuation. The continuation may be an inline tail on the same physical line, vertical child fields at source level N + 1, or an explicit close through `end: <target>` when allowed by the open target policy. A line `head:` with no inline tail and no following vertical child fields is a syntax error unless the receiver/profile explicitly defines an empty Structure form for that head.
+A head followed by `:` must have a continuation. The continuation may be an inline tail on the same physical line, vertical child fields at source level N + 1, or an explicit close through `end: <target>` when allowed by the open target policy. A line `head:` with no inline tail and no following vertical child fields is a syntax error unless the receiver/profile explicitly defines an empty Structure form for that head.
 
 A line without `:` is not a non-nullary receiver call. In executable statement position, a bare receiver/callable line is valid only when the resolved binding can be consumed with zero arguments. This includes registered nullary line operators such as `return`, `break` and nullary `continue`, registered nullary receivers, and visible `fn`/`sub` bindings whose signature has zero required arguments.
 
@@ -707,17 +748,17 @@ Parentheses create a bounded Structure:
 
     (a, b, c)
 
-Inside parentheses, fields may be separated by comma, by physical newline/source-level composition, by the matching closing parenthesis, or by the numeric-run shortcut when the current item is a pure numeric run.
+Inside parentheses, bounded elements may be separated by comma, by physical newline/source-level composition, or by the matching closing parenthesis. For ordinary data fields, comma is a conventional separator and may leave the same field sequence as whitespace separation. For short colon-forms admitted by a bounded-form profile, comma carries structural load because it terminates the current short form and lets the next item belong to the enclosing bounded Structure.
 
 Parentheses do not disable the source-level system. Vertical child items inside parentheses are still written with dots.
 
 A short colon-form is not allowed as an inline argument inside parentheses. It must be the main source item of its physical line. Therefore `call(int: a, b)` is invalid. Use `call(int(a, b))` for a compact constructor Frame, or write the short colon-form vertically:
 
     call(
-    . int: a, b
+    . int: a b
     )
 
-Numeric literals are separated by space, comma, newline, closing parenthesis or source-level boundary. Bare phrase fields are separated by comma, newline, closing parenthesis or source-level boundary; whitespace alone remains part of the phrase/signature and is normalized according to Section 3.4. Exact quoted identifiers are atomic name tokens.
+Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric and string literal fields in ordinary short-tail form are separated by whitespace; bounded Structures may additionally use comma at their own bounded level for conventional data notation or short-form termination.
 
 Example:
 
@@ -749,7 +790,7 @@ Examples of equal source level in canonical dotted notation:
     . . . . call
     .	. .	.     call
 
-Relaxed indentation notation is a readability notation over the same source-level tree. It may replace leading dots before ordinary source items with ordinary indentation. In relaxed indentation notation, the source level is computed from leading spaces/tabs before the first non-space character by the implementation's indentation-stack rule and then mapped to the same source levels used by canonical dotted notation. Internal spaces remain ordinary source characters and may still participate in phrase identifiers, numeric runs and manual alignment.
+Relaxed indentation notation is a readability notation over the same source-level tree. It may replace leading dots before ordinary source items with ordinary indentation. In relaxed indentation notation, the source level is computed from leading spaces/tabs before the first non-space character by the implementation's indentation-stack rule and then mapped to the same source levels used by canonical dotted notation. Internal spaces remain ordinary source characters and may still participate in exact quoted identifiers, short-tail field separation and manual alignment.
 
 Shared source-level rule after either surface notation has been mapped to source levels:
 
@@ -761,7 +802,8 @@ Shared source-level rule after either surface notation has been mapped to source
     leading spaces/tabs indentation stack.
 
     Internal spaces remain ordinary source characters and may still participate
-    in phrase identifiers, numeric runs and manual alignment.
+    in exact quoted identifiers, short-tail field separation and manual
+    alignment.
 
     A line at a source level deeper than the previous structural head is a
     child item of that head.
@@ -797,7 +839,7 @@ A useful parser view is the head-body-trailer envelope:
     body Structure
     trailer
 
-The body Structure is the primary Structure consumed by the opened frame or anonymous positional argument. The head and trailer are structural envelope roles, not ordinary child fields of that body. For a named frame, the head is a source item such as `if: condition`, `fn: name, ...` or `outerLoop:`. For an anonymous positional Structure, the head may be a canonical dotted delimiter line or a relaxed `---` delimiter line.
+The body Structure is the primary Structure consumed by the opened frame or anonymous positional argument. The head and trailer are structural envelope roles, not ordinary child fields of that body. For a named frame, the head is a source item such as `if: condition`, `fn: name ...` or `outerLoop:`. For an anonymous positional Structure, the head may be a canonical dotted delimiter line or a relaxed `---` delimiter line.
 
 In canonical dotted notation:
 
@@ -813,7 +855,7 @@ A source item at level N may open a frame/Structure. Its vertical child argument
 
 A physical source line at level N + 1 is one positional child item of the open frame/Structure at level N.
 
-A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. Scalar literals and ordinary phrase/value items do not become headers merely because a deeper line follows them.
+A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. Scalar literals and ordinary value items do not become headers merely because a deeper line follows them.
 
 A physical source line at a smaller level than the current open child resumes the parent level and starts a sibling item there. The smaller-level line itself is the level delimiter. If the next item starts at the same level as the current anonymous/implicit section, use a canonical dotted delimiter line or relaxed `---` at that level.
 
@@ -996,8 +1038,8 @@ The line `else:` is at the same source level as the preceding anonymous section.
 Example with an explicit nameless close after a nested `if`:
 
 outerLoop:
-    for: int(i, 1), (i <= 3), i++
-        for: int(j, 1), (j <= 3), j++
+    for: int(i, 1) (i <= 3) i++
+        for: int(j, 1) (j <= 3) j++
             if: i = 2 && j = 2
                 System/out/println: "--- continue outerLoop ---"
                 continue: outerLoop
@@ -1008,8 +1050,8 @@ end: outerLoop
 The `---` at the source level of the inner `for` body replaces the canonical source-level delimiter line:
 
 outerLoop:
-. for: int(i, 1), (i <= 3), i++
-. . for: int(j, 1), (j <= 3), j++
+. for: int(i, 1) (i <= 3) i++
+. . for: int(j, 1) (j <= 3) j++
 . . . if: i = 2 && j = 2
 . . . . System/out/println: "--- continue outerLoop ---"
 . . . . continue: outerLoop
@@ -1025,32 +1067,32 @@ Matrix-like data does not require a special table context. It follows ordinary s
 
 Canonical source-level notation example:
 
-[]: my 2d example
+[]: `2 dim example`
 . 1 2
 . 3 4
 
 Relaxed indentation notation example:
 
-[]: my 2d example
+[]: `2 dim example`
     1 2
     3 4
 ---
 
 Conceptual normal form:
 
-    [](my 2d example, (1, 2), (3, 4))
+    [](`2 dim example`, (1, 2), (3, 4))
 
-The rows are ordinary child items. The numeric-run shortcut makes `1 2` equivalent to `1, 2` inside each row item.
+The rows are ordinary child items. The ordinary short-tail whitespace rule makes `1 2` two numeric fields inside each row item.
 
-Mixed symbolic/numeric rows require commas for non-numeric segments:
+Mixed identifier/numeric rows use the same whitespace short-tail rule:
 
-[]: my 2d example
-. a, b
+[]: `2 dim example`
+. a b
 . 3 4
 
 Conceptual normal form:
 
-    [](my 2d example, (a, b), (3, 4))
+    [](`2 dim example`, (a, b), (3, 4))
 
 Named nested rows may be written with nested `[]` frames:
 
@@ -1086,8 +1128,8 @@ The standalone source line `---` is the nameless delimiter form used primarily b
 Example named close:
 
 outerLoop:
-. for: int(i, 1), (i <= 3), i++
-. . for: int(j, 1), (j <= 3), j++
+. for: int(i, 1) (i <= 3) i++
+. . for: int(j, 1) (j <= 3) j++
 . . . if: i = 2 && j = 2
 . . . . continue: outerLoop
 end: outerLoop
@@ -1164,13 +1206,13 @@ The names `then` and `else` are ordinary nested Structures consumed by the activ
 
 A one-line form is also possible when the receiver defines it:
 
-    if: a, doSomething
+    if: a doSomething
 
 This builds a Frame whose final meaning is assigned by the active `if` receiver.
 
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
 
-This is an intentional property of the language, not an accidental ambiguity. In colon line forms, commas and numeric-run shortcuts create fields. In vertical form, child items at the next source level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
+This is an intentional property of the language, not an accidental ambiguity. In ordinary colon line forms, whitespace creates short-tail fields and expression operators may bind neighboring fields into expression Structures. In vertical form, child items at the next source level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
 
 4.7. No Native `=` Assignment or Named-Field Operator
 
@@ -1356,7 +1398,7 @@ If the expected type is boolean, the value producer must produce a boolean value
 
 Example:
 
-for: int(i, 0), (i < n), i++
+for: int(i, 0) (i < n) i++
     print: i
 
 
@@ -1369,7 +1411,7 @@ The `for` receiver consumes:
 
 Compact body example:
 
-    for: int(i, 0), (i < n), i++, print(i)
+    for: int(i, 0) (i < n) i++ print(i)
 
 Here `print(i)` is the last argument Structure of `for`. The `for` receiver signature names that position as `body` and consumes it as the executable loop body. The compact body example uses only compact Frames and contains no inline short colon-form.
 
@@ -2067,10 +2109,10 @@ Return models include:
     ret: Status
         status-only function;
 
-    ret: Status, T
+    ret: Status T
         status/value pair or profile-defined checked result;
 
-    ret: destinationArg(N), T
+    ret: destinationArg(N) T
         destination-first backend procedure that produces a Lingvamyxa value;
 
     ret: pointer / handle / borrowed / owned
@@ -2148,8 +2190,8 @@ L4:
         header: mpfr.h
         pkg: PkgConfig::mpfr
         args:
-            mpfr_t: rop, ownedMutable
-            mpfr_srcptr: op, borrowed
+            mpfr_t: rop ownedMutable
+            mpfr_srcptr: op borrowed
             mpfr_rnd_t: rnd
         ret:
             int
@@ -2223,7 +2265,7 @@ Example safe namespace call:
 
 Example raw/runtime-only call, allowed only in L2/runtime profile:
 
-    Lingvamyxa/MPFR/raw/mpfr_sqrt: rop, op, rnd
+    Lingvamyxa/MPFR/raw/mpfr_sqrt: rop op rnd
 
 Functions that return `Unit` or perform effects should normally be exposed as
 namespace calls or explicit receivers, not as pure mathematical expression
@@ -2233,8 +2275,8 @@ Examples:
 
     Lingvamyxa/GMP/init: x
     Lingvamyxa/GMP/clear: x
-    Lingvamyxa/Decimal/setPrecision: ctx, 34
-    Lingvamyxa/Real/setRounding: ctx, nearest
+    Lingvamyxa/Decimal/setPrecision: ctx 34
+    Lingvamyxa/Real/setRounding: ctx nearest
 
 High-level numeric code should not normally call backend initialization and
 clear functions directly. The owner/arena runtime should initialize, retain and
@@ -2343,11 +2385,11 @@ in the expression/function call according to the active profile.
 
 Examples:
 
-    withRealContext: precision 256, rounding nearest
+    withRealContext: precision 256 rounding nearest
         y = sqrt(x)
     ---
 
-    withDecimalContext: precision 34, rounding halfEven
+    withDecimalContext: precision 34 rounding halfEven
         total = price * quantity
     ---
 
@@ -2423,12 +2465,12 @@ A `sub` frame consumes a Structure and creates a subroutine callable value.
 
 Example source:
 
-fn: myFunc, (int(i), int(j, 1), p1, p2), (int(r1), int(r2))
+fn: myFunc (int(i), int(j, 1), p1, p2) (int(r1), int(r2))
     print: i
     print: j
     p1()
     p2()
-return: r1, r2
+return: r1 r2
 
 Strict conceptual form:
 
@@ -2458,7 +2500,7 @@ fn:
     name: myFunc
     args:
         int: i
-        int: j, 1
+        int: j 1
         p1
         p2
     ret:
@@ -2473,7 +2515,7 @@ end: myFunc
 
 The receiver `fn` consumes its child Structures by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures consumed by `fn`. They are not `=` named fields.
 
-The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set. In declaration context, a type/constructor receiver consumes the following raw identifier/name phrase as a new binding name. If that name already exists in the current namespace, the declaration is invalid.
+The names `int`, `boolean` and similar names are primitive/type-constructor receivers when registered in the active receiver set. In declaration context, a type/constructor receiver consumes the following raw identifier or exact identifier as a new binding name. If that name already exists in the current namespace, the declaration is invalid.
 
 Compact definition form with vertical children inside the bounded argument list:
 
@@ -2522,9 +2564,11 @@ The form:
 
     args: int v j
 
-parses as one phrase/signature field `int v j`, not as `args(int, v, j)`. To pass several fields through short colon-form, use commas:
+is valid ordinary short-tail syntax and normalizes as:
 
-    args: int, v, j
+    args(int, v, j)
+
+It does not secretly create `args(int(v, j))`; that interpretation requires a compact Frame such as `args: int(v, j)` or a receiver-defined semantic equivalence.
 
 Here `j: v / 2` updates the visible binding `j`. The final result is returned with `return: v`. Using `i: v` as a function-name return binding is optional/profile-defined and is not the canonical form in this revision.
 
@@ -2532,7 +2576,7 @@ Here `j: v / 2` updates the visible binding `j`. The final result is returned wi
 
 Example source:
 
-sub: l5_if, (boolean(condition)), then, else
+sub: l5_if (boolean(condition)) then else
 return
 
 Strict conceptual form:
@@ -2577,7 +2621,7 @@ In expression position, a visible `fn` name is callable. The canonical way to re
 
 Example:
 
-fn: factorial, (int(n)), (int)
+fn: factorial (int(n)) (int)
     if: n <= 1
         return: 1
 return: n * factorial(n - 1)
@@ -2660,7 +2704,7 @@ The source-level closing form is:
 
 The bare form `end` and the old-looking form `end <target>` are not valid Lingvamyxa source syntax.
 
-`end:` validates `<target>` against a visible open frame, labelled block or entity block. The target may match the current node/receiver name, the normalized `name` field of the current Structure, or a visible control label according to the active closing policy. The target may be a multi-token label phrase when the active label policy permits such labels.
+`end:` validates `<target>` against a visible open frame, labelled block or entity block. The target may match the current node/receiver name, the normalized `name` field of the current Structure, or a visible control label according to the active closing policy. Multi-word target names must be written as exact quoted identifiers.
 
 The closing line has its own source level. It may close several currently open implicit vertical levels at once if the named target is visible at or above that level. This allows a long tail of nested blocks to be cut with one named close. A parser must reject `end: <target>` if the target is ambiguous, not visible or not valid for closing from that position.
 
@@ -2672,13 +2716,13 @@ end: if
 
 Here `if` validates against the node/receiver name.
 
-fn: myFunc, (int(i)), (int(r))
+fn: myFunc (int(i)) (int(r))
     return: i
 end: fn
 
 Here `fn` validates against the node/receiver name.
 
-fn: myFunc, (int(i)), (int(r))
+fn: myFunc (int(i)) (int(r))
     return: i
 end: myFunc
 
@@ -2734,7 +2778,7 @@ A label-block binding is a local executable binding with no source arguments and
 
 or an equivalent implementation-level contract. It shares the same lexical namespace as variables, functions, subroutines, receivers, model names and other bindings. There is no separate label namespace.
 
-In executable statement position, a bare identifier or phrase identifier may resolve to a visible zero-argument label-block binding. In that context, the bare name is the canonical call/consumption syntax for the label block:
+In executable statement position, a bare identifier or exact identifier may resolve to a visible zero-argument label-block binding. In that context, the bare or exact name is the canonical call/consumption syntax for the label block:
 
 readLoop
 
@@ -2773,7 +2817,7 @@ Inside an executable body, `return` exits the current executable body.
 
 For an `fn`, `return` without tail returns the current return binding. For a `sub`, `return` without tail exits without producing a normal return value.
 
-For an `fn`, `return: value` evaluates or consumes `value` as one logical value compatible with the declared return model, stores that value in the current return binding, and exits the current executable body. If the function return model is structural, the tail of `return:` is consumed as one return Structure. Comma-separated fields may be mapped positionally to the return Structure by the `return` receiver signature.
+For an `fn`, `return: value` evaluates or consumes `value` as one logical value compatible with the declared return model, stores that value in the current return binding, and exits the current executable body. If the function return model is structural, the tail of `return:` is consumed as one return Structure. Whitespace-separated short-tail fields may be mapped positionally to the return Structure by the `return` receiver signature.
 
 For a `sub`, `return: value` is invalid unless a later profile defines a status/result convention for subroutines.
 
@@ -2781,7 +2825,7 @@ For a `sub`, `return: value` is invalid unless a later profile defines a status/
 
 Examples:
 
-fn: square, (int(x)), (int)
+fn: square (int(x)) (int)
 return: x * x
 
 Conceptual executable body:
@@ -2790,7 +2834,7 @@ Conceptual executable body:
 
 Example with early runtime return and terminal return:
 
-fn: factorial, (int(n)), (int)
+fn: factorial (int(n)) (int)
     if: n <= 1
         return: 1
 return: n * factorial(n - 1)
@@ -2807,12 +2851,12 @@ Terminal return is equivalent to appending the corresponding runtime `return` as
 
 Example:
 
-fn: square, (int(x)), (int)
+fn: square (int(x)) (int)
 return: x * x
 
 is source-semantically equivalent to:
 
-fn: square, (int(x)), (int)
+fn: square (int(x)) (int)
     return: x * x
 end: square
 
@@ -2837,7 +2881,7 @@ The source level separates the two roles.
 
 Runtime return inside a body:
 
-fn: abs, (int(x)), (int)
+fn: abs (int(x)) (int)
     if: x < 0
         return: -x
 return: x
@@ -2846,7 +2890,7 @@ Here the indented `return: -x` line is runtime control inside the `if` body. It 
 
 Terminal empty return is also valid when a return binding has already been prepared:
 
-fn: estimate harvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
+fn: `estimate harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     harvest: bed\area
     redApples: 0
     greenApples: 0
@@ -2860,7 +2904,7 @@ Return values may be represented by declared return variables inside an executab
 
 Example:
 
-fn: estimate harvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
+fn: `estimate harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     harvest: bed\area
     redApples: 0
     greenApples: 0
@@ -2872,8 +2916,8 @@ A function return signature with several fields defines one return Structure. Up
 
 Example positional structural return:
 
-fn: split harvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
-return: bed\area, 0, 0
+fn: `split harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
+return: bed\area 0 0
 
 Here the `return:` tail is one logical return Structure with three fields consumed by the return signature.
 
@@ -2883,7 +2927,7 @@ The old Pascal-style function-name return binding is not the canonical return fo
 
 A profile may still allow the current function name in head/update position to denote the current return binding inside that function body:
 
-fn: square, (int(x)), (int)
+fn: square (int(x)) (int)
     square: x * x
 return
 
@@ -2899,7 +2943,7 @@ A profile may still allow implicit final return of the current return binding wh
 
 The preferred style is:
 
-fn: f, (int(x)), (int)
+fn: f (int(x)) (int)
 return: x + 1
 
 rather than relying on an implicit return binding update.
@@ -2965,7 +3009,7 @@ Example:
 
     u32: id
     Text: crop
-    f64: harvest, 0.0
+    f64: harvest 0.0
 
 Conceptual meaning:
 
@@ -3005,7 +3049,7 @@ L3:
         Text: crop
         f64: area
         f64: soilWater
-        f64: harvest, 0.0
+        f64: harvest 0.0
     ---
         boolean
     ---
@@ -3026,7 +3070,7 @@ L4:
             Text: crop
             f64: area
             f64: soilWater
-            f64: harvest, 0.0
+            f64: harvest 0.0
         ---
         condition:
             area > 0.0
@@ -3038,7 +3082,7 @@ end: L4
 This section does not define a final type/model language. It only states that model declarations are ordinary Structures consumed by model receivers.
 
 ?
-The model/type declaration syntax is only partially specified. The preferred direction avoids a separate `field` receiver and uses declaration-context type constructors such as `u32: id` and `f64: harvest, 0.0`. Still unspecified: canonical alias syntax, explicit layout syntax, relation signature syntax, and whether canonical model definitions use condition functions, `autoModel`, or both.
+The model/type declaration syntax is only partially specified. The preferred direction avoids a separate `field` receiver and uses declaration-context type constructors such as `u32: id` and `f64: harvest 0.0`. Still unspecified: canonical alias syntax, explicit layout syntax, relation signature syntax, and whether canonical model definitions use condition functions, `autoModel`, or both.
 ?
 
 variant 1:
@@ -3131,14 +3175,14 @@ The physical representation of a union value is not defined by this structural c
 Model, union, operator and behavior descriptors may be represented internally as typed facts. For example, a model descriptor for `Circle` may materialize facts such as:
 
     model: Circle
-    slot: Circle, radius, f64
+    slot: Circle radius f64
 
 A union descriptor may materialize facts such as:
 
     union: Shape
-    variant: Shape, Circle
-    variant: Shape, Square
-    variant: Shape, Triangle
+    variant: Shape Circle
+    variant: Shape Square
+    variant: Shape Triangle
 
 These facts are registry facts. They are not ordinary runtime assertions unless a receiver exposes them to a runtime query system. The fact representation gives one uniform way to index, query, validate and derive registry information.
 
@@ -3168,8 +3212,8 @@ Example:
 
 L5:
     behavior: Circle
-        message: drawOn, drawCircleOn
-        message: area, circleArea
+        message: drawOn drawCircleOn
+        message: area circleArea
     ---
 
 
@@ -3224,7 +3268,7 @@ The receiver object is passed as the first semantic argument to the selected imp
 
 If `shape\model` is `Circle`, and the behavior registry contains:
 
-    message: Circle, drawOn, drawCircleOn
+    message: Circle drawOn drawCircleOn
 
 then the send lowers or interprets as:
 
@@ -3244,12 +3288,12 @@ L5 message-missing behavior is not fixed. A final L5 behavior specification must
 
 L5 may store registry information as typed facts and rules. Examples:
 
-    fact: model, Circle
-    fact: slot, Circle, radius, f64
-    fact: behavior, Circle
-    fact: message, Circle, drawOn, drawCircleOn
-    fact: variant, Shape, Circle
-    fact: method, draw, Circle, drawCircle
+    fact: model Circle
+    fact: slot Circle radius f64
+    fact: behavior Circle
+    fact: message Circle drawOn drawCircleOn
+    fact: variant Shape Circle
+    fact: method draw Circle drawCircle
 
 The same information may also be materialized as descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec` or `GenericMethodSpec`. Descriptors and facts are two views of one registry model.
 
@@ -3341,9 +3385,9 @@ L4:
         domain: Shape
     ---
 
-    method: draw, Circle, drawCircle
-    method: draw, Square, drawSquare
-    method: draw, Triangle, drawTriangle
+    method: draw Circle drawCircle
+    method: draw Square drawSquare
+    method: draw Triangle drawTriangle
 
 
 The `operator: draw` frame registers `draw` as a callable generic receiver. The child Structure `dispatchBy: firstArgumentModel` says that the concrete implementation is selected by the model of the first argument. The child Structure `domain: Shape` restricts or documents the generic domain.
@@ -3355,11 +3399,11 @@ Each `method` frame registers one dispatch entry:
 Example semantic facts:
 
     generic: draw
-    dispatchBy: draw, firstArgumentModel
-    domain: draw, Shape
-    method: draw, Circle, drawCircle
-    method: draw, Square, drawSquare
-    method: draw, Triangle, drawTriangle
+    dispatchBy: draw firstArgumentModel
+    domain: draw Shape
+    method: draw Circle drawCircle
+    method: draw Square drawSquare
+    method: draw Triangle drawTriangle
 
 The implementation names are ordinary `fn` or `sub` bindings and must satisfy the signature contract of the generic operation. For example, if `draw` returns no value, each drawing implementation is normally a `sub`. If `draw` returns a `DrawCommand`, each implementation must return a compatible value.
 
@@ -3369,15 +3413,15 @@ If a generic operation has a union domain, the union variants and method facts t
 
 Example union facts:
 
-    variant: Shape, Circle
-    variant: Shape, Square
-    variant: Shape, Triangle
+    variant: Shape Circle
+    variant: Shape Square
+    variant: Shape Triangle
 
 Example method facts:
 
-    method: draw, Circle, drawCircle
-    method: draw, Square, drawSquare
-    method: draw, Triangle, drawTriangle
+    method: draw Circle drawCircle
+    method: draw Square drawSquare
+    method: draw Triangle drawTriangle
 
 At a call site:
 
@@ -3388,13 +3432,13 @@ translation may derive:
 
 match: shape
     ---
-        Circle, c
+        Circle c
         drawCircle: c
     ---
-        Square, s
+        Square s
         drawSquare: s
     ---
-        Triangle, t
+        Triangle t
         drawTriangle: t
     ---
 
@@ -3494,16 +3538,16 @@ Allocation and storage receivers create storage and bind the requested name to t
 
 Examples:
 
-stack: PlantBed, branch
-heap: PlantBed, tree
-static: PlantBed, root
-int: count, 5
-[]: leafs, count
+stack: PlantBed branch
+heap: PlantBed tree
+static: PlantBed root
+int: count 5
+[]: leafs count
 
-int: x, 5
-@: int, p
-@@: int, pp
-@@@: int, ppp
+int: x 5
+@: int p
+@@: int pp
+@@@: int ppp
 
 p: @x
 pp: @p
@@ -3542,15 +3586,15 @@ form the reserved L2 address-depth operator family `@ⁿ`. They are reserved ope
 
 In head position before `:`, `@ⁿ:` declares an address/reference slot of depth n:
 
-    @: BaseType, name
-    @@: BaseType, name
-    @@@: BaseType, name
+    @: BaseType name
+    @@: BaseType name
+    @@@: BaseType name
 
 Examples:
 
-    @: int, p
-    @@: int, pp
-    @@@: int, ppp
+    @: int p
+    @@: int pp
+    @@@: int ppp
 
 Meanings:
 
@@ -3558,22 +3602,22 @@ Meanings:
     pp   address-depth-2 slot whose base type is `int`
     ppp  address-depth-3 slot whose base type is `int`
 
-Comma is required between the base type and the binding name under the Rev.12 comma-tail rule. Therefore:
-
-    @@@: int, ppp
-
-has two fields, `int` and `ppp`, while:
+Whitespace separates the base type and the binding name under the ordinary short-tail rule. Therefore:
 
     @@@: int ppp
 
-has one non-numeric phrase segment `int ppp` and is not the canonical address-depth declaration form.
+has two fields, `int` and `ppp`, while:
+
+    @@@: int, ppp
+
+terminates the `@@@:` short form after `int`. The following `ppp` is not the binding-name field of that declaration unless an enclosing bounded/block profile explicitly consumes it as a following item.
 
 The prefix expression form `@x` remains the depth-1 address-of operation. Higher address depth is expressed by declaring deeper address slots and storing ordinary depth-1 addresses of those slots:
 
-    int: x, 5
-    @: int, p
-    @@: int, pp
-    @@@: int, ppp
+    int: x 5
+    @: int p
+    @@: int pp
+    @@@: int ppp
 
     p: @x
     pp: @p
@@ -3591,7 +3635,7 @@ The prefix form:
 
 returns the address of the storage location `x`.
 
-If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object. This is the expression-side companion of the declaration-side `@ⁿ:` family: `@@: int, pp` declares an address-depth-2 slot, while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
+If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object. This is the expression-side companion of the declaration-side `@ⁿ:` family: `@@: int pp` declares an address-depth-2 slot, while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
 
 The prefix form:
 
@@ -3813,7 +3857,7 @@ The native structural core does not use `=` for assignment.
 
 A declaration with initialization is written through a declaration-context constructor:
 
-    int: a, 3
+    int: a 3
 
 A later update to an existing mutable binding or addressable field/index location is written by placing that location in head/update position:
 
@@ -3821,7 +3865,7 @@ A later update to an existing mutable binding or addressable field/index locatio
 
 Example:
 
-    int: a, 3
+    int: a 3
     print: a
     a: 4
     print: a
@@ -3832,7 +3876,7 @@ The update form is valid only if the head resolves to an existing mutable bindin
 
 The same surface form is used for callable consumption. For example, `i: 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable/receiver binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
 
-A bounded Structure or compact Frame in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: int(i, 0), (i < n), i++, print(i)`, the final `print(i)` is the `body` argument consumed by `for`.
+A bounded Structure or compact Frame in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: int(i, 0) (i < n) i++ print(i)`, the final `print(i)` is the `body` argument consumed by `for`.
 
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
@@ -3852,7 +3896,7 @@ Example return signature:
 
 Canonical structural return:
 
-    return: bed\area, 0, 0
+    return: bed\area 0 0
 
 Named return variables may also be updated before an empty terminal return:
 
@@ -3935,13 +3979,13 @@ L5 may treat registry information as a typed fact store. Structural declarations
 
 Examples:
 
-    fact: model, Circle
-    fact: slot, Circle, radius, f64
-    fact: variant, Shape, Circle
-    fact: behavior, Circle
-    fact: message, Circle, drawOn, drawCircleOn
-    fact: generic, draw
-    fact: method, draw, Circle, drawCircle
+    fact: model Circle
+    fact: slot Circle radius f64
+    fact: variant Shape Circle
+    fact: behavior Circle
+    fact: message Circle drawOn drawCircleOn
+    fact: generic draw
+    fact: method draw Circle drawCircle
 
 The registry may also expose materialized descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec`, `GenericMethodSpec` and `RelationSpec`. These descriptors are derived views over facts or the facts are derived views over descriptors. The source semantics only require consistency between these views.
 
@@ -4128,7 +4172,7 @@ and consume the query result.
 Example conceptual operator-resolution query:
 
 query:
-    operator: +, decimal, decimal, ?implementation, ?resultType
+    operator: + decimal decimal ?implementation ?resultType
 
 Possible result bindings:
 
@@ -4138,7 +4182,7 @@ Possible result bindings:
 Example conceptual method-dispatch query:
 
 query:
-    method: draw, Circle, ?implementation
+    method: draw Circle ?implementation
 
 Possible result binding:
 
@@ -4178,9 +4222,9 @@ A fact assertion is an ordinary Structure consumed by a `fact` receiver or anoth
 
 Examples:
 
-    fact: variant, Shape, Circle
-    fact: method, draw, Circle, drawCircle
-    fact: message, Circle, drawOn, drawCircleOn
+    fact: variant Shape Circle
+    fact: method draw Circle drawCircle
+    fact: message Circle drawOn drawCircleOn
 
 A relation frame such as:
 
@@ -4193,15 +4237,15 @@ is a fact only when consumed by a fact receiver. It is a query only when consume
 The compiler/runtime registry may be modeled as a typed fact store. The following are examples of registry facts:
 
     model: Circle
-    slot: Circle, radius, f64
+    slot: Circle radius f64
     union: Shape
-    variant: Shape, Circle
+    variant: Shape Circle
     behavior: Circle
-    message: Circle, drawOn, drawCircleOn
+    message: Circle drawOn drawCircleOn
     generic: draw
-    dispatchBy: draw, firstArgumentModel
-    domain: draw, Shape
-    method: draw, Circle, drawCircle
+    dispatchBy: draw firstArgumentModel
+    domain: draw Shape
+    method: draw Circle drawCircle
 
 Descriptors such as `ModelSpec`, `UnionSpec`, `BehaviorSpec`, `OperatorSpec` and `GenericMethodSpec` may be materialized views over these facts. Conversely, source receivers may first produce descriptors and then materialize facts from them.
 
@@ -4212,10 +4256,10 @@ A rule defines a relation in terms of other relations.
 Example conceptual form:
 
 rule:
-    completeGeneric: draw, Shape
+    completeGeneric: draw Shape
     if:
-        variant: Shape, ?model
-        method: draw, ?model, ?implementation
+        variant: Shape ?model
+        method: draw ?model ?implementation
 
 
 The exact syntax for rule heads, rule bodies, conjunction, disjunction, negation and aggregation is not specified by this document.
@@ -4234,7 +4278,7 @@ A query asks for bindings that satisfy relation Structures.
 Example:
 
 query:
-    method: draw, ?model, ?implementation
+    method: draw ?model ?implementation
 
 
 Meaning:
@@ -4259,8 +4303,8 @@ For a call:
 
 where `shape` has type `Shape`, the translator may query:
 
-    variant: Shape, ?model
-    method: draw, ?model, ?implementation
+    variant: Shape ?model
+    method: draw ?model ?implementation
 
 For each result, the translator can generate a `match` case over the union variant.
 
@@ -4271,7 +4315,7 @@ For a concrete call:
 
 the translator may query:
 
-    method: draw, Circle, ?implementation
+    method: draw Circle ?implementation
 
 and lower directly to the returned implementation.
 
@@ -4285,7 +4329,7 @@ For a send:
 
 where `shape\model` is `Circle`, the runtime or translator queries:
 
-    message: Circle, drawOn, ?implementation
+    message: Circle drawOn ?implementation
 
 and calls the returned implementation with the receiver object and message arguments.
 
@@ -4321,8 +4365,8 @@ A query returns a Structure, for example:
 
 QueryResult
     bindings
-        binding: ?model, Circle
-        binding: ?implementation, drawCircle
+        binding: ?model Circle
+        binding: ?implementation drawCircle
     ---
     status: success
 
@@ -4393,28 +4437,30 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     line_frame          ::= source_level colon_frame_body newline
 
-    colon_frame_body    ::= head_phrase ":" [ line_arguments ]
+    colon_frame_body    ::= head ":" [ line_arguments ]
 
     // A physical source line may contain at most one short colon-form.
     // A short colon-form must be the main source item of that line.
 
-    head_phrase         ::= head_token { horizontal_space head_token }
-
-    head_token          ::= source token allowed in receiver/head position
+    head                ::= bare_identifier
+                          | exact_identifier
+                          | symbolic_head
 
     nullary_line_body   ::= name
                             valid in executable statement position only when
                             `name` resolves to a zero-argument consumable binding:
                             registered nullary operator/receiver or visible zero-argument fn/sub
 
-    line_arguments      ::= comma_argument_list | numeric_run | phrase_field
+    line_arguments      ::= short_tail
 
-    comma_argument_list ::= line_argument { "," line_argument } [ "," ]
+    short_tail          ::= short_field { horizontal_space+ short_field }
 
-    numeric_run         ::= numeric_literal { horizontal_space numeric_literal }
-                            valid as shorthand for comma-separated numeric fields
+    short_field         ::= expression_or_structure
 
-    phrase_field        ::= non-comma tail segment not parsed as numeric_run or expression
+    // In ordinary physical short-line form, comma terminates the current
+    // short form. It does not add another field to that short form.
+    // Expression parsing may bind neighboring short_fields into one expression
+    // Structure before receiver consumption.
 
     expr_line           ::= source_level expr_line_body newline
 
@@ -4446,7 +4492,7 @@ This grammar sketch describes the structural parser only. It does not define fin
 
 The vertical Structure tree is produced by source levels and explicit visible delimiters: smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed `---` lines, named `end:` closes and terminal return where valid.
 
-For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and phrase fields do not become headers merely because a deeper line follows.
+For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and identifier values do not become headers merely because a deeper line follows.
 
 A canonical dotted delimiter line or relaxed `---` line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at a smaller source level closes all open Structures above that smaller level.
 
@@ -4454,9 +4500,9 @@ A `colon_frame_body` whose tail is empty must be followed by vertical child fiel
 
 This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone `---` line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 
-Line arguments are comma-separated except for the numeric-run shortcut. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
+Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
-Inside a bounded Structure, comma separates elements at the bounded Structure's current level. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
+Inside a bounded Structure, comma separates elements at the bounded Structure's current level or terminates an admitted short form in that bounded/block context. For simple data elements, comma may be only conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form. In an ordinary physical short-line tail, comma does not add another argument to the current head; it can only terminate the current short form for an enclosing bounded/block context that admits a following item.
 
 Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
@@ -4484,10 +4530,10 @@ Normal form:
 
 Source:
 
-fn: estimateHarvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
+fn: estimateHarvest (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     if: bed\crop = Apples
-        return: bed\area * 1.7, bed\area * 1.7, bed\area * 1.1
-return: bed\area, 0, 0
+        return: bed\area * 1.7 bed\area * 1.7 bed\area * 1.1
+return: bed\area 0 0
 
 Semantic outline:
 
@@ -4502,7 +4548,7 @@ Semantic outline:
 
 Source:
 
-fn: estimateHarvest, (PlantBed(bed)), (f32(harvest), f32(redApples), f32(greenApples))
+fn: estimateHarvest (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     harvest: bed\area
     redApples: 0
     greenApples: 0
@@ -4518,7 +4564,7 @@ Semantic outline:
 
 Source:
 
-fn: factorial, (int(n)), (int)
+fn: factorial (int(n)) (int)
     if: n <= 1
         return: 1
 return: n * factorial(n - 1)
@@ -4575,7 +4621,7 @@ Semantic outline:
 
 Source:
 
-sub: l5_if, (boolean(condition)), then, else
+sub: l5_if (boolean(condition)) then else
 return
 
 Conceptual form:
@@ -4594,9 +4640,9 @@ Conceptual form:
 24. Summary Table
 
     f(a, b)                    compact Frame named f
-    f: a, b                    line command Frame named f with comma-separated fields
-    f: a b                     line command Frame named f with one phrase/signature field `a b`
-    f: 1 2                     numeric-run shorthand for f(1, 2)
+    f: a b                     line command Frame named f with whitespace-separated short-tail fields
+    f: a, b                    f receives only a; comma terminates the short form, so b belongs only to an enclosing bounded/block context
+    f: 1 2                     ordinary short-tail fields, equivalent to f(1, 2)
     f: / child lines at . / end: f
                                 canonical dotted vertical Frame named f; vertical fields are at source level N + 1
     f: / indented child lines / end: f
@@ -4856,7 +4902,7 @@ Nested explicit `else` form:
 
 Single-line form:
 
-    if: condition, doSomething
+    if: condition doSomething
 
 The condition is evaluated once before branch selection.
 
@@ -4942,10 +4988,10 @@ Example:
 
 match: shape
     ---
-        Circle, c
+        Circle c
         drawCircle: c
     ---
-        Square, s
+        Square s
         drawSquare: s
     ---
 
@@ -5001,7 +5047,7 @@ The loop repeats until the condition is true. If the condition is false, control
 
 Compact counter/triplet form:
 
-for: int(i, 0), (i < n), i++
+for: int(i, 0) (i < n) i++
     print: i
 
 
@@ -5015,13 +5061,13 @@ The vertical child Structure is consumed as the loop body.
 
 Single-line compact body form:
 
-    for: int(i, 0), (i < n), i++, print(i)
+    for: int(i, 0) (i < n) i++ print(i)
 
 In this form, `print(i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as a parser method.
 
 Range-style example:
 
-for: i, 0, n
+for: i 0 n
     print: i
 
 
@@ -5038,10 +5084,10 @@ The compact counter/triplet form is specified above. Other source forms for nume
 ?
 
 variant 1:
-Use compact positional forms such as `for i 0 n`.
+Use compact positional forms such as `for(i, 0, n)`.
 
 variant 2:
-Use named/signature phrase forms such as `for: i from 0 to n step 1` only when the `for` receiver explicitly consumes that phrase as one semantic field; otherwise write explicit comma fields such as `for: i, 0, n, 1`.
+Use explicit short-tail fields such as `for: i 0 n 1`, or use a future exact-identifier/profile descriptor only when the `for` receiver explicitly defines that descriptor shape.
 
 variant 3:
 Treat all range policies as ordinary receiver Structures consumed by `for`.
@@ -5058,7 +5104,7 @@ each: item in items
 
 Receiver-like example:
 
-each: items, item
+each: items item
     draw: item
 
 
@@ -5093,10 +5139,10 @@ At the source level of the open executable definition, `return` is terminal retu
 
 Examples:
 
-fn: square, (int(x)), (int)
+fn: square (int(x)) (int)
 return: x * x
 
-fn: factorial, (int(n)), (int)
+fn: factorial (int(n)) (int)
     if: n <= 1
         return: 1
 return: n * factorial(n - 1)
@@ -5214,11 +5260,11 @@ fn: parseInt
         ParseError
     ---
 
-    guard: validInteger, text
-        fail: ParseError, text
+    guard: validInteger text
+        fail: ParseError text
     ---
 
-    parseInt: parseInteger, text
+    parseInt: parseInteger text
 
 
 `throws` lists the failure labels that may leave the executable body as recoverable failures.
@@ -5232,7 +5278,7 @@ A caller must handle, propagate or remap a declared failure.
 Example:
 
 guard: radius > 0.0
-    fail: InvalidRadius, radius
+    fail: InvalidRadius radius
 
 
 Semantic form:
@@ -5249,7 +5295,7 @@ if: not condition
 
 Example:
 
-    fail: ParseError, text
+    fail: ParseError text
 
 Semantic effect:
 
@@ -5771,7 +5817,7 @@ Sending a message appends it to a synchronized FIFO container and returns.
 
 Basic operation:
 
-    send: target, message
+    send: target message
 
 Semantic effect:
 
@@ -5824,9 +5870,9 @@ L5 behavior dispatch for a delivered message uses the target object's behavior d
 Conceptual dispatch:
 
     model: target\model
-    behavior: lookupBehavior, model
-    method: lookup, behavior\messageTable, selector
-    call: method, target, args
+    behavior: lookupBehavior model
+    method: lookup behavior\messageTable selector
+    call: method target args
 
 If the target belongs to the current thread and the source form is a local L5 message, the translator/runtime may use direct Smalltalk-style synchronous dispatch.
 
@@ -5835,15 +5881,15 @@ If the target belongs to another thread or the source form is an explicit event 
 This profile distinguishes:
 
     local L5 message:
-        receiver: selector, args
+        receiver: selector args
         direct behavior lookup and call in the current thread
 
     L5 event send:
-        send: receiver, selector, args
+        send: receiver selector args
         asynchronous inbox delivery
 
     L5 request:
-        request: receiver, selector, args, replyTo/correlation
+        request: receiver selector args replyTo/correlation
         asynchronous inbox delivery with a later reply message
 
 There is no blocking `ask` primitive in this profile.
@@ -5955,7 +6001,7 @@ Consequences:
 
 L2 address and field forms are:
 
-    @ⁿ: T, x    reserved address-depth declaration head, for example `@@@: int, ppp`
+    @ⁿ: T x     reserved address-depth declaration head, for example `@@@: int ppp`
     @x          address of storage location `x`
     \x          raw load from address expression `x`
     x\field     typed field-follow through address/reference `x`
@@ -5967,23 +6013,23 @@ Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
 
 Minimal L2 storage/allocation and address-slot forms:
 
-    stack: Layout, name
-    heap: Layout, name
-    static: Layout, name
-    Primitive: name, [initialValue]
-    []: name, size
-    @ⁿ: BaseType, name
+    stack: Layout name
+    heap: Layout name
+    static: Layout name
+    Primitive: name [initialValue]
+    []: name size
+    @ⁿ: BaseType name
 
 Examples:
 
-stack: PlantBed, branch
-heap: PlantBed, tree
-static: PlantBed, root
-int: count, 5
-[]: leafs, count
-@: int, p
-@@: int, pp
-@@@: int, ppp
+stack: PlantBed branch
+heap: PlantBed tree
+static: PlantBed root
+int: count 5
+[]: leafs count
+@: int p
+@@: int pp
+@@@: int ppp
 
 Meanings:
 
@@ -5996,17 +6042,17 @@ Meanings:
     pp      address-depth-2 slot to base type `int`
     ppp     address-depth-3 slot to base type `int`
 
-Name phrases may contain spaces when separated by comma from other fields:
+Names that contain spaces use exact quoted identifiers as ordinary fields:
 
-stack: PlantBed, second branch
+stack: PlantBed `second branch`
 
-This allocates stack storage with layout `PlantBed` and introduces the single bare phrase name `second branch`.
+This allocates stack storage with layout `PlantBed` and introduces the exact quoted name `second branch`.
 
-The same comma-tail rule applies to address-depth declarations:
+The same short-tail whitespace rule applies to address-depth declarations:
 
-@@@: int, ppp
+@@@: int ppp
 
-This declares `ppp` as an address-depth-3 slot with base type `int`. Without the comma, `@@@: int ppp` would be one non-numeric phrase segment rather than the canonical two-field declaration.
+This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration unless an enclosing bounded/block profile explicitly consumes it as a following item.
 
 Address-producing and address-consuming forms:
 
@@ -6114,7 +6160,7 @@ readLoop:
     process: record
 until: endOfInput(record)
 
-In this example, `record` is an explicit compact-call argument of `endOfInput`. The `until:` line consumes the whole tail `endOfInput(record)` as a boolean-producing condition Structure. The condition producer is the compact call `endOfInput(record)`, not a space-separated phrase `endOfInput record`.
+In this example, `record` is an explicit compact-call argument of `endOfInput`. The `until:` line consumes the whole tail `endOfInput(record)` as a boolean-producing condition Structure. The condition producer is the compact call `endOfInput(record)`, not the invalid space-separated spelling `endOfInput record`.
 
 More explicit condition form:
 
@@ -6142,13 +6188,13 @@ L2 `for` consumes:
 
 Vertical body form:
 
-for: int(i, 0), (i < n), i++
+for: int(i, 0) (i < n) i++
     print: i
 
 
 Compact body form:
 
-    for: int(i, 0), (i < n), i++, print(i)
+    for: int(i, 0) (i < n) i++ print(i)
 
 28.5.5. `return`
 
@@ -6170,7 +6216,7 @@ At the source level of an open executable definition, `return` may be terminal r
 
 Example:
 
-fn: square, (int(x)), (int)
+fn: square (int(x)) (int)
 return: x * x
 
 28.5.6. `break` and `continue`
@@ -6207,7 +6253,7 @@ They may still exist in L3 or higher levels, or in a richer L2 profile.
 
 A namespace is a Structure.
 
-Before translation or receiver consumption, a namespace may be represented as a typed dictionary-like Structure whose entries bind names, phrase signatures, receiver names, type/model descriptors, callable values, behavior descriptors and ordinary values.
+Before translation or receiver consumption, a namespace may be represented as a typed dictionary-like Structure whose entries bind names, exact quoted signatures, receiver names, type/model descriptors, callable values, behavior descriptors and ordinary values.
 
 Conceptual example:
 
@@ -6263,17 +6309,17 @@ Because callable values are Structures or handles/references to Structures, loca
 
 Example:
 
-fn: compute, (int(x)), (int)
-    fn: slow path, (int(v)), (int)
+fn: compute (int(x)) (int)
+    fn: `slow path` (int(v)) (int)
     return: v * v
-    fn: fast path, (int(v)), (int)
+    fn: `fast path` (int(v)) (int)
     return: v << 1
-    strategy: slow path
+    strategy: `slow path`
     if: x < 10
-        strategy: fast path
+        strategy: `fast path`
 return: strategy(x)
 
-Here `strategy` is a local callable binding. The update `strategy: fast path` is valid only if `fast path` is compatible with the declared or inferred signature of `strategy`.
+Here `strategy` is a local callable binding. Updating `strategy` to the exact identifier `fast path` is valid only if that callable is compatible with the declared or inferred signature of `strategy`.
 
 This operation does not replace `slow path`, `fast path`, `compute`, or any outer namespace binding. It only changes the local namespace view used inside the current executable body.
 
@@ -6378,7 +6424,7 @@ Values obtained from outside the current owner are borrowed by default. This inc
 
 To retain such a value after the current frame, handler or owner lifetime ends, the program must create an owned copy:
 
-    owner: saved, m\payload
+    owner: saved m\payload
 
 Conceptual meaning:
 
@@ -6387,7 +6433,7 @@ Conceptual meaning:
 
 A plain binding of an external value may remain a borrow/view:
 
-    borrow: view, m\payload
+    borrow: view m\payload
 
 Conceptual meaning:
 
@@ -6404,7 +6450,7 @@ A borrowed reference is valid only inside the frame, handler, arena epoch, branc
 Invalid Lingvamyxa-shaped pattern:
 
 L5:
-    handler: retainPayload, m
+    handler: retainPayload m
         saved: m\payload
     ---
 end: L5
@@ -6414,8 +6460,8 @@ when `saved` outlives the message frame and `m\payload` is borrowed.
 Valid Lingvamyxa-shaped pattern:
 
 L5:
-    handler: retainPayload, m
-        owner: saved, m\payload
+    handler: retainPayload m
+        owner: saved m\payload
     ---
 end: L5
 
@@ -6508,40 +6554,40 @@ The high-level branch-arena model does not prohibit low-level code. It only requ
 
 30.10. Source Receivers and Lifetime Policy Forms
 
-Ownership and lifetime policy should be expressed through ordinary receivers, phrase identifiers and argument Structures. The memory model does not introduce a separate ownership grammar.
+Ownership and lifetime policy should be expressed through ordinary receivers, identifiers and argument Structures. The memory model does not introduce a separate ownership grammar.
 
 L2 storage/allocation receivers remain the low-level unsafe layer:
 
-    stack: T, name
-    heap: T, name
-    static: T, name
-    []: name, size
-    @: T, p
+    stack: T name
+    heap: T name
+    static: T name
+    []: name size
+    @: T p
 
 An L2 or implementation-facing profile may allow policy arguments on declaration/allocation receivers:
 
-    heap: Buffer, data, owner(frame)
-    heap: Buffer, data, external(release freeBuffer)
-    []: bytes, n, owner(branch)
+    heap: Buffer data owner(frame)
+    heap: Buffer data external(release freeBuffer)
+    []: bytes n owner(branch)
 
 These arguments are ordinary Structures consumed by the active receiver signature. They do not create C-like declaration syntax.
 
 L3 profiles may expose safe memory-operation receivers:
 
-    owner: saved, m\payload
-    borrow: view, m\payload
-    copy: dst, src
-    move: dst, src
+    owner: saved m\payload
+    borrow: view m\payload
+    copy: dst src
+    move: dst src
 
-`owner: saved, value` creates an owned copy in the current owner according to the active type/model descriptor. `borrow: view, value` creates a borrowed view whose lifetime is bounded by the source owner. `copy` creates an independent value according to the target context. `move` transfers a value or branch when the active descriptor permits transfer and invalidates or empties the source binding according to the profile.
+`owner: saved value` creates an owned copy in the current owner according to the active type/model descriptor. `borrow: view value` creates a borrowed view whose lifetime is bounded by the source owner. `copy` creates an independent value according to the target context. `move` transfers a value or branch when the active descriptor permits transfer and invalidates or empties the source binding according to the profile.
 
-The phrase-signature spelling:
+The exact-head readable spelling:
 
-    owner saved: m\payload
+    `owner saved`: m\payload
 
 may be supported by a profile as a readable variant of the same owner-copy operation. If `owner` is consumed as the ordinary receiver identifier, the canonical receiver-level form is:
 
-    owner: saved, m\payload
+    owner: saved m\payload
 
 Both spellings consume ordinary Structures. Neither introduces a new grammar category.
 
@@ -6564,9 +6610,9 @@ L4 model/type descriptors may attach memory-edge policies to fields and payloads
 L4:
     model: MessageEnvelope
         vars:
-            MessagePayload: payload, owned
-            Text: view, borrowed
-            SQL: nativeHandle, external(release close)
+            MessagePayload: payload owned
+            Text: view borrowed
+            SQL: nativeHandle external(release close)
         ---
     ---
 end: L4
@@ -6574,22 +6620,22 @@ end: L4
 Such descriptors may materialize registry facts such as:
 
 L5:
-    fact: edge, MessageEnvelope, payload, owned
-    fact: edge, MessageEnvelope, view, borrowed
-    fact: release, MessageEnvelope, nativeHandle, close
-    fact: copyPolicy, MessageEnvelope, payload, deep
-    fact: transferPolicy, MessageEnvelope, payload, forbidden
+    fact: edge MessageEnvelope payload owned
+    fact: edge MessageEnvelope view borrowed
+    fact: release MessageEnvelope nativeHandle close
+    fact: copyPolicy MessageEnvelope payload deep
+    fact: transferPolicy MessageEnvelope payload forbidden
 end: L5
 
 The exact relation names are registry/profile details. The source rule is that L4 descriptors define the ownership contract used by L3/L5 consumption and by L1 lowering.
 
 L5 message and sharing receivers may select boundary behavior explicitly:
 
-    send: worker, m\payload, copy
-    send: worker, m\payload, serialize
-    send: worker, m\payload, transfer
+    send: worker m\payload copy
+    send: worker m\payload serialize
+    send: worker m\payload transfer
     intern: value
-    share: value, immutable
+    share: value immutable
 
 At an L5 Thread boundary, raw mutable references are invalid. `copy`, `serialize` and `transfer` are the ordinary policies for crossing the boundary. Immutable sharing is permitted only when the implementation profile can preserve immutability and thread-safety.
 
@@ -6665,7 +6711,7 @@ Generated type/model operations may be derived from L4 descriptors:
 
 An owner-copy form such as:
 
-    owner: saved, m\payload
+    owner: saved m\payload
 
 may lower to:
 
@@ -6735,10 +6781,10 @@ If a program needs a large resource that many L5 Threads read directly, such as 
 Example conceptual L2 forms:
 
 L2:
-    static: BigArray, table, shared(readonly)
+    static: BigArray table shared(readonly)
 
 L2:
-    static: BigArray, table, shared(readonly), externalLifetime
+    static: BigArray table shared(readonly) externalLifetime
 
 The exact receiver names and policy arguments are profile-defined. The semantic point is that the resource is not an ordinary mutable L5 branch. It is a shared immutable or externally managed low-level object with an explicit lifetime contract.
 
@@ -6746,9 +6792,9 @@ L4 may describe such a resource as a model/descriptor:
 
 L4:
     model: BigArray
-        field: data, @f64, borrowed
-        field: len, u64
-        access: shared, readonly
+        field: data @f64 borrowed
+        field: len u64
+        access: shared readonly
 
 The L4 descriptor may record that the data edge is borrowed from low-level storage, shared only under read-only access, externally managed, memory-mapped or protected by another explicit runtime contract. L5 may use the descriptor and receive handles/selectors/facts about the resource, but ordinary L5 message passing does not send raw mutable references to it.
 
@@ -6764,74 +6810,6 @@ Therefore:
 
 The long-term bootstrap direction is that L1 should shrink to the target/backend substrate. Language-visible rules for shared resources, memory edges, synchronization and lifetime should move upward into L2, L3, L4 and L5 descriptors/receivers. L1 remains the implementation layer used to lower those rules to C99, platform APIs, libraries and native binaries.
 
-Да. Ниже два готовых куска для копипаста. **30.12** лучше оставить как текущий параграф про shared low-level resources, потому что этот номер уже занят в файле; новый материал логично вставить как **30.13** после него. Текущая §30.12 действительно уже стоит перед §31 и описывает shared low-level / read-only resources. 
-
-```text id="sa2w2t"
-30.12. Shared Low-Level Resources and Large Read-Only Data
-
-The L5 memory model is intentionally message- and branch-oriented. It is the
-default safe model for active objects, behavior dispatch, high-level events,
-configuration and query handling. It should not be used to pretend that large
-shared raw buffers are ordinary per-thread message payloads.
-
-If a program needs a large resource that many L5 Threads read directly, such as
-a large numeric table, shared index, memory-mapped dataset, model-weight array
-or external database page cache, that resource belongs in an L2 or
-implementation-facing L3 profile as an explicit low-level/shared resource.
-
-Example conceptual L2 forms:
-
-L2:
-    static: BigArray, table, shared(readonly)
-
-L2:
-    static: BigArray, table, shared(readonly), externalLifetime
-
-The exact receiver names and policy arguments are profile-defined. The semantic
-point is that the resource is not an ordinary mutable L5 branch. It is a shared
-immutable or externally managed low-level object with an explicit lifetime
-contract.
-
-L4 may describe such a resource as a model/descriptor:
-
-L4:
-    model: BigArray
-        field: data, @f64, borrowed
-        field: len, u64
-        access: shared, readonly
-
-The L4 descriptor may record that the data edge is borrowed from low-level
-storage, shared only under read-only access, externally managed, memory-mapped
-or protected by another explicit runtime contract. L5 may use the descriptor and
-receive handles/selectors/facts about the resource, but ordinary L5 message
-passing does not send raw mutable references to it.
-
-Shared immutable data may be read by many L5 Threads when the implementation
-profile guarantees immutability and thread-safe publication. Since no thread
-can mutate the shared value through an alias, this does not violate the L5
-no-shared-mutable-memory rule.
-
-Shared mutable data is different. If multiple threads must write or coordinate
-over the same resource, the resource must be represented through explicit L2/L3
-synchronization or atomic constructs such as locks, read-write locks, atomics,
-barriers, memory-order policies or transactional receivers. Those constructs
-are unsafe or implementation-facing unless a higher-level profile wraps them in
-a checked abstraction.
-
-Therefore:
-
-    L5 default       -> copy, serialization, whole-branch ownership transfer
-    L5 shared read   -> immutable / read-only / externally published resource
-    L2/L3 explicit   -> shared mutable buffers, atomics, locks and external lifetimes
-
-The long-term bootstrap direction is that L1 should shrink to the target/backend
-substrate. Language-visible rules for shared resources, memory edges,
-synchronization and lifetime should move upward into L2, L3, L4 and L5
-descriptors/receivers. L1 remains the implementation layer used to lower those
-rules to C99, platform APIs, libraries and native binaries.
-```
-
-```text id="83c9z7"
 30.13. Control Exit, Assert Diagnostics and Thread-Local Collection
 
 The memory model has two distinct memory mechanisms:
@@ -7329,8 +7307,8 @@ A future L2/L1 profile may define C-like receivers or operations for:
 Conceptual future profile sketch:
 
 L2:
-    thread: workerThread, workerEntry, workerArgs
-    mem: sharedBlock, bytes, shared(mutable)
+    thread: workerThread workerEntry workerArgs
+    mem: sharedBlock bytes shared(mutable)
     freemem: sharedBlock
 end: L2
 
@@ -8871,8 +8849,8 @@ end: L4
 
 L5:
     behavior: Circle
-        message: drawOn, drawCircleOn
-        message: area, circleArea
+        message: drawOn drawCircleOn
+        message: area circleArea
     ---
 end: L5
 
@@ -9014,10 +8992,10 @@ Allowed relationships must be explicit:
 Example explicit registry facts:
 
 L5:
-    fact: role, PlantRole
-    fact: roleMessage, PlantRole, grow
-    fact: implements, Oak, PlantRole
-    fact: delegates, Oak, PlantRole, plant
+    fact: role PlantRole
+    fact: roleMessage PlantRole grow
+    fact: implements Oak PlantRole
+    fact: delegates Oak PlantRole plant
 end: L5
 
 ---ANSI C---
@@ -9268,8 +9246,8 @@ end: L4
 
 L5:
     behavior: Circle
-        message: drawOn, drawCircleOn
-        message: area, circleArea
+        message: drawOn drawCircleOn
+        message: area circleArea
     ---
 end: L5
 
@@ -9363,10 +9341,10 @@ end: L4
 Пример явных facts:
 
 L5:
-    fact: role, PlantRole
-    fact: roleMessage, PlantRole, grow
-    fact: implements, Oak, PlantRole
-    fact: delegates, Oak, PlantRole, plant
+    fact: role PlantRole
+    fact: roleMessage PlantRole grow
+    fact: implements Oak PlantRole
+    fact: delegates Oak PlantRole plant
 end: L5
 
 Такой подход заменяет объектное наследование делегированием и явными registry

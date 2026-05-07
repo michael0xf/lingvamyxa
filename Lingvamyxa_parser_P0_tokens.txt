@@ -111,11 +111,17 @@ according to the active mode.
 P0 structural punctuation tokens:
 
     COLON       :
-        Separates head spelling from inline body in a physical short colon-form.
-        A physical source line may contain at most one short colon-form.
+        Mandatory visible marker between head spelling and body in a physical
+        short colon-form. The head role is positional; COLON is retained for
+        navigation, tooling and a clear head/body boundary. A physical source
+        line may contain at most one short colon-form.
 
     COMMA       ,
-        Separates fields in an inline body or bounded Structure.
+        Separates bounded elements or terminates an admitted short form inside
+        a bounded/anonymous block context. In ordinary physical short-line tail
+        form, COMMA does not add another field to the current short form. It can
+        only terminate that form for an enclosing bounded/block context that can
+        consume the following item.
 
     LPAREN      (
     RPAREN      )
@@ -178,28 +184,19 @@ P0 atom tokens:
 
         Unicode identifier starts/continues may be admitted by a later profile.
 
-    PHRASE_IDENTIFIER
-        Parser-level value formed from a non-comma body/head segment that starts
-        with a bare word and continues until a structural separator.
-        Repeated horizontal whitespace is normalized to one ASCII space.
-
-Structural separators for phrase identifiers:
-
-    comma
-    newline
-    closing parenthesis of the current bounded Structure
-    source-level boundary
-    colon in head-scanning mode
-
-Whitespace alone does not split a phrase identifier into several fields.
+Bare identifiers are single BARE_WORD tokens. Multi-word names and external
+spellings must use EXACT_IDENTIFIER.
 
 Examples:
 
-    branch 2
-        one PHRASE_IDENTIFIER, not `branch`, `2`
+    PlantBed
+        one BARE_WORD.
 
-    red     apples
-        one PHRASE_IDENTIFIER normalized as `red apples`
+    `second branch`
+        one EXACT_IDENTIFIER whose exact spelling is second branch.
+
+    `red     apples`
+        one EXACT_IDENTIFIER whose repeated spaces are preserved.
 
     `properties.lm5`
         one EXACT_IDENTIFIER whose exact spelling is properties.lm5
@@ -218,14 +215,14 @@ profile trailer head, a binding, a selector or a callable.
 
 P0 head spellings:
 
-    bare phrase head
+    bare word head
         print:
-        slow path:
         outerLoop:
 
     exact identifier head
         `select`:
         `properties.lm5`:
+        `slow path`:
 
     symbolic/reserved head
         []:
@@ -248,19 +245,20 @@ context, trailer-role profile or receiver consumption.
 
 7. Inline Body and Bounded-Structure Mode
 
-After COLON, P0 scans the rest of the physical line as an inline body Structure.
+After COLON, P0 scans the rest of the physical line as an ordinary short-tail
+Structure unless the line opens a bounded continuation.
 
 Field separators:
 
-    COMMA
+    horizontal whitespace in ordinary short-tail form
     physical newline
     RPAREN closing the current bounded Structure
     source-level boundary
 
 Whitespace behavior:
 
-    pure numeric run
-        whitespace separates numeric literals:
+    all ordinary short-tail fields
+        whitespace separates fields:
 
             print: 1 2 3
 
@@ -268,27 +266,33 @@ Whitespace behavior:
 
             print(1, 2, 3)
 
-    string run
-        whitespace separates string literal values:
+    identifier and exact-identifier fields
+        bare identifiers and exact identifiers are separate atomic fields:
 
-            print: "hello" "world"
-
-        means:
-
-            print("hello", "world")
-
-    phrase segment
-        whitespace is part of the phrase and is normalized:
-
-            stack: PlantBed, branch 2
+            stack: PlantBed `2 dim`
 
         means two fields:
 
             PlantBed
-            branch 2
+            `2 dim`
+
+    comma after an ordinary short-tail field
+        does not add another field to the current head:
+
+            stack: PlantBed, `2 dim`
+
+        means that `stack` receives only `PlantBed`. The exact identifier
+        `2 dim` can be a following item only if an enclosing bounded/anonymous
+        block context admits that comma as a terminator/separator.
+
+    comma in bounded or anonymous block context
+        may separate simple data items for conventional notation, and has
+        structural load when it terminates an admitted short form before the
+        next item.
 
 P0 must not use receiver signatures to insert hidden nesting while parsing the
-inline body. Receiver signatures operate after the parser tree exists.
+ordinary short tail or bounded body. Receiver signatures operate after the
+parser tree exists.
 
 A short colon-form is a physical source-line form. It may not appear as an
 inline argument inside parentheses:
@@ -356,10 +360,8 @@ Required P0 token/event names:
     STRING_LITERAL
     EXACT_IDENTIFIER
     BARE_WORD
-    PHRASE_IDENTIFIER
     EXPRESSION_OPERATOR
     EOF
 
 Trailer-role names such as END_NAMED, TERMINAL_RETURN and UNTIL_CLOSE are not
 lexer tokens. They are profile-level roles assigned above tokenization.
-

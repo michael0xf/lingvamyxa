@@ -79,8 +79,8 @@ The input is not raw parser syntax. It is a typed/normalized ModelSpec.
 Example:
 
     model: Plant
-        field: height, f64
-        field: age, i32
+        field: height f64
+        field: age i32
 
 may lower to:
 
@@ -92,8 +92,8 @@ may lower to:
 And:
 
     model: Oak
-        field: plant, Plant
-        field: acornCount, i32
+        field: plant Plant
+        field: acornCount i32
 
 may lower to:
 
@@ -109,28 +109,28 @@ This is composition. It is not inheritance.
 
 A field descriptor should lower according to its type and edge policy:
 
-    field: age, i32
+    field: age i32
         int32_t age;
 
-    field: plant, Plant
+    field: plant Plant
         LmPlant plant;
 
-    field: plant, @Plant
+    field: plant @Plant
         LmPlant *plant;
 
-    field: plant, borrowed @Plant
+    field: plant borrowed @Plant
         LmPlant *plant;
         plus edge policy metadata in generated type ops, if needed.
 
-    field: plant, owned @Plant
+    field: plant owned @Plant
         LmPlant *plant;
         generated destroy/copy/tree-cut ops know this edge is owned.
 
-    field: plants, [] Plant
+    field: plants [] Plant
         LmPlant *plants;
         size_t plants_count;
 
-    field: source, TextSlice
+    field: source TextSlice
         LmSlice source;
 
 Inside one owner/arena, typed C pointers are fine. Edge metadata belongs to
@@ -175,7 +175,7 @@ component, use a role/ref/protocol type instead of concrete Plant.
 
 Conceptual Lingvamyxa descriptor:
 
-    field: plant, PlantRole
+    field: plant PlantRole
 
 Possible C lowering:
 
@@ -326,8 +326,8 @@ depending on the selected C99 initializer profile.
 Given:
 
     model: Oak
-        field: plant, Plant
-        field: acornCount, i32
+        field: plant Plant
+        field: acornCount i32
 
 The expression:
 
@@ -366,7 +366,7 @@ Behavior lookup is separate from field layout.
 
 If a message receiver expects a behavior/role:
 
-    send: plantLike, grow
+    send: plantLike grow
 
 The type checker asks:
 
@@ -477,4 +477,3 @@ It does not need:
 
     L1 C projection
         -> ordinary ANSI C declarations and functions.
-
