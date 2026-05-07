@@ -164,7 +164,7 @@ pointer with the newly copied target-owned pointer.
 
 6. Automatic Tree-Cut Promotion
 
-Promotion is ownership maintenance, not memory cleanup.
+Promotion is ownership maintenance, not memory release.
 
 It runs automatically as part of local owner-tree cutting/detaching inside one
 parser run or one L5 Thread. It is not a separately invoked Lingvamyxa source
@@ -330,18 +330,18 @@ Use explicit status returns:
     int lm_tree_cut(...);
     int lm_tree_cut_promote_lazy_edges(...);
 
-Avoid hidden ownership promotion in cleanup functions.
+Avoid hidden ownership promotion in resource-release functions.
 
-Use one cleanup label per generated/manual C function:
+Use one exit/resource-release label per generated/manual C function:
 
     status = do_work(...);
-    goto cleanup;
+    goto exit;
 
-    cleanup:
+    exit:
         lm_parse_context_destroy(ctx);
         return status;
 
-The cleanup label destroys the whole parser context or releases obvious local
+The exit/resource-release label destroys the whole parser context or releases obvious local
 temporaries. It does not perform the tree-cut promotion algorithm. Promotion is
 part of the automatic local tree-cut/detach machinery.
 

@@ -100,12 +100,30 @@ A trailer role has:
             none.
 
 
+    COMMA_SHORT
+        Spelling:
+            ,
+
+        Meaning:
+            closes the current short form at the current source or bounded
+            level. If another item follows, that item is parsed as the next
+            source item at the same current level. If no item follows before
+            newline, RPAREN, EOF or another block boundary, the comma is a
+            cosmetic trailing marker. It never adds a field to the open short
+            tail.
+
+        Argument Structure:
+            none.
+
+
     RPAREN_BOUNDED
         Spelling:
             )
 
         Meaning:
-            closes the current bounded/compact form.
+            closes the current bounded/compact form. If a short form is open
+            inside that bounded form, RPAREN first closes that short form and
+            then closes the bounded/compact form itself.
 
         Argument Structure:
             none.
@@ -220,7 +238,11 @@ A trailer role has:
 
 5. Role Recognition Algorithm
 
-When an ITEM(K, body) has a head spelling that could be a trailer role:
+Punctuation trailers such as COMMA_SHORT, NEWLINE_SHORT and RPAREN_BOUNDED are
+recognized by the structural scanner before receiver-head role recognition.
+
+When an ITEM(K, body) has a head spelling that could be a receiver-like trailer
+role:
 
     1. Look at the current open envelope stack.
     2. Ask the active P0 trailer-role table whether this spelling may act as a

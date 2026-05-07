@@ -79,6 +79,9 @@ After source-level normalization, the tree builder consumes generic events:
     EOF
         End of file.
 
+COMMA is handled by the structural item-sequence scanner as a local trailer. It
+is not emitted as a receiver-consumable item.
+
 Physical empty lines are ignored as formatting whitespace in P0. They are not
 close tokens and do not replace a required same-level delimiter.
 
@@ -226,8 +229,17 @@ by fixed keyword spelling:
     short-line trailer
         physical newline closes a short physical line form.
 
+    comma trailer
+        `,` closes the current short form at the current source or bounded
+        level. If another item follows, the scanner continues with the next
+        source item at that same level. If no item follows before newline,
+        RPAREN, EOF or another block boundary, the comma is a cosmetic trailing
+        marker. It never adds a field to the open short tail.
+
     bounded trailer
-        `)` closes a bounded/compact form.
+        `)` closes a bounded/compact form. If a short form is open inside that
+        bounded form, `)` first closes the short form and then closes the
+        bounded/compact form itself.
 
     source-level trailer
         a following source item at a smaller level closes all open Structures
@@ -263,8 +275,13 @@ Specific receiver trailer forms are outside this generic file.
     physical newline
         trailer for a short physical line form.
 
+    ,
+        trailer for a short form at the current source or bounded level;
+        may also be a cosmetic trailing marker with no following item.
+
     )
-        trailer for a bounded/compact form.
+        trailer for a bounded/compact form; also closes an open short form
+        inside that bounded/compact form.
 
     profile trailer receiver
         closes/completes an envelope and may carry an unrestricted argument
