@@ -266,7 +266,7 @@ Notes:
     `fn: words () iterator(Text)` gives the `fn` receiver the fields
     `words`, `()`, `iterator(Text)` and the following `yield:` fields. The
     `fn` receiver consumes them as name, empty formal argument Structure,
-    return model and executable body.
+    return descriptor and executable body.
 
     `yield: "Hello"` gives the `yield` receiver one produced value. The
     receiver inspects the current `fn` return descriptor, verifies that
@@ -1048,7 +1048,7 @@ The inline tail contributes initial fields. The vertical child lines at level N 
 
 A physical newline ends the physical source line, but it is not a short-form trailer. If the following source item is at level N + 1, it continues the open frame's logical argument Structure. If the following source item is at level N or smaller, the open frame is complete and ordinary sibling/close rules apply.
 
-Do not confuse the logical argument Structure of a Frame with semantic arguments declared by a receiver. For example, the fields of an `fn` frame are fields consumed by the `fn` receiver; they are not automatically formal parameters of the function being defined. The `fn` receiver later classifies its fields as function name, formal parameter Structure, return model Structure and executable body fields.
+Do not confuse the logical argument Structure of a Frame with semantic arguments declared by a receiver. For example, the fields of an `fn` frame are fields consumed by the `fn` receiver; they are not automatically formal parameters of the function being defined. The `fn` receiver later classifies its fields as function name, formal parameter Structure, return descriptor Structure and executable body fields.
 
 4.4. Parenthesized Bounded Structure
 
@@ -8889,8 +8889,6 @@ Rejected candidates are diagnostics, not failed control flow.
 
 The registry, query engine, and validators form the trusted semantic path.
 Agent receivers are advisory producers of candidate Structures only.
-
-Да. Ниже готовый **32.15 Resume** для вставки после **32.14 Standard Statement**. Он связывает §32 с общей L5 message-моделью: registry events — это сообщения, query receivers работают внутри L5 Thread, candidate не trusted, а dispatch в §31 уже опирается на registry/query facts.  
 
 32.15. Resume
 
