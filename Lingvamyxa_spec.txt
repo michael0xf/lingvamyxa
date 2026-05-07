@@ -1,30 +1,4 @@
-Lingvamyxa Structural Core Specification
-
-This Rev.12.12 revision preserves the uploaded Rev.12.10 document body where possible and adds the logical registry/query layer summary to section 21, the L5 branch-arena memory model in section 30, and the L5 Thread/message model in section 31 while keeping canonical dotted syntax valid.
-
-Status
-
-Revision 12.12 draft. General language-role principle, external lexical standards boundary, identifier and string literal conventions, exact quoted identifiers, colon receiver-valence definition, whitespace-separated short tail, exact quoted multi-word names, canonical dotted vertical syntax, relaxed indentation syntax, `---` nameless separators, short-form trailer rule, terminal return, local namespace overlay, reserved L2 address-depth operator update, L5 branch-arena memory model, logical registry/query layer summary, and L5 Thread/message scheduling model.
-
-This document specifies the structural core of Lingvamyxa as a self-contained language model.
-
-Revision 12.12 note:
-
-    Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
-
-    Line command form is `head: tail`. In a short form, whitespace separates tail fields and expression operators may bind neighboring fields into one expression field. A comma is not a way to add another field to that same short tail: in `f: a, b`, `b` is not an argument of `f`. Comma and physical newline are trailers of the current short form. A comma lets the parser continue with the next source item at the same current structural or bounded level; physical newline returns to the ordinary source-level rules. Inside a parenthesized bounded Structure, the matching close parenthesis is both a trailer of the current short form, if one is open, and the trailer of the bounded Structure itself. Parenthesized bounded Structures are not comma-list syntax: whitespace, newline/source-level composition and `)` may separate or end ordinary bounded items. Comma remains optional conventional notation for simple fields, a short-form trailer when needed, and a permitted trailing marker at any block level including file/root level 0. Thus `(1 2 3)`, `(1, 2, 3)` and `(1 2 3,)` may normalize to the same three fields. The source line `stack: PlantBed` followed by exact identifier `2 dim` has two fields: `PlantBed` and the exact quoted identifier `2 dim`. Exact quoted identifiers in backticks are the SQLite-style identifier form for external names and multi-word names and preserve their contents exactly.
-
-    The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
-
-    Vertical composition is source-level tree composition. A frame opened at source level N receives vertical child arguments at source level N + 1. A following source line with a smaller source level is a level delimiter: it closes all open structures above that smaller level. When the next structural item starts at the same source level and no smaller-level source line intervenes, a canonical dotted delimiter line or relaxed `---` line supplies the visible same-level anonymous Structure delimiter. That delimiter opens an anonymous positional Structure when followed by a deeper source item, and separates or closes the current anonymous/implicit section otherwise. Where a profile permits it and the target is unambiguous, `---` may also act as a nameless close for a named frame.
-
-    `case` is not structural syntax. Receivers such as `match` consume ordinary positional argument streams or anonymous Structures and assign case/default semantics themselves.
-
-    `return` has two structural positions. Inside an executable body, `return` is ordinary runtime control. At the source level of the open executable definition, `return` is terminal return: it supplies or returns the current result and structurally closes that executable definition, like a checked executable-specific close.
-
-    The token sequences `@`, `@@`, `@@@`, ... form the reserved L2 address-depth operator family `@ⁿ`. In head position, `@ⁿ: BaseType name` declares a typed address slot of depth n. Whitespace separates the base type from the binding name, so `@@@: int ppp` is a three-level address slot to `int`. Ordinary source cannot rebind `@ⁿ` as user procedure names.
-
-    The ordinary receiver form `end: <target>` closes by visible target name. If `[]: matrix` introduces the entity name `matrix`, the close form is `end: matrix`, not `end: [] matrix`. Bare `end` and `end <target>` are not Lingvamyxa source syntax. The standalone source line `---` is a nameless structural delimiter. It may replace a canonical dotted delimiter line, opening an anonymous positional Structure when followed by a deeper source item, or separating/closing the current anonymous/implicit section otherwise. It may replace `end: <name>` only when the current close target is unambiguous and the receiver/profile permits nameless close. A `---` line must contain only the delimiter as a structural token; leading spaces/tabs, leading canonical dots and an optional trailing `#` comment are ignored for this restriction.
+Lingvamyxa language Structural Core Specification
 
 The document is descriptive and semantic. Surface syntax builds Structures. Receivers and subroutines consume Structures and assign typed meaning to them.
 
