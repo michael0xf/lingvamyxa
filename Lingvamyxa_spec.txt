@@ -12,7 +12,7 @@ Revision 12.12 note:
 
     Lingvamyxa vertical source levels have two surface forms. The canonical dotted form represents source level by dot characters (`.`) in the leading indentation zone; spaces and tabs between dots or after the last leading dot are readability only. The relaxed indentation form may replace leading dots before ordinary source items with leading spaces/tabs. Textless anonymous/nameless structural transitions remain visible as canonical dotted delimiter lines or as `---` lines at the corresponding indentation level.
 
-    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a bare phrase identifier is normalized to one ASCII space and leading/trailing whitespace is trimmed. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, branch 2` has two fields: `PlantBed` and the bare phrase name `branch 2`. Exact quoted identifiers in backticks are a separate second identifier form for SQLite/external names and preserve their contents exactly. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
+    Line command form is `head: tail`. In short linear form, comma is the explicit field separator. Whitespace inside a bare phrase identifier is normalized to one ASCII space and leading/trailing whitespace is trimmed. A pure numeric run may use whitespace as a shorthand field separator, so `print: 1 2 3` is equivalent to `print: 1, 2, 3`, while `stack: PlantBed, second branch` has two fields: `PlantBed` and the bare phrase name `second branch`. Exact quoted identifiers in backticks are a separate second identifier form for SQLite/external names and preserve their contents exactly. A short colon-form is a physical source-line form: one physical line may contain at most one short colon-form, and a short colon-form may not appear as an inline item inside a parenthesized comma list.
 
     The colon `:` is the receiver-valence marker of the structural syntax. In `head: tail`, the head governs the following argument Structure; the tail is not assignment and not a key-value mapping. The receiver signature gives semantic roles to the fields it consumes. In linguistic terms this is a valence/rective colon: the head opens a predicate-argument frame and the following source Structure supplies its actants.
 
@@ -312,7 +312,7 @@ Examples of bare phrase identifiers:
 
     PlantBed
     branch
-    branch 2
+    second branch
     red apples
     estimate harvest
     my 2d example
@@ -330,10 +330,10 @@ After normalization, all of them denote:
 
 The following source spellings also denote one bare phrase identifier each, not multiple arguments:
 
-    branch 2
+    second branch
     my 2d example
 
-Because each phrase starts with an identifier word, the later numeric-looking words belong to the phrase. By contrast, a pure numeric run starts in numeric mode and is split as numbers:
+By contrast, a pure numeric run starts in numeric mode and is split as numbers:
 
     1 2 3
 
@@ -343,12 +343,12 @@ normalizes as:
 
 Therefore:
 
-    stack: PlantBed, branch 2
+    stack: PlantBed, second branch
 
 has two fields:
 
     PlantBed
-    branch 2
+    second branch
 
 and it does not normalize as:
 
@@ -551,15 +551,15 @@ normalizes as:
 
 Whitespace inside a non-numeric segment is part of that segment. Therefore:
 
-    stack: PlantBed, branch 2
+    stack: PlantBed, second branch
 
 normalizes as:
 
-    stack(PlantBed, branch 2)
+    stack(PlantBed, second branch)
 
-where `branch 2` is one bare phrase name field. It does not normalize as:
+where `second branch` is one bare phrase name field. It does not normalize as:
 
-    stack(PlantBed, branch, 2)
+    stack(PlantBed, second, branch)
 
 and it does not allocate `branch` with an extra numeric argument `2`.
 
@@ -5998,9 +5998,9 @@ Meanings:
 
 Name phrases may contain spaces when separated by comma from other fields:
 
-stack: PlantBed, branch 2
+stack: PlantBed, second branch
 
-This allocates stack storage with layout `PlantBed` and introduces the single bare phrase name `branch 2`. Because the phrase starts with an identifier word, the later numeric word belongs to the phrase rather than becoming a numeric field.
+This allocates stack storage with layout `PlantBed` and introduces the single bare phrase name `second branch`.
 
 The same comma-tail rule applies to address-depth declarations:
 
