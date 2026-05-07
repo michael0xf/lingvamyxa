@@ -58,9 +58,13 @@ one file: L4 consumes model/registry descriptors, L5 consumes behavior/fact/buil
 descriptors, and L3 consumes executable definitions and ordinary control
 receivers.
 
-Short version of the "hello.lmx" file:
+Short version of the "hello.lm3" file in the default executable script profile:
 
 print: "Hello World"
+
+In this profile, the file root is consumed as an L3 top-level executable body.
+The long `.lmx` version below spells out the surrounding model, registry, build
+target and explicit executable entry point.
 
 Long version of the "hello.lmx" file:
 
