@@ -39,7 +39,7 @@ has:
 
     head            print
     primary body    (hello)
-    trailer         physical newline
+    trailer         source-level boundary / no vertical continuation
 
 And:
 
@@ -82,6 +82,10 @@ After source-level normalization, the tree builder consumes generic events:
 COMMA is handled by the structural item-sequence scanner as a local trailer. It
 is not emitted as a receiver-consumable item.
 
+Physical newline is not a short-form trailer. It ends a physical line. The next
+source-level event decides whether an open short frame continues with vertical
+arguments or is completed by ordinary level rules.
+
 Physical empty lines are ignored as formatting whitespace in P0. They are not
 close tokens and do not replace a required same-level delimiter.
 
@@ -99,6 +103,15 @@ This is the ordinary way indentation/dots close a vertical tail.
 A visible same-level delimiter is needed when the next structural item starts
 at the same source level and no smaller-level source line appears between the
 two Structures.
+
+Short colon-forms have an implicit argument level. If a short frame opens at
+source level K, its argument fields are at level K + 1 even when the first
+fields are written inline on the same physical line. Physical newline only
+ends the line. If the next source item is at K + 1, it is another argument of
+that open short frame. If the next source item is at K or smaller, the short
+frame is complete and normal sibling/close rules apply. If the next source
+item is deeper than K + 1, it is valid only when the preceding field can own
+that deeper level.
 
 
 4. How Structures Start
@@ -226,20 +239,15 @@ created by DELIM(K).
 At the generic envelope level, trailers are described by role shape rather than
 by fixed keyword spelling:
 
-    short-line trailer
-        physical newline closes a short physical line form.
-
     comma trailer
-        `,` closes the current short form at the current source or bounded
-        level. If another item follows, the scanner continues with the next
-        source item at that same level. If no item follows before newline,
-        RPAREN, EOF or another block boundary, the comma is a cosmetic trailing
-        marker. It never adds a field to the open short tail.
+        `,` closes the current open short form at any scan depth. If no short
+        form is open at that scan depth, comma is an ordinary separator or
+        cosmetic trailing marker. It never adds a field to an open short tail.
 
     bounded trailer
         `)` closes a bounded/compact form. If a short form is open inside that
-        bounded form, `)` first closes the short form and then closes the
-        bounded/compact form itself.
+        bounded form, that short form is completed as part of closing the
+        bounded/compact context.
 
     source-level trailer
         a following source item at a smaller level closes all open Structures
@@ -273,15 +281,16 @@ Specific receiver trailer forms are outside this generic file.
         may also become a nameless trailer where a profile permits it.
 
     physical newline
-        trailer for a short physical line form.
+        not a trailer by itself; it ends the physical line. The following
+        source level decides continuation or closure of any open short form.
 
     ,
-        trailer for a short form at the current source or bounded level;
-        may also be a cosmetic trailing marker with no following item.
+        trailer for an open short form at any scan depth; otherwise ordinary
+        separator or cosmetic trailing marker.
 
     )
-        trailer for a bounded/compact form; also closes an open short form
-        inside that bounded/compact form.
+        trailer for a bounded/compact form; completes any open short form
+        inside that bounded/compact context as part of closing it.
 
     profile trailer receiver
         closes/completes an envelope and may carry an unrestricted argument

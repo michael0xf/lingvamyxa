@@ -117,19 +117,20 @@ P0 structural punctuation tokens:
         Mandatory visible marker between head spelling and body in a physical
         short colon-form. The head role is positional; COLON is retained for
         navigation, tooling and a clear head/body boundary. A short colon-form
-        continues until a trailer at the current scan depth: COMMA, physical
-        newline/source-level boundary, or, inside a bounded Structure, RPAREN.
-        RPAREN also closes the bounded Structure itself.
+        has an implicit argument level one step deeper than its own source
+        level. COMMA terminates an open short form at any scan depth. Physical
+        newline is not a trailer; after newline, the following source level
+        decides whether the open short form continues or is completed. RPAREN
+        closes the bounded Structure itself and completes any open short form
+        inside that bounded context.
 
     COMMA       ,
         Trailer at the current scan depth. For a short form, COMMA terminates
-        the current short form and lets the scanner continue with the next
-        source item at the same current source or bounded level. COMMA does not
-        add another field to the current short tail. For simple data elements
-        inside bounded/anonymous block Structures, COMMA may also be optional
-        conventional list notation. A trailing COMMA with no following item is
-        accepted as a cosmetic trailer at any block level, including file/root
-        level 0.
+        the current open short form and does not add another field to the
+        current short tail. When no short form is open at that scan depth,
+        COMMA may be optional conventional list notation. A trailing COMMA with
+        no following item is accepted as a cosmetic marker at any block level,
+        including file/root level 0.
 
     LPAREN      (
     RPAREN      )
@@ -260,9 +261,10 @@ Field separators:
 
     horizontal whitespace in ordinary short-tail form
     horizontal whitespace between simple bounded fields when no short form is open
-    physical newline
+    physical newline/source-level composition for ordinary fields
     RPAREN closing the current bounded Structure; if a short form is open
-        inside that bounded Structure, RPAREN also closes the short form
+        inside that bounded Structure, the short form is completed as part of
+        closing that bounded context
     source-level boundary
 
 Whitespace behavior:
@@ -292,13 +294,11 @@ Whitespace behavior:
             stack: PlantBed, `2 dim`
 
         means that `stack` receives only `PlantBed`. The exact identifier
-        `2 dim` is parsed as the next source item at the same current source
-        or bounded level.
+        `2 dim` is parsed as the next item at the current scan depth.
 
-    comma in bounded or anonymous block context
-        may mark simple data item separation for conventional notation, has
-        structural load when it terminates a short form before the next item,
-        and may appear as a trailing cosmetic marker with no following item.
+    comma when no short form is open
+        may mark simple data item separation for conventional notation and may
+        appear as a trailing cosmetic marker with no following item.
 
 P0 must not use receiver signatures to insert hidden nesting while parsing the
 ordinary short tail or bounded body. Receiver signatures operate after the
@@ -306,7 +306,7 @@ parser tree exists.
 
 A short colon-form is a source-item form. Several short forms may appear on one
 physical line when COMMA closes the earlier source item. Short forms may also
-appear inline inside a bounded Structure:
+appear inline inside another short form or inside a bounded Structure:
 
     call(int: a b, ret: int)
         means call(int(a, b), ret(int))

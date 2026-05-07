@@ -89,27 +89,14 @@ A trailer role has:
 
 4. P0 Trailer Role Table
 
-    NEWLINE_SHORT
-        Spelling:
-            physical newline
-
-        Meaning:
-            closes a short physical line form.
-
-        Argument Structure:
-            none.
-
-
     COMMA_SHORT
         Spelling:
             ,
 
         Meaning:
-            closes the current short form at the current source or bounded
-            level. If another item follows, that item is parsed as the next
-            source item at the same current level. If no item follows before
-            newline, RPAREN, EOF or another block boundary, the comma is a
-            cosmetic trailing marker. It never adds a field to the open short
+            closes the current open short form at any scan depth. If no short
+            form is open at that scan depth, comma is an ordinary separator or
+            cosmetic trailing marker. It never adds a field to an open short
             tail.
 
         Argument Structure:
@@ -122,8 +109,8 @@ A trailer role has:
 
         Meaning:
             closes the current bounded/compact form. If a short form is open
-            inside that bounded form, RPAREN first closes that short form and
-            then closes the bounded/compact form itself.
+            inside that bounded form, that short form is completed as part of
+            closing the bounded/compact context.
 
         Argument Structure:
             none.
@@ -247,8 +234,10 @@ A trailer role has:
 
 5. Role Recognition Algorithm
 
-Punctuation trailers such as COMMA_SHORT, NEWLINE_SHORT and RPAREN_BOUNDED are
-recognized by the structural scanner before receiver-head role recognition.
+Punctuation trailers such as COMMA_SHORT and RPAREN_BOUNDED are recognized by
+the structural scanner before receiver-head role recognition. Physical newline
+is not a trailer role; it only ends a physical line, and the following
+source-level event determines continuation or closure by ordinary level rules.
 
 When an ITEM(K, body) has a head spelling that could be a receiver-like trailer
 role:
