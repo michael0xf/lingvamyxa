@@ -55,8 +55,11 @@ The source-level normalization prepass produces:
         Formatting whitespace. Ignored by P0. Not a close token.
 
     RAW_COMMENT_BLOCK
-        `===` at column 0 opens/closes a raw ignored block. The contents are
-        not tokenized.
+        A run of `=` characters at column 0 with length 3 through 80 opens a
+        raw ignored block. The closing fence must also appear at column 0 and
+        must have the same run length as the opener. Fence-looking lines with a
+        different `=` run length inside the block are ignored as raw comment
+        content. The contents are not tokenized.
 
     LINE_TEXT(K, text)
         Physical source line content after indentation/source-level handling.

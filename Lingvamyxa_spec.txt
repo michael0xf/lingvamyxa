@@ -1,4 +1,4 @@
-Lingvamyxa language Structural Core Specification
+Lingvamyxa Language Structural Core Specification
 
 The document is descriptive and semantic. Surface syntax builds Structures. Receivers and subroutines consume Structures and assign typed meaning to them.
 
@@ -1328,15 +1328,17 @@ Here only the `then` Structure is disabled. Its body is still parsed and syntax-
 
 The `$` marker is not a receiver, not an operator and not a runtime action. It is a source-control marker handled before receiver consumption.
 
-The raw file-comment fence is:
+The raw file-comment fence is a run of equals characters:
 
     ===
+    ====
+    =====
 
-A raw file-comment fence is recognized only when the physical line begins at column 0 with `===` and is followed only by optional spaces or tabs before the line ending. No source indentation, leading spaces, title text or other non-whitespace characters are allowed on the fence line.
+A raw file-comment fence is recognized only when the physical line begins at column 0 with a run of `=` characters of length 3 through 80 and is followed only by optional spaces or tabs before the line ending. No source indentation, leading spaces, title text or other non-whitespace characters are allowed on the fence line.
 
-The first fence opens a raw file comment block. The next fence closes it. All physical lines between the fences are ignored completely by the Lingvamyxa parser. Source levels are not tracked inside the raw file comment block, mathematical expressions are not parsed, closing forms are not validated and source syntax errors inside the block are not reported.
+The first fence opens a raw file comment block and records its exact fence length. The block is closed only by a column-0 fence line with the same number of `=` characters. All physical lines between the matching fences are ignored completely by the Lingvamyxa parser. Source levels are not tracked inside the raw file comment block, mathematical expressions are not parsed, closing forms are not validated and source syntax errors inside the block are not reported.
 
-Raw file comment blocks do not nest. A fence inside an open raw file comment block closes that block. An unclosed raw file comment block is a file-level syntax error.
+Raw file comment blocks do not nest. A fence-looking line inside an open raw file comment block whose `=` run length does not match the opener is treated as ignored comment content, not as a nested opener and not as a closer. An unclosed raw file comment block is a file-level syntax error.
 
 Example:
 
@@ -1345,6 +1347,14 @@ This text is ignored by the parser.
 Broken Lingvamyxa source may appear here:
     if (
 ===
+
+Example with inner fence-looking lines:
+
+=====
+This line is ignored.
+===       # ignored raw comment content, because the opener has length 5
+====      # also ignored raw comment content
+=====
 
 
 5. Receiver-Based Semantics
@@ -4379,9 +4389,13 @@ This grammar sketch describes the structural parser only. It does not define fin
                           | logical_line
 
     raw_file_comment_block
-                        ::= "===" trailing_horizontal_space newline
+                        ::= raw_comment_fence(N) trailing_horizontal_space newline
                               raw_ignored_line*
-                            "===" trailing_horizontal_space newline
+                            raw_comment_fence(N) trailing_horizontal_space newline
+                            where 3 <= N <= 80
+
+    raw_comment_fence(N)
+                        ::= exactly N "=" characters at column 0
 
     trailing_horizontal_space
                         ::= { " " | tab }
@@ -4654,15 +4668,24 @@ Receiver semantics:
 
 Source:
 
+print: "Hello World"
+
+Full form:
+
 L3:
-    print: Hello World
+    print: "Hello World"
 end: L3
 
 Normal form:
 
-    L3(
-      print(Hello, World)
-    )
+L3(
+    print("Hello World")
+)
+
+Short form:
+
+print: Hello World
+
 
 `Hello` and `World` are accepted only if the active L3 `print` receiver and lexical rules allow bare atoms/symbols in that position.
 
@@ -4798,7 +4821,7 @@ Conceptual form:
     empty line                 formatting whitespace, not a structural close token
     #                          line comment marker; ignores text to the end of the physical line
     $                          disabled item/block marker; syntax is still parsed and checked
-    ===                        column-0 raw file comment fence; syntax inside is ignored
+    ===...                     column-0 raw file comment fence, 3..80 `=` characters; closing fence must have the same length; syntax inside is ignored
     end: name                  close receiver for a visible frame/entity/label block by name
     L2/L3/L4/L5                level receiver frames
     sub                        receiver that registers subroutine definitions
