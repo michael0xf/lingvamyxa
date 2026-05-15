@@ -10409,3 +10409,508 @@ Concrete model становится final C struct.
 
 Именно поэтому Lingvamyxa может получить class-like модель, но опускать ее в
 очень простой C99 код.
+
+
+35.En. Example of Class-Like Polymorphism
+
+35.En.0. Status of This Example
+
+This section defines an example `class` receiver that gathers structural
+properties and behavior in one source block. It is a convenient composition form
+over the `ModelSpec`, `BehaviorSpec` and registry facts described in section 34.
+
+In this example, `class` does not introduce magical inheritance and does not
+change P0 syntax. The parser still builds ordinary Structures, and the `class`
+receiver normalizes them into registry descriptors.
+
+35.En.1. Short Form
+
+Example class-like declaration:
+
+    class: Button Widget Clickable
+    . drop:
+    . . slot: Widget theme
+    . alias:
+    . . slot: Widget enabled widgetEnabled
+    . vars:
+    . . String: label
+    . . bool: enabled true
+    . methods:
+    . . method: draw (Canvas(c)) buttonDraw override(Widget)
+    . . method: press (MouseEvent(e)) buttonPress override(Clickable)
+    . . method: press (KeyEvent(e)) buttonKeyPress overload
+    end: Button
+
+The first field after `class` is the introduced registry name. The remaining
+fields on the header line are class-like sources whose model and behavior
+descriptors are composed into the new registry entry:
+
+    class: Button Widget Clickable
+
+means:
+
+    introduce registry entry `Button`
+    compose structural slots from `Widget` and `Clickable`
+    compose behavior entries from `Widget` and `Clickable`
+    apply local exclusions, aliases, slots and methods
+
+This is multiple class-like composition. It is not implicit subtype
+inheritance. A `Button` value is not automatically assignable to a `Widget`
+value unless a role, delegation, component projection, union membership or
+adapter relation says so explicitly.
+
+35.En.2. Normalized Descriptor View
+
+The previous example may normalize conceptually to:
+
+L4:
+    model: Button
+    . compose: Widget Clickable
+    . drop:
+    . . slot: Widget theme
+    . alias:
+    . . slot: Widget enabled widgetEnabled
+    . vars:
+    . . String: label
+    . . bool: enabled true
+    end: Button
+
+L5:
+    behavior: Button
+    . compose: Widget Clickable
+    . method: draw (Canvas(c)) buttonDraw
+    . method: press (MouseEvent(e)) buttonPress
+    . method: press (KeyEvent(e)) buttonKeyPress
+    end: Button
+
+L5:
+    fact: override Button Widget draw (Canvas)
+    fact: override Button Clickable press (MouseEvent)
+    fact: overload Button press (KeyEvent)
+    fact: aliasSlot Button Widget enabled widgetEnabled
+    fact: dropSlot Button Widget theme
+    fact: implements Button WidgetRole
+    fact: implements Button ClickableRole
+end: L5
+
+The exact fact names are profile-defined. The important rule is that the compact
+`class` form decomposes into explicit registry descriptors.
+
+35.En.3. Member Keys and Origins
+
+Composition is checked over normalized member keys.
+
+For structural slots, the key is the normalized slot name:
+
+    slot key = name
+
+For methods, the key is the selector plus the normalized signature:
+
+    method key = selector + input signature + result signature
+
+Each inherited member also carries an origin:
+
+    origin = source class-like descriptor + member kind + member key
+
+Origins are used to distinguish a harmless diamond from a real conflict.
+
+35.En.4. Conflict Rules
+
+Composition must not use silent last-wins behavior.
+
+Required conflict rules:
+
+    same inherited origin through multiple paths
+        collapse to one member.
+
+    same slot key from different origins
+        conflict unless `drop`, `alias`, `replace` or a profile-defined merge
+        rule resolves it explicitly.
+
+    same method key from different origins
+        conflict unless `override`, `prefer`, `drop` or another explicit rule
+        resolves it.
+
+    same method selector with a different signature
+        allowed only when the local declaration or imported descriptor marks the
+        relation as `overload`.
+
+    local member with the same key as an inherited member
+        requires `override(...)` or `replace(...)`; otherwise it is a duplicate
+        definition error.
+
+    local member with the same selector and a different method signature
+        requires `overload`; otherwise it is an accidental overload error.
+
+The base list order may be used for deterministic diagnostics. It must not
+choose the winner of a semantic conflict by itself.
+
+35.En.5. Exclusion, Alias, Override and Overload
+
+The example profile uses these control forms:
+
+    drop
+        removes an inherited candidate before final conflict checking.
+
+    alias
+        imports an inherited member under a new local name or selector.
+
+    override(Base)
+        replaces the inherited method with the same method key from `Base`.
+
+    prefer(Base)
+        selects one inherited implementation when two bases provide the same
+        method key and the profile permits inherited selection.
+
+    replace(Base)
+        replaces an inherited slot or method explicitly.
+
+    overload
+        admits a method with the same selector but a different signature.
+
+Example:
+
+    class: ToggleButton Button Switch
+    . drop:
+    . . method: Switch draw (Canvas)
+    . alias:
+    . . slot: Button enabled buttonEnabled
+    . vars:
+    . . bool: checked false
+    . methods:
+    . . method: draw (Canvas(c)) toggleButtonDraw override(Button)
+    . . method: press (MouseEvent(e)) toggleButtonPress override(Button)
+    . . method: press (KeyEvent(e)) toggleButtonKeyPress overload
+    end: ToggleButton
+
+Here `ToggleButton` composes `Button` and `Switch`, removes the `Switch.draw`
+candidate, preserves `Button.enabled` under another local slot name, overrides
+the inherited mouse `press`, and explicitly adds a key-event overload.
+
+35.En.6. Polymorphic Use
+
+Polymorphism is expressed through registry-visible roles, behavior tables,
+generic methods, union domains or adapters. It is not implied merely because a
+class-like descriptor composes another class-like descriptor.
+
+Example role use:
+
+L5:
+    fact: role ClickableRole
+    fact: roleMessage ClickableRole press (MouseEvent)
+    fact: implements Button ClickableRole
+    fact: implements ToggleButton ClickableRole
+end: L5
+
+Then a receiver expecting `ClickableRole` may accept either `Button` or
+`ToggleButton` through the explicit registry relation. The selected method is
+found by the behavior descriptor for the concrete model:
+
+    send: clickable press MouseEvent(...)
+
+Conceptual lookup:
+
+    concrete model = dynamic model behind `clickable`
+    selector       = press
+    signature      = MouseEvent
+    implementation = registry method(concrete model, selector, signature)
+
+If the concrete model is known statically, the translator may lower directly to
+the concrete implementation. If it is known only through a role/reference, the
+translator may lower through a behavior table or method lookup cache.
+
+35.En.7. ANSI C Projection Sketch
+
+---ANSI C---
+One possible C99 projection keeps data composition and behavior dispatch
+separate:
+
+    typedef struct LmButton {
+        LmWidget widget;
+        LmString label;
+        bool enabled;
+    } LmButton;
+
+    typedef struct LmToggleButton {
+        LmButton button;
+        LmSwitch sw;
+        bool checked;
+    } LmToggleButton;
+
+    typedef struct LmClickableRef {
+        void *object;
+        LmTypeId concrete_type;
+        const LmBehaviorSpec *behavior;
+    } LmClickableRef;
+
+    status = ref.behavior->press(ref.object, &mouse_event);
+
+If the receiver statically knows that the value is `LmToggleButton`, the same
+source-level call may lower directly:
+
+    status = lm_toggle_button_press(&toggle_button, &mouse_event);
+---ANSI C---
+
+35.En.8. Standard Statement
+
+The example `class` receiver is a compact registry-construction form. It may
+compose properties and methods from several class-like descriptors, but every
+conflict must be resolved explicitly by the source or by a selected profile
+rule.
+
+`class` is class-like because it packages model and behavior descriptors under
+one introduced name. It remains Lingvamyxa-like because the normalized result is
+still decomposed registry data: `ModelSpec`, `BehaviorSpec`, facts, roles,
+adapters and derivations.
+
+
+35.Ru. Пример class-like полиморфизма
+
+35.Ru.0. Статус примера
+
+Этот раздел задает пример receiver-а `class`, который собирает в одном исходном
+блоке структурные свойства и поведение. Это удобная композиционная форма над
+уже описанными в разделе 34 `ModelSpec`, `BehaviorSpec` и registry facts.
+
+`class` в этом примере не вводит магическое наследование и не меняет P0
+синтаксис. Parser по-прежнему строит обычные Structures, а receiver `class`
+нормализует их в registry descriptors.
+
+35.Ru.1. Короткая форма
+
+Пример class-like объявления:
+
+    class: Button Widget Clickable
+    . drop:
+    . . slot: Widget theme
+    . alias:
+    . . slot: Widget enabled widgetEnabled
+    . vars:
+    . . String: label
+    . . bool: enabled true
+    . methods:
+    . . method: draw (Canvas(c)) buttonDraw override(Widget)
+    . . method: press (MouseEvent(e)) buttonPress override(Clickable)
+    . . method: press (KeyEvent(e)) buttonKeyPress overload
+    end: Button
+
+Первое поле после `class` - вводимое имя registry entry. Остальные поля в
+заголовке - class-like источники, чьи model и behavior descriptors
+композиционно входят в новую registry entry:
+
+    class: Button Widget Clickable
+
+означает:
+
+    ввести registry entry `Button`
+    скомпоновать structural slots из `Widget` и `Clickable`
+    скомпоновать behavior entries из `Widget` и `Clickable`
+    применить локальные exclusions, aliases, slots и methods
+
+Это множественная class-like композиция. Это не implicit subtype inheritance.
+Значение `Button` не становится автоматически присваиваемым в `Widget`, если
+явная role, delegation, component projection, union membership или adapter
+relation не говорит об этом.
+
+35.Ru.2. Нормализованный descriptor view
+
+Предыдущий пример может концептуально нормализоваться так:
+
+L4:
+    model: Button
+    . compose: Widget Clickable
+    . drop:
+    . . slot: Widget theme
+    . alias:
+    . . slot: Widget enabled widgetEnabled
+    . vars:
+    . . String: label
+    . . bool: enabled true
+    end: Button
+
+L5:
+    behavior: Button
+    . compose: Widget Clickable
+    . method: draw (Canvas(c)) buttonDraw
+    . method: press (MouseEvent(e)) buttonPress
+    . method: press (KeyEvent(e)) buttonKeyPress
+    end: Button
+
+L5:
+    fact: override Button Widget draw (Canvas)
+    fact: override Button Clickable press (MouseEvent)
+    fact: overload Button press (KeyEvent)
+    fact: aliasSlot Button Widget enabled widgetEnabled
+    fact: dropSlot Button Widget theme
+    fact: implements Button WidgetRole
+    fact: implements Button ClickableRole
+end: L5
+
+Точные имена facts задаются профилем. Важное правило: компактная форма `class`
+раскладывается в явные registry descriptors.
+
+35.Ru.3. Ключи членов и origins
+
+Композиция проверяется по нормализованным member keys.
+
+Для structural slots ключом является нормализованное имя slot-а:
+
+    slot key = name
+
+Для methods ключом является selector плюс нормализованная signature:
+
+    method key = selector + input signature + result signature
+
+Каждый inherited member также несет origin:
+
+    origin = source class-like descriptor + member kind + member key
+
+Origins нужны, чтобы отличать безвредный diamond от настоящего конфликта.
+
+35.Ru.4. Правила конфликтов
+
+Композиция не должна использовать silent last-wins behavior.
+
+Обязательные правила конфликтов:
+
+    same inherited origin through multiple paths
+        схлопывается в один member.
+
+    same slot key from different origins
+        конфликт, если `drop`, `alias`, `replace` или profile-defined merge
+        rule не разрешает его явно.
+
+    same method key from different origins
+        конфликт, если `override`, `prefer`, `drop` или другое явное правило
+        не разрешает его.
+
+    same method selector with a different signature
+        разрешается только если локальная декларация или imported descriptor
+        явно помечает связь как `overload`.
+
+    local member with the same key as an inherited member
+        требует `override(...)` или `replace(...)`; иначе это ошибка duplicate
+        definition.
+
+    local member with the same selector and a different method signature
+        требует `overload`; иначе это ошибка accidental overload.
+
+Порядок base list может использоваться для детерминированных diagnostics. Он не
+должен сам выбирать победителя semantic conflict.
+
+35.Ru.5. Exclusion, alias, override и overload
+
+Примерный профиль использует такие управляющие формы:
+
+    drop
+        удаляет inherited candidate до финальной проверки конфликтов.
+
+    alias
+        импортирует inherited member под новым локальным именем или selector.
+
+    override(Base)
+        заменяет inherited method с тем же method key из `Base`.
+
+    prefer(Base)
+        выбирает одну inherited implementation, когда две базы дают один
+        method key и профиль разрешает inherited selection.
+
+    replace(Base)
+        явно заменяет inherited slot или method.
+
+    overload
+        допускает method с тем же selector, но с другой signature.
+
+Пример:
+
+    class: ToggleButton Button Switch
+    . drop:
+    . . method: Switch draw (Canvas)
+    . alias:
+    . . slot: Button enabled buttonEnabled
+    . vars:
+    . . bool: checked false
+    . methods:
+    . . method: draw (Canvas(c)) toggleButtonDraw override(Button)
+    . . method: press (MouseEvent(e)) toggleButtonPress override(Button)
+    . . method: press (KeyEvent(e)) toggleButtonKeyPress overload
+    end: ToggleButton
+
+Здесь `ToggleButton` компонует `Button` и `Switch`, удаляет candidate
+`Switch.draw`, сохраняет `Button.enabled` под другим локальным именем slot-а,
+переопределяет inherited mouse `press` и явно добавляет key-event overload.
+
+35.Ru.6. Полиморфное использование
+
+Полиморфизм выражается через registry-visible roles, behavior tables, generic
+methods, union domains или adapters. Он не следует автоматически из того, что
+class-like descriptor компонует другой class-like descriptor.
+
+Пример role use:
+
+L5:
+    fact: role ClickableRole
+    fact: roleMessage ClickableRole press (MouseEvent)
+    fact: implements Button ClickableRole
+    fact: implements ToggleButton ClickableRole
+end: L5
+
+Тогда receiver, ожидающий `ClickableRole`, может принять `Button` или
+`ToggleButton` через явную registry relation. Конкретная method выбирается по
+behavior descriptor-у concrete model:
+
+    send: clickable press MouseEvent(...)
+
+Концептуальный lookup:
+
+    concrete model = dynamic model behind `clickable`
+    selector       = press
+    signature      = MouseEvent
+    implementation = registry method(concrete model, selector, signature)
+
+Если concrete model известна статически, translator может опустить вызов прямо
+в concrete implementation. Если она известна только через role/reference,
+translator может использовать behavior table или method lookup cache.
+
+35.Ru.7. Эскиз ANSI C projection
+
+---ANSI C---
+Один возможный C99 projection держит data composition и behavior dispatch
+раздельно:
+
+    typedef struct LmButton {
+        LmWidget widget;
+        LmString label;
+        bool enabled;
+    } LmButton;
+
+    typedef struct LmToggleButton {
+        LmButton button;
+        LmSwitch sw;
+        bool checked;
+    } LmToggleButton;
+
+    typedef struct LmClickableRef {
+        void *object;
+        LmTypeId concrete_type;
+        const LmBehaviorSpec *behavior;
+    } LmClickableRef;
+
+    status = ref.behavior->press(ref.object, &mouse_event);
+
+Если receiver статически знает, что значение имеет тип `LmToggleButton`, тот же
+source-level call может опуститься напрямую:
+
+    status = lm_toggle_button_press(&toggle_button, &mouse_event);
+---ANSI C---
+
+35.Ru.8. Короткая формула
+
+Пример receiver-а `class` является компактной формой построения registry. Он
+может компоновать свойства и методы из нескольких class-like descriptors, но
+каждый конфликт должен быть разрешен явно исходником или выбранным profile rule.
+
+`class` похож на class потому, что упаковывает model и behavior descriptors под
+одним вводимым именем. Он остается Lingvamyxa-подобным, потому что
+нормализованный результат все равно является разобранными registry data:
+`ModelSpec`, `BehaviorSpec`, facts, roles, adapters и derivations.
