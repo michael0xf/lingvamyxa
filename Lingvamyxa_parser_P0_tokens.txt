@@ -59,6 +59,13 @@ The source-level normalization prepass produces:
         different `=` run length inside the block are ignored as raw comment
         content. The contents are not tokenized.
 
+    BLOCK_STRING_LITERAL
+        A run of single quotes or double quotes at column 0 with length 3 or
+        greater opens a block string. The closing fence must also appear at
+        column 0 and must use the same quote character and run length as the
+        opener. The opening and closing fence lines contain no string content.
+        Physical lines between the fences are one STRING_LITERAL value.
+
     LINE_TEXT(K, text)
         Physical source line content after indentation/source-level handling.
 
@@ -176,7 +183,10 @@ P0 atom tokens:
     STRING_LITERAL
         ANSI C / C99 string literal spelling. It is a value, not an identifier.
         Lingvamyxa additionally allows physical line breaks before the closing
-        double quote; each such source line break decodes to newline `\n`.
+        double quote. Such source line breaks are visual continuation only:
+        they are not part of the string value and do not decode to newline
+        `\n`. The source pieces are concatenated as one ANSI-C-style string
+        spelling.
         After the closing double quote, the next source character must be a
         field boundary: horizontal whitespace, a physical line break, comma,
         `(`, `)`, or the end of the source item.

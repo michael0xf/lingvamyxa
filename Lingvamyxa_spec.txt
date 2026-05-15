@@ -640,7 +640,9 @@ A physical newline is not allowed inside an exact quoted identifier in the porta
 
 3.4.4. Text/String Literals
 
-Text/string literals use ANSI C / C99 string literal syntax, with one source-level Lingvamyxa extension: a physical line break may appear inside a double-quoted string literal before the closing quote. Such a physical line break is part of the string value and denotes a newline character `\n` after literal decoding. They are values, not identifiers.
+Text/string literals use ANSI C / C99 string literal syntax. They are values, not identifiers.
+
+Lingvamyxa allows a physical line break to appear inside an ordinary double-quoted string literal before the closing quote. This is a source formatting extension only. The physical line break itself is not part of the string value and does not decode to newline `\n`. The source pieces are concatenated as one ANSI-C-style string spelling. Characters that are actually present inside the quoted text on either side of the visual line break remain part of the string.
 
 Examples:
 
@@ -659,7 +661,9 @@ Examples:
     "grinning face: \U0001F600"
     L"wide text"
 
-The string spelling and escape rules follow the ANSI C / C99 string-literal model. The physical-newline extension above is source syntax only: when a Lingvamyxa string literal is lowered to ANSI C, physical line breaks inside the source literal must be emitted through valid C spelling such as `\n` escapes or adjacent C string literals. Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
+In the example above, the visual break inside `"physical ... line break"` is not a newline character. It is the same string as if the source pieces had been written as one continued ANSI-C-style string. A real newline character inside the value must be written through an escape such as `\n`, or through the block string form below.
+
+The string spelling and escape rules follow the ANSI C / C99 string-literal model. The physical-newline extension above is source syntax only: when a Lingvamyxa string literal is lowered to ANSI C, physical line breaks inside the source literal must be emitted through valid C spelling such as adjacent C string literals or equivalent escaped spelling. Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
 
 After the closing double quote of a text/string literal, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item. Any other following character is a missing-separator syntax error rather than implicit string concatenation.
 
@@ -691,6 +695,40 @@ is a text value, while:
     `hello`
 
 is the exact identifier/name `hello`.
+
+3.4.4.1. Block Text/String Literals
+
+Lingvamyxa also has a block text/string literal form. It uses the same fence-matching algorithm as raw file comment blocks, but the fence character is a quote character instead of `=`.
+
+A block string fence is a run of single quotes or double quotes:
+
+    '''
+    """
+    ''''
+    """"
+
+A block string fence is recognized only when the physical line begins at column 0 with a run of either `'` or `"` characters of length 3 or greater, and the rest of the fence line contains only optional spaces or tabs before the line ending. No source item, title text or line comment is allowed on the opening or closing fence line.
+
+The opening fence records both the quote character and the exact run length. The block string is closed only by a column-0 fence line with the same quote character and the same run length. A fence-looking line inside the block whose quote character or run length does not match the opener is ordinary string content, not a nested opener and not a closer.
+
+The opening and closing fence lines do not contribute characters to the string value. The physical lines between them are the string content. Physical line breaks between content lines are preserved as newline characters after source newline normalization. Source levels, comments, mathematical expressions, closing forms and ordinary structural syntax are not recognized inside the block string content.
+
+Examples:
+
+"""
+line one
+line two
+"""
+
+is one text/string literal whose value contains a newline between `line one` and `line two`.
+
+Example with a longer fence:
+
+""""
+This line may contain """ without closing the block.
+""""
+
+This differs from Python triple-quoted strings in two source-level ways: the fence must begin at column 0, and the closing fence must have exactly the same quote character and run length as the opening fence. The opening and closing fence lines are pure fences; content starts on the following physical line and ends before the closing fence line.
 
 
 4. Surface Forms and Normalization
@@ -4906,6 +4944,7 @@ This grammar sketch describes the structural parser only. It does not define fin
     program             ::= { empty_line | physical_item }
 
     physical_item       ::= raw_file_comment_block
+                          | block_string_literal
                           | logical_line
 
     raw_file_comment_block
@@ -4916,6 +4955,15 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     raw_comment_fence(N)
                         ::= exactly N "=" characters at column 0
+
+    block_string_literal
+                        ::= block_string_fence(Q,N) trailing_horizontal_space newline
+                              block_string_content_line*
+                            block_string_fence(Q,N) trailing_horizontal_space newline
+                            where Q is "'" or "\"" and N >= 3
+
+    block_string_fence(Q,N)
+                        ::= exactly N Q characters at column 0
 
     trailing_horizontal_space
                         ::= { " " | tab }
@@ -5348,6 +5396,7 @@ Conceptual form:
     #                          line comment marker; ignores text to the end of the physical line
     $                          disabled item/block marker; syntax is still parsed and checked
     ===...                     column-0 raw file comment fence, 3..80 `=` characters; closing fence must have the same length; syntax inside is ignored
+    '''... or """...           column-0 block string fence, 3 or more quote characters; closing fence must use the same quote character and run length
     end: name                  explicit named tail-cutter for a visible frame/entity/label block; not the only close mechanism
     L2/L3/L4/L5                level receiver frames
     sub                        receiver that registers subroutine definitions
