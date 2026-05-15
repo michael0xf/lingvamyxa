@@ -1,0 +1,7 @@
+doc:
+''''
+alpha
+''' literal content
+beta
+''''
+end: doc

@@ -34,7 +34,8 @@ P0 uses several lightweight modes instead of one flat token stream:
         bounded Structures.
 
     atom scanner
-        recognizes identifiers, exact identifiers, numbers and strings.
+        recognizes identifiers, exact identifiers, numbers, character constants
+        and strings.
 
 P0 does not run a mathematical expression scanner while building the structural
 tree. Operator-looking spellings such as `2+2`, `i<n` or `a*b` remain ordinary
@@ -182,20 +183,36 @@ P0 atom tokens:
 
     STRING_LITERAL
         ANSI C / C99 string literal spelling. It is a value, not an identifier.
-        Lingvamyxa additionally allows physical line breaks before the closing
-        double quote. Such source line breaks are visual continuation only:
-        they are not part of the string value and do not decode to newline
-        `\n`. The source pieces are concatenated as one ANSI-C-style string
-        spelling.
+        An unescaped physical newline before the closing double quote is a
+        syntax error. The only physical-line continuation is ANSI C
+        backslash-newline line splicing before tokenization. While inside the
+        string literal, the following physical line is not treated as a new
+        source-level line; spaces/tabs physically written after the spliced
+        line ending remain ordinary string-literal characters. Lingvamyxa does
+        not add source-level string wrapping or implicit adjacent-string
+        concatenation.
         After the closing double quote, the next source character must be a
         field boundary: horizontal whitespace, a physical line break, comma,
         `(`, `)`, or the end of the source item.
         The P0 lexer may preserve original spelling and decoded value metadata.
 
+    CHARACTER_CONSTANT
+        ANSI C / C99 single-quoted character constant spelling. It is a numeric
+        value, not a string and not an identifier. Escape rules and
+        backslash-newline line splicing follow the selected ANSI C / C99 L1
+        profile.
+        After the closing single quote, the same field-boundary rule applies.
+
     EXACT_IDENTIFIER
-        Backtick-delimited exact identifier.
+        Backtick-delimited exact identifier using SQLite-compatible
+        grave-accent quoted identifier content rules: zero or more non-zero
+        characters and/or escaped backtick pairs before the closing backtick.
         Two backticks inside the spelling represent one literal backtick.
-        Newline inside exact identifier is invalid in the portable P0 profile.
+        Physical newlines inside an exact identifier follow SQLite-style quoted
+        identifier behavior: the newline and any following indentation are
+        ordinary identifier content and are preserved exactly. Source-level
+        events, comments and structural punctuation are not recognized inside
+        the exact identifier before the closing backtick.
         After the closing backtick, the same field-boundary rule applies.
 
     BARE_WORD
@@ -364,6 +381,7 @@ Required P0 token/event names:
     AT_RUN
     NUMERIC_LITERAL
     STRING_LITERAL
+    CHARACTER_CONSTANT
     EXACT_IDENTIFIER
     BARE_WORD
     EXPRESSION_OPERATOR

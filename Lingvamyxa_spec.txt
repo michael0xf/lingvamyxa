@@ -368,7 +368,7 @@ The logical side is represented by facts, rules, relations and query receivers. 
 
 The source syntax itself does not hard-code object semantics, functional semantics or logic semantics. It builds generic Structures. The active level and the active receiver/operator registry determine which semantic domain consumes a Structure. The same surface form may describe a low-level storage declaration, a function definition, a model descriptor, a behavior descriptor, a fact, a rule, a query or a build configuration, depending on receiver consumption.
 
-Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
+Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals, character constants and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
 
 This reuse applies only to lexical atoms. It does not import C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
 
@@ -377,7 +377,7 @@ The practical rule is:
     Lingvamyxa owns structure.
     External standards may own selected lexical atoms.
 
-Consequently, an ANSI C numeric or string literal may often be preserved as text during L1 lowering, while its surrounding Lingvamyxa Structure is still parsed, typed and consumed by Lingvamyxa receivers. Likewise, an exact quoted identifier may preserve an external SQLite name without forcing that name into the narrower bare Lingvamyxa identifier grammar.
+Consequently, an ANSI C numeric literal, character constant or string literal may often be preserved as text during L1 lowering, while its surrounding Lingvamyxa Structure is still parsed, typed and consumed by Lingvamyxa receivers. Likewise, an exact quoted identifier may preserve an external SQLite name without forcing that name into the narrower bare Lingvamyxa identifier grammar.
 
 1.1. L0
 
@@ -604,11 +604,11 @@ The first bare form is intentionally narrower than SQLite-style exact quoted ide
 
 The second identifier form is the exact quoted identifier. It is intended for SQLite names, external schemas, generated bindings, multi-word names and unusual names that are not representable as bare Lingvamyxa identifiers.
 
-An exact quoted identifier is delimited by backtick characters:
+An exact quoted identifier is delimited by backtick characters and follows SQLite-compatible grave-accent quoted identifier content rules:
 
     `exact name`
 
-It is a namespace identifier/name, not a text/string literal. Its contents are taken as the exact identifier string after quote unescaping. No whitespace normalization is applied inside backticks. Commas, dots, spaces, numeric-looking text, reserved words and operator characters inside the backticks are part of the identifier.
+It starts with a backtick, continues with zero or more non-zero characters or escaped backtick pairs, and terminates at a backtick that is not part of an escaped pair. It is a namespace identifier/name, not a text/string literal. Its contents are taken as the exact identifier string after quote unescaping. No whitespace normalization is applied inside backticks. Commas, dots, spaces, physical line breaks, indentation after those line breaks, numeric-looking text, reserved words and operator characters inside the backticks are part of the identifier.
 
 Examples:
 
@@ -617,6 +617,8 @@ Examples:
     `return`
     `1 2`
     `a  b`
+    `line
+        continued`
     ``
 
 Inside an exact quoted identifier, two consecutive backticks represent one literal backtick character:
@@ -636,13 +638,22 @@ Declares and updates the binding whose exact name contains a literal backtick.
 
 Exact quoted identifiers behave as atomic name tokens in head position, tail/name position and expression/name position.
 
-A physical newline is not allowed inside an exact quoted identifier in the portable source profile. External identifiers containing newlines must be imported through an escaping or mapping rule defined by the external integration profile.
+Physical newlines inside an exact quoted identifier follow SQLite-style quoted identifier behavior: the newline is ordinary identifier content, not source-level syntax. The physical line break and any spaces or tabs after it are preserved in the exact identifier value. Source levels, comments, delimiters, cutters and ordinary structural syntax are not recognized until the closing backtick is reached.
+
+Example:
+
+    `line
+        continued`
+
+names an exact identifier containing one newline followed by eight spaces before `continued`.
 
 3.4.4. Text/String Literals
 
 Text/string literals use ANSI C / C99 string literal syntax. They are values, not identifiers.
 
-Lingvamyxa allows a physical line break to appear inside an ordinary double-quoted string literal before the closing quote. This is a source formatting extension only. The physical line break itself is not part of the string value and does not decode to newline `\n`. The source pieces are concatenated as one ANSI-C-style string spelling. Characters that are actually present inside the quoted text on either side of the visual line break remain part of the string.
+An ordinary double-quoted string literal does not admit an unescaped physical newline. A physical newline before the closing double quote is a syntax error unless it is removed by the ANSI C backslash-newline line-splicing rule. Lingvamyxa does not add any separate source-level string wrapping or implicit adjacent-string concatenation rule.
+
+The only physical-line continuation for an ordinary double-quoted string is the ANSI C / C99 one: a backslash immediately followed by the physical line ending is deleted before string-literal tokenization. While the lexer is inside the string literal, the following physical line is not treated as a new source-level line. Any spaces or tabs physically written after the spliced line ending are ordinary string-literal characters under the ANSI C / C99 rules.
 
 Examples:
 
@@ -651,8 +662,6 @@ Examples:
     "tab\tseparated"
     "quote: \""
     "backslash: \\"
-    "physical
-    line break"
     "question: \?"
     "alert\a backspace\b formfeed\f newline\n carriage\r tab\t vertical\v"
     "octal A: \101"
@@ -661,9 +670,14 @@ Examples:
     "grinning face: \U0001F600"
     L"wide text"
 
-In the example above, the visual break inside `"physical ... line break"` is not a newline character. It is the same string as if the source pieces had been written as one continued ANSI-C-style string. A real newline character inside the value must be written through an escape such as `\n`, or through the block string form below.
+Column-0 continuation example:
 
-The string spelling and escape rules follow the ANSI C / C99 string-literal model. The physical-newline extension above is source syntax only: when a Lingvamyxa string literal is lowered to ANSI C, physical line breaks inside the source literal must be emitted through valid C spelling such as adjacent C string literals or equivalent escaped spelling. Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
+"physical\
+line break"
+
+The backslash-newline in that example is C line splicing and does not contribute a newline character. The value is the same as `"physicalline break"`. A real newline character inside the value must be written through an escape such as `\n`, or through the block string form below.
+
+The string spelling, escape rules and backslash-newline line splicing follow the ANSI C / C99 string-literal model. Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
 
 After the closing double quote of a text/string literal, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item. Any other following character is a missing-separator syntax error rather than implicit string concatenation.
 
@@ -696,7 +710,23 @@ is a text value, while:
 
 is the exact identifier/name `hello`.
 
-3.4.4.1. Block Text/String Literals
+3.4.4.1. Character Constants
+
+Single-quoted ANSI C / C99 character constants are numeric values. They are not text/string literals and not identifiers.
+
+Examples:
+
+    'A'
+    '\n'
+    '\101'
+    '\x41'
+    L'A'
+
+The spelling and escape rules follow the ANSI C / C99 character-constant model, including the backslash-newline line-splicing rule before tokenization. The resulting value is numeric. Multi-character constants, wide character constants and implementation-defined details follow the selected ANSI C / C99 L1 profile. After the closing single quote of a character constant, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item.
+
+A source line whose entire column-0 content is a run of three or more single quote characters is a block string fence, not a character constant.
+
+3.4.4.2. Block Text/String Literals
 
 Lingvamyxa also has a block text/string literal form. It uses the same fence-matching algorithm as raw file comment blocks, but the fence character is a quote character instead of `=`.
 
@@ -709,7 +739,7 @@ A block string fence is a run of single quotes or double quotes:
 
 A block string fence is recognized only when the physical line begins at column 0 with a run of either `'` or `"` characters of length 3 or greater, and the rest of the fence line contains only optional spaces or tabs before the line ending. No source item, title text or line comment is allowed on the opening or closing fence line.
 
-The opening fence records both the quote character and the exact run length. The block string is closed only by a column-0 fence line with the same quote character and the same run length. A fence-looking line inside the block whose quote character or run length does not match the opener is ordinary string content, not a nested opener and not a closer.
+The opening fence records both the quote character and the exact run length, exactly like a raw file-comment fence records the `=` run length. The block string is closed only by a column-0 fence line with the same quote character and the same run length. A fence-looking line inside the block whose quote character or run length does not match the opener is ordinary string content, not a nested opener and not a closer.
 
 The opening and closing fence lines do not contribute characters to the string value. The physical lines between them are the string content. Physical line breaks between content lines are preserved as newline characters after source newline normalization. Source levels, comments, mathematical expressions, closing forms and ordinary structural syntax are not recognized inside the block string content.
 
@@ -728,7 +758,7 @@ Example with a longer fence:
 This line may contain """ without closing the block.
 """"
 
-This differs from Python triple-quoted strings in two source-level ways: the fence must begin at column 0, and the closing fence must have exactly the same quote character and run length as the opening fence. The opening and closing fence lines are pure fences; content starts on the following physical line and ends before the closing fence line.
+This is a source-level fence form. The rule is the same fence principle as raw file comments: the fence must begin at column 0, the opening fence line is pure fence, and the closing fence must have exactly the same quote character and run length as the opening fence.
 
 
 4. Surface Forms and Normalization
@@ -1100,7 +1130,7 @@ The comma terminates `int: a b`, then `ret: int` starts the next source item ins
 
 In `call(int: a b)`, the closing `)` terminates the short form `int: a b` and closes the bounded argument Structure of `call`.
 
-Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric and string literal fields in ordinary short-tail form are separated by whitespace. Bounded Structures also use whitespace/newline composition for ordinary fields; comma terminates an open short form, and otherwise may be optional conventional notation or a trailing marker.
+Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric literal, character constant and string literal fields in ordinary short-tail form are separated by whitespace. Bounded Structures also use whitespace/newline composition for ordinary fields; comma terminates an open short form, and otherwise may be optional conventional notation or a trailing marker.
 
 Example:
 

@@ -8,7 +8,8 @@
 
 typedef enum LmP0StreamEventKind {
     LM_P0_STREAM_EVENT_ITEM = 1,
-    LM_P0_STREAM_EVENT_DELIM = 2
+    LM_P0_STREAM_EVENT_DELIM = 2,
+    LM_P0_STREAM_EVENT_BLOCK_STRING = 3
 } LmP0StreamEventKind;
 
 typedef struct LmP0StreamEvent {
@@ -107,6 +108,16 @@ static int lm_p0_is_horizontal_space(char c) {
 
 static int lm_p0_is_line_break(char c) {
     return c == '\n' || c == '\r';
+}
+
+static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index) {
+    if (index >= length) {
+        return 0U;
+    }
+    if (source[index] == '\r') {
+        return index + 1U < length && source[index + 1U] == '\n' ? 2U : 1U;
+    }
+    return source[index] == '\n' ? 1U : 0U;
 }
 
 static int lm_p0_is_field_space(char c) {
@@ -237,7 +248,16 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
     while (i < length) {
         if (quote != '\0') {
             if (quote == '"' && source[i] == '\\') {
-                i += i + 1U < length ? 2U : 1U;
+                size_t line_break_width;
+
+                line_break_width = i + 1U < length
+                    ? lm_p0_line_break_width_at(source, length, i + 1U)
+                    : 0U;
+                if (line_break_width > 0U) {
+                    i += 1U + line_break_width;
+                } else {
+                    i += i + 1U < length ? 2U : 1U;
+                }
                 continue;
             }
             if (quote == '`' && source[i] == '`' && i + 1U < length && source[i + 1U] == '`') {
@@ -266,6 +286,116 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
     }
 
     return i;
+}
+
+static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start) {
+    size_t i;
+
+    i = start;
+    while (i < length && !lm_p0_is_line_break(source[i])) {
+        ++i;
+    }
+    return i;
+}
+
+static int lm_p0_match_quote_fence_line(
+    const char *source,
+    size_t line_start,
+    size_t line_end,
+    char quote,
+    size_t quote_count
+) {
+    size_t i;
+
+    if (quote_count < 3U || line_start + quote_count > line_end) {
+        return 0;
+    }
+    for (i = 0U; i < quote_count; ++i) {
+        if (source[line_start + i] != quote) {
+            return 0;
+        }
+    }
+    if (line_start + quote_count < line_end && source[line_start + quote_count] == quote) {
+        return 0;
+    }
+    i = line_start + quote_count;
+    while (i < line_end) {
+        if (!lm_p0_is_horizontal_space(source[i])) {
+            return 0;
+        }
+        ++i;
+    }
+    return 1;
+}
+
+static int lm_p0_scan_block_string_event(
+    LmP0Document *document,
+    const char *source,
+    size_t length,
+    size_t line_start,
+    size_t line,
+    LmP0StreamEvent *event,
+    size_t *next_offset,
+    size_t *next_line
+) {
+    size_t line_end;
+    size_t quote_count;
+    size_t scan_start;
+    size_t scan_line;
+    char quote;
+
+    if (line_start >= length || (source[line_start] != '"' && source[line_start] != '\'')) {
+        return 0;
+    }
+
+    quote = source[line_start];
+    line_end = lm_p0_find_physical_line_end(source, length, line_start);
+    quote_count = 0U;
+    while (line_start + quote_count < line_end && source[line_start + quote_count] == quote) {
+        ++quote_count;
+    }
+    if (!lm_p0_match_quote_fence_line(source, line_start, line_end, quote, quote_count)) {
+        return 0;
+    }
+
+    scan_start = line_end;
+    if (scan_start < length) {
+        scan_start += lm_p0_line_break_width_at(source, length, scan_start);
+    }
+    scan_line = line + 1U;
+
+    while (scan_start <= length) {
+        size_t current_end;
+        size_t break_width;
+
+        current_end = lm_p0_find_physical_line_end(source, length, scan_start);
+        if (lm_p0_match_quote_fence_line(source, scan_start, current_end, quote, quote_count)) {
+            break_width = current_end < length
+                ? lm_p0_line_break_width_at(source, length, current_end)
+                : 0U;
+
+            memset(event, 0, sizeof(*event));
+            event->kind = LM_P0_STREAM_EVENT_BLOCK_STRING;
+            event->text = source + line_start;
+            event->text_length = current_end - line_start;
+            event->line = line;
+            event->column = 1U;
+            event->offset = line_start;
+
+            *next_offset = current_end + break_width;
+            *next_line = scan_line + (break_width > 0U ? 1U : 0U);
+            return 1;
+        }
+
+        if (current_end == length) {
+            break;
+        }
+        scan_start = current_end + lm_p0_line_break_width_at(source, length, current_end);
+        ++scan_line;
+    }
+
+    lm_p0_set_diagnostic(document, 20, line, 1U, "unterminated block string literal");
+    return 0;
 }
 
 static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end) {
@@ -621,9 +751,34 @@ static int lm_p0_scan_quoted(
 
     i = *index + 1U;
     while (i < length) {
-        if (quote == '"' && text[i] == '\\') {
-            i += 2U;
-            continue;
+        if (quote == '"') {
+            if (text[i] == '\\') {
+                size_t line_break_width;
+
+                line_break_width = i + 1U < length
+                    ? lm_p0_line_break_width_at(text, length, i + 1U)
+                    : 0U;
+                if (line_break_width > 0U) {
+                    i += 1U + line_break_width;
+                    continue;
+                }
+                i += i + 1U < length ? 2U : 1U;
+                continue;
+            }
+            if (lm_p0_is_line_break(text[i])) {
+                size_t diagnostic_line;
+                size_t diagnostic_column;
+
+                lm_p0_position_in_slice(text, length, i, line, base_column, &diagnostic_line, &diagnostic_column);
+                lm_p0_set_diagnostic(
+                    document,
+                    19,
+                    diagnostic_line,
+                    diagnostic_column,
+                    "unescaped newline in string literal"
+                );
+                return 0;
+            }
         }
         if (quote == '`' && text[i] == '`' && i + 1U < length && text[i + 1U] == '`') {
             i += 2U;
@@ -1511,7 +1666,9 @@ static int lm_p0_stream_apply_item_event(
         return 0;
     }
 
-    trailer_role = lm_p0_trailer_role(event->text, event->text_length);
+    trailer_role = event->kind == LM_P0_STREAM_EVENT_ITEM
+        ? lm_p0_trailer_role(event->text, event->text_length)
+        : LM_P0_TRAILER_ROLE_NONE;
     top_level = lm_p0_stack_top_level(stack);
     if (trailer_role != LM_P0_TRAILER_ROLE_TAIL_CUTTER ||
         event->level + 1U > top_level ||
@@ -1574,16 +1731,29 @@ static int lm_p0_stream_apply_item_event(
         return 0;
     }
 
-    node = lm_p0_parse_line_item(
-        document,
-        event->text,
-        event->text_length,
-        event->line,
-        event->column,
-        event->offset
-    );
-    if (node == NULL) {
-        return 0;
+    if (event->kind == LM_P0_STREAM_EVENT_BLOCK_STRING) {
+        node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
+        if (node == NULL) {
+            return 0;
+        }
+        node->as.atom.data = event->text;
+        node->as.atom.length = event->text_length;
+        node->span.line = event->line;
+        node->span.column = event->column;
+        node->span.offset = event->offset;
+        node->span.length = event->text_length;
+    } else {
+        node = lm_p0_parse_line_item(
+            document,
+            event->text,
+            event->text_length,
+            event->line,
+            event->column,
+            event->offset
+        );
+        if (node == NULL) {
+            return 0;
+        }
     }
 
     if (!lm_p0_append_field(document, parent, node)) {
@@ -1627,6 +1797,26 @@ static int lm_p0_stream_apply_event(
         return 0;
     }
     return lm_p0_stream_apply_item_event(document, stack, event);
+}
+
+static size_t lm_p0_stream_block_string_level(
+    const LmP0Stack *stack,
+    const LmP0PendingDelimiter *pending
+) {
+    size_t level;
+
+    if (pending->active) {
+        return pending->event.level + 1U;
+    }
+
+    level = lm_p0_stack_top_level(stack);
+    while (level > 0U) {
+        if (stack->parents[level] != NULL && stack->hard[level] != 0U) {
+            return level;
+        }
+        --level;
+    }
+    return 0U;
 }
 
 static int lm_p0_parse_stream(LmP0Document *document) {
@@ -1673,6 +1863,28 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         LmP0StreamEvent event;
 
         line_start = offset;
+        if (lm_p0_scan_block_string_event(
+                document,
+                source,
+                length,
+                line_start,
+                line,
+                &event,
+                &offset,
+                &line
+            )) {
+            event.level = lm_p0_stream_block_string_level(&stack, &pending);
+            if (!lm_p0_stream_apply_event(document, &stack, &pending, &event)) {
+                status = 0;
+                break;
+            }
+            continue;
+        }
+        if (document->diagnostic.code != 0) {
+            status = 0;
+            break;
+        }
+
         line_end = lm_p0_find_layout_line_end(source, length, offset);
         raw_length = line_end - line_start;
         if (raw_length > 0U && source[line_start + raw_length - 1U] == '\r') {
