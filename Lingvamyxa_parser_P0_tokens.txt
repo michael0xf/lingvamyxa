@@ -294,11 +294,11 @@ P0 head spellings:
         @@@:
 
     profile head path
-        System/out/println:
+        System\out\println:
 
 The last form is treated as one head spelling in P0 head mode if the selected
-profile admits slash-separated receiver heads. The slash has no expression
-operator meaning in head mode.
+profile admits backslash-separated receiver heads. The backslash has no
+raw-load or field-follow operator meaning in head mode.
 
 The spellings `end`, `until`, `return`, `if`, `then`, `else`, `for`, `while`,
 `match`, `model`, `route`, `message`, `print` and similar words are not lexical

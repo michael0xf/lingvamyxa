@@ -231,24 +231,24 @@ L3:
             maxJ: 3
         ---
 
-        System/out/println: cfg\greeting
+        System\out\println: cfg\greeting
 
         each: word in words
-            System/out/println: word
+            System\out\println: word
         end: each
 
         outerLoop:
             for: int(i, 1) (i <= cfg\maxI) i++
                 for: int(j, 1) (j <= cfg\maxJ) j++
                     if: i = 2 && j = 2
-                        System/out/println: "--- continue outerLoop ---"
+                        System\out\println: "--- continue outerLoop ---"
                         continue: outerLoop
                     ---
 
-                    System/out/println: ("i: " + factorial(i) + ", j: " + factorial(j))
+                    System\out\println: ("i: " + factorial(i) + ", j: " + factorial(j))
         end: outerLoop
 
-        System/out/println: "Done."
+        System\out\println: "Done."
     end: sub
 end: L3
 
@@ -1630,10 +1630,10 @@ outerLoop:
     for: int(i, 1) (i <= 3) i++
         for: int(j, 1) (j <= 3) j++
             if: i = 2 && j = 2
-                System/out/println: "--- continue outerLoop ---"
+                System\out\println: "--- continue outerLoop ---"
                 continue: outerLoop
             ---
-            System/out/println: "i: " + i + ", j: " + j
+            System\out\println: "i: " + i + ", j: " + j
 end: outerLoop
 
 The `---` at the source level of the inner `for` body replaces the canonical source-level delimiter line:
@@ -1642,10 +1642,10 @@ outerLoop:
 . for: int(i, 1) (i <= 3) i++
 . . for: int(j, 1) (j <= 3) j++
 . . . if: i = 2 && j = 2
-. . . . System/out/println: "--- continue outerLoop ---"
+. . . . System\out\println: "--- continue outerLoop ---"
 . . . . continue: outerLoop
 . . .
-. . . System/out/println: "i: " + i + ", j: " + j
+. . . System\out\println: "i: " + i + ", j: " + j
 end: outerLoop
 
 The shorter relaxed indentation version without this delimiter is not valid Lingvamyxa, because it hides a required nameless close in indentation alone.
