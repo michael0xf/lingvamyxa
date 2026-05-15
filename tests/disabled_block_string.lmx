@@ -1,6 +1,6 @@
 $outer:
-"""
+===
 # content, not a line comment here
-"""
+===
 end: outer
 active: ok

@@ -1,9 +1,9 @@
 $outer:
 . keep: before
-====
+****
 ignored " bad
 . broken:
-====
+****
 . keep: after
 end: outer
 active: ok

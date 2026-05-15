@@ -1,6 +1,6 @@
 doc:
-"""
+===
 alpha
     beta
-"""
+===
 end: doc

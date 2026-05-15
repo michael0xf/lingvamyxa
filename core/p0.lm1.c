@@ -471,37 +471,7 @@ static size_t lm_p0_find_physical_line_end(const char *source, size_t length, si
     return i;
 }
 
-static int lm_p0_match_quote_fence_line(
-    const char *source,
-    size_t line_start,
-    size_t line_end,
-    char quote,
-    size_t quote_count
-) {
-    size_t i;
-
-    if (quote_count < 3U || quote_count > LM_P0_MAX_FENCE_LENGTH || line_start + quote_count > line_end) {
-        return 0;
-    }
-    for (i = 0U; i < quote_count; ++i) {
-        if (source[line_start + i] != quote) {
-            return 0;
-        }
-    }
-    if (line_start + quote_count < line_end && source[line_start + quote_count] == quote) {
-        return 0;
-    }
-    i = line_start + quote_count;
-    while (i < line_end) {
-        if (!lm_p0_is_horizontal_space(source[i])) {
-            return 0;
-        }
-        ++i;
-    }
-    return 1;
-}
-
-static int lm_p0_match_raw_comment_fence_line(
+static int lm_p0_match_block_string_fence_line(
     const char *source,
     size_t line_start,
     size_t line_end,
@@ -520,7 +490,36 @@ static int lm_p0_match_raw_comment_fence_line(
     if (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
         return 0;
     }
-    return lm_p0_line_rest_is_horizontal_space(source, line_start + eq_count, line_end);
+    i = line_start + eq_count;
+    while (i < line_end) {
+        if (!lm_p0_is_horizontal_space(source[i])) {
+            return 0;
+        }
+        ++i;
+    }
+    return 1;
+}
+
+static int lm_p0_match_raw_comment_fence_line(
+    const char *source,
+    size_t line_start,
+    size_t line_end,
+    size_t star_count
+) {
+    size_t i;
+
+    if (star_count < 3U || star_count > LM_P0_MAX_FENCE_LENGTH || line_start + star_count > line_end) {
+        return 0;
+    }
+    for (i = 0U; i < star_count; ++i) {
+        if (source[line_start + i] != '*') {
+            return 0;
+        }
+    }
+    if (line_start + star_count < line_end && source[line_start + star_count] == '*') {
+        return 0;
+    }
+    return lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end);
 }
 
 static int lm_p0_scan_raw_comment_block(
@@ -533,28 +532,28 @@ static int lm_p0_scan_raw_comment_block(
     size_t *next_line
 ) {
     size_t line_end;
-    size_t eq_count;
+    size_t star_count;
     size_t scan_start;
     size_t scan_line;
 
-    if (line_start >= length || source[line_start] != '=') {
+    if (line_start >= length || source[line_start] != '*') {
         return 0;
     }
 
     line_end = lm_p0_find_physical_line_end(source, length, line_start);
-    eq_count = 0U;
-    while (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
-        ++eq_count;
+    star_count = 0U;
+    while (line_start + star_count < line_end && source[line_start + star_count] == '*') {
+        ++star_count;
     }
-    if (eq_count < 3U) {
+    if (star_count < 3U) {
         return 0;
     }
-    if (eq_count > LM_P0_MAX_FENCE_LENGTH) {
+    if (star_count > LM_P0_MAX_FENCE_LENGTH) {
         lm_p0_set_diagnostic(document, 23, line, 1U, "raw comment fence length exceeds 80 characters");
         return 0;
     }
-    if (!lm_p0_match_raw_comment_fence_line(source, line_start, line_end, eq_count)) {
-        lm_p0_set_diagnostic(document, 27, line, 1U, "raw comment fence line must contain only the equals fence and whitespace");
+    if (!lm_p0_match_raw_comment_fence_line(source, line_start, line_end, star_count)) {
+        lm_p0_set_diagnostic(document, 27, line, 1U, "raw comment fence line must contain only the star fence and whitespace");
         return 0;
     }
 
@@ -569,7 +568,7 @@ static int lm_p0_scan_raw_comment_block(
         size_t break_width;
 
         current_end = lm_p0_find_physical_line_end(source, length, scan_start);
-        if (lm_p0_match_raw_comment_fence_line(source, scan_start, current_end, eq_count)) {
+        if (lm_p0_match_raw_comment_fence_line(source, scan_start, current_end, star_count)) {
             break_width = current_end < length
                 ? lm_p0_line_break_width_at(source, length, current_end)
                 : 0U;
@@ -600,28 +599,47 @@ static int lm_p0_scan_block_string_event(
     size_t *next_line
 ) {
     size_t line_end;
-    size_t quote_count;
+    size_t eq_count;
+    size_t content_start;
+    size_t content_end;
     size_t scan_start;
     size_t scan_line;
-    char quote;
 
-    if (line_start >= length || (source[line_start] != '"' && source[line_start] != '\'')) {
+    if (line_start >= length) {
         return 0;
     }
 
-    quote = source[line_start];
     line_end = lm_p0_find_physical_line_end(source, length, line_start);
-    quote_count = 0U;
-    while (line_start + quote_count < line_end && source[line_start + quote_count] == quote) {
-        ++quote_count;
-    }
-    if (quote_count > LM_P0_MAX_FENCE_LENGTH) {
-        if (lm_p0_line_rest_is_horizontal_space(source, line_start + quote_count, line_end)) {
-            lm_p0_set_diagnostic(document, 23, line, 1U, "block string fence length exceeds 80 characters");
+    if (source[line_start] == '"' || source[line_start] == '\'') {
+        char old_quote;
+        size_t old_quote_count;
+
+        old_quote = source[line_start];
+        old_quote_count = 0U;
+        while (line_start + old_quote_count < line_end && source[line_start + old_quote_count] == old_quote) {
+            ++old_quote_count;
+        }
+        if (old_quote_count >= 3U && lm_p0_line_rest_is_horizontal_space(source, line_start + old_quote_count, line_end)) {
+            lm_p0_set_diagnostic(document, 28, line, 1U, "block string fence must use a run of '=' characters");
         }
         return 0;
     }
-    if (!lm_p0_match_quote_fence_line(source, line_start, line_end, quote, quote_count)) {
+    if (source[line_start] != '=') {
+        return 0;
+    }
+    eq_count = 0U;
+    while (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
+        ++eq_count;
+    }
+    if (eq_count < 3U) {
+        return 0;
+    }
+    if (eq_count > LM_P0_MAX_FENCE_LENGTH) {
+        lm_p0_set_diagnostic(document, 23, line, 1U, "block string fence length exceeds 80 characters");
+        return 0;
+    }
+    if (!lm_p0_match_block_string_fence_line(source, line_start, line_end, eq_count)) {
+        lm_p0_set_diagnostic(document, 29, line, 1U, "block string fence line must contain only the equals fence and whitespace");
         return 0;
     }
 
@@ -629,6 +647,8 @@ static int lm_p0_scan_block_string_event(
     if (scan_start < length) {
         scan_start += lm_p0_line_break_width_at(source, length, scan_start);
     }
+    content_start = scan_start;
+    content_end = content_start;
     scan_line = line + 1U;
 
     while (scan_start <= length) {
@@ -636,15 +656,15 @@ static int lm_p0_scan_block_string_event(
         size_t break_width;
 
         current_end = lm_p0_find_physical_line_end(source, length, scan_start);
-        if (lm_p0_match_quote_fence_line(source, scan_start, current_end, quote, quote_count)) {
+        if (lm_p0_match_block_string_fence_line(source, scan_start, current_end, eq_count)) {
             break_width = current_end < length
                 ? lm_p0_line_break_width_at(source, length, current_end)
                 : 0U;
 
             memset(event, 0, sizeof(*event));
             event->kind = LM_P0_STREAM_EVENT_BLOCK_STRING;
-            event->text = source + line_start;
-            event->text_length = current_end - line_start;
+            event->text = source + content_start;
+            event->text_length = content_end - content_start;
             event->line = line;
             event->column = 1U;
             event->offset = line_start;
@@ -657,6 +677,7 @@ static int lm_p0_scan_block_string_event(
         if (current_end == length) {
             break;
         }
+        content_end = current_end;
         scan_start = current_end + lm_p0_line_break_width_at(source, length, current_end);
         ++scan_line;
     }

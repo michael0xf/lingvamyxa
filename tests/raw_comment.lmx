@@ -1,6 +1,6 @@
 root: before
-====
+****
 ignored " bad
 . broken:
-====
+****
 root: after

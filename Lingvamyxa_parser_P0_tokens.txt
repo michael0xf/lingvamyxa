@@ -54,18 +54,21 @@ The source-level normalization prepass produces:
         Formatting whitespace. Ignored by P0. Not a close token.
 
     RAW_COMMENT_BLOCK
-        A run of `=` characters at column 0 with length 3 through 80 opens a
+        A run of `*` characters at column 0 with length 3 through 80 opens a
         raw ignored block. The closing fence must also appear at column 0 and
-        must have the same run length as the opener. Fence-looking lines with a
-        different `=` run length inside the block are ignored as raw comment
-        content. The contents are not tokenized.
+        must have the same run length as the opener. The fence line contains
+        only the `*` run and optional spaces/tabs; no trailing `#` comment or
+        title text is allowed. Fence-looking lines with a different `*` run
+        length inside the block are ignored as raw comment content. The
+        contents are not tokenized.
 
     BLOCK_STRING_LITERAL
-        A run of single quotes or double quotes at column 0 with length 3
-        through 80 opens a block string. The closing fence must also appear at
-        column 0 and must use the same quote character and run length as the
-        opener. The opening and closing fence lines contain no string content.
-        Physical lines between the fences are one STRING_LITERAL value.
+        A run of `=` characters at column 0 with length 3 through 80 opens a
+        block string. The closing fence must also appear at column 0 and must
+        use the same run length as the opener. The opening and closing fence
+        lines contain only the `=` run and optional spaces/tabs; no trailing
+        `#` comment or title text is allowed. Physical lines between the fences
+        are one STRING_LITERAL value.
 
     LINE_TEXT(K, text)
         Physical source line content after indentation/source-level handling.

@@ -1,4 +1,4 @@
 $outer:
-=====# comment
-=====
+*****# comment
+*****
 end: outer
