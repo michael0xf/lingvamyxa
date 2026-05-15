@@ -1,0 +1,4 @@
+calc:
+    value: (1 +
+        2)
+end: calc

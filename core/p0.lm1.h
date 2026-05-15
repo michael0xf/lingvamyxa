@@ -10,8 +10,7 @@ extern "C" {
 typedef enum LmP0NodeKind {
     LM_P0_NODE_STRUCTURE = 1,
     LM_P0_NODE_FRAME = 2,
-    LM_P0_NODE_ATOM = 3,
-    LM_P0_NODE_EXPR = 4
+    LM_P0_NODE_ATOM = 3
 } LmP0NodeKind;
 
 typedef enum LmP0FrameFlags {
@@ -73,7 +72,6 @@ struct LmP0Node {
         LmP0Structure structure;
         LmP0Frame frame;
         LmP0Text atom;
-        LmP0Text expr;
     } as;
 };
 

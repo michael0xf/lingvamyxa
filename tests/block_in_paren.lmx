@@ -1,0 +1,4 @@
+call(
+. int: a b
+. ret: int
+)

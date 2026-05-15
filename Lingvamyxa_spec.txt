@@ -640,7 +640,7 @@ A physical newline is not allowed inside an exact quoted identifier in the porta
 
 3.4.4. Text/String Literals
 
-Text/string literals use ANSI C / C99 string literal syntax. They are values, not identifiers.
+Text/string literals use ANSI C / C99 string literal syntax, with one source-level Lingvamyxa extension: a physical line break may appear inside a double-quoted string literal before the closing quote. Such a physical line break is part of the string value and denotes a newline character `\n` after literal decoding. They are values, not identifiers.
 
 Examples:
 
@@ -649,6 +649,8 @@ Examples:
     "tab\tseparated"
     "quote: \""
     "backslash: \\"
+    "physical
+    line break"
     "question: \?"
     "alert\a backspace\b formfeed\f newline\n carriage\r tab\t vertical\v"
     "octal A: \101"
@@ -657,7 +659,9 @@ Examples:
     "grinning face: \U0001F600"
     L"wide text"
 
-The string spelling and escape rules follow the ANSI C / C99 string-literal model. However, Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
+The string spelling and escape rules follow the ANSI C / C99 string-literal model. The physical-newline extension above is source syntax only: when a Lingvamyxa string literal is lowered to ANSI C, physical line breaks inside the source literal must be emitted through valid C spelling such as `\n` escapes or adjacent C string literals. Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
+
+After the closing double quote of a text/string literal, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item. Any other following character is a missing-separator syntax error rather than implicit string concatenation.
 
 In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace. Comma does not add another field to an open short tail; it terminates the open short form. When no short form is open at the current scan depth, comma may act as optional conventional notation for data or as a trailing marker. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
 
@@ -928,51 +932,34 @@ ShortForm1(
 
 This is valid but intentionally hard to read. Prefer clearer vertical or bounded spelling when nested short forms are not visually obvious.
 
-4.2.2. Expression Operators in Short Tail
+4.2.2. Operator-Looking Spellings in Short Tail
 
-Whitespace separates short-tail fields, but expression operators may bind neighboring fields into one expression Structure.
+Whitespace separates short-tail fields. The structural parser does not bind mathematical operators into a separate expression node.
 
 Example:
 
     print: a+b c
 
-normalizes as two fields:
+normalizes as two structural fields:
 
-    print((a + b), c)
+    print(a+b, c)
 
-The binary operator `+` consumes its left and right operands and the resulting expression becomes one argument field.
+where `a+b` is one atom/name spelling at this layer. A later receiver, identifier parser or expression parser may consume that spelling as an expression.
 
-Whitespace around operators is permitted, but the preferred formatting is to keep compact mathematical operators tight because ordinary whitespace is also the short-tail field separator:
-
-    print: a+b c
-
-rather than:
+Whitespace remains structural field separation:
 
     print: a + b c
 
-Both are parsed as:
+normalizes as:
 
-    print((a + b), c)
+    print(a, +, b, c)
 
-The unary `-` operator consumes its right operand and produces one expression field. Binary `-` consumes both sides.
+To keep an operator-looking form as one field at the structural layer, write it as one spelling chunk, or make grouping explicit with a bounded Structure:
 
-Therefore:
+    print: a+b
+    print: (a + b)
 
-    print: -1-2
-
-is one expression field:
-
-    print((-1) - 2)
-
-To pass two negative values as two fields, write:
-
-    print: -1 (-2)
-
-which normalizes as:
-
-    print((-1), (-2))
-
-The expression parser is context-sensitive. It is used when expression operators are present or when a receiver/profile expects an expression. It does not make receiver calls or binding meanings by itself; it only builds expression Structures from visible operands and operators.
+The second form produces one bounded Structure field containing the atom spellings `a`, `+` and `b`; expression meaning is assigned later by the consumer.
 
 4.2.3. No Hidden Receiver-Signature Grouping
 
@@ -4978,7 +4965,7 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     source_item         ::= colon_frame_body
                           | nullary_line_body
-                          | expr_line_body
+                          | atom_or_value
 
     colon_frame_body    ::= head ":" [ line_arguments ]
 
@@ -4999,19 +4986,14 @@ This grammar sketch describes the structural parser only. It does not define fin
     short_tail          ::= short_field { horizontal_space+ short_field }
 
     short_field         ::= colon_frame_body
-                          | expression_or_structure
+                          | structural_value
 
     // In ordinary physical short-line form, comma terminates the current
     // short form. It does not add another field to that short form.
     // Physical newline is not a short-form trailer; after newline, the next
     // source-level event decides whether the open frame receives more fields
     // or is completed by level rules.
-    // Expression parsing may bind neighboring short_fields into one expression
-    // Structure before receiver consumption.
-
-    expr_line           ::= source_level expr_line_body newline
-
-    expr_line_body      ::= expression
+    // Mathematical/operator parsing is deferred to a later consumer.
 
     argument_list       ::= bounded_item_sequence
 
@@ -5026,7 +5008,7 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     bounded_item        ::= colon_frame_body
                           | nullary_line_body
-                          | expression_or_structure
+                          | structural_value
 
     // Inside bounded Structures, short colon-forms may appear inline.
     // Horizontal whitespace separates simple bounded fields only when no
@@ -5045,14 +5027,10 @@ This grammar sketch describes the structural parser only. It does not define fin
                             where each contained source_line follows the same
                             source-level rules as ordinary vertical composition
 
-    expression_or_structure
-                         ::= mathematical_expression
-                          | compact_frame
+    structural_value
+                         ::= compact_frame
                           | bounded_structure
                           | atom_or_value
-
-    mathematical_expression
-                         ::= parsed by the mathematical expression syntax
 
 The vertical Structure tree is produced by source levels and explicit visible delimiters: smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed `---` lines, named `end:` closes and terminal return where valid.
 
@@ -5066,7 +5044,7 @@ This grammar is intentionally incomplete around full update semantics, full inde
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
-Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. When no short form is open at the current scan depth, comma may be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma inside a deeper parenthesized expression or compact Frame belongs to that deeper form.
+Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. When no short form is open at the current scan depth, comma may be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma inside a deeper bounded Structure or compact Frame belongs to that deeper form.
 
 Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
 
