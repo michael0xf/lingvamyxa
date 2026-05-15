@@ -1,0 +1,27 @@
+﻿f( a, b, c
+d, e: hello world
+ print:
+  test1
+  test2 
+ print
+ prijt
+ , f) 
+
+f2( a, b, c
+d, e: hello world
+. . print:
+. . . test1
+. . . test2 
+ print
+ prijt
+ , f) 
+
+f3( a, b, c
+d, e: hello world
+. print:
+. . test1
+. . test2 
+ print
+ prijt
+ , f) 
+

@@ -1,6 +1,20 @@
-﻿f( a, b, c
-d, e: hello world, f) 
+﻿fn: test(int: a) (int) return: a + 1
 
+f( a, b, c
+d, e: hello world
+ print:
+  test1
+  test2 
+ print
+ prijt
+ , f) 
+
+f( a, b, c
+d, e: hello world
+ print 
+ print
+ prijt
+ , fn: test(int: a) (int) return: a + 1) 
 
 
 dataset: harvest
