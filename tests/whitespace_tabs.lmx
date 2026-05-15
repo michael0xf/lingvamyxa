@@ -1,0 +1,7 @@
+dataset: harvest
+	meta:
+		title:	"Regional harvest report"
+		columns:	int(id)	Text(region)	real(tons)
+		row:	1	`north field`	12.50
+	---
+end: harvest

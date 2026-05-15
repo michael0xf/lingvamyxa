@@ -97,9 +97,13 @@ static char *lm_p0_copy_bytes(const char *source, size_t length) {
     return copy;
 }
 
+static int lm_p0_is_horizontal_space(char c) {
+    return c == ' ' || c == '\t';
+}
+
 static void lm_p0_trim_right(const char **text, size_t *length) {
     (void)text;
-    while (*length > 0U && ((*text)[*length - 1U] == ' ' || (*text)[*length - 1U] == '\r')) {
+    while (*length > 0U && (lm_p0_is_horizontal_space((*text)[*length - 1U]) || (*text)[*length - 1U] == '\r')) {
         --(*length);
     }
 }
@@ -180,7 +184,7 @@ static void lm_p0_scan_indent_column(
 
     p = start;
     column = 0U;
-    while (p < end && (source[p] == ' ' || source[p] == '\t')) {
+    while (p < end && lm_p0_is_horizontal_space(source[p])) {
         if (source[p] == '\t') {
             column = lm_p0_indent_tab_column(column);
         } else {
@@ -289,7 +293,7 @@ static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) 
             while (p < line_start + raw_length && source[p] == '.') {
                 ++level;
                 ++p;
-                while (p < line_start + raw_length && source[p] == ' ') {
+                while (p < line_start + raw_length && lm_p0_is_horizontal_space(source[p])) {
                     ++p;
                 }
             }
@@ -455,7 +459,7 @@ static void lm_p0_free_node(LmP0Node *node) {
 }
 
 static void lm_p0_skip_spaces(const char *text, size_t length, size_t *index) {
-    while (*index < length && text[*index] == ' ') {
+    while (*index < length && lm_p0_is_horizontal_space(text[*index])) {
         ++(*index);
     }
 }
@@ -689,7 +693,7 @@ static int lm_p0_parse_fields_into(
         } else {
             size_t head_end;
 
-            while (i < length && text[i] != ' ' && text[i] != ',' && text[i] != '(') {
+            while (i < length && !lm_p0_is_horizontal_space(text[i]) && text[i] != ',' && text[i] != '(') {
                 if (text[i] == '"' || text[i] == '`') {
                     if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, column)) {
                         return 0;
@@ -774,7 +778,7 @@ static LmP0Node *lm_p0_parse_line_item(
         size_t body_start;
 
         head_length = colon_index;
-        while (head_length > 0U && text[head_length - 1U] == ' ') {
+        while (head_length > 0U && lm_p0_is_horizontal_space(text[head_length - 1U])) {
             --head_length;
         }
         if (head_length == 0U) {
@@ -795,7 +799,7 @@ static LmP0Node *lm_p0_parse_line_item(
         node->as.frame.flags = LM_P0_FRAME_COLON;
 
         body_start = colon_index + 1U;
-        while (body_start < length && text[body_start] == ' ') {
+        while (body_start < length && lm_p0_is_horizontal_space(text[body_start])) {
             ++body_start;
         }
         if (!lm_p0_parse_fields_into(
@@ -952,7 +956,7 @@ static int lm_p0_text_has_prefix_name(
 
 static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
     if (length >= 3U && memcmp(text, "---", 3U) == 0 &&
-        (length == 3U || text[3U] == ' ' || text[3U] == ':')) {
+        (length == 3U || lm_p0_is_horizontal_space(text[3U]) || text[3U] == ':')) {
         return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
     }
     if (lm_p0_text_has_prefix_name(text, length, "end", 0)) {
@@ -1055,11 +1059,11 @@ static int lm_p0_parse_trailer_item(
 
     if (lm_p0_find_colon(text, length, &colon_index)) {
         spelling_length = colon_index;
-        while (spelling_length > 0U && text[spelling_length - 1U] == ' ') {
+        while (spelling_length > 0U && lm_p0_is_horizontal_space(text[spelling_length - 1U])) {
             --spelling_length;
         }
         body_start = colon_index + 1U;
-        while (body_start < length && text[body_start] == ' ') {
+        while (body_start < length && lm_p0_is_horizontal_space(text[body_start])) {
             ++body_start;
         }
     } else {
@@ -1070,12 +1074,12 @@ static int lm_p0_parse_trailer_item(
             }
             spelling_length = body_start;
         } else {
-            while (body_start < length && text[body_start] != ' ' && text[body_start] != ',') {
+            while (body_start < length && !lm_p0_is_horizontal_space(text[body_start]) && text[body_start] != ',') {
                 ++body_start;
             }
             spelling_length = body_start;
         }
-        while (body_start < length && text[body_start] == ' ') {
+        while (body_start < length && lm_p0_is_horizontal_space(text[body_start])) {
             ++body_start;
         }
     }
