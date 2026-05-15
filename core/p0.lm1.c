@@ -9,11 +9,13 @@
 typedef enum LmP0StreamEventKind {
     LM_P0_STREAM_EVENT_ITEM = 1,
     LM_P0_STREAM_EVENT_DELIM = 2,
-    LM_P0_STREAM_EVENT_BLOCK_STRING = 3
+    LM_P0_STREAM_EVENT_BLOCK_STRING = 3,
+    LM_P0_STREAM_EVENT_DISABLED_BLOCK = 4
 } LmP0StreamEventKind;
 
 typedef struct LmP0StreamEvent {
     LmP0StreamEventKind kind;
+    unsigned node_flags;
     size_t level;
     const char *text;
     size_t text_length;
@@ -39,6 +41,14 @@ typedef struct LmP0IndentStack {
     size_t count;
     size_t capacity;
 } LmP0IndentStack;
+
+typedef struct LmP0DisabledState {
+    int body_started;
+    int pending_item;
+    size_t base_level;
+    size_t top_level;
+    size_t pending_level;
+} LmP0DisabledState;
 
 typedef struct LmP0Stack {
     LmP0Structure **parents;
@@ -170,6 +180,32 @@ static int lm_p0_indent_stack_push(
 static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack) {
     memset(stack, 0, sizeof(*stack));
     return lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U);
+}
+
+static int lm_p0_indent_stack_copy(
+    LmP0Document *document,
+    LmP0IndentStack *target,
+    const LmP0IndentStack *source,
+    size_t line,
+    size_t column
+) {
+    size_t capacity;
+
+    memset(target, 0, sizeof(*target));
+    capacity = source->capacity > source->count ? source->capacity : source->count;
+    if (capacity == 0U) {
+        return 1;
+    }
+
+    target->columns = (size_t *)malloc(capacity * sizeof(*target->columns));
+    if (target->columns == NULL) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
+        return 0;
+    }
+    memcpy(target->columns, source->columns, source->count * sizeof(*target->columns));
+    target->count = source->count;
+    target->capacity = capacity;
+    return 1;
 }
 
 static size_t lm_p0_indent_tab_column(size_t column) {
@@ -1731,7 +1767,18 @@ static int lm_p0_stream_apply_item_event(
         return 0;
     }
 
-    if (event->kind == LM_P0_STREAM_EVENT_BLOCK_STRING) {
+    if (event->kind == LM_P0_STREAM_EVENT_DISABLED_BLOCK) {
+        node = lm_p0_new_node(document, LM_P0_NODE_DISABLED);
+        if (node == NULL) {
+            return 0;
+        }
+        node->as.atom.data = event->text;
+        node->as.atom.length = event->text_length;
+        node->span.line = event->line;
+        node->span.column = event->column;
+        node->span.offset = event->offset;
+        node->span.length = event->text_length;
+    } else if (event->kind == LM_P0_STREAM_EVENT_BLOCK_STRING) {
         node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
         if (node == NULL) {
             return 0;
@@ -1755,6 +1802,7 @@ static int lm_p0_stream_apply_item_event(
             return 0;
         }
     }
+    node->flags |= event->node_flags;
 
     if (!lm_p0_append_field(document, parent, node)) {
         lm_p0_free_node(node);
@@ -1819,6 +1867,352 @@ static size_t lm_p0_stream_block_string_level(
     return 0U;
 }
 
+static int lm_p0_validate_disabled_item_text(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column
+) {
+    size_t i;
+
+    i = 0U;
+    while (i < length) {
+        if (text[i] == '"' || text[i] == '`') {
+            if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, column)) {
+                return 0;
+            }
+            continue;
+        }
+        if (text[i] == '(') {
+            size_t close_index;
+
+            if (!lm_p0_find_matching_paren(document, text, length, i, line, column, &close_index)) {
+                return 0;
+            }
+            i = close_index + 1U;
+            continue;
+        }
+        if (text[i] == ')') {
+            size_t diagnostic_line;
+            size_t diagnostic_column;
+
+            lm_p0_position_in_slice(text, length, i, line, column, &diagnostic_line, &diagnostic_column);
+            lm_p0_set_diagnostic(document, 6, diagnostic_line, diagnostic_column, "unmatched closing parenthesis");
+            return 0;
+        }
+        ++i;
+    }
+    return 1;
+}
+
+static int lm_p0_disabled_scan_next_event(
+    LmP0Document *document,
+    LmP0IndentStack *indent_stack,
+    size_t *offset,
+    size_t *line,
+    LmP0StreamEvent *event,
+    int *has_event
+) {
+    const char *source;
+    size_t length;
+
+    source = document->source;
+    length = document->source_length;
+    *has_event = 0;
+
+    while (*offset <= length) {
+        size_t line_start;
+        size_t line_end;
+        size_t raw_length;
+        size_t p;
+        size_t level;
+        const char *text;
+        size_t text_length;
+
+        line_start = *offset;
+        if (line_start >= length) {
+            return 1;
+        }
+
+        if (lm_p0_scan_block_string_event(
+                document,
+                source,
+                length,
+                line_start,
+                *line,
+                event,
+                offset,
+                line
+            )) {
+            event->level = (size_t)-1;
+            *has_event = 1;
+            return 1;
+        }
+        if (document->diagnostic.code != 0) {
+            return 0;
+        }
+
+        line_end = lm_p0_find_layout_line_end(source, length, line_start);
+        raw_length = line_end - line_start;
+        if (raw_length > 0U && source[line_start + raw_length - 1U] == '\r') {
+            --raw_length;
+        }
+
+        if (raw_length == 0U) {
+            lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line);
+            continue;
+        }
+
+        p = line_start;
+        level = 0U;
+        if (*line == 1U && raw_length >= 3U &&
+            (unsigned char)source[p] == 0xEFU &&
+            (unsigned char)source[p + 1U] == 0xBBU &&
+            (unsigned char)source[p + 2U] == 0xBFU) {
+            p += 3U;
+        }
+
+        if (p < line_start + raw_length && source[p] == '.') {
+            while (p < line_start + raw_length && source[p] == '.') {
+                ++level;
+                ++p;
+                while (p < line_start + raw_length && lm_p0_is_horizontal_space(source[p])) {
+                    ++p;
+                }
+            }
+        } else {
+            size_t indent_column;
+
+            lm_p0_scan_indent_column(source, p, line_start + raw_length, &p, &indent_column);
+            text = source + p;
+            text_length = (line_start + raw_length) - p;
+            lm_p0_trim_right(&text, &text_length);
+
+            if (text_length == 0U || text[0] == '#') {
+                lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line);
+                continue;
+            }
+
+            if (!lm_p0_indent_level_from_column(
+                    document,
+                    indent_stack,
+                    indent_column,
+                    *line,
+                    (size_t)(text - (source + line_start)) + 1U,
+                    &level
+                )) {
+                return 0;
+            }
+        }
+
+        text = source + p;
+        text_length = (line_start + raw_length) - p;
+        lm_p0_trim_right(&text, &text_length);
+
+        if (text_length == 0U || text[0] == '#') {
+            lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line);
+            continue;
+        }
+
+        memset(event, 0, sizeof(*event));
+        event->level = level;
+        event->text = text;
+        event->text_length = text_length;
+        event->line = *line;
+        event->column = (size_t)(text - (source + line_start)) + 1U;
+        event->offset = (size_t)(text - source);
+        event->kind = text_length == 0U && level > 0U
+            ? LM_P0_STREAM_EVENT_DELIM
+            : LM_P0_STREAM_EVENT_ITEM;
+
+        lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line);
+        *has_event = 1;
+        return 1;
+    }
+
+    return 1;
+}
+
+static int lm_p0_disabled_event_is_tail_cutter(const LmP0StreamEvent *event) {
+    if (event->kind == LM_P0_STREAM_EVENT_DELIM) {
+        return 1;
+    }
+    if (event->kind != LM_P0_STREAM_EVENT_ITEM) {
+        return 0;
+    }
+    return lm_p0_trailer_role(event->text, event->text_length) == LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+}
+
+static int lm_p0_disabled_state_accept_event(
+    LmP0Document *document,
+    LmP0DisabledState *state,
+    LmP0StreamEvent *event,
+    int *done_after_event,
+    int *done_before_event
+) {
+    int is_tail_cutter;
+
+    *done_after_event = 0;
+    *done_before_event = 0;
+
+    if (event->level == (size_t)-1) {
+        event->level = state->pending_item
+            ? state->pending_level + 1U
+            : state->top_level;
+    }
+
+    if (event->kind == LM_P0_STREAM_EVENT_ITEM &&
+        !lm_p0_validate_disabled_item_text(
+            document,
+            event->text,
+            event->text_length,
+            event->line,
+            event->column
+        )) {
+        return 0;
+    }
+
+    if (state->pending_item) {
+        if (event->level == state->pending_level + 1U) {
+            state->body_started = 1;
+            state->top_level = event->level;
+            state->pending_item = 0;
+        } else if (event->level > state->pending_level + 1U) {
+            lm_p0_set_diagnostic(document, 13, event->line, event->column, "disabled block source level jumps too deep");
+            return 0;
+        } else {
+            state->pending_item = 0;
+        }
+    }
+
+    is_tail_cutter = lm_p0_disabled_event_is_tail_cutter(event);
+    if (!state->body_started) {
+        if (event->level == state->base_level && is_tail_cutter) {
+            *done_after_event = 1;
+            return 1;
+        }
+        if (event->level <= state->base_level) {
+            *done_before_event = 1;
+            return 1;
+        }
+        lm_p0_set_diagnostic(document, 8, event->line, event->column, "disabled block source level has no open parent");
+        return 0;
+    }
+
+    if (is_tail_cutter && event->level >= state->base_level && event->level + 1U <= state->top_level) {
+        state->top_level = event->level;
+        state->pending_item = 0;
+        if (event->level == state->base_level) {
+            *done_after_event = 1;
+        }
+        return 1;
+    }
+
+    if (event->level < state->top_level) {
+        lm_p0_set_diagnostic(
+            document,
+            16,
+            event->line,
+            event->column,
+            "name is not an accepted disabled block trailer; expected end, ---, return, or until"
+        );
+        return 0;
+    }
+    if (event->level > state->top_level) {
+        lm_p0_set_diagnostic(document, 8, event->line, event->column, "disabled block source level has no open parent");
+        return 0;
+    }
+
+    state->pending_item = 1;
+    state->pending_level = event->level;
+    return 1;
+}
+
+static int lm_p0_validate_disabled_block(
+    LmP0Document *document,
+    const LmP0IndentStack *indent_stack,
+    size_t first_next_offset,
+    size_t first_next_line,
+    size_t base_level,
+    const char *header_text,
+    size_t header_length,
+    size_t header_line,
+    size_t header_column,
+    size_t *out_offset,
+    size_t *out_line
+) {
+    LmP0IndentStack local_indent;
+    LmP0DisabledState state;
+    size_t offset;
+    size_t line;
+    int status;
+
+    if (!lm_p0_validate_disabled_item_text(document, header_text, header_length, header_line, header_column)) {
+        return 0;
+    }
+    if (!lm_p0_indent_stack_copy(document, &local_indent, indent_stack, header_line, header_column)) {
+        return 0;
+    }
+
+    memset(&state, 0, sizeof(state));
+    state.base_level = base_level;
+    state.top_level = base_level;
+    state.pending_item = 1;
+    state.pending_level = base_level;
+
+    offset = first_next_offset;
+    line = first_next_line;
+    status = 1;
+
+    while (status && offset <= document->source_length) {
+        LmP0StreamEvent event;
+        size_t event_offset;
+        size_t event_line;
+        int has_event;
+        int done_after_event;
+        int done_before_event;
+
+        event_offset = offset;
+        event_line = line;
+        if (!lm_p0_disabled_scan_next_event(document, &local_indent, &offset, &line, &event, &has_event)) {
+            status = 0;
+            break;
+        }
+        if (!has_event) {
+            if (state.body_started && state.top_level > state.base_level) {
+                lm_p0_set_diagnostic(document, 22, header_line, header_column, "unterminated disabled block");
+                status = 0;
+            }
+            break;
+        }
+
+        if (!lm_p0_disabled_state_accept_event(
+                document,
+                &state,
+                &event,
+                &done_after_event,
+                &done_before_event
+            )) {
+            status = 0;
+            break;
+        }
+        if (done_before_event) {
+            offset = event_offset;
+            line = event_line;
+            break;
+        }
+        if (done_after_event) {
+            break;
+        }
+    }
+
+    lm_p0_indent_stack_free(&local_indent);
+    *out_offset = offset;
+    *out_line = line;
+    return status && document->diagnostic.code == 0;
+}
+
 static int lm_p0_parse_stream(LmP0Document *document) {
     const char *source;
     size_t length;
@@ -1860,6 +2254,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         size_t level;
         const char *text;
         size_t text_length;
+        unsigned node_flags;
         LmP0StreamEvent event;
 
         line_start = offset;
@@ -1948,6 +2343,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         text = source + p;
         text_length = (line_start + raw_length) - p;
         lm_p0_trim_right(&text, &text_length);
+        node_flags = 0U;
 
         if (text_length == 0U && level == 0U) {
             if (line_end == length) {
@@ -1963,9 +2359,73 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             lm_p0_advance_layout_line(source, length, line_start, line_end, &offset, &line);
             continue;
         }
+        if (text_length > 0U && text[0] == '$') {
+            size_t marker_column;
+            size_t header_column;
+            size_t next_offset;
+            size_t next_line;
+            size_t disabled_next_offset;
+            size_t disabled_next_line;
+            size_t skip;
+
+            node_flags |= LM_P0_NODE_INACTIVE;
+            marker_column = (size_t)(text - (source + line_start)) + 1U;
+            skip = 1U;
+            while (skip < text_length && lm_p0_is_horizontal_space(text[skip])) {
+                ++skip;
+            }
+            text += skip;
+            text_length -= skip;
+            if (text_length == 0U || text[0] == '#') {
+                lm_p0_set_diagnostic(document, 21, line, marker_column, "disabled marker must be followed by a source item");
+                status = 0;
+                break;
+            }
+
+            header_column = (size_t)(text - (source + line_start)) + 1U;
+            next_offset = line_start;
+            next_line = line;
+            lm_p0_advance_layout_line(source, length, line_start, line_end, &next_offset, &next_line);
+            if (!lm_p0_validate_disabled_block(
+                    document,
+                    &indent_stack,
+                    next_offset,
+                    next_line,
+                    level,
+                    text,
+                    text_length,
+                    line,
+                    header_column,
+                    &disabled_next_offset,
+                    &disabled_next_line
+                )) {
+                status = 0;
+                break;
+            }
+
+            memset(&event, 0, sizeof(event));
+            event.kind = LM_P0_STREAM_EVENT_DISABLED_BLOCK;
+            event.level = level;
+            event.node_flags = node_flags;
+            event.text = text;
+            event.text_length = text_length;
+            event.line = line;
+            event.column = header_column;
+            event.offset = (size_t)(text - source);
+
+            if (!lm_p0_stream_apply_event(document, &stack, &pending, &event)) {
+                status = 0;
+                break;
+            }
+
+            offset = disabled_next_offset;
+            line = disabled_next_line;
+            continue;
+        }
 
         memset(&event, 0, sizeof(event));
         event.level = level;
+        event.node_flags = node_flags;
         event.text = text;
         event.text_length = text_length;
         event.line = line;
@@ -2423,6 +2883,9 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
     }
 
     lm_p0_dump_indent(dump, indent);
+    if ((node->flags & LM_P0_NODE_INACTIVE) != 0U) {
+        lm_p0_dump_append_cstr(dump, "Inactive ");
+    }
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         lm_p0_dump_appendf(dump, "Structure fields=%lu\n", (unsigned long)node->as.structure.field_count);
         lm_p0_dump_structure(dump, &node->as.structure, indent + 1U);
@@ -2435,6 +2898,10 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
         lm_p0_dump_trailer(dump, node->as.frame.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_ATOM) {
         lm_p0_dump_append_cstr(dump, "Atom ");
+        lm_p0_dump_text(dump, node->as.atom);
+        lm_p0_dump_append_cstr(dump, "\n");
+    } else if (node->kind == LM_P0_NODE_DISABLED) {
+        lm_p0_dump_append_cstr(dump, "Block ");
         lm_p0_dump_text(dump, node->as.atom);
         lm_p0_dump_append_cstr(dump, "\n");
     }

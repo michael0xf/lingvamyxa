@@ -107,8 +107,12 @@ scanning:
 
     DISABLED_ITEM
         `$` immediately after the source-level zone marks the following source
-        item disabled. The item and its body are still tokenized and syntax
-        checked, but they are not emitted for receiver consumption.
+        item disabled; optional horizontal whitespace after `$` is ignored. The
+        normal P0 subtree is not built for the disabled body. P0 records an
+        inactive placeholder and runs a lightweight disabled-block validator
+        over the disabled range. That validator checks source-level nesting,
+        accepted structural trailers, balanced parenthesized forms, quoted-token
+        closure and block-string closure.
 
 `---` is DELIM_DASH only as a standalone structural line. Inside ordinary text,
 `-` is just part of the source spelling consumed by a later parsing layer.

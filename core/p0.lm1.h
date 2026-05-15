@@ -10,7 +10,8 @@ extern "C" {
 typedef enum LmP0NodeKind {
     LM_P0_NODE_STRUCTURE = 1,
     LM_P0_NODE_FRAME = 2,
-    LM_P0_NODE_ATOM = 3
+    LM_P0_NODE_ATOM = 3,
+    LM_P0_NODE_DISABLED = 4
 } LmP0NodeKind;
 
 typedef enum LmP0FrameFlags {
@@ -18,6 +19,10 @@ typedef enum LmP0FrameFlags {
     LM_P0_FRAME_COMPACT = 2,
     LM_P0_FRAME_INLINE_BODY = 4
 } LmP0FrameFlags;
+
+typedef enum LmP0NodeFlags {
+    LM_P0_NODE_INACTIVE = 1
+} LmP0NodeFlags;
 
 typedef enum LmP0TrailerFlags {
     LM_P0_TRAILER_TAIL_CUTTER = 1
@@ -68,6 +73,7 @@ typedef struct LmP0Frame {
 
 struct LmP0Node {
     LmP0NodeKind kind;
+    unsigned flags;
     LmP0Span span;
     union {
         LmP0Structure structure;

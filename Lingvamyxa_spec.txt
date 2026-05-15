@@ -1773,11 +1773,11 @@ The disabled-block marker is:
 
     $
 
-`$` may appear at the start of a source item, immediately after that item's indentation zone. The parser removes `$` for the purpose of parsing the item, but marks the item as disabled.
+`$` may appear at the start of a source item, immediately after that item's indentation zone. Optional horizontal whitespace after `$` is ignored. The parser removes `$` for the purpose of identifying the disabled item and records an inactive placeholder for that disabled item/block in the P0 tree.
 
-If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser still parses the disabled item and its body, tracks source levels, validates closing forms and parses mathematical expressions. Therefore disabled code may still produce syntax errors.
+If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser does not build the normal P0 subtree for that disabled body. Instead, a lightweight disabled-block validator scans the disabled range and checks only structural integrity: source-level nesting, accepted structural trailers, balanced parenthesized forms, quoted-token closure and block-string closure. Therefore disabled code may still produce structural syntax errors, but ordinary receiver/P0 body validation is not run inside it.
 
-Disabled code does not build source-semantic Structures for receiver consumption, does not register definitions, does not update models or registries and does not lower to executable/runtime behavior.
+Disabled code remains present in the P0 tree as an inactive placeholder. Later receiver consumption skips inactive items, does not register definitions from them, does not update models or registries from them and does not lower them to executable/runtime behavior.
 
 The `$` marker does not contribute to source level. The source level of a disabled item is computed exactly as if `$` were absent, whether the file uses canonical dotted form or relaxed indentation form. Child lines are written at the same source levels they would use for the enabled form.
 
