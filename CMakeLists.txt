@@ -63,6 +63,7 @@ target_compile_definitions(decnumber
 
 add_library(lingvamyxa_core STATIC
     core/lm_core.c
+    core/lm_p0.c
 )
 
 target_include_directories(lingvamyxa_core PUBLIC

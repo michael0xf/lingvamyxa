@@ -737,7 +737,7 @@ A form such as:
 
     int: x
 
-is not a separate Pascal-like type grammar. It is the same receiver-valence form: the registered `int` constructor receiver consumes the raw name `x` in declaration context and introduces a typed binding.
+is not a separate declaration grammar. It is the same receiver-valence form: the registered `int` constructor receiver consumes the raw name `x` in declaration context and introduces a typed binding.
 
 A form such as:
 
@@ -3079,7 +3079,7 @@ is valid ordinary short-tail syntax and normalizes as:
 
 It does not secretly create `args(int(v, j))`; that interpretation requires a compact Frame such as `args: int(v, j)` or a receiver-defined semantic equivalence.
 
-Here `j: v / 2` updates the visible binding `j`. The final result is returned with `return: v`. Using `i: v` as a function-name return binding is optional/profile-defined and is not the canonical form in this revision.
+Here `j: v / 2` updates the visible binding `j`. The final result is returned with `return: v`.
 
 7.3. Subroutine Definition Form
 
@@ -3126,7 +3126,7 @@ A local variable cannot reuse the name of a visible type. A local `fn` or `sub` 
 
 L5 message selectors are looked up through a receiver object's behavior table. A selector is not automatically a lexical binding unless it is also imported or registered as an ordinary receiver/generic operation. The implementation name attached to a message is a lexical executable binding and follows the single-namespace rule.
 
-In expression position, a visible `fn` name is callable. The canonical way to return a value is `return: value`, including terminal return at the source level of the current function. A profile may optionally allow Pascal-style function-name return binding, but it is not the canonical return mechanism in this revision.
+In expression position, a visible `fn` name is callable. The canonical way to return a value is `return: value`, including terminal return at the source level of the current function. The function name remains an ordinary namespace binding for callable lookup unless ordinary binding-update rules explicitly change that visible binding.
 
 Example:
 
@@ -3462,34 +3462,32 @@ return: bed\area 0 0
 
 Here the `return:` tail is one logical return Structure with three fields consumed by the return signature.
 
-8.6. Function-Name Return Binding
+8.6. Function Name Binding Update
 
-The old Pascal-style function-name return binding is not the canonical return form in this revision.
+The current function name is not a special return target. It is an ordinary name in the shared lexical namespace.
 
-A profile may still allow the current function name in head/update position to denote the current return binding inside that function body:
+If an execution/type profile exposes a mutable local result binding with the same visible name as the function and the declared type is compatible with the assigned value, the ordinary head/update form may update that binding:
 
 fn: square (int(x)) (int)
     square: x * x
 return: square
 
-However, this form is optional/profile-defined and should not be used as the primary return mechanism. The canonical form for an `fn` is `return: value`. When written in a valid terminal trailer position, `return: value` also closes the function definition.
+This is not a dedicated return form. The line `square: x * x` is an ordinary binding update in the shared namespace. After that update, the visible name `square` denotes the updated result binding, so recursive lookup through `square(...)` is no longer available through that same visible name in the remaining local scope.
 
-This restriction keeps the function name available for ordinary callable lookup, recursion and future local namespace overlay operations, where a callable binding may be locally replaced by another compatible callable value.
+The function still returns explicitly with `return: square`. The canonical return mechanism for an `fn` is `return: value`. When written in a valid terminal trailer position, `return: value` also closes the function definition.
 
 8.7. Implicit Return at Function End
 
-Implicit return at function end is not the canonical source form in this revision.
+Implicit return at function end is not a core source form in this revision.
 
 In the core profile, `end: fn` is a structural close only. It does not append an implicit runtime return for a value-producing function.
-
-A profile may still allow implicit final return of the current return binding when execution reaches the end of an `fn` body. Such a profile must say how the return binding is established and how this interacts with named return variables. The canonical source form remains explicit `return: value`.
 
 The preferred style is:
 
 fn: f (int(x)) (int)
 return: x + 1
 
-rather than relying on an implicit return binding update.
+rather than relying on a value left in a local binding at structural close.
 
 8.8. Return Source Semantics
 
@@ -4446,7 +4444,7 @@ Named return variables may also be updated before an explicit terminal value ret
     greenApples: 0
     return: harvest redApples greenApples
 
-The old Pascal-style current function-name return binding is optional/profile-defined. The canonical return mechanism for an `fn` is `return: value`. In a valid terminal trailer position, `return: value` also closes the `fn` source frame.
+The canonical return mechanism for an `fn` is `return: value`. In a valid terminal trailer position, `return: value` also closes the `fn` source frame. Named return variables are ordinary typed bindings whose current values may be returned explicitly.
 
 16.3. Destructuring
 
@@ -5863,8 +5861,6 @@ For an `fn`, `return: value` consumes a compatible primitive or Structure value 
 
 For a `sub`, `return` exits the `sub` body. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
-For an `fn`, the core profile admits `return: value`, not a bare `return`. A compatibility profile may define a current-return-binding convention, but that is not the canonical form in this revision.
-
 At a valid terminal trailer position for the open executable definition, an admitted return form is terminal return. It appends the corresponding runtime return as the final body item and closes the executable definition. For an `fn`, this terminal form is `return: value`; for a `sub` or no-value label/procedure executable, this terminal form may be bare `return`. This is an executable-specific close, not a general replacement for `end: name`.
 
 For a definition opened by `fn: name` or `sub: name` at level N, the source level of the definition is N. An admitted return form at level N is the common terminal structural trailer. The same return form at level N + 1 or deeper is an ordinary runtime return inside the body. A return form at a smaller source level may still be terminal return when the normal source-level cut reaches the visible executable tail and the intervening frames admit that closure. See section 8.3.
@@ -7114,11 +7110,9 @@ is invalid if `factorial` is a callable slot with signature `Callable(int -> int
 
 29.6. Interaction with Return and Function Names
 
-The canonical return mechanism for an `fn` is `return: value`. When `return: value` is written in a valid terminal trailer position, it also closes the `fn` source frame. The current function name is not the primary return binding syntax in this revision.
+The canonical return mechanism for an `fn` is `return: value`. When `return: value` is written in a valid terminal trailer position, it also closes the `fn` source frame. The current function name is an ordinary namespace binding, not a separate return syntax.
 
-This avoids overloading a function name with too many roles. The same visible name may participate in ordinary callable lookup, recursion and local namespace overlay operations without also being the canonical way to write the function result.
-
-A compatibility profile may allow Pascal-style function-name return binding, but such a profile must define how it interacts with local namespace overlays and callable replacement.
+The same visible name may participate in ordinary callable lookup, recursion and local namespace overlay operations. If ordinary binding-update rules replace that visible name with a compatible non-callable value, later recursive callable lookup through that spelling is no longer available in the remaining local scope.
 
 29.7. Translation and Optimization
 
