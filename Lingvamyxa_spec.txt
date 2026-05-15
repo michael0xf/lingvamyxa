@@ -3613,6 +3613,94 @@ Conceptual meaning:
 
 The token after the type constructor is not evaluated as an existing value. It is a raw name introduced by the declaration. If the name already exists in the current namespace, the declaration is invalid.
 
+9.1.1. Nested Type and Storage Forms
+
+Type, storage and mutability descriptors are ordinary receiver heads. They do
+not require a separate declaration syntax. A colon only builds the right-nested
+form; it is not a named semantic node.
+
+For example:
+
+    const: char: (): s "hello" "world!"
+    const: char: []: s "hello" "world!"
+    const: String: (): s "hello" "world!"
+    const: String: []: s "hello" "world!"
+
+These are parsed as nested forms:
+
+    const(char(()(s, "hello", "world!")))
+    const(char([](s, "hello", "world!")))
+    const(String(()(s, "hello", "world!")))
+    const(String([](s, "hello", "world!")))
+
+The heads `const`, `char`, `String`, `()` and `[]` are ordinary visible names
+resolved by the active semantic profile. In this profile:
+
+    const       qualifies the introduced storage/value as immutable
+    char        selects ANSI C compatible character storage semantics
+    String      selects the Lingvamyxa immutable string value/reference model
+    ()          introduces a named Structure-like aggregate
+    []          introduces a named array-like aggregate
+
+Therefore the examples mean:
+
+    const: char: (): s "hello" "world!"
+        `s` is an immutable char aggregate whose fields are character storage
+        compatible with ANSI C.
+
+    const: char: []: s "hello" "world!"
+        `s` is an immutable array of references/pointers to character storage
+        fragments compatible with ANSI C string storage.
+
+    const: String: (): s "hello" "world!"
+        `s` is an immutable Structure whose fields are references to immutable
+        Lingvamyxa String values.
+
+    const: String: []: s "hello" "world!"
+        `s` is an immutable array of references to immutable Lingvamyxa String
+        values.
+
+`char` and `String` are intentionally different types. `char` exists for the
+low-level ANSI C compatible model. `String` has higher-level string behavior and
+must not be treated as merely a spelling of `char *`.
+
+---ANSI C---
+A possible ANSI C projection of the four examples is:
+
+    static const struct {
+        char field0[6];
+        char field1[7];
+    } s_char_struct = { "hello", "world!" };
+
+    static const char * const s_char_array[] = {
+        "hello",
+        "world!"
+    };
+
+    typedef struct LmString {
+        const char *data;
+        unsigned long size;
+    } LmString;
+
+    static const LmString lm_string_0 = { "hello", 5 };
+    static const LmString lm_string_1 = { "world!", 6 };
+
+    static const struct {
+        const LmString *field0;
+        const LmString *field1;
+    } s_string_struct = { &lm_string_0, &lm_string_1 };
+
+    static const LmString * const s_string_array[] = {
+        &lm_string_0,
+        &lm_string_1
+    };
+
+The concrete field names, descriptor type, length type, string interning and
+object naming are implementation details. The important distinction is that
+`char` lowers toward ANSI C character storage, while `String` lowers toward
+Lingvamyxa immutable string objects or references.
+---ANSI C---
+
 9.2. Type Constructors
 
 A form such as:
