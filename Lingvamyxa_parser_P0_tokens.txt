@@ -110,8 +110,8 @@ scanning:
         handling. Ignored by P0.
 
     DISABLED_ITEM
-        `$` immediately after the source-level zone marks the following source
-        item disabled; optional horizontal whitespace after `$` is ignored. The
+        `%` immediately after the source-level zone marks the following source
+        item disabled; optional horizontal whitespace after `%` is ignored. The
         normal P0 subtree is not built for the disabled body. P0 records an
         inactive placeholder and runs a lightweight disabled-block validator
         over the disabled range. That validator checks source-level nesting,

@@ -1,4 +1,4 @@
-$if: mode = debug
+%if: mode = debug
 . then:
 . . print: disabled branch
 end: if

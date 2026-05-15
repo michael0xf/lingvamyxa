@@ -1,4 +1,4 @@
-$if: mode = debug # inactive header comment
+%if: mode = debug # inactive header comment
 . then: # disabled frame comment
 . . print: disabled # "bad quote hidden by comment
 . # dotted delimiter comment

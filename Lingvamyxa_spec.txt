@@ -1887,19 +1887,19 @@ print: count # print the current value of count
 
 The disabled-block marker is:
 
-    $
+    %
 
-`$` may appear at the start of a source item, immediately after that item's indentation zone. Optional horizontal whitespace after `$` is ignored. The parser removes `$` for the purpose of identifying the disabled item and records an inactive placeholder for that disabled item/block in the P0 tree.
+`%` may appear at the start of a source item, immediately after that item's indentation zone. Optional horizontal whitespace after `%` is ignored. The parser removes `%` for the purpose of identifying the disabled item and records an inactive placeholder for that disabled item/block in the P0 tree.
 
 If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser does not build the normal P0 subtree for that disabled body. Instead, a lightweight disabled-block validator scans the disabled range and checks only structural integrity: source-level nesting, accepted structural trailers, balanced parenthesized forms, quoted-token closure and block-string closure. Therefore disabled code may still produce structural syntax errors, but ordinary receiver/P0 body validation is not run inside it.
 
 Disabled code remains present in the P0 tree as an inactive placeholder. Later receiver consumption skips inactive items, does not register definitions from them, does not update models or registries from them and does not lower them to executable/runtime behavior.
 
-The `$` marker does not contribute to source level. The source level of a disabled item is computed exactly as if `$` were absent, whether the file uses canonical dotted form or relaxed indentation form. Child lines are written at the same source levels they would use for the enabled form.
+The `%` marker does not contribute to source level. The source level of a disabled item is computed exactly as if `%` were absent, whether the file uses canonical dotted form or relaxed indentation form. Child lines are written at the same source levels they would use for the enabled form.
 
 Example:
 
-$if: mode = debug
+%if: mode = debug
     then:
         print: debug branch
     ---
@@ -1913,7 +1913,7 @@ This whole `if` Structure is disabled, but the parser still verifies the syntax 
 Example inside an enabled block:
 
 if: mode = debug
-    $then:
+    %then:
         print: disabled then branch
     ---
     else:
@@ -1923,7 +1923,7 @@ if: mode = debug
 
 Here only the `then` Structure is disabled. Its body is still parsed and syntax-checked.
 
-The `$` marker is not a receiver, not an operator and not a runtime action. It is a source-control marker handled before receiver consumption.
+The `%` marker is not a receiver, not an operator and not a runtime action. It is a source-control marker handled before receiver consumption.
 
 The raw file-comment fence is a run of asterisks:
 
@@ -5235,7 +5235,7 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     comment_body        ::= "#" ignored_until_newline
 
-    disabled_body       ::= "$" enabled_line_body
+    disabled_body       ::= "%" enabled_line_body
 
     enabled_line_body   ::= line_item_sequence
 
@@ -5628,7 +5628,7 @@ Conceptual form:
     same-parent-level line     ordinary source-level cut for the previous child frame and start of the next sibling item
     empty line                 formatting whitespace, not a structural close token
     #                          line comment marker; ignores text to the end of the physical line
-    $                          disabled item/block marker; syntax is still parsed and checked
+    %                          disabled item/block marker; syntax is still parsed and checked
     ***...                     column-0 raw file comment fence, 3..80 `*` characters; closing fence must have the same length; syntax inside is ignored
     ===...                     column-0 block string fence, 3..80 `=` characters; closing fence must have the same length
     end: name                  explicit named tail-cutter for a visible frame/entity/label block; not the only close mechanism

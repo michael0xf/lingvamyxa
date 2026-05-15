@@ -1,4 +1,4 @@
-$outer:
+%outer:
 . keep: before
 ****
 ignored " bad

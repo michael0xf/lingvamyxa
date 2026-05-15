@@ -2809,7 +2809,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
                 continue;
             }
         }
-        if (text_length > 0U && text[0] == '$') {
+        if (text_length > 0U && text[0] == '%') {
             size_t marker_column;
             size_t header_column;
             size_t next_offset;

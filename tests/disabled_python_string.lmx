@@ -1,4 +1,4 @@
-$outer:
+%outer:
 . """inactive # not a comment
 colon: stays data
 """

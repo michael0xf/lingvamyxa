@@ -1,4 +1,4 @@
-$outer:
+%outer:
 =====# comment
 =====
 end: outer
