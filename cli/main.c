@@ -4,6 +4,9 @@
 #include "lm_p0.h"
 
 int main(int argc, char **argv) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     if (argc == 2) {
         LmP0Document *document;
         const LmP0Diagnostic *diagnostic;
@@ -38,6 +41,7 @@ int main(int argc, char **argv) {
         }
 
         fputs(dump, stdout);
+        fflush(stdout);
         lm_p0_free(dump);
         lm_p0_document_destroy(document);
         return 0;

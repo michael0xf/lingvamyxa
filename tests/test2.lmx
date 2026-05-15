@@ -1,0 +1,23 @@
+﻿dataset: harvest
+. meta:
+. . title: "Regional harvest report"
+. . season: 2026
+. . source:
+. . . organization: `Field Bureau`
+. . . system: `manual survey`
+. .
+. . location:
+. . . country: Uruguay
+. . . region: `north field group`
+. .
+. . note:
+. . . "This part is XML-like tree data: nested named Structures."
+.
+. table:
+. . columns: int(id) Text(region) Text(crop) real(tons) decimal(moisture)
+. . rows:
+. . . 1 `north field` wheat 12.50 0.14
+. . . 2 `south field` corn 8.75 0.19
+. . . 3 `east ridge` barley 10.00 0.16
+. . . 4 `river lowland` rice 21.30 0.22
+.

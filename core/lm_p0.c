@@ -172,6 +172,13 @@ static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) 
         p = line_start;
         level = 0U;
 
+        if (line == 1U && raw_length >= 3U &&
+            (unsigned char)source[p] == 0xEFU &&
+            (unsigned char)source[p + 1U] == 0xBBU &&
+            (unsigned char)source[p + 2U] == 0xBFU) {
+            p += 3U;
+        }
+
         if (source[p] == ' ') {
             lm_p0_set_diagnostic(document, 3, line, 1U, "leading spaces are not accepted by the first dotted P0 parser");
             return 0;
@@ -316,6 +323,34 @@ static int lm_p0_text_has_expression_operator(const char *text, size_t length) {
     size_t i;
 
     for (i = 0U; i < length; ++i) {
+        if (text[i] == '"') {
+            ++i;
+            while (i < length) {
+                if (text[i] == '\\') {
+                    i += 2U;
+                    continue;
+                }
+                if (text[i] == '"') {
+                    break;
+                }
+                ++i;
+            }
+            continue;
+        }
+        if (text[i] == '`') {
+            ++i;
+            while (i < length) {
+                if (text[i] == '`' && i + 1U < length && text[i + 1U] == '`') {
+                    i += 2U;
+                    continue;
+                }
+                if (text[i] == '`') {
+                    break;
+                }
+                ++i;
+            }
+            continue;
+        }
         if (lm_p0_is_operator_char(text[i])) {
             return 1;
         }
