@@ -319,7 +319,7 @@ object representation too early.
 
 Detailed type-checking and ANSI C projection rules are specified in:
 
-    Lingvamyxa_L1_ansi_c_type_projection_instruction.txt
+    ansi_c_type_projection_instruction.lm1.txt
 
 
 10. C99 Style Rules
