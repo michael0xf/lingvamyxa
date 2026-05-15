@@ -1,0 +1,7 @@
+$if: mode = debug # inactive header comment
+. then: # disabled frame comment
+. . print: disabled # "bad quote hidden by comment
+. # dotted delimiter comment
+. more: value
+end: if # close disabled
+active: ok # active line comment

@@ -74,6 +74,8 @@ typedef enum LmP0FieldParseFlags {
     LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL = 2
 } LmP0FieldParseFlags;
 
+#define LM_P0_MAX_FENCE_LENGTH 80U
+
 static void lm_p0_set_diagnostic(
     LmP0Document *document,
     int code,
@@ -135,13 +137,55 @@ static int lm_p0_is_field_space(char c) {
 }
 
 static int lm_p0_is_quoted_token_boundary(char c) {
-    return lm_p0_is_field_space(c) || c == ',' || c == '(' || c == ')';
+    return lm_p0_is_field_space(c) || c == ',' || c == '(' || c == ')' || c == '#';
 }
 
 static void lm_p0_trim_right(const char **text, size_t *length) {
     (void)text;
     while (*length > 0U && (lm_p0_is_horizontal_space((*text)[*length - 1U]) || (*text)[*length - 1U] == '\r')) {
         --(*length);
+    }
+}
+
+static void lm_p0_trim_trailing_line_comment(const char **text, size_t *length) {
+    size_t i;
+
+    i = 0U;
+    while (i < *length) {
+        if ((*text)[i] == '"' || (*text)[i] == '`') {
+            char quote;
+
+            quote = (*text)[i++];
+            while (i < *length) {
+                if (quote == '"' && (*text)[i] == '\\') {
+                    i += i + 1U < *length ? 2U : 1U;
+                    continue;
+                }
+                if (quote == '`' && (*text)[i] == '`' && i + 1U < *length && (*text)[i + 1U] == '`') {
+                    i += 2U;
+                    continue;
+                }
+                if ((*text)[i++] == quote) {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if ((*text)[i] == '#') {
+            size_t end;
+
+            end = i + 1U;
+            while (end < *length && !lm_p0_is_line_break((*text)[end])) {
+                ++end;
+            }
+            if (end == *length) {
+                *length = i;
+                lm_p0_trim_right(text, length);
+            }
+            return;
+        }
+        ++i;
     }
 }
 
@@ -311,6 +355,12 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
             quote = source[i++];
             continue;
         }
+        if (source[i] == '#') {
+            while (i < length && !lm_p0_is_line_break(source[i])) {
+                ++i;
+            }
+            continue;
+        }
         if (source[i] == '(') {
             ++depth;
         } else if (source[i] == ')' && depth > 0U) {
@@ -322,6 +372,19 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
     }
 
     return i;
+}
+
+static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end) {
+    size_t i;
+
+    i = start;
+    while (i < end) {
+        if (!lm_p0_is_horizontal_space(source[i])) {
+            return 0;
+        }
+        ++i;
+    }
+    return 1;
 }
 
 static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start) {
@@ -343,7 +406,7 @@ static int lm_p0_match_quote_fence_line(
 ) {
     size_t i;
 
-    if (quote_count < 3U || line_start + quote_count > line_end) {
+    if (quote_count < 3U || quote_count > LM_P0_MAX_FENCE_LENGTH || line_start + quote_count > line_end) {
         return 0;
     }
     for (i = 0U; i < quote_count; ++i) {
@@ -362,6 +425,95 @@ static int lm_p0_match_quote_fence_line(
         ++i;
     }
     return 1;
+}
+
+static int lm_p0_match_raw_comment_fence_line(
+    const char *source,
+    size_t line_start,
+    size_t line_end,
+    size_t eq_count
+) {
+    size_t i;
+
+    if (eq_count < 3U || eq_count > LM_P0_MAX_FENCE_LENGTH || line_start + eq_count > line_end) {
+        return 0;
+    }
+    for (i = 0U; i < eq_count; ++i) {
+        if (source[line_start + i] != '=') {
+            return 0;
+        }
+    }
+    if (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
+        return 0;
+    }
+    return lm_p0_line_rest_is_horizontal_space(source, line_start + eq_count, line_end);
+}
+
+static int lm_p0_scan_raw_comment_block(
+    LmP0Document *document,
+    const char *source,
+    size_t length,
+    size_t line_start,
+    size_t line,
+    size_t *next_offset,
+    size_t *next_line
+) {
+    size_t line_end;
+    size_t eq_count;
+    size_t scan_start;
+    size_t scan_line;
+
+    if (line_start >= length || source[line_start] != '=') {
+        return 0;
+    }
+
+    line_end = lm_p0_find_physical_line_end(source, length, line_start);
+    eq_count = 0U;
+    while (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
+        ++eq_count;
+    }
+    if (eq_count < 3U) {
+        return 0;
+    }
+    if (eq_count > LM_P0_MAX_FENCE_LENGTH) {
+        if (lm_p0_line_rest_is_horizontal_space(source, line_start + eq_count, line_end)) {
+            lm_p0_set_diagnostic(document, 23, line, 1U, "raw comment fence length exceeds 80 characters");
+        }
+        return 0;
+    }
+    if (!lm_p0_match_raw_comment_fence_line(source, line_start, line_end, eq_count)) {
+        return 0;
+    }
+
+    scan_start = line_end;
+    if (scan_start < length) {
+        scan_start += lm_p0_line_break_width_at(source, length, scan_start);
+    }
+    scan_line = line + 1U;
+
+    while (scan_start <= length) {
+        size_t current_end;
+        size_t break_width;
+
+        current_end = lm_p0_find_physical_line_end(source, length, scan_start);
+        if (lm_p0_match_raw_comment_fence_line(source, scan_start, current_end, eq_count)) {
+            break_width = current_end < length
+                ? lm_p0_line_break_width_at(source, length, current_end)
+                : 0U;
+            *next_offset = current_end + break_width;
+            *next_line = scan_line + (break_width > 0U ? 1U : 0U);
+            return 1;
+        }
+
+        if (current_end == length) {
+            break;
+        }
+        scan_start = current_end + lm_p0_line_break_width_at(source, length, current_end);
+        ++scan_line;
+    }
+
+    lm_p0_set_diagnostic(document, 24, line, 1U, "unterminated raw comment block");
+    return 0;
 }
 
 static int lm_p0_scan_block_string_event(
@@ -389,6 +541,12 @@ static int lm_p0_scan_block_string_event(
     quote_count = 0U;
     while (line_start + quote_count < line_end && source[line_start + quote_count] == quote) {
         ++quote_count;
+    }
+    if (quote_count > LM_P0_MAX_FENCE_LENGTH) {
+        if (lm_p0_line_rest_is_horizontal_space(source, line_start + quote_count, line_end)) {
+            lm_p0_set_diagnostic(document, 23, line, 1U, "block string fence length exceeds 80 characters");
+        }
+        return 0;
     }
     if (!lm_p0_match_quote_fence_line(source, line_start, line_end, quote, quote_count)) {
         return 0;
@@ -742,6 +900,13 @@ static int lm_p0_skip_field_space(
             continue;
         }
 
+        if (text[*index] == '#') {
+            while (*index < length && !lm_p0_is_line_break(text[*index])) {
+                ++(*index);
+            }
+            continue;
+        }
+
         if (lm_p0_is_line_break(text[*index])) {
             size_t content_index;
             size_t next_level;
@@ -878,6 +1043,12 @@ static int lm_p0_find_matching_paren(
     i = open_index;
     depth = 0U;
     while (i < length) {
+        if (text[i] == '#') {
+            while (i < length && !lm_p0_is_line_break(text[i])) {
+                ++i;
+            }
+            continue;
+        }
         if (text[i] == '"' || text[i] == '`') {
             if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, base_column)) {
                 return 0;
@@ -913,6 +1084,12 @@ static int lm_p0_find_colon(const char *text, size_t length, size_t *colon_index
     depth = 0U;
     i = 0U;
     while (i < length) {
+        if (text[i] == '#') {
+            while (i < length && !lm_p0_is_line_break(text[i])) {
+                ++i;
+            }
+            continue;
+        }
         if (text[i] == '"' || text[i] == '`') {
             char quote;
 
@@ -1090,6 +1267,7 @@ static int lm_p0_parse_fields_until_with_layout(
                        text[i] != ',' &&
                        text[i] != '(' &&
                        text[i] != ')' &&
+                       text[i] != '#' &&
                        text[i] != ':') {
                     if (text[i] == '"' || text[i] == '`') {
                         size_t diagnostic_line;
@@ -1121,7 +1299,11 @@ static int lm_p0_parse_fields_until_with_layout(
                     ++i;
                 }
                 body_index = i;
-                has_inline_body = i < length && !lm_p0_is_line_break(text[i]) && text[i] != ',' && text[i] != ')';
+                has_inline_body = i < length &&
+                    !lm_p0_is_line_break(text[i]) &&
+                    text[i] != ',' &&
+                    text[i] != ')' &&
+                    text[i] != '#';
                 if (has_inline_body) {
                     node->as.frame.flags |= LM_P0_FRAME_INLINE_BODY;
                 }
@@ -1460,12 +1642,15 @@ static int lm_p0_text_has_prefix_name(
     if (length == name_length) {
         return allow_bare;
     }
+    if (allow_bare && (lm_p0_is_horizontal_space(text[name_length]) || text[name_length] == '#')) {
+        return 1;
+    }
     return text[name_length] == ':';
 }
 
 static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
     if (length >= 3U && memcmp(text, "---", 3U) == 0 &&
-        (length == 3U || lm_p0_is_horizontal_space(text[3U]) || text[3U] == ':')) {
+        (length == 3U || lm_p0_is_horizontal_space(text[3U]) || text[3U] == ':' || text[3U] == '#')) {
         return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
     }
     if (lm_p0_text_has_prefix_name(text, length, "end", 0)) {
@@ -1583,7 +1768,10 @@ static int lm_p0_parse_trailer_item(
             }
             spelling_length = body_start;
         } else {
-            while (body_start < length && !lm_p0_is_horizontal_space(text[body_start]) && text[body_start] != ',') {
+            while (body_start < length &&
+                   !lm_p0_is_horizontal_space(text[body_start]) &&
+                   text[body_start] != ',' &&
+                   text[body_start] != '#') {
                 ++body_start;
             }
             spelling_length = body_start;
@@ -1878,6 +2066,12 @@ static int lm_p0_validate_disabled_item_text(
 
     i = 0U;
     while (i < length) {
+        if (text[i] == '#') {
+            while (i < length && !lm_p0_is_line_break(text[i])) {
+                ++i;
+            }
+            continue;
+        }
         if (text[i] == '"' || text[i] == '`') {
             if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, column)) {
                 return 0;
@@ -1927,12 +2121,28 @@ static int lm_p0_disabled_scan_next_event(
         size_t raw_length;
         size_t p;
         size_t level;
+        int dotted_level;
         const char *text;
         size_t text_length;
 
         line_start = *offset;
         if (line_start >= length) {
             return 1;
+        }
+
+        if (lm_p0_scan_raw_comment_block(
+                document,
+                source,
+                length,
+                line_start,
+                *line,
+                offset,
+                line
+            )) {
+            continue;
+        }
+        if (document->diagnostic.code != 0) {
+            return 0;
         }
 
         if (lm_p0_scan_block_string_event(
@@ -1966,6 +2176,7 @@ static int lm_p0_disabled_scan_next_event(
 
         p = line_start;
         level = 0U;
+        dotted_level = 0;
         if (*line == 1U && raw_length >= 3U &&
             (unsigned char)source[p] == 0xEFU &&
             (unsigned char)source[p + 1U] == 0xBBU &&
@@ -1974,6 +2185,7 @@ static int lm_p0_disabled_scan_next_event(
         }
 
         if (p < line_start + raw_length && source[p] == '.') {
+            dotted_level = 1;
             while (p < line_start + raw_length && source[p] == '.') {
                 ++level;
                 ++p;
@@ -2011,8 +2223,12 @@ static int lm_p0_disabled_scan_next_event(
         lm_p0_trim_right(&text, &text_length);
 
         if (text_length == 0U || text[0] == '#') {
-            lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line);
-            continue;
+            if (dotted_level && level > 0U) {
+                text_length = 0U;
+            } else {
+                lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line);
+                continue;
+            }
         }
 
         memset(event, 0, sizeof(*event));
@@ -2252,12 +2468,29 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         size_t raw_length;
         size_t p;
         size_t level;
+        int dotted_level;
         const char *text;
         size_t text_length;
         unsigned node_flags;
         LmP0StreamEvent event;
 
         line_start = offset;
+        if (lm_p0_scan_raw_comment_block(
+                document,
+                source,
+                length,
+                line_start,
+                line,
+                &offset,
+                &line
+            )) {
+            continue;
+        }
+        if (document->diagnostic.code != 0) {
+            status = 0;
+            break;
+        }
+
         if (lm_p0_scan_block_string_event(
                 document,
                 source,
@@ -2296,6 +2529,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
 
         p = line_start;
         level = 0U;
+        dotted_level = 0;
         if (line == 1U && raw_length >= 3U &&
             (unsigned char)source[p] == 0xEFU &&
             (unsigned char)source[p + 1U] == 0xBBU &&
@@ -2304,6 +2538,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         }
 
         if (p < line_start + raw_length && source[p] == '.') {
+            dotted_level = 1;
             while (p < line_start + raw_length && source[p] == '.') {
                 ++level;
                 ++p;
@@ -2353,11 +2588,15 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             continue;
         }
         if (text_length > 0U && text[0] == '#') {
-            if (line_end == length) {
-                break;
+            if (dotted_level && level > 0U) {
+                text_length = 0U;
+            } else {
+                if (line_end == length) {
+                    break;
+                }
+                lm_p0_advance_layout_line(source, length, line_start, line_end, &offset, &line);
+                continue;
             }
-            lm_p0_advance_layout_line(source, length, line_start, line_end, &offset, &line);
-            continue;
         }
         if (text_length > 0U && text[0] == '$') {
             size_t marker_column;
@@ -2376,6 +2615,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             }
             text += skip;
             text_length -= skip;
+            lm_p0_trim_trailing_line_comment(&text, &text_length);
             if (text_length == 0U || text[0] == '#') {
                 lm_p0_set_diagnostic(document, 21, line, marker_column, "disabled marker must be followed by a source item");
                 status = 0;
