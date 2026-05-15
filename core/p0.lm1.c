@@ -69,6 +69,13 @@ typedef enum LmP0TrailerRole {
     LM_P0_TRAILER_ROLE_TAIL_CUTTER = 1
 } LmP0TrailerRole;
 
+typedef enum LmP0DashFenceStatus {
+    LM_P0_DASH_FENCE_NONE = 0,
+    LM_P0_DASH_FENCE_VALID = 1,
+    LM_P0_DASH_FENCE_TOO_LONG = 2,
+    LM_P0_DASH_FENCE_TRAILING_TEXT = 3
+} LmP0DashFenceStatus;
+
 typedef enum LmP0FieldParseFlags {
     LM_P0_FIELD_PARSE_STOP_ON_COMMA = 1,
     LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL = 2
@@ -387,6 +394,73 @@ static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start,
     return 1;
 }
 
+static LmP0DashFenceStatus lm_p0_dash_fence_status(
+    const char *text,
+    size_t length,
+    size_t *out_dash_count
+) {
+    size_t dash_count;
+    size_t i;
+
+    dash_count = 0U;
+    while (dash_count < length && text[dash_count] == '-') {
+        ++dash_count;
+    }
+    if (out_dash_count != NULL) {
+        *out_dash_count = dash_count;
+    }
+    if (dash_count < 3U) {
+        return LM_P0_DASH_FENCE_NONE;
+    }
+    if (dash_count > LM_P0_MAX_FENCE_LENGTH) {
+        return LM_P0_DASH_FENCE_TOO_LONG;
+    }
+
+    i = dash_count;
+    while (i < length) {
+        if (!lm_p0_is_horizontal_space(text[i])) {
+            return LM_P0_DASH_FENCE_TRAILING_TEXT;
+        }
+        ++i;
+    }
+    return LM_P0_DASH_FENCE_VALID;
+}
+
+static LmP0DashFenceStatus lm_p0_dash_fence_status_after_comment_trim(
+    const char *text,
+    size_t length,
+    size_t *out_dash_count
+) {
+    const char *trimmed_text;
+    size_t trimmed_length;
+
+    trimmed_text = text;
+    trimmed_length = length;
+    lm_p0_trim_trailing_line_comment(&trimmed_text, &trimmed_length);
+    return lm_p0_dash_fence_status(trimmed_text, trimmed_length, out_dash_count);
+}
+
+static int lm_p0_validate_dash_fence_line(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column
+) {
+    LmP0DashFenceStatus status;
+
+    status = lm_p0_dash_fence_status_after_comment_trim(text, length, NULL);
+    if (status == LM_P0_DASH_FENCE_TOO_LONG) {
+        lm_p0_set_diagnostic(document, 25, line, column, "dash delimiter fence length exceeds 80 characters");
+        return 0;
+    }
+    if (status == LM_P0_DASH_FENCE_TRAILING_TEXT) {
+        lm_p0_set_diagnostic(document, 26, line, column, "dash delimiter line must contain only the dash fence, whitespace, or a line comment");
+        return 0;
+    }
+    return 1;
+}
+
 static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start) {
     size_t i;
 
@@ -476,12 +550,11 @@ static int lm_p0_scan_raw_comment_block(
         return 0;
     }
     if (eq_count > LM_P0_MAX_FENCE_LENGTH) {
-        if (lm_p0_line_rest_is_horizontal_space(source, line_start + eq_count, line_end)) {
-            lm_p0_set_diagnostic(document, 23, line, 1U, "raw comment fence length exceeds 80 characters");
-        }
+        lm_p0_set_diagnostic(document, 23, line, 1U, "raw comment fence length exceeds 80 characters");
         return 0;
     }
     if (!lm_p0_match_raw_comment_fence_line(source, line_start, line_end, eq_count)) {
+        lm_p0_set_diagnostic(document, 27, line, 1U, "raw comment fence line must contain only the equals fence and whitespace");
         return 0;
     }
 
@@ -1649,8 +1722,7 @@ static int lm_p0_text_has_prefix_name(
 }
 
 static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
-    if (length >= 3U && memcmp(text, "---", 3U) == 0 &&
-        (length == 3U || lm_p0_is_horizontal_space(text[3U]) || text[3U] == ':' || text[3U] == '#')) {
+    if (lm_p0_dash_fence_status_after_comment_trim(text, length, NULL) == LM_P0_DASH_FENCE_VALID) {
         return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
     }
     if (lm_p0_text_has_prefix_name(text, length, "end", 0)) {
@@ -1890,6 +1962,11 @@ static int lm_p0_stream_apply_item_event(
         return 0;
     }
 
+    if (event->kind == LM_P0_STREAM_EVENT_ITEM &&
+        !lm_p0_validate_dash_fence_line(document, event->text, event->text_length, event->line, event->column)) {
+        return 0;
+    }
+
     trailer_role = event->kind == LM_P0_STREAM_EVENT_ITEM
         ? lm_p0_trailer_role(event->text, event->text_length)
         : LM_P0_TRAILER_ROLE_NONE;
@@ -2014,6 +2091,13 @@ static int lm_p0_stream_apply_item_event(
     return 1;
 }
 
+static int lm_p0_dash_fence_has_close_target(const LmP0Stack *stack, const LmP0StreamEvent *event) {
+    size_t top_level;
+
+    top_level = lm_p0_stack_top_level(stack);
+    return event->level + 1U <= top_level && stack->owners[event->level + 1U] != NULL;
+}
+
 static int lm_p0_stream_apply_event(
     LmP0Document *document,
     LmP0Stack *stack,
@@ -2031,6 +2115,14 @@ static int lm_p0_stream_apply_event(
 
     if (!lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event->level)) {
         return 0;
+    }
+    if (event->kind == LM_P0_STREAM_EVENT_ITEM &&
+        lm_p0_dash_fence_status_after_comment_trim(event->text, event->text_length, NULL) == LM_P0_DASH_FENCE_VALID &&
+        !lm_p0_dash_fence_has_close_target(stack, event)) {
+        pending->active = 1;
+        pending->event = *event;
+        pending->event.kind = LM_P0_STREAM_EVENT_DELIM;
+        return 1;
     }
     return lm_p0_stream_apply_item_event(document, stack, event);
 }
@@ -2065,6 +2157,9 @@ static int lm_p0_validate_disabled_item_text(
     size_t i;
 
     i = 0U;
+    if (!lm_p0_validate_dash_fence_line(document, text, length, line, column)) {
+        return 0;
+    }
     while (i < length) {
         if (text[i] == '#') {
             while (i < length && !lm_p0_is_line_break(text[i])) {

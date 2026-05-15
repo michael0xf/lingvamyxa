@@ -1,0 +1,20 @@
+----
+. anonymous
+----
+
+block:
+. item
+----
+after4: ok
+
+block80:
+. item
+--------------------------------------------------------------------------------
+after80: ok
+
+outer:
+. inner:
+. . item
+. ----- # dotted indentation plus longer dash fence
+. after: ok
+end: outer

@@ -900,7 +900,7 @@ The head is the `[]` or `[][]` receiver/procedure. The first inline tail field i
 
 In the one-dimensional examples, `1 2` and `3 4` are sibling row/value items. A deeper line under `1 2` would be invalid unless `1 2` were written as a Structure-opening item; scalar/value rows do not become heads merely because a deeper line follows them.
 
-In the relaxed examples, `[][]:` is a sibling of the preceding `[]:` under `L2`. The optional middle delimiter must therefore be written at the same source level as those sibling array frames. It may be written as relaxed `---` with the same indentation, or as a delimiter line whose leading zone contains one canonical dot, such as ` .  ---`. A root-level `---` there would close/cut at the `L2` level instead of merely separating the two array declarations.
+In the relaxed examples, `[][]:` is a sibling of the preceding `[]:` under `L2`. The optional middle delimiter must therefore be written at the same source level as those sibling array frames. It may be written as a relaxed dash-fence line with the same indentation, or as a delimiter line whose leading zone contains one canonical dot, such as ` .  ---`. A root-level dash-fence line there would close/cut at the `L2` level instead of merely separating the two array declarations.
 
 4.2.1. Whitespace Short-Tail Rule
 
@@ -1249,7 +1249,7 @@ A useful parser view is the head-body-trailer envelope:
     body Structure
     trailer
 
-The body Structure is the primary Structure consumed by the opened frame or anonymous positional argument. The head and trailer are structural envelope roles, not ordinary child fields of that body. For a named frame, the head is a source item such as `if: condition`, `fn: name ...` or `outerLoop:`. For an anonymous positional Structure, the head may be a canonical dotted delimiter line or a relaxed `---` delimiter line.
+The body Structure is the primary Structure consumed by the opened frame or anonymous positional argument. The head and trailer are structural envelope roles, not ordinary child fields of that body. For a named frame, the head is a source item such as `if: condition`, `fn: name ...` or `outerLoop:`. For an anonymous positional Structure, the head may be a canonical dotted delimiter line or a relaxed dash-fence delimiter line.
 
 In canonical dotted notation:
 
@@ -1259,7 +1259,7 @@ In canonical dotted notation:
     . . body2                       # body
     .                               # trailer
 
-The middle dotted delimiter line has both roles: it closes/separates the preceding anonymous Structure and, because it is followed by a deeper source item, opens the next anonymous positional Structure. A relaxed `---` line follows the same head/body/trailer envelope rule.
+The middle dotted delimiter line has both roles: it closes/separates the preceding anonymous Structure and, because it is followed by a deeper source item, opens the next anonymous positional Structure. A relaxed dash-fence line follows the same head/body/trailer envelope rule.
 
 Example: ordinary source-level cut after a nested executable definition
 
@@ -1307,7 +1307,7 @@ The anonymous Structure continues until the next canonical source-level delimite
 
 A canonical source-level delimiter line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
 
-Every source line written with leading dots remains valid in the relaxed language profile. A canonical source-level delimiter line may therefore still be used instead of `---` as the visible anonymous delimiter / nameless close form.
+Every source line written with leading dots remains valid in the relaxed language profile. A canonical source-level delimiter line may therefore still be used instead of a dash-fence line as the visible anonymous delimiter / nameless close form.
 
 Canonical anonymous-branch example:
 
@@ -1350,7 +1350,7 @@ Conceptual normal form:
 
     match(value, 1, print(World), 2, print(Hello))
 
-4.5.2. Relaxed Indentation Notation and `---`
+4.5.2. Relaxed Indentation Notation and Dash Fences
 
 Relaxed indentation notation is a readability shorthand for the same source-level tree. It replaces leading dots before ordinary source items with spaces/tabs indentation. It does not remove the requirement for visible nameless delimiters.
 
@@ -1358,7 +1358,8 @@ The simple replacement rule is:
 
     leading dots before source text may be replaced by indentation;
     a textless canonical source-level delimiter line must remain visible either
-    as that dotted delimiter line or as `---` at the corresponding source level.
+    as that dotted delimiter line or as a dash-fence line at the corresponding
+    source level.
 
 4.5.2.1. Relative Indentation Pitfall
 
@@ -1426,50 +1427,54 @@ absolute deeper level unambiguously, use canonical dots or introduce the
 intermediate relaxed indentation level explicitly through the surrounding
 layout.
 
-A standalone line:
+A standalone dash-fence line:
 
     ---
+    ----
+    -----
 
-at source level K is an explicit source-level marker. It materializes level K in the source stream without adding an ordinary receiver item.
+at source level K is an explicit source-level marker. The dash fence is a run of `-` characters of length 3 through 80 after the leading indentation/source-level zone. It materializes level K in the source stream without adding an ordinary receiver item.
 
 Its primary role is to make a level transition visible when ordinary indentation or dots would otherwise hide an empty structural step.
 
-A `---` line performs no receiver call by itself. Its effect is derived from ordinary source-level rules:
+A dash-fence line performs no receiver call by itself. Its effect is derived from ordinary source-level rules:
 
-    1. If the parser is currently inside a deeper level, the move to `---` at
+    1. If the parser is currently inside a deeper level, the move to the dash fence at
        level K performs the ordinary source-level cut/trailer for all open
        Structures above K.
 
-    2. If the following non-empty source item is at level K + 1, the `---` line
+    2. If the following non-empty source item is at level K + 1, the dash-fence line
        acts as the visible head of an anonymous positional Structure at level
        K.
 
-    3. If both conditions hold, the same `---` line separates two sibling
+    3. If both conditions hold, the same dash-fence line separates two sibling
        anonymous Structures: it closes the previous deeper Structure and opens
        the next deeper Structure.
 
-Therefore `---` is not a special close operator, not a special open operator and not a third independent separator syntax. It is the explicit spelling of a structural level point K. Close/open/separator behavior follows from the same source-level cut and child rules used everywhere else.
+Therefore a dash-fence line is not a special close operator, not a special open operator and not a third independent separator syntax. It is the explicit spelling of a structural level point K. Close/open/separator behavior follows from the same source-level cut and child rules used everywhere else.
 
-If `---` at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next `---` at level K, a following source item at a smaller source level, an explicit `end: <target>`, terminal `return` / `return: value` where valid, or EOF.
+If a dash-fence line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next dash-fence line at level K, a following source item at a smaller source level, an explicit `end: <target>`, terminal `return` / `return: value` where valid, or EOF.
 
-If `---` at level K is not followed by deeper source items, it closes or cuts the current open anonymous/implicit section at that level and resumes parsing at level K.
+If a dash-fence line at level K is not followed by deeper source items, it closes or cuts the current open anonymous/implicit section at that level and resumes parsing at level K.
 
-A `---` delimiter line must contain no source item other than the delimiter itself. It may have leading spaces/tabs in relaxed indentation notation, leading canonical dots in canonical source-level / automatic-rewrite notation, horizontal whitespace after the delimiter, and an optional trailing `#` line comment. The `#` comment text is ignored by the structural parser, exactly like comments after ordinary source text.
+A dash-fence delimiter line must contain no source item other than the delimiter itself. It may have leading spaces/tabs in relaxed indentation notation, leading canonical dots in canonical source-level / automatic-rewrite notation, horizontal whitespace after the delimiter, and an optional trailing `#` line comment. The `#` comment text is ignored by the structural parser, exactly like comments after ordinary source text.
 
 Valid delimiter lines:
 
     ---
+    ----
     --- # anonymous branch delimiter
     .---
-    . --- # automatically rewritten dotted separator
+    . ---- # automatically rewritten dotted separator
 
 Invalid delimiter lines:
 
     ---else:
+    ----else:
     --- return: x
     --- int: x
 
-`---` is not a prefix operator and cannot be combined with a receiver or any other source item on the same physical line.
+A dash fence is not a prefix operator and cannot be combined with a receiver or any other source item on the same physical line.
 
 A following named receiver line at the same indentation/source level may close the previous anonymous section and start the next structural item of the same parent frame. For example, `else:` at the correct level may close the preceding anonymous branch and start the named `else` branch; it does not need to be attached to `---`.
 
@@ -1664,7 +1669,7 @@ not:
 
 `end:` is not the default close mechanism for all named frames. The default structural close is the ordinary source-level cut. `end:` is the explicit named form of that close. It is useful when the source wants to identify the close target directly, close across a long nested tail, or improve diagnostics and readability in long blocks.
 
-The standalone source line `---` is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it separates or closes the current open anonymous/implicit section at that level by ordinary source-level rules. When the current named frame allows nameless close and there is no ambiguity, `---` may close that frame as a shorter alternative to `end: name`.
+A standalone dash-fence source line is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it separates or closes the current open anonymous/implicit section at that level by ordinary source-level rules. When the current named frame allows nameless close and there is no ambiguity, a dash-fence line may close that frame as a shorter alternative to `end: name`.
 
 Example named close:
 
@@ -5264,15 +5269,15 @@ This grammar sketch describes the structural parser only. It does not define fin
                           | bounded_structure
                           | atom_or_value
 
-The vertical Structure tree is produced by source levels and explicit visible delimiters: smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed `---` lines, named `end:` closes and terminal return where valid.
+The vertical Structure tree is produced by source levels and explicit visible delimiters: smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed dash-fence lines, named `end:` closes and terminal return where valid.
 
 For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. In a short colon-form, the inline tail fields are also treated as fields at the implicit argument level N + 1. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and identifier values do not become headers merely because a deeper line follows.
 
-A canonical dotted delimiter line or relaxed `---` line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at a smaller source level closes all open Structures above that smaller level.
+A canonical dotted delimiter line or relaxed dash-fence line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at a smaller source level closes all open Structures above that smaller level.
 
-A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed `---` anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
+A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed dash-fence anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
 
-This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone `---` line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
+This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone dash-fence line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
@@ -5572,7 +5577,7 @@ Conceptual form:
     leading dots               canonical visible source level units in the leading indentation zone
     indentation                relaxed source level units before ordinary source items
     dotted delimiter line      canonical anonymous Structure delimiter; may open, separate or close at its source level
-    ---                        explicit source-level marker; materializes level K without an ordinary receiver item;
+    ---...                     dash-fence source-level marker, 3..80 `-` characters; materializes level K without an ordinary receiver item;
                                close/open/separator behavior follows from neighboring source levels
     smaller-level source line  ordinary source-level cut/trailer; completes all open Structures above the smaller level
     same-parent-level line     ordinary source-level cut for the previous child frame and start of the next sibling item

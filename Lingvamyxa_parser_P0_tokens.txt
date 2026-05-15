@@ -97,9 +97,10 @@ scanning:
         before newline and at least one dot.
 
     DELIM_DASH(K)
-        A `---` line at source level K. The line may contain leading indentation,
-        optional whitespace after `---`, and an optional trailing `#` comment.
-        It may not contain another source item.
+        A dash-fence line at source level K: a run of `-` characters of length
+        3 through 80 after leading indentation/source-level handling. The line
+        may contain optional whitespace after the dash fence and an optional
+        trailing `#` comment. It may not contain another source item.
 
     COMMENT_LINE
         A line whose content begins with `#` after indentation/source-level
@@ -114,8 +115,9 @@ scanning:
         accepted structural trailers, balanced parenthesized forms, quoted-token
         closure and block-string closure.
 
-`---` is DELIM_DASH only as a standalone structural line. Inside ordinary text,
-`-` is just part of the source spelling consumed by a later parsing layer.
+`---`, `----`, and longer runs up to length 80 are DELIM_DASH only as standalone
+structural lines. Inside ordinary text, `-` is just part of the source spelling
+consumed by a later parsing layer.
 
 
 4. Structural Punctuation
