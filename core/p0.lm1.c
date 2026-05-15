@@ -34,6 +34,12 @@ typedef struct LmP0EventList {
     size_t capacity;
 } LmP0EventList;
 
+typedef struct LmP0IndentStack {
+    size_t *columns;
+    size_t count;
+    size_t capacity;
+} LmP0IndentStack;
+
 typedef struct LmP0Stack {
     LmP0Structure **parents;
     LmP0Node **owners;
@@ -121,16 +127,123 @@ static int lm_p0_event_list_push(
     return 1;
 }
 
+static void lm_p0_indent_stack_free(LmP0IndentStack *stack) {
+    free(stack->columns);
+    stack->columns = NULL;
+    stack->count = 0U;
+    stack->capacity = 0U;
+}
+
+static int lm_p0_indent_stack_push(
+    LmP0Document *document,
+    LmP0IndentStack *stack,
+    size_t column,
+    size_t line,
+    size_t source_column
+) {
+    size_t new_capacity;
+    size_t *columns;
+
+    if (stack->count == stack->capacity) {
+        new_capacity = stack->capacity == 0U ? 8U : stack->capacity * 2U;
+        columns = (size_t *)realloc(stack->columns, new_capacity * sizeof(*columns));
+        if (columns == NULL) {
+            lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels");
+            return 0;
+        }
+        stack->columns = columns;
+        stack->capacity = new_capacity;
+    }
+
+    stack->columns[stack->count++] = column;
+    return 1;
+}
+
+static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack) {
+    memset(stack, 0, sizeof(*stack));
+    return lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U);
+}
+
+static size_t lm_p0_indent_tab_column(size_t column) {
+    return ((column / 8U) + 1U) * 8U;
+}
+
+static void lm_p0_scan_indent_column(
+    const char *source,
+    size_t start,
+    size_t end,
+    size_t *out_offset,
+    size_t *out_column
+) {
+    size_t p;
+    size_t column;
+
+    p = start;
+    column = 0U;
+    while (p < end && (source[p] == ' ' || source[p] == '\t')) {
+        if (source[p] == '\t') {
+            column = lm_p0_indent_tab_column(column);
+        } else {
+            ++column;
+        }
+        ++p;
+    }
+
+    *out_offset = p;
+    *out_column = column;
+}
+
+static int lm_p0_indent_level_from_column(
+    LmP0Document *document,
+    LmP0IndentStack *stack,
+    size_t column,
+    size_t line,
+    size_t source_column,
+    size_t *out_level
+) {
+    size_t top;
+
+    top = stack->columns[stack->count - 1U];
+    if (column == top) {
+        *out_level = stack->count - 1U;
+        return 1;
+    }
+
+    if (column > top) {
+        if (!lm_p0_indent_stack_push(document, stack, column, line, source_column)) {
+            return 0;
+        }
+        *out_level = stack->count - 1U;
+        return 1;
+    }
+
+    while (stack->count > 0U && stack->columns[stack->count - 1U] > column) {
+        --stack->count;
+    }
+    if (stack->count == 0U || stack->columns[stack->count - 1U] != column) {
+        lm_p0_set_diagnostic(document, 17, line, source_column, "unindent does not match any outer indentation level");
+        return 0;
+    }
+
+    *out_level = stack->count - 1U;
+    return 1;
+}
+
 static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) {
     const char *source;
     size_t length;
     size_t offset;
     size_t line;
+    LmP0IndentStack indent_stack;
 
     source = document->source;
     length = document->source_length;
     offset = 0U;
     line = 1U;
+
+    if (!lm_p0_indent_stack_init(document, &indent_stack)) {
+        return 0;
+    }
 
     while (offset <= length) {
         size_t line_start;
@@ -162,13 +275,6 @@ static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) 
             continue;
         }
 
-        for (p = line_start; p < line_start + raw_length; ++p) {
-            if (source[p] == '\t') {
-                lm_p0_set_diagnostic(document, 2, line, p - line_start + 1U, "tabs are not accepted by the first dotted P0 parser");
-                return 0;
-            }
-        }
-
         p = line_start;
         level = 0U;
 
@@ -179,16 +285,41 @@ static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) 
             p += 3U;
         }
 
-        if (source[p] == ' ') {
-            lm_p0_set_diagnostic(document, 3, line, 1U, "leading spaces are not accepted by the first dotted P0 parser");
-            return 0;
-        }
-
-        while (p < line_start + raw_length && source[p] == '.') {
-            ++level;
-            ++p;
-            while (p < line_start + raw_length && source[p] == ' ') {
+        if (p < line_start + raw_length && source[p] == '.') {
+            while (p < line_start + raw_length && source[p] == '.') {
+                ++level;
                 ++p;
+                while (p < line_start + raw_length && source[p] == ' ') {
+                    ++p;
+                }
+            }
+        } else {
+            size_t indent_column;
+
+            lm_p0_scan_indent_column(source, p, line_start + raw_length, &p, &indent_column);
+            text = source + p;
+            text_length = (line_start + raw_length) - p;
+            lm_p0_trim_right(&text, &text_length);
+
+            if (text_length == 0U || text[0] == '#') {
+                if (line_end == length) {
+                    break;
+                }
+                offset = line_end + 1U;
+                ++line;
+                continue;
+            }
+
+            if (!lm_p0_indent_level_from_column(
+                    document,
+                    &indent_stack,
+                    indent_column,
+                    line,
+                    (size_t)(text - (source + line_start)) + 1U,
+                    &level
+                )) {
+                lm_p0_indent_stack_free(&indent_stack);
+                return 0;
             }
         }
 
@@ -229,6 +360,7 @@ static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) 
         }
 
         if (!lm_p0_event_list_push(document, events, &event)) {
+            lm_p0_indent_stack_free(&indent_stack);
             return 0;
         }
 
@@ -239,6 +371,7 @@ static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) 
         ++line;
     }
 
+    lm_p0_indent_stack_free(&indent_stack);
     return 1;
 }
 
