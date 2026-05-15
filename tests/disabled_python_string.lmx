@@ -1,0 +1,6 @@
+$outer:
+. """inactive # not a comment
+colon: stays data
+"""
+end: outer
+active: ok

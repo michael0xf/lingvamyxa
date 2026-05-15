@@ -205,6 +205,19 @@ P0 atom tokens:
         `(`, `)`, or the end of the source item.
         The P0 lexer may preserve original spelling and decoded value metadata.
 
+    PYTHON_STRING_LITERAL
+        Python-like triple-quoted string spelling. It starts with exactly three
+        double quotes or exactly three single quotes in ordinary token position
+        and closes at the next unescaped matching triple delimiter. Physical
+        line breaks inside the literal are string content. `#`, `:`, `,`, `(`,
+        `)`, dash fences, source levels and tail cutters are not recognized
+        inside the literal before the closing delimiter. Backslash is ordinary
+        raw text in this literal form. A run of exactly three matching quote
+        characters closes the literal; a run of four or more matching quote
+        characters is literal content and value decoding emits one fewer quote
+        character than the source run. After the closing triple delimiter, the
+        same field-boundary rule applies. P0 preserves source spelling.
+
     CHARACTER_CONSTANT
         ANSI C / C99 single-quoted character constant spelling. It is a numeric
         value, not a string and not an identifier. Escape rules and
@@ -250,6 +263,9 @@ Examples:
 
     "properties.lm5"
         one STRING_LITERAL value, not an identifier
+
+    """properties.lm5"""
+        one PYTHON_STRING_LITERAL value, not an identifier
 
 
 6. Head Mode
@@ -390,6 +406,7 @@ Required P0 token/event names:
     AT_RUN
     NUMERIC_LITERAL
     STRING_LITERAL
+    PYTHON_STRING_LITERAL
     CHARACTER_CONSTANT
     EXACT_IDENTIFIER
     BARE_WORD

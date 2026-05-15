@@ -147,6 +147,66 @@ static int lm_p0_is_quoted_token_boundary(char c) {
     return lm_p0_is_field_space(c) || c == ',' || c == '(' || c == ')' || c == '#';
 }
 
+static int lm_p0_starts_python_string(const char *text, size_t length, size_t index) {
+    char quote;
+
+    if (index + 2U >= length) {
+        return 0;
+    }
+    quote = text[index];
+    if (quote != '"' && quote != '\'') {
+        return 0;
+    }
+    return text[index + 1U] == quote && text[index + 2U] == quote;
+}
+
+static int lm_p0_find_python_string_end(
+    const char *text,
+    size_t length,
+    size_t start,
+    size_t *out_end
+) {
+    char quote;
+    size_t i;
+
+    if (!lm_p0_starts_python_string(text, length, start)) {
+        *out_end = start;
+        return 0;
+    }
+
+    quote = text[start];
+    i = start + 3U;
+    while (i < length) {
+        if (text[i] == quote) {
+            size_t run_length;
+
+            run_length = 1U;
+            while (i + run_length < length && text[i + run_length] == quote) {
+                ++run_length;
+            }
+            if (run_length == 3U) {
+                *out_end = i + 3U;
+                return 1;
+            }
+            i += run_length;
+            continue;
+        }
+        ++i;
+    }
+
+    *out_end = length;
+    return 0;
+}
+
+static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start) {
+    size_t end;
+
+    if (!lm_p0_find_python_string_end(text, length, start, &end)) {
+        return length;
+    }
+    return end;
+}
+
 static void lm_p0_trim_right(const char **text, size_t *length) {
     (void)text;
     while (*length > 0U && (lm_p0_is_horizontal_space((*text)[*length - 1U]) || (*text)[*length - 1U] == '\r')) {
@@ -159,6 +219,10 @@ static void lm_p0_trim_trailing_line_comment(const char **text, size_t *length) 
 
     i = 0U;
     while (i < *length) {
+        if (lm_p0_starts_python_string(*text, *length, i)) {
+            i = lm_p0_skip_python_string_unchecked(*text, *length, i);
+            continue;
+        }
         if ((*text)[i] == '"' || (*text)[i] == '`') {
             char quote;
 
@@ -358,6 +422,10 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
             continue;
         }
 
+        if (lm_p0_starts_python_string(source, length, i)) {
+            i = lm_p0_skip_python_string_unchecked(source, length, i);
+            continue;
+        }
         if (source[i] == '"' || source[i] == '`') {
             quote = source[i++];
             continue;
@@ -605,28 +673,11 @@ static int lm_p0_scan_block_string_event(
     size_t scan_start;
     size_t scan_line;
 
-    if (line_start >= length) {
+    if (line_start >= length || source[line_start] != '=') {
         return 0;
     }
 
     line_end = lm_p0_find_physical_line_end(source, length, line_start);
-    if (source[line_start] == '"' || source[line_start] == '\'') {
-        char old_quote;
-        size_t old_quote_count;
-
-        old_quote = source[line_start];
-        old_quote_count = 0U;
-        while (line_start + old_quote_count < line_end && source[line_start + old_quote_count] == old_quote) {
-            ++old_quote_count;
-        }
-        if (old_quote_count >= 3U && lm_p0_line_rest_is_horizontal_space(source, line_start + old_quote_count, line_end)) {
-            lm_p0_set_diagnostic(document, 28, line, 1U, "block string fence must use a run of '=' characters");
-        }
-        return 0;
-    }
-    if (source[line_start] != '=') {
-        return 0;
-    }
     eq_count = 0U;
     while (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
         ++eq_count;
@@ -1033,6 +1084,29 @@ static int lm_p0_skip_field_space(
     return 1;
 }
 
+static int lm_p0_scan_python_string(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t *index,
+    size_t line,
+    size_t base_column
+) {
+    size_t end;
+
+    if (!lm_p0_find_python_string_end(text, length, *index, &end)) {
+        size_t diagnostic_line;
+        size_t diagnostic_column;
+
+        lm_p0_position_in_slice(text, length, *index, line, base_column, &diagnostic_line, &diagnostic_column);
+        lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated python-like string literal");
+        return 0;
+    }
+
+    *index = end;
+    return 1;
+}
+
 static int lm_p0_scan_quoted(
     LmP0Document *document,
     const char *text,
@@ -1043,6 +1117,10 @@ static int lm_p0_scan_quoted(
     size_t base_column
 ) {
     size_t i;
+
+    if (lm_p0_starts_python_string(text, length, *index)) {
+        return lm_p0_scan_python_string(document, text, length, index, line, base_column);
+    }
 
     i = *index + 1U;
     while (i < length) {
@@ -1143,6 +1221,12 @@ static int lm_p0_find_matching_paren(
             }
             continue;
         }
+        if (lm_p0_starts_python_string(text, length, i)) {
+            if (!lm_p0_scan_python_string(document, text, length, &i, line, base_column)) {
+                return 0;
+            }
+            continue;
+        }
         if (text[i] == '"' || text[i] == '`') {
             if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, base_column)) {
                 return 0;
@@ -1182,6 +1266,10 @@ static int lm_p0_find_colon(const char *text, size_t length, size_t *colon_index
             while (i < length && !lm_p0_is_line_break(text[i])) {
                 ++i;
             }
+            continue;
+        }
+        if (lm_p0_starts_python_string(text, length, i)) {
+            i = lm_p0_skip_python_string_unchecked(text, length, i);
             continue;
         }
         if (text[i] == '"' || text[i] == '`') {
@@ -1349,7 +1437,7 @@ static int lm_p0_parse_fields_until_with_layout(
             int quoted_head;
 
             quoted_head = 0;
-            if (text[i] == '"' || text[i] == '`') {
+            if (lm_p0_starts_python_string(text, length, i) || text[i] == '"' || text[i] == '`') {
                 if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, column)) {
                     return 0;
                 }
@@ -1363,7 +1451,7 @@ static int lm_p0_parse_fields_until_with_layout(
                        text[i] != ')' &&
                        text[i] != '#' &&
                        text[i] != ':') {
-                    if (text[i] == '"' || text[i] == '`') {
+                    if (lm_p0_starts_python_string(text, length, i) || text[i] == '"' || text[i] == '`') {
                         size_t diagnostic_line;
                         size_t diagnostic_column;
 
@@ -1855,7 +1943,8 @@ static int lm_p0_parse_trailer_item(
         }
     } else {
         body_start = 0U;
-        if (body_start < length && (text[body_start] == '"' || text[body_start] == '`')) {
+        if (body_start < length &&
+            (lm_p0_starts_python_string(text, length, body_start) || text[body_start] == '"' || text[body_start] == '`')) {
             if (!lm_p0_scan_quoted(document, text, length, &body_start, text[body_start], line, column)) {
                 return 0;
             }
@@ -2185,6 +2274,12 @@ static int lm_p0_validate_disabled_item_text(
         if (text[i] == '#') {
             while (i < length && !lm_p0_is_line_break(text[i])) {
                 ++i;
+            }
+            continue;
+        }
+        if (lm_p0_starts_python_string(text, length, i)) {
+            if (!lm_p0_scan_python_string(document, text, length, &i, line, column)) {
+                return 0;
             }
             continue;
         }

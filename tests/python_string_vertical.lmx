@@ -1,0 +1,5 @@
+doc:
+. """
+column zero python-like string
+"""
+end: doc

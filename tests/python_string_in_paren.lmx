@@ -1,0 +1,7 @@
+f("""a
+) # not syntax
+"""" stays data
+b""", '''c
+( # not syntax
+'''' stays data
+d''', tail)

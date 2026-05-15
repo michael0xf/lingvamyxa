@@ -710,7 +710,54 @@ is a text value, while:
 
 is the exact identifier/name `hello`.
 
-3.4.4.1. Character Constants
+3.4.4.1. Python-Like Triple-Quoted Text/String Literals
+
+Lingvamyxa also supports Python-like triple-quoted text/string literals. They are ordinary atom tokens, not source-level fence blocks:
+
+    """text"""
+    '''text'''
+
+A Python-like string starts with exactly three double quotes or exactly three single quotes in ordinary token position and closes at the next unescaped matching triple delimiter. It may appear inline, inside a short form, inside a parenthesized form or as a vertical child item with ordinary source-level indentation.
+
+Physical line breaks inside the literal are string content. Source levels, `#` comments, colons, commas, parentheses, dash delimiters, tail cutters and other structural syntax are not recognized inside the literal before the matching closing delimiter is reached.
+
+This literal form is not an ANSI C / C99 string and does not use ANSI C / C99 escape decoding. Its purpose is readable multi-line raw text with no backslash escaping.
+
+Inside a Python-like string, backslash is an ordinary character. `\n` is two characters, backslash and `n`; `\t` is two characters, backslash and `t`; `\"` is two characters, backslash and double quote; `\'` is two characters, backslash and single quote.
+
+The only delimiter-writing rule is quote-run shortening for the same quote character that opened the literal:
+
+    Source run      Parser/value meaning
+    " or '          ordinary raw character
+    "" or ''        ordinary raw characters
+    """ or '''      closes the matching Python-like string
+    """" or ''''    content containing one fewer quote character
+    N >= 4 quotes   content containing N - 1 quote characters
+
+The opposite quote character is always ordinary raw text. For example, single quotes inside a `"""..."""` literal do not need this rule, and double quotes inside a `'''...'''` literal do not need this rule.
+
+A physical line break written directly inside the literal is decoded as a newline character after source newline normalization.
+
+Examples:
+
+    text: """line one
+    line two # not a comment
+    line three: not a frame"""
+
+    text: '''single-quote form
+    four quotes produce three: ''''
+    still text'''
+
+The opening and closing triple delimiters are part of the preserved source spelling at P0. Value decoding belongs to the literal/value layer above P0 and uses the quote-run rule above. After the closing triple delimiter, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item.
+
+This form is different from the column-0 block string fence below. It does not create or close a source-level block by itself. For example, as a child of a frame it still needs an ordinary child level:
+
+    doc:
+    . """text child
+    still text"""
+    end: doc
+
+3.4.4.2. Character Constants
 
 Single-quoted ANSI C / C99 character constants are numeric values. They are not text/string literals and not identifiers.
 
@@ -726,7 +773,7 @@ The spelling and escape rules follow the ANSI C / C99 character-constant model, 
 
 A source line whose entire column-0 content is a run of three through 80 `=` characters is a block string fence.
 
-3.4.4.2. Block Text/String Literals
+3.4.4.3. Block Text/String Literals
 
 Lingvamyxa also has a block text/string literal form. It uses the same fence-matching algorithm as raw file comment blocks, but the fence character is `=`.
 
