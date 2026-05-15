@@ -1,4 +1,4 @@
-#include "lm_p0.h"
+#include "p0.lm1.h"
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -36,6 +36,8 @@ typedef struct LmP0EventList {
 
 typedef struct LmP0Stack {
     LmP0Structure **parents;
+    LmP0Node **owners;
+    unsigned char *hard;
     size_t capacity;
 } LmP0Stack;
 
@@ -82,13 +84,6 @@ static char *lm_p0_copy_bytes(const char *source, size_t length) {
     }
     copy[length] = '\0';
     return copy;
-}
-
-static int lm_p0_text_equals(const char *text, size_t length, const char *literal) {
-    size_t literal_length;
-
-    literal_length = strlen(literal);
-    return length == literal_length && memcmp(text, literal, literal_length) == 0;
 }
 
 static void lm_p0_trim_right(const char **text, size_t *length) {
@@ -222,7 +217,7 @@ static int lm_p0_normalize_lines(LmP0Document *document, LmP0EventList *events) 
         event.column = (size_t)(text - (source + line_start)) + 1U;
         event.offset = (size_t)(text - source);
 
-        if ((text_length == 0U && level > 0U) || lm_p0_text_equals(text, text_length, "---")) {
+        if (text_length == 0U && level > 0U) {
             event.kind = LM_P0_LINE_DELIM;
         } else {
             event.kind = LM_P0_LINE_ITEM;
@@ -275,33 +270,47 @@ static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, 
     return 1;
 }
 
-static void lm_p0_free_node(LmP0Node *node) {
+static void lm_p0_free_node(LmP0Node *node);
+static void lm_p0_free_structure_fields(LmP0Structure *structure);
+
+static void lm_p0_free_trailer(LmP0Trailer *trailer) {
+    if (trailer == NULL) {
+        return;
+    }
+    lm_p0_free_structure_fields(&trailer->body);
+    free(trailer);
+}
+
+static void lm_p0_free_structure_fields(LmP0Structure *structure) {
     LmP0Field *field;
 
+    field = structure->first_field;
+    while (field != NULL) {
+        LmP0Field *next;
+
+        next = field->next;
+        lm_p0_free_node(field->value);
+        free(field);
+        field = next;
+    }
+    structure->first_field = NULL;
+    structure->last_field = NULL;
+    structure->field_count = 0U;
+    lm_p0_free_trailer(structure->trailer);
+    structure->trailer = NULL;
+}
+
+static void lm_p0_free_node(LmP0Node *node) {
     if (node == NULL) {
         return;
     }
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        field = node->as.structure.first_field;
-        while (field != NULL) {
-            LmP0Field *next;
-
-            next = field->next;
-            lm_p0_free_node(field->value);
-            free(field);
-            field = next;
-        }
+        lm_p0_free_structure_fields(&node->as.structure);
     } else if (node->kind == LM_P0_NODE_FRAME) {
-        field = node->as.frame.body.first_field;
-        while (field != NULL) {
-            LmP0Field *next;
-
-            next = field->next;
-            lm_p0_free_node(field->value);
-            free(field);
-            field = next;
-        }
+        lm_p0_free_structure_fields(&node->as.frame.body);
+        lm_p0_free_trailer(node->as.frame.trailer);
+        node->as.frame.trailer = NULL;
     }
 
     free(node);
@@ -696,6 +705,8 @@ static LmP0Node *lm_p0_parse_line_item(
 
 static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t level) {
     LmP0Structure **parents;
+    LmP0Node **owners;
+    unsigned char *hard;
     size_t old_capacity;
     size_t new_capacity;
     size_t i;
@@ -715,11 +726,28 @@ static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t l
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
         return 0;
     }
+    owners = (LmP0Node **)realloc(stack->owners, new_capacity * sizeof(*owners));
+    if (owners == NULL) {
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
+        stack->parents = parents;
+        return 0;
+    }
+    hard = (unsigned char *)realloc(stack->hard, new_capacity * sizeof(*hard));
+    if (hard == NULL) {
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
+        stack->parents = parents;
+        stack->owners = owners;
+        return 0;
+    }
 
     stack->parents = parents;
+    stack->owners = owners;
+    stack->hard = hard;
     stack->capacity = new_capacity;
     for (i = old_capacity; i < new_capacity; ++i) {
         stack->parents[i] = NULL;
+        stack->owners[i] = NULL;
+        stack->hard[i] = 0U;
     }
 
     return 1;
@@ -734,7 +762,43 @@ static void lm_p0_stack_truncate_deeper(LmP0Stack *stack, size_t level) {
 
     for (i = level + 1U; i < stack->capacity; ++i) {
         stack->parents[i] = NULL;
+        stack->owners[i] = NULL;
+        stack->hard[i] = 0U;
     }
+}
+
+static size_t lm_p0_stack_top_level(const LmP0Stack *stack) {
+    size_t i;
+
+    i = stack->capacity;
+    while (i > 0U) {
+        --i;
+        if (stack->parents[i] != NULL) {
+            return i;
+        }
+    }
+    return 0U;
+}
+
+static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack *stack, size_t event_level) {
+    size_t top_level;
+
+    top_level = lm_p0_stack_top_level(stack);
+    while (top_level > 0U && event_level < top_level && stack->hard[top_level] == 0U) {
+        lm_p0_stack_truncate_deeper(stack, top_level - 1U);
+        top_level = lm_p0_stack_top_level(stack);
+    }
+    return top_level;
+}
+
+static void lm_p0_stack_free(LmP0Stack *stack) {
+    free(stack->parents);
+    free(stack->owners);
+    free(stack->hard);
+    stack->parents = NULL;
+    stack->owners = NULL;
+    stack->hard = NULL;
+    stack->capacity = 0U;
 }
 
 static int lm_p0_node_can_own_children(LmP0Node *node) {
@@ -751,6 +815,118 @@ static LmP0Structure *lm_p0_node_child_structure(LmP0Node *node) {
     return NULL;
 }
 
+static LmP0Trailer **lm_p0_node_trailer_slot(LmP0Node *node) {
+    if (node->kind == LM_P0_NODE_FRAME) {
+        return &node->as.frame.trailer;
+    }
+    if (node->kind == LM_P0_NODE_STRUCTURE) {
+        return &node->as.structure.trailer;
+    }
+    return NULL;
+}
+
+static LmP0Trailer *lm_p0_attach_trailer(
+    LmP0Document *document,
+    LmP0Node *node,
+    const char *spelling,
+    size_t spelling_length,
+    size_t line,
+    size_t column
+) {
+    LmP0Trailer **slot;
+    LmP0Trailer *trailer;
+
+    slot = lm_p0_node_trailer_slot(node);
+    if (slot == NULL) {
+        lm_p0_set_diagnostic(document, 10, line, column, "this parser node cannot receive a trailer");
+        return NULL;
+    }
+    if (*slot != NULL) {
+        lm_p0_set_diagnostic(document, 11, line, column, "parser node already has a trailer");
+        return NULL;
+    }
+
+    trailer = (LmP0Trailer *)calloc(1U, sizeof(*trailer));
+    if (trailer == NULL) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer");
+        return NULL;
+    }
+    trailer->spelling.data = spelling;
+    trailer->spelling.length = spelling_length;
+    *slot = trailer;
+    return trailer;
+}
+
+static int lm_p0_parse_trailer_item(
+    LmP0Document *document,
+    LmP0Node *target,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t offset,
+    LmP0Structure **out_body
+) {
+    size_t colon_index;
+    size_t spelling_length;
+    size_t body_start;
+    LmP0Trailer *trailer;
+
+    *out_body = NULL;
+
+    if (lm_p0_find_colon(text, length, &colon_index)) {
+        spelling_length = colon_index;
+        while (spelling_length > 0U && text[spelling_length - 1U] == ' ') {
+            --spelling_length;
+        }
+        body_start = colon_index + 1U;
+        while (body_start < length && text[body_start] == ' ') {
+            ++body_start;
+        }
+    } else {
+        body_start = 0U;
+        if (body_start < length && (text[body_start] == '"' || text[body_start] == '`')) {
+            if (!lm_p0_scan_quoted(document, text, length, &body_start, text[body_start], line, column)) {
+                return 0;
+            }
+            spelling_length = body_start;
+        } else {
+            while (body_start < length && text[body_start] != ' ' && text[body_start] != ',') {
+                ++body_start;
+            }
+            spelling_length = body_start;
+        }
+        while (body_start < length && text[body_start] == ' ') {
+            ++body_start;
+        }
+    }
+
+    if (spelling_length == 0U) {
+        lm_p0_set_diagnostic(document, 12, line, column, "trailer spelling is empty");
+        return 0;
+    }
+
+    trailer = lm_p0_attach_trailer(document, target, text, spelling_length, line, column);
+    if (trailer == NULL) {
+        return 0;
+    }
+
+    if (!lm_p0_parse_fields_into(
+            document,
+            &trailer->body,
+            text + body_start,
+            length - body_start,
+            line,
+            column + body_start,
+            offset + body_start
+        )) {
+        return 0;
+    }
+
+    *out_body = &trailer->body;
+    return 1;
+}
+
 static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *events) {
     LmP0Stack stack;
     size_t i;
@@ -763,33 +939,55 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
     }
 
     if (!lm_p0_stack_ensure(document, &stack, 0U)) {
-        free(stack.parents);
+        lm_p0_stack_free(&stack);
         return 0;
     }
     stack.parents[0] = &document->root->as.structure;
+    stack.owners[0] = document->root;
 
     for (i = 0U; i < events->count; ++i) {
         const LmP0LineEvent *event;
+        size_t top_level;
 
         event = &events->items[i];
         if (!lm_p0_stack_ensure(document, &stack, event->level + 1U)) {
-            free(stack.parents);
+            lm_p0_stack_free(&stack);
             return 0;
         }
 
-        if (stack.parents[event->level] == NULL) {
-            lm_p0_set_diagnostic(document, 8, event->line, event->column, "source level has no open parent structure");
-            free(stack.parents);
-            return 0;
+        top_level = lm_p0_stack_collapse_soft_to_event(&stack, event->level);
+        if (event->level == top_level && stack.hard[top_level] == 0U) {
+            stack.hard[top_level] = 1U;
         }
 
         if (event->kind == LM_P0_LINE_DELIM) {
+            LmP0Structure *parent;
+
+            if (event->level < top_level) {
+                if (event->level + 1U != top_level) {
+                    lm_p0_set_diagnostic(document, 13, event->line, event->column, "dotted point cannot close more than one open source level");
+                    lm_p0_stack_free(&stack);
+                    return 0;
+                }
+                lm_p0_stack_truncate_deeper(&stack, event->level);
+            }
+
+            parent = stack.parents[event->level];
+            if (parent == NULL && event->level == 1U) {
+                parent = stack.parents[0];
+            }
+            if (parent == NULL) {
+                lm_p0_set_diagnostic(document, 8, event->line, event->column, "source level has no open parent structure");
+                lm_p0_stack_free(&stack);
+                return 0;
+            }
+
             if (i + 1U < events->count && events->items[i + 1U].level == event->level + 1U) {
                 LmP0Node *anonymous_node;
 
                 anonymous_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
                 if (anonymous_node == NULL) {
-                    free(stack.parents);
+                    lm_p0_stack_free(&stack);
                     return 0;
                 }
                 anonymous_node->span.line = event->line;
@@ -797,18 +995,63 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
                 anonymous_node->span.offset = event->offset;
                 anonymous_node->span.length = event->text_length;
 
-                if (!lm_p0_append_field(document, stack.parents[event->level], anonymous_node)) {
+                if (!lm_p0_append_field(document, parent, anonymous_node)) {
                     lm_p0_free_node(anonymous_node);
-                    free(stack.parents);
+                    lm_p0_stack_free(&stack);
                     return 0;
                 }
                 stack.parents[event->level + 1U] = &anonymous_node->as.structure;
+                stack.owners[event->level + 1U] = anonymous_node;
+                stack.hard[event->level + 1U] = 1U;
                 lm_p0_stack_truncate_deeper(&stack, event->level + 1U);
             } else {
                 lm_p0_stack_truncate_deeper(&stack, event->level);
             }
         } else {
             LmP0Node *node;
+            LmP0Structure *parent;
+
+            if (event->level < top_level) {
+                LmP0Structure *trailer_body;
+                LmP0Node *target;
+
+                if (event->level + 1U != top_level) {
+                    lm_p0_set_diagnostic(document, 14, event->line, event->column, "trailer line cannot close more than one open source level");
+                    lm_p0_stack_free(&stack);
+                    return 0;
+                }
+                target = stack.owners[top_level];
+                if (target == NULL) {
+                    lm_p0_set_diagnostic(document, 15, event->line, event->column, "open source level has no trailer target");
+                    lm_p0_stack_free(&stack);
+                    return 0;
+                }
+                if (!lm_p0_parse_trailer_item(
+                        document,
+                        target,
+                        event->text,
+                        event->text_length,
+                        event->line,
+                        event->column,
+                        event->offset,
+                        &trailer_body
+                    )) {
+                    lm_p0_stack_free(&stack);
+                    return 0;
+                }
+                stack.parents[top_level] = trailer_body;
+                stack.owners[top_level] = target;
+                stack.hard[top_level] = 0U;
+                lm_p0_stack_truncate_deeper(&stack, top_level);
+                continue;
+            }
+
+            parent = stack.parents[event->level];
+            if (parent == NULL) {
+                lm_p0_set_diagnostic(document, 8, event->line, event->column, "source level has no open parent structure");
+                lm_p0_stack_free(&stack);
+                return 0;
+            }
 
             node = lm_p0_parse_line_item(
                 document,
@@ -819,26 +1062,34 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
                 event->offset
             );
             if (node == NULL) {
-                free(stack.parents);
+                lm_p0_stack_free(&stack);
                 return 0;
             }
 
-            if (!lm_p0_append_field(document, stack.parents[event->level], node)) {
+            if (!lm_p0_append_field(document, parent, node)) {
                 lm_p0_free_node(node);
-                free(stack.parents);
+                lm_p0_stack_free(&stack);
                 return 0;
             }
 
             if (lm_p0_node_can_own_children(node)) {
                 stack.parents[event->level + 1U] = lm_p0_node_child_structure(node);
+                stack.owners[event->level + 1U] = node;
+                if (node->kind == LM_P0_NODE_FRAME) {
+                    stack.hard[event->level + 1U] = node->as.frame.body.field_count == 0U ? 1U : 0U;
+                } else {
+                    stack.hard[event->level + 1U] = node->as.structure.field_count == 0U ? 1U : 0U;
+                }
             } else {
                 stack.parents[event->level + 1U] = NULL;
+                stack.owners[event->level + 1U] = NULL;
+                stack.hard[event->level + 1U] = 0U;
             }
             lm_p0_stack_truncate_deeper(&stack, event->level + 1U);
         }
     }
 
-    free(stack.parents);
+    lm_p0_stack_free(&stack);
     return document->diagnostic.code == 0;
 }
 
@@ -846,6 +1097,16 @@ static int lm_p0_validate_nonempty_colon_frames_in_structure(
     LmP0Document *document,
     const LmP0Structure *structure
 );
+
+static int lm_p0_validate_nonempty_colon_frames_in_trailer(
+    LmP0Document *document,
+    const LmP0Trailer *trailer
+) {
+    if (trailer == NULL) {
+        return 1;
+    }
+    return lm_p0_validate_nonempty_colon_frames_in_structure(document, &trailer->body);
+}
 
 static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, const LmP0Node *node) {
     if (node == NULL) {
@@ -863,11 +1124,17 @@ static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, 
             );
             return 0;
         }
-        return lm_p0_validate_nonempty_colon_frames_in_structure(document, &node->as.frame.body);
+        if (!lm_p0_validate_nonempty_colon_frames_in_structure(document, &node->as.frame.body)) {
+            return 0;
+        }
+        return lm_p0_validate_nonempty_colon_frames_in_trailer(document, node->as.frame.trailer);
     }
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        return lm_p0_validate_nonempty_colon_frames_in_structure(document, &node->as.structure);
+        if (!lm_p0_validate_nonempty_colon_frames_in_structure(document, &node->as.structure)) {
+            return 0;
+        }
+        return lm_p0_validate_nonempty_colon_frames_in_trailer(document, node->as.structure.trailer);
     }
 
     return 1;
@@ -1087,6 +1354,18 @@ static void lm_p0_dump_text(LmP0Dump *dump, LmP0Text text) {
 
 static void lm_p0_dump_structure(LmP0Dump *dump, const LmP0Structure *structure, size_t indent);
 
+static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_t indent) {
+    if (trailer == NULL) {
+        return;
+    }
+
+    lm_p0_dump_indent(dump, indent);
+    lm_p0_dump_append_cstr(dump, "Trailer spelling=");
+    lm_p0_dump_text(dump, trailer->spelling);
+    lm_p0_dump_appendf(dump, " fields=%lu\n", (unsigned long)trailer->body.field_count);
+    lm_p0_dump_structure(dump, &trailer->body, indent + 1U);
+}
+
 static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent) {
     if (node == NULL) {
         return;
@@ -1096,11 +1375,13 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         lm_p0_dump_appendf(dump, "Structure fields=%lu\n", (unsigned long)node->as.structure.field_count);
         lm_p0_dump_structure(dump, &node->as.structure, indent + 1U);
+        lm_p0_dump_trailer(dump, node->as.structure.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_FRAME) {
         lm_p0_dump_append_cstr(dump, "Frame head=");
         lm_p0_dump_text(dump, node->as.frame.head);
         lm_p0_dump_appendf(dump, " fields=%lu\n", (unsigned long)node->as.frame.body.field_count);
         lm_p0_dump_structure(dump, &node->as.frame.body, indent + 1U);
+        lm_p0_dump_trailer(dump, node->as.frame.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_ATOM) {
         lm_p0_dump_append_cstr(dump, "Atom ");
         lm_p0_dump_text(dump, node->as.atom);

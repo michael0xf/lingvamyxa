@@ -1,4 +1,4 @@
-#include "lm_core.h"
+#include "core.lm1.h"
 
 int lm_add(int a, int b) {
     return a + b;

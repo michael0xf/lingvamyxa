@@ -5,7 +5,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include "lm_core.h"
+#include "core.lm1.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),

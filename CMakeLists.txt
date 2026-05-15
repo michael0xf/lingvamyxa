@@ -65,10 +65,10 @@ endif()
 # This target must stay independent from Qt, Android, Windows APIs, etc.
 
 add_library(lingvamyxa_core STATIC
-    core/lm_core.c
-    core/lm_core.h
-    core/lm_p0.c
-    core/lm_p0.h
+    core/core.lm1.c
+    core/core.lm1.h
+    core/p0.lm1.c
+    core/p0.lm1.h
 )
 
 target_include_directories(lingvamyxa_core PUBLIC
@@ -105,7 +105,7 @@ endif()
 
 if (BUILD_LINGVAMYXA_CLI)
     add_executable(lingvamyxa_cli
-        cli/main.c
+        cli/main.lm1.c
     )
 
     target_include_directories(lingvamyxa_cli PRIVATE

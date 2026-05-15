@@ -1,7 +1,7 @@
 #include <stdio.h>
 
-#include "lm_core.h"
-#include "lm_p0.h"
+#include "core.lm1.h"
+#include "p0.lm1.h"
 
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);

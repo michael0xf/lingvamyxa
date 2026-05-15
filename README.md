@@ -11,10 +11,12 @@ This is a small importable CMake project.
 lingvamyxa_c_qt_skeleton/
   CMakeLists.txt
   core/
-    lm_core.h
-    lm_core.c
+    core.lm1.h
+    core.lm1.c
+    p0.lm1.h
+    p0.lm1.c
   cli/
-    main.c
+    main.lm1.c
   qt_app/
     main.cpp
     MainWindow.cpp

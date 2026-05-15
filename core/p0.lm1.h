@@ -40,17 +40,25 @@ typedef struct LmP0Diagnostic {
 
 typedef struct LmP0Node LmP0Node;
 typedef struct LmP0Field LmP0Field;
+typedef struct LmP0Trailer LmP0Trailer;
 
 typedef struct LmP0Structure {
     LmP0Field *first_field;
     LmP0Field *last_field;
     size_t field_count;
+    LmP0Trailer *trailer;
 } LmP0Structure;
+
+struct LmP0Trailer {
+    LmP0Text spelling;
+    LmP0Structure body;
+};
 
 typedef struct LmP0Frame {
     LmP0Text head;
     unsigned flags;
     LmP0Structure body;
+    LmP0Trailer *trailer;
 } LmP0Frame;
 
 struct LmP0Node {
