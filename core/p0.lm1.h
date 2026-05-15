@@ -19,6 +19,10 @@ typedef enum LmP0FrameFlags {
     LM_P0_FRAME_COMPACT = 2
 } LmP0FrameFlags;
 
+typedef enum LmP0TrailerFlags {
+    LM_P0_TRAILER_TAIL_CUTTER = 1
+} LmP0TrailerFlags;
+
 typedef struct LmP0Text {
     const char *data;
     size_t length;
@@ -51,6 +55,7 @@ typedef struct LmP0Structure {
 
 struct LmP0Trailer {
     LmP0Text spelling;
+    unsigned flags;
     LmP0Structure body;
 };
 

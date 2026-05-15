@@ -12,8 +12,7 @@
 . .
 . . note:
 . . . "This part is XML-like tree data: nested named Structures."
-. . `note закончилась`
-. 
+. ---
 . table:
 . . columns: int(id) Text(region) Text(crop) real(tons) decimal(moisture)
 . . rows:

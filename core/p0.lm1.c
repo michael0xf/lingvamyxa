@@ -873,6 +873,7 @@ static LmP0Trailer *lm_p0_attach_trailer(
     LmP0Node *node,
     const char *spelling,
     size_t spelling_length,
+    unsigned flags,
     size_t line,
     size_t column
 ) {
@@ -896,6 +897,7 @@ static LmP0Trailer *lm_p0_attach_trailer(
     }
     trailer->spelling.data = spelling;
     trailer->spelling.length = spelling_length;
+    trailer->flags = flags;
     *slot = trailer;
     return trailer;
 }
@@ -908,6 +910,7 @@ static int lm_p0_parse_trailer_item(
     size_t line,
     size_t column,
     size_t offset,
+    unsigned flags,
     LmP0Structure **out_body
 ) {
     size_t colon_index;
@@ -949,7 +952,7 @@ static int lm_p0_parse_trailer_item(
         return 0;
     }
 
-    trailer = lm_p0_attach_trailer(document, target, text, spelling_length, line, column);
+    trailer = lm_p0_attach_trailer(document, target, text, spelling_length, flags, line, column);
     if (trailer == NULL) {
         return 0;
     }
@@ -1083,6 +1086,7 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
                         event->line,
                         event->column,
                         event->offset,
+                        LM_P0_TRAILER_TAIL_CUTTER,
                         &trailer_body
                     )) {
                     lm_p0_stack_free(&stack);
@@ -1099,38 +1103,15 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
             }
 
             if (event->level < top_level) {
-                LmP0Structure *trailer_body;
-                LmP0Node *target;
-
-                if (event->level + 1U != top_level) {
-                    lm_p0_set_diagnostic(document, 14, event->line, event->column, "trailer line cannot close more than one open source level");
-                    lm_p0_stack_free(&stack);
-                    return 0;
-                }
-                target = stack.owners[top_level];
-                if (target == NULL) {
-                    lm_p0_set_diagnostic(document, 15, event->line, event->column, "open source level has no trailer target");
-                    lm_p0_stack_free(&stack);
-                    return 0;
-                }
-                if (!lm_p0_parse_trailer_item(
-                        document,
-                        target,
-                        event->text,
-                        event->text_length,
-                        event->line,
-                        event->column,
-                        event->offset,
-                        &trailer_body
-                    )) {
-                    lm_p0_stack_free(&stack);
-                    return 0;
-                }
-                stack.parents[top_level] = trailer_body;
-                stack.owners[top_level] = target;
-                stack.hard[top_level] = 0U;
-                lm_p0_stack_truncate_deeper(&stack, top_level);
-                continue;
+                lm_p0_set_diagnostic(
+                    document,
+                    16,
+                    event->line,
+                    event->column,
+                    "name is not an accepted block trailer; expected end, ---, return, or until"
+                );
+                lm_p0_stack_free(&stack);
+                return 0;
             }
 
             parent = stack.parents[event->level];
@@ -1447,7 +1428,11 @@ static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_
     }
 
     lm_p0_dump_indent(dump, indent);
-    lm_p0_dump_append_cstr(dump, "Trailer spelling=");
+    if ((trailer->flags & LM_P0_TRAILER_TAIL_CUTTER) != 0U) {
+        lm_p0_dump_append_cstr(dump, "Tail cutter trailer spelling=");
+    } else {
+        lm_p0_dump_append_cstr(dump, "Trailer spelling=");
+    }
     lm_p0_dump_text(dump, trailer->spelling);
     lm_p0_dump_appendf(dump, " fields=%lu\n", (unsigned long)trailer->body.field_count);
     lm_p0_dump_structure(dump, &trailer->body, indent + 1U);
