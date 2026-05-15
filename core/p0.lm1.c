@@ -48,6 +48,11 @@ typedef struct LmP0Dump {
     int failed;
 } LmP0Dump;
 
+typedef enum LmP0TrailerRole {
+    LM_P0_TRAILER_ROLE_NONE = 0,
+    LM_P0_TRAILER_ROLE_TAIL_CUTTER = 1
+} LmP0TrailerRole;
+
 static void lm_p0_set_diagnostic(
     LmP0Document *document,
     int code,
@@ -791,6 +796,44 @@ static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack *stack, size_t event_
     return top_level;
 }
 
+static int lm_p0_text_has_prefix_name(
+    const char *text,
+    size_t length,
+    const char *name,
+    int allow_bare
+) {
+    size_t name_length;
+
+    name_length = strlen(name);
+    if (length < name_length) {
+        return 0;
+    }
+    if (memcmp(text, name, name_length) != 0) {
+        return 0;
+    }
+    if (length == name_length) {
+        return allow_bare;
+    }
+    return text[name_length] == ':';
+}
+
+static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
+    if (length >= 3U && memcmp(text, "---", 3U) == 0 &&
+        (length == 3U || text[3U] == ' ' || text[3U] == ':')) {
+        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+    }
+    if (lm_p0_text_has_prefix_name(text, length, "end", 0)) {
+        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+    }
+    if (lm_p0_text_has_prefix_name(text, length, "return", 1)) {
+        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+    }
+    if (lm_p0_text_has_prefix_name(text, length, "until", 0)) {
+        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+    }
+    return LM_P0_TRAILER_ROLE_NONE;
+}
+
 static void lm_p0_stack_free(LmP0Stack *stack) {
     free(stack->parents);
     free(stack->owners);
@@ -948,6 +991,7 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
     for (i = 0U; i < events->count; ++i) {
         const LmP0LineEvent *event;
         size_t top_level;
+        LmP0TrailerRole trailer_role;
 
         event = &events->items[i];
         if (!lm_p0_stack_ensure(document, &stack, event->level + 1U)) {
@@ -955,9 +999,18 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
             return 0;
         }
 
-        top_level = lm_p0_stack_collapse_soft_to_event(&stack, event->level);
-        if (event->level == top_level && stack.hard[top_level] == 0U) {
-            stack.hard[top_level] = 1U;
+        trailer_role = event->kind == LM_P0_LINE_ITEM
+            ? lm_p0_trailer_role(event->text, event->text_length)
+            : LM_P0_TRAILER_ROLE_NONE;
+
+        top_level = lm_p0_stack_top_level(&stack);
+        if (trailer_role != LM_P0_TRAILER_ROLE_TAIL_CUTTER ||
+            event->level + 1U > top_level ||
+            stack.owners[event->level + 1U] == NULL) {
+            top_level = lm_p0_stack_collapse_soft_to_event(&stack, event->level);
+            if (event->level == top_level && stack.hard[top_level] == 0U) {
+                stack.hard[top_level] = 1U;
+            }
         }
 
         if (event->kind == LM_P0_LINE_DELIM) {
@@ -1010,6 +1063,40 @@ static int lm_p0_parse_events(LmP0Document *document, const LmP0EventList *event
         } else {
             LmP0Node *node;
             LmP0Structure *parent;
+
+            if (trailer_role == LM_P0_TRAILER_ROLE_TAIL_CUTTER &&
+                event->level + 1U <= top_level &&
+                stack.owners[event->level + 1U] != NULL) {
+                LmP0Structure *trailer_body;
+                LmP0Node *target;
+                size_t target_level;
+
+                target_level = event->level + 1U;
+                target = stack.owners[target_level];
+                lm_p0_stack_truncate_deeper(&stack, target_level);
+
+                if (!lm_p0_parse_trailer_item(
+                        document,
+                        target,
+                        event->text,
+                        event->text_length,
+                        event->line,
+                        event->column,
+                        event->offset,
+                        &trailer_body
+                    )) {
+                    lm_p0_stack_free(&stack);
+                    return 0;
+                }
+                stack.parents[target_level] = trailer_body;
+                stack.owners[target_level] = target;
+                stack.hard[target_level] = 0U;
+                if (target_level > 0U) {
+                    stack.hard[target_level - 1U] = 0U;
+                }
+                lm_p0_stack_truncate_deeper(&stack, target_level);
+                continue;
+            }
 
             if (event->level < top_level) {
                 LmP0Structure *trailer_body;
