@@ -15,7 +15,8 @@ typedef enum LmP0NodeKind {
 
 typedef enum LmP0FrameFlags {
     LM_P0_FRAME_COLON = 1,
-    LM_P0_FRAME_COMPACT = 2
+    LM_P0_FRAME_COMPACT = 2,
+    LM_P0_FRAME_INLINE_BODY = 4
 } LmP0FrameFlags;
 
 typedef enum LmP0TrailerFlags {
