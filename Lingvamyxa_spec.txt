@@ -11098,3 +11098,610 @@ source-level call может опуститься напрямую:
 одним вводимым именем. Он остается Lingvamyxa-подобным, потому что
 нормализованный результат все равно является разобранными registry data:
 `ModelSpec`, `BehaviorSpec`, facts, roles, adapters и derivations.
+
+
+36.En. Core Authentication, Delegated Tickets and Guarantees
+
+36.En.0. Status of This Section
+
+This section describes the core authentication shape used by the registry and
+runtime model. It is intentionally smaller than a full external identity system.
+
+Core authentication is not OAuth, Kerberos, passkeys or an operating-system
+login. Those systems may be adapters above the core. The core provides the
+primitive model:
+
+    principal;
+    primary credential;
+    verifier;
+    delegated ticket;
+    capability;
+    guarantees attached to a validated flow.
+
+An external authentication module does not replace the core model. It may obtain
+or prove an external session and then request a local delegated ticket from the
+core.
+
+36.En.1. Primary Credential and Verifier
+
+A primary credential is the ordinary local credential for a principal. In the
+password profile, the user enters a password through the Lingvamyxa
+authentication UI, and the core checks it against a stored verifier.
+
+The verifier is not a password and must not be accepted by any UI or public API
+as an input credential. It is a core-owned checking record.
+
+Conceptual shape:
+
+    principal = system or registry user
+    primary secret = user-entered password
+    primary verifier = password verifier record stored by the core
+
+The password itself is never stored by the core. The verifier may be replaced
+when the user changes the password or when the selected password-verifier
+parameters are migrated.
+
+36.En.2. Default Installation Credential
+
+A simple local installation may create the first principal from the current
+system user name:
+
+    principal name = system user name
+    primary secret = empty string
+    primary verifier = verifier("")
+
+This is a bootstrap convenience, not a high-assurance login. It avoids turning
+installation into a fake security ceremony. The user may replace the empty
+password with an ordinary password later. Replacing the primary verifier is a
+security event and invalidates delegated tickets according to section 36.En.3.
+
+36.En.2.1. Verifier Realms and Protected Objects
+
+The principal namespace may be shared, but verifier realms are independent.
+
+A verifier realm is a protected credential area:
+
+    (realm, principal) -> verifier
+
+The default realm may use the empty-string verifier and represent ordinary
+local presence. This is enough for unprotected local work and for identifying
+which system user owns the current flow.
+
+When the user wants to protect something, the user creates a new verifier realm
+and attaches it to an object, module or archive:
+
+    protected L5 module;
+    protected `.lmx` module;
+    protected `.lmz` data archive;
+    protected local registry area;
+    protected service admin surface.
+
+For example:
+
+L5:
+    fact: authRealm Default
+    fact: authRealm AdminModule
+    fact: authRealm WorkArchive
+
+    fact: principal alice source SystemUser
+
+    fact: credential Default alice primary PasswordVerifier
+    fact: credential AdminModule alice primary PasswordVerifier
+    fact: credential WorkArchive alice primary PasswordVerifier
+
+    fact: protects AdminModule admin.lmx
+    fact: protects WorkArchive work.lmz
+end: L5
+
+The same principal may have credentials in several realms. The system does not
+assume that equal human password text across two realms means one login should
+unlock both. If a protected object requires `AdminModule`, a prior login to
+`Default` or `WorkArchive` is not enough unless an explicit trust bridge or
+delegated ticket says so.
+
+This keeps the default experience light while making protection explicit:
+
+    ordinary local identity
+        -> default realm, possibly empty verifier
+
+    important module/archive/data
+        -> its own verifier realm
+
+Password reset is realm-local. Resetting the default realm may replace its
+verifier with `verifier("")` or another bootstrap verifier, but it must not
+reset protected object realms automatically. A `.lmz` archive or protected
+module that has its own verifier realm remains protected after the default
+login is reset.
+
+This avoids the common failure mode where control over an email account or a
+global account reset grants access to every local document. A reset recovers
+ordinary access to the application or realm being reset; it does not decrypt or
+unlock independently protected data.
+
+36.En.3. Delegated Module Ticket
+
+An OAuth-like or OS-session-like module may be allowed to act as a robot user
+for a principal. It does not receive the user's primary password and does not
+receive the primary verifier.
+
+After successful primary authentication, the core may issue a delegated ticket:
+
+    holder    = OAuth.lmx or another trusted module
+    principal = local user represented by the ticket
+    scope     = permitted action set, for example loginAs principal
+    lifetime  = optional time limit
+    nonce     = random ticket nonce
+
+The delegated ticket is a bearer credential for the holder module. It should be
+kept only as long as needed. A profile may keep it in memory only, persist it
+through an OS secret store, or require renewal after every process restart.
+
+The core does not have to store a second verifier for every delegated ticket.
+The preferred compact profile is a stateless ticket:
+
+    ticket_body =
+        principal,
+        holder,
+        scope,
+        issuedAt,
+        expiresAt,
+        nonce
+
+    ticket_key =
+        KDF(core_secret, current_primary_verifier, principal, holder, scope)
+
+    ticket_mac =
+        MAC(ticket_key, ticket_body)
+
+    ticket =
+        ticket_body + ticket_mac
+
+`core_secret` is a core-owned random secret. A profile that wants delegated
+tickets to survive process restart must store it as protected core state. A
+profile that wants delegated tickets to be session-only may keep it only in
+memory, which invalidates all delegated tickets on restart. `core_secret` is not
+derived from the user's password.
+
+When the holder presents the ticket, the core recomputes the key from the
+current primary verifier and checks the MAC. If the primary verifier has changed
+because the user changed the password or because verifier parameters were
+migrated, the old ticket no longer validates.
+
+This gives the desired rule:
+
+    primary verifier changed
+        -> previously issued delegated tickets fail validation
+
+The ticket is not the user's password. The user's password cannot be recovered
+from the ticket. The ticket is still a secret while it is valid, because whoever
+holds it may exercise its scope.
+
+36.En.4. External Authentication Modules
+
+An OAuth/OIDC-like module may use an external provider session as a way to avoid
+asking the user for the primary password again. For example, if the system
+browser or OS account still has an active provider session, the module may
+obtain a fresh external proof and ask the core to issue a new delegated ticket.
+
+The external proof is not the core password model. It is an adapter input:
+
+    external session proof
+        -> module validation
+        -> request local delegated ticket
+        -> core ticket validation later
+
+If the external provider session is gone, the module may run the Lingvamyxa
+authentication UI and ask the user to authenticate with the primary credential.
+
+If the user logs out from the external provider after a local delegated ticket
+has been issued, the local ticket remains valid unless the selected policy
+requires live external-session proof for every use or uses a very short ticket
+lifetime.
+
+36.En.5. Registry Facts, Validators and Guarantees
+
+The exact fact names are profile-defined. A profile may describe the model with
+ordinary registry facts:
+
+L5:
+    fact: authRealm Default
+    fact: authRealm OAuthRealm
+    fact: principal alice source SystemUser
+    fact: credential Default alice primary PasswordVerifier
+    fact: credential OAuthRealm alice primary PasswordVerifier
+    fact: authModule OAuth.lmx
+    fact: mayRequestTicket OAuth.lmx OAuthRealm alice
+    fact: ticketScope OAuth.lmx OAuthRealm loginAs alice
+    fact: ticketInvalidatedBy OAuth.lmx OAuthRealm primaryVerifierChange
+end: L5
+
+After a ticket is validated, the flow receives ordinary registry-visible
+evidence:
+
+    principal = alice
+    realm     = OAuthRealm
+    holder    = OAuth.lmx
+    scope     = loginAs alice
+    assurance = delegatedTicket
+
+Receivers may require these facts or guarantees just as they may require model
+validators:
+
+L5:
+    fact: requires updateProfile Authenticated
+    fact: requires issueTicket PrimaryAuthenticated
+    fact: grants ticket OAuth.lmx loginAs alice
+end: L5
+
+This keeps authentication close to the same fact/validator/guarantee machinery
+used by structural models. Authentication is not a separate global role table.
+It is a way to attach validated authority to an L5 flow.
+
+36.En.6. ANSI C / libsodium Runtime Sketch
+
+---ANSI C---
+The default ANSI C / C99 security substrate uses the bundled libsodium source
+tree, imported under `third_party/libsodium-1.0.22/`. It is a vendored,
+verified source dependency, not a live package-manager dependency.
+
+The runtime must call `sodium_init()` once before using the security substrate.
+
+Possible C99 mapping:
+
+    primary verifier:
+        `crypto_pwhash_str()` using the selected Argon2id password profile.
+
+    primary password check:
+        `crypto_pwhash_str_verify()`.
+
+    password verifier migration check:
+        `crypto_pwhash_str_needs_rehash()`, if the selected profile wants
+        automatic parameter migration.
+
+    random ticket nonce and core secret:
+        `randombytes_buf()`.
+
+    secure password buffers owned by the Lingvamyxa prompt:
+        `sodium_malloc()`, `sodium_mlock()`, `sodium_memzero()`,
+        `sodium_munlock()` and `sodium_free()` where supported.
+
+    ticket key derivation:
+        a libsodium keyed hash or KDF over
+        `core_secret`, `current_primary_verifier`, `principal`, `holder` and
+        `scope`.
+
+    ticket authentication:
+        `crypto_auth()` / `crypto_auth_verify()` or an equivalent selected
+        libsodium MAC profile over the serialized ticket body.
+
+The primary verifier string must not leave the core as an input credential. It
+may be read by the core as local derivation material for delegated-ticket
+validation. A standard profile should combine it with a core-owned secret when
+deriving the ticket MAC key, so that stealing only the verifier is not enough to
+forge tickets.
+
+If the Lingvamyxa prompt owns the password input path, the plaintext password
+should live in a locked secret buffer and be wiped immediately after
+verification. If the password comes from an external UI toolkit, the runtime can
+only wipe the buffers it owns; it cannot retroactively protect toolkit-internal
+copies.
+---ANSI C---
+
+36.En.7. Standard Statement
+
+The core authentication model is credential-neutral but verifier-centered.
+Primary password authentication, OS session adapters and OAuth-like modules all
+lead to the same local result: a validated flow with explicit facts, scopes and
+guarantees.
+
+The principal namespace may be common, but verifier realms are independent.
+The default realm may be light and empty-password based; protected modules,
+archives and service surfaces declare their own verifier realms.
+
+Delegated modules receive tickets or capabilities, not the user's password and
+not the primary verifier. A stateless delegated ticket may be validated against
+the current primary verifier, which causes password changes and verifier
+migrations to invalidate older module tickets automatically.
+
+
+36.Ru. Core-аутентификация, делегированные tickets и guarantees
+
+36.Ru.0. Статус раздела
+
+Этот раздел описывает форму core-аутентификации для registry и runtime model.
+Она намеренно меньше, чем полноценная внешняя identity system.
+
+Core-аутентификация не является OAuth, Kerberos, passkey или login-ом
+операционной системы. Эти системы могут быть adapters над core. Core задает
+базовую модель:
+
+    principal;
+    primary credential;
+    verifier;
+    delegated ticket;
+    capability;
+    guarantees, привязанные к проверенному flow.
+
+Внешний модуль аутентификации не заменяет core model. Он может получить или
+доказать внешнюю session и затем попросить core выдать локальный delegated
+ticket.
+
+36.Ru.1. Primary credential и verifier
+
+Primary credential - это обычный локальный credential principal-а. В password
+profile пользователь вводит пароль через Lingvamyxa authentication UI, а core
+проверяет его по сохраненному verifier.
+
+Verifier не является паролем и не должен приниматься никаким UI или публичным
+API как входной credential. Это core-owned проверочная запись.
+
+Концептуальная форма:
+
+    principal = system или registry user
+    primary secret = пароль, введенный пользователем
+    primary verifier = password verifier record, хранимый core
+
+Сам пароль core никогда не хранит. Verifier может быть заменен, когда
+пользователь меняет пароль или когда выбранные параметры password verifier
+мигрируются.
+
+36.Ru.2. Credential при установке по умолчанию
+
+Простая локальная установка может создать первый principal из имени текущего
+system user:
+
+    principal name = system user name
+    primary secret = empty string
+    primary verifier = verifier("")
+
+Это bootstrap convenience, а не high-assurance login. Так установка не
+превращается в фальшивую security-церемонию. Пользователь может позже заменить
+пустой пароль обычным паролем. Замена primary verifier является security event
+и инвалидирует delegated tickets по правилу из раздела 36.Ru.3.
+
+36.Ru.2.1. Verifier realms и protected objects
+
+Principal namespace может быть общим, но verifier realms независимы.
+
+Verifier realm - это защищенная credential-область:
+
+    (realm, principal) -> verifier
+
+Default realm может использовать empty-string verifier и обозначать обычное
+local presence. Этого достаточно для незащищенной локальной работы и для
+понимания, какой system user владеет текущим flow.
+
+Когда пользователь хочет что-то защитить, он создает новый verifier realm и
+привязывает его к объекту, модулю или архиву:
+
+    protected L5 module;
+    protected `.lmx` module;
+    protected `.lmz` data archive;
+    protected local registry area;
+    protected service admin surface.
+
+Например:
+
+L5:
+    fact: authRealm Default
+    fact: authRealm AdminModule
+    fact: authRealm WorkArchive
+
+    fact: principal alice source SystemUser
+
+    fact: credential Default alice primary PasswordVerifier
+    fact: credential AdminModule alice primary PasswordVerifier
+    fact: credential WorkArchive alice primary PasswordVerifier
+
+    fact: protects AdminModule admin.lmx
+    fact: protects WorkArchive work.lmz
+end: L5
+
+Один и тот же principal может иметь credentials в нескольких realms. Система не
+считает, что одинаковый человеческий password text в двух realms означает, что
+один login должен открыть оба. Если protected object требует `AdminModule`,
+предыдущего login в `Default` или `WorkArchive` недостаточно, если явный trust
+bridge или delegated ticket не говорит обратного.
+
+Так default experience остается легким, а protection становится явной:
+
+    ordinary local identity
+        -> default realm, possibly empty verifier
+
+    important module/archive/data
+        -> its own verifier realm
+
+Password reset является realm-local. Сброс default realm может заменить его
+verifier на `verifier("")` или другой bootstrap verifier, но он не должен
+автоматически сбрасывать protected object realms. `.lmz` archive или protected
+module со своим verifier realm остается защищенным после reset default login.
+
+Так избегается обычная ошибка, когда контроль над email account или global
+account reset дает доступ ко всем локальным документам. Reset восстанавливает
+обычный доступ к приложению или realm, который сбрасывают; он не decrypt-ит и
+не unlock-ит независимо защищенные данные.
+
+36.Ru.3. Delegated module ticket
+
+OAuth-like или OS-session-like модулю можно разрешить действовать как
+robot-user для principal-а. Он не получает primary password пользователя и не
+получает primary verifier.
+
+После успешной primary authentication core может выпустить delegated ticket:
+
+    holder    = OAuth.lmx или другой доверенный модуль
+    principal = локальный user, которого представляет ticket
+    scope     = разрешенный набор действий, например loginAs principal
+    lifetime  = опциональное время жизни
+    nonce     = random ticket nonce
+
+Delegated ticket является bearer credential для holder-модуля. Его следует
+держать только столько, сколько нужно. Профиль может держать его только в
+памяти, сохранять через OS secret store или требовать перевыпуска после каждого
+restart процесса.
+
+Core не обязан хранить второй verifier для каждого delegated ticket.
+Предпочтительный компактный профиль - stateless ticket:
+
+    ticket_body =
+        principal,
+        holder,
+        scope,
+        issuedAt,
+        expiresAt,
+        nonce
+
+    ticket_key =
+        KDF(core_secret, current_primary_verifier, principal, holder, scope)
+
+    ticket_mac =
+        MAC(ticket_key, ticket_body)
+
+    ticket =
+        ticket_body + ticket_mac
+
+`core_secret` - core-owned random secret. Профиль, которому нужно переживание
+delegated tickets через restart процесса, должен хранить его как protected core
+state. Профиль, которому нужны только session-only delegated tickets, может
+держать его только в памяти; тогда restart инвалидирует все delegated tickets.
+`core_secret` не выводится из password пользователя.
+
+Когда holder предъявляет ticket, core заново считает key из текущего primary
+verifier и проверяет MAC. Если primary verifier изменился из-за смены пароля
+или миграции verifier parameters, старый ticket больше не валидируется.
+
+Получается нужное правило:
+
+    primary verifier changed
+        -> ранее выпущенные delegated tickets не проходят validation
+
+Ticket не является паролем пользователя. Пароль пользователя невозможно
+восстановить из ticket. При этом ticket остается secret на время своей
+валидности, потому что тот, кто держит ticket, может использовать его scope.
+
+36.Ru.4. Внешние authentication modules
+
+OAuth/OIDC-like модуль может использовать внешнюю provider session, чтобы не
+просить у пользователя primary password повторно. Например, если system browser
+или OS account все еще имеет активную provider session, модуль может получить
+свежий external proof и попросить core выдать новый delegated ticket.
+
+External proof не является core password model. Это вход adapter-а:
+
+    external session proof
+        -> module validation
+        -> request local delegated ticket
+        -> core ticket validation later
+
+Если внешняя provider session исчезла, модуль может запустить Lingvamyxa
+authentication UI и попросить пользователя пройти primary credential.
+
+Если пользователь вышел из внешнего provider-а после того, как локальный
+delegated ticket уже выдан, локальный ticket остается валидным, если выбранная
+policy не требует live external-session proof для каждого использования или не
+использует очень короткое время жизни ticket.
+
+36.Ru.5. Registry facts, validators и guarantees
+
+Точные имена facts задаются профилем. Профиль может описывать модель обычными
+registry facts:
+
+L5:
+    fact: authRealm Default
+    fact: authRealm OAuthRealm
+    fact: principal alice source SystemUser
+    fact: credential Default alice primary PasswordVerifier
+    fact: credential OAuthRealm alice primary PasswordVerifier
+    fact: authModule OAuth.lmx
+    fact: mayRequestTicket OAuth.lmx OAuthRealm alice
+    fact: ticketScope OAuth.lmx OAuthRealm loginAs alice
+    fact: ticketInvalidatedBy OAuth.lmx OAuthRealm primaryVerifierChange
+end: L5
+
+После validation ticket flow получает обычное registry-visible evidence:
+
+    principal = alice
+    realm     = OAuthRealm
+    holder    = OAuth.lmx
+    scope     = loginAs alice
+    assurance = delegatedTicket
+
+Receivers могут требовать эти facts или guarantees так же, как они требуют
+model validators:
+
+L5:
+    fact: requires updateProfile Authenticated
+    fact: requires issueTicket PrimaryAuthenticated
+    fact: grants ticket OAuth.lmx loginAs alice
+end: L5
+
+Так authentication остается рядом с той же fact/validator/guarantee machinery,
+которую используют structural models. Authentication не становится отдельной
+глобальной таблицей ролей. Это способ привязать проверенную authority к L5
+flow.
+
+36.Ru.6. ANSI C / libsodium runtime sketch
+
+---ANSI C---
+Default ANSI C / C99 security substrate использует bundled libsodium source
+tree, импортированный в `third_party/libsodium-1.0.22/`. Это vendored,
+проверенная source dependency, а не живая package-manager dependency.
+
+Runtime должен вызвать `sodium_init()` один раз перед использованием security
+substrate.
+
+Возможная C99 mapping:
+
+    primary verifier:
+        `crypto_pwhash_str()` с выбранным Argon2id password profile.
+
+    primary password check:
+        `crypto_pwhash_str_verify()`.
+
+    password verifier migration check:
+        `crypto_pwhash_str_needs_rehash()`, если выбранный профиль хочет
+        automatic parameter migration.
+
+    random ticket nonce and core secret:
+        `randombytes_buf()`.
+
+    secure password buffers, которыми владеет Lingvamyxa prompt:
+        `sodium_malloc()`, `sodium_mlock()`, `sodium_memzero()`,
+        `sodium_munlock()` и `sodium_free()`, где поддерживается.
+
+    ticket key derivation:
+        libsodium keyed hash или KDF над
+        `core_secret`, `current_primary_verifier`, `principal`, `holder` и
+        `scope`.
+
+    ticket authentication:
+        `crypto_auth()` / `crypto_auth_verify()` или другой выбранный
+        libsodium MAC profile над serialized ticket body.
+
+Primary verifier string не должен выходить из core как входной credential. Core
+может читать его как локальный derivation material для validation delegated
+ticket. Standard profile должен смешивать его с core-owned secret при выводе
+ticket MAC key, чтобы кражи одного verifier было недостаточно для подделки
+tickets.
+
+Если Lingvamyxa prompt владеет password input path, plaintext password должен
+жить в locked secret buffer и затираться сразу после verification. Если пароль
+приходит из внешнего UI toolkit, runtime может затирать только собственные
+buffers; он не может задним числом защитить toolkit-internal copies.
+---ANSI C---
+
+36.Ru.7. Короткая формула
+
+Core authentication model является credential-neutral, но verifier-centered.
+Primary password authentication, OS session adapters и OAuth-like modules
+приводят к одному локальному результату: validated flow с явными facts, scopes
+и guarantees.
+
+Principal namespace может быть общим, но verifier realms независимы. Default
+realm может быть легким и empty-password based; protected modules, archives и
+service surfaces объявляют собственные verifier realms.
+
+Delegated modules получают tickets или capabilities, а не password пользователя
+и не primary verifier. Stateless delegated ticket может валидироваться через
+текущий primary verifier; поэтому смена пароля и verifier migration
+автоматически инвалидируют старые module tickets.
