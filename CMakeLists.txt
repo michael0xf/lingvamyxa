@@ -69,6 +69,10 @@ add_library(core.lm1 STATIC
     lm1/core/core.lm1.h
 )
 
+set_target_properties(core.lm1 PROPERTIES
+    OUTPUT_NAME "core.lm0"
+)
+
 target_include_directories(core.lm1 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/lm1/core
 )
@@ -103,6 +107,10 @@ endif()
 add_library(parser.lm1 STATIC
     lm1/parser/p0.lm1.c
     lm1/parser/p0.lm1.h
+)
+
+set_target_properties(parser.lm1 PROPERTIES
+    OUTPUT_NAME "parser.lm0"
 )
 
 target_include_directories(parser.lm1 PUBLIC
