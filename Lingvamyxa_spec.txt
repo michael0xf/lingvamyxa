@@ -11259,6 +11259,38 @@ Forgetting the default password should not destroy the computer. Forgetting a
 protected archive or protected directory verifier may make that protected data
 unrecoverable, and that is the honest cost of real encryption.
 
+36.En.2.3. Multiple Verifiers, Session Quorum and Creator Parent
+
+The data model must not assume that one realm/principal pair has only one
+verifier. A principal in a realm may have several verifier slots. This supports
+special policies without changing the core syntax later:
+
+    (realm, principal, verifierSlot) -> verifier
+
+The first bootstrap profile may require only one verifier slot, but stored
+auth data and registry facts should leave room for multiple slots.
+
+A minimal accepted session may also require more than one authenticated
+principal inside the same module or realm. This is a session policy, not a new
+source syntax rule:
+
+    accepted session =
+        principal alice authenticated in AdminModule
+        principal bob authenticated in AdminModule
+
+The exact policy language may later define `all`, `any` or threshold forms. The
+important constraint for now is that a session identity is allowed to contain
+more than one principal.
+
+User/principal creation should record a creator parent:
+
+    parent principal -> created principal
+
+The root parent for ordinary local users is the system process or system
+bootstrap principal. The parent relation is provenance, not authority. A parent
+does not gain access to content protected by the created user's verifier realms
+unless a separate fact, ticket, capability or shared realm grants that access.
+
 36.En.3. Delegated Module Ticket
 
 An OAuth-like or OS-session-like module may be allowed to act as a robot user
@@ -11601,6 +11633,38 @@ Lingvamyxa protection должна разделять recovery и secrecy:
 Забытый default password не должен уничтожать компьютер. Забытый verifier от
 protected archive или protected directory может сделать эти protected data
 невосстановимыми, и это честная цена настоящего encryption.
+
+36.Ru.2.3. Multiple verifiers, session quorum и creator parent
+
+Data model не должна предполагать, что у пары realm/principal есть только один
+verifier. Principal в realm может иметь несколько verifier slots. Это
+поддерживает особые политики без изменения core syntax позже:
+
+    (realm, principal, verifierSlot) -> verifier
+
+Первый bootstrap profile может требовать только один verifier slot, но stored
+auth data и registry facts должны оставить место для нескольких slots.
+
+Минимально accepted session тоже может требовать больше одного authenticated
+principal внутри одного module или realm. Это session policy, а не новое
+правило source syntax:
+
+    accepted session =
+        principal alice authenticated in AdminModule
+        principal bob authenticated in AdminModule
+
+Точный policy language позже может задать `all`, `any` или threshold forms.
+Важное ограничение сейчас: session identity может содержать больше одного
+principal.
+
+Создание user/principal должно записывать creator parent:
+
+    parent principal -> created principal
+
+Root parent для обычных local users - system process или system bootstrap
+principal. Parent relation является provenance, а не authority. Parent не
+получает доступ к content, защищенному verifier realms созданного user-а, если
+отдельный fact, ticket, capability или shared realm не выдает такой доступ.
 
 36.Ru.3. Delegated module ticket
 
