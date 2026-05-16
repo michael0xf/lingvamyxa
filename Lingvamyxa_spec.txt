@@ -10070,6 +10070,81 @@ registry-visible evidence that it satisfies `LightPassenger`, including
 documented guarantees such as `weightLessThan 80`. IDEs and diagnostics should
 show these guarantees as part of the value's available type information.
 
+34.4.1. Lmx Codec Receivers
+
+Every language value should have a Lingvamyxa-native codec path. The standard
+conceptual receivers are:
+
+    toLmx: value
+    fromLmx: lmx
+    fromLmx: lmx Type
+
+`toLmx` produces a canonical Lingvamyxa representation of a value. The target
+representation may be text, a generic Structure, a byte stream carrying
+canonical text, or another profile-defined Lmx serialization carrier. The
+semantic payload is still Lingvamyxa Structures and typed scalar values.
+
+`fromLmx: lmx` parses or decodes Lmx representation into generic Structures and
+scalar atoms. It does not by itself grant authority and does not create a
+trusted typed value.
+
+`fromLmx: lmx Type` parses or decodes Lmx representation and then consumes the
+result through the expected type receiver, validator or registry descriptor. A
+typed value is produced only after the selected type/validator accepts the
+Structure.
+
+The explicit `Type` argument may be omitted when the expected type is already
+known from context:
+
+    Person: p fromLmx personText
+
+is equivalent to asking `fromLmx` to produce a `Person` and then validating the
+parsed Structure through the `Person` model/validator.
+
+This codec contract applies to everything in the language, not only to user
+models:
+
+    primitive numeric values;
+    bool-like values;
+    ANSI C / C99 character constants as numeric values;
+    String and Text values;
+    exact quoted identifiers;
+    generic Structures;
+    concrete ModelSpec values;
+    arrays, slices and validated containers;
+    registry facts and descriptors;
+    messages and service payloads;
+    capabilities or tickets when the selected security profile permits
+        serialization.
+
+Some values may be deliberately non-serializable or may serialize only as a
+redacted capability reference. That is a type/validator/security decision, not
+a parser exception.
+
+The important rule is:
+
+    Lmx representation is data.
+    P0/P1 parsing builds Structures.
+    Type receivers and validators grant typed meaning.
+
+Therefore `fromLmx` is not Java-style `fromString`. It is a structural import
+path that ends at the same registry validator/type authority as ordinary source
+Structures.
+
+---ANSI C---
+An ANSI C runtime may expose this as generated type operations:
+
+    int (*to_lmx)(LmWriter *out, const void *src);
+    int (*from_lmx)(LmArena *arena,
+                    const LmStructure *src,
+                    void *dst,
+                    LmDiagnostic *diagnostic);
+
+Primitive types should still have entries in the same operation table. The
+runtime should not special-case user models as serializable while leaving
+primitive values outside the Lmx codec model.
+---ANSI C---
+
 34.5. Type Reconciliation Algorithm
 
 When a receiver, assignment target or field expects type `E` and the source
@@ -10454,6 +10529,81 @@ validator. Значение, прочитанное из `passengers`, може�
 evidence, что оно удовлетворяет `LightPassenger`, включая documented guarantees
 наподобие `weightLessThan 80`. IDE и diagnostics должны показывать такие
 guarantees как часть доступной type information значения.
+
+34.RU.4.1. Lmx codec receivers
+
+У каждого значения языка должен быть Lingvamyxa-native codec path.
+Стандартные концептуальные receivers:
+
+    toLmx: value
+    fromLmx: lmx
+    fromLmx: lmx Type
+
+`toLmx` производит canonical Lingvamyxa representation значения. Target
+representation может быть text, generic Structure, byte stream с canonical
+text или другой profile-defined Lmx serialization carrier. Semantic payload
+все равно остается Lingvamyxa Structures и typed scalar values.
+
+`fromLmx: lmx` парсит или декодирует Lmx representation в generic Structures и
+scalar atoms. Сам по себе он не выдает authority и не создает trusted typed
+value.
+
+`fromLmx: lmx Type` парсит или декодирует Lmx representation, а затем
+передает результат в expected type receiver, validator или registry descriptor.
+Typed value появляется только после того, как выбранный type/validator принял
+Structure.
+
+Явный аргумент `Type` можно опускать, когда expected type уже известен из
+контекста:
+
+    Person: p fromLmx personText
+
+эквивалентно запросу `fromLmx` произвести `Person`, а затем проверить
+распарсенную Structure через model/validator `Person`.
+
+Этот codec contract распространяется на все, что есть в языке, а не только на
+user models:
+
+    primitive numeric values;
+    bool-like values;
+    ANSI C / C99 character constants как numeric values;
+    String и Text values;
+    exact quoted identifiers;
+    generic Structures;
+    concrete ModelSpec values;
+    arrays, slices и validated containers;
+    registry facts и descriptors;
+    messages и service payloads;
+    capabilities или tickets, если выбранный security profile разрешает
+        serialization.
+
+Некоторые значения могут быть намеренно non-serializable или могут
+serialize-иться только как redacted capability reference. Это решение
+type/validator/security, а не parser exception.
+
+Главное правило:
+
+    Lmx representation is data.
+    P0/P1 parsing builds Structures.
+    Type receivers and validators grant typed meaning.
+
+Поэтому `fromLmx` - это не Java-style `fromString`. Это structural import path,
+который заканчивается в той же registry validator/type authority, что и
+ordinary source Structures.
+
+---ANSI C---
+ANSI C runtime может представить это как generated type operations:
+
+    int (*to_lmx)(LmWriter *out, const void *src);
+    int (*from_lmx)(LmArena *arena,
+                    const LmStructure *src,
+                    void *dst,
+                    LmDiagnostic *diagnostic);
+
+Primitive types тоже должны иметь entries в той же operation table. Runtime не
+должен делать user models serializable, оставляя primitive values вне Lmx codec
+model.
+---ANSI C---
 
 34.RU.5. Сверка типов
 
