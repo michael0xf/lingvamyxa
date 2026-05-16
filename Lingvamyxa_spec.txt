@@ -2745,15 +2745,16 @@ The level boundary is:
         may expose a universal adapter to the selected L1 / ANSI C profile.
         Raw C functions, raw pointers, raw storage, C headers and platform
         calls belong here. This adapter is governed by the L2/L1 build profile,
-        not by L4 registry descriptors.
+        not by high-level L4 semantic wrapper descriptors.
 
     L3 and above
         may not call raw L1 / ANSI C symbols directly. They may call only
         Lingvamyxa receivers, functions, methods, wrappers, handles or
         capabilities whose registry entries define the needed contract.
 
-The L2 universal ANSI C adapter does not read instructions from L4 in order to
-translate raw L2 code. Its inputs are the L2 source and the L2/L1 build profile:
+The L2 universal ANSI C adapter does not read high-level wrapper instructions
+from L4 in order to assign semantic meaning to raw L2 code. Its inputs are the
+L2 source and the L2/L1 build profile:
 
     target compiler;
     target ABI;
@@ -2765,6 +2766,11 @@ translate raw L2 code. Its inputs are the L2 source and the L2/L1 build profile:
     linker inputs;
     platform profile.
 
+The build profile itself may be described by an L4 build/configuration
+Structure. In that role, L4 is not assigning high-level meaning to C functions;
+it is supplying mechanical toolchain inputs that will be passed to the
+compiler/linker.
+
 This is intentionally close to an ordinary C compilation environment. The same
 L2 source should not acquire a different raw C meaning because a higher-level
 registry state changed.
@@ -2774,17 +2780,19 @@ backends, type mappings, ownership rules, borrow rules, effect rules,
 capability requirements and operator implementations for L3+ visibility. That
 is the same mechanism used for other receiver/operator registration.
 
-The L4 layer does not declare every C function for L2. A selected L2 universal
-ANSI C adapter may discover or bind raw symbols from headers, toolchain
-metadata, build metadata or explicit L2 adapter syntax. Those raw symbols remain
-L2-only unless a checked Lingvamyxa wrapper is registered.
+The L4 semantic wrapper layer does not declare every C function for L2. A
+selected L2 universal ANSI C adapter may discover or bind raw symbols from
+headers, toolchain metadata, build metadata or explicit L2 adapter syntax.
+Those raw symbols remain L2-only unless a checked Lingvamyxa wrapper is
+registered.
 
 No special "import C into mathematics" mechanism is required. Mathematics and
 ordinary L3+ code see only accepted Lingvamyxa descriptors.
 
 Canonical rule:
 
-    L2 source + L2/L1 build profile define raw L1 visibility;
+    L2 source + L2/L1 build profile define raw L1 toolchain visibility;
+    L4 may provide that build profile as compiler/linker configuration data;
     L4 wrappers define high-level contracts and visibility;
     registry validation accepts or rejects high-level descriptors;
     accepted high-level descriptors enter the L3+ shared namespace;
@@ -2797,9 +2805,11 @@ translator.
 
 6.6.7. L2 Raw Adapter and Checked Wrapper Example
 
-A raw L1 function does not need an L4 declaration merely to be used by an L2
-universal adapter. L2 is the low-level adapter boundary. Headers, include paths
-and link inputs are build-profile data, not L4 semantic registry data.
+A raw L1 function does not need an L4 semantic wrapper declaration merely to be
+used by an L2 universal adapter. L2 is the low-level adapter boundary. Headers,
+include paths and link inputs are build-profile data. They may be written in L4
+configuration syntax, but they are passed mechanically to the toolchain rather
+than used as high-level receiver/type policy.
 
 Using MPFR from L2 may therefore be as direct as ordinary C-profile use, if the
 L2/L1 build profile provides `mpfr.h` and the MPFR link inputs.
