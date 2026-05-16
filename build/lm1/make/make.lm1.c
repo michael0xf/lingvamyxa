@@ -1,0 +1,193 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static const char *lm_make_env_or_default(const char *name, const char *fallback) {
+    const char *value;
+
+    value = getenv(name);
+    if (value == NULL || value[0] == '\0') {
+        return fallback;
+    }
+
+    return value;
+}
+
+static int lm_make_append(char *buffer, size_t size, size_t *used, const char *text) {
+    size_t length;
+
+    length = strlen(text);
+    if (*used + length >= size) {
+        fprintf(stderr, "make.lm0: command line is too long\n");
+        return 1;
+    }
+
+    memcpy(buffer + *used, text, length + 1U);
+    *used += length;
+    return 0;
+}
+
+static int lm_make_append_arg(char *buffer, size_t size, size_t *used, const char *arg) {
+    if (lm_make_append(buffer, size, used, " \"") != 0) {
+        return 1;
+    }
+    if (lm_make_append(buffer, size, used, arg) != 0) {
+        return 1;
+    }
+    return lm_make_append(buffer, size, used, "\"");
+}
+
+static int lm_make_run_command(const char *command) {
+    int status;
+
+    printf("%s\n", command);
+    status = system(command);
+    if (status != 0) {
+        fprintf(stderr, "make.lm0: command failed with status %d\n", status);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_make_run_tool(const char *tool, int argc, char **argv, int start) {
+    char command[8192];
+    size_t used;
+    int index;
+
+    used = 0U;
+    command[0] = '\0';
+
+    if (lm_make_append(command, sizeof(command), &used, tool) != 0) {
+        return 1;
+    }
+
+    for (index = start; index < argc; ++index) {
+        if (lm_make_append_arg(command, sizeof(command), &used, argv[index]) != 0) {
+            return 1;
+        }
+    }
+
+    return lm_make_run_command(command);
+}
+
+static int lm_make_copy_file(const char *source_path, const char *output_path) {
+    unsigned char buffer[32768];
+    FILE *source;
+    FILE *output;
+    size_t count;
+    int status;
+
+    source = fopen(source_path, "rb");
+    if (source == NULL) {
+        fprintf(stderr, "make.lm0: cannot open input file %s\n", source_path);
+        return 1;
+    }
+
+    output = fopen(output_path, "wb");
+    if (output == NULL) {
+        fprintf(stderr, "make.lm0: cannot open output file %s\n", output_path);
+        fclose(source);
+        return 1;
+    }
+
+    status = 0;
+    while ((count = fread(buffer, 1U, sizeof(buffer), source)) > 0U) {
+        if (fwrite(buffer, 1U, count, output) != count) {
+            status = 1;
+            break;
+        }
+    }
+
+    if (ferror(source)) {
+        status = 1;
+    }
+    if (fclose(output) != 0) {
+        status = 1;
+    }
+    fclose(source);
+
+    if (status != 0) {
+        fprintf(stderr, "make.lm0: cannot copy %s to %s\n", source_path, output_path);
+        return 1;
+    }
+
+    return 0;
+}
+
+static void lm_make_print_usage(void) {
+    fprintf(stderr, "usage:\n");
+    fprintf(stderr, "  make.lm0 mkdir <dir>...\n");
+    fprintf(stderr, "  make.lm0 cc <arg>...\n");
+    fprintf(stderr, "  make.lm0 link <arg>...\n");
+    fprintf(stderr, "  make.lm0 ar <arg>...\n");
+    fprintf(stderr, "  make.lm0 ranlib <arg>...\n");
+    fprintf(stderr, "  make.lm0 copy <source> <output>\n");
+}
+
+int main(int argc, char **argv) {
+    const char *cmake;
+    const char *cc;
+    const char *ar;
+    const char *ranlib;
+
+    if (argc < 2) {
+        lm_make_print_usage();
+        return 1;
+    }
+
+    cmake = lm_make_env_or_default("LM_CMAKE", "cmake");
+    cc = lm_make_env_or_default("LM_CC", "gcc");
+    ar = lm_make_env_or_default("LM_AR", "ar");
+    ranlib = lm_make_env_or_default("LM_RANLIB", "ranlib");
+
+    if (strcmp(argv[1], "mkdir") == 0) {
+        char command[8192];
+        size_t used;
+        int index;
+
+        if (argc < 3) {
+            lm_make_print_usage();
+            return 1;
+        }
+
+        used = 0U;
+        command[0] = '\0';
+        if (lm_make_append(command, sizeof(command), &used, cmake) != 0) {
+            return 1;
+        }
+        if (lm_make_append(command, sizeof(command), &used, " -E make_directory") != 0) {
+            return 1;
+        }
+        for (index = 2; index < argc; ++index) {
+            if (lm_make_append_arg(command, sizeof(command), &used, argv[index]) != 0) {
+                return 1;
+            }
+        }
+
+        return lm_make_run_command(command);
+    }
+
+    if (strcmp(argv[1], "cc") == 0 || strcmp(argv[1], "link") == 0) {
+        return lm_make_run_tool(cc, argc, argv, 2);
+    }
+
+    if (strcmp(argv[1], "ar") == 0) {
+        return lm_make_run_tool(ar, argc, argv, 2);
+    }
+
+    if (strcmp(argv[1], "ranlib") == 0) {
+        return lm_make_run_tool(ranlib, argc, argv, 2);
+    }
+
+    if (strcmp(argv[1], "copy") == 0) {
+        if (argc != 4) {
+            lm_make_print_usage();
+            return 1;
+        }
+        return lm_make_copy_file(argv[2], argv[3]);
+    }
+
+    lm_make_print_usage();
+    return 1;
+}

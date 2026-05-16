@@ -5,7 +5,7 @@ project(lingvamyxa
     LANGUAGES C CXX
 )
 
-# ---- C core settings ----
+# ---- Language settings ----
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -15,9 +15,33 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(BUILD_PARSER_LM0 "Build the parser.lm0 command-line parser executable" ON)
+set(LM0_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/lm0")
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
+
+set(LM0_TRUSTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lm0")
+set(LM0_TRUSTED_PARSER_LIB "${LM0_TRUSTED_DIR}/libparser.lm0.a")
+
+option(BUILD_PRINT_TREE_LM0 "Build the printTree.lm0 tree dump executable" ON)
+option(BUILD_TRANS_LM0 "Build the trans.lm0 L2-to-L1 translator executable" ON)
+option(BUILD_MAKE_LM0 "Build the make.lm0 native build driver executable" ON)
+option(BUILD_BUILD_CORE_LM0 "Build the buildCore.lm0 core build driver executable" ON)
 option(BUILD_LINGVAMYXA_QT_APP "Build the optional Qt Widgets shell" ON)
 option(LINGVAMYXA_ENABLE_EXTERNAL_DEPS "Enable optional runtime/backend dependencies" OFF)
+
+if (BUILD_PRINT_TREE_LM0 AND NOT BUILD_TRANS_LM0)
+    message(FATAL_ERROR "BUILD_PRINT_TREE_LM0 requires BUILD_TRANS_LM0 because printTree.lm0 is generated from lm2/printTree/printTree.lm2.")
+endif()
+
+if (BUILD_MAKE_LM0 AND NOT BUILD_TRANS_LM0)
+    message(FATAL_ERROR "BUILD_MAKE_LM0 requires BUILD_TRANS_LM0 because make.lm0 is generated from lm2/make/make.lm2.")
+endif()
+
+if (BUILD_TRANS_LM0 AND NOT EXISTS "${LM0_TRUSTED_PARSER_LIB}")
+    message(FATAL_ERROR "Trusted parser library was not found: ${LM0_TRUSTED_PARSER_LIB}")
+endif()
 
 # ---- External language/runtime dependencies ----
 
@@ -61,88 +85,166 @@ if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
     )
 endif()
 
-# ---- L1 core ----
-# This target must stay independent from Qt, Android, Windows APIs, etc.
+set(LM1_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/lm1")
+set(LM1_GENERATED_TRANS_C "${LM1_GENERATED_DIR}/trans/trans.lm1.c")
+set(LM1_GENERATED_PARSER_C "${LM1_GENERATED_DIR}/parser/parser.lm1.c")
+set(LM1_GENERATED_PRINT_TREE_C "${LM1_GENERATED_DIR}/printTree/printTree.lm1.c")
+set(LM1_GENERATED_MAKE_C "${LM1_GENERATED_DIR}/make/make.lm1.c")
 
-add_library(core.lm1 STATIC
-    lm1/core/core.lm1.c
-    lm1/core/core.lm1.h
-)
+# ---- L2 to L1 translator and generated L1 mirror ----
 
-set_target_properties(core.lm1 PROPERTIES
-    OUTPUT_NAME "core.lm0"
-)
-
-target_include_directories(core.lm1 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/lm1/core
-)
-
-if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
-    target_compile_definitions(core.lm1
-        PUBLIC
-            PCRE2_CODE_UNIT_WIDTH=8
+if (BUILD_TRANS_LM0)
+    add_library(parser_trusted.lm0 STATIC IMPORTED GLOBAL)
+    set_target_properties(parser_trusted.lm0 PROPERTIES
+        IMPORTED_LOCATION "${LM0_TRUSTED_PARSER_LIB}"
     )
 
-    target_link_libraries(core.lm1
-        PUBLIC
-            unofficial::sqlite3::sqlite3
-            PCRE2::8BIT
-            civetweb::civetweb
-            CURL::libcurl
-            PkgConfig::gmp
-            PkgConfig::mpfr
-            yyjson::yyjson
-            decnumber
+    set_source_files_properties("${LM1_GENERATED_TRANS_C}" PROPERTIES GENERATED TRUE)
+
+    add_executable(trans.lm0
+        "${LM1_GENERATED_TRANS_C}"
+    )
+
+    target_include_directories(trans.lm0 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser
+    )
+
+    target_link_libraries(trans.lm0 PRIVATE
+        parser_trusted.lm0
+    )
+
+    add_custom_target(refresh_trans_lm1
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/trans"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans/trans.lm2"
+            "${LM1_GENERATED_TRANS_C}"
+        DEPENDS
+            trans.lm0
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans/trans.lm2"
+        COMMENT "Refreshing build/lm1/trans/trans.lm1.c from lm2/trans/trans.lm2"
+        VERBATIM
+    )
+
+    add_custom_target(refresh_parser_lm1
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/parser"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser/parser.lm2"
+            "${LM1_GENERATED_PARSER_C}"
+        DEPENDS
+            trans.lm0
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser/parser.lm2"
+        COMMENT "Refreshing build/lm1/parser/parser.lm1.c from lm2/parser/parser.lm2"
+        VERBATIM
+    )
+
+    add_custom_command(
+        OUTPUT "${LM1_GENERATED_PRINT_TREE_C}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/printTree"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree/printTree.lm2"
+            "${LM1_GENERATED_PRINT_TREE_C}"
+        DEPENDS
+            trans.lm0
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree/printTree.lm2"
+        COMMENT "Generating build/lm1/printTree/printTree.lm1.c from lm2/printTree/printTree.lm2"
+        VERBATIM
+    )
+
+    add_custom_command(
+        OUTPUT "${LM1_GENERATED_MAKE_C}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/make"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make/make.lm2"
+            "${LM1_GENERATED_MAKE_C}"
+        DEPENDS
+            trans.lm0
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make/make.lm2"
+        COMMENT "Generating build/lm1/make/make.lm1.c from lm2/make/make.lm2"
+        VERBATIM
+    )
+
+    add_custom_target(lm2_to_lm1 ALL
+        DEPENDS
+            refresh_trans_lm1
+            refresh_parser_lm1
+            "${LM1_GENERATED_PRINT_TREE_C}"
+            "${LM1_GENERATED_MAKE_C}"
     )
 endif()
 
-if (MSVC)
-    target_compile_options(core.lm1 PRIVATE /W4)
-else()
-    target_compile_options(core.lm1 PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+# ---- Generated L1 parser ----
 
-# ---- L1 parser ----
+if (BUILD_TRANS_LM0)
+    set_source_files_properties("${LM1_GENERATED_PARSER_C}" PROPERTIES GENERATED TRUE)
 
-add_library(parser.lm1 STATIC
-    lm1/parser/p0.lm1.c
-    lm1/parser/p0.lm1.h
-)
-
-set_target_properties(parser.lm1 PROPERTIES
-    OUTPUT_NAME "parser.lm0"
-)
-
-target_include_directories(parser.lm1 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser
-)
-
-target_link_libraries(parser.lm1 PUBLIC
-    core.lm1
-)
-
-if (MSVC)
-    target_compile_options(parser.lm1 PRIVATE /W4)
-else()
-    target_compile_options(parser.lm1 PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-
-# ---- L0 parser executable ----
-
-if (BUILD_PARSER_LM0)
-    add_executable(parser.lm0
-        lm1/parser/parser.lm1.c
+    add_library(parser.lm1 STATIC
+        "${LM1_GENERATED_PARSER_C}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser/parser.lm1.h"
     )
 
-    target_link_libraries(parser.lm0 PRIVATE
+    add_dependencies(parser.lm1
+        lm2_to_lm1
+    )
+
+    set_target_properties(parser.lm1 PROPERTIES
+        OUTPUT_NAME "parser.lm0"
+    )
+
+    target_include_directories(parser.lm1 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser
+    )
+
+    if (MSVC)
+        target_compile_options(parser.lm1 PRIVATE /W4)
+    else()
+        target_compile_options(parser.lm1 PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
+
+# ---- L0 native build driver ----
+
+if (BUILD_MAKE_LM0)
+    set_source_files_properties("${LM1_GENERATED_MAKE_C}" PROPERTIES GENERATED TRUE)
+
+    add_executable(make.lm0
+        "${LM1_GENERATED_MAKE_C}"
+    )
+
+    add_dependencies(make.lm0
+        lm2_to_lm1
+    )
+endif()
+
+# ---- L0 core build driver ----
+
+if (BUILD_BUILD_CORE_LM0)
+    add_executable(buildCore.lm0
+        "${CMAKE_CURRENT_SOURCE_DIR}/lm1/buildCore/buildCore.lm1.c"
+    )
+endif()
+
+# ---- L0 tree dump executable ----
+
+if (BUILD_PRINT_TREE_LM0)
+    set_source_files_properties("${LM1_GENERATED_PRINT_TREE_C}" PROPERTIES GENERATED TRUE)
+
+    add_executable(printTree.lm0
+        "${LM1_GENERATED_PRINT_TREE_C}"
+    )
+
+    add_dependencies(printTree.lm0
+        lm2_to_lm1
+    )
+
+    target_link_libraries(printTree.lm0 PRIVATE
         parser.lm1
     )
 endif()
 
 # ---- Optional Qt Widgets shell ----
-# If Qt6 Widgets is available, this builds a tiny GUI wrapper around the same C core.
-# If Qt is not available, the project still configures and builds the L1 core
-# and parser targets.
+# If Qt6 Widgets is available, this builds a tiny GUI shell.
+# If Qt is not available, the project still configures and builds the parser
+# and tool targets.
 
 if (BUILD_LINGVAMYXA_QT_APP)
     find_package(Qt6 COMPONENTS Widgets QUIET)
@@ -158,7 +260,6 @@ if (BUILD_LINGVAMYXA_QT_APP)
 
         target_link_libraries(lingvamyxa_qt PRIVATE
             Qt6::Widgets
-            core.lm1
         )
 
         set_target_properties(lingvamyxa_qt PROPERTIES
@@ -167,6 +268,6 @@ if (BUILD_LINGVAMYXA_QT_APP)
         )
     else()
         message(STATUS "Qt6 Widgets was not found. Skipping lingvamyxa_qt target.")
-        message(STATUS "The pure C core and CLI target can still be built.")
+        message(STATUS "The parser and tool targets can still be built.")
     endif()
 endif()

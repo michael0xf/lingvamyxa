@@ -1,7 +1,9 @@
+L1:
+===
 #include <stdio.h>
+#include "parser.lm1.h"
 
-#include "core.lm1.h"
-#include "p0.lm1.h"
+
 
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -47,9 +49,9 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    printf("%s\n", lm_version());
-    printf("lm_add(2, 3) = %d\n", lm_add(2, 3));
-    printf("usage: parser.lm0[.exe] <source.lmx>\n");
+    printf("usage: printTree.lm0[.exe] <source.lmx>\n");
 
     return 0;
 }
+
+===

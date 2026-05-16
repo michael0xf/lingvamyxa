@@ -61,3 +61,14 @@ CMakeCache.txt
 *.user
 *.autosave
 .DS_Store
+
+# Lingvamyxa trusted bootstrap layer.
+!lm0/
+!lm0/*.a
+!lm0/*.exe
+
+# Lingvamyxa portable generated L1 source snapshot.
+!build/
+build/*
+!build/lm1/
+!build/lm1/**
