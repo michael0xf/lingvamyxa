@@ -1,22 +1,23 @@
 # lingvamyxa
 Luminomyxa Proxima b, the planet's technosphere programming language
 
-# Lingvamyxa C + optional Qt skeleton
+# Lingvamyxa C + optional Qt shell
 
 This is a small importable CMake project.
 
 ## Structure
 
 ```text
-lingvamyxa_c_qt_skeleton/
+lingvamyxa/
   CMakeLists.txt
-  core/
-    core.lm1.h
-    core.lm1.c
-    p0.lm1.h
-    p0.lm1.c
-  cli/
-    main.lm1.c
+  lm1/
+    core/
+      core.lm1.h
+      core.lm1.c
+    parser/
+      p0.lm1.h
+      p0.lm1.c
+      parser.lm1.c
   qt_app/
     main.cpp
     MainWindow.cpp
@@ -25,8 +26,9 @@ lingvamyxa_c_qt_skeleton/
 
 ## Idea
 
-- `lingvamyxa_core` is a pure C static library.
-- `lingvamyxa_cli` is a tiny command-line test app.
+- `core.lm1` is the pure L1/C static core library.
+- `parser.lm1` is the L1/C parser static library.
+- `parser.lm0` is the tiny command-line parser app and built L0 executable.
 - `lingvamyxa_qt` is an optional Qt Widgets GUI wrapper.
 
 The core does not depend on Qt, Android, Windows, POSIX, GUI, filesystem, or any event loop.
@@ -52,13 +54,13 @@ cmake --build build
 Run CLI:
 
 ```bash
-./build/lingvamyxa_cli
+./build/parser.lm0
 ```
 
 On Windows, the executable is usually:
 
 ```bat
-build\lingvamyxa_cli.exe
+build\parser.lm0.exe
 ```
 
 ## Windows Qt/MinGW/vcpkg build
@@ -114,7 +116,7 @@ Build and run the CLI:
 
 ```powershell
 cmake --build C:\Nyasha_Planet\lingvamyxa\build\mingw-vcpkg
-C:\Nyasha_Planet\lingvamyxa\build\mingw-vcpkg\lingvamyxa_cli.exe
+C:\Nyasha_Planet\lingvamyxa\build\mingw-vcpkg\parser.lm0.exe
 ```
 
 ## Build only the C part

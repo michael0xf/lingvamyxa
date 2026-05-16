@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
 
     printf("%s\n", lm_version());
     printf("lm_add(2, 3) = %d\n", lm_add(2, 3));
-    printf("usage: lingvamyxa_cli <source.lmx>\n");
+    printf("usage: parser.lm0[.exe] <source.lmx>\n");
 
     return 0;
 }

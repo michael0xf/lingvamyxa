@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(lingvamyxa_skeleton
+project(lingvamyxa
     VERSION 0.1.0
     LANGUAGES C CXX
 )
@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(BUILD_LINGVAMYXA_CLI "Build the simple command-line test app" ON)
+option(BUILD_PARSER_LM0 "Build the parser.lm0 command-line parser executable" ON)
 option(BUILD_LINGVAMYXA_QT_APP "Build the optional Qt Widgets shell" ON)
 option(LINGVAMYXA_ENABLE_EXTERNAL_DEPS "Enable optional runtime/backend dependencies" OFF)
 
@@ -61,27 +61,25 @@ if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
     )
 endif()
 
-# ---- Pure C language core ----
+# ---- L1 core ----
 # This target must stay independent from Qt, Android, Windows APIs, etc.
 
-add_library(lingvamyxa_core STATIC
-    core/core.lm1.c
-    core/core.lm1.h
-    core/p0.lm1.c
-    core/p0.lm1.h
+add_library(core.lm1 STATIC
+    lm1/core/core.lm1.c
+    lm1/core/core.lm1.h
 )
 
-target_include_directories(lingvamyxa_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/core
+target_include_directories(core.lm1 PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/lm1/core
 )
 
 if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
-    target_compile_definitions(lingvamyxa_core
+    target_compile_definitions(core.lm1
         PUBLIC
             PCRE2_CODE_UNIT_WIDTH=8
     )
 
-    target_link_libraries(lingvamyxa_core
+    target_link_libraries(core.lm1
         PUBLIC
             unofficial::sqlite3::sqlite3
             PCRE2::8BIT
@@ -95,31 +93,48 @@ if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
 endif()
 
 if (MSVC)
-    target_compile_options(lingvamyxa_core PRIVATE /W4)
+    target_compile_options(core.lm1 PRIVATE /W4)
 else()
-    target_compile_options(lingvamyxa_core PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(core.lm1 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# ---- Tiny CLI test app ----
-# Useful for testing the C core without GUI or platform-specific APIs.
+# ---- L1 parser ----
 
-if (BUILD_LINGVAMYXA_CLI)
-    add_executable(lingvamyxa_cli
-        cli/main.lm1.c
+add_library(parser.lm1 STATIC
+    lm1/parser/p0.lm1.c
+    lm1/parser/p0.lm1.h
+)
+
+target_include_directories(parser.lm1 PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser
+)
+
+target_link_libraries(parser.lm1 PUBLIC
+    core.lm1
+)
+
+if (MSVC)
+    target_compile_options(parser.lm1 PRIVATE /W4)
+else()
+    target_compile_options(parser.lm1 PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# ---- L0 parser executable ----
+
+if (BUILD_PARSER_LM0)
+    add_executable(parser.lm0
+        lm1/parser/parser.lm1.c
     )
 
-    target_include_directories(lingvamyxa_cli PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/core
-    )
-
-    target_link_libraries(lingvamyxa_cli PRIVATE
-        lingvamyxa_core
+    target_link_libraries(parser.lm0 PRIVATE
+        parser.lm1
     )
 endif()
 
 # ---- Optional Qt Widgets shell ----
 # If Qt6 Widgets is available, this builds a tiny GUI wrapper around the same C core.
-# If Qt is not available, the project still configures and builds the C core/CLI.
+# If Qt is not available, the project still configures and builds the L1 core
+# and parser targets.
 
 if (BUILD_LINGVAMYXA_QT_APP)
     find_package(Qt6 COMPONENTS Widgets QUIET)
@@ -135,7 +150,7 @@ if (BUILD_LINGVAMYXA_QT_APP)
 
         target_link_libraries(lingvamyxa_qt PRIVATE
             Qt6::Widgets
-            lingvamyxa_core
+            core.lm1
         )
 
         set_target_properties(lingvamyxa_qt PROPERTIES
