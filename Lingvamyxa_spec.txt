@@ -2775,6 +2775,61 @@ This is intentionally close to an ordinary C compilation environment. The same
 L2 source should not acquire a different raw C meaning because a higher-level
 registry state changed.
 
+For ANSI C ordinary identifiers, L2 uses an explicit C-visible foreign
+identifier spelling:
+
+    c.name
+
+`c.name` is a reserved L2 spelling form. It is not Structure field access, not
+`/` namespace path access, not `\` typed field-follow, and not high-level
+registry lookup. It denotes the C ordinary identifier `name` as seen by the
+active L2/L1 translation unit after the build profile's headers, defines and
+toolchain inputs have been applied.
+
+The `c.` prefix may be used directly in C call, type or value position:
+
+L2:
+    c.printf "Hello C\n"
+    c.printf "%s\n" msg
+    c.strlen text
+    c.size_t: n
+    @: c.FILE file
+    println: c.puts
+    println "Hello C"
+end: L2
+
+Here `c.printf`, `c.strlen`, `c.size_t`, `c.FILE` and `c.puts` do not need
+Lingvamyxa descriptors for raw L2 use. They become valid only if the L2/L1
+build profile makes the corresponding C ordinary identifiers visible, for
+example through `#include <stdio.h>`, `#include <stddef.h>` or another selected
+header. The C compiler, preprocessor and linker validate whether each spelling
+is actually a function, object, typedef, enum constant, object-like macro or
+function-like macro in that C grammar position.
+
+A bare unresolved L2 head such as `printf` is not automatically treated as a
+raw C fallback. Direct C-visible access is explicit through `c.printf`, or
+through a local Lingvamyxa alias such as `println: c.puts`.
+
+The `c.` spelling covers only ANSI C ordinary identifiers. It does not cover C
+tag names as tags, aggregate members, labels or declarator syntax. Those are
+provided by the minimal L2 structural bridge, by selected profile-specific L2
+forms, or by an explicit raw L1 text escape.
+
+Known ANSI C99 primitive type words and L2 storage/address/index forms are not
+imported through `c.`. They belong to the minimal L2 structural bridge:
+
+    int: x
+    char: ch
+    @: int p
+    @@: char pp
+    []: int values 16
+    \p
+    p\field
+
+Thus L2 may have many C-visible identifiers through headers, but the structural
+spelling of pointers, arrays, raw loads and field-follow remains Lingvamyxa
+syntax.
+
 L4 may still describe checked wrappers, high-level constants, numeric
 backends, type mappings, ownership rules, borrow rules, effect rules,
 capability requirements and operator implementations for L3+ visibility. That
@@ -2782,9 +2837,21 @@ is the same mechanism used for other receiver/operator registration.
 
 The L4 semantic wrapper layer does not declare every C function for L2. A
 selected L2 universal ANSI C adapter may discover or bind raw symbols from
-headers, toolchain metadata, build metadata or explicit L2 adapter syntax.
-Those raw symbols remain L2-only unless a checked Lingvamyxa wrapper is
-registered.
+headers, toolchain metadata, build metadata or explicit L2 adapter syntax such
+as `c.name`. Those raw symbols remain L2-only unless a checked Lingvamyxa
+wrapper is registered.
+
+When structural L2 spelling is not enough, a source may use an explicit raw L1
+text block. This is a text escape into L1, not C-visible identifier lookup:
+
+L1:
+===
+printf("Hello C\n");
+===
+
+The raw block body is governed by the raw text/block rules. A trailing
+`end: L1` is not required when ordinary source-level decrease already closes
+the `L1` frame.
 
 No special "import C into mathematics" mechanism is required. Mathematics and
 ordinary L3+ code see only accepted Lingvamyxa descriptors.
