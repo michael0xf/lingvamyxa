@@ -370,7 +370,7 @@ The source syntax itself does not hard-code object semantics, functional semanti
 
 Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals, character constants and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
 
-This reuse applies only to lexical atoms. It does not import C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
+This reuse applies only to lexical atoms. It does not adopt C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
 
 The practical rule is:
 
@@ -2570,7 +2570,7 @@ The special mathematical types are not primitive C values:
         decimal arithmetic backed by decNumber and a decimal context.
 
 `bigint`, `real` and `decimal` are ordinary names/receivers/descriptors in the
-shared namespace when the active profile imports them. Their physical
+shared namespace when the active profile registers them. Their physical
 representation and linked libraries belong to the selected L1/runtime profile.
 
 6.6.1. Mathematics Uses Registry Resolution
@@ -2816,7 +2816,7 @@ provided by the minimal L2 structural bridge, by selected profile-specific L2
 forms, or by an explicit raw L1 text escape.
 
 Known ANSI C99 primitive type words and L2 storage/address/index forms are not
-imported through `c.`. They belong to the minimal L2 structural bridge:
+obtained through `c.`. They belong to the minimal L2 structural bridge:
 
     int: x
     char: ch
@@ -2853,8 +2853,8 @@ The raw block body is governed by the raw text/block rules. A trailing
 `end: L1` is not required when ordinary source-level decrease already closes
 the `L1` frame.
 
-No special "import C into mathematics" mechanism is required. Mathematics and
-ordinary L3+ code see only accepted Lingvamyxa descriptors.
+No special mechanism for making C headers visible to mathematics is required.
+Mathematics and ordinary L3+ code see only accepted Lingvamyxa descriptors.
 
 Canonical rule:
 
@@ -3106,7 +3106,7 @@ The minimal built-in mathematics profile should include:
     array elementwise arithmetic over supported numeric types;
     reduction over supported numeric arrays.
 
-Additional functions may be imported through ordinary L4 descriptors and
+Additional functions may be registered through ordinary L4 descriptors and
 registry validation.
 
 The language core does not require every C library function to be visible.
@@ -3776,7 +3776,7 @@ The default ANSI C / C99 bootstrap profile may use the following implementation 
     SQL      -> SQLite            -> vcpkg: sqlite3
     Regex    -> PCRE2             -> vcpkg: pcre2
 
-The `i/u` family denotes implementation-profile integer types over C integer storage. `bigint`, `real`, `decimal`, `SQL` and `Regex` are ordinary names/receivers/descriptors in the shared namespace when the active profile imports them. Their physical representation and linked libraries belong to the selected L1/runtime profile.
+The `i/u` family denotes implementation-profile integer types over C integer storage. `bigint`, `real`, `decimal`, `SQL` and `Regex` are ordinary names/receivers/descriptors in the shared namespace when the active profile registers them. Their physical representation and linked libraries belong to the selected L1/runtime profile.
 
 9.1. Type and Model Information
 
@@ -7327,7 +7327,7 @@ For `for`, `continue` transfers control to the iteration-step Structure, then to
 
 28.6. Outside the Minimal L2 Set
 
-The following section 26 operators are not part of the minimal L2 control set unless an L2 profile explicitly imports or redefines them:
+The following section 26 operators are not part of the minimal L2 control set unless an L2 profile explicitly enables or redefines them:
 
     match / case / default
     each
@@ -9332,7 +9332,7 @@ Therefore:
 
     Lingvamyxa fact/query semantics belong to Lingvamyxa.
     SQLite or another relational store may materialize the registry.
-    SQL syntax is not imported as native Lingvamyxa syntax by default.
+    SQL syntax is not adopted as native Lingvamyxa syntax by default.
     External names may be represented through exact quoted identifiers when
     an integration profile requires exact round-trip spelling.
 
@@ -11642,7 +11642,7 @@ It is a way to attach validated authority to an L5 flow.
 
 ---ANSI C---
 The default ANSI C / C99 security substrate uses the bundled libsodium source
-tree, imported under `third_party/libsodium-1.0.22/`. It is a vendored,
+tree, vendored under `third_party/libsodium-1.0.22/`. It is a vendored,
 verified source dependency, not a live package-manager dependency.
 
 The runtime must call `sodium_init()` once before using the security substrate.
