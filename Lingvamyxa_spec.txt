@@ -10048,6 +10048,28 @@ One possible role/reference lowering:
 
 This is L5 delegation/behavior. It is not C struct inheritance.
 
+Validator/type contracts use the same registry-fact mechanism. A typed
+container or view does not have to become a generic container class. The
+container remains storage; registry facts attach a named validator/contract to
+the value, binding, field, write channel or view that must be checked.
+
+Example registry facts for a validated container:
+
+L5:
+    fact: validator LightPassenger
+    fact: accepts LightPassenger Person
+    fact: accepts LightPassenger Alien
+    fact: guarantee LightPassenger weightLessThan 80
+    fact: validates passengers LightPassenger
+end: L5
+
+The exact fact names are profile-defined. The semantic rule is that
+`LightPassenger` is a named validator/type contract. A write into `passengers`
+must satisfy that validator. A value read from `passengers` may carry the
+registry-visible evidence that it satisfies `LightPassenger`, including
+documented guarantees such as `weightLessThan 80`. IDEs and diagnostics should
+show these guarantees as part of the value's available type information.
+
 34.5. Type Reconciliation Algorithm
 
 When a receiver, assignment target or field expects type `E` and the source
@@ -10411,6 +10433,28 @@ registry явно подтвердил: Oak может использовать�
 Это не "Oak наследует Plant". Это "Oak имеет concrete type, а registry дает
 способ смотреть на него через role/delegation".
 
+Validator/type contracts выражаются тем же механизмом registry facts. Для этого
+не нужен generic container class. Контейнер остается механизмом хранения, а
+facts прикрепляют именованный validator/contract к значению, binding-у, полю,
+write channel или view, который должен проверяться.
+
+Пример facts для валидируемого контейнера:
+
+L5:
+    fact: validator LightPassenger
+    fact: accepts LightPassenger Person
+    fact: accepts LightPassenger Alien
+    fact: guarantee LightPassenger weightLessThan 80
+    fact: validates passengers LightPassenger
+end: L5
+
+Точные имена facts задаются профилем. Смысл в том, что `LightPassenger` - это
+именованный validator/type contract. Запись в `passengers` должна пройти этот
+validator. Значение, прочитанное из `passengers`, может нести registry-visible
+evidence, что оно удовлетворяет `LightPassenger`, включая documented guarantees
+наподобие `weightLessThan 80`. IDE и diagnostics должны показывать такие
+guarantees как часть доступной type information значения.
+
 34.RU.5. Сверка типов
 
 Когда receiver или поле ожидает тип `E`, а выражение дает тип `A`,
@@ -10735,6 +10779,18 @@ If the concrete model is known statically, the translator may lower directly to
 the concrete implementation. If it is known only through a role/reference, the
 translator may lower through a behavior table or method lookup cache.
 
+Validator facts are another polymorphic entry point. A receiver may require a
+named validator/type contract rather than a concrete model. For example, a
+receiver expecting `LightPassenger` may accept any concrete instance that
+registry validation proves to be `Person` or `Alien` and below the documented
+weight limit. If a value comes from a container whose write channel is validated
+by `LightPassenger`, the translator and IDE may propagate that evidence to the
+read value.
+
+This is not a container generic. The container stores values. The named
+validator fact describes which incoming instances are admitted and which
+guarantees are known after admission.
+
 35.En.7. ANSI C Projection Sketch
 
 ---ANSI C---
@@ -10987,6 +11043,18 @@ behavior descriptor-у concrete model:
 Если concrete model известна статически, translator может опустить вызов прямо
 в concrete implementation. Если она известна только через role/reference,
 translator может использовать behavior table или method lookup cache.
+
+Validator facts являются еще одной точкой полиморфного использования. Receiver
+может ожидать именованный validator/type contract, а не concrete model.
+Например, receiver, ожидающий `LightPassenger`, может принять любой concrete
+instance, если registry validation доказывает, что это `Person` или `Alien` и
+что он ниже documented weight limit. Если значение пришло из контейнера, чей
+write channel валидируется `LightPassenger`, translator и IDE могут
+распространять это evidence на прочитанное значение.
+
+Это не container generic. Контейнер хранит значения. Именованный validator fact
+описывает, какие входящие instances допускаются и какие guarantees известны
+после допуска.
 
 35.Ru.7. Эскиз ANSI C projection
 
