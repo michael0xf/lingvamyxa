@@ -446,6 +446,74 @@ Semantic normal form:
 
 The receiver `L4` consumes its body as model and registry input.
 
+1.8. Startup and Entry Targets
+
+An entry point is not the first event in the physical life of a program. A
+binary loader, target runtime, C runtime, Lingvamyxa runtime, restored state,
+registry data, build profile or service host may already exist before source
+level execution begins. The entry point is only the selected target to which
+control is handed after that environment is ready.
+
+Different Lingvamyxa levels use different default startup conventions:
+
+    L2
+        L2 is compiled and close to L1 / ANSI C. For an executable artifact,
+        the default L2 entry target is `main`, because that convention maps
+        directly to C99 and to ordinary native executable startup.
+
+        Example:
+
+        L2:
+        . main: int argc (@@: char argv)
+        . . c.puts "Hello"
+        . . return: 0
+        end: L2
+
+        lowers conceptually to a C `main` function. This is a bootstrap and
+        lowering convention, not a philosophical center of the language. A
+        raw `L1:` block may also contain an ordinary C `main`; in that case
+        the raw C block supplies the executable entry target.
+
+    L3
+        L3 is the ordinary algorithmic/script level. In the default script
+        profile, the root body of an L3 source item may be consumed from the
+        beginning of the file, Python-style. A build or runtime profile may
+        also select a visible L3 function or subroutine as the executable
+        target, but `main` is not a source-semantic requirement for L3.
+
+    L4
+        L4 is applied, validated and registered. It is not ordinary runtime
+        control flow. An L4 source body may describe models, types, registry
+        patches, build profiles, constraints or facts; applying that body is
+        descriptor consumption, not program execution from a first statement.
+
+    L5
+        L5 is the message, behavior, fact, service and high-level dispatch
+        layer. Its startup model is closer to a selected message/callable
+        target than to a hard-coded `main`. A runtime or build profile may
+        choose any visible L5 startup target, such as a `start` receiver, an
+        `onStart` handler, a service descriptor, or an explicit message send.
+
+        Example conceptual target:
+
+        L5:
+        . HelloWorld:
+        . . start:
+        . . . System\out\println: "Hello"
+        end: L5
+
+        The startup target may be described as `HelloWorld/start` by the
+        runtime profile. The language does not require every L5 file to run
+        linearly from its first source item.
+
+The common rule is:
+
+    startup = prepared environment + selected visible target
+
+The selected target may be the conventional C-compatible `main` at L2, the file
+root in an L3 script profile, descriptor application for L4, or an explicit
+message/callable target for L5.
+
 
 2. Value Ontology
 
