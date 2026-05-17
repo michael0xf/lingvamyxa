@@ -4844,6 +4844,9 @@ C-profile mnemonic table:
     \parent\child    # parsed as \(parent\child); C expression role: *(parent->child)
     (\parent)\child  # explicit grouping: raw-load parent first, then follow child
 
+In expression position, field-follow and index chains are assembled before
+prefix `@` and prefix `\`; parentheses override this order.
+
 The last spelling is not the default parse. It is the explicit grouped form for a profile that needs the meaning "first raw-load `parent`, then field-follow `child` from the loaded typed address/reference".
 
 Examples:
