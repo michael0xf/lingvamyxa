@@ -89,9 +89,66 @@ static const char *lm_build_env_or_default(const char *name, const char *fallbac
     return value;
 }
 
+static int lm_build_file_exists(const char *path) {
+    FILE *file;
+
+    file = fopen(path, "rb");
+    if (file == NULL) {
+        return 0;
+    }
+
+    fclose(file);
+    return 1;
+}
+
+static const char *lm_build_default_cmake(void) {
+#ifdef _WIN32
+    if (lm_build_file_exists("C:/Qt/Tools/CMake_64/bin/cmake.exe")) {
+        return "C:/Qt/Tools/CMake_64/bin/cmake.exe";
+    }
+#endif
+    return "cmake";
+}
+
+static const char *lm_build_default_generator(void) {
+#ifdef _WIN32
+    if (lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")) {
+        return "MinGW Makefiles";
+    }
+#endif
+    return "";
+}
+
+static const char *lm_build_default_make_program(void) {
+#ifdef _WIN32
+    if (lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")) {
+        return "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe";
+    }
+#endif
+    return "";
+}
+
+static const char *lm_build_default_cc(void) {
+#ifdef _WIN32
+    if (lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe")) {
+        return "C:/Qt/Tools/mingw1310_64/bin/gcc.exe";
+    }
+#endif
+    return "";
+}
+
+static const char *lm_build_default_cxx(void) {
+#ifdef _WIN32
+    if (lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe")) {
+        return "C:/Qt/Tools/mingw1310_64/bin/g++.exe";
+    }
+#endif
+    return "";
+}
+
 static void lm_build_print_usage(void) {
     printf("usage: buildCore.lm0 [--full]\n");
-    printf("  --full  refresh L0 tools, then run the full CMake/vcpkg build profile\n");
+    printf("  --full  refresh L0 tools, then build the bundled third_party profile\n");
 }
 
 static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options) {
@@ -322,6 +379,90 @@ static int lm_build_defer_finalize(void) {
     return lm_build_run(command);
 }
 
+static int lm_build_extract_third_party_zips(void) {
+    const char *cmake_tool;
+    char command[4096];
+    size_t used;
+
+    cmake_tool = lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake());
+
+    used = 0U;
+    command[0] = '\0';
+
+    if (lm_build_append(command, sizeof(command), &used, cmake_tool) != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-DLM_THIRD_PARTY_ARCHIVE_DIR=third_party") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-DLM_THIRD_PARTY_EXTRACT_DIR=build/third_party") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-P") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "cmake/ExtractThirdPartyZips.cmake") != 0) {
+        return 1;
+    }
+
+    return lm_build_run(command);
+}
+
+static int lm_build_clear_full_cmake_cache(const char *cmake_tool, const char *build_dir) {
+    char command[4096];
+    char cache_path[2048];
+    char files_path[2048];
+    size_t used;
+
+    if (strlen(build_dir) + 32U >= sizeof(cache_path)) {
+        fprintf(stderr, "buildCore.lm0: full build directory is too long\n");
+        return 1;
+    }
+
+    snprintf(cache_path, sizeof(cache_path), "%s/CMakeCache.txt", build_dir);
+    snprintf(files_path, sizeof(files_path), "%s/CMakeFiles", build_dir);
+
+    used = 0U;
+    command[0] = '\0';
+    if (lm_build_append(command, sizeof(command), &used, cmake_tool) != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-E") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "rm") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-f") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, cache_path) != 0) {
+        return 1;
+    }
+    if (lm_build_run(command) != 0) {
+        return 1;
+    }
+
+    used = 0U;
+    command[0] = '\0';
+    if (lm_build_append(command, sizeof(command), &used, cmake_tool) != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-E") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "rm") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-rf") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, files_path) != 0) {
+        return 1;
+    }
+    return lm_build_run(command);
+}
+
 static int lm_build_full_configure(void) {
     const char *cmake_tool;
     const char *build_dir;
@@ -330,44 +471,19 @@ static int lm_build_full_configure(void) {
     const char *make_program;
     const char *cc;
     const char *cxx;
-    const char *vcpkg_root;
-    const char *vcpkg_toolchain;
-    const char *vcpkg_manifest_dir;
-    const char *vcpkg_target_triplet;
-    const char *vcpkg_host_triplet;
-    char default_toolchain[1024];
     char command[8192];
     size_t used;
 
-    cmake_tool = lm_build_env_or_default("LM_CMAKE", "cmake");
+    cmake_tool = lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake());
     build_dir = lm_build_env_or_default("LM_FULL_BUILD_DIR", "build/libs");
     build_type = lm_build_env_or_default("LM_FULL_BUILD_TYPE", "Debug");
-    generator = lm_build_env_or_default("LM_CMAKE_GENERATOR", "");
-    make_program = lm_build_env_or_default("LM_CMAKE_MAKE_PROGRAM", "");
-    cc = lm_build_env_or_default("LM_CC", "");
-    cxx = lm_build_env_or_default("LM_CXX", "");
-    vcpkg_manifest_dir = lm_build_env_or_default("LM_VCPKG_MANIFEST_DIR", "cmake/vcpkg");
-    vcpkg_target_triplet = lm_build_env_or_default("LM_VCPKG_TARGET_TRIPLET", "x64-mingw-dynamic");
-    vcpkg_host_triplet = lm_build_env_or_default("LM_VCPKG_HOST_TRIPLET", "x64-mingw-dynamic");
+    generator = lm_build_env_or_default("LM_CMAKE_GENERATOR", lm_build_default_generator());
+    make_program = lm_build_env_or_default("LM_CMAKE_MAKE_PROGRAM", lm_build_default_make_program());
+    cc = lm_build_env_or_default("LM_CC", lm_build_default_cc());
+    cxx = lm_build_env_or_default("LM_CXX", lm_build_default_cxx());
 
-#ifdef _WIN32
-    vcpkg_root = lm_build_env_or_default("LM_VCPKG_ROOT", lm_build_env_or_default("VCPKG_ROOT", "C:/vcpkg"));
-#else
-    vcpkg_root = lm_build_env_or_default("LM_VCPKG_ROOT", lm_build_env_or_default("VCPKG_ROOT", ""));
-#endif
-    vcpkg_toolchain = lm_build_env_or_default("LM_VCPKG_TOOLCHAIN_FILE", "");
-    if (vcpkg_toolchain[0] == '\0') {
-        if (vcpkg_root[0] == '\0') {
-            fprintf(stderr, "buildCore.lm0: --full needs LM_VCPKG_TOOLCHAIN_FILE or VCPKG_ROOT\n");
-            return 1;
-        }
-        snprintf(
-            default_toolchain,
-            sizeof(default_toolchain),
-            "%s/scripts/buildsystems/vcpkg.cmake",
-            vcpkg_root
-        );
-        vcpkg_toolchain = default_toolchain;
+    if (lm_build_clear_full_cmake_cache(cmake_tool, build_dir) != 0) {
+        return 1;
     }
 
     used = 0U;
@@ -414,22 +530,13 @@ static int lm_build_full_configure(void) {
             return 1;
         }
     }
-    if (lm_build_append_prefixed_arg(command, sizeof(command), &used, "-DCMAKE_TOOLCHAIN_FILE=", vcpkg_toolchain) != 0) {
-        return 1;
-    }
-    if (lm_build_append_prefixed_arg(command, sizeof(command), &used, "-DVCPKG_MANIFEST_DIR=", vcpkg_manifest_dir) != 0) {
-        return 1;
-    }
-    if (lm_build_append_prefixed_arg(command, sizeof(command), &used, "-DVCPKG_TARGET_TRIPLET=", vcpkg_target_triplet) != 0) {
-        return 1;
-    }
-    if (lm_build_append_prefixed_arg(command, sizeof(command), &used, "-DVCPKG_HOST_TRIPLET=", vcpkg_host_triplet) != 0) {
-        return 1;
-    }
-    if (lm_build_append_arg(command, sizeof(command), &used, "-DLINGVAMYXA_ENABLE_EXTERNAL_DEPS=ON") != 0) {
+    if (lm_build_append_arg(command, sizeof(command), &used, "-DLINGVAMYXA_ENABLE_EXTERNAL_DEPS=OFF") != 0) {
         return 1;
     }
     if (lm_build_append_arg(command, sizeof(command), &used, "-DLINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY=ON") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "-DLM_THIRD_PARTY_SOURCE_DIR=build/third_party") != 0) {
         return 1;
     }
     if (lm_build_append_arg(command, sizeof(command), &used, "-DBUILD_LINGVAMYXA_QT_APP=OFF") != 0) {
@@ -451,7 +558,7 @@ static int lm_build_full_build(void) {
     char command[4096];
     size_t used;
 
-    cmake_tool = lm_build_env_or_default("LM_CMAKE", "cmake");
+    cmake_tool = lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake());
     build_dir = lm_build_env_or_default("LM_FULL_BUILD_DIR", "build/libs");
 
     used = 0U;
@@ -466,11 +573,20 @@ static int lm_build_full_build(void) {
     if (lm_build_append_arg(command, sizeof(command), &used, build_dir) != 0) {
         return 1;
     }
+    if (lm_build_append_arg(command, sizeof(command), &used, "--target") != 0) {
+        return 1;
+    }
+    if (lm_build_append_arg(command, sizeof(command), &used, "third_party.lm0") != 0) {
+        return 1;
+    }
 
     return lm_build_run(command);
 }
 
 static int lm_build_full_project(void) {
+    if (lm_build_extract_third_party_zips() != 0) {
+        return 1;
+    }
     if (lm_build_full_configure() != 0) {
         return 1;
     }

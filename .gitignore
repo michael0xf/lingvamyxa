@@ -67,3 +67,6 @@ CMakeCache.txt
 build/*
 !build/lm1/
 !build/lm1/**
+
+# vcpkg source-catalog local state.
+cmake/vcpkg-sources/vcpkg_installed/

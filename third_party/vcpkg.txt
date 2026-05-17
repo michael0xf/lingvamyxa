@@ -1,0 +1,10 @@
+﻿civetweb*.tar.gz 
+curl*.tar.gz 
+gmp*.tar.xz 
+yyjson*.tar.gz 
+libsodium*.tar.gz 
+mpfr*.tar.xz 
+PCRE2Project*.tar.gz 
+sqlite-autoconf*.tar.gz 
+madler-zlib*.tar.gz 
+zherczeg-sljit*.tar.gz

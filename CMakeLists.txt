@@ -23,6 +23,20 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
 
 set(LM0_TRUSTED_DIR "${LM0_OUTPUT_DIR}")
 set(LM_LIBS_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/libs")
+set(LM_AUTOTOOLS_JOBS "2" CACHE STRING "Parallel jobs used when building bundled autotools libraries")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(LingvamyxaThirdParty)
+
+add_custom_target(extractThirdPartyZips.lm0
+    COMMAND ${CMAKE_COMMAND}
+        "-DLM_THIRD_PARTY_ARCHIVE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/third_party"
+        "-DLM_THIRD_PARTY_EXTRACT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/build/third_party"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ExtractThirdPartyZips.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Extracting third_party/*.zip archives"
+    USES_TERMINAL
+    VERBATIM
+)
 
 option(BUILD_PRINT_TREE_LM0 "Build the printTree.lm0 tree dump executable" ON)
 option(BUILD_TRANS_LM0 "Build the trans.lm0 L2-to-L1 translator executable" ON)
@@ -60,143 +74,9 @@ if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
     list(APPEND LM_THIRD_PARTY_TARGETS vcpkg_deps.lm0)
 endif()
 
-if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS OR LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY)
-    # decimal -> decNumber
-    set(DECNUMBER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/decNumber/decNumber-icu-368")
-
-    add_library(decnumber STATIC
-        "${DECNUMBER_DIR}/decContext.c"
-        "${DECNUMBER_DIR}/decNumber.c"
-    )
-
-    set_target_properties(decnumber PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY "${LM_LIBS_OUTPUT_DIR}"
-        OUTPUT_NAME "decnumber"
-    )
-
-    target_include_directories(decnumber
-        PUBLIC
-            "${DECNUMBER_DIR}"
-    )
-
-    target_compile_features(decnumber
-        PUBLIC
-            c_std_99
-    )
-
-    target_compile_definitions(decnumber
-        PUBLIC
-            DECNUMDIGITS=64
-    )
-
-    list(APPEND LM_THIRD_PARTY_TARGETS decnumber)
-endif()
-
 if (LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY)
-    set(LIBSODIUM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libsodium-1.0.22")
-
-    if (NOT EXISTS "${LIBSODIUM_DIR}/src/libsodium/include/sodium.h")
-        message(FATAL_ERROR "Bundled libsodium source was not found: ${LIBSODIUM_DIR}")
-    endif()
-
-    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium/sodium")
-    configure_file(
-        "${LIBSODIUM_DIR}/builds/msvc/version.h"
-        "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium/sodium/version.h"
-        COPYONLY
-    )
-
-    file(GLOB_RECURSE LIBSODIUM_SOURCES CONFIGURE_DEPENDS
-        "${LIBSODIUM_DIR}/src/libsodium/*.c"
-    )
-
-    add_library(libsodium_vendor STATIC
-        ${LIBSODIUM_SOURCES}
-    )
-
-    set_target_properties(libsodium_vendor PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY "${LM_LIBS_OUTPUT_DIR}"
-        OUTPUT_NAME "sodium"
-    )
-
-    target_include_directories(libsodium_vendor
-        PUBLIC
-            "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium"
-            "${LIBSODIUM_DIR}/src/libsodium/include"
-        PRIVATE
-            "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium/sodium"
-            "${LIBSODIUM_DIR}/src/libsodium/include/sodium"
-    )
-
-    target_compile_features(libsodium_vendor
-        PUBLIC
-            c_std_99
-    )
-
-    target_compile_definitions(libsodium_vendor
-        PUBLIC
-            SODIUM_STATIC=1
-        PRIVATE
-            CONFIGURED=1
-            DEV_MODE=1
-            HAVE_ATOMIC_OPS=1
-            HAVE_C11_MEMORY_FENCES=1
-            HAVE_GCC_MEMORY_FENCES=1
-            HAVE_INLINE_ASM=1
-            HAVE_INTTYPES_H=1
-            HAVE_STDINT_H=1
-            HAVE_TI_MODE=1
-    )
-
-    if (CMAKE_C_BYTE_ORDER STREQUAL "BIG_ENDIAN")
-        target_compile_definitions(libsodium_vendor PRIVATE NATIVE_BIG_ENDIAN=1)
-    else()
-        target_compile_definitions(libsodium_vendor PRIVATE NATIVE_LITTLE_ENDIAN=1)
-    endif()
-
-    if (WIN32)
-        target_compile_definitions(libsodium_vendor
-            PRIVATE
-                HAVE_RAISE=1
-                HAVE_SYS_PARAM_H=1
-        )
-        target_link_libraries(libsodium_vendor
-            INTERFACE
-                advapi32
-        )
-    endif()
-
-    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
-        target_compile_definitions(libsodium_vendor
-            PRIVATE
-                HAVE_AVX2INTRIN_H=1
-                HAVE_AVX512FINTRIN_H=1
-                HAVE_AVXINTRIN_H=1
-                HAVE_CPUID=1
-                HAVE_EMMINTRIN_H=1
-                HAVE_MMINTRIN_H=1
-                HAVE_PMMINTRIN_H=1
-                HAVE_RDRAND=1
-                HAVE_SMMINTRIN_H=1
-                HAVE_TMMINTRIN_H=1
-                HAVE_WMMINTRIN_H=1
-        )
-    endif()
-
-    if (NOT MSVC)
-        target_compile_options(libsodium_vendor
-            PRIVATE
-                -fvisibility=hidden
-                -fno-strict-aliasing
-                -fno-strict-overflow
-                -fwrapv
-                -flax-vector-conversions
-                -Wno-attributes
-                -Werror=vla
-        )
-    endif()
-
-    list(APPEND LM_THIRD_PARTY_TARGETS libsodium_vendor)
+    lm_register_bundled_third_party(LM_BUNDLED_THIRD_PARTY_TARGETS)
+    list(APPEND LM_THIRD_PARTY_TARGETS ${LM_BUNDLED_THIRD_PARTY_TARGETS})
 endif()
 
 if (LM_THIRD_PARTY_TARGETS)

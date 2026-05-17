@@ -96,9 +96,9 @@ On Windows, the executable is usually:
 build\lm0\printTree.lm0.exe
 ```
 
-## Windows Qt/MinGW/vcpkg build
+## Windows Qt/MinGW Build
 
-This project can be built with the Qt-installed CMake, Ninja and MinGW tools plus vcpkg manifest dependencies.
+This project can be built with the Qt-installed CMake, Ninja and MinGW tools. The normal Lingvamyxa build does not use the vcpkg toolchain.
 
 Add Qt tools to the user `Path` once:
 
@@ -122,7 +122,7 @@ ninja --version
 gcc --version
 ```
 
-Install/bootstrap vcpkg once:
+Optionally install/bootstrap vcpkg once if you want to refresh third-party source archives:
 
 ```powershell
 git clone https://github.com/microsoft/vcpkg C:\vcpkg
@@ -130,29 +130,19 @@ C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 [Environment]::SetEnvironmentVariable("VCPKG_ROOT", "C:\vcpkg", "User")
 ```
 
-Configure with the MinGW vcpkg triplets:
+## Download source archives with vcpkg
+
+The source catalog in `cmake/vcpkg-sources/vcpkg.json` is only a helper for source tracking and occasional updates. It includes the external C libraries that can be imported into `third_party` and built by our own CMake rules, including `libsodium`.
 
 ```powershell
-cmake -S C:\Nyasha_Planet\lingvamyxa `
-  -B C:\Nyasha_Planet\lingvamyxa\build\mingw-vcpkg `
-  -G Ninja `
-  -DCMAKE_MAKE_PROGRAM=C:\Qt\Tools\Ninja\ninja.exe `
-  -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
-  -DVCPKG_MANIFEST_DIR=C:\Nyasha_Planet\lingvamyxa\cmake\vcpkg `
-  -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic `
-  -DVCPKG_HOST_TRIPLET=x64-mingw-dynamic `
-  -DCMAKE_C_COMPILER=C:\Qt\Tools\mingw1310_64\bin\gcc.exe `
-  -DCMAKE_CXX_COMPILER=C:\Qt\Tools\mingw1310_64\bin\g++.exe `
-  -DLINGVAMYXA_ENABLE_EXTERNAL_DEPS=ON `
-  -DBUILD_LINGVAMYXA_QT_APP=OFF
+C:\vcpkg\vcpkg.exe install `
+  --x-manifest-root=C:\Nyasha_Planet\lingvamyxa\cmake\vcpkg-sources `
+  --triplet x64-mingw-dynamic `
+  --host-triplet x64-mingw-dynamic `
+  --only-downloads
 ```
 
-Build and run the CLI:
-
-```powershell
-cmake --build C:\Nyasha_Planet\lingvamyxa\build\mingw-vcpkg
-C:\Nyasha_Planet\lingvamyxa\build\lm0\printTree.lm0.exe
-```
+This does not build the libraries for Lingvamyxa. It only refreshes vcpkg's source/download cache, such as `C:\vcpkg\downloads` and `C:\vcpkg\buildtrees`. Selected archives can then be imported into `third_party`.
 
 ## Refresh trusted L0 tools
 
@@ -170,7 +160,11 @@ From CMake or Qt Creator, use the `runBuildCore.lm0` target. It builds the CMake
 cmake --build --preset run-buildcore
 ```
 
-For the full bootstrap mode, pass `--full` to `buildCore.lm0`. This refreshes the L0 tools first, then configures and builds a separate CMake/vcpkg profile in `build/libs` with `cmake/vcpkg/vcpkg.json`, `LINGVAMYXA_ENABLE_EXTERNAL_DEPS=ON`, and bundled `third_party` libraries enabled. vcpkg libraries stay in `build/libs/vcpkg_installed`; they are represented by the `vcpkg_deps.lm0` marker target. The bundled C libraries keep plain C names next to that profile: `build/libs/libdecnumber.a` and `build/libs/libsodium.a`.
+For the full bootstrap mode, pass `--full` to `buildCore.lm0`. This refreshes the L0 tools first, then configures and builds bundled `third_party` libraries into `build/libs` with `LINGVAMYXA_ENABLE_EXTERNAL_DEPS=OFF` and `LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY=ON`. No vcpkg toolchain is used by this mode.
+
+The full profile produces plain C library names in `build/libs`: `libcivetweb.a`, `libcurl.a`, `libdecnumber.a`, `libgmp.a`, `libmpfr.a`, `libpcre2-8.a`, `libpcre2-posix.a`, `libsodium.a`, `libsqlite3.a`, `libyyjson.a`, and `libz.a`.
+
+On Windows, the bundled GMP/MPFR autotools builds use the MSYS2 shell and `make` discovered under `VCPKG_ROOT\downloads\tools\msys2` or `C:\vcpkg\downloads\tools\msys2`; that MSYS2 `usr/bin` is added only to the subprocess `PATH`. On Linux/macOS, the same rule uses the normal system `sh`/`bash` and `make`/`gmake`.
 
 ```powershell
 C:\Nyasha_Planet\lingvamyxa\build\lm0\buildCore.lm0.exe --full
