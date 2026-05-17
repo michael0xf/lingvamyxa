@@ -1,3 +1,7 @@
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 199309L
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +12,7 @@
 #define LM_FINALIZE_GETCWD _getcwd
 #define LM_FINALIZE_CHDIR _chdir
 #else
+#include <time.h>
 #include <unistd.h>
 #define LM_FINALIZE_GETCWD getcwd
 #define LM_FINALIZE_CHDIR chdir
@@ -105,7 +110,11 @@ static void lm_finalize_sleep_retry(void) {
 #ifdef _WIN32
     Sleep(250U);
 #else
-    usleep(250000U);
+    struct timespec request;
+
+    request.tv_sec = 0;
+    request.tv_nsec = 250000000L;
+    nanosleep(&request, NULL);
 #endif
 }
 
