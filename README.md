@@ -11,21 +11,14 @@ This is a small importable CMake project.
 lingvamyxa/
   CMakeLists.txt
   lm1/
-    parser/
-      parser.lm1.h
+    parser.lm1.h
   lm2/
-    trans/
-      trans.lm2
-    parser/
-      parser.lm2
-    printTree/
-      printTree.lm2
-    make/
-      make.lm2
-    finalize/
-      finalize.lm2
-    buildCore/
-      buildCore.lm2
+    trans.lm2
+    parser.lm2
+    printTree.lm2
+    make.lm2
+    finalize.lm2
+    buildCore.lm2
   qt_app/
     main.cpp
     MainWindow.cpp
@@ -39,18 +32,12 @@ lingvamyxa/
       finalize.lm0.exe
       buildCore.lm0.exe
     lm1/
-      buildCore/
-        buildCore.lm1.c
-      parser/
-        parser.lm1.c
-      printTree/
-        printTree.lm1.c
-      make/
-        make.lm1.c
-      trans/
-        trans.lm1.c
-      finalize/
-        finalize.lm1.c
+      buildCore.lm1.c
+      parser.lm1.c
+      printTree.lm1.c
+      make.lm1.c
+      trans.lm1.c
+      finalize.lm1.c
 ```
 
 ## Idea
@@ -58,9 +45,9 @@ lingvamyxa/
 - `parser.lm1` is the L1/C parser static library.
 - `printTree.lm0` is the tiny command-line tree dump app and built L0 executable.
 - `trans.lm0` is the first L2-to-L1 translator executable.
-- `make.lm0` is the first native build driver generated from `lm2/make/make.lm2`.
+- `make.lm0` is the first native build driver generated from `lm2/make.lm2`.
 - `finalize.lm0` is the post-build installer that replaces `.next` tools in `build/lm0`.
-- `buildCore.lm0` is the project build driver compiled from `build/lm1/buildCore/buildCore.lm1.c`; after bootstrap, that snapshot is regenerated from `lm2/buildCore/buildCore.lm2`.
+- `buildCore.lm0` is the project build driver compiled from `build/lm1/buildCore.lm1.c`; after bootstrap, that snapshot is regenerated from `lm2/buildCore.lm2`.
 - `build/lm0/...` is the trusted current L0 tool layer and the local L0 output directory; it is not a portable source snapshot.
 - `build/libs/...` is the local native C library output/profile directory.
 - `build/lm1/...` is the generated L1 mirror produced from `lm2/...`; this is the portable build snapshot kept in Git.

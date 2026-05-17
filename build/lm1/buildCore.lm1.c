@@ -1,5 +1,3 @@
-L1:
-===
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -275,29 +273,29 @@ static int lm_build_trans(const char *trans_tool, const char *source_path, const
 }
 
 static int lm_build_generate_all(const char *trans_tool) {
-    if (lm_build_trans(trans_tool, "lm2/trans/trans.lm2", "build/lm1/trans/trans.lm1.c") != 0) {
+    if (lm_build_trans(trans_tool, "lm2/trans.lm2", "build/lm1/trans.lm1.c") != 0) {
         return 1;
     }
-    if (lm_build_trans(trans_tool, "lm2/parser/parser.lm2", "build/lm1/parser/parser.lm1.c") != 0) {
+    if (lm_build_trans(trans_tool, "lm2/parser.lm2", "build/lm1/parser.lm1.c") != 0) {
         return 1;
     }
-    if (lm_build_trans(trans_tool, "lm2/printTree/printTree.lm2", "build/lm1/printTree/printTree.lm1.c") != 0) {
+    if (lm_build_trans(trans_tool, "lm2/printTree.lm2", "build/lm1/printTree.lm1.c") != 0) {
         return 1;
     }
-    if (lm_build_trans(trans_tool, "lm2/finalize/finalize.lm2", "build/lm1/finalize/finalize.lm1.c") != 0) {
+    if (lm_build_trans(trans_tool, "lm2/finalize.lm2", "build/lm1/finalize.lm1.c") != 0) {
         return 1;
     }
-    if (lm_build_trans(trans_tool, "lm2/make/make.lm2", "build/lm1/make/make.lm1.c") != 0) {
+    if (lm_build_trans(trans_tool, "lm2/make.lm2", "build/lm1/make.lm1.c") != 0) {
         return 1;
     }
-    if (lm_build_trans(trans_tool, "lm2/buildCore/buildCore.lm2", "build/lm1/buildCore/buildCore.lm1.c") != 0) {
+    if (lm_build_trans(trans_tool, "lm2/buildCore.lm2", "build/lm1/buildCore.lm1.c") != 0) {
         return 1;
     }
     return 0;
 }
 
 static int lm_build_parser_library(const char *make_tool) {
-    if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1/parser\" -c \"build/lm1/parser/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0) {
+    if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"build/lm1/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0) {
         return 1;
     }
     if (lm_build_make(make_tool, "ar", "qc \"build/lm0/libparser.lm0.a\" \"build/obj/parser.lm1.o\"") != 0) {
@@ -312,7 +310,7 @@ static int lm_build_compile_trans(const char *make_tool, const char *parser_libr
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1/parser\" \"build/lm1/trans/trans.lm1.c\" \"%s\" -o \"build/lm0/trans.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" -o \"build/lm0/trans.lm0%s\"",
         parser_library,
         LM_BUILD_EXE_SUFFIX
     );
@@ -329,7 +327,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/make/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
@@ -339,7 +337,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/finalize/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
@@ -349,7 +347,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1/parser\" \"build/lm1/printTree/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" -o \"build/lm0/printTree.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" -o \"build/lm0/printTree.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
@@ -359,7 +357,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/buildCore/buildCore.lm1.c\" -o \"build/lm0/buildCore.next.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/buildCore.lm1.c\" -o \"build/lm0/buildCore.next.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     return lm_build_make(make_tool, "link", command);
@@ -631,7 +629,7 @@ int main(int argc, char **argv) {
 
     trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
 
-    if (lm_build_make(trusted_make, "mkdir", "\"build/lm1/trans\" \"build/lm1/parser\" \"build/lm1/printTree\" \"build/lm1/finalize\" \"build/lm1/make\" \"build/lm1/buildCore\" \"build/obj\" \"build/lm0\"") != 0) {
+    if (lm_build_make(trusted_make, "mkdir", "\"build/lm1\" \"build/obj\" \"build/lm0\"") != 0) {
         return 1;
     }
 
@@ -676,4 +674,3 @@ int main(int argc, char **argv) {
 
     return lm_build_defer_finalize();
 }
-===

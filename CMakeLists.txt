@@ -86,18 +86,18 @@ if (LM_THIRD_PARTY_TARGETS)
 endif()
 
 set(LM1_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/lm1")
-set(LM1_GENERATED_TRANS_C "${LM1_GENERATED_DIR}/trans/trans.lm1.c")
-set(LM1_GENERATED_PARSER_C "${LM1_GENERATED_DIR}/parser/parser.lm1.c")
-set(LM1_GENERATED_PRINT_TREE_C "${LM1_GENERATED_DIR}/printTree/printTree.lm1.c")
-set(LM1_GENERATED_MAKE_C "${LM1_GENERATED_DIR}/make/make.lm1.c")
-set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore/buildCore.lm1.c")
+set(LM1_GENERATED_TRANS_C "${LM1_GENERATED_DIR}/trans.lm1.c")
+set(LM1_GENERATED_PARSER_C "${LM1_GENERATED_DIR}/parser.lm1.c")
+set(LM1_GENERATED_PRINT_TREE_C "${LM1_GENERATED_DIR}/printTree.lm1.c")
+set(LM1_GENERATED_MAKE_C "${LM1_GENERATED_DIR}/make.lm1.c")
+set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
 
 # ---- Generated L1 parser snapshot ----
 
 if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0)
     add_library(parser.lm1 STATIC
         "${LM1_GENERATED_PARSER_C}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser/parser.lm1.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser.lm1.h"
     )
 
     set_target_properties(parser.lm1 PROPERTIES
@@ -105,7 +105,7 @@ if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0)
     )
 
     target_include_directories(parser.lm1 PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
     )
 
     if (MSVC)
@@ -123,7 +123,7 @@ if (BUILD_TRANS_LM0)
     )
 
     target_include_directories(trans.lm0 PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
     )
 
     target_link_libraries(trans.lm0 PRIVATE
@@ -131,65 +131,65 @@ if (BUILD_TRANS_LM0)
     )
 
     add_custom_target(refresh_trans_lm1
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/trans"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
         COMMAND $<TARGET_FILE:trans.lm0>
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans/trans.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans.lm2"
             "${LM1_GENERATED_TRANS_C}"
         DEPENDS
             trans.lm0
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans/trans.lm2"
-        COMMENT "Refreshing build/lm1/trans/trans.lm1.c from lm2/trans/trans.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans.lm2"
+        COMMENT "Refreshing build/lm1/trans.lm1.c from lm2/trans.lm2"
         VERBATIM
     )
 
     add_custom_target(refresh_parser_lm1
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/parser"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
         COMMAND $<TARGET_FILE:trans.lm0>
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser/parser.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser.lm2"
             "${LM1_GENERATED_PARSER_C}"
         DEPENDS
             trans.lm0
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser/parser.lm2"
-        COMMENT "Refreshing build/lm1/parser/parser.lm1.c from lm2/parser/parser.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser.lm2"
+        COMMENT "Refreshing build/lm1/parser.lm1.c from lm2/parser.lm2"
         VERBATIM
     )
 
     add_custom_command(
         OUTPUT "${LM1_GENERATED_PRINT_TREE_C}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/printTree"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
         COMMAND $<TARGET_FILE:trans.lm0>
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree/printTree.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree.lm2"
             "${LM1_GENERATED_PRINT_TREE_C}"
         DEPENDS
             trans.lm0
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree/printTree.lm2"
-        COMMENT "Generating build/lm1/printTree/printTree.lm1.c from lm2/printTree/printTree.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree.lm2"
+        COMMENT "Generating build/lm1/printTree.lm1.c from lm2/printTree.lm2"
         VERBATIM
     )
 
     add_custom_command(
         OUTPUT "${LM1_GENERATED_MAKE_C}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/make"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
         COMMAND $<TARGET_FILE:trans.lm0>
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make/make.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make.lm2"
             "${LM1_GENERATED_MAKE_C}"
         DEPENDS
             trans.lm0
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make/make.lm2"
-        COMMENT "Generating build/lm1/make/make.lm1.c from lm2/make/make.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make.lm2"
+        COMMENT "Generating build/lm1/make.lm1.c from lm2/make.lm2"
         VERBATIM
     )
 
     add_custom_command(
         OUTPUT "${LM1_GENERATED_BUILD_CORE_C}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}/buildCore"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
         COMMAND $<TARGET_FILE:trans.lm0>
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore/buildCore.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lm2"
             "${LM1_GENERATED_BUILD_CORE_C}"
         DEPENDS
             trans.lm0
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore/buildCore.lm2"
-        COMMENT "Generating build/lm1/buildCore/buildCore.lm1.c from lm2/buildCore/buildCore.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lm2"
+        COMMENT "Generating build/lm1/buildCore.lm1.c from lm2/buildCore.lm2"
         VERBATIM
     )
 
