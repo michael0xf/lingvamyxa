@@ -2171,6 +2171,11 @@ static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
     return LM_P0_TRAILER_ROLE_NONE;
 }
 
+static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event) {
+    return event->kind == LM_P0_STREAM_EVENT_ITEM &&
+        lm_p0_trailer_role(event->text, event->text_length) == LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+}
+
 static void lm_p0_stack_free(LmP0Stack *stack) {
     free(stack->parents);
     free(stack->owners);
@@ -2193,6 +2198,124 @@ static LmP0Structure *lm_p0_node_child_structure(LmP0Node *node) {
         return &node->as.structure;
     }
     return NULL;
+}
+
+static LmP0Node *lm_p0_structure_last_colon_frame(LmP0Structure *structure) {
+    LmP0Node *node;
+
+    if (structure->last_field == NULL || structure->last_field->value == NULL) {
+        return NULL;
+    }
+
+    node = structure->last_field->value;
+    if (node->kind == LM_P0_NODE_FRAME &&
+        (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U) {
+        return node;
+    }
+
+    return NULL;
+}
+
+static int lm_p0_stack_install_node_lineage(
+    LmP0Document *document,
+    LmP0Stack *stack,
+    size_t base_level,
+    LmP0Node *node
+) {
+    LmP0Node *owner;
+    size_t level;
+
+    if (!lm_p0_node_can_own_children(node)) {
+        if (!lm_p0_stack_ensure(document, stack, base_level + 1U)) {
+            return 0;
+        }
+        stack->parents[base_level + 1U] = NULL;
+        stack->owners[base_level + 1U] = NULL;
+        stack->hard[base_level + 1U] = 0U;
+        lm_p0_stack_truncate_deeper(stack, base_level + 1U);
+        return 1;
+    }
+
+    owner = node;
+    level = base_level + 1U;
+    while (lm_p0_node_can_own_children(owner)) {
+        LmP0Structure *body;
+        LmP0Node *next_owner;
+
+        if (!lm_p0_stack_ensure(document, stack, level)) {
+            return 0;
+        }
+
+        body = lm_p0_node_child_structure(owner);
+        stack->parents[level] = body;
+        stack->owners[level] = owner;
+        stack->hard[level] = body->field_count == 0U ? 1U : 0U;
+
+        next_owner = lm_p0_structure_last_colon_frame(body);
+        if (next_owner == NULL) {
+            break;
+        }
+
+        owner = next_owner;
+        ++level;
+    }
+
+    lm_p0_stack_truncate_deeper(stack, level);
+    return 1;
+}
+
+static int lm_p0_stack_ensure_root_level_alias(LmP0Document *document, LmP0Stack *stack, size_t level) {
+    if (level != 1U || stack->parents[1] != NULL) {
+        return 1;
+    }
+    if (!lm_p0_stack_ensure(document, stack, 1U)) {
+        return 0;
+    }
+    stack->parents[1] = stack->parents[0];
+    stack->owners[1] = stack->owners[0];
+    stack->hard[1] = 1U;
+    return 1;
+}
+
+static int lm_p0_stack_open_implicit_anonymous(
+    LmP0Document *document,
+    LmP0Stack *stack,
+    size_t parent_level,
+    size_t line,
+    size_t column,
+    size_t offset
+) {
+    LmP0Node *anonymous_node;
+    LmP0Structure *parent;
+
+    parent = stack->parents[parent_level];
+    if (parent == NULL) {
+        lm_p0_set_diagnostic(document, 8, line, column, "source level has no open parent structure");
+        return 0;
+    }
+
+    anonymous_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
+    if (anonymous_node == NULL) {
+        return 0;
+    }
+    anonymous_node->span.line = line;
+    anonymous_node->span.column = column;
+    anonymous_node->span.offset = offset;
+    anonymous_node->span.length = 0U;
+
+    if (!lm_p0_append_field(document, parent, anonymous_node)) {
+        lm_p0_free_node(anonymous_node);
+        return 0;
+    }
+
+    if (!lm_p0_stack_ensure(document, stack, parent_level + 1U)) {
+        return 0;
+    }
+    stack->parents[parent_level + 1U] = &anonymous_node->as.structure;
+    stack->owners[parent_level + 1U] = anonymous_node;
+    stack->hard[parent_level + 1U] = 1U;
+    lm_p0_stack_truncate_deeper(stack, parent_level + 1U);
+    return 1;
 }
 
 static LmP0Trailer **lm_p0_node_trailer_slot(LmP0Node *node) {
@@ -2351,11 +2474,8 @@ static int lm_p0_stream_resolve_pending_delimiter(
     }
 
     if (event->level < top_level) {
-        if (event->level + 1U != top_level) {
-            lm_p0_set_diagnostic(document, 13, event->line, event->column, "dotted point cannot close more than one open source level");
-            return 0;
-        }
         lm_p0_stack_truncate_deeper(stack, event->level);
+        top_level = lm_p0_stack_top_level(stack);
     }
 
     parent = stack->parents[event->level];
@@ -2463,14 +2583,29 @@ static int lm_p0_stream_apply_item_event(
     }
 
     if (event->level < top_level) {
-        lm_p0_set_diagnostic(
-            document,
-            16,
-            event->line,
-            event->column,
-            "name is not an accepted block trailer; expected end, ---, return, or until"
-        );
+        lm_p0_stack_truncate_deeper(stack, event->level);
+        top_level = lm_p0_stack_top_level(stack);
+    }
+
+    if (!lm_p0_stack_ensure_root_level_alias(document, stack, event->level)) {
         return 0;
+    }
+
+    if (stack->parents[event->level] == NULL && event->level > top_level) {
+        if (event->level != top_level + 1U) {
+            lm_p0_set_diagnostic(document, 13, event->line, event->column, "source level jumps too deep");
+            return 0;
+        }
+        if (!lm_p0_stack_open_implicit_anonymous(
+                document,
+                stack,
+                top_level,
+                event->line,
+                event->column,
+                event->offset
+            )) {
+            return 0;
+        }
     }
 
     parent = stack->parents[event->level];
@@ -2521,28 +2656,10 @@ static int lm_p0_stream_apply_item_event(
         return 0;
     }
 
-    if (lm_p0_node_can_own_children(node)) {
-        stack->parents[event->level + 1U] = lm_p0_node_child_structure(node);
-        stack->owners[event->level + 1U] = node;
-        if (node->kind == LM_P0_NODE_FRAME) {
-            stack->hard[event->level + 1U] = node->as.frame.body.field_count == 0U ? 1U : 0U;
-        } else {
-            stack->hard[event->level + 1U] = node->as.structure.field_count == 0U ? 1U : 0U;
-        }
-    } else {
-        stack->parents[event->level + 1U] = NULL;
-        stack->owners[event->level + 1U] = NULL;
-        stack->hard[event->level + 1U] = 0U;
+    if (!lm_p0_stack_install_node_lineage(document, stack, event->level, node)) {
+        return 0;
     }
-    lm_p0_stack_truncate_deeper(stack, event->level + 1U);
     return 1;
-}
-
-static int lm_p0_dash_fence_has_close_target(const LmP0Stack *stack, const LmP0StreamEvent *event) {
-    size_t top_level;
-
-    top_level = lm_p0_stack_top_level(stack);
-    return event->level + 1U <= top_level && stack->owners[event->level + 1U] != NULL;
 }
 
 static int lm_p0_stream_apply_event(
@@ -2564,8 +2681,7 @@ static int lm_p0_stream_apply_event(
         return 0;
     }
     if (event->kind == LM_P0_STREAM_EVENT_ITEM &&
-        lm_p0_dash_fence_status_after_comment_trim(event->text, event->text_length, NULL) == LM_P0_DASH_FENCE_VALID &&
-        !lm_p0_dash_fence_has_close_target(stack, event)) {
+        lm_p0_dash_fence_status_after_comment_trim(event->text, event->text_length, NULL) == LM_P0_DASH_FENCE_VALID) {
         pending->active = 1;
         pending->event = *event;
         pending->event.kind = LM_P0_STREAM_EVENT_DELIM;
@@ -2802,10 +2918,7 @@ static int lm_p0_disabled_event_is_tail_cutter(const LmP0StreamEvent *event) {
     if (event->kind == LM_P0_STREAM_EVENT_DELIM) {
         return 1;
     }
-    if (event->kind != LM_P0_STREAM_EVENT_ITEM) {
-        return 0;
-    }
-    return lm_p0_trailer_role(event->text, event->text_length) == LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+    return lm_p0_stream_event_is_tail_cutter(event);
 }
 
 static int lm_p0_disabled_state_accept_event(
@@ -2873,19 +2986,30 @@ static int lm_p0_disabled_state_accept_event(
         return 1;
     }
 
-    if (event->level < state->top_level) {
+    if (event->level + 1U < state->top_level) {
         lm_p0_set_diagnostic(
             document,
-            16,
+            13,
             event->line,
             event->column,
-            "name is not an accepted disabled block trailer; expected end, ---, return, or until"
+            "disabled block source level decrease must be one step unless a tail cutter is used"
         );
         return 0;
     }
-    if (event->level > state->top_level) {
+
+    if (event->level <= state->base_level) {
+        *done_before_event = 1;
+        return 1;
+    }
+    if (event->level < state->top_level) {
+        state->top_level = event->level;
+    }
+    if (event->level > state->top_level + 1U) {
         lm_p0_set_diagnostic(document, 8, event->line, event->column, "disabled block source level has no open parent");
         return 0;
+    }
+    if (event->level == state->top_level + 1U) {
+        state->top_level = event->level;
     }
 
     state->pending_item = 1;
@@ -2986,12 +3110,16 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     LmP0Stack stack;
     LmP0PendingDelimiter pending;
     int status;
+    int has_last_physical_level;
+    size_t last_physical_level;
 
     source = document->source;
     length = document->source_length;
     offset = 0U;
     line = 1U;
     status = 1;
+    has_last_physical_level = 0;
+    last_physical_level = 0U;
     memset(&indent_stack, 0, sizeof(indent_stack));
     memset(&stack, 0, sizeof(stack));
     memset(&pending, 0, sizeof(pending));
@@ -3223,10 +3351,31 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             ? LM_P0_STREAM_EVENT_DELIM
             : LM_P0_STREAM_EVENT_ITEM;
 
+        if (has_last_physical_level) {
+            if (level > last_physical_level + 1U) {
+                lm_p0_set_diagnostic(document, 13, line, event.column, "source level increase must be one step");
+                status = 0;
+                break;
+            }
+            if (level + 1U < last_physical_level && !lm_p0_stream_event_is_tail_cutter(&event)) {
+                lm_p0_set_diagnostic(
+                    document,
+                    13,
+                    line,
+                    event.column,
+                    "source level decrease must be one step unless a tail cutter is used"
+                );
+                status = 0;
+                break;
+            }
+        }
+
         if (!lm_p0_stream_apply_event(document, &stack, &pending, &event)) {
             status = 0;
             break;
         }
+        has_last_physical_level = 1;
+        last_physical_level = level;
 
         if (line_end == length) {
             break;

@@ -302,31 +302,36 @@ This example should be read with five simple structural rules in mind:
 
    Indentation in relaxed notation, or dots in canonical notation, determines
    the source-level tree. Child items are written at the next deeper source
-   level. Returning to the same parent level or to a smaller level completes
-   the currently open Structure before the next source item is parsed.
+   level. Returning by one source level completes the currently open Structure
+   before the next source item is parsed. Cutting more than one level at once is
+   reserved for admitted tail-cutter semantics in the next layer.
 
-4. A source-level cut is the ordinary trailer.
+4. A source-level cut is the ordinary trailer event.
 
    A block does not need an explicit close merely because it is named. The
-   ordinary trailer is the source-level cut. Explicit forms such as `end: name`,
-   terminal return forms and `---` are visible or specialized ways to make this
-   tree transition clear.
+   ordinary trailer event is the source-level cut itself. It is not the text of
+   the following lower-level line. Explicit forms such as `end: name` and
+   terminal return forms become tail-cutter trailers only in a valid
+   source-level tail-cutter position. They may close source-level/block tails,
+   but they do not close unmatched parenthesized/bounded Structures; those must
+   still be closed by `)`.
 
 5. `end: name`, `---` and terminal return forms are not competing block systems.
 
-   `end: name` is an explicit named tail-cutter, useful in long or deeply nested
-   blocks and when the close target should be visible.
+   `end: name` is an explicit named tail-cutter, useful in long or deeply
+   nested blocks and when the close target should be visible. P0 records it as a
+   tail-cutter trailer only when it actually closes an open source-level frame.
 
    `---` is an explicit source-level marker. It materializes a level point
    without adding an ordinary receiver item. It is mainly useful for anonymous
    same-level sections where an ordinary source item cannot show the necessary
    down/up level transition.
 
-   A terminal return form is an executable-specific trailer when it appears at
-   the source level of the executable definition. For a value-producing `fn`,
-   that form is `return: value`; for a no-value executable profile, a bare
-   `return` may be admitted. A `return` written inside the body level is an
-   ordinary runtime return.
+   A terminal return form is an executable-specific trailer when the semantic
+   executable layer admits it at the source level of the executable definition.
+   For a value-producing `fn`, that form is `return: value`; for a no-value
+   executable profile, a bare `return` may be admitted. A `return` written
+   inside the body level is an ordinary runtime return.
 
 Style convention used by this example:
 
@@ -808,6 +813,8 @@ Physical line breaks inside the literal are string content. Source levels, `#` c
 
 This literal form is not an ANSI C / C99 string and does not use ANSI C / C99 escape decoding. Its purpose is readable multi-line raw text with no backslash escaping.
 
+This literal is a length-based raw source payload, not a null-terminated C string. A physical U+0000 / NUL byte inside the literal is ordinary content and does not terminate the source item. Consumers that interpret the payload as UTF-8, UTF-16, UTF-32 or another representation must do so explicitly.
+
 Inside a Python-like string, backslash is an ordinary character. `\n` is two characters, backslash and `n`; `\t` is two characters, backslash and `t`; `\"` is two characters, backslash and double quote; `\'` is two characters, backslash and single quote.
 
 The only delimiter-writing rule is quote-run shortening for the same quote character that opened the literal:
@@ -879,7 +886,42 @@ concatenation. The two inline triple-quoted forms have exactly one delimiter
 content rule: a same-quote run of length N greater than 3 contributes N - 1 quote
 characters to the decoded value. The column-0 `=` block string has no quote-run
 shortening rule; all content lines between the matching fence lines are raw text
-after source newline normalization.
+after source newline normalization. These raw text forms are length-based source
+payloads: a physical U+0000 / NUL byte is ordinary content, not a terminator.
+Because they are length-based raw payloads, all three raw text forms may carry
+payloads intended for any explicitly selected text representation, including
+UTF-8, UTF-16 and UTF-32. The structural parser records the source bytes and the
+surrounding Structure; the receiver/profile that consumes the value decides how
+to interpret, validate or transcode those bytes. Encoding words such as `utf8`,
+`utf16` and `utf32` are ordinary structural metadata, not special P0 syntax.
+
+Examples with an explicit storage-width marker and an encoding receiver:
+
+    @: u32 utf32:
+    ===
+    текст utf32
+    ===
+
+    @: u16 utf16: '''текст utf16'''
+    @: u32 utf32: """текст utf32"""
+
+The same idea can be made clearer by naming the value model explicitly:
+
+    String: u32 utf32:
+    ===
+    текст utf32
+    ===
+
+    String: u16 utf16: '''текст utf16'''
+    String: u32 utf32: """текст utf32"""
+
+In these examples the raw text value is a field of the innermost encoding frame
+(`utf16` or `utf32`). For example, in `String: u16 utf16: '''текст utf16'''`
+the raw literal is the implicit level N + 1 body field of `utf16`. A following
+ordinary source item at level N closes that short-form tail by the normal
+source-level cut rule. A column-0 `===` block string fence does not itself
+change the source level; it only supplies the raw value for the currently open
+receiver body.
 
 Examples:
 
@@ -1070,6 +1112,25 @@ Physical newline is not a short-form trailer. It only ends the physical line. Th
     next item at N      -> the current short form is complete; the next item is a sibling
     next item below N   -> the current short form is complete and ordinary level-close rules apply
     next item deeper than N + 1 -> valid only if the preceding field can own that deeper level
+
+If the last field of a short tail is itself a colon-form, that nested colon-form
+is the current open continuation target for the corresponding deeper source
+level. Therefore a compact nested spelling may be continued vertically:
+
+    L1: utf8:
+    ===
+    raw text
+    ===
+
+normalizes like the explicit vertical spelling:
+
+    L1:
+    . utf8:
+    ===
+    raw text
+    ===
+
+In both cases the block string is a field of `utf8`, not a sibling of `L1`.
 
 Comma is different from physical newline. Comma always terminates the current open short form at the current scan depth:
 
@@ -1338,18 +1399,23 @@ Shared source-level rule after either surface notation has been mapped to source
     A line at a source level deeper than the previous structural head is a
     child item of that head.
 
-    A line that returns to an earlier source level is a level delimiter and
-    closes all open structures above that level.
+    A line that returns by one source level is a level delimiter and closes the
+    open structure above that level before the line text is parsed as an
+    ordinary source item at its own level. Returning by more than one level is
+    not a plain P0 level transition; it requires an admitted tail-cutter layer.
 
-    A source-level cut is the ordinary structural trailer mechanism.
+    A source-level cut is the ordinary structural trailer event. The event is
+    the level transition itself, not any receiver/data written on the following
+    source line.
 
     For a frame opened at source level N:
 
         source items at level N + 1 are child/body fields of that frame;
         a following source item at level N completes the open frame at level N
         and starts a sibling item at the same parent level;
-        a following source item at level M < N completes all open frames above
-        M before the new item at level M is parsed.
+        a following source item at level N - 1 completes the open frame above
+        that level before the new item is parsed; larger decreases require an
+        admitted tail-cutter layer.
 
     This rule applies to named frames, anonymous frames and executable
     definitions. A named frame does not require `end: name` merely because it
@@ -1357,8 +1423,12 @@ Shared source-level rule after either surface notation has been mapped to source
     semantically valid.
 
     `end: name` is an explicit named tail-cutter. It is useful for readability,
-    diagnostics and closing a long or deeply nested visible target. It is not
-    the only ordinary close mechanism.
+    diagnostics and closing a long or deeply nested visible target. P0 records
+    it as a tail-cutter trailer only in a valid source-level tail-cutter
+    position. A tail-cutter closes only source-level/block tails; it never
+    closes an unmatched parenthesized/bounded Structure. Therefore an `end:` at
+    a source position that is still inside one or more unmatched `(` frames does
+    not replace the required `)`.
 
     `end: name` closes a visible named target explicitly.
 
@@ -1367,9 +1437,9 @@ Shared source-level rule after either surface notation has been mapped to source
     adding an ordinary receiver item. Open, separate and close behavior follows
     from the neighboring source levels.
 
-This rule is not a Python-like license to hide every same-level anonymous separator in whitespace. A smaller source-level line closes the open structures above that smaller level. But when two anonymous/implicit Structures must be separated at the same source level, no smaller-level line exists between them, so Lingvamyxa requires a visible same-level delimiter: a canonical dotted delimiter line or `---`.
+This rule is not a Python-like license to hide every same-level anonymous separator in whitespace. A one-step smaller source-level line closes the open structure above that smaller level. But when two anonymous/implicit Structures must be separated at the same source level, no smaller-level line exists between them, so Lingvamyxa requires a visible same-level delimiter: a canonical dotted delimiter line or `---`.
 
-Visible structural transition forms are:
+Visible structural transition forms in the full language are:
 
     end: name
     return
@@ -1377,9 +1447,9 @@ Visible structural transition forms are:
     ---
     a canonical source-level delimiter line
     a following source item at the same parent level
-    a following source item at a smaller source level
+    a following source item one source level smaller
 
-Visible named Structures may be completed by the ordinary source-level cut. `end: name` is the explicit named close form, normally used when a visible, checked or long-distance close is clearer than relying on the next smaller-level or same-parent-level source item. Executable definitions may also be closed by an admitted terminal return form: `return: value` for a core `fn`, or bare `return` for no-value executable profiles such as `sub` or labels. Anonymous positional Structures and nameless implicit sections are closed by a smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
+Visible named Structures may be completed by the ordinary one-step source-level cut. `end: name` is the explicit named close form, normally used when a visible, checked or long-distance close is clearer than relying on the next one-step smaller-level or same-parent-level source item. Executable definitions may also be closed by an admitted terminal return form: `return: value` for a core `fn`, or bare `return` for no-value executable profiles such as `sub` or labels. Anonymous positional Structures and nameless implicit sections are closed by a one-step smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
 Therefore the term "dot-only line" is not a general word for all closure. It names only the canonical source-level notation for an anonymous/nameless structural delimiter. Explicit named closure is written as `end: name`.
 
@@ -1393,9 +1463,17 @@ Terminology:
 
     trailer
         The structural completion event of an opened frame or anonymous
-        Structure. In ordinary source this is usually a source-level cut.
-        Explicit forms such as `end: name`, terminal `return` and `---` are
-        visible ways to materialize or specialize trailer behavior.
+        Structure. In ordinary P0 source this is usually a one-step
+        source-level cut: a change from level N to level N - 1 that completes
+        the open item before the new source line is parsed. The next line's
+        text is not the trailer. Larger cuts are not ordinary P0 level
+        transitions; they require an admitted tail-cutter layer.
+        Explicit forms such as `end: name` and terminal `return` become
+        specialized tail-cutter trailers only in admitted source-level
+        tail-cutter positions. A tail-cutter may close source-level/block
+        tails, including deeply nested ones, but it does not close unmatched
+        parenthesized/bounded Structures; those remain governed by `)`. `---`
+        is different: it is a visible source-level marker, not a receiver item.
 
     explicit source-level marker
         A visible source line, such as a dotted delimiter line or `---`, that
@@ -1447,9 +1525,26 @@ A source item at level N may open a frame/Structure. Its vertical child argument
 
 A physical source line at level N + 1 is one positional child item of the open frame/Structure at level N.
 
-A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. Scalar literals and ordinary value items do not become headers merely because a deeper line follows them.
+A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. If no such open item exists, the level increase itself materializes an anonymous positional Structure at the intervening parent level. Scalar literals and ordinary value items do not become headers merely because a deeper line follows them.
 
-A physical source line at a smaller level than the current open child resumes the parent level and starts a sibling item there. The smaller-level line itself is the level delimiter. If the next item starts at the same level as the current anonymous/implicit section, use a canonical dotted delimiter line or relaxed `---` at that level.
+A physical source line one level smaller than the current open child resumes the parent level and starts a sibling item there. The smaller-level line itself is the level delimiter. A larger decrease is reserved for an admitted tail-cutter layer. If the next item starts at the same level as the current anonymous/implicit section, use a canonical dotted delimiter line or relaxed `---` at that level.
+
+A smaller-level ordinary item is still an ordinary item. It is not treated as a
+named trailer merely because it closes deeper open structure before it is read.
+For example:
+
+.
+. . block0
+. . block0
+. trailer_word
+. . block1
+. . block1
+.
+
+has three root fields: an anonymous Structure containing the two `block0`
+items, the atom `trailer_word`, and an anonymous Structure containing the two
+`block1` items. Because `trailer_word` has no `:`, it is not a receiver-form and
+not a trailer form.
 
 Physical empty lines are level-0 structural boundary events. They close an open
 level-1 vertical tail by the ordinary source-level decrease to 0. They do not
@@ -1464,7 +1559,7 @@ A canonical source-level delimiter line at level K may serve as an anonymous pos
 
 If a canonical source-level delimiter line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. That anonymous Structure is one child item of the surrounding parent Structure.
 
-The anonymous Structure continues until the next canonical source-level delimiter line at level K, a following source item at a smaller source level, an explicit `end: <target>` that closes a visible target, terminal `return` / `return: value` where valid, or EOF.
+The anonymous Structure continues until the next canonical source-level delimiter line at level K, a following source item at source level K - 1, an explicit `end: <target>` in a valid tail-cutter position, terminal `return` / `return: value` where valid, or EOF.
 
 A canonical source-level delimiter line at level K may close the previous anonymous Structure at K and, if followed by deeper items, open the next anonymous Structure at K.
 
@@ -1601,8 +1696,9 @@ Its primary role is to make a level transition visible when ordinary indentation
 A dash-fence line performs no receiver call by itself. Its effect is derived from ordinary source-level rules:
 
     1. If the parser is currently inside a deeper level, the move to the dash fence at
-       level K performs the ordinary source-level cut/trailer for all open
-       Structures above K.
+       level K performs the ordinary one-step source-level cut/trailer for the
+       open Structure above K. A dash-fence line is not a general multi-level
+       tail cutter.
 
     2. If the following non-empty source item is at level K + 1, the dash-fence line
        acts as the visible head of an anonymous positional Structure at level
@@ -1614,11 +1710,18 @@ A dash-fence line performs no receiver call by itself. Its effect is derived fro
 
 Therefore a dash-fence line is not a special close operator, not a special open operator and not a third independent separator syntax. It is the explicit spelling of a structural level point K. Close/open/separator behavior follows from the same source-level cut and child rules used everywhere else.
 
-If a dash-fence line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next dash-fence line at level K, a following source item at a smaller source level, an explicit `end: <target>`, terminal `return` / `return: value` where valid, or EOF.
+If a dash-fence line at level K is followed by source items at level K + 1, it opens an anonymous positional Structure at level K. The anonymous Structure continues until the next dash-fence line at level K, a following source item at source level K - 1, an explicit `end: <target>` in a valid tail-cutter position, terminal `return` / `return: value` where valid, or EOF.
 
 If a dash-fence line at level K is not followed by deeper source items, it closes or cuts the current open anonymous/implicit section at that level and resumes parsing at level K.
 
 A dash-fence delimiter line must contain no source item other than the delimiter itself. It may have leading spaces/tabs in relaxed indentation notation, leading canonical dots in canonical source-level / automatic-rewrite notation, horizontal whitespace after the delimiter, and an optional trailing `#` line comment. The `#` comment text is ignored by the structural parser, exactly like comments after ordinary source text.
+
+A trailing `#` comment is not an exception to the dash-fence rule. It is the
+ordinary line-comment syntax: after the comment is removed, the line is still a
+pure dash-fence line. The intentional exception is payload text: although
+worded cutters such as `end: name` may carry a target/body at the later
+semantic layer, `---` never carries a trailer name or payload. Write `end:
+name` when the close target must be visible; `--- trailer word` is invalid.
 
 Valid delimiter lines:
 
@@ -1634,6 +1737,7 @@ Invalid delimiter lines:
     ----else:
     --- return: x
     --- int: x
+    --- trailer word
 
 A dash fence is not a prefix operator and cannot be combined with a receiver or any other source item on the same physical line.
 
@@ -2007,7 +2111,7 @@ The disabled-block marker is:
 
 `%` may appear at the start of a source item, immediately after that item's indentation zone. Optional horizontal whitespace after `%` is ignored. The parser removes `%` for the purpose of identifying the disabled item and records an inactive placeholder for that disabled item/block in the P0 tree.
 
-If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser does not build the normal P0 subtree for that disabled body. Instead, a lightweight disabled-block validator scans the disabled range and checks only structural integrity: source-level nesting, accepted structural trailers, balanced parenthesized forms, quoted-token closure and block-string closure. Therefore disabled code may still produce structural syntax errors, but ordinary receiver/P0 body validation is not run inside it.
+If the disabled item opens a vertical Structure, the whole vertical Structure is disabled. The parser does not build the normal P0 subtree for that disabled body. Instead, a lightweight disabled-block validator scans the disabled range and checks only structural integrity: source-level nesting, accepted tail-cutter lines, balanced parenthesized forms, quoted-token closure and block-string closure. Therefore disabled code may still produce structural syntax errors, but ordinary receiver/P0 body validation is not run inside it.
 
 Disabled code remains present in the P0 tree as an inactive placeholder. Later receiver consumption skips inactive items, does not register definitions from them, does not update models or registries from them and does not lower them to executable/runtime behavior.
 
@@ -3965,13 +4069,16 @@ The default ANSI C / C99 bootstrap profile may use the following implementation 
     real     -> MPFR mpfr_t        -> vendored `third_party/mpfr.zip`
     decimal  -> decNumber         -> vendored `third_party/decNumber.zip`
     SQL      -> SQLite            -> vendored `third_party/sqlite.zip`
-    Regex    -> PCRE2             -> vendored `third_party/pcre2.zip`
+    Regex    -> PCRE2 8/16/32     -> vendored `third_party/pcre2.zip`
 
 The default project bootstrap keeps third-party source archives under
 `third_party/*.zip`. A full local build expands them into `build/third_party/`
 and emits static libraries into `build/libs/`. `vcpkg` may be used as a
 download/cache helper for upstream archives, but the default build does not
-depend on live package-manager libraries.
+depend on live package-manager libraries. The bundled PCRE2 profile builds
+8-bit, 16-bit and 32-bit code-unit libraries so raw length-based payloads can be
+interpreted by the receiver profile instead of being forced through a single
+null-terminated UTF-8-only representation.
 
 The `i/u` family denotes implementation-profile integer types over C integer storage. `bigint`, `real`, `decimal`, `SQL` and `Regex` are ordinary names/receivers/descriptors in the shared namespace when the active profile registers them. Their physical representation and linked libraries belong to the selected L1/runtime profile.
 
@@ -5581,13 +5688,13 @@ This grammar sketch describes the structural parser only. It does not define fin
                           | bounded_structure
                           | atom_or_value
 
-The vertical Structure tree is produced by source levels and explicit visible delimiters: smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed dash-fence lines, named `end:` closes and terminal return where valid.
+The vertical Structure tree is produced by source levels and explicit visible delimiters: one-step smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed dash-fence lines, and admitted source-level tail-cutter forms such as `end:` or terminal return where valid.
 
 For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. In a short colon-form, the inline tail fields are also treated as fields at the implicit argument level N + 1. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and identifier values do not become headers merely because a deeper line follows.
 
-A canonical dotted delimiter line or relaxed dash-fence line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at a smaller source level closes all open Structures above that smaller level.
+A canonical dotted delimiter line or relaxed dash-fence line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at level K - 1 closes that anonymous Structure by the ordinary one-step cut. A larger cut is not ordinary P0 syntax and requires an admitted tail-cutter layer.
 
-A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed dash-fence anonymous Structure delimiter when that is valid in the current parent, or an explicit `end: <target>` close when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
+A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed dash-fence anonymous Structure delimiter when that is valid in the current parent, or an admitted tail-cutter such as `end: <target>` when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
 
 This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone dash-fence line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 
@@ -5723,7 +5830,9 @@ Parenthesis semantics:
 Source-level semantics:
 
     A line at source level K + 1 is a child field of the current item at level K.
-    A line at a smaller source level closes all open Structures above that level.
+    A line at source level K - 1 closes the current open Structure by the
+    ordinary one-step cut. Larger decreases require an admitted tail-cutter
+    layer.
     A delimiter at level K may open an AnonymousStructure(K) when followed by
     items at K + 1, or close/separate the current anonymous or implicit section
     at level K.
@@ -5891,7 +6000,7 @@ Conceptual form:
     dotted delimiter line      canonical anonymous Structure delimiter; may open, separate or close at its source level
     ---...                     dash-fence source-level marker, 3..80 `-` characters; materializes level K without an ordinary receiver item;
                                close/open/separator behavior follows from neighboring source levels
-    smaller-level source line  ordinary source-level cut/trailer; completes all open Structures above the smaller level
+    smaller-level source line  ordinary one-step source-level cut/trailer; larger cuts require an admitted tail-cutter layer
     same-parent-level line     ordinary source-level cut for the previous child frame and start of the next sibling item
     empty line                 level-0 structural boundary; closes an open level-1 vertical tail
     #                          line comment marker; ignores text to the end of the physical line

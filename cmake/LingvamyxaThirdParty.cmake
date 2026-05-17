@@ -288,12 +288,12 @@ function(lm_register_bundled_third_party out_var)
     endif()
     list(APPEND local_targets libsodium_vendor)
 
-    # Regex -> PCRE2 8-bit + JIT only.
+    # Regex -> PCRE2 8/16/32-bit code-unit libraries + JIT.
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
     set(PCRE2_BUILD_PCRE2_8 ON CACHE BOOL "" FORCE)
-    set(PCRE2_BUILD_PCRE2_16 OFF CACHE BOOL "" FORCE)
-    set(PCRE2_BUILD_PCRE2_32 OFF CACHE BOOL "" FORCE)
+    set(PCRE2_BUILD_PCRE2_16 ON CACHE BOOL "" FORCE)
+    set(PCRE2_BUILD_PCRE2_32 ON CACHE BOOL "" FORCE)
     set(PCRE2_BUILD_PCRE2GREP OFF CACHE BOOL "" FORCE)
     set(PCRE2_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(PCRE2_SUPPORT_JIT ON CACHE BOOL "" FORCE)
@@ -314,8 +314,15 @@ function(lm_register_bundled_third_party out_var)
         EXCLUDE_FROM_ALL
     )
     lm_set_archive_output(pcre2-8-static "pcre2-8")
+    lm_set_archive_output(pcre2-16-static "pcre2-16")
+    lm_set_archive_output(pcre2-32-static "pcre2-32")
     lm_set_archive_output(pcre2-posix-static "pcre2-posix")
-    list(APPEND local_targets pcre2-8-static pcre2-posix-static)
+    list(APPEND local_targets
+        pcre2-8-static
+        pcre2-16-static
+        pcre2-32-static
+        pcre2-posix-static
+    )
 
     # Network client -> libcurl. On Windows, use native Schannel/SSPI instead of OpenSSL.
     set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)

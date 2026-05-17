@@ -1,0 +1,15 @@
+@: u32 utf32:
+===
+text utf32
+===
+
+@: u16 utf16: '''text utf16'''
+@: u32 utf32: """text utf32"""
+
+String: u32 utf32:
+===
+text utf32
+===
+
+String: u16 utf16: '''text utf16'''
+String: u32 utf32: """text utf32"""

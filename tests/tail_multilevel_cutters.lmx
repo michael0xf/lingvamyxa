@@ -1,0 +1,9 @@
+fn: square
+. body:
+. . value: x
+return: x
+
+loop:
+. body:
+. . tick
+until: done

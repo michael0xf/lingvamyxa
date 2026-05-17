@@ -117,12 +117,16 @@ scanning:
         normal P0 subtree is not built for the disabled body. P0 records an
         inactive placeholder and runs a lightweight disabled-block validator
         over the disabled range. That validator checks source-level nesting,
-        accepted structural trailers, balanced parenthesized forms, quoted-token
+        accepted tail-cutter lines, balanced parenthesized forms, quoted-token
         closure and block-string closure.
 
 `---`, `----`, and longer runs up to length 80 are DELIM_DASH only as standalone
-structural lines. Inside ordinary text, `-` is just part of the source spelling
-consumed by a later parsing layer.
+structural lines. Leading source-level dots or relaxed spaces/tabs may precede
+the run. A trailing `#` line comment is part of the ordinary line-comment
+syntax: after removing the comment, the line is still a pure dash-fence line.
+No trailer word or payload may follow the dash run. Use `end: name` at the next
+tail-cutter position for a named close. Inside ordinary text, `-` is just part
+of the source spelling consumed by a later parsing layer.
 
 
 4. Structural Punctuation
@@ -218,7 +222,9 @@ P0 atom tokens:
         more matching quote characters is literal content and value decoding
         emits one fewer quote character than the source run. After the closing
         triple delimiter, the same field-boundary rule applies. P0 preserves
-        source spelling.
+        source spelling. This token is a length-based raw source payload; a
+        physical U+0000 / NUL byte inside it is ordinary content, not a
+        terminator.
 
     CHARACTER_CONSTANT
         ANSI C / C99 single-quoted character constant spelling. It is a numeric
@@ -246,7 +252,9 @@ P0 atom tokens:
         PYTHON_STRING_LITERAL, but it has no quote-run shortening rule. The
         opening and closing fence lines are not content; all physical lines
         between the matching fences are content after source newline
-        normalization.
+        normalization. This token is a length-based raw source payload; a
+        physical U+0000 / NUL byte inside it is ordinary content, not a
+        terminator.
 
     BARE_WORD
         Portable core form:

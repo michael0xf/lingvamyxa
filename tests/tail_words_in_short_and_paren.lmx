@@ -1,0 +1,2 @@
+box(end: value return: item until: done)
+line: end: value return: item until: done
