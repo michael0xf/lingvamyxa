@@ -710,10 +710,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a") != 0) {
-        return 1;
-    }
-
     if (lm_build_generate_all(built_trans_buffer) != 0) {
         return 1;
     }
