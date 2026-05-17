@@ -303,6 +303,11 @@ This example should be read with five simple structural rules in mind:
        return 1   # two neighboring fields; not "return value 1"
        return: 1  # a return Frame whose receiver consumes value 1
 
+   `return:` has a deliberate double role: inside an executable body it is a
+   runtime return receiver, and at an admitted executable trailer position it
+   may also close the executable definition. `end:` is different. It is only a
+   structural close receiver; it has no ordinary body-level runtime action.
+
 3. Source levels build the tree.
 
    Indentation in relaxed notation, or dots in canonical notation, determines
@@ -3730,7 +3735,7 @@ Variables or names used inside an `fn` or `sub` body do not become arguments aut
 
 7.5. `end:` as General Closing Receiver
 
-`end` is an ordinary receiver/control name used in colon line form. It is analogous to a closing parenthesis for vertical Structures. It has no runtime-return meaning by itself.
+`end` is written with the ordinary colon Frame surface form, but it is not an ordinary executable body receiver. It is analogous to a closing parenthesis for vertical Structures. It has no runtime-return meaning by itself and no body-level runtime action.
 
 The source-level closing form is:
 
@@ -3739,6 +3744,13 @@ The source-level closing form is:
 The bare form `end` and the old-looking form `end <target>` are not valid Lingvamyxa source syntax.
 
 `end:` validates `<target>` against a visible open frame, labelled block or entity block. In the core structural policy, the target matches the current node/receiver name or a visible control label. Multi-word target names must be written as exact quoted identifiers.
+
+Unlike `return: value`, which may be a valid runtime item inside an executable
+body, `end: <target>` is valid only as a structural close from an admitted close
+position. If P0 records `end: <target>` as an ordinary nested Frame because it is
+written inside a body position rather than at a close position, the close
+validation layer must reject it unless an explicit profile defines another
+non-runtime meaning for that receiver.
 
 For `fn`, the canonical explicit close is `end: fn`. A function's value-level name, such as `myFunc`, is not the core closing target for its source frame. A later profile may define semantic-name closing for selected entity descriptors, but that is not the default `fn` rule.
 
@@ -6016,7 +6028,7 @@ Conceptual form:
     L2/L3/L4/L5                level receiver frames
     sub                        receiver that registers subroutine definitions
     fn                         receiver that registers function definitions
-    return                     executable-body return receiver/operator; terminal executable close at definition level
+    return                     executable-body return receiver/operator; also terminal executable close at definition level
     operator                   receiver that registers receivers/operators
     if                         registered receiver, semantics depend on level
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
