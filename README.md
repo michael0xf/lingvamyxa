@@ -167,6 +167,18 @@ From CMake or Qt Creator, use the `runBuildCore.lm0` target. It builds the CMake
 cmake --build --preset run-buildcore
 ```
 
+For the full bootstrap mode, pass `--full` to `buildCore.lm0`. This refreshes the L0 tools first, then configures and builds a separate full CMake profile in `build/full` with `cmake/vcpkg/vcpkg.json`, `LINGVAMYXA_ENABLE_EXTERNAL_DEPS=ON`, and bundled `third_party` libraries enabled. The bundled C libraries keep plain C names in `build/lm0`: `libdecnumber.a` and `libsodium.a`.
+
+```powershell
+C:\Nyasha_Planet\lingvamyxa\build\lm0\buildCore.lm0.exe --full
+```
+
+From Qt Creator, set the CMake cache variable `LINGVAMYXA_BUILDCORE_ARGS` to `--full` and build the `runBuildCore.lm0` target. From the command line, the preset shortcut is:
+
+```powershell
+cmake --build --preset run-buildcore-full
+```
+
 ## Build only the C part
 
 ```bash

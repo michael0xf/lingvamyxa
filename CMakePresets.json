@@ -19,6 +19,16 @@
         "BUILD_LINGVAMYXA_QT_APP": "OFF",
         "LINGVAMYXA_ENABLE_EXTERNAL_DEPS": "OFF"
       }
+    },
+    {
+      "name": "p0-debug-buildcore-full",
+      "displayName": "P0 Debug + buildCore --full",
+      "description": "Lightweight Qt/MinGW configure that passes --full to buildCore when runBuildCore.lm0 is built.",
+      "inherits": "p0-debug",
+      "binaryDir": "${sourceDir}/build/qtcreator-p0-buildcore-full",
+      "cacheVariables": {
+        "LINGVAMYXA_BUILDCORE_ARGS": "--full"
+      }
     }
   ],
   "buildPresets": [
@@ -38,6 +48,14 @@
       "name": "run-buildcore",
       "displayName": "Run buildCore Bootstrap",
       "configurePreset": "p0-debug",
+      "targets": [
+        "runBuildCore.lm0"
+      ]
+    },
+    {
+      "name": "run-buildcore-full",
+      "displayName": "Run buildCore Full Bootstrap",
+      "configurePreset": "p0-debug-buildcore-full",
       "targets": [
         "runBuildCore.lm0"
       ]

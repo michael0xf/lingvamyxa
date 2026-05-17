@@ -30,6 +30,8 @@ option(BUILD_MAKE_LM0 "Build the make.lm0 native build driver executable" ON)
 option(BUILD_BUILD_CORE_LM0 "Build the buildCore.lm0 core build driver executable" ON)
 option(BUILD_LINGVAMYXA_QT_APP "Build the optional Qt Widgets shell" ON)
 option(LINGVAMYXA_ENABLE_EXTERNAL_DEPS "Enable optional runtime/backend dependencies" OFF)
+option(LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY "Register bundled third_party projects in the full build profile" OFF)
+set(LINGVAMYXA_BUILDCORE_ARGS "" CACHE STRING "Arguments passed to build/lm0/buildCore.lm0 by the runBuildCore.lm0 target")
 
 if (BUILD_PRINT_TREE_LM0 AND NOT BUILD_TRANS_LM0)
     message(FATAL_ERROR "BUILD_PRINT_TREE_LM0 requires BUILD_TRANS_LM0 because printTree.lm0 is generated from lm2/printTree/printTree.lm2.")
@@ -59,14 +61,21 @@ if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
 
     # real -> MPFR mpfr_t
     pkg_check_modules(mpfr REQUIRED IMPORTED_TARGET mpfr)
+endif()
 
+set(LM_THIRD_PARTY_TARGETS "")
+
+if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS OR LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY)
     # decimal -> decNumber
-
     set(DECNUMBER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/decNumber/decNumber-icu-368")
 
     add_library(decnumber STATIC
         "${DECNUMBER_DIR}/decContext.c"
         "${DECNUMBER_DIR}/decNumber.c"
+    )
+
+    set_target_properties(decnumber PROPERTIES
+        OUTPUT_NAME "decnumber"
     )
 
     target_include_directories(decnumber
@@ -82,6 +91,120 @@ if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
     target_compile_definitions(decnumber
         PUBLIC
             DECNUMDIGITS=64
+    )
+
+    list(APPEND LM_THIRD_PARTY_TARGETS decnumber)
+endif()
+
+if (LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY)
+    set(LIBSODIUM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libsodium-1.0.22")
+
+    if (NOT EXISTS "${LIBSODIUM_DIR}/src/libsodium/include/sodium.h")
+        message(FATAL_ERROR "Bundled libsodium source was not found: ${LIBSODIUM_DIR}")
+    endif()
+
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium/sodium")
+    configure_file(
+        "${LIBSODIUM_DIR}/builds/msvc/version.h"
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium/sodium/version.h"
+        COPYONLY
+    )
+
+    file(GLOB_RECURSE LIBSODIUM_SOURCES CONFIGURE_DEPENDS
+        "${LIBSODIUM_DIR}/src/libsodium/*.c"
+    )
+
+    add_library(libsodium_vendor STATIC
+        ${LIBSODIUM_SOURCES}
+    )
+
+    set_target_properties(libsodium_vendor PROPERTIES
+        OUTPUT_NAME "sodium"
+    )
+
+    target_include_directories(libsodium_vendor
+        PUBLIC
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium"
+            "${LIBSODIUM_DIR}/src/libsodium/include"
+        PRIVATE
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/libsodium/sodium"
+            "${LIBSODIUM_DIR}/src/libsodium/include/sodium"
+    )
+
+    target_compile_features(libsodium_vendor
+        PUBLIC
+            c_std_99
+    )
+
+    target_compile_definitions(libsodium_vendor
+        PUBLIC
+            SODIUM_STATIC=1
+        PRIVATE
+            CONFIGURED=1
+            DEV_MODE=1
+            HAVE_ATOMIC_OPS=1
+            HAVE_C11_MEMORY_FENCES=1
+            HAVE_GCC_MEMORY_FENCES=1
+            HAVE_INLINE_ASM=1
+            HAVE_INTTYPES_H=1
+            HAVE_STDINT_H=1
+            HAVE_TI_MODE=1
+    )
+
+    if (CMAKE_C_BYTE_ORDER STREQUAL "BIG_ENDIAN")
+        target_compile_definitions(libsodium_vendor PRIVATE NATIVE_BIG_ENDIAN=1)
+    else()
+        target_compile_definitions(libsodium_vendor PRIVATE NATIVE_LITTLE_ENDIAN=1)
+    endif()
+
+    if (WIN32)
+        target_compile_definitions(libsodium_vendor
+            PRIVATE
+                HAVE_RAISE=1
+                HAVE_SYS_PARAM_H=1
+        )
+        target_link_libraries(libsodium_vendor
+            INTERFACE
+                advapi32
+        )
+    endif()
+
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+        target_compile_definitions(libsodium_vendor
+            PRIVATE
+                HAVE_AVX2INTRIN_H=1
+                HAVE_AVX512FINTRIN_H=1
+                HAVE_AVXINTRIN_H=1
+                HAVE_CPUID=1
+                HAVE_EMMINTRIN_H=1
+                HAVE_MMINTRIN_H=1
+                HAVE_PMMINTRIN_H=1
+                HAVE_RDRAND=1
+                HAVE_SMMINTRIN_H=1
+                HAVE_TMMINTRIN_H=1
+                HAVE_WMMINTRIN_H=1
+        )
+    endif()
+
+    if (NOT MSVC)
+        target_compile_options(libsodium_vendor
+            PRIVATE
+                -fvisibility=hidden
+                -fno-strict-aliasing
+                -fno-strict-overflow
+                -fwrapv
+                -flax-vector-conversions
+                -Wno-attributes
+                -Werror=vla
+        )
+    endif()
+
+    list(APPEND LM_THIRD_PARTY_TARGETS libsodium_vendor)
+endif()
+
+if (LM_THIRD_PARTY_TARGETS)
+    add_custom_target(third_party.lm0 ALL
+        DEPENDS ${LM_THIRD_PARTY_TARGETS}
     )
 endif()
 
@@ -225,10 +348,14 @@ if (BUILD_BUILD_CORE_LM0)
     add_custom_target(runBuildCore.lm0
         COMMAND ${CMAKE_COMMAND} -E env
             "LM_CMAKE=${CMAKE_COMMAND}"
+            "LM_CMAKE_GENERATOR=${CMAKE_GENERATOR}"
+            "LM_CMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
             "LM_CC=${CMAKE_C_COMPILER}"
+            "LM_CXX=${CMAKE_CXX_COMPILER}"
             "LM_AR=${CMAKE_AR}"
             "LM_RANLIB=${CMAKE_RANLIB}"
             "${LM0_TRUSTED_DIR}/buildCore.lm0${CMAKE_EXECUTABLE_SUFFIX}"
+            ${LINGVAMYXA_BUILDCORE_ARGS}
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         DEPENDS buildCore.lm0
         COMMENT "Running build/lm0/buildCore.lm0 from the project root"
