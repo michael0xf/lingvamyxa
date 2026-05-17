@@ -26,13 +26,6 @@ lingvamyxa/
       make.lm2
     finalize/
       finalize.lm2
-  lm0/
-    libparser.lm0.a
-    trans.lm0.exe
-    make.lm0.exe
-    finalize.lm0.exe
-    printTree.lm0.exe
-    buildCore.lm0.exe
   qt_app/
     main.cpp
     MainWindow.cpp
@@ -64,10 +57,9 @@ lingvamyxa/
 - `printTree.lm0` is the tiny command-line tree dump app and built L0 executable.
 - `trans.lm0` is the first L2-to-L1 translator executable.
 - `make.lm0` is the first native build driver generated from `lm2/make/make.lm2`.
-- `finalize.lm0` is the post-build installer that copies the freshly built `buildCore.lm0` into `lm0`.
+- `finalize.lm0` is the post-build installer that replaces `.next` tools in `build/lm0`.
 - `buildCore.lm0` is the project build driver compiled from portable L1/C source.
-- `lm0/...` is the trusted current L0 tool layer used to build the next `build/lm0/...`.
-- `build/lm0/...` contains built L0 binaries/libraries.
+- `build/lm0/...` is the trusted current L0 tool layer and the local L0 output directory.
 - `build/lm1/...` is the generated L1 mirror produced from `lm2/...`; it is also the portable source snapshot for the first build on a new platform.
 - `lingvamyxa_qt` is an optional Qt Widgets GUI wrapper.
 
@@ -143,10 +135,12 @@ cmake -S C:\Nyasha_Planet\lingvamyxa `
   -G Ninja `
   -DCMAKE_MAKE_PROGRAM=C:\Qt\Tools\Ninja\ninja.exe `
   -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake `
+  -DVCPKG_MANIFEST_DIR=C:\Nyasha_Planet\lingvamyxa\cmake\vcpkg `
   -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic `
   -DVCPKG_HOST_TRIPLET=x64-mingw-dynamic `
   -DCMAKE_C_COMPILER=C:\Qt\Tools\mingw1310_64\bin\gcc.exe `
   -DCMAKE_CXX_COMPILER=C:\Qt\Tools\mingw1310_64\bin\g++.exe `
+  -DLINGVAMYXA_ENABLE_EXTERNAL_DEPS=ON `
   -DBUILD_LINGVAMYXA_QT_APP=OFF
 ```
 
@@ -161,12 +155,16 @@ C:\Nyasha_Planet\lingvamyxa\build\lm0\printTree.lm0.exe
 
 `buildCore.lm0` refreshes generated L1 sources and rebuilds the L0 tools into `build/lm0`.
 `finalize.lm0` is produced by `buildCore.lm0`, not by the CMake preset.
-It copies ordinary tools into `lm0`, but it does not overwrite the running `lm0/buildCore.lm0.exe`.
-Run `finalize.lm0` after `buildCore.lm0` exits to install the refreshed build driver:
+It builds lock-sensitive tools as `.next` files, then schedules `build/lm0/finalize.lm0` to install them after `buildCore.lm0` exits:
 
 ```powershell
-C:\Nyasha_Planet\lingvamyxa\lm0\buildCore.lm0.exe
-C:\Nyasha_Planet\lingvamyxa\build\lm0\finalize.lm0.exe
+C:\Nyasha_Planet\lingvamyxa\build\lm0\buildCore.lm0.exe
+```
+
+From CMake or Qt Creator, use the `runBuildCore.lm0` target. It builds the CMake `buildCore.lm0` target first, then runs the trusted `build/lm0/buildCore.lm0` from the project root:
+
+```powershell
+cmake --build --preset run-buildcore
 ```
 
 ## Build only the C part

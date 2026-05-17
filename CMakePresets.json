@@ -33,6 +33,14 @@
         "buildCore.lm0",
         "lm2_to_lm1"
       ]
+    },
+    {
+      "name": "run-buildcore",
+      "displayName": "Run buildCore Bootstrap",
+      "configurePreset": "p0-debug",
+      "targets": [
+        "runBuildCore.lm0"
+      ]
     }
   ]
 }

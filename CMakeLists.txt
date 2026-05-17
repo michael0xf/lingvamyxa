@@ -21,7 +21,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
 
-set(LM0_TRUSTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lm0")
+set(LM0_TRUSTED_DIR "${LM0_OUTPUT_DIR}")
 set(LM0_TRUSTED_PARSER_LIB "${LM0_TRUSTED_DIR}/libparser.lm0.a")
 
 option(BUILD_PRINT_TREE_LM0 "Build the printTree.lm0 tree dump executable" ON)
@@ -220,6 +220,20 @@ endif()
 if (BUILD_BUILD_CORE_LM0)
     add_executable(buildCore.lm0
         "${CMAKE_CURRENT_SOURCE_DIR}/lm1/buildCore/buildCore.lm1.c"
+    )
+
+    add_custom_target(runBuildCore.lm0
+        COMMAND ${CMAKE_COMMAND} -E env
+            "LM_CMAKE=${CMAKE_COMMAND}"
+            "LM_CC=${CMAKE_C_COMPILER}"
+            "LM_AR=${CMAKE_AR}"
+            "LM_RANLIB=${CMAKE_RANLIB}"
+            "${LM0_TRUSTED_DIR}/buildCore.lm0${CMAKE_EXECUTABLE_SUFFIX}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DEPENDS buildCore.lm0
+        COMMENT "Running build/lm0/buildCore.lm0 from the project root"
+        USES_TERMINAL
+        VERBATIM
     )
 endif()
 

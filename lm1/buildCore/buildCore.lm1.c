@@ -3,12 +3,74 @@
 #include <string.h>
 
 #ifdef _WIN32
+#include <direct.h>
 #define LM_BUILD_EXE_SUFFIX ".exe"
 #define LM_BUILD_PATH_SEP "\\"
+#define LM_BUILD_CHDIR _chdir
 #else
+#include <unistd.h>
 #define LM_BUILD_EXE_SUFFIX ""
 #define LM_BUILD_PATH_SEP "/"
+#define LM_BUILD_CHDIR chdir
 #endif
+
+static int lm_build_is_path_separator(char value) {
+    return value == '/' || value == '\\';
+}
+
+static int lm_build_trim_last_path_part(char *path) {
+    size_t length;
+
+    length = strlen(path);
+    while (length > 0U && lm_build_is_path_separator(path[length - 1U])) {
+        path[length - 1U] = '\0';
+        --length;
+    }
+
+    while (length > 0U) {
+        --length;
+        if (lm_build_is_path_separator(path[length])) {
+            path[length] = '\0';
+            return 0;
+        }
+    }
+
+    path[0] = '\0';
+    return 0;
+}
+
+static int lm_build_enter_project_root(const char *program_path) {
+    char root_path[1024];
+
+    if (program_path == NULL || program_path[0] == '\0') {
+        return 0;
+    }
+    if (strlen(program_path) >= sizeof(root_path)) {
+        fprintf(stderr, "buildCore.lm0: executable path is too long\n");
+        return 1;
+    }
+
+    strcpy(root_path, program_path);
+
+    if (strchr(root_path, '/') == NULL && strchr(root_path, '\\') == NULL) {
+        return 0;
+    }
+
+    lm_build_trim_last_path_part(root_path);
+    lm_build_trim_last_path_part(root_path);
+    lm_build_trim_last_path_part(root_path);
+
+    if (root_path[0] == '\0') {
+        return 0;
+    }
+
+    if (LM_BUILD_CHDIR(root_path) != 0) {
+        fprintf(stderr, "buildCore.lm0: cannot enter project root %s\n", root_path);
+        return 1;
+    }
+
+    return 0;
+}
 
 static const char *lm_build_env_or_default(const char *name, const char *fallback) {
     const char *value;
@@ -155,7 +217,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/make/make.lm1.c\" -o \"build/lm0/make.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/make/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
@@ -185,71 +247,40 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic \"lm1/buildCore/buildCore.lm1.c\" -o \"build/lm0/buildCore.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic \"lm1/buildCore/buildCore.lm1.c\" -o \"build/lm0/buildCore.next.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     return lm_build_make(make_tool, "link", command);
 }
 
-static int lm_build_copy_to_trusted_lm0(const char *make_tool) {
-    char source[128];
-    char output[128];
-    char args[320];
+static int lm_build_defer_finalize(void) {
+    char command[256];
 
-    if (lm_build_make(make_tool, "mkdir", "\"lm0\"") != 0) {
-        return 1;
-    }
-
-    if (lm_build_make(make_tool, "copy", "\"build/lm0/libparser.lm0.a\" \"lm0/libparser.lm0.a\"") != 0) {
-        return 1;
-    }
-
-    snprintf(source, sizeof(source), "\"build/lm0/trans.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(output, sizeof(output), "\"lm0/trans.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(args, sizeof(args), "%s %s", source, output);
-    if (lm_build_make(make_tool, "copy", args) != 0) {
-        return 1;
-    }
-
-    snprintf(source, sizeof(source), "\"build/lm0/make.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(output, sizeof(output), "\"lm0/make.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(args, sizeof(args), "%s %s", source, output);
-    if (lm_build_make(make_tool, "copy", args) != 0) {
-        return 1;
-    }
-
-    snprintf(source, sizeof(source), "\"build/lm0/printTree.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(output, sizeof(output), "\"lm0/printTree.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(args, sizeof(args), "%s %s", source, output);
-    if (lm_build_make(make_tool, "copy", args) != 0) {
-        return 1;
-    }
-
-    snprintf(source, sizeof(source), "\"build/lm0/finalize.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(output, sizeof(output), "\"lm0/finalize.lm0%s\"", LM_BUILD_EXE_SUFFIX);
-    snprintf(args, sizeof(args), "%s %s", source, output);
-    return lm_build_make(make_tool, "copy", args);
+    snprintf(
+        command,
+        sizeof(command),
+        "build%slm0%sfinalize.lm0%s --defer",
+        LM_BUILD_PATH_SEP,
+        LM_BUILD_PATH_SEP,
+        LM_BUILD_EXE_SUFFIX
+    );
+    return lm_build_run(command);
 }
 
 int main(int argc, char **argv) {
     const char *trusted_make;
     char trusted_make_buffer[128];
-    char built_make_buffer[128];
     char built_trans_buffer[128];
 
     (void)argc;
-    (void)argv;
+
+    if (lm_build_enter_project_root(argv[0]) != 0) {
+        return 1;
+    }
 
     snprintf(
         trusted_make_buffer,
         sizeof(trusted_make_buffer),
-        "lm0%smake.lm0%s",
-        LM_BUILD_PATH_SEP,
-        LM_BUILD_EXE_SUFFIX
-    );
-    snprintf(
-        built_make_buffer,
-        sizeof(built_make_buffer),
         "build%slm0%smake.lm0%s",
         LM_BUILD_PATH_SEP,
         LM_BUILD_PATH_SEP,
@@ -266,11 +297,11 @@ int main(int argc, char **argv) {
 
     trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
 
-    if (lm_build_make(trusted_make, "mkdir", "\"build/lm1/trans\" \"build/lm1/parser\" \"build/lm1/printTree\" \"build/lm1/finalize\" \"build/lm1/make\" \"build/obj\" \"build/lm0\" \"lm0\"") != 0) {
+    if (lm_build_make(trusted_make, "mkdir", "\"build/lm1/trans\" \"build/lm1/parser\" \"build/lm1/printTree\" \"build/lm1/finalize\" \"build/lm1/make\" \"build/obj\" \"build/lm0\"") != 0) {
         return 1;
     }
 
-    if (lm_build_compile_trans(trusted_make, "lm0/libparser.lm0.a") != 0) {
+    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a") != 0) {
         return 1;
     }
 
@@ -302,10 +333,5 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (lm_build_copy_to_trusted_lm0(built_make_buffer) != 0) {
-        return 1;
-    }
-
-    printf("buildCore.lm0: run build/lm0/finalize.lm0%s after buildCore exits to install the refreshed buildCore tool.\n", LM_BUILD_EXE_SUFFIX);
-    return 0;
+    return lm_build_defer_finalize();
 }
