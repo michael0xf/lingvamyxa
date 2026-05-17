@@ -90,6 +90,7 @@ struct LmP0Field {
 typedef struct LmP0Document LmP0Document;
 
 int lm_p0_parse_string(const char *source, LmP0Document **out_document);
+int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **out_document);
 int lm_p0_parse_file(const char *path, LmP0Document **out_document);
 
 void lm_p0_document_destroy(LmP0Document *document);

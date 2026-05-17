@@ -37,7 +37,7 @@ Lingvamyxa is based on the following model:
     The core parser has one structural syntax.
     Operator tokens that cannot be namespace identifiers are parsed as operator fields without `:`.
     Whitespace-bounded operator forms are accepted directly by the core structural parser.
-    Compact non-quoted spellings with invalid bare-name characters may be refined into ordinary fields and operator-token fields by the same parsing pipeline.
+    Compact non-quoted spellings with invalid bare-name characters are split into ordinary fields and operator-token fields by the same structural tokenization pipeline.
     Levels restrict the active receiver/operator set.
 
 The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver or subroutine consumes a Structure and assigns typed semantics to it.
@@ -676,11 +676,24 @@ The first bare form is intentionally narrower than SQLite-style exact quoted ide
 
 The second identifier form is the exact quoted identifier. It is intended for SQLite names, external schemas, generated bindings, multi-word names and unusual names that are not representable as bare Lingvamyxa identifiers.
 
-An exact quoted identifier is delimited by backtick characters and follows SQLite-compatible grave-accent quoted identifier content rules:
+An exact quoted identifier is delimited by backtick characters and follows the
+SQLite-compatible grave-accent identifier rule:
 
     `exact name`
 
-It starts with a backtick, continues with zero or more non-zero characters or escaped backtick pairs, and terminates at a backtick that is not part of an escaped pair. It is a namespace identifier/name, not a text/string literal. Its contents are taken as the exact identifier string after quote unescaping. No whitespace normalization is applied inside backticks. Commas, dots, spaces, physical line breaks, indentation after those line breaks, numeric-looking text, reserved words and operator characters inside the backticks are part of the identifier.
+It starts with a backtick, preserves raw identifier content, treats two
+consecutive backticks as one literal backtick, and terminates at a backtick that
+is not part of such a doubled pair. It is a namespace identifier/name, not a
+text/string literal. Its contents are taken as the exact identifier string after
+backtick-pair unescaping. No whitespace normalization is applied inside
+backticks. Commas, dots, spaces, physical line breaks, indentation after those
+line breaks, numeric-looking text, reserved words and operator characters inside
+the backticks are part of the identifier.
+
+The NUL character U+0000 is not valid inside an exact quoted identifier. This
+follows the SQLite tokenizer model for grave-accent quoted identifiers. A source
+file containing a NUL byte before the closing backtick is a syntax error, not an
+identifier containing an embedded zero character.
 
 Examples:
 
@@ -789,7 +802,7 @@ Lingvamyxa also supports Python-like triple-quoted text/string literals. They ar
     """text"""
     '''text'''
 
-A Python-like string starts with exactly three double quotes or exactly three single quotes in ordinary token position and closes at the next unescaped matching triple delimiter. It may appear inline, inside a short form, inside a parenthesized form or as a vertical child item with ordinary source-level indentation.
+A Python-like string starts with exactly three double quotes or exactly three single quotes in ordinary token position. It closes at the next matching run of exactly three opening-quote characters. Longer same-quote runs inside the literal are content by the quote-run shortening rule below. It may appear inline, inside a short form, inside a parenthesized form or as a vertical child item with ordinary source-level indentation.
 
 Physical line breaks inside the literal are string content. Source levels, `#` comments, colons, commas, parentheses, dash delimiters, tail cutters and other structural syntax are not recognized inside the literal before the matching closing delimiter is reached.
 
@@ -859,6 +872,14 @@ A block string fence is recognized only when the physical line begins at column 
 The opening fence records the exact run length, exactly like a raw file-comment fence records the `*` run length. The block string is closed only by a column-0 fence line with the same `=` run length. A fence-looking line inside the block whose run length does not match the opener is ordinary string content, not a nested opener and not a closer.
 
 The opening and closing fence lines do not contribute characters to the string value. The physical lines between them are the string content. Physical line breaks between content lines are preserved as newline characters after source newline normalization. Source levels, comments, operator/expression structures, closing forms and ordinary structural syntax are not recognized inside the block string content.
+
+The non-ANSI-C text forms `"""..."""`, `'''...'''` and `===...===` are raw text
+forms. They do not use ANSI C escapes, line splicing or adjacent string
+concatenation. The two inline triple-quoted forms have exactly one delimiter
+content rule: a same-quote run of length N greater than 3 contributes N - 1 quote
+characters to the decoded value. The column-0 `=` block string has no quote-run
+shortening rule; all content lines between the matching fence lines are raw text
+after source newline normalization.
 
 Examples:
 
@@ -1133,7 +1154,7 @@ normalizes structurally as:
 
     print(1, +, 2)
 
-Here `1` and `2` are value fields. Because there is no colon after `1`, `1` is not a receiver/head. The token `+` is an operator field. A later receiver/operator consumer may interpret `+` as an infix operator and honestly take the neighboring fields from the Structure as its left and right operands.
+Here `1` and `2` are value fields. Because there is no colon after `1`, `1` is not a receiver/head. The token `+` is an operator field. A later receiver/operator consumer may interpret `+` as an infix operator and consume the neighboring fields from the Structure as its left and right operands.
 
 Whitespace remains structural field separation:
 
@@ -1147,11 +1168,14 @@ A compact spelling chunk such as:
 
     print: a+b c
 
-may be submitted to compact spelling refinement by a profile that admits implied token boundaries. In that profile, the non-quoted chunk `a+b` contains a character that is not valid inside a bare identifier, so the same parsing pipeline may refine it as if `+` had token boundaries around it:
+normalizes structurally as:
 
     print(a, +, b, c)
 
-This refinement is not a second parser and not a parallel syntax. The token `+` is simply an operator-token field, and a later receiver/operator consumer may consume neighboring fields according to the active profile. A minimal bootstrap profile may instead require explicit whitespace around operators.
+The compact non-quoted chunk `a+b` contains a character that is not valid inside
+a bare identifier, so P0 splits it as if `+` had token boundaries around it. The
+token `+` is simply an operator-token field, and a later receiver/operator
+consumer may consume neighboring fields according to the active profile.
 
 To keep an operator-looking spelling as an exact name, use an exact quoted identifier:
 
@@ -1427,7 +1451,10 @@ A physical source line at level greater than N + 1 belongs to the immediately pr
 
 A physical source line at a smaller level than the current open child resumes the parent level and starts a sibling item there. The smaller-level line itself is the level delimiter. If the next item starts at the same level as the current anonymous/implicit section, use a canonical dotted delimiter line or relaxed `---` at that level.
 
-Physical empty lines are formatting whitespace unless a future profile gives them a diagnostic/style meaning. They are not the general structural close mechanism and they do not replace a required same-level delimiter.
+Physical empty lines are level-0 structural boundary events. They close an open
+level-1 vertical tail by the ordinary source-level decrease to 0. They do not
+open Structures, do not separate same-level anonymous siblings below level 1,
+and do not replace a required same-level delimiter.
 
 4.5.1. Canonical Source-Level Delimiters
 
@@ -2209,7 +2236,7 @@ Because there is no colon after `1`, `1` is a value field, not a receiver/head.
 The `+` operator may consume the neighboring values supplied by the
 Structure.
 
-6.2. Compact Spellings and Same-Pipeline Token-Boundary Refinement
+6.2. Compact Spellings and P0 Token Boundaries
 
 The core parser always accepts whitespace-bounded operator spellings. With explicit whitespace:
 
@@ -2223,13 +2250,15 @@ A compact spelling such as:
 
     print: 1+2
 
-contains the compact non-quoted chunk `1+2`. A profile may submit such a chunk to token-boundary refinement. Because `+` is not valid inside a portable bare identifier, the refinement may produce the same structural form:
+contains the compact non-quoted chunk `1+2`. Because `+` is not valid inside a
+portable bare identifier, P0 inserts token boundaries around the operator
+spelling and produces the same structural form:
 
     print(1, +, 2)
 
-This refinement belongs to the same structural parsing pipeline. It is not a second parser and not a parallel operator/expression syntax. A minimal bootstrap profile may reject the compact spelling and require explicit whitespace around operators.
-
-The same refinement principle may apply to compact sequences such as `a+b*c==d` and `arr[i+1]` if the active profile defines those operator and indexing token boundaries. They become ordinary field sequences containing value/name fields and operator-token fields.
+The same rule applies to compact sequences such as `a+b*c==d` and `arr[i+1]`:
+they become ordinary field sequences containing value/name fields and
+operator-token fields.
 
 Exact quoted identifiers are never split this way. For example:
 
@@ -3553,7 +3582,7 @@ If a callable binding is mutable, it may be updated by the same head/update form
 
 When `otherCallable` resolves to a callable value with a compatible callable Structure/signature, the binding `i` receives that callable value. Source semantics does not require a separate function-pointer syntax for this operation.
 
-For a callable with no required arguments, value-like consumption may be receiver/profile-defined. For example, a parser method or receiver may lower a read of `i` to a zero-argument call `i()`, and a write/update of `i` to a one-argument call or binding update `i(newValue)`, depending on the resolved binding and active profile.
+For a callable with no required arguments, value-like consumption may be receiver/profile-defined. For example, an operator method or receiver may lower a read of `i` to a zero-argument call `i()`, and a write/update of `i` to a one-argument call or binding update `i(newValue)`, depending on the resolved binding and active profile.
 
 The exact mutability, compatibility and callable-signature rules are part of the execution-model and type/model specifications. The structural core only requires that callable values are ordinary namespace values and that the same head/update surface form is used after resolution.
 
@@ -3932,11 +3961,17 @@ The default ANSI C / C99 bootstrap profile may use the following implementation 
 
     i/u      -> C integer          -> no vcpkg
     bool     -> C int / bool       -> no vcpkg
-    bigint   -> GMP mpz_t          -> vcpkg: gmp,  CMake: `PkgConfig::gmp`
-    real     -> MPFR mpfr_t        -> vcpkg: mpfr, CMake: `PkgConfig::mpfr`
-    decimal  -> decNumber         -> third_party\decNumber\decNumber-icu-368\
-    SQL      -> SQLite            -> vcpkg: sqlite3
-    Regex    -> PCRE2             -> vcpkg: pcre2
+    bigint   -> GMP mpz_t          -> vendored `third_party/gmp.zip`
+    real     -> MPFR mpfr_t        -> vendored `third_party/mpfr.zip`
+    decimal  -> decNumber         -> vendored `third_party/decNumber.zip`
+    SQL      -> SQLite            -> vendored `third_party/sqlite.zip`
+    Regex    -> PCRE2             -> vendored `third_party/pcre2.zip`
+
+The default project bootstrap keeps third-party source archives under
+`third_party/*.zip`. A full local build expands them into `build/third_party/`
+and emits static libraries into `build/libs/`. `vcpkg` may be used as a
+download/cache helper for upstream archives, but the default build does not
+depend on live package-manager libraries.
 
 The `i/u` family denotes implementation-profile integer types over C integer storage. `bigint`, `real`, `decimal`, `SQL` and `Regex` are ordinary names/receivers/descriptors in the shared namespace when the active profile registers them. Their physical representation and linked libraries belong to the selected L1/runtime profile.
 
@@ -5451,9 +5486,10 @@ This grammar sketch describes the structural parser only. It does not define fin
                             computed by the indentation-stack rule.
 
     empty_line          ::= trailing_horizontal_space newline
-                            formatting whitespace; not a structural close
-                            token and not a replacement for a required
-                            same-level delimiter
+                            level-0 structural boundary event;
+                            closes an open level-1 vertical tail by ordinary
+                            source-level decrease, but is not a same-level
+                            delimiter below level 1
 
     line_content        ::= dot_only_marker [ comment_body ]
                           | comment_body
@@ -5857,7 +5893,7 @@ Conceptual form:
                                close/open/separator behavior follows from neighboring source levels
     smaller-level source line  ordinary source-level cut/trailer; completes all open Structures above the smaller level
     same-parent-level line     ordinary source-level cut for the previous child frame and start of the next sibling item
-    empty line                 formatting whitespace, not a structural close token
+    empty line                 level-0 structural boundary; closes an open level-1 vertical tail
     #                          line comment marker; ignores text to the end of the physical line
     %                          disabled item/block marker; syntax is still parsed and checked
     ***...                     column-0 raw file comment fence, 3..80 `*` characters; closing fence must have the same length; syntax inside is ignored
@@ -6266,7 +6302,7 @@ Single-line compact body form:
 
     for: int(i, 0) (i < n) i++ print(i)
 
-In this form, `print(i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as a parser method.
+In this form, `print(i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as an operator-token form.
 
 Range-style example:
 
@@ -7365,7 +7401,7 @@ Examples:
 
 After resolution, the form may update mutable storage, update an addressable field/index slot, or consume a callable/receiver binding. This is compile-time resolution, not a separate assignment syntax.
 
-Parser methods such as `++i`, `--i`, `i++` and `i--` are not mandatory source syntax in the minimal L2 set. A profile may register them as compact parser forms that lower to ordinary read-update-write sequences using the same head/update form.
+Operator methods such as `++i`, `--i`, `i++` and `i--` are not mandatory source syntax in the minimal L2 set. A profile may register them as compact operator-token forms that lower to ordinary read-update-write sequences using the same head/update form.
 
 28.5. Minimal L2 Control Receivers
 
@@ -10371,7 +10407,7 @@ a parser exception.
 The important rule is:
 
     Lmx representation is data.
-    P0 structural parsing and same-pipeline refinement build Structures.
+    P0 structural parsing and operator-tokenization build Structures.
     Type receivers and validators grant typed meaning.
 
 Therefore `fromLmx` is not Java-style `fromString`. It is a structural import
@@ -10831,7 +10867,7 @@ type/validator/security, а не parser exception.
 Главное правило:
 
     Lmx representation is data.
-    P0 structural parsing and same-pipeline refinement build Structures.
+    P0 structural parsing and operator-tokenization build Structures.
     Type receivers and validators grant typed meaning.
 
 Поэтому `fromLmx` - это не Java-style `fromString`. Это structural import path,
@@ -11820,8 +11856,9 @@ It is a way to attach validated authority to an L5 flow.
 
 ---ANSI C---
 The default ANSI C / C99 security substrate uses the bundled libsodium source
-tree, vendored under `third_party/libsodium-1.0.22/`. It is a vendored,
-verified source dependency, not a live package-manager dependency.
+archive, vendored as `third_party/libsodium.zip` and expanded into
+`build/third_party/` by the full local build. It is a vendored, verified source
+dependency, not a live package-manager dependency.
 
 The runtime must call `sodium_init()` once before using the security substrate.
 
@@ -12195,8 +12232,9 @@ flow.
 
 ---ANSI C---
 Default ANSI C / C99 security substrate использует bundled libsodium source
-tree, импортированный в `third_party/libsodium-1.0.22/`. Это vendored,
-проверенная source dependency, а не живая package-manager dependency.
+archive, импортированный как `third_party/libsodium.zip` и распаковываемый в
+`build/third_party/` полной локальной сборкой. Это vendored, проверенная source
+dependency, а не живая package-manager dependency.
 
 Runtime должен вызвать `sodium_init()` один раз перед использованием security
 substrate.

@@ -1414,6 +1414,20 @@ static int lm_p0_scan_quoted(
                 return 0;
             }
         }
+        if (quote == '`' && text[i] == '\0') {
+            size_t diagnostic_line;
+            size_t diagnostic_column;
+
+            lm_p0_position_in_slice(text, length, i, line, base_column, &diagnostic_line, &diagnostic_column);
+            lm_p0_set_diagnostic(
+                document,
+                30,
+                diagnostic_line,
+                diagnostic_column,
+                "NUL byte in exact quoted identifier"
+            );
+            return 0;
+        }
         if (quote == '`' && text[i] == '`' && i + 1U < length && text[i + 1U] == '`') {
             i += 2U;
             continue;
@@ -1516,7 +1530,14 @@ static int lm_p0_find_matching_paren(
     return 0;
 }
 
-static int lm_p0_find_colon(const char *text, size_t length, size_t *colon_index) {
+static int lm_p0_find_colon(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t *colon_index
+) {
     size_t i;
     size_t depth;
 
@@ -1545,6 +1566,20 @@ static int lm_p0_find_colon(const char *text, size_t length, size_t *colon_index
                 if (quote == '`' && text[i] == '`' && i + 1U < length && text[i + 1U] == '`') {
                     i += 2U;
                     continue;
+                }
+                if (quote == '`' && text[i] == '\0') {
+                    size_t diagnostic_line;
+                    size_t diagnostic_column;
+
+                    lm_p0_position_in_slice(text, length, i, line, column, &diagnostic_line, &diagnostic_column);
+                    lm_p0_set_diagnostic(
+                        document,
+                        30,
+                        diagnostic_line,
+                        diagnostic_column,
+                        "NUL byte in exact quoted identifier"
+                    );
+                    return -1;
                 }
                 if (text[i++] == quote) {
                     break;
@@ -1921,7 +1956,19 @@ static LmP0Node *lm_p0_parse_line_item(
     size_t colon_index;
     LmP0Node *node;
 
-    if (lm_p0_find_colon(text, length, &colon_index)) {
+    {
+        int colon_status;
+
+        colon_status = lm_p0_find_colon(document, text, length, line, column, &colon_index);
+        if (colon_status < 0) {
+            return NULL;
+        }
+        if (colon_status == 0) {
+            colon_index = length;
+        }
+    }
+
+    if (colon_index < length) {
         size_t head_length;
         size_t body_start;
 
@@ -2210,7 +2257,19 @@ static int lm_p0_parse_trailer_item(
 
     *out_body = NULL;
 
-    if (lm_p0_find_colon(text, length, &colon_index)) {
+    {
+        int colon_status;
+
+        colon_status = lm_p0_find_colon(document, text, length, line, column, &colon_index);
+        if (colon_status < 0) {
+            return 0;
+        }
+        if (colon_status == 0) {
+            colon_index = length;
+        }
+    }
+
+    if (colon_index < length) {
         spelling_length = colon_index;
         while (spelling_length > 0U && lm_p0_is_horizontal_space(text[spelling_length - 1U])) {
             --spelling_length;
@@ -3396,7 +3455,11 @@ static int lm_p0_validate_nonempty_colon_frames_in_structure(
     return 1;
 }
 
-int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
+int lm_p0_parse_bytes(
+    const char *source,
+    size_t source_length,
+    LmP0Document **out_document
+) {
     LmP0Document *document;
 
     if (out_document == NULL) {
@@ -3411,9 +3474,10 @@ int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
 
     if (source == NULL) {
         source = "";
+        source_length = 0U;
     }
 
-    document->source_length = strlen(source);
+    document->source_length = source_length;
     document->source = lm_p0_copy_bytes(source, document->source_length);
     if (document->source == NULL) {
         free(document);
@@ -3428,6 +3492,13 @@ int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
 
     *out_document = document;
     return document->diagnostic.code == 0 ? 0 : document->diagnostic.code;
+}
+
+int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
+    if (source == NULL) {
+        source = "";
+    }
+    return lm_p0_parse_bytes(source, strlen(source), out_document);
 }
 
 int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
@@ -3472,9 +3543,9 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
         free(buffer);
         return 1;
     }
-    buffer[size] = '\0';
+    buffer[read_size] = '\0';
 
-    status = lm_p0_parse_string(buffer, out_document);
+    status = lm_p0_parse_bytes(buffer, read_size, out_document);
     free(buffer);
     return status;
 }

@@ -210,15 +210,15 @@ P0 atom tokens:
     PYTHON_STRING_LITERAL
         Python-like triple-quoted string spelling. It starts with exactly three
         double quotes or exactly three single quotes in ordinary token position
-        and closes at the next unescaped matching triple delimiter. Physical
-        line breaks inside the literal are string content. `#`, `:`, `,`, `(`,
-        `)`, dash fences, source levels and tail cutters are not recognized
-        inside the literal before the closing delimiter. Backslash is ordinary
-        raw text in this literal form. A run of exactly three matching quote
-        characters closes the literal; a run of four or more matching quote
-        characters is literal content and value decoding emits one fewer quote
-        character than the source run. After the closing triple delimiter, the
-        same field-boundary rule applies. P0 preserves source spelling.
+        and closes at the next matching run of exactly three opening-quote
+        characters. Physical line breaks inside the literal are string content.
+        `#`, `:`, `,`, `(`, `)`, dash fences, source levels and tail cutters are
+        not recognized inside the literal before the closing delimiter.
+        Backslash is ordinary raw text in this literal form. A run of four or
+        more matching quote characters is literal content and value decoding
+        emits one fewer quote character than the source run. After the closing
+        triple delimiter, the same field-boundary rule applies. P0 preserves
+        source spelling.
 
     CHARACTER_CONSTANT
         ANSI C / C99 single-quoted character constant spelling. It is a numeric
@@ -229,15 +229,24 @@ P0 atom tokens:
 
     EXACT_IDENTIFIER
         Backtick-delimited exact identifier using SQLite-compatible
-        grave-accent quoted identifier content rules: zero or more non-zero
-        characters and/or escaped backtick pairs before the closing backtick.
-        Two backticks inside the spelling represent one literal backtick.
+        grave-accent quoted identifier content rules: raw identifier content
+        up to a closing backtick that is not part of a doubled pair. Two
+        backticks inside the spelling represent one literal backtick. U+0000 /
+        NUL is not valid inside the identifier; a NUL byte before the closing
+        backtick is a syntax error.
         Physical newlines inside an exact identifier follow SQLite-style quoted
         identifier behavior: the newline and any following indentation are
         ordinary identifier content and are preserved exactly. Source-level
         events, comments and structural punctuation are not recognized inside
         the exact identifier before the closing backtick.
         After the closing backtick, the same field-boundary rule applies.
+
+    BLOCK_STRING_LITERAL
+        Column-0 `=` fence string. This is a raw text form like
+        PYTHON_STRING_LITERAL, but it has no quote-run shortening rule. The
+        opening and closing fence lines are not content; all physical lines
+        between the matching fences are content after source newline
+        normalization.
 
     BARE_WORD
         Portable core form:
