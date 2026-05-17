@@ -50,7 +50,7 @@ fi
 "$LM_CMAKE" -E make_directory build/obj
 
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c "$parser_source" -o build/obj/parser.lm1.o
-"$LM_AR" qc build/lm0/libparser.lm0.a build/obj/parser.lm1.o
+"$LM_AR" rcs build/lm0/libparser.lm0.a build/obj/parser.lm1.o
 "$LM_RANLIB" build/lm0/libparser.lm0.a
 
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "$trans_source" build/lm0/libparser.lm0.a -o build/lm0/trans.lm0

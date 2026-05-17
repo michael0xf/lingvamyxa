@@ -1,0 +1,4 @@
+print: a+b*c==d
+print: arr[i+1]
+print: c.printf "%d" n
+print: `a+b` "x+y"

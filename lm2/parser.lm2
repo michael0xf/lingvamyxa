@@ -856,6 +856,266 @@ static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, 
     return 1;
 }
 
+static int lm_p0_is_bare_identifier_start(char c) {
+    unsigned char value;
+
+    value = (unsigned char)c;
+    return isalpha(value) || c == '_';
+}
+
+static int lm_p0_is_bare_identifier_rest(char c) {
+    unsigned char value;
+
+    value = (unsigned char)c;
+    return isalnum(value) || c == '_';
+}
+
+static int lm_p0_is_hex_digit(char c) {
+    unsigned char value;
+
+    value = (unsigned char)c;
+    return isxdigit(value) != 0;
+}
+
+static int lm_p0_is_decimal_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+static int lm_p0_scan_number_token(const char *text, size_t end, size_t start, size_t *out_end) {
+    size_t i;
+    int saw_digit;
+
+    i = start;
+    saw_digit = 0;
+
+    if (i + 1U < end && text[i] == '0' && (text[i + 1U] == 'x' || text[i + 1U] == 'X')) {
+        i += 2U;
+        while (i < end && lm_p0_is_hex_digit(text[i])) {
+            saw_digit = 1;
+            ++i;
+        }
+        if (i < end && text[i] == '.') {
+            ++i;
+            while (i < end && lm_p0_is_hex_digit(text[i])) {
+                saw_digit = 1;
+                ++i;
+            }
+        }
+        if (saw_digit && i < end && (text[i] == 'p' || text[i] == 'P')) {
+            size_t exponent_start;
+
+            exponent_start = i;
+            ++i;
+            if (i < end && (text[i] == '+' || text[i] == '-')) {
+                ++i;
+            }
+            if (i < end && lm_p0_is_decimal_digit(text[i])) {
+                while (i < end && lm_p0_is_decimal_digit(text[i])) {
+                    ++i;
+                }
+            } else {
+                i = exponent_start;
+            }
+        }
+        while (i < end && lm_p0_is_bare_identifier_rest(text[i])) {
+            ++i;
+        }
+        *out_end = saw_digit ? i : start + 1U;
+        return 1;
+    }
+
+    while (i < end && lm_p0_is_decimal_digit(text[i])) {
+        saw_digit = 1;
+        ++i;
+    }
+    if (i < end && text[i] == '.') {
+        ++i;
+        while (i < end && lm_p0_is_decimal_digit(text[i])) {
+            saw_digit = 1;
+            ++i;
+        }
+    }
+    if (saw_digit && i < end && (text[i] == 'e' || text[i] == 'E')) {
+        size_t exponent_start;
+
+        exponent_start = i;
+        ++i;
+        if (i < end && (text[i] == '+' || text[i] == '-')) {
+            ++i;
+        }
+        if (i < end && lm_p0_is_decimal_digit(text[i])) {
+            while (i < end && lm_p0_is_decimal_digit(text[i])) {
+                ++i;
+            }
+        } else {
+            i = exponent_start;
+        }
+    }
+    while (i < end && lm_p0_is_bare_identifier_rest(text[i])) {
+        ++i;
+    }
+
+    *out_end = saw_digit ? i : start;
+    return saw_digit;
+}
+
+static size_t lm_p0_scan_c_char_token(const char *text, size_t end, size_t start) {
+    size_t i;
+
+    if (start >= end || text[start] != '\'') {
+        return start;
+    }
+
+    i = start + 1U;
+    while (i < end) {
+        if (text[i] == '\\' && i + 1U < end) {
+            i += 2U;
+            continue;
+        }
+        if (text[i] == '\'') {
+            return i + 1U;
+        }
+        if (lm_p0_is_line_break(text[i])) {
+            return start + 1U;
+        }
+        ++i;
+    }
+
+    return start + 1U;
+}
+
+static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end, size_t start) {
+    size_t i;
+
+    if (start >= end) {
+        return start;
+    }
+
+    if (lm_p0_is_bare_identifier_start(text[start])) {
+        i = start + 1U;
+        while (i < end && lm_p0_is_bare_identifier_rest(text[i])) {
+            ++i;
+        }
+        if (
+            i == start + 1U &&
+            text[start] == 'c' &&
+            i + 1U < end &&
+            text[i] == '.' &&
+            lm_p0_is_bare_identifier_start(text[i + 1U])
+        ) {
+            i += 2U;
+            while (i < end && lm_p0_is_bare_identifier_rest(text[i])) {
+                ++i;
+            }
+        }
+        return i;
+    }
+
+    if (lm_p0_is_decimal_digit(text[start])) {
+        size_t number_end;
+
+        if (lm_p0_scan_number_token(text, end, start, &number_end)) {
+            return number_end;
+        }
+    }
+
+    if (text[start] == '\'' && !lm_p0_starts_python_string(text, end, start)) {
+        return lm_p0_scan_c_char_token(text, end, start);
+    }
+
+    if (start + 1U < end) {
+        char first;
+        char second;
+
+        first = text[start];
+        second = text[start + 1U];
+        if (
+            (first == '=' && second == '=') ||
+            (first == '!' && second == '=') ||
+            (first == '<' && second == '=') ||
+            (first == '>' && second == '=') ||
+            (first == '&' && second == '&') ||
+            (first == '|' && second == '|') ||
+            (first == '+' && second == '+') ||
+            (first == '-' && second == '-') ||
+            (first == '-' && second == '>') ||
+            (first == '<' && second == '<') ||
+            (first == '>' && second == '>') ||
+            (first == '[' && second == ']')
+        ) {
+            return start + 2U;
+        }
+        if (first == '@' && second == '@') {
+            size_t at_end;
+
+            at_end = start + 2U;
+            while (at_end < end && text[at_end] == '@') {
+                ++at_end;
+            }
+            return at_end;
+        }
+    }
+
+    return start + 1U;
+}
+
+static int lm_p0_append_atom_slice(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t offset,
+    size_t start,
+    size_t end
+) {
+    LmP0Node *node;
+
+    node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
+    if (node == NULL) {
+        return 0;
+    }
+    node->as.atom.data = text + start;
+    node->as.atom.length = end - start;
+    node->span.line = line;
+    lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
+    node->span.offset = offset + start;
+    node->span.length = end - start;
+
+    return lm_p0_append_field(document, structure, node);
+}
+
+static int lm_p0_append_compact_atom_pieces(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t offset,
+    size_t start,
+    size_t end
+) {
+    size_t i;
+
+    i = start;
+    while (i < end) {
+        size_t piece_end;
+
+        piece_end = lm_p0_scan_compact_atom_piece(text, end, i);
+        if (piece_end <= i) {
+            piece_end = i + 1U;
+        }
+        if (!lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, i, piece_end)) {
+            return 0;
+        }
+        i = piece_end;
+    }
+
+    return 1;
+}
+
 static void lm_p0_free_node(LmP0Node *node);
 static void lm_p0_free_structure_fields(LmP0Structure *structure);
 
@@ -1560,6 +1820,23 @@ static int lm_p0_parse_fields_until_with_layout(
                 }
                 if (quoted_head && !lm_p0_require_quoted_token_boundary(document, text, length, head_end, line, column)) {
                     return 0;
+                }
+                if (!quoted_head) {
+                    i = head_end;
+                    if (!lm_p0_append_compact_atom_pieces(
+                            document,
+                            structure,
+                            text,
+                            length,
+                            line,
+                            column,
+                            offset,
+                            start,
+                            head_end
+                        )) {
+                        return 0;
+                    }
+                    continue;
                 }
                 node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
                 if (node == NULL) {

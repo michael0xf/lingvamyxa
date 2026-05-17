@@ -68,7 +68,7 @@ if not exist "%LM_RANLIB%" (
 "%LM_CMAKE%" -E make_directory build\obj || exit /b 1
 
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c "%PARSER_SOURCE%" -o build\obj\parser.lm1.o || exit /b 1
-"%LM_AR%" qc build\lm0\libparser.lm0.a build\obj\parser.lm1.o || exit /b 1
+"%LM_AR%" rcs build\lm0\libparser.lm0.a build\obj\parser.lm1.o || exit /b 1
 "%LM_RANLIB%" build\lm0\libparser.lm0.a || exit /b 1
 
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "%TRANS_SOURCE%" build\lm0\libparser.lm0.a -o build\lm0\trans.lm0.exe || exit /b 1
