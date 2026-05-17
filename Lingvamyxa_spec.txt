@@ -4835,6 +4835,17 @@ The field-follow form:
 
 follows typed address/reference `a` to the named field `field`. It uses the known layout/type metadata of `a`, reads or writes the field slot, and returns the field content as either a primitive value or another typed address/reference.
 
+C-profile mnemonic table:
+
+    @: char c        # C declarator role: char *c
+    @c               # C expression role: &c
+
+    parent\child     # C expression role: parent->child
+    \parent\child    # parsed as \(parent\child); C expression role: *(parent->child)
+    (\parent)\child  # explicit grouping: raw-load parent first, then follow child
+
+The last spelling is not the default parse. It is the explicit grouped form for a profile that needs the meaning "first raw-load `parent`, then field-follow `child` from the loaded typed address/reference".
+
 Examples:
 
 print: @count
@@ -7442,6 +7453,8 @@ L2 address and field forms are:
     x[i]        indexed access through address/reference/container `x`
 
 Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
+
+The C-profile mnemonic table in section 13.3 shows how the L2 forms cover the C declarator/expression roles of `*`, `&` and `->` without using those tokens as Lingvamyxa pointer/field syntax.
 
 28.2. Storage, Address and Indexed Forms
 
