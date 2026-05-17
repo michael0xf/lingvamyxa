@@ -13,8 +13,6 @@ lingvamyxa/
   lm1/
     parser/
       parser.lm1.h
-    buildCore/
-      buildCore.lm1.c
   lm2/
     trans/
       trans.lm2
@@ -26,6 +24,8 @@ lingvamyxa/
       make.lm2
     finalize/
       finalize.lm2
+    buildCore/
+      buildCore.lm2
   qt_app/
     main.cpp
     MainWindow.cpp
@@ -39,6 +39,8 @@ lingvamyxa/
       finalize.lm0.exe
       buildCore.lm0.exe
     lm1/
+      buildCore/
+        buildCore.lm1.c
       parser/
         parser.lm1.c
       printTree/
@@ -58,9 +60,10 @@ lingvamyxa/
 - `trans.lm0` is the first L2-to-L1 translator executable.
 - `make.lm0` is the first native build driver generated from `lm2/make/make.lm2`.
 - `finalize.lm0` is the post-build installer that replaces `.next` tools in `build/lm0`.
-- `buildCore.lm0` is the project build driver compiled from portable L1/C source.
-- `build/lm0/...` is the trusted current L0 tool layer and the local L0 output directory.
-- `build/lm1/...` is the generated L1 mirror produced from `lm2/...`; it is also the portable source snapshot for the first build on a new platform.
+- `buildCore.lm0` is the project build driver compiled from `build/lm1/buildCore/buildCore.lm1.c`; after bootstrap, that snapshot is regenerated from `lm2/buildCore/buildCore.lm2`.
+- `build/lm0/...` is the trusted current L0 tool layer and the local L0 output directory; it is not a portable source snapshot.
+- `build/libs/...` is the local native C library output/profile directory.
+- `build/lm1/...` is the generated L1 mirror produced from `lm2/...`; this is the portable build snapshot kept in Git.
 - `lingvamyxa_qt` is an optional Qt Widgets GUI wrapper.
 
 ## Import into Qt Creator
@@ -167,7 +170,7 @@ From CMake or Qt Creator, use the `runBuildCore.lm0` target. It builds the CMake
 cmake --build --preset run-buildcore
 ```
 
-For the full bootstrap mode, pass `--full` to `buildCore.lm0`. This refreshes the L0 tools first, then configures and builds a separate full CMake profile in `build/full` with `cmake/vcpkg/vcpkg.json`, `LINGVAMYXA_ENABLE_EXTERNAL_DEPS=ON`, and bundled `third_party` libraries enabled. The bundled C libraries keep plain C names in `build/lm0`: `libdecnumber.a` and `libsodium.a`.
+For the full bootstrap mode, pass `--full` to `buildCore.lm0`. This refreshes the L0 tools first, then configures and builds a separate CMake/vcpkg profile in `build/libs` with `cmake/vcpkg/vcpkg.json`, `LINGVAMYXA_ENABLE_EXTERNAL_DEPS=ON`, and bundled `third_party` libraries enabled. vcpkg libraries stay in `build/libs/vcpkg_installed`; they are represented by the `vcpkg_deps.lm0` marker target. The bundled C libraries keep plain C names next to that profile: `build/libs/libdecnumber.a` and `build/libs/libsodium.a`.
 
 ```powershell
 C:\Nyasha_Planet\lingvamyxa\build\lm0\buildCore.lm0.exe --full

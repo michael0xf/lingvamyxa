@@ -62,13 +62,8 @@ CMakeCache.txt
 *.autosave
 .DS_Store
 
-# Lingvamyxa tracked bootstrap/output snapshots.
+# Lingvamyxa tracked generated source snapshot.
 !build/
 build/*
-!build/lm0/
-!build/lm0/*.a
-!build/lm0/*.exe
-build/lm0/*.next.*
-build/lm0/*.log
 !build/lm1/
 !build/lm1/**
