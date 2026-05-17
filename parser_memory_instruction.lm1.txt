@@ -79,7 +79,7 @@ owner boundary or points into storage owned elsewhere:
 
     source text slice -> (source_owner, offset, length)
     token text        -> exact slice or interned identifier handle
-    AST string/name   -> owned/interned handle or lazy-owned slice
+    tree string/name  -> owned/interned handle or lazy-owned slice
 
 Avoid plain `char *` fields unless their owner is obvious and local.
 

@@ -33,14 +33,16 @@ P0 uses several lightweight modes instead of one flat token stream:
         recognizes colon frames, delimiters, comments, disabled items and
         bounded Structures.
 
-    atom scanner
-        recognizes identifiers, exact identifiers, numbers, character constants
-        and strings.
+    atom/operator scanner
+        recognizes identifiers, exact identifiers, numbers, character constants,
+        strings and operator-token fields.
 
-P0 does not run a mathematical expression scanner while building the structural
-tree. Operator-looking spellings such as `2+2`, `i<n` or `a*b` remain ordinary
-atom spelling chunks until a later receiver, identifier parser or expression
-parser consumes them.
+While building the structural tree, P0 keeps compact operator spellings inside
+the same tokenization pass. A non-quoted spelling chunk that contains characters
+not allowed inside a bare identifier is split as if those characters had token
+boundaries around them. For example, `2+2`, `i<n`, `a*b` and `arr[i+1]` become
+ordinary field sequences containing values and operator-token fields. Later
+receivers consume those fields.
 
 
 2. Source-Level Events
@@ -372,16 +374,19 @@ The comma after `a` terminates `int: a`; it does not add `b` to the `int`
 tail.
 
 
-8. Deferred Expression Tokens
+8. Operator Token Fields
 
-P0 structural parsing does not recognize mathematical/operator tokens as a
-separate syntax. The token `=` is not structural assignment and not named-field
-syntax. Spellings such as `+`, `-`, `*`, `/`, `%`, `=`, `<`, `>`, `not`, `and`,
-`or`, `true` and `false` are ordinary atom/name spellings at this layer unless
-they appear inside strings, exact identifiers or structural punctuation.
+P0 structural parsing records operator-looking spellings as fields in the same
+tree as ordinary source items. The token `=` is not structural assignment and
+not named-field syntax.
+Spellings such as `+`, `-`, `*`, `/`, `%`, `=`, `<`, `>`, `not`, `and`, `or`,
+`true` and `false` are ordinary fields at this layer unless they appear inside
+strings or exact identifiers.
 
-A later receiver, identifier parser or expression parser may consume those atom
-spellings as mathematical, boolean, indexing, update or profile-specific forms.
+When a compact non-quoted spelling contains invalid bare-identifier characters,
+P0 splits it into valid bare/numeric pieces and operator-token pieces. Later
+receivers may consume those fields as mathematical, boolean, indexing, update
+or profile-specific forms.
 
 
 9. Token Summary
@@ -410,7 +415,7 @@ Required P0 token/event names:
     CHARACTER_CONSTANT
     EXACT_IDENTIFIER
     BARE_WORD
-    EXPRESSION_OPERATOR
+    OPERATOR_TOKEN
     EOF
 
 Trailer-role names such as END_NAMED, TERMINAL_RETURN and UNTIL_CLOSE are not

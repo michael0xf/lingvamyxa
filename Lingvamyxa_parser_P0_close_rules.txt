@@ -66,8 +66,8 @@ After source-level normalization, the tree builder consumes generic events:
 
     ITEM(K, body)
         Ordinary source item at source level K. It may become a frame envelope,
-        compact frame, atom/value item, expression Structure or other parser
-        item according to the structural and expression scanners.
+        compact frame, atom/value item, operator-token sequence or other parser
+        item according to the structural scanner.
 
     DELIM(K, kind)
         Explicit source-level marker at source level K. It materializes level K

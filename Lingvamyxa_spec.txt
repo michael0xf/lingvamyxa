@@ -36,7 +36,7 @@ Lingvamyxa is based on the following model:
     Receivers and subroutines consume Structures.
     The core parser has one structural syntax.
     Operator tokens that cannot be namespace identifiers are parsed as operator fields without `:`.
-    Compact spellings with otherwise invalid name characters may be refined later into the same Structure model.
+    Compact non-quoted spellings with invalid bare-name characters are split into ordinary fields and operator-token fields.
     Levels restrict the active receiver/operator set.
 
 The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver or subroutine consumes a Structure and assigns typed semantics to it.
@@ -46,8 +46,7 @@ Canonical semantic pipeline:
     source text
         -> core structural parse
         -> generic Structure values
-        -> optional operator/spelling refinement
-        -> receiver/subroutine consumption
+        -> receiver/operator/subroutine consumption
         -> typed semantic structures
         -> interpretation or lowering
 
@@ -1117,9 +1116,11 @@ This is valid but intentionally hard to read. Prefer clearer vertical or bounded
 
 4.2.2. Operator Tokens and Compact Operator-Looking Spellings
 
-Whitespace separates short-tail fields. The core structural parser does not enter an additional independent parser and does not hide an independent mathematical language behind the short-tail rule.
+Whitespace separates short-tail fields. The core structural parser keeps
+operator-looking spellings in the same structural token stream as ordinary
+fields.
 
-Operator spellings such as `+`, `-`, `*`, `/`, `=`, `<`, `>`, `<=`, `>=` and `!=` are not valid bare namespace identifiers in the portable profile. When such a spelling appears as its own whitespace-bounded token, the parser may classify it immediately as an operator token. An operator token is not a head/name frame and does not require the colon marker that ordinary head/frame forms require.
+Operator spellings such as `+`, `-`, `*`, `/`, `=`, `<`, `>`, `<=`, `>=` and `!=` are not valid bare namespace identifiers in the portable profile. The parser classifies them as operator-token fields. An operator-token field is not a head/name frame and does not require the colon marker that ordinary head/frame forms require.
 
 Example:
 
@@ -1143,11 +1144,11 @@ A compact spelling chunk such as:
 
     print: a+b c
 
-normalizes first as two structural fields:
+normalizes structurally as:
 
-    print(a+b, c)
+    print(a, +, b, c)
 
-where `a+b` is one spelling chunk at the core structural layer. Since `a+b` is not a valid bare identifier and is not an exact quoted identifier, a later refinement step may parse that chunk as if implied token boundaries had been written, for example `a + b`. This refinement is not an additional independent parser. It is an optional continuation of the same structural pipeline for spelling chunks that contain otherwise invalid name characters without whitespace.
+The compact non-quoted chunk `a+b` contains a character that is not valid inside a bare identifier, so P0 splits it as if `+` had token boundaries around it. The token `+` is simply an operator-token field, and a later receiver/operator consumer may consume neighboring fields according to the active profile.
 
 To keep an operator-looking spelling as an exact name, use an exact quoted identifier:
 
@@ -2147,16 +2148,16 @@ As query input, it may mean a tuple of terms.
 The receiver defines the interpretation.
 
 
-6. Operator Tokens and Expression Refinement
+6. Operator Tokens and Expression Consumption
 
 Mathematics is a core runtime domain because expressions, numeric models,
 arrays, queries, reductions, constraints, validation, scheduling metrics,
 build rules and diagnostics all rely on typed computation.
 
-This does not require an additional independent source parser or an independent mathematical language.
 The core parser builds Structures first. Operator tokens and compact
-operator-looking spelling chunks are refined or consumed inside the same
-structural pipeline.
+operator-looking spelling chunks stay in the same structural pipeline: P0
+tokenization produces ordinary value/name fields and operator-token fields,
+then receiver/operator profiles consume those fields according to context.
 
 6.1. One Structural Parser and Operator Tokens
 
@@ -2202,36 +2203,35 @@ Core structural form:
     print(1, +, 2)
 
 Because there is no colon after `1`, `1` is a value field, not a receiver/head.
-The `+` operator may later consume the neighboring values supplied by the
+The `+` operator may consume the neighboring values supplied by the
 Structure.
 
-6.2. Compact Spellings and Implied Token Boundaries
+6.2. Compact Spellings and P0 Token Boundaries
 
-The first parser may require spaces around operators for the simplest bootstrap
-profile. Under that profile:
+P0 accepts both whitespace-bounded operator spellings and compact spellings.
+With explicit whitespace:
 
     print: 1 + 2
 
-is directly structural, while:
+normalizes directly as:
+
+    print(1, +, 2)
+
+The compact spelling:
 
     print: 1+2
 
-contains one compact spelling chunk `1+2`.
+contains the compact non-quoted chunk `1+2`. Because `+` is not valid inside a
+portable bare identifier, P0 inserts token boundaries around the operator
+spelling and produces the same structural form:
 
-A compact spelling chunk that contains otherwise invalid bare-name characters and
-is not an exact quoted identifier may be sent to an additional refinement step.
-That step may infer implied token boundaries and refine the chunk into the same
-structural/operator model, for example:
+    print(1, +, 2)
 
-    1+2
-        -> 1 + 2
-        -> (1, +, 2)
+The same rule applies to compact sequences such as `a+b*c==d` and `arr[i+1]`:
+they become ordinary field sequences containing value/name fields and
+operator-token fields.
 
-This refinement is not an additional independent parser and not a separate expression syntax.
-It is a continuation of the same structural pipeline for spellings that omit spaces.
-A profile may postpone this refinement and require explicit whitespace instead.
-
-Exact quoted identifiers are never refined this way. For example:
+Exact quoted identifiers are never split this way. For example:
 
     `1+2`
     `a+b`
@@ -2251,31 +2251,29 @@ is a value producer for that expected type. A comparison or logical operator
 structure may satisfy a boolean field. A numeric operator structure may satisfy a
 numeric field, subject to the active profile's conversion rules.
 
-The important semantic rule is that operator/refinement handling produces
-ordinary Structures, not a separate fundamental AST type and not an ordinary
-runtime action.
+The important semantic rule is that operator-token consumption produces ordinary
+Structures or typed semantic Structures; it is not an ordinary runtime action.
 
 ?
-The final operator/refinement specification is not complete here. It must define
+The final operator-consumption specification is not complete here. It must define
 the accepted operator tokens, precedence and associativity where a
-receiver/operator profile needs them, grouping behavior, compact-spelling
-refinement, expression Structure layout and translation rules. It may borrow an
-established mathematical/operator-precedence convention, but it must remain a
-refinement of the same structural syntax rather than an independent mathematical
-language.
+receiver/operator profile needs them, grouping behavior, expression Structure
+layout and translation rules. It may borrow an established
+mathematical/operator-precedence convention, but it works over the same
+structural fields produced by P0.
 ?
 
 variant 1:
 Use a compact C-like precedence table for arithmetic, comparison and boolean
-operators during operator/refinement consumption.
+operators during operator-token consumption.
 
 variant 2:
-Use a minimal bootstrap profile that recognizes only whitespace-bounded operator
-tokens and rejects compact spellings such as `1+2` until a later refinement
-profile is enabled.
+Use a minimal bootstrap profile that recognizes operator-token fields but does
+not perform precedence grouping. Receivers then consume explicit Structures or
+registered simple operator patterns.
 
 variant 3:
-Use profile-based operator/refinement rules selected by level, module or build
+Use profile-based operator-consumption rules selected by level, module or build
 configuration.
 
 ---ANSI C---
@@ -2284,24 +2282,23 @@ precedence, evaluation order and side effects are fully known. Otherwise it may
 lower them to helper calls, temporary Structures or generated evaluator code.
 ---ANSI C---
 
-6.4. Refinement Methods for Registered Operator Forms
+6.4. Registered Operator Forms
 
-A parser/refinement profile may recognize compact operator forms and lower them
-to registered refinement methods before ordinary receiver consumption. This
-document does not define a final operator set for increment, decrement or similar
-forms, but it defines the expected source-semantic shape for such refinement
-methods.
+An operator profile may recognize token sequences as registered operator forms
+before ordinary receiver consumption. This document does not define a final
+operator set for increment, decrement or similar forms, but it defines the
+expected source-semantic shape for such operator methods.
 
 For example, if a profile registers prefix decrement:
 
     --i
 
-the refinement step may split it into an operator method and a source target
-name:
+P0 tokenization produces the operator-token field `--` and the source target
+name `i`. The operator profile may consume that sequence as:
 
     decBefore("i")
 
-The refinement method resolves `i` in the same shared namespace used by ordinary
+The operator method resolves `i` in the same shared namespace used by ordinary
 source. It may lower the operation as a read-update-write sequence. The
 write/update step uses the ordinary head/update form:
 
@@ -2313,11 +2310,10 @@ zero-argument read and one-argument update, the sequence may lower to generated
 temporary code that calls/consumes `i` to read, computes the new value, then
 calls/consumes `i: newValue` to write.
 
-The exact refinement methods, temporary names, evaluation order, numeric rules
-and diagnostics belong to the operator/refinement specification. The core point
-is that refinement methods do not introduce a separate assignment syntax; they
-compose with the same namespace resolution and head/update form as ordinary
-source.
+The exact operator methods, temporary names, evaluation order, numeric rules and
+diagnostics belong to the operator-consumption specification. The core point is
+that operator methods do not introduce a separate assignment syntax; they compose
+with the same namespace resolution and head/update form as ordinary source.
 
 6.5. Basic Array Operations
 
@@ -2741,16 +2737,16 @@ representation and linked libraries belong to the selected L1/runtime profile.
 
 6.6.1. Mathematics Uses Registry Resolution
 
-Operator/refinement syntax does not directly call C symbols.
+Operator-token syntax does not directly call C symbols.
 
-Operator tokens and refined compact spellings produce ordinary Structures. A receiver that
+Operator-token fields and compact operator spellings produce ordinary Structures. A receiver that
 expects an expression later consumes that expression Structure. During that consumption,
 operators and function calls are resolved through the active numeric registry.
 
 Canonical pipeline:
 
     source structure
-        -> operator/refinement Structure
+        -> operator-consumption Structure
         -> numeric operator/function resolution
         -> typed numeric semantic Structure
         -> interpretation or lowering
@@ -4793,7 +4789,7 @@ Lowering does not change source semantics.
 
 14.3. Indexing
 
-Operator/refinement rules are specified by level and profile. Indexing is treated as a level-dependent operator/form.
+Operator-token consumption rules are specified by level and profile. Indexing is treated as a level-dependent operator/form.
 
 At L2, `[]` is a low-level index operator. It uses a typed or computed address and is governed by the L2 memory model.
 
@@ -5510,7 +5506,7 @@ This grammar sketch describes the structural parser only. It does not define fin
     // Physical newline is not a short-form trailer; after newline, the next
     // source-level event decides whether the open frame receives more fields
     // or is completed by level rules.
-    // Operator/refinement consumption is deferred to a later consumer.
+    // Operator-token consumption is deferred to a later consumer.
 
     argument_list       ::= bounded_item_sequence
 
@@ -5897,7 +5893,7 @@ Field-follow failure semantics are not fixed. A final source-semantic rule must 
 25.2. External or Undescribed Specification Areas
 
 ?
-The final operator/refinement specification is not complete in this document. It must define operator tokens, precedence, grouping, compact-spelling refinement, expression Structure layout and translation rules. These rules refine or consume the same structural syntax; they are not an independent mathematical source syntax.
+The final operator-consumption specification is not complete in this document. It must define operator tokens, precedence, grouping, expression Structure layout and translation rules over the structural fields produced by P0.
 ?
 
 variant 1:
@@ -5907,7 +5903,7 @@ variant 2:
 Define a smaller token-boundary-only numeric/operator profile for the first implementation.
 
 variant 3:
-Allow profiles so the active level or module can select operator/refinement rules.
+Allow profiles so the active level or module can select operator-token consumption rules.
 
 ?
 Model/type syntax is not specified in full. It must define model receivers, slot declarations, defaults, constraints, aliases, layouts and relation signatures.
