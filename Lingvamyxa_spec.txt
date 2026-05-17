@@ -34,8 +34,9 @@ Lingvamyxa is based on the following model:
     L2-L5 are Lingvamyxa levels.
     Source syntax builds Structures.
     Receivers and subroutines consume Structures.
-    The parser has a native structural syntax and a mathematical expression syntax.
-    Mathematical expressions also produce Structures.
+    The core parser has one structural syntax.
+    Operator tokens that cannot be namespace identifiers are parsed as operator fields without `:`.
+    Compact spellings with otherwise invalid name characters may be refined later into the same Structure model.
     Levels restrict the active receiver/operator set.
 
 The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver or subroutine consumes a Structure and assigns typed semantics to it.
@@ -43,8 +44,9 @@ The language does not assign final meaning directly from surface syntax. Surface
 Canonical semantic pipeline:
 
     source text
-        -> structural and mathematical parse
+        -> core structural parse
         -> generic Structure values
+        -> optional operator/spelling refinement
         -> receiver/subroutine consumption
         -> typed semantic structures
         -> interpretation or lowering
@@ -1113,19 +1115,21 @@ ShortForm1(
 
 This is valid but intentionally hard to read. Prefer clearer vertical or bounded spelling when nested short forms are not visually obvious.
 
-4.2.2. Operator-Looking Spellings in Short Tail
+4.2.2. Operator Tokens and Compact Operator-Looking Spellings
 
-Whitespace separates short-tail fields. The structural parser does not bind mathematical operators into a separate expression node.
+Whitespace separates short-tail fields. The core structural parser does not enter an additional independent parser and does not hide an independent mathematical language behind the short-tail rule.
+
+Operator spellings such as `+`, `-`, `*`, `/`, `=`, `<`, `>`, `<=`, `>=` and `!=` are not valid bare namespace identifiers in the portable profile. When such a spelling appears as its own whitespace-bounded token, the parser may classify it immediately as an operator token. An operator token is not a head/name frame and does not require the colon marker that ordinary head/frame forms require.
 
 Example:
 
-    print: a+b c
+    print: 1 + 2
 
-normalizes as two structural fields:
+normalizes structurally as:
 
-    print(a+b, c)
+    print(1, +, 2)
 
-where `a+b` is one atom/name spelling at this layer. A later receiver, identifier parser or expression parser may consume that spelling as an expression.
+Here `1` and `2` are value fields. Because there is no colon after `1`, `1` is not a receiver/head. The token `+` is an operator field. A later receiver/operator consumer may interpret `+` as an infix operator and honestly take the neighboring fields from the Structure as its left and right operands.
 
 Whitespace remains structural field separation:
 
@@ -1135,12 +1139,25 @@ normalizes as:
 
     print(a, +, b, c)
 
-To keep an operator-looking form as one field at the structural layer, write it as one spelling chunk, or make grouping explicit with a bounded Structure:
+A compact spelling chunk such as:
 
-    print: a+b
+    print: a+b c
+
+normalizes first as two structural fields:
+
+    print(a+b, c)
+
+where `a+b` is one spelling chunk at the core structural layer. Since `a+b` is not a valid bare identifier and is not an exact quoted identifier, a later refinement step may parse that chunk as if implied token boundaries had been written, for example `a + b`. This refinement is not an additional independent parser. It is an optional continuation of the same structural pipeline for spelling chunks that contain otherwise invalid name characters without whitespace.
+
+To keep an operator-looking spelling as an exact name, use an exact quoted identifier:
+
+    print: `a+b`
+
+To make grouping explicit at the structural layer, use a bounded Structure:
+
     print: (a + b)
 
-The second form produces one bounded Structure field containing the atom spellings `a`, `+` and `b`; expression meaning is assigned later by the consumer.
+The bounded form produces one Structure field containing the spellings `a`, `+` and `b`; expression meaning is assigned later by the consumer.
 
 4.2.3. No Hidden Receiver-Signature Grouping
 
@@ -1897,7 +1914,7 @@ Conceptual receiver-level interpretation:
 
 The receiver `model` may interpret `name(PlantBed)` as semantic field `name` and `condition(plantBedCondition)` as semantic field `condition`.
 
-The token `=` belongs to mathematical expression syntax as equality/comparison. It is not native structural assignment and not native named-field syntax.
+The token `=` is an operator token used by expression/operator consumers as equality/comparison. It is not native structural assignment and not native named-field syntax.
 
 4.8. Positional Fields and Semantic Named Fields
 
@@ -2130,22 +2147,24 @@ As query input, it may mean a tuple of terms.
 The receiver defines the interpretation.
 
 
-6. Mathematical Expression Parser
+6. Operator Tokens and Expression Refinement
 
 Mathematics is a core runtime domain because expressions, numeric models,
 arrays, queries, reductions, constraints, validation, scheduling metrics,
 build rules and diagnostics all rely on typed computation.
 
-6.1. Two Syntax Modes in One Parser
+This does not require an additional independent source parser or an independent mathematical language.
+The core parser builds Structures first. Operator tokens and compact
+operator-looking spelling chunks are refined or consumed inside the same
+structural pipeline.
 
-Lingvamyxa has one parsing system with two syntax modes:
+6.1. One Structural Parser and Operator Tokens
 
-    native structural syntax
-    mathematical expression syntax
+Lingvamyxa has one core structural parsing system. It builds ordinary receiver
+Frames, bounded Structures, value fields and operator-token fields.
 
-Native structural syntax builds ordinary receiver Frames and bounded Structures.
-
-Mathematical expression syntax is entered when the parser detects mathematical expression indicators in an argument position. Indicators include explicit numeric literals and mathematical/operator tokens such as:
+Operator spellings such as the following are not valid bare namespace identifiers
+in the portable profile:
 
     =
     !=
@@ -2158,68 +2177,147 @@ Mathematical expression syntax is entered when the parser detects mathematical e
     *
     /
 
-The parser does not need to reinterpret forms such as `i = 1` as ordinary Lingvamyxa receiver syntax first. It detects the mathematical operator token and parses the expression with the expression rules. The token `=` is equality/comparison in mathematical expression syntax, not assignment in native structural syntax.
-
-6.2. Expression Output
-
-The mathematical syntax returns an expression Structure. This expression Structure is a tree-shaped Structure made of nested Structures.
+When such a spelling is whitespace-bounded, the parser can classify it
+immediately as an operator token. Because it is not an ordinary namespace
+identifier, it does not require `:` and it is not parsed as a head/frame form.
 
 Example source:
 
     i = 1
 
-The parser detects this as mathematical syntax because of the `=` token. The exact internal expression-tree layout is not specified in this document. It belongs to the separate mathematical-syntax specification.
+Core structural form:
 
-The native structural syntax described by this document is not the canonical representation of mathematical expressions. A form such as a receiver call with the name `=` is not defined here as the canonical expression output. It may be omitted entirely from the native receiver set if that makes lexical separation between native syntax and mathematical syntax simpler.
+    (i, =, 1)
 
-The important semantic rule is that mathematical syntax produces an expression Structure, not a separate fundamental AST type and not an ordinary runtime action.
+Here `i` and `1` are value fields. The token `=` is an operator field. It is
+equality/comparison for expression/operator consumers, not assignment and not
+native named-field syntax.
 
-The expression Structure is consumed later by a receiver that expects an expression, for example the `condition` field of `if`.
+Example inside a receiver frame:
+
+    print: 1 + 2
+
+Core structural form:
+
+    print(1, +, 2)
+
+Because there is no colon after `1`, `1` is a value field, not a receiver/head.
+The `+` operator may later consume the neighboring values supplied by the
+Structure.
+
+6.2. Compact Spellings and Implied Token Boundaries
+
+The first parser may require spaces around operators for the simplest bootstrap
+profile. Under that profile:
+
+    print: 1 + 2
+
+is directly structural, while:
+
+    print: 1+2
+
+contains one compact spelling chunk `1+2`.
+
+A compact spelling chunk that contains otherwise invalid bare-name characters and
+is not an exact quoted identifier may be sent to an additional refinement step.
+That step may infer implied token boundaries and refine the chunk into the same
+structural/operator model, for example:
+
+    1+2
+        -> 1 + 2
+        -> (1, +, 2)
+
+This refinement is not an additional independent parser and not a separate expression syntax.
+It is a continuation of the same structural pipeline for spellings that omit spaces.
+A profile may postpone this refinement and require explicit whitespace instead.
+
+Exact quoted identifiers are never refined this way. For example:
+
+    `1+2`
+    `a+b`
+
+remain exact identifier/name values.
+
+6.3. Expression Structures Are Data Before Consumption
+
+An expression-like Structure is data until a receiver consumes it as an
+expression.
+
+For example, the `if` receiver consumes its `condition` field as an expression. A
+configuration receiver might instead store the same Structure as data.
+
+When consumed in a primitive/scalar field position, an expression-like Structure
+is a value producer for that expected type. A comparison or logical operator
+structure may satisfy a boolean field. A numeric operator structure may satisfy a
+numeric field, subject to the active profile's conversion rules.
+
+The important semantic rule is that operator/refinement handling produces
+ordinary Structures, not a separate fundamental AST type and not an ordinary
+runtime action.
 
 ?
-The mathematical expression syntax is specified separately. It must define operator tokens, precedence, grouping rules, expression Structure layout and translation rules. It may borrow an established mathematical/operator-precedence convention instead of inventing a full new expression language.
+The final operator/refinement specification is not complete here. It must define
+the accepted operator tokens, precedence and associativity where a
+receiver/operator profile needs them, grouping behavior, compact-spelling
+refinement, expression Structure layout and translation rules. It may borrow an
+established mathematical/operator-precedence convention, but it must remain a
+refinement of the same structural syntax rather than an independent mathematical
+language.
 ?
 
 variant 1:
-Use a compact C-like precedence table for arithmetic, comparison and boolean operators.
+Use a compact C-like precedence table for arithmetic, comparison and boolean
+operators during operator/refinement consumption.
 
 variant 2:
-Use a minimal mathematical table that includes only numeric literals, grouping and explicitly listed mathematical operators.
+Use a minimal bootstrap profile that recognizes only whitespace-bounded operator
+tokens and rejects compact spellings such as `1+2` until a later refinement
+profile is enabled.
 
 variant 3:
-Use a profile-based expression grammar selected by level, module or build configuration.
+Use profile-based operator/refinement rules selected by level, module or build
+configuration.
 
 ---ANSI C---
-A translator may lower expression Structures to ANSI C expressions when precedence, evaluation order and side effects are fully known. Otherwise it may lower them to helper calls, temporary Structures or generated evaluator code.
+A translator may lower expression/operator Structures to ANSI C expressions when
+precedence, evaluation order and side effects are fully known. Otherwise it may
+lower them to helper calls, temporary Structures or generated evaluator code.
 ---ANSI C---
 
-6.3. Expressions Are Data Before Consumption
+6.4. Refinement Methods for Registered Operator Forms
 
-An expression Structure is data until a receiver consumes it as an expression.
-
-For example, the `if` receiver consumes its `condition` field as an expression. A configuration receiver might instead store the same Structure as data.
-
-When consumed in a primitive/scalar field position, an expression Structure is a value producer for that expected type. A comparison or logical expression may satisfy a boolean field. A numeric expression may satisfy a numeric field, subject to the active profile's conversion rules.
-
-6.4. Parser Methods for Registered Operator Forms
-
-A parser profile may recognize compact operator forms and lower them to parser methods before ordinary receiver consumption. This document does not define a final operator set for increment, decrement or similar forms, but it defines the expected source-semantic shape for such parser methods.
+A parser/refinement profile may recognize compact operator forms and lower them
+to registered refinement methods before ordinary receiver consumption. This
+document does not define a final operator set for increment, decrement or similar
+forms, but it defines the expected source-semantic shape for such refinement
+methods.
 
 For example, if a profile registers prefix decrement:
 
     --i
 
-the parser may split it into an operator method and a source target name:
+the refinement step may split it into an operator method and a source target
+name:
 
     decBefore("i")
 
-The parser method resolves `i` in the same shared namespace used by ordinary source. It may lower the operation as a read-update-write sequence. The write/update step uses the ordinary head/update form:
+The refinement method resolves `i` in the same shared namespace used by ordinary
+source. It may lower the operation as a read-update-write sequence. The
+write/update step uses the ordinary head/update form:
 
     i: newValue
 
-If `i` resolves to mutable storage, the sequence may lower to a direct storage update. If `i` resolves to a callable value that can be consumed as a zero-argument read and one-argument update, the sequence may lower to generated temporary code that calls/consumes `i` to read, computes the new value, then calls/consumes `i: newValue` to write.
+If `i` resolves to mutable storage, the sequence may lower to a direct storage
+update. If `i` resolves to a callable value that can be consumed as a
+zero-argument read and one-argument update, the sequence may lower to generated
+temporary code that calls/consumes `i` to read, computes the new value, then
+calls/consumes `i: newValue` to write.
 
-The exact parser methods, temporary names, evaluation order, numeric rules and diagnostics belong to the mathematical/operator specification. The core point is that parser methods do not introduce a separate assignment syntax; they compose with the same namespace resolution and head/update form as ordinary source.
+The exact refinement methods, temporary names, evaluation order, numeric rules
+and diagnostics belong to the operator/refinement specification. The core point
+is that refinement methods do not introduce a separate assignment syntax; they
+compose with the same namespace resolution and head/update form as ordinary
+source.
 
 6.5. Basic Array Operations
 
@@ -2643,16 +2741,16 @@ representation and linked libraries belong to the selected L1/runtime profile.
 
 6.6.1. Mathematics Uses Registry Resolution
 
-Mathematical syntax does not directly call C symbols.
+Operator/refinement syntax does not directly call C symbols.
 
-Mathematical syntax produces expression Structures. A receiver that expects an
-expression later consumes that expression Structure. During that consumption,
+Operator tokens and refined compact spellings produce ordinary Structures. A receiver that
+expects an expression later consumes that expression Structure. During that consumption,
 operators and function calls are resolved through the active numeric registry.
 
 Canonical pipeline:
 
-    source expression
-        -> expression Structure
+    source structure
+        -> operator/refinement Structure
         -> numeric operator/function resolution
         -> typed numeric semantic Structure
         -> interpretation or lowering
@@ -2684,7 +2782,7 @@ Examples:
     f64 / f64        -> f64
     bool && bool     -> bool
 
-The mathematical specification must define or reference the active profile's
+The operator/numeric specification must define or reference the active profile's
 rules for:
 
     integer overflow;
@@ -2999,7 +3097,7 @@ Conceptual lowering:
     record status/exactness according to profile;
     return result.
 
-6.6.8. Namespace Calls Outside Mathematical Expressions
+6.6.8. Namespace Calls Outside Pure Expressions
 
 Checked external wrappers may also be called through ordinary namespace
 receiver/call syntax when their descriptors allow it.
@@ -3013,7 +3111,7 @@ Example raw/runtime-only call through the L2 adapter:
     Lingvamyxa/MPFR/raw/mpfr_sqrt: rop op rnd
 
 Functions that return `Unit` or perform effects should normally be exposed as
-namespace calls or explicit receivers, not as pure mathematical expression
+namespace calls or explicit receivers, not as pure expression
 functions.
 
 Examples:
@@ -3029,7 +3127,7 @@ clear backend storage according to the numeric value's owner lifetime.
 
 6.6.9. Pure Expression Profile
 
-The default mathematical expression profile is pure.
+The default expression/operator profile is pure.
 
 A pure expression may call only functions registered as pure value functions or
 pure wrappers.
@@ -4695,7 +4793,7 @@ Lowering does not change source semantics.
 
 14.3. Indexing
 
-The mathematical expression parser is specified separately. Indexing is treated as a level-dependent operator/form.
+Operator/refinement rules are specified by level and profile. Indexing is treated as a level-dependent operator/form.
 
 At L2, `[]` is a low-level index operator. It uses a typed or computed address and is governed by the L2 memory model.
 
@@ -5412,7 +5510,7 @@ This grammar sketch describes the structural parser only. It does not define fin
     // Physical newline is not a short-form trailer; after newline, the next
     // source-level event decides whether the open frame receives more fields
     // or is completed by level rules.
-    // Mathematical/operator parsing is deferred to a later consumer.
+    // Operator/refinement consumption is deferred to a later consumer.
 
     argument_list       ::= bounded_item_sequence
 
@@ -5777,7 +5875,7 @@ Conceptual form:
     if                         registered receiver, semantics depend on level
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
     while                      registered receiver, semantics depend on level
-    mathematical infix         parsed into expression Structure
+    operator/infix tokens       structural operator fields consumed into expression Structures
     []                         L2 indexed address access; L3+ checked array-Structure access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
@@ -5799,17 +5897,17 @@ Field-follow failure semantics are not fixed. A final source-semantic rule must 
 25.2. External or Undescribed Specification Areas
 
 ?
-Mathematical expression syntax is not specified in this document. It must define operator tokens, precedence, grouping, expression Structure layout and translation rules. The native structural syntax is not the canonical representation of mathematical expressions.
+The final operator/refinement specification is not complete in this document. It must define operator tokens, precedence, grouping, compact-spelling refinement, expression Structure layout and translation rules. These rules refine or consume the same structural syntax; they are not an independent mathematical source syntax.
 ?
 
 variant 1:
-Borrow a compact C-like mathematical precedence table.
+Borrow a compact C-like operator precedence table.
 
 variant 2:
-Define a smaller numeric-only expression grammar for the first implementation.
+Define a smaller token-boundary-only numeric/operator profile for the first implementation.
 
 variant 3:
-Allow profiles so the active level or module can select a mathematical grammar.
+Allow profiles so the active level or module can select operator/refinement rules.
 
 ?
 Model/type syntax is not specified in full. It must define model receivers, slot declarations, defaults, constraints, aliases, layouts and relation signatures.
@@ -7155,7 +7253,7 @@ This rule should be stated once as an L2 invariant instead of repeated at every 
 
 Consequences:
 
-    `*`  remains available for multiplication in mathematical expression syntax.
+    `*`  remains available as a multiplication operator token.
     `&`  is not address-of.
     `^`  is not pointer dereference and is not a field-follow marker.
     `.`  is source indentation only when it appears in the leading dot prefix; it is not field access.
@@ -7229,7 +7327,7 @@ Address-producing and address-consuming forms:
 
 28.3. Primitive Expression Operators
 
-The minimal L2 mathematical expression profile includes:
+The minimal L2 primitive operator profile includes:
 
     grouping        (expr)
     unary numeric   +expr, -expr
@@ -7237,7 +7335,7 @@ The minimal L2 mathematical expression profile includes:
     comparison      =, !=, <, <=, >, >=
     boolean words   not, and, or
 
-The token `=` is comparison/equality in mathematical expression syntax. It is not native assignment.
+The token `=` is comparison/equality for expression/operator consumers. It is not native assignment.
 
 Bitwise operators, shifts, overflow rules, integer division rules, floating-point rules and conversion rules are L2 profile details unless a later specification selects a mandatory set.
 
