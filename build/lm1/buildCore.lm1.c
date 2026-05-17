@@ -7,11 +7,13 @@
 #define LM_BUILD_EXE_SUFFIX ".exe"
 #define LM_BUILD_PATH_SEP "\\"
 #define LM_BUILD_CHDIR _chdir
+#define LM_BUILD_GETCWD _getcwd
 #else
 #include <unistd.h>
 #define LM_BUILD_EXE_SUFFIX ""
 #define LM_BUILD_PATH_SEP "/"
 #define LM_BUILD_CHDIR chdir
+#define LM_BUILD_GETCWD getcwd
 #endif
 
 typedef struct LmBuildOptions {
@@ -20,6 +22,48 @@ typedef struct LmBuildOptions {
 
 static int lm_build_is_path_separator(char value) {
     return value == '/' || value == '\\';
+}
+
+static int lm_build_has_path_separator(const char *path) {
+    return strchr(path, '/') != NULL || strchr(path, '\\') != NULL;
+}
+
+static int lm_build_is_absolute_path(const char *path) {
+#ifdef _WIN32
+    if (path[0] != '\0' && lm_build_is_path_separator(path[0]) && lm_build_is_path_separator(path[1])) {
+        return 1;
+    }
+    if (path[0] != '\0' && path[1] == ':' && lm_build_is_path_separator(path[2])) {
+        return 1;
+    }
+    return 0;
+#else
+    return path[0] == '/';
+#endif
+}
+
+static int lm_build_join_path(char *buffer, size_t size, const char *base, const char *tail) {
+    size_t base_length;
+    size_t tail_length;
+    size_t used;
+
+    base_length = strlen(base);
+    tail_length = strlen(tail);
+    used = base_length;
+
+    if (base_length + tail_length + 2U >= size) {
+        fprintf(stderr, "buildCore.lm0: path is too long\n");
+        return 1;
+    }
+
+    memcpy(buffer, base, base_length);
+    if (base_length > 0U && tail_length > 0U && !lm_build_is_path_separator(base[base_length - 1U]) && !lm_build_is_path_separator(tail[0])) {
+        memcpy(buffer + used, LM_BUILD_PATH_SEP, strlen(LM_BUILD_PATH_SEP));
+        used += strlen(LM_BUILD_PATH_SEP);
+    }
+    memcpy(buffer + used, tail, tail_length + 1U);
+
+    return 0;
 }
 
 static int lm_build_trim_last_path_part(char *path) {
@@ -43,37 +87,69 @@ static int lm_build_trim_last_path_part(char *path) {
     return 0;
 }
 
+static int lm_build_file_exists(const char *path) {
+    FILE *file;
+
+    file = fopen(path, "rb");
+    if (file == NULL) {
+        return 0;
+    }
+
+    fclose(file);
+    return 1;
+}
+
+static int lm_build_has_project_marker(const char *path) {
+    char marker_path[2048];
+
+    if (lm_build_join_path(marker_path, sizeof(marker_path), path, "lm2/buildCore.lm2") != 0) {
+        return 0;
+    }
+
+    return lm_build_file_exists(marker_path);
+}
+
 static int lm_build_enter_project_root(const char *program_path) {
-    char root_path[1024];
+    char search_path[1024];
+    char executable_path[1024];
+    char cwd[1024];
+    int depth;
 
-    if (program_path == NULL || program_path[0] == '\0') {
-        return 0;
-    }
-    if (strlen(program_path) >= sizeof(root_path)) {
-        fprintf(stderr, "buildCore.lm0: executable path is too long\n");
+    if (LM_BUILD_GETCWD(cwd, sizeof(cwd)) == NULL) {
+        fprintf(stderr, "buildCore.lm0: cannot read current directory\n");
         return 1;
     }
 
-    strcpy(root_path, program_path);
+    if (program_path != NULL && program_path[0] != '\0' && lm_build_has_path_separator(program_path)) {
+        if (lm_build_is_absolute_path(program_path)) {
+            if (strlen(program_path) >= sizeof(executable_path)) {
+                fprintf(stderr, "buildCore.lm0: executable path is too long\n");
+                return 1;
+            }
+            strcpy(executable_path, program_path);
+        } else if (lm_build_join_path(executable_path, sizeof(executable_path), cwd, program_path) != 0) {
+            return 1;
+        }
 
-    if (strchr(root_path, '/') == NULL && strchr(root_path, '\\') == NULL) {
-        return 0;
+        strcpy(search_path, executable_path);
+        lm_build_trim_last_path_part(search_path);
+    } else {
+        strcpy(search_path, cwd);
     }
 
-    lm_build_trim_last_path_part(root_path);
-    lm_build_trim_last_path_part(root_path);
-    lm_build_trim_last_path_part(root_path);
-
-    if (root_path[0] == '\0') {
-        return 0;
+    for (depth = 0; depth < 12 && search_path[0] != '\0'; ++depth) {
+        if (lm_build_has_project_marker(search_path)) {
+            if (LM_BUILD_CHDIR(search_path) != 0) {
+                fprintf(stderr, "buildCore.lm0: cannot enter project root %s\n", search_path);
+                return 1;
+            }
+            return 0;
+        }
+        lm_build_trim_last_path_part(search_path);
     }
 
-    if (LM_BUILD_CHDIR(root_path) != 0) {
-        fprintf(stderr, "buildCore.lm0: cannot enter project root %s\n", root_path);
-        return 1;
-    }
-
-    return 0;
+    fprintf(stderr, "buildCore.lm0: cannot locate project root from %s\n", cwd);
+    return 1;
 }
 
 static const char *lm_build_env_or_default(const char *name, const char *fallback) {
@@ -85,18 +161,6 @@ static const char *lm_build_env_or_default(const char *name, const char *fallbac
     }
 
     return value;
-}
-
-static int lm_build_file_exists(const char *path) {
-    FILE *file;
-
-    file = fopen(path, "rb");
-    if (file == NULL) {
-        return 0;
-    }
-
-    fclose(file);
-    return 1;
 }
 
 static const char *lm_build_default_cmake(void) {
