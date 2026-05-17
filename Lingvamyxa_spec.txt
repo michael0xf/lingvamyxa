@@ -36,7 +36,8 @@ Lingvamyxa is based on the following model:
     Receivers and subroutines consume Structures.
     The core parser has one structural syntax.
     Operator tokens that cannot be namespace identifiers are parsed as operator fields without `:`.
-    Compact non-quoted spellings with invalid bare-name characters are split into ordinary fields and operator-token fields.
+    Whitespace-bounded operator forms are accepted directly by the core structural parser.
+    Compact non-quoted spellings with invalid bare-name characters may be refined into ordinary fields and operator-token fields by the same parsing pipeline.
     Levels restrict the active receiver/operator set.
 
 The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver or subroutine consumes a Structure and assigns typed semantics to it.
@@ -278,9 +279,9 @@ Notes:
     Frame when a profile/receiver wants the iterator state to be created before
     `each` consumes it.
 
-    The `match`, `case`, failure-handler and full build-target semantics are not
-    implied by this example. They remain receiver/profile semantics described in
-    their own sections.
+    The `match`, default-pattern, failure-handler and full build-target semantics
+    are not implied by this example. They remain receiver/profile semantics
+    described in their own sections.
 
 This example should be read with five simple structural rules in mind:
 
@@ -345,19 +346,19 @@ following sections.
 
 1.0. General Language Role and External Lexical Standards
 
-Lingvamyxa is a cross-platform structural language built above an external procedural L1 layer. In the default bootstrap and lowering model, that L1 layer is ANSI C / C99. Lingvamyxa is not a replacement spelling of C. It is a structural-semantic superstructure over L1: source text builds Structures; registered receivers, functions, subroutines, operators, model descriptors, behavior descriptors and query receivers consume those Structures and assign typed meaning to them.
+Lingvamyxa is a cross-platform structural language with an explicit external L1 bootstrap, implementation and lowering substrate. In the default hosted bootstrap profile, L1 may lower through ANSI C / C99, but ANSI C / C99 is a porting and implementation substrate, not the language's semantic parent and not the language's self-hosting level. Lingvamyxa source text builds Structures; registered receivers, functions, subroutines, operators, model descriptors, behavior descriptors and query receivers consume those Structures and assign typed meaning to them.
 
 A compact description is:
 
-    Lingvamyxa is an object-oriented, functional and logical structural superlanguage over a procedural ANSI C / C99 lowering layer.
+    Lingvamyxa is an object-oriented, functional and logical structural language whose self-hosting infrastructure begins at L2/lm2 and whose hosted bootstrap may lower through an external L1 substrate.
 
 More precisely:
 
-    * L1 supplies the procedural, portable, implementation-facing substrate.
-    * L2 exposes low-level typed storage, addresses, layouts and unsafe operations.
+    * L1 supplies the external procedural, portable, implementation-facing substrate and may map to ANSI C / C99 in a hosted bootstrap profile.
+    * L2/lm2 exposes low-level typed storage, addresses, layouts and unsafe operations and is the first Lingvamyxa self-hosting infrastructure layer.
     * L3 supplies ordinary algorithmic computation and executable definitions.
     * L4 describes structural models, types, contracts, unions, constraints and registry descriptors.
-    * L5 describes behavior, messages, configuration, facts, rules, build/query/startup receivers and high-level dispatch.
+    * L5 describes behavior, messages, configuration, facts, rules, build/query/startup receivers, L5 Threads and high-level dispatch.
 
 Lingvamyxa implementations may also act as service runtimes. The built-in HTTP Lingvamyxa REST profile provides a standard event/message transport between groups of L5 Threads and service instances. HTTP is the transport envelope; Lingvamyxa typed messages and Structures remain the semantic payload.
 
@@ -402,7 +403,7 @@ This document does not specify the L1 target language, physical calling conventi
 
 1.3. L2
 
-L2 is the low-level unsafe Lingvamyxa level. It is the low-level systems layer. It may expose memory, typed addresses, handles, layout-based storage, explicit low-level operations and low-level concurrency.
+L2 is the low-level unsafe Lingvamyxa level. It is the low-level systems layer. It may expose memory, typed addresses, handles, layout-based storage and explicit low-level operations. Selected low-level L2 Thread primitives may be introduced later for operations over shared memory arrays or other implementation-facing data, but ordinary interactive, concurrent, UI and service programming belongs to the L5 Thread model.
 
 L2 is compiled. It is not executed as a casual script.
 
@@ -418,9 +419,11 @@ L4 may update or check the compiler/runtime model. L4 does not perform ordinary 
 
 1.6. L5
 
-L5 is the level of messages, configuration, behavior descriptors, fact registries, build/run/query/startup receivers and high-level dispatch.
+L5 is the level of messages, configuration, behavior descriptors, fact registries, build/run/query/startup receivers, L5 Threads and high-level dispatch.
 
-L5 may attach message behavior to L4 structural models. L5 may also represent registry data as typed facts and rules. This draft places that fact/behavior layer in L5. A later level split may move part of it to L6. This document treats the L5 fact/behavior model as source-semantic infrastructure, not as ordinary runtime I/O.
+An L5 Thread is the ordinary source-semantic active unit for interactive, concurrent, event-driven and service-like Lingvamyxa programs. A service instance is a placement or bundling mode of one or more L5 Threads, not a separate later paradigm.
+
+L5 may attach message behavior to L4 structural models. L5 may also represent registry data as typed facts and rules. This draft places that fact/behavior layer in L5. A later specification may split this area into internal L5 profiles, bundles or subdomains, but this document keeps it within L5 as source-semantic infrastructure, not as ordinary runtime I/O.
 
 1.7. Level Receivers
 
@@ -503,7 +506,7 @@ Different Lingvamyxa levels use different default startup conventions:
         . . . System\out\println: "Hello"
         end: L5
 
-        The startup target may be described as `HelloWorld/start` by the
+        The startup target may be described as `HelloWorld\start` by the
         runtime profile. The language does not require every L5 file to run
         linearly from its first source item.
 
@@ -855,7 +858,7 @@ A block string fence is recognized only when the physical line begins at column 
 
 The opening fence records the exact run length, exactly like a raw file-comment fence records the `*` run length. The block string is closed only by a column-0 fence line with the same `=` run length. A fence-looking line inside the block whose run length does not match the opener is ordinary string content, not a nested opener and not a closer.
 
-The opening and closing fence lines do not contribute characters to the string value. The physical lines between them are the string content. Physical line breaks between content lines are preserved as newline characters after source newline normalization. Source levels, comments, mathematical expressions, closing forms and ordinary structural syntax are not recognized inside the block string content.
+The opening and closing fence lines do not contribute characters to the string value. The physical lines between them are the string content. Physical line breaks between content lines are preserved as newline characters after source newline normalization. Source levels, comments, operator/expression structures, closing forms and ordinary structural syntax are not recognized inside the block string content.
 
 Examples:
 
@@ -1144,11 +1147,11 @@ A compact spelling chunk such as:
 
     print: a+b c
 
-normalizes structurally as:
+may be submitted to compact spelling refinement by a profile that admits implied token boundaries. In that profile, the non-quoted chunk `a+b` contains a character that is not valid inside a bare identifier, so the same parsing pipeline may refine it as if `+` had token boundaries around it:
 
     print(a, +, b, c)
 
-The compact non-quoted chunk `a+b` contains a character that is not valid inside a bare identifier, so P0 splits it as if `+` had token boundaries around it. The token `+` is simply an operator-token field, and a later receiver/operator consumer may consume neighboring fields according to the active profile.
+This refinement is not a second parser and not a parallel syntax. The token `+` is simply an operator-token field, and a later receiver/operator consumer may consume neighboring fields according to the active profile. A minimal bootstrap profile may instead require explicit whitespace around operators.
 
 To keep an operator-looking spelling as an exact name, use an exact quoted identifier:
 
@@ -2019,7 +2022,7 @@ The raw file-comment fence is a run of asterisks:
 
 A raw file-comment fence is recognized only when the physical line begins at column 0 with a run of `*` characters of length 3 through 80 and is followed only by optional spaces or tabs before the line ending. No source indentation, leading spaces, title text, trailing `#` line comment or other non-whitespace characters are allowed on the fence line.
 
-The first fence opens a raw file comment block and records its exact fence length. The block is closed only by a column-0 fence line with the same number of `*` characters. All physical lines between the matching fences are ignored completely by the Lingvamyxa parser. Source levels are not tracked inside the raw file comment block, mathematical expressions are not parsed, closing forms are not validated and source syntax errors inside the block are not reported.
+The first fence opens a raw file comment block and records its exact fence length. The block is closed only by a column-0 fence line with the same number of `*` characters. All physical lines between the matching fences are ignored completely by the Lingvamyxa parser. Source levels are not tracked inside the raw file comment block, operator/expression structures are not parsed, closing forms are not validated and source syntax errors inside the block are not reported.
 
 Raw file comment blocks do not nest. A fence-looking line inside an open raw file comment block whose `*` run length does not match the opener is treated as ignored comment content, not as a nested opener and not as a closer. An unclosed raw file comment block is a file-level syntax error.
 
@@ -2079,7 +2082,7 @@ A receiver signature assigns an expected role to each field. If a field position
 
 If a field position expects a callable/executable value and the source supplies a bounded Structure or vertical body Structure, the receiver consumes that Structure as an anonymous executable/callable value. Its argument and return profile come from the expected field position.
 
-If a field position expects a primitive/scalar value and the source supplies a bounded Structure that is not already a direct primitive/scalar value, the receiver consumes that Structure as a value producer for the expected type. A mathematical expression Structure is the usual compact case of this rule.
+If a field position expects a primitive/scalar value and the source supplies a bounded Structure that is not already a direct primitive/scalar value, the receiver consumes that Structure as a value producer for the expected type. An operator-consumed Structure is the usual compact case of this rule.
 
 If the expected type is boolean, the value producer must produce a boolean value. If the expected type is numeric or another primitive/scalar type, the value producer must produce that type or be convertible according to the active profile.
 
@@ -2206,10 +2209,9 @@ Because there is no colon after `1`, `1` is a value field, not a receiver/head.
 The `+` operator may consume the neighboring values supplied by the
 Structure.
 
-6.2. Compact Spellings and P0 Token Boundaries
+6.2. Compact Spellings and Same-Pipeline Token-Boundary Refinement
 
-P0 accepts both whitespace-bounded operator spellings and compact spellings.
-With explicit whitespace:
+The core parser always accepts whitespace-bounded operator spellings. With explicit whitespace:
 
     print: 1 + 2
 
@@ -2217,19 +2219,17 @@ normalizes directly as:
 
     print(1, +, 2)
 
-The compact spelling:
+A compact spelling such as:
 
     print: 1+2
 
-contains the compact non-quoted chunk `1+2`. Because `+` is not valid inside a
-portable bare identifier, P0 inserts token boundaries around the operator
-spelling and produces the same structural form:
+contains the compact non-quoted chunk `1+2`. A profile may submit such a chunk to token-boundary refinement. Because `+` is not valid inside a portable bare identifier, the refinement may produce the same structural form:
 
     print(1, +, 2)
 
-The same rule applies to compact sequences such as `a+b*c==d` and `arr[i+1]`:
-they become ordinary field sequences containing value/name fields and
-operator-token fields.
+This refinement belongs to the same structural parsing pipeline. It is not a second parser and not a parallel operator/expression syntax. A minimal bootstrap profile may reject the compact spelling and require explicit whitespace around operators.
+
+The same refinement principle may apply to compact sequences such as `a+b*c==d` and `arr[i+1]` if the active profile defines those operator and indexing token boundaries. They become ordinary field sequences containing value/name fields and operator-token fields.
 
 Exact quoted identifiers are never split this way. For example:
 
@@ -2888,11 +2888,11 @@ Valid:
 
     x = sqrt(y)
 
-Invalid in a pure value-required mathematical expression:
+Invalid in a pure value-required expression/operator context:
 
-    x = Lingvamyxa/GMP/raw/mpz_clear(y)
+    x = Lingvamyxa\GMP\raw\mpz_clear(y)
 
-because raw clear is an effect/release operation, not a mathematical value.
+because raw clear is an effect/release operation, not a pure value.
 
 A `Unit` function may be callable as a statement-level receiver or namespace
 function if its descriptor allows that level and effect profile.
@@ -3043,7 +3043,7 @@ than used as high-level receiver/type policy.
 Using MPFR from L2 may therefore be as direct as ordinary C-profile use, if the
 L2/L1 build profile provides `mpfr.h` and the MPFR link inputs.
 
-This does not make `mpfr_sqrt` callable from ordinary mathematical expressions
+This does not make `mpfr_sqrt` callable from ordinary expression/operator consumption
 or L3 source.
 
 A safe value-producing wrapper may be registered separately.
@@ -3051,11 +3051,11 @@ A safe value-producing wrapper may be registered separately.
 Example conceptual wrapper:
 
 L4:
-    externFn: Lingvamyxa/MPFR/sqrt
+    externFn: Lingvamyxa\MPFR\sqrt
         sourceLevel: L1
         sourceName: mpfr_sqrt
-        header: mpfr.h
-        pkg: PkgConfig::mpfr
+        header: `mpfr.h`
+        pkg: `PkgConfig::mpfr`
         args:
             real: x
         ret:
@@ -3063,14 +3063,14 @@ L4:
         backendShape:
             destinationArg: 0
             operandArg: 1
-            roundingArg: activeRealContext.rounding
+            roundingArg: activeRealContext\rounding
             statusReturn: int
         effects:
             pureWrapper
         context:
             activeRealContext
         implementation:
-            Lingvamyxa/MPFR/raw/mpfr_sqrt
+            Lingvamyxa\MPFR\raw\mpfr_sqrt
         callableFrom:
             L3
             L4 expression
@@ -3089,22 +3089,22 @@ Conceptual lowering:
 
     allocate result real in the current owner/arena;
     initialize MPFR storage according to activeRealContext;
-    call mpfr_sqrt(result.storage, x.storage, activeRealContext.rounding);
+    call mpfr_sqrt(result\storage, x\storage, activeRealContext\rounding);
     record status/exactness according to profile;
     return result.
 
 6.6.8. Namespace Calls Outside Pure Expressions
 
-Checked external wrappers may also be called through ordinary namespace
+Checked external wrappers may also be called through ordinary structural path
 receiver/call syntax when their descriptors allow it.
 
 Example safe namespace call:
 
-    Lingvamyxa/MPFR/sqrt: x
+    Lingvamyxa\MPFR\sqrt: x
 
 Example raw/runtime-only call through the L2 adapter:
 
-    Lingvamyxa/MPFR/raw/mpfr_sqrt: rop op rnd
+    Lingvamyxa\MPFR\raw\mpfr_sqrt: rop op rnd
 
 Functions that return `Unit` or perform effects should normally be exposed as
 namespace calls or explicit receivers, not as pure expression
@@ -3112,10 +3112,10 @@ functions.
 
 Examples:
 
-    Lingvamyxa/GMP/init: x
-    Lingvamyxa/GMP/clear: x
-    Lingvamyxa/Decimal/setPrecision: ctx 34
-    Lingvamyxa/Real/setRounding: ctx nearest
+    Lingvamyxa\GMP\init: x
+    Lingvamyxa\GMP\clear: x
+    Lingvamyxa\Decimal\setPrecision: ctx 34
+    Lingvamyxa\Real\setRounding: ctx nearest
 
 High-level numeric code should not normally call backend initialization and
 clear functions directly. The owner/arena runtime should initialize, retain and
@@ -3147,7 +3147,7 @@ belong to the L2 universal adapter boundary.
 Effectful operations may be visible at L3+ only as checked Lingvamyxa receivers
 or wrappers with declared effects, capabilities, ownership and failure behavior.
 Even then, they are statement-level or effect-profile calls, not pure
-mathematical expression calls.
+expression/operator calls.
 
 Required rule:
 
@@ -3169,7 +3169,7 @@ Required rule:
 6.6.10. Pointer and Memory Rule
 
 An L1 function with raw pointer parameters or raw pointer return values is not a
-safe mathematical expression function and is not directly visible at L3+.
+safe value-producing expression function and is not directly visible at L3+.
 
 At L2, the selected universal ANSI C adapter may call it according to the L2
 memory profile.
@@ -3932,8 +3932,8 @@ The default ANSI C / C99 bootstrap profile may use the following implementation 
 
     i/u      -> C integer          -> no vcpkg
     bool     -> C int / bool       -> no vcpkg
-    bigint   -> GMP mpz_t          -> vcpkg: gmp,  CMake: PkgConfig::gmp
-    real     -> MPFR mpfr_t        -> vcpkg: mpfr, CMake: PkgConfig::mpfr
+    bigint   -> GMP mpz_t          -> vcpkg: gmp,  CMake: `PkgConfig::gmp`
+    real     -> MPFR mpfr_t        -> vcpkg: mpfr, CMake: `PkgConfig::mpfr`
     decimal  -> decNumber         -> third_party\decNumber\decNumber-icu-368\
     SQL      -> SQLite            -> vcpkg: sqlite3
     Regex    -> PCRE2             -> vcpkg: pcre2
@@ -4827,15 +4827,15 @@ Dynamic arrays lower to runtime handles with accessor calls when layout is not s
 
 15. Typed Field Follow
 
-15.1. Backslash Field-Follow Form
+15.1. Backslash Structural Traversal Form
 
-Named field follow/access uses backslash syntax:
+Structural traversal / dereference-like access uses backslash syntax:
 
     result\harvest
 
-The field-follow form is a built-in parser form. It exists so the translator can generate direct field-follow access through known Structures, typed addresses, handles and layouts.
+The backslash form is a built-in parser form. It exists so the translator can generate direct structural traversal through known Structures, typed addresses, handles and layouts. It is not a textual namespace separator and it is not equivalent to the L2 foreign/substrate qualified-symbol form such as `c.printf`.
 
-At L2, the left side is normally a typed address. At L3 and above, the left side may be a Structure, handle or reference according to the active semantic environment.
+At L2, the left side is normally a typed address. At L3 and above, the left side may be a Structure, handle or reference according to the active semantic environment. In all cases, `\` implies an actual traversable source-semantic object, not a dotted or slash-separated external name.
 
 The same `\` character also has a prefix L2 raw-load form, described in section 13.3. These forms are distinguished by position:
 
@@ -5934,7 +5934,7 @@ L5 behavior/message semantics require a final rule for missing messages, method 
 ?
 
 ?
-The final level placement of the persistent fact/rule/configuration layer is not fixed. This draft places it in L5; a later specification may move some high-level fact, policy or live-configuration receivers to L6.
+The final internal placement of the persistent fact/rule/configuration layer inside L5 is not fixed. This draft places it in L5; a later specification may split some high-level fact, policy or live-configuration receivers into L5 profiles, bundles or subdomains without introducing another source level.
 
 ?
 Generic operation signatures and method compatibility rules are not fully specified. A final specification must define how return types, argument Structures, domains and defaults are checked for `method` registrations.
@@ -6043,7 +6043,7 @@ Unless stated otherwise, these operators are L3 operators. Some of them may also
 Operator summary:
 
     0.  if / then / else                                  L3
-    1.  match / case / default                            L3
+    1.  match / default-pattern receivers                            L3
     2.  while                                             L3
     3.  until                                             L3
     4.  for                                               L3
@@ -6854,24 +6854,40 @@ The exact grammar rule for attaching labels to frames is not specified beyond th
 ?
 
 
-27. L2 Thread Context and L5 Event Delivery Profile
+27. L5 Thread Context and Event Delivery Profile
 
 27.0. Scope of This Section
 
 This section defines a default runtime profile for:
 
-    L2 execution threads;
+    L5 Threads;
     thread-local ExecutionContext;
     `finally` cleanup storage;
     `assert` diagnostic exit;
-    Java-style synchronized inbox/outbox event delivery;
+    synchronized FIFO inbox/outbox event delivery;
     L5 object/message event dispatch.
 
 This profile is intentionally simple. It is based on cooperative thread loops that periodically check inbound messages and flush outbound messages. It does not define blocking request/reply as a primitive operation.
 
+Terminology in this section is strict:
+
+    L5 Thread
+        the source-semantic active unit visible to L3/L4/L5 programs, UI code,
+        event-driven code and services;
+
+    L2 Thread
+        a future low-level Lingvamyxa primitive for implementation-facing
+        operations such as explicit concurrency over shared memory arrays;
+
+    L1 Thread
+        a host/substrate thread or task used by the external L1 implementation
+        and by the L1-L2 runtime binding.
+
+L1 Threads and future L2 Threads are not visible as ordinary programming objects above L2. A runtime may map one or more L5 Threads to L1/L2 threads, fibers, event loops or platform tasks, but that mapping does not change the source-semantic L5 Thread model.
+
 27.1. ExecutionContext
 
-Each L2 execution thread owns one current ExecutionContext.
+Each L5 Thread owns one current ExecutionContext.
 
 The ExecutionContext is thread-local.
 
@@ -6912,9 +6928,9 @@ Diagnostic thread exit runs all remaining cleanup entries in the current thread.
 
 Cleanup entries are removed when they are executed. A cleanup must not execute twice.
 
-27.3. L2Thread
+27.3. L5Thread
 
-An L2 thread owns:
+An L5 Thread owns:
 
     thread id;
     thread-local ExecutionContext;
@@ -6925,7 +6941,7 @@ An L2 thread owns:
 
 Conceptual Structure:
 
-L2Thread:
+L5Thread:
     ThreadId: id
     ExecutionContext: context
     Inbox: inbox
@@ -6934,9 +6950,9 @@ L2Thread:
     BodyStep: body
 
 
-The inbox and outbox are synchronized FIFO containers.
+The inbox and outbox are synchronized FIFO containers in the source-semantic model.
 
-This profile describes them as Java-style synchronized Vectors. A translator/runtime may implement them as ring buffers, queues or other FIFO containers if the observable semantics are preserved.
+A translator/runtime may implement them as ring buffers, queues, channels, platform event-loop mailboxes or other FIFO containers if the observable L5 message semantics are preserved.
 
 27.4. Thread loop
 
@@ -6954,11 +6970,11 @@ while: running
 run all remaining finally cleanups
 terminate thread
 
-Java-style pseudocode:
+Conceptual host-language pseudocode:
 
-    class L2Runnable implements Runnable {
-        Vector<Message> inbox;
-        Vector<Message> outbox;
+    class L5Runnable implements Runnable {
+        Fifo<Message> inbox;
+        Fifo<Message> outbox;
         ExecutionContext context;
 
         public void run() {
@@ -6986,7 +7002,7 @@ ANSI C style profile:
     run all remaining cleanups;
     terminate thread;
 
-The Java-style and ANSI C-style profiles are implementation strategies for the same source-level thread model.
+Host-language and ANSI C-style profiles are implementation strategies for the same source-semantic L5 Thread model.
 
 27.5. Assertion failure in the thread profile
 
@@ -7026,13 +7042,13 @@ This implementation note does not define ordinary `fail`. Declared `fail` remain
 The policy for assertion failure during cleanup is not fixed. A final runtime specification must define whether the runtime continues cleanup, stops cleanup, records secondary diagnostics or terminates immediately.
 !!!
 
-27.6. L2Message
+27.6. L5Message
 
 A message is an event envelope delivered between threads or active L5 objects.
 
 Conceptual Structure:
 
-L2Message
+L5Message
     target
     selector
     sender
@@ -7065,7 +7081,7 @@ Fields:
     flags ->
         runtime delivery metadata
 
-`L2Message` is a transport envelope. The target's L5 behavior table decides which implementation consumes the selector.
+`L5Message` is a transport envelope. The target's L5 behavior table decides which implementation consumes the selector.
 
 27.7. Inbox and outbox operations
 
@@ -7491,7 +7507,7 @@ For `for`, `continue` transfers control to the iteration-step Structure, then to
 
 The following section 26 operators are not part of the minimal L2 control set unless an L2 profile explicitly enables or redefines them:
 
-    match / case / default
+    match / default-pattern receivers
     each
     finally
     guard / fail / throws / handlers
@@ -8536,7 +8552,7 @@ standalone C-like L2 execution threads, raw shared memory blocks, direct
 allocator calls or explicit `freemem`-style memory release.
 
 Those mechanisms belong to future L2 and L1-facing implementation profiles.
-They are lower-level than the default L5 Thread memory model.
+They are lower-level than the default L5 Thread memory model. L1 Threads are host/substrate execution resources used by the L1-L2 runtime binding; L2 Threads, when introduced, are low-level Lingvamyxa primitives for explicit shared-memory work. Neither kind is visible as an ordinary programming object above L2.
 
 The default L5 model remains:
 
@@ -8780,7 +8796,7 @@ Failures are not hidden cross-thread exceptions. A failure crossing an L5 Thread
 
 Inside one handler, a profile may use local failure control such as guard/fail/throws/handler labels, as described by the failure model. Across L5 Thread boundaries, the failure must be materialized as data:
 
-    Result.Err;
+    Result\Err;
     failure message;
     rejected Future/Task;
     reply-channel failure payload;
@@ -10355,7 +10371,7 @@ a parser exception.
 The important rule is:
 
     Lmx representation is data.
-    P0/P1 parsing builds Structures.
+    P0 structural parsing and same-pipeline refinement build Structures.
     Type receivers and validators grant typed meaning.
 
 Therefore `fromLmx` is not Java-style `fromString`. It is a structural import
@@ -10815,7 +10831,7 @@ type/validator/security, а не parser exception.
 Главное правило:
 
     Lmx representation is data.
-    P0/P1 parsing builds Structures.
+    P0 structural parsing and same-pipeline refinement build Structures.
     Type receivers and validators grant typed meaning.
 
 Поэтому `fromLmx` - это не Java-style `fromString`. Это structural import path,
@@ -11579,8 +11595,8 @@ L5:
     fact: credential AdminModule alice primary PasswordVerifier
     fact: credential WorkArchive alice primary PasswordVerifier
 
-    fact: protects AdminModule admin.lmx
-    fact: protects WorkArchive work.lmz
+    fact: protects AdminModule `admin.lmx`
+    fact: protects WorkArchive `work.lmz`
 end: L5
 
 The same principal may have credentials in several realms. The system does not
@@ -11689,7 +11705,7 @@ receive the primary verifier.
 
 After successful primary authentication, the core may issue a delegated ticket:
 
-    holder    = OAuth.lmx or another trusted module
+    holder    = `OAuth.lmx` or another trusted module
     principal = local user represented by the ticket
     scope     = permitted action set, for example loginAs principal
     lifetime  = optional time limit
@@ -11772,10 +11788,10 @@ L5:
     fact: principal alice source SystemUser
     fact: credential Default alice primary PasswordVerifier
     fact: credential OAuthRealm alice primary PasswordVerifier
-    fact: authModule OAuth.lmx
-    fact: mayRequestTicket OAuth.lmx OAuthRealm alice
-    fact: ticketScope OAuth.lmx OAuthRealm loginAs alice
-    fact: ticketInvalidatedBy OAuth.lmx OAuthRealm primaryVerifierChange
+    fact: authModule `OAuth.lmx`
+    fact: mayRequestTicket `OAuth.lmx` OAuthRealm alice
+    fact: ticketScope `OAuth.lmx` OAuthRealm loginAs alice
+    fact: ticketInvalidatedBy `OAuth.lmx` OAuthRealm primaryVerifierChange
 end: L5
 
 After a ticket is validated, the flow receives ordinary registry-visible
@@ -11783,7 +11799,7 @@ evidence:
 
     principal = alice
     realm     = OAuthRealm
-    holder    = OAuth.lmx
+    holder    = `OAuth.lmx`
     scope     = loginAs alice
     assurance = delegatedTicket
 
@@ -11793,7 +11809,7 @@ validators:
 L5:
     fact: requires updateProfile Authenticated
     fact: requires issueTicket PrimaryAuthenticated
-    fact: grants ticket OAuth.lmx loginAs alice
+    fact: grants ticket `OAuth.lmx` loginAs alice
 end: L5
 
 This keeps authentication close to the same fact/validator/guarantee machinery
@@ -11956,8 +11972,8 @@ L5:
     fact: credential AdminModule alice primary PasswordVerifier
     fact: credential WorkArchive alice primary PasswordVerifier
 
-    fact: protects AdminModule admin.lmx
-    fact: protects WorkArchive work.lmz
+    fact: protects AdminModule `admin.lmx`
+    fact: protects WorkArchive `work.lmz`
 end: L5
 
 Один и тот же principal может иметь credentials в нескольких realms. Система не
@@ -12064,7 +12080,7 @@ robot-user для principal-а. Он не получает primary password по
 
 После успешной primary authentication core может выпустить delegated ticket:
 
-    holder    = OAuth.lmx или другой доверенный модуль
+    holder    = `OAuth.lmx` или другой доверенный модуль
     principal = локальный user, которого представляет ticket
     scope     = разрешенный набор действий, например loginAs principal
     lifetime  = опциональное время жизни
@@ -12147,17 +12163,17 @@ L5:
     fact: principal alice source SystemUser
     fact: credential Default alice primary PasswordVerifier
     fact: credential OAuthRealm alice primary PasswordVerifier
-    fact: authModule OAuth.lmx
-    fact: mayRequestTicket OAuth.lmx OAuthRealm alice
-    fact: ticketScope OAuth.lmx OAuthRealm loginAs alice
-    fact: ticketInvalidatedBy OAuth.lmx OAuthRealm primaryVerifierChange
+    fact: authModule `OAuth.lmx`
+    fact: mayRequestTicket `OAuth.lmx` OAuthRealm alice
+    fact: ticketScope `OAuth.lmx` OAuthRealm loginAs alice
+    fact: ticketInvalidatedBy `OAuth.lmx` OAuthRealm primaryVerifierChange
 end: L5
 
 После validation ticket flow получает обычное registry-visible evidence:
 
     principal = alice
     realm     = OAuthRealm
-    holder    = OAuth.lmx
+    holder    = `OAuth.lmx`
     scope     = loginAs alice
     assurance = delegatedTicket
 
@@ -12167,7 +12183,7 @@ model validators:
 L5:
     fact: requires updateProfile Authenticated
     fact: requires issueTicket PrimaryAuthenticated
-    fact: grants ticket OAuth.lmx loginAs alice
+    fact: grants ticket `OAuth.lmx` loginAs alice
 end: L5
 
 Так authentication остается рядом с той же fact/validator/guarantee machinery,
