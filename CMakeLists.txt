@@ -41,6 +41,7 @@ add_custom_target(extractThirdPartyZips.lm0
 option(BUILD_PRINT_TREE_LM0 "Build the printTree.lm0 tree dump executable" ON)
 option(BUILD_TRANS_LM0 "Build the trans.lm0 L2-to-L1 translator executable" ON)
 option(BUILD_MAKE_LM0 "Build the make.lm0 native build driver executable" ON)
+option(BUILD_VCPKG_FETCH_LM0 "Build the vcpkgFetch.lm0 source archive downloader executable" ON)
 option(BUILD_BUILD_CORE_LM0 "Build the buildCore.lm0 core build driver executable" ON)
 option(BUILD_LINGVAMYXA_QT_APP "Build the optional Qt Widgets shell" ON)
 option(LINGVAMYXA_ENABLE_EXTERNAL_DEPS "Enable optional runtime/backend dependencies" OFF)
@@ -90,6 +91,7 @@ set(LM1_GENERATED_TRANS_C "${LM1_GENERATED_DIR}/trans.lm1.c")
 set(LM1_GENERATED_PARSER_C "${LM1_GENERATED_DIR}/parser.lm1.c")
 set(LM1_GENERATED_PRINT_TREE_C "${LM1_GENERATED_DIR}/printTree.lm1.c")
 set(LM1_GENERATED_MAKE_C "${LM1_GENERATED_DIR}/make.lm1.c")
+set(LM1_GENERATED_VCPKG_FETCH_C "${LM1_GENERATED_DIR}/vcpkgFetch.lm1.c")
 set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
 
 # ---- Generated L1 parser snapshot ----
@@ -181,6 +183,19 @@ if (BUILD_TRANS_LM0)
     )
 
     add_custom_command(
+        OUTPUT "${LM1_GENERATED_VCPKG_FETCH_C}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/vcpkgFetch.lm2"
+            "${LM1_GENERATED_VCPKG_FETCH_C}"
+        DEPENDS
+            trans.lm0
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/vcpkgFetch.lm2"
+        COMMENT "Generating build/lm1/vcpkgFetch.lm1.c from lm2/vcpkgFetch.lm2"
+        VERBATIM
+    )
+
+    add_custom_command(
         OUTPUT "${LM1_GENERATED_BUILD_CORE_C}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
         COMMAND $<TARGET_FILE:trans.lm0>
@@ -199,6 +214,7 @@ if (BUILD_TRANS_LM0)
             refresh_parser_lm1
             "${LM1_GENERATED_PRINT_TREE_C}"
             "${LM1_GENERATED_MAKE_C}"
+            "${LM1_GENERATED_VCPKG_FETCH_C}"
             "${LM1_GENERATED_BUILD_CORE_C}"
     )
 endif()
@@ -208,6 +224,14 @@ endif()
 if (BUILD_MAKE_LM0)
     add_executable(make.lm0
         "${LM1_GENERATED_MAKE_C}"
+    )
+endif()
+
+# ---- L0 vcpkg source downloader ----
+
+if (BUILD_VCPKG_FETCH_LM0)
+    add_executable(vcpkgFetch.lm0
+        "${LM1_GENERATED_VCPKG_FETCH_C}"
     )
 endif()
 

@@ -122,14 +122,18 @@ C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 The source catalog in `cmake/vcpkg-sources/vcpkg.json` is only a helper for source tracking and occasional updates. It includes the external C libraries that can be imported into `third_party` and built by our own CMake rules, including `libsodium`.
 
 ```powershell
-C:\vcpkg\vcpkg.exe install `
-  --x-manifest-root=C:\Nyasha_Planet\lingvamyxa\cmake\vcpkg-sources `
-  --triplet x64-mingw-dynamic `
-  --host-triplet x64-mingw-dynamic `
-  --only-downloads
+C:\Nyasha_Planet\lingvamyxa\build\lm0\vcpkgFetch.lm0.exe `
+  --output C:\Nyasha_Planet\lingvamyxa\build\vcpkg-downloads
 ```
 
-This does not build the libraries for Lingvamyxa. It only refreshes vcpkg's source/download cache, such as `C:\vcpkg\downloads` and `C:\vcpkg\buildtrees`. Selected archives can then be imported into `third_party`.
+On Linux/macOS, use the extensionless tool:
+
+```sh
+./build/lm0/vcpkgFetch.lm0 --output ./build/vcpkg-downloads
+```
+
+This does not build the libraries for Lingvamyxa. It runs vcpkg with `--only-downloads` against `cmake/vcpkg-sources/vcpkg.json` and places the downloaded source archive cache under the selected `--downloads-root`. Selected archives can then be imported into `third_party`.
+Use `--triplet`, `--host-triplet`, `--vcpkg` and `--vcpkg-root` when the defaults are not right; the same values can be supplied through `LM_VCPKG_TRIPLET`, `LM_VCPKG_HOST_TRIPLET`, `LM_VCPKG` and `VCPKG_ROOT`.
 
 ## Refresh trusted L0 tools
 

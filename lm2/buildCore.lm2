@@ -354,6 +354,9 @@ static int lm_build_generate_all(const char *trans_tool) {
     if (lm_build_trans(trans_tool, "lm2/make.lm2", "build/lm1/make.lm1.c") != 0) {
         return 1;
     }
+    if (lm_build_trans(trans_tool, "lm2/vcpkgFetch.lm2", "build/lm1/vcpkgFetch.lm1.c") != 0) {
+        return 1;
+    }
     if (lm_build_trans(trans_tool, "lm2/buildCore.lm2", "build/lm1/buildCore.lm1.c") != 0) {
         return 1;
     }
@@ -404,6 +407,16 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
         command,
         sizeof(command),
         "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\"",
+        LM_BUILD_EXE_SUFFIX
+    );
+    if (lm_build_make(make_tool, "link", command) != 0) {
+        return 1;
+    }
+
+    snprintf(
+        command,
+        sizeof(command),
+        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/vcpkgFetch.lm1.c\" -o \"build/lm0/vcpkgFetch.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
