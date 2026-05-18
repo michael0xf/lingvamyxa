@@ -61,7 +61,7 @@ The same source mechanism builds Structures. Different receivers and profiles
 consume those Structures as data, executable code, model descriptors, registry
 facts, messages, service routes, build instructions or transport payloads.
 
-First, Lingvamyxa is a general structural data notation.
+0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
 It can be used for human-readable records, trees, nested configurations,
 schemas, registries, message payloads and table-like data in the same problem
@@ -120,7 +120,63 @@ to CSV, SQL rows, binary records, in-memory arrays, Lingvamyxa Structure
 serialization, JSON for legacy interoperability, or another backend
 representation.
 
-Second, Lingvamyxa is a high-level programming language.
+0.0.2.0. Secondly, Lingvamyxa is a markup and document language.
+
+Lingvamyxa source may also carry an active markup layer. Curly-brace marks are
+part of the language, not an XML preprocessor and not a separate mini-language.
+The text inside `{...}` is parsed as Lingvamyxa source. A mark opens a named
+active fact, and `end` closes the corresponding active name:
+
+    {color: red}
+    {color: green}
+    {end: red}
+    {end: green}
+
+This is intentionally different from XML and HTML nesting. Closing names the
+active value that is no longer wanted; it is not just a repeated tag name. The
+active mark set is therefore naturally represented as a current attribute table,
+and it may describe overlapping ranges without forcing the document into a
+single strict tree.
+
+Example of the same tree and table-like data with a markup layer:
+
+dataset: harvest
+    meta:
+        title: "Regional harvest report"
+        season: 2026
+        source:
+            organization: `Field Bureau`
+            system: `manual survey`
+        ---
+        location:
+            country: Uruguay
+            region: `north field group`
+        ---
+        note:
+            {color: red}
+            {color: green}
+            "This part is marked document data over ordinary Structures."
+            {end: red}
+            {end: green}
+    ---
+
+    table:
+        columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
+        rows:
+                 1        `north field`       wheat       12.50       0.14
+                 2        `south field`       corn         8.75       0.19
+                 3        `east ridge`        barley      10.00       0.16
+                 4        `river lowland`     rice        21.30       0.22
+end: harvest
+
+The structural parser keeps the ordinary Lingvamyxa data model: trees, tables,
+arrays and records are still Structures. The markup parser runs as a parallel
+document layer and maintains active marks while traversing the source. It can
+therefore expose all data at a position, including the Structure context and the
+current active mark attributes, with fast access and without requiring large
+contiguous memory blocks.
+
+0.0.3.0. Thirdly, Lingvamyxa is a high-level programming language.
 
 The executable layer supplies ordinary algorithmic computation, function and
 subroutine definitions, control receivers, expressions and calls.
