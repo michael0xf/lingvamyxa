@@ -300,7 +300,7 @@ L3:
     fn: words () iterator(Text)
         yield: "Hello"
         yield: "World"
-    end: fn
+    end: words
 
     fn: factorial (int(n)) (int)
         if: n <= 1
@@ -332,16 +332,16 @@ L3:
         end: outerLoop
 
         System\out\println: "Done."
-    end: sub
+    end: helloMain
 end: L3
 
 Notes:
 
-    `end: fn` explicitly closes the `fn: words () iterator(Text)` definition.
+    `end: words` explicitly closes the `fn: words () iterator(Text)` definition.
     The `return:` at the source level of `fn: factorial (int(n)) (int)` is
     terminal return for that function definition. It appends the runtime return
     and closes the executable definition. The `sub: helloMain` definition is
-    closed explicitly by `end: sub`. The enclosing `L3` frame is closed by
+    closed explicitly by `end: helloMain`. The enclosing `L3` frame is closed by
     `end: L3`.
 
     `fn: words () iterator(Text)` gives the `fn` receiver the fields
@@ -1630,7 +1630,7 @@ This is structurally equivalent to:
 fn: outer () (int)
     fn: inner (int: a) (int)
         return: a + 1
-    end: fn
+    end: inner
 
     int: a 1
 return: inner(a)
@@ -2047,6 +2047,14 @@ The source-level named close form is the ordinary colon receiver form. It is val
 not:
 
     end: [] matrix
+
+The close target is not mechanically the receiver/head spelling. A receiver
+defines which visible target it introduces. The ordinary convention is that a
+field consumed with semantic role `name` becomes the visible close target. This
+is why `[]: matrix` closes as `end: matrix`, and why `fn: square ...` closes as
+`end: square`. Receivers without a `name` role may expose their head spelling as
+the close target, expose another receiver-defined target, or expose no named
+close target at all.
 
 `end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current source level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
@@ -3604,7 +3612,7 @@ fn:
         p1()
         p2()
         return: r1 r2
-end: fn
+end: myFunc
 
 The L1 receiver function registered as `fn` receives the whole frame argument Structure as its first argument and consumes that Structure by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures inside that first argument Structure. They are not `=` named fields.
 
@@ -3616,6 +3624,11 @@ The `fn` frame's logical argument Structure is not the same thing as the formal 
     body -> fields 3..end as one executable body Structure
 
 P0 does not know these roles. It only builds the field sequence.
+After receiver normalization, the `name` role is ordinary visible metadata of
+the normalized Structure. Editors, highlighters and translators may use that
+metadata to show the introduced name and to validate `end: <target>` against the
+receiver-exposed close target. A receiver that does not consume any field as
+`name` does not automatically introduce a semantic-name close target.
 
 The formal argument field must be an argument-list Structure even when there is only one formal argument. Therefore:
 
@@ -3634,7 +3647,7 @@ Example with no required formal parameters:
 fn: words () iterator(Text)
     yield: "Hello"
     yield: "World"
-end: fn
+end: words
 
 Generic structural reading:
 
@@ -3661,7 +3674,7 @@ fn: words () iterator(Text)
     ---
         yield: "Hello"
         yield: "World"
-end: fn
+end: words
 
 Generic structural reading:
 
@@ -3761,7 +3774,7 @@ sub:
         else
     body:
         return
-end: sub
+end: l5_if
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
 
@@ -3851,7 +3864,12 @@ The source-level closing form is:
 
 The bare form `end` and the old-looking form `end <target>` are not valid Lingvamyxa source syntax.
 
-`end:` validates `<target>` against a visible open frame, labelled block or entity block. In the core structural policy, the target matches the current node/receiver name or a visible control label. Multi-word target names must be written as exact quoted identifiers.
+`end:` validates `<target>` against a visible open close target: a frame/entity
+name introduced by the active receiver, a labelled block or another
+receiver-defined visible target. The target is not necessarily the receiver/head
+spelling. In the ordinary receiver convention, the field consumed with semantic
+role `name` becomes the close target. Multi-word target names must be written as
+exact quoted identifiers.
 
 Unlike `return: value`, which may be a valid runtime item inside an executable
 body, `end: <target>` is valid only as a structural close from an admitted close
@@ -3860,7 +3878,9 @@ written inside a body position rather than at a close position, the close
 validation layer must reject it unless an explicit profile defines another
 non-runtime meaning for that receiver.
 
-For `fn`, the canonical explicit close is `end: fn`. A function's value-level name, such as `myFunc`, is not the core closing target for its source frame. A later profile may define semantic-name closing for selected entity descriptors, but that is not the default `fn` rule.
+For `fn`, the canonical explicit close target is the function name consumed by
+the `fn` receiver. Therefore `fn: myFunc ...` closes as `end: myFunc`, and an
+expanded form with `name: myFunc` also closes as `end: myFunc`.
 
 The closing line has its own source level. It may close several currently open implicit vertical levels at once if the named target is visible at or above that level. This allows a long tail of nested blocks to be cut with one named close. A parser must reject `end: <target>` if the target is ambiguous, not visible or not valid for closing from that position.
 
@@ -3872,13 +3892,14 @@ if: condition
     bodyCall()
 end: if
 
-Here `if` validates against the node/receiver name.
+Here `if` has no separate `name` argument, so the core `if` receiver exposes its
+head spelling as the close target.
 
 fn: myFunc (int(i)) (int(r))
     return: i
-end: fn
+end: myFunc
 
-Here `fn` validates against the node/receiver name.
+Here `fn` exposes the function name `myFunc` as the close target.
 
 fn:
     name: myFunc
@@ -3890,9 +3911,9 @@ fn:
     ---
     body:
         return: i
-end: fn
+end: myFunc
 
-Here `fn` still validates against the receiver/source-frame name, even though the function's value-level name is written as an ordinary nested Structure.
+Here `fn` exposes the explicit `name: myFunc` field as the close target.
 
 fn:
     args:
@@ -3904,11 +3925,15 @@ fn:
     ---
     body:
         return: i
-end: fn
+end: myFunc
 
-This is also valid because validation closes the current `fn` frame by receiver/source-frame name rather than by the function's value-level name.
+This is also valid because close-target validation uses the semantic `name` role
+after receiver normalization, not the physical position of the `name:` field.
 
-All core examples above close by receiver/source-frame name. A future profile may add semantic-name close for long entity definitions, but that must be specified separately and must not make `fn` closing ambiguous.
+All core examples above close by the receiver-exposed visible target. For
+receivers with a `name` role, that role is the close target. Receivers without
+such a role may expose their head spelling or may require ordinary source-level
+cut/nameless close instead.
 
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
@@ -3958,7 +3983,11 @@ Runtime exit from an `fn`, `sub`, iterator-like executable body or method-like e
 
 `return` is not the same as the general structural close receiver `end:`. `end:` closes source structure by visible target name. `return` exits executable control flow. In a terminal trailer position inside an open executable definition, an admitted `return` form may also serve as the structural close of that executable definition.
 
-For `fn`, the ordinary explicit structural close is `end: fn`. A value return, written as `return: value`, may also close the `fn` when it appears in a valid terminal trailer position. The same spelling inside the body is still an ordinary runtime return and does not structurally close the definition.
+For `fn`, the ordinary explicit structural close uses the function name exposed
+by the `fn` receiver, for example `end: square`. A value return, written as
+`return: value`, may also close the function when it appears in a valid terminal
+trailer position. The same spelling inside the body is still an ordinary runtime
+return and does not structurally close the definition.
 
 8.2. Return Forms
 
@@ -4007,7 +4036,11 @@ If an executable definition is opened at source level N, then its ordinary verti
 
 Here "at the source level of the executable definition" means the level of the opening source item, such as `fn: name` or `sub: name`, not the ordinary body level. A `return` or `return: value` item written at level N + 1 or deeper is a runtime return inside the executable body. It exits the executable at runtime, but it is not the structural trailer of the executable definition.
 
-Terminal return is equivalent to appending the corresponding runtime `return` as the final body item and then closing the executable definition by its admitted executable close target. For an `fn`, this is equivalent to appending `return: value` to the body and closing the source frame with `end: fn`.
+Terminal return is equivalent to appending the corresponding runtime `return` as
+the final body item and then closing the executable definition by its admitted
+executable close target. For an `fn`, this is equivalent to appending `return:
+value` to the body and closing the function with its receiver-exposed name, such
+as `end: square`.
 
 If the terminal `return` item is written at a smaller source level than the executable definition itself, it may still act as the terminal trailer for the visible executable tail when the normal source-level cut reaches that tail and all intervening frames admit such closure. In that case, the `return` role belongs to the executable tail. Enclosing non-executable frames are closed by the source-level cut, not because `return` is a general close receiver for them.
 
@@ -4020,7 +4053,7 @@ is source-semantically equivalent to:
 
 fn: square (int(x)) (int)
     return: x * x
-end: fn
+end: square
 
 The first form is the canonical compact form for a short function. The second form is an explicit expanded explanation of the same source semantics.
 
@@ -4038,7 +4071,7 @@ L3:
     sub: helloMain
         print: "Hello"
         return
-    end: sub
+    end: helloMain
 end: L3
 
 The source-level `return` at the level of `sub: helloMain` closes the `sub: helloMain` definition. The following `end: L3` closes only the enclosing level receiver.
@@ -4056,10 +4089,10 @@ L3:
     sub: helloMain
         print: "Hello"
         return
-    end: sub
+    end: helloMain
 end: L3
 
-Terminal return may close the open executable tail in the same checked way as the executable's admitted `end:` target. For an `fn`, that target is `end: fn`. It is not a general close form for arbitrary Structures. It is valid only for executable definitions or executable-like receivers that explicitly admit terminal return.
+Terminal return may close the open executable tail in the same checked way as the executable's admitted `end:` target. For an `fn`, that target is the function name exposed by the `fn` receiver, such as `end: square`. It is not a general close form for arbitrary Structures. It is valid only for executable definitions or executable-like receivers that explicitly admit terminal return.
 
 A terminal `return` may also cut through still-open nested body frames above its target level in the same structural-trailer sense as `end: <name>` or an allowed nameless delimiter, provided all intervening frames admit such closure.
 
@@ -4138,7 +4171,7 @@ The function still returns explicitly with `return: square`. The canonical retur
 
 Implicit return at function end is not a core source form in this revision.
 
-In the core profile, `end: fn` is a structural close only. It does not append an implicit runtime return for a value-producing function.
+In the core profile, an explicit structural close such as `end: f` does not append an implicit runtime return for a value-producing function.
 
 The preferred style is:
 
@@ -4348,7 +4381,7 @@ L3:
         f64(harvest 0.0)
     ) (boolean)
         return: area > 0.0 && soilWater >= 0.0 && soilWater <= 100.0
-    end: fn
+    end: plantBedCondition
 end: L3
 
 In this direction, the formal argument Structure of `plantBedCondition` defines the model slots and defaults. The boolean return descriptor and the explicit `return:` body define the validation predicate.
@@ -6977,14 +7010,14 @@ fn: makePoints () iterator(Point)
     yield: Point(1.0 2.0)
     yield: Point(3.0 4.0)
     yield: Point(5.0 6.0)
-end: fn
+end: makePoints
 
 Another zero-argument example:
 
 fn: words () iterator(Text)
     yield: "Hello"
     yield: "World"
-end: fn
+end: words
 
 
 Calling:
@@ -7053,13 +7086,13 @@ If `T` is primitive, `value` is checked against that primitive type:
 
     fn: words () iterator(Text)
         yield: "Hello"
-    end: fn
+    end: words
 
 If `T` is structural, write the produced Structure explicitly:
 
     fn: makePoints () iterator(Point)
         yield: Point(1.0 2.0)
-    end: fn
+    end: makePoints
 
 inside an `iterator(Point)` function emits one `Point` value if `Point(1.0 2.0)` is a valid Point construction in the active profile.
 
@@ -7770,7 +7803,7 @@ For an `fn`, `return: value` consumes a compatible primitive or Structure value 
 
 For a `sub`, `return` exits without producing a normal return value. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
-At a valid terminal trailer position for an open executable definition, an admitted return form may be terminal return. Terminal return appends the corresponding runtime return as the final body item and closes the executable definition, in the same checked close position where the executable's admitted `end:` target would otherwise be expected. For an `fn`, that target is `end: fn` and the terminal return form is `return: value`. The common compact position is the executable definition's own source level; a smaller source level may also be valid when the ordinary source-level cut reaches the visible executable tail and intervening frames admit that closure.
+At a valid terminal trailer position for an open executable definition, an admitted return form may be terminal return. Terminal return appends the corresponding runtime return as the final body item and closes the executable definition, in the same checked close position where the executable's admitted `end:` target would otherwise be expected. For an `fn`, that target is the function name exposed by the `fn` receiver, such as `end: square`, and the terminal return form is `return: value`. The common compact position is the executable definition's own source level; a smaller source level may also be valid when the ordinary source-level cut reaches the visible executable tail and intervening frames admit that closure.
 
 Example:
 
