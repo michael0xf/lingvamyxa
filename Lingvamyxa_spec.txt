@@ -1031,6 +1031,33 @@ This line may contain === without closing the block.
 
 This is a source-level fence form. The rule is the same fence principle as raw file comments: the fence must begin at column 0, the opening fence line is pure fence, and the closing fence must have exactly the same run length as the opening fence.
 
+3.4.4.4. Mark-Based String Templates
+
+Curly-brace marks inside text/string payloads provide a passive, mark-based
+analogue of string templates. They are document marks first, not automatic
+runtime substitution.
+
+Example:
+
+    SQL: "select * from users where id = {userId}"
+
+An editor or document consumer may recognize `{userId}` as an internal mark or
+placeholder and may highlight it according to the selected string profile, such
+as SQL, JSON, regular expression text or Lingvamyxa source text. This recognition
+does not evaluate `userId`, does not read variables and does not change the
+string value.
+
+Substitution or binding happens only when an explicit receiver consumes the
+string under a profile that defines that behavior. For example, a SQL receiver
+or driver may consume the string as a parameterized query, bind `userId` as an
+argument and apply the driver-specific escaping, encoding or binary parameter
+rules. The source-level mark only identifies a potential placeholder; the
+receiver decides whether it is meaningful and how it is consumed.
+
+This keeps string payload interpretation passive by default. The same source can
+be inspected, highlighted and formatted safely, while execution, substitution or
+transport binding requires an explicit consuming receiver.
+
 
 4. Surface Forms and Normalization
 
