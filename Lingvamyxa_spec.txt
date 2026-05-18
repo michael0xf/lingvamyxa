@@ -53,6 +53,12 @@ Canonical semantic pipeline:
 
 A Structure does not execute merely because it exists. Execution, translation, registration, validation or query handling starts only when a receiver or subroutine consumes the Structure under a defined mode.
 
+Argument position does not change that rule. A Structure supplied as an argument
+remains a Structure until the active receiver/signature consumes it. Ordinary
+call/expression resolution may consume an immediate singleton field that resolves
+in the active namespace as a callable/method item, but a bounded, anonymous or
+vertical Structure is not executed merely because it appears among arguments.
+
 0.0.1. Language Scope
 
 Lingvamyxa is one structural language with several consumption modes.
@@ -1079,6 +1085,13 @@ the colon as explicit punctuation so humans, editors, formatters and simple
 tools can see the head/tail boundary without receiver-specific knowledge.
 
 In receiver terminology, `head` is a receiver, operator, callable, constructor, updater, model receiver, message receiver or other consuming head. The parser builds the generic Structure; the active receiver signature later assigns semantic roles to its fields.
+
+The colon itself does not evaluate the tail. It only creates the head/tail frame.
+The following argument Structure may later be consumed as values, an expression,
+an executable body, a tuple, model data, configuration data or another
+receiver-defined role. A nested Structure in the tail is still a Structure unless
+the active receiver explicitly consumes that field in a mode that executes,
+translates or otherwise interprets it.
 
 In linguistic terminology, this colon may be described as a valence colon or a marker of government/rection. It marks a predicate-argument frame: the left side is the governing predicate/head, and the right side or the following vertical children are its actants/arguments. The predicate/head status still comes from position and receiver consumption, not from a separate colon-specific semantic operator.
 
@@ -2153,6 +2166,13 @@ This builds a Frame whose final meaning is assigned by the active `if` receiver.
 
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
 
+This does not mean that Structure arguments are evaluated automatically. If a
+direct argument field resolves as a callable/method in a position that expects a
+value producer, that field may be consumed as a call or expression. A Structure
+field remains a Structure unless the receiver signature consumes it as body,
+callable/executable value, expression, tuple/data, model fragment or another
+explicit role.
+
 This is an intentional property of the language, not an accidental ambiguity. In ordinary colon line forms, whitespace creates short-tail fields and expression operators may bind neighboring fields into expression Structures. In vertical form, child items at the next source level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
 
 4.7. No Native `=` Assignment or Named-Field Operator
@@ -2333,7 +2353,7 @@ A receiver may consume a field as one of the following semantic modes:
     relation frame
     query frame
 
-The mode is receiver-defined. The parser does not decide that a field is executable merely because it looks like code.
+The mode is receiver-defined. The parser does not decide that a field is executable merely because it looks like code. Likewise, ordinary argument passing does not execute Structure fields merely because they are present in argument position. Execution happens only when the receiver/signature consumes that field in an executable/callable/body/value-producing mode.
 
 5.3. Expected Field Positions and Anonymous Bodies
 
@@ -5285,6 +5305,11 @@ The same surface form is used for callable consumption. For example, `i: 5` is p
 
 A bounded Structure or compact Frame in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: int(i, 0) (i < n) i++ print(i)`, the final `print(i)` is the `body` argument consumed by `for`.
 
+This is receiver consumption, not automatic execution of every Structure in an
+argument list. A direct singleton argument that resolves as a callable/method may
+be called by the active value-production rule. A Structure argument is called or
+executed only when the receiver/signature gives that Structure such a role.
+
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
 ?
@@ -5508,6 +5533,29 @@ This means that the source call:
 is always semantically treated as a call with one argument Structure containing `a`, `b` and `c`.
 
 A concrete translator may pass fields directly, use a handle, use a temporary Structure, inline the call, specialize adapters or apply any other physical strategy. These choices do not change the Lingvamyxa source semantics.
+
+For ordinary direct `fn`/`sub` call lowering, a single top-level
+bounded/anonymous Structure supplied as the whole call argument Structure is the
+canonical spelling of "use these N fields as the call arguments". This exception
+exists because the call argument list itself is a Structure, so a one-field
+argument list containing only one Structure is otherwise indistinguishable from
+that Structure used as the physical argument-list wrapper. This is a one-level
+argument-list equivalence only; it is not evaluation or execution of that
+Structure. A variable that contains a Structure remains one argument, and an
+explicitly nested Structure remains one structural argument after the outer
+call-argument wrapper has been consumed.
+
+Example:
+
+    f((a b))
+
+is lowered as a call with two physical fields `a` and `b` by a direct C-call
+translator for ordinary `fn`/`sub` calls. But:
+
+    f(((a b)))
+
+contains an explicit nested Structure and preserves that inner Structure as one
+argument for the receiver/lowering profile.
 
 20.3. Return Lowering Independence
 
@@ -5940,7 +5988,7 @@ Ordinary line arguments are whitespace-separated short-tail fields. A parser mus
 
 Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. When no short form is open at the current scan depth, comma may be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma inside a deeper bounded Structure or compact Frame belongs to that deeper form.
 
-Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position.
+Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position. The parser never marks a Structure as executable merely because it is nested inside arguments; that role is assigned only by receiver/signature consumption.
 
 Labels are not a separate structural grammar category. A source line such as `outerLoop:` is a colon frame with an empty inline tail and a required following vertical block. The active receiver/profile decides whether that frame introduces a local nullary executable binding, a control label role, both, or an error. A later bare line such as `outerLoop` is also not special label grammar; in executable statement position it may resolve through the ordinary namespace to that zero-argument label-block binding.
 

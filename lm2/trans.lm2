@@ -365,6 +365,15 @@ static int lm_trans_emit_call_args(FILE *file, const LmP0Structure *body) {
 
     first = 1;
     field = body->first_field;
+    if (
+        field != NULL &&
+        field->next == NULL &&
+        field->value != NULL &&
+        field->value->kind == LM_P0_NODE_STRUCTURE
+    ) {
+        field = field->value->as.structure.first_field;
+    }
+
     while (field != NULL) {
         if (!first && lm_trans_put(file, ", ") != 0) {
             return 1;
