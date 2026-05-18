@@ -180,20 +180,11 @@ dataset: harvest
 end: harvest
 {end: system}
 
-The structural parser keeps the ordinary Lingvamyxa data model: trees, tables,
-arrays and records are still Structures. Curly-brace marks are document marks,
-not ordinary P0 Structure fields. The parser still walks source in character
-order and does not remove or skip string payload text merely because it is a
-string. If the common source scan sees `{...}` inside a quoted string, the
-string remains one full string value for the structural parser, but the scan may
-also place the corresponding mark tag into the overlapper document.
-
-When source is held as an overlapper document, an implementation may build the
-marks layer during the same structural parse. Each parsed Structure may receive
-a generated document tag that points to that Structure, while the Structure
-keeps the corresponding tag reference. Generated context tags also mark source
-regions such as quoted strings. For example, the generated string tag records
-that the current position is inside a string.
+From one compact unified syntax, the parser can simultaneously create
+hierarchical Structures, arrays and a mark graph. The mark graph is a layer of
+overlapping, partially hierarchical active sets. It is laid over the tree and
+array data, so the language algorithm can know the active values of all relevant
+elements at every position and can update them directly.
 
 A document consumer therefore knows both the Structure context and whether the
 current position is inside a string. Marks found inside a string are interpreted
