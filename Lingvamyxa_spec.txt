@@ -132,6 +132,9 @@ active fact, and `end` closes the corresponding active name:
     {end: red}
     {end: green}
 
+`{end}` closes the last still-active mark. `{end: name}` closes the active mark
+named `name`.
+
 This is intentionally different from XML and HTML nesting. Closing names the
 active value that is no longer wanted; it is not just a repeated tag name. The
 active mark set is therefore naturally represented as a current attribute table,
@@ -140,25 +143,31 @@ single strict tree.
 
 Example of the same tree and table-like data with a markup layer:
 
+{style: system}
 dataset: harvest
     meta:
+{style: title}
+{color: blue}
         title: "Regional harvest report"
+{style: date}
         season: 2026
+{end: title}
+        month: April
+{end: date}
         source:
             organization: `Field Bureau`
             system: `manual survey`
         ---
         location:
+{color: green}
             country: Uruguay
             region: `north field group`
         ---
-        note:
-            {color: red}
-            {color: green}
-            "This part is marked document data over ordinary Structures."
-            {end: red}
-            {end: green}
+        note:{color: blue}
+            "This part is {color: red} marked {end} document data over ordinary Structures."
+
     ---
+{end: blue}
 
     table:
         columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
@@ -167,11 +176,36 @@ dataset: harvest
                  2        `south field`       corn         8.75       0.19
                  3        `east ridge`        barley      10.00       0.16
                  4        `river lowland`     rice        21.30       0.22
+{end: green}
 end: harvest
+{end: system}
 
 The structural parser keeps the ordinary Lingvamyxa data model: trees, tables,
-arrays and records are still Structures. The markup parser runs as a parallel
-document layer and maintains active marks while traversing the source. It can
+arrays and records are still Structures. Curly-brace marks are document marks,
+not ordinary P0 Structure fields. The parser still walks source in character
+order and does not remove or skip string payload text merely because it is a
+string. If the common source scan sees `{...}` inside a quoted string, the
+string remains one full string value for the structural parser, but the scan may
+also place the corresponding mark tag into the overlapper document.
+
+When source is held as an overlapper document, an implementation may build the
+marks layer during the same structural parse. Each parsed Structure may receive
+a generated document tag that points to that Structure, while the Structure
+keeps the corresponding tag reference. Generated context tags also mark source
+regions such as quoted strings. For example, the generated string tag records
+that the current position is inside a string.
+
+A document consumer therefore knows both the Structure context and whether the
+current position is inside a string. Marks found inside a string are interpreted
+under the string context, with their own isolated marker table and namespace,
+rather than being mixed into the surrounding source-level active mark table.
+Additional interpretation is needed only when a consumer chooses to activate or
+render such internal payload marks, such as colorizing text inside a string
+according to that string's own internal document markup. For example, a
+surrounding mark such as `{style: system}` may select a profile in which printed
+strings are treated as document text and their internal marks are interpreted.
+
+The marks layer maintains active marks while traversing the source. It can
 therefore expose all data at a position, including the Structure context and the
 current active mark attributes, with fast access and without requiring large
 contiguous memory blocks.
