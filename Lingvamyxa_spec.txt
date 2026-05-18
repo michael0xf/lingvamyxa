@@ -2040,7 +2040,9 @@ The source-level named close form is the ordinary colon receiver form. It is val
 
     end: <target>
 
-`end:` consumes its tail as a close target. The target names a visible frame, label block or entity block. If an opening form such as `[]: matrix` introduces the visible name `matrix`, then the close form is:
+`end:` consumes its tail as a close target. The target names a visible frame, label block or entity block. This tail is a structural close operand, not an ordinary namespace expression: it is not looked up as a variable, not called, not evaluated and not available to user code as a runtime argument. The colon spelling is source syntax for a privileged structural instruction to the parser/translator validation layer.
+
+If an opening form such as `[]: matrix` introduces the visible name `matrix`, then the close form is:
 
     end: matrix
 
@@ -2048,13 +2050,15 @@ not:
 
     end: [] matrix
 
-The close target is not mechanically the receiver/head spelling. A receiver
-defines which visible target it introduces. The ordinary convention is that a
-field consumed with semantic role `name` becomes the visible close target. This
-is why `[]: matrix` closes as `end: matrix`, and why `fn: square ...` closes as
-`end: square`. Receivers without a `name` role may expose their head spelling as
-the close target, expose another receiver-defined target, or expose no named
-close target at all.
+The close target is not blindly the receiver/head spelling. A receiver defines
+which visible target it introduces. The privileged receiver role is `name`: if a
+receiver consumes one of its fields as semantic role `name`, that value becomes
+the visible close target. This is why `[]: matrix` closes as `end: matrix`, and
+why `fn: square ...` closes as `end: square`. If an opening receiver has no
+`name` role, the general named-close default is its own head spelling, so
+`if: ...` closes as `end: if` and `Label: ...` closes as `end: Label`. A
+receiver may explicitly define a nameless/anonymous opening form, but that is an
+opt-out from named close, not the default.
 
 `end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current source level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
@@ -3624,11 +3628,12 @@ The `fn` frame's logical argument Structure is not the same thing as the formal 
     body -> fields 3..end as one executable body Structure
 
 P0 does not know these roles. It only builds the field sequence.
-After receiver normalization, the `name` role is ordinary visible metadata of
+After receiver normalization, the `name` role is privileged visible metadata of
 the normalized Structure. Editors, highlighters and translators may use that
 metadata to show the introduced name and to validate `end: <target>` against the
-receiver-exposed close target. A receiver that does not consume any field as
-`name` does not automatically introduce a semantic-name close target.
+receiver-exposed close target. A receiver that consumes no field as `name` still
+uses the general named-close default, its own head spelling, unless it explicitly
+defines an anonymous/nameless close form.
 
 The formal argument field must be an argument-list Structure even when there is only one formal argument. Therefore:
 
@@ -3867,9 +3872,20 @@ The bare form `end` and the old-looking form `end <target>` are not valid Lingva
 `end:` validates `<target>` against a visible open close target: a frame/entity
 name introduced by the active receiver, a labelled block or another
 receiver-defined visible target. The target is not necessarily the receiver/head
-spelling. In the ordinary receiver convention, the field consumed with semantic
-role `name` becomes the close target. Multi-word target names must be written as
-exact quoted identifiers.
+spelling. The privileged receiver role is `name`: when a receiver consumes an
+argument or child frame as semantic role `name`, that value is the close target.
+If the receiver has no `name` role, the default close target is the receiver's
+own head spelling. Multi-word target names must be written as exact quoted
+identifiers.
+
+The `<target>` operand of `end:` is outside the ordinary namespace expression
+rules. It is a literal close target consumed by the structural validation layer,
+not a variable, function call, computed value or user-level receiver argument.
+Therefore `end: someName` never means "evaluate `someName` and close whatever it
+returns"; it means "close the currently visible target whose source name is
+exactly `someName`". In this sense `end:` has broader structural authority than
+ordinary function receivers: it may cut an admitted open tail, while ordinary
+calls can only consume and produce runtime values inside already-open structure.
 
 Unlike `return: value`, which may be a valid runtime item inside an executable
 body, `end: <target>` is valid only as a structural close from an admitted close
@@ -3930,10 +3946,49 @@ end: myFunc
 This is also valid because close-target validation uses the semantic `name` role
 after receiver normalization, not the physical position of the `name:` field.
 
+The same rule applies to any receiver that defines `name` as its semantic name
+role. In this example the receiver/head is `hello`, but the visible close target
+is `world`:
+
+hello: name: world
+. "!"
+. "!"
+end: world
+
+When the same close target is visible at several levels, the source level of
+the closing line participates in target selection. A parent-level close selects
+the matching target opened at that parent level and cuts the open deeper tail
+along the way:
+
+hello: name: world  # world #1, opened at level 0
+. "1"
+. hello: name: world  # world #2, opened at level 1
+. . "2"
+. . "!"
+end: world  # closes world #1 and also closes its still-open tail
+
+To close the inner `world` explicitly, place the close at the inner opening
+level:
+
+hello: name: world  # world #1
+. "1"
+. hello: name: world  # world #2
+. . "2"
+. . "!"
+. end: world  # closes world #2
+end: world    # closes world #1
+
 All core examples above close by the receiver-exposed visible target. For
-receivers with a `name` role, that role is the close target. Receivers without
-such a role may expose their head spelling or may require ordinary source-level
-cut/nameless close instead.
+receivers with a `name` role, that role is the close target. For receivers
+without such a role, the ordinary default is the receiver/head spelling. A
+receiver that wants no named close target must define that explicitly.
+
+The `name` role is privileged in the same practical sense as a conventional
+entry name such as `main` in other languages: tools may highlight it specially,
+the normalized Structure exposes it as the introduced visible name, calls and
+namespace lookup use it where the receiver defines a callable/entity binding,
+and `end: <target>` validation uses it as the only valid named close target for
+that opened Structure.
 
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
@@ -3948,6 +4003,17 @@ readLoop:
 end: readLoop
 
 is an ordinary colon Frame with an empty inline tail and a vertical body. When the active executable/control profile consumes this shape as a label block, the label name introduces a local namespace binding for that block.
+Because this receiver has no separate `name` argument, its visible close target
+is its own head spelling. Therefore the explicit close form is:
+
+Label:
+    step0
+    step1
+end: Label
+
+A label block can also be closed by the ordinary source-level cut when the
+surrounding structure makes the target clear. `end: Label` is the explicit
+checked form for long or visually separated label bodies.
 
 A label-block binding is a local executable binding with no source arguments and no normal return value:
 

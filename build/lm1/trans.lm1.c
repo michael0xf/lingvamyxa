@@ -21,6 +21,16 @@ static int lm_trans_text_equals(LmP0Text text, const char *value) {
     return text.length == length && memcmp(text.data, value, length) == 0;
 }
 
+static int lm_trans_text_same(LmP0Text left, LmP0Text right) {
+    if (left.length != right.length) {
+        return 0;
+    }
+    if (left.length == 0U) {
+        return 1;
+    }
+    return memcmp(left.data, right.data, left.length) == 0;
+}
+
 static int lm_trans_text_starts_with(LmP0Text text, const char *prefix) {
     size_t length;
 
@@ -100,6 +110,27 @@ static const LmP0Field *lm_trans_nth_field(const LmP0Structure *structure, size_
     }
 
     return field;
+}
+
+static int lm_trans_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text) {
+    const LmP0Field *field;
+
+    if (trailer == NULL || out_text == NULL) {
+        return 0;
+    }
+
+    field = trailer->body.first_field;
+    if (
+        field == NULL ||
+        field->next != NULL ||
+        field->value == NULL ||
+        field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        return 0;
+    }
+
+    *out_text = field->value->as.atom;
+    return 1;
 }
 
 static void lm_trans_names_destroy(LmTransNameSet *set) {
@@ -591,6 +622,125 @@ static int lm_trans_emit_control_condition(FILE *file, const LmP0Frame *frame) {
     return lm_trans_emit_expr_range(file, first, body_start);
 }
 
+static int lm_trans_frame_has_positional_name_role(const LmP0Frame *frame) {
+    if (frame == NULL) {
+        return 0;
+    }
+
+    return
+        lm_trans_text_equals(frame->head, "fn") ||
+        lm_trans_text_equals(frame->head, "sub") ||
+        lm_trans_text_equals(frame->head, "synchronized") ||
+        lm_trans_text_equals(frame->head, "[]") ||
+        lm_trans_text_equals(frame->head, "entry");
+}
+
+static int lm_trans_named_role_from_frame(const LmP0Frame *frame, LmP0Text *out_name) {
+    const LmP0Field *field;
+    const LmP0Field *name_field;
+    const LmP0Frame *child_frame;
+
+    if (frame == NULL || out_name == NULL) {
+        return 0;
+    }
+
+    field = frame->body.first_field;
+    while (field != NULL) {
+        if (field->value != NULL && field->value->kind == LM_P0_NODE_FRAME) {
+            child_frame = &field->value->as.frame;
+            if (lm_trans_text_equals(child_frame->head, "name")) {
+                name_field = child_frame->body.first_field;
+                if (
+                    name_field != NULL &&
+                    name_field->next == NULL &&
+                    name_field->value != NULL &&
+                    name_field->value->kind == LM_P0_NODE_ATOM
+                ) {
+                    *out_name = name_field->value->as.atom;
+                    return 1;
+                }
+            }
+        }
+        field = field->next;
+    }
+
+    if (!lm_trans_frame_has_positional_name_role(frame)) {
+        return 0;
+    }
+
+    field = lm_trans_nth_field(&frame->body, 0U);
+    if (field == NULL || field->value == NULL) {
+        return 0;
+    }
+
+    if (field->value->kind == LM_P0_NODE_ATOM) {
+        *out_name = field->value->as.atom;
+        return 1;
+    }
+
+    if (field->value->kind == LM_P0_NODE_FRAME) {
+        *out_name = field->value->as.frame.head;
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_trans_frame_close_target(const LmP0Frame *frame, LmP0Text *out_target) {
+    if (frame == NULL || out_target == NULL) {
+        return 0;
+    }
+
+    if (lm_trans_named_role_from_frame(frame, out_target)) {
+        return 1;
+    }
+
+    *out_target = frame->head;
+    return 1;
+}
+
+static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
+    LmP0Text actual;
+    LmP0Text expected;
+
+    if (frame == NULL || frame->trailer == NULL) {
+        return 0;
+    }
+
+    if (!lm_trans_text_equals(frame->trailer->spelling, "end")) {
+        return 0;
+    }
+
+    if (!lm_trans_trailer_single_atom(frame->trailer, &actual)) {
+        fprintf(stderr, "trans error: end trailer expects exactly one target name\n");
+        return 1;
+    }
+
+    if (!lm_trans_frame_close_target(frame, &expected)) {
+        fprintf(
+            stderr,
+            "trans error: receiver \"%.*s\" does not expose a named close target\n",
+            (int)frame->head.length,
+            frame->head.data
+        );
+        return 1;
+    }
+
+    if (!lm_trans_text_same(actual, expected)) {
+        fprintf(
+            stderr,
+            "trans error: end target \"%.*s\" does not match receiver close target \"%.*s\"\n",
+            (int)actual.length,
+            actual.data,
+            (int)expected.length,
+            expected.data
+        );
+        return 1;
+    }
+
+    return 0;
+}
+
 static int lm_trans_emit_trailer_statement(
     FILE *file,
     const LmP0Trailer *trailer,
@@ -616,7 +766,17 @@ static int lm_trans_emit_trailer_statement(
         return lm_trans_put(file, ";\n");
     }
 
-    return 0;
+    if (lm_trans_text_equals(trailer->spelling, "end")) {
+        return 0;
+    }
+
+    fprintf(
+        stderr,
+        "trans error: unsupported trailer \"%.*s\"\n",
+        (int)trailer->spelling.length,
+        trailer->spelling.data
+    );
+    return 1;
 }
 
 static int lm_trans_emit_control(
@@ -926,6 +1086,10 @@ static int lm_trans_emit_statement(
         return status;
     }
 
+    if (lm_trans_validate_end_trailer(&node->as.frame) != 0) {
+        return 1;
+    }
+
     return lm_trans_emit_trailer_statement(file, node->as.frame.trailer, indent, locals);
 }
 
@@ -1040,6 +1204,9 @@ static int lm_trans_emit_function(FILE *file, const LmP0Frame *frame, int is_sub
 
     status = lm_trans_emit_statement_list(file, body_start, 1U, &locals);
     if (status == 0) {
+        status = lm_trans_validate_end_trailer(frame);
+    }
+    if (status == 0) {
         status = lm_trans_emit_trailer_statement(file, frame->trailer, 1U, &locals);
     }
     if (status == 0) {
@@ -1074,7 +1241,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
         field = field->next;
     }
 
-    return 0;
+    return lm_trans_validate_end_trailer(l2);
 }
 
 static int lm_trans_emit_raw_atom(FILE *output, const LmP0Node *node) {
@@ -1139,7 +1306,7 @@ static int lm_trans_emit_l1_body(FILE *output, const LmP0Frame *l1, int *emitted
         field = field->next;
     }
 
-    return 0;
+    return lm_trans_validate_end_trailer(l1);
 }
 
 static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int *emitted) {
@@ -1186,6 +1353,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     const LmP0Node *root;
     FILE *output;
     int status;
+    int close_status;
     int emitted;
 
     document = NULL;
@@ -1223,11 +1391,13 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
         status = 1;
     }
 
-    if (fclose(output) != 0) {
-        status = 1;
+    close_status = fclose(output);
+    if (status != 0) {
+        lm_p0_document_destroy(document);
+        return 1;
     }
 
-    if (status != 0) {
+    if (close_status != 0) {
         fprintf(stderr, "trans error: cannot write output file %s\n", output_path);
         lm_p0_document_destroy(document);
         return 1;
