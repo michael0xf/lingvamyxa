@@ -2,11 +2,11 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "p0-debug",
-      "displayName": "P0 Debug (MinGW)",
+      "name": "lmx-debug",
+      "displayName": "LMX Debug (MinGW)",
       "description": "Lightweight parser/debug configuration without Qt app or external runtime dependencies.",
       "generator": "MinGW Makefiles",
-      "binaryDir": "${sourceDir}/build/qtcreator-p0-debug",
+      "binaryDir": "${sourceDir}/lmx-debug-config",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_COMPILER": "C:/Qt/Tools/mingw1310_64/bin/gcc.exe",
@@ -21,11 +21,11 @@
       }
     },
     {
-      "name": "p0-debug-buildcore-full",
-      "displayName": "P0 Debug + buildCore --full",
+      "name": "lmx-debug-buildcore-full",
+      "displayName": "LMX Debug + buildCore --full",
       "description": "Lightweight Qt/MinGW configure that passes --full to buildCore when runBuildCore.lm0 is built.",
-      "inherits": "p0-debug",
-      "binaryDir": "${sourceDir}/build/qtcreator-p0-buildcore-full",
+      "inherits": "lmx-debug",
+      "binaryDir": "${sourceDir}/lmx-debug-full-config",
       "cacheVariables": {
         "LINGVAMYXA_BUILDCORE_ARGS": "--full"
       }
@@ -33,9 +33,9 @@
   ],
   "buildPresets": [
     {
-      "name": "p0-debug",
-      "displayName": "Build P0 Debug",
-      "configurePreset": "p0-debug",
+      "name": "lmx-debug",
+      "displayName": "Build LMX Debug",
+      "configurePreset": "lmx-debug",
       "targets": [
         "printTree.lm0",
         "trans.lm0",
@@ -47,7 +47,7 @@
     {
       "name": "run-buildcore",
       "displayName": "Run buildCore Bootstrap",
-      "configurePreset": "p0-debug",
+      "configurePreset": "lmx-debug",
       "targets": [
         "runBuildCore.lm0"
       ]
@@ -55,7 +55,7 @@
     {
       "name": "run-buildcore-full",
       "displayName": "Run buildCore Full Bootstrap",
-      "configurePreset": "p0-debug-buildcore-full",
+      "configurePreset": "lmx-debug-buildcore-full",
       "targets": [
         "runBuildCore.lm0"
       ]

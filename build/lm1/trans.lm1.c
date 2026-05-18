@@ -199,42 +199,13 @@ static int lm_trans_emit_name(FILE *file, LmP0Text name) {
     return lm_trans_write_text(file, name);
 }
 
-static int lm_trans_is_c_type_name(LmP0Text name) {
-    LmP0Text tail;
+static int lm_trans_accepts_c_type_name(LmP0Text name) {
+    (void)name;
+    return 1;
+}
 
-    if (!lm_trans_text_starts_with(name, "c.")) {
-        return 0;
-    }
-
-    tail.data = name.data + 2U;
-    tail.length = name.length - 2U;
-
-    return
-        lm_trans_text_equals(tail, "void") ||
-        lm_trans_text_equals(tail, "char") ||
-        lm_trans_text_equals(tail, "short") ||
-        lm_trans_text_equals(tail, "int") ||
-        lm_trans_text_equals(tail, "long") ||
-        lm_trans_text_equals(tail, "float") ||
-        lm_trans_text_equals(tail, "double") ||
-        lm_trans_text_equals(tail, "size_t") ||
-        lm_trans_text_equals(tail, "FILE") ||
-        lm_trans_text_equals(tail, "u8") ||
-        lm_trans_text_equals(tail, "u16") ||
-        lm_trans_text_equals(tail, "u32") ||
-        lm_trans_text_equals(tail, "u64") ||
-        lm_trans_text_equals(tail, "i8") ||
-        lm_trans_text_equals(tail, "i16") ||
-        lm_trans_text_equals(tail, "i32") ||
-        lm_trans_text_equals(tail, "i64") ||
-        lm_trans_text_equals(tail, "uint8_t") ||
-        lm_trans_text_equals(tail, "uint16_t") ||
-        lm_trans_text_equals(tail, "uint32_t") ||
-        lm_trans_text_equals(tail, "uint64_t") ||
-        lm_trans_text_equals(tail, "int8_t") ||
-        lm_trans_text_equals(tail, "int16_t") ||
-        lm_trans_text_equals(tail, "int32_t") ||
-        lm_trans_text_equals(tail, "int64_t");
+static int lm_trans_is_c_reference_name(LmP0Text name) {
+    return lm_trans_text_starts_with(name, "c.") && name.length > 2U;
 }
 
 static int lm_trans_emit_expr_node(FILE *file, const LmP0Node *node);
@@ -524,7 +495,10 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNameSet 
     field0 = lm_trans_nth_field(&node->as.frame.body, 0U);
     field1 = lm_trans_nth_field(&node->as.frame.body, 1U);
 
-    if (lm_trans_is_c_type_name(node->as.frame.head)) {
+    if (
+        lm_trans_is_c_reference_name(node->as.frame.head) &&
+        lm_trans_accepts_c_type_name(node->as.frame.head)
+    ) {
         if (field0 == NULL || field0->value == NULL || field0->value->kind != LM_P0_NODE_ATOM) {
             fprintf(stderr, "trans L2 error: c.type parameter expects a name\n");
             return 1;
@@ -739,6 +713,57 @@ static int lm_trans_emit_declaration(
     return lm_trans_names_add(locals, name_node->as.atom);
 }
 
+static int lm_trans_atom_can_be_new_binding_name(LmP0Text text) {
+    unsigned char ch;
+
+    if (text.length == 0U || lm_trans_atom_starts_string(text)) {
+        return 0;
+    }
+
+    if (
+        lm_trans_text_is_operator_atom(text) ||
+        lm_trans_text_equals(text, "@") ||
+        lm_trans_text_equals(text, "\\")
+    ) {
+        return 0;
+    }
+
+    ch = (unsigned char)text.data[0];
+    return
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= 'a' && ch <= 'z') ||
+        ch == '_' ||
+        ch == '`';
+}
+
+static int lm_trans_frame_looks_c_declaration(
+    const LmP0Frame *frame,
+    const LmTransNameSet *locals
+) {
+    const LmP0Field *name_field;
+
+    if (
+        frame == NULL ||
+        !lm_trans_is_c_reference_name(frame->head) ||
+        !lm_trans_accepts_c_type_name(frame->head)
+    ) {
+        return 0;
+    }
+
+    name_field = lm_trans_nth_field(&frame->body, 0U);
+    if (
+        name_field == NULL ||
+        name_field->value == NULL ||
+        name_field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        return 0;
+    }
+
+    return
+        lm_trans_atom_can_be_new_binding_name(name_field->value->as.atom) &&
+        !lm_trans_names_contains(locals, name_field->value->as.atom);
+}
+
 static int lm_trans_emit_pointer_declaration(
     FILE *file,
     const LmP0Frame *frame,
@@ -887,7 +912,7 @@ static int lm_trans_emit_statement(
             return 1;
         }
         status = lm_trans_put(file, "continue;\n");
-    } else if (lm_trans_is_c_type_name(node->as.frame.head)) {
+    } else if (lm_trans_frame_looks_c_declaration(&node->as.frame, locals)) {
         status = lm_trans_emit_declaration(file, &node->as.frame, indent, locals);
     } else if (lm_trans_text_all_char(node->as.frame.head, '@')) {
         status = lm_trans_emit_pointer_declaration(file, &node->as.frame, indent, locals);
