@@ -33,6 +33,8 @@ Lingvamyxa is based on the following model:
     L1 is an external bootstrap, implementation and lowering layer.
     L2-L5 are Lingvamyxa levels.
     Source syntax builds Structures.
+    Source traversal also builds MIX overlay intervals in parallel with
+    Structures and arrays.
     Receivers and subroutines consume Structures.
     The core parser has one structural syntax.
     Operator tokens that cannot be namespace identifiers are parsed as operator fields without `:`.
@@ -126,28 +128,70 @@ to CSV, SQL rows, binary records, in-memory arrays, Lingvamyxa Structure
 serialization, JSON for legacy interoperability, or another backend
 representation.
 
-0.0.2.0. Secondly, Lingvamyxa is a markup and document language.
+0.0.2.0. Secondly, Lingvamyxa has MIX overlay markup and document semantics.
 
-Lingvamyxa source may also carry an active markup layer. Curly-brace marks are
-part of the language, not an XML preprocessor and not a separate mini-language.
-The text inside `{...}` is parsed as Lingvamyxa source. A mark opens a named
-active fact, and `end` closes the corresponding active name:
+MIX is the Lingvamyxa overlay markup model. It is not an XML-like tree
+markup system, not an HTML preprocessor and not a separate mini-language.
+MIX is a parallel active mark and interval overlay built during the same
+source traversal that builds ordinary Structures and arrays.
+
+The compact formula is:
+
+    source traversal
+        -> Structures and arrays
+        -> MIX active mark / interval overlay
+        -> receiver/profile consumption
+
+The source text may still look tree-shaped, because that is convenient for
+human reading and for structural parsing. The MIX view is different: it
+projects source positions, Structure nodes, array rows, fields and explicit
+marks into overlapping active sets. Therefore a Lingvamyxa source file can have
+MIX overlay information even when it contains no explicit curly-brace marks.
+Ordinary structural forms are also markable source-interval entities. Curly
+braces are only the explicit document-facing spelling for adding extra active
+marks to the same overlay model.
+
+Curly-brace marks are part of the language. The text inside `{...}` is parsed
+as Lingvamyxa source. A mark frame such as:
+
+    {color: red}
+
+opens one active MIX mark entry. In this example the mark head is `color` and
+the active close name/value is `red`. The entry remains active until it is
+closed or until the containing source/document unit ends according to the
+selected profile. Unclosed entries are not silently forgotten; they remain
+tracked as still-open entries and may become diagnostics, document-wide
+intervals or profile-specific state.
+
+Explicit close forms operate over the active mark stack:
 
     {color: red}
     {color: green}
+    text
     {end: red}
     {end: green}
 
-`{end}` closes the last still-active mark. `{end: name}` closes the active mark
-named `name`.
+`{end}` closes the last still-active explicit mark. `{end: name}` closes the
+most recent still-active explicit mark whose close name/value is `name`.
+Closing `red` in the example above closes the `{color: red}` entry; the
+`{color: green}` entry remains open until it is closed separately.
 
 This is intentionally different from XML and HTML nesting. Closing names the
-active value that is no longer wanted; it is not just a repeated tag name. The
-active mark set is therefore naturally represented as a current attribute table,
-and it may describe overlapping ranges without forcing the document into a
-single strict tree.
+active value that is no longer wanted; it is not a repeated tag name and it
+does not force all open marks into a single strict element tree. A later or
+inner mark does not destroy the earlier one. For example, while the parser is
+inside both `{color: red}` and `{color: green}`, the current `color` value for a
+simple renderer may be `green`, but the underlying active chain still contains
+`red` below it. A consumer may inspect the whole chain.
 
-Example of the same tree and table-like data with a markup layer:
+The active attribute view is therefore not just a flat map from name to one
+value. It is at least a key-to-stack, key-to-list or key-to-active-set view over
+the ordered active MIX entries. A rendering profile may project this view to a
+simple last-open-wins table. A semantic, editor, diagnostic or registry profile
+may use the complete active chain and all intersecting active sets. P0 does not
+perform conflict resolution for MIX marks.
+
+Example of the same tree and table-like data with explicit MIX overlay marks:
 
 {style: system}
 dataset: harvest
@@ -187,25 +231,39 @@ end: harvest
 {end: system}
 
 From one compact unified syntax, the parser can simultaneously create
-hierarchical Structures, arrays and a mark graph. The mark graph is a layer of
-overlapping, partially hierarchical active sets. It is laid over the tree and
-array data, so the language algorithm can know the active values of all relevant
-elements at every position and can update them directly.
+hierarchical Structures, arrays and the MIX overlay graph. The MIX graph is a
+layer of overlapping, partially hierarchical active sets laid over source
+positions and structural data. The language algorithm can therefore know the
+active values of all relevant elements at every position and can update them
+directly.
 
-A document consumer therefore knows both the Structure context and whether the
-current position is inside a string. Marks found inside a string are interpreted
-under the string context, with their own isolated marker table and namespace,
-rather than being mixed into the surrounding source-level active mark table.
-Additional interpretation is needed only when a consumer chooses to activate or
-render such internal payload marks, such as colorizing text inside a string
-according to that string's own internal document markup. For example, a
-surrounding mark such as `{style: system}` may select a profile in which printed
-strings are treated as document text and their internal marks are interpreted.
+MIX scanning is universal. MIX interpretation is profile-dependent.
 
-The marks layer maintains active marks while traversing the source. It can
-therefore expose all data at a position, including the Structure context and the
-current active mark attributes, with fast access and without requiring large
-contiguous memory blocks.
+A source/document consumer may know the ordinary Structure context, the array
+or row context, the source position context, the active explicit marks and the
+implicit structural intervals around the current position. Marks found inside a
+string or raw text payload are recorded under that payload context, with their
+own isolated marker table and namespace, instead of being mixed into the
+surrounding source-level active mark table. Additional interpretation is needed
+only when a consumer chooses to activate, render or consume such internal
+payload marks.
+
+For example, a surrounding mark such as `{style: system}` may select a profile
+in which printed strings are treated as document text and their internal MIX
+marks are interpreted. A SQL string profile may highlight or bind internal
+placeholders. A plain string profile may ignore them completely. The raw string
+value is not changed merely because MIX marks are visible to the parser or
+document consumer.
+
+The MIX layer maintains active marks while traversing the source. It can
+therefore expose all data at a position, including Structure context,
+structural-array context, current top attributes and the full active mark
+chains, with fast access and without requiring large contiguous memory blocks.
+
+MIX overlay data is produced below or alongside the level receivers; it is not
+ordinary L5 execution by itself. However, L5 receivers may consume accepted
+MIX-derived intervals, annotations and structural facts through the ordinary
+fact, query, registry, message and validation machinery.
 
 0.0.3.0. Thirdly, Lingvamyxa is a high-level programming language.
 
@@ -526,6 +584,12 @@ L5 is the level of messages, configuration, behavior descriptors, fact registrie
 An L5 Thread is the ordinary source-semantic active unit for interactive, concurrent, event-driven and service-like Lingvamyxa programs. A service instance is a placement or bundling mode of one or more L5 Threads, not a separate later paradigm.
 
 L5 may attach message behavior to L4 structural models. L5 may also represent registry data as typed facts and rules. This draft places that fact/behavior layer in L5. A later specification may split this area into internal L5 profiles, bundles or subdomains, but this document keeps it within L5 as source-semantic infrastructure, not as ordinary runtime I/O.
+
+L5 may consume accepted MIX-derived intervals, annotations and structural
+facts through the ordinary registry/query/message machinery. MIX itself is
+produced by source traversal and structural overlay processing; it is not
+ordinary L5 execution merely because L5 can store or react to accepted
+MIX-derived facts.
 
 1.7. Level Receivers
 
@@ -1038,33 +1102,37 @@ This line may contain === without closing the block.
 
 This is a source-level fence form. The rule is the same fence principle as raw file comments: the fence must begin at column 0, the opening fence line is pure fence, and the closing fence must have exactly the same run length as the opening fence.
 
-3.4.4.4. Mark-Based String Templates
+3.4.4.4. MIX Mark-Based String Templates
 
-Curly-brace marks inside text/string payloads provide a passive, mark-based
-analogue of string templates. They are document marks first, not automatic
-runtime substitution.
+Curly-brace marks inside text/string payloads provide a passive MIX analogue of
+string templates. They are internal payload marks first, not automatic runtime
+substitution.
 
 Example:
 
     SQL: "select * from users where id = {userId}"
 
-An editor or document consumer may recognize `{userId}` as an internal mark or
-placeholder and may highlight it according to the selected string profile, such
-as SQL, JSON, regular expression text or Lingvamyxa source text. This recognition
-does not evaluate `userId`, does not read variables and does not change the
-string value.
+MIX scanning may record `{userId}` as an internal mark, placeholder or interval
+event inside the string payload. An editor or document consumer may highlight it
+according to the selected string profile, such as SQL, JSON, regular expression
+text or Lingvamyxa source text. This recognition does not evaluate `userId`,
+does not read variables and does not change the string value.
+
+Internal payload marks have their own isolated marker table and namespace. They
+are visible to consumers that inspect the string under a selected profile, but
+they are not mixed into the surrounding source-level active MIX table unless an
+explicit consumer profile defines such a projection.
 
 Substitution or binding happens only when an explicit receiver consumes the
 string under a profile that defines that behavior. For example, a SQL receiver
 or driver may consume the string as a parameterized query, bind `userId` as an
 argument and apply the driver-specific escaping, encoding or binary parameter
-rules. The source-level mark only identifies a potential placeholder; the
+rules. The internal MIX mark only identifies a potential placeholder; the
 receiver decides whether it is meaningful and how it is consumed.
 
 This keeps string payload interpretation passive by default. The same source can
 be inspected, highlighted and formatted safely, while execution, substitution or
 transport binding requires an explicit consuming receiver.
-
 
 4. Surface Forms and Normalization
 
