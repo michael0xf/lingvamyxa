@@ -4,15 +4,29 @@
 
 #include "parser.lm1.h"
 
-typedef struct LmTransName {
-    LmP0Text text;
-} LmTransName;
+typedef enum LmTransSymbolKind {
+    LM_TRANS_SYMBOL_VARIABLE = 1,
+    LM_TRANS_SYMBOL_FUNCTION = 2,
+    LM_TRANS_SYMBOL_PROCEDURE = 3,
+    LM_TRANS_SYMBOL_LABEL = 4,
+    LM_TRANS_SYMBOL_RECEIVER = 5,
+    LM_TRANS_SYMBOL_TYPE = 6
+} LmTransSymbolKind;
 
-typedef struct LmTransNameSet {
-    LmTransName *items;
+typedef struct LmTransSymbol {
+    LmP0Text name;
+    LmTransSymbolKind kind;
+    unsigned depth;
+    int has_c_name;
+    LmP0Text c_name;
+} LmTransSymbol;
+
+typedef struct LmTransNamespace {
+    LmTransSymbol *items;
     size_t count;
     size_t capacity;
-} LmTransNameSet;
+    unsigned depth;
+} LmTransNamespace;
 
 static int lm_trans_text_equals(LmP0Text text, const char *value) {
     size_t length;
@@ -133,54 +147,238 @@ static int lm_trans_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *ou
     return 1;
 }
 
-static void lm_trans_names_destroy(LmTransNameSet *set) {
-    if (set != NULL) {
-        free(set->items);
-        set->items = NULL;
-        set->count = 0U;
-        set->capacity = 0U;
+static const char *lm_trans_symbol_kind_name(LmTransSymbolKind kind) {
+    switch (kind) {
+    case LM_TRANS_SYMBOL_VARIABLE:
+        return "variable";
+    case LM_TRANS_SYMBOL_FUNCTION:
+        return "function";
+    case LM_TRANS_SYMBOL_PROCEDURE:
+        return "procedure";
+    case LM_TRANS_SYMBOL_LABEL:
+        return "label";
+    case LM_TRANS_SYMBOL_RECEIVER:
+        return "receiver";
+    case LM_TRANS_SYMBOL_TYPE:
+        return "type";
+    default:
+        return "symbol";
     }
 }
 
-static int lm_trans_names_contains(const LmTransNameSet *set, LmP0Text name) {
-    size_t i;
+static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
+    if (namespace_ != NULL) {
+        free(namespace_->items);
+        namespace_->items = NULL;
+        namespace_->count = 0U;
+        namespace_->capacity = 0U;
+        namespace_->depth = 0U;
+    }
+}
 
-    if (set == NULL) {
-        return 0;
+static void lm_trans_namespace_enter_scope(LmTransNamespace *namespace_) {
+    if (namespace_ != NULL) {
+        ++namespace_->depth;
+    }
+}
+
+static void lm_trans_namespace_leave_scope(LmTransNamespace *namespace_) {
+    if (namespace_ == NULL) {
+        return;
     }
 
-    for (i = 0U; i < set->count; ++i) {
-        if (
-            set->items[i].text.length == name.length &&
-            memcmp(set->items[i].text.data, name.data, name.length) == 0
-        ) {
-            return 1;
+    while (
+        namespace_->count > 0U &&
+        namespace_->items[namespace_->count - 1U].depth == namespace_->depth
+    ) {
+        --namespace_->count;
+    }
+
+    if (namespace_->depth > 0U) {
+        --namespace_->depth;
+    }
+}
+
+static int lm_trans_symbol_name_same(LmP0Text left, LmP0Text right) {
+    return left.length == right.length && memcmp(left.data, right.data, left.length) == 0;
+}
+
+static const LmTransSymbol *lm_trans_namespace_find(
+    const LmTransNamespace *namespace_,
+    LmP0Text name
+) {
+    size_t i;
+
+    if (namespace_ == NULL) {
+        return NULL;
+    }
+
+    i = namespace_->count;
+    while (i > 0U) {
+        --i;
+        if (lm_trans_symbol_name_same(namespace_->items[i].name, name)) {
+            return &namespace_->items[i];
         }
     }
 
-    return 0;
+    return NULL;
 }
 
-static int lm_trans_names_add(LmTransNameSet *set, LmP0Text name) {
-    LmTransName *items;
-    size_t capacity;
+static LmTransSymbol *lm_trans_namespace_find_mutable(
+    LmTransNamespace *namespace_,
+    LmP0Text name
+) {
+    size_t i;
 
-    if (lm_trans_names_contains(set, name)) {
-        return 0;
+    if (namespace_ == NULL) {
+        return NULL;
     }
 
-    if (set->count == set->capacity) {
-        capacity = set->capacity == 0U ? 16U : set->capacity * 2U;
-        items = (LmTransName *)realloc(set->items, capacity * sizeof(*items));
+    i = namespace_->count;
+    while (i > 0U) {
+        --i;
+        if (lm_trans_symbol_name_same(namespace_->items[i].name, name)) {
+            return &namespace_->items[i];
+        }
+    }
+
+    return NULL;
+}
+
+static int lm_trans_is_c_reference_name(LmP0Text name);
+
+static int lm_trans_is_reserved_receiver_name(LmP0Text name) {
+    return
+        lm_trans_text_equals(name, "L1") ||
+        lm_trans_text_equals(name, "L2") ||
+        lm_trans_text_equals(name, "fn") ||
+        lm_trans_text_equals(name, "sub") ||
+        lm_trans_text_equals(name, "if") ||
+        lm_trans_text_equals(name, "else") ||
+        lm_trans_text_equals(name, "while") ||
+        lm_trans_text_equals(name, "return") ||
+        lm_trans_text_equals(name, "break") ||
+        lm_trans_text_equals(name, "continue") ||
+        lm_trans_text_equals(name, "end") ||
+        lm_trans_text_equals(name, "until") ||
+        lm_trans_text_equals(name, "synchronized");
+}
+
+static int lm_trans_namespace_declare(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    LmTransSymbolKind kind
+) {
+    LmTransSymbol *items;
+    const LmTransSymbol *existing;
+    size_t capacity;
+
+    if (namespace_ == NULL) {
+        return 1;
+    }
+
+    if (lm_trans_is_c_reference_name(name)) {
+        fprintf(
+            stderr,
+            "trans L2 error: C name \"%.*s\" belongs to the ANSI C namespace and cannot be declared in Lingvamyxa namespace\n",
+            (int)name.length,
+            name.data
+        );
+        return 1;
+    }
+
+    if (lm_trans_is_reserved_receiver_name(name)) {
+        fprintf(
+            stderr,
+            "trans L2 error: reserved receiver \"%.*s\" cannot be redeclared\n",
+            (int)name.length,
+            name.data
+        );
+        return 1;
+    }
+
+    existing = lm_trans_namespace_find(namespace_, name);
+    if (existing != NULL) {
+        fprintf(
+            stderr,
+            "trans L2 error: name \"%.*s\" is already visible as %s\n",
+            (int)name.length,
+            name.data,
+            lm_trans_symbol_kind_name(existing->kind)
+        );
+        return 1;
+    }
+
+    if (namespace_->count == namespace_->capacity) {
+        capacity = namespace_->capacity == 0U ? 16U : namespace_->capacity * 2U;
+        items = (LmTransSymbol *)realloc(namespace_->items, capacity * sizeof(*items));
         if (items == NULL) {
             return 1;
         }
-        set->items = items;
-        set->capacity = capacity;
+        namespace_->items = items;
+        namespace_->capacity = capacity;
     }
 
-    set->items[set->count].text = name;
-    ++set->count;
+    namespace_->items[namespace_->count].name = name;
+    namespace_->items[namespace_->count].kind = kind;
+    namespace_->items[namespace_->count].depth = namespace_->depth;
+    namespace_->items[namespace_->count].has_c_name = 0;
+    namespace_->items[namespace_->count].c_name.data = NULL;
+    namespace_->items[namespace_->count].c_name.length = 0U;
+    ++namespace_->count;
+    return 0;
+}
+
+static int lm_trans_namespace_bind_c_reference(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    LmP0Text c_name
+) {
+    LmTransSymbol *symbol;
+
+    if (namespace_ == NULL) {
+        return 1;
+    }
+
+    if (lm_trans_is_c_reference_name(name)) {
+        fprintf(
+            stderr,
+            "trans L2 error: C name \"%.*s\" belongs to the ANSI C namespace and cannot be rebound in Lingvamyxa namespace\n",
+            (int)name.length,
+            name.data
+        );
+        return 1;
+    }
+
+    if (lm_trans_is_reserved_receiver_name(name)) {
+        fprintf(
+            stderr,
+            "trans L2 error: reserved receiver \"%.*s\" cannot be rebound\n",
+            (int)name.length,
+            name.data
+        );
+        return 1;
+    }
+
+    symbol = lm_trans_namespace_find_mutable(namespace_, name);
+    if (symbol == NULL) {
+        if (lm_trans_namespace_declare(namespace_, name, LM_TRANS_SYMBOL_VARIABLE) != 0) {
+            return 1;
+        }
+        symbol = &namespace_->items[namespace_->count - 1U];
+    } else if (symbol->kind != LM_TRANS_SYMBOL_VARIABLE) {
+        fprintf(
+            stderr,
+            "trans L2 error: name \"%.*s\" is already visible as %s and cannot be rebound to a C value\n",
+            (int)name.length,
+            name.data,
+            lm_trans_symbol_kind_name(symbol->kind)
+        );
+        return 1;
+    }
+
+    symbol->has_c_name = 1;
+    symbol->c_name = c_name;
     return 0;
 }
 
@@ -239,12 +437,101 @@ static int lm_trans_is_c_reference_name(LmP0Text name) {
     return lm_trans_text_starts_with(name, "c.") && name.length > 2U;
 }
 
-static int lm_trans_emit_expr_node(FILE *file, const LmP0Node *node);
-static int lm_trans_emit_expr_fields(FILE *file, const LmP0Field *first);
-static int lm_trans_emit_expr_range(FILE *file, const LmP0Field *first, const LmP0Field *stop);
+static int lm_trans_emit_expr_node(FILE *file, const LmP0Node *node, const LmTransNamespace *namespace_);
+static int lm_trans_emit_expr_fields(FILE *file, const LmP0Field *first, const LmTransNamespace *namespace_);
+static int lm_trans_emit_expr_range(
+    FILE *file,
+    const LmP0Field *first,
+    const LmP0Field *stop,
+    const LmTransNamespace *namespace_
+);
 
 static int lm_trans_atom_starts_string(LmP0Text text) {
     return text.length > 0U && (text.data[0] == '"' || text.data[0] == '\'');
+}
+
+static int lm_trans_atom_is_identifier_like(LmP0Text text) {
+    unsigned char ch;
+
+    if (text.length == 0U || lm_trans_atom_starts_string(text)) {
+        return 0;
+    }
+
+    if (
+        lm_trans_text_is_operator_atom(text) ||
+        lm_trans_text_equals(text, "@") ||
+        lm_trans_text_equals(text, "\\")
+    ) {
+        return 0;
+    }
+
+    ch = (unsigned char)text.data[0];
+    return
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= 'a' && ch <= 'z') ||
+        ch == '_' ||
+        ch == '`';
+}
+
+static int lm_trans_validate_expr_atom(
+    LmP0Text atom,
+    const LmTransNamespace *namespace_
+) {
+    const LmTransSymbol *symbol;
+
+    if (lm_trans_is_c_reference_name(atom) || !lm_trans_atom_is_identifier_like(atom)) {
+        return 0;
+    }
+
+    symbol = lm_trans_namespace_find(namespace_, atom);
+    if (symbol == NULL) {
+        fprintf(
+            stderr,
+            "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+            (int)atom.length,
+            atom.data,
+            (int)atom.length,
+            atom.data
+        );
+        return 1;
+    }
+
+    if (
+        symbol->kind == LM_TRANS_SYMBOL_PROCEDURE ||
+        symbol->kind == LM_TRANS_SYMBOL_LABEL ||
+        symbol->kind == LM_TRANS_SYMBOL_RECEIVER ||
+        symbol->kind == LM_TRANS_SYMBOL_TYPE
+    ) {
+        fprintf(
+            stderr,
+            "trans L2 error: \"%.*s\" is %s, not an expression value\n",
+            (int)atom.length,
+            atom.data,
+            lm_trans_symbol_kind_name(symbol->kind)
+        );
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_expr_atom(
+    FILE *file,
+    LmP0Text atom,
+    const LmTransNamespace *namespace_
+) {
+    const LmTransSymbol *symbol;
+
+    if (lm_trans_validate_expr_atom(atom, namespace_) != 0) {
+        return 1;
+    }
+
+    symbol = lm_trans_namespace_find(namespace_, atom);
+    if (symbol != NULL && symbol->has_c_name) {
+        return lm_trans_emit_name(file, symbol->c_name);
+    }
+
+    return lm_trans_emit_name(file, atom);
 }
 
 static int lm_trans_atom_is_prefix_expr_operator(LmP0Text text) {
@@ -356,7 +643,11 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
     return field;
 }
 
-static int lm_trans_emit_call_args(FILE *file, const LmP0Structure *body) {
+static int lm_trans_emit_call_args(
+    FILE *file,
+    const LmP0Structure *body,
+    const LmTransNamespace *namespace_
+) {
     const LmP0Field *field;
     const LmP0Field *next;
     int first;
@@ -377,7 +668,7 @@ static int lm_trans_emit_call_args(FILE *file, const LmP0Structure *body) {
             return 1;
         }
         next = lm_trans_expr_segment_end(field);
-        if (lm_trans_emit_expr_range(file, field, next) != 0) {
+        if (lm_trans_emit_expr_range(file, field, next, namespace_) != 0) {
             return 1;
         }
         first = 0;
@@ -387,37 +678,72 @@ static int lm_trans_emit_call_args(FILE *file, const LmP0Structure *body) {
     return 0;
 }
 
-static int lm_trans_emit_expr_frame(FILE *file, const LmP0Frame *frame) {
-    if (lm_trans_emit_name(file, frame->head) != 0) {
+static int lm_trans_emit_expr_frame(
+    FILE *file,
+    const LmP0Frame *frame,
+    const LmTransNamespace *namespace_
+) {
+    const LmTransSymbol *symbol;
+    LmP0Text callee;
+
+    callee = frame->head;
+    if (!lm_trans_is_c_reference_name(frame->head)) {
+        symbol = lm_trans_namespace_find(namespace_, frame->head);
+        if (symbol == NULL) {
+            fprintf(
+                stderr,
+                "trans L2 error: unknown Lingvamyxa function \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+                (int)frame->head.length,
+                frame->head.data,
+                (int)frame->head.length,
+                frame->head.data
+            );
+            return 1;
+        }
+        if (symbol->has_c_name) {
+            callee = symbol->c_name;
+        } else if (symbol->kind != LM_TRANS_SYMBOL_FUNCTION) {
+            fprintf(
+                stderr,
+                "trans L2 error: \"%.*s\" is %s, not a value-returning function\n",
+                (int)frame->head.length,
+                frame->head.data,
+                lm_trans_symbol_kind_name(symbol->kind)
+            );
+            return 1;
+        }
+    }
+
+    if (lm_trans_emit_name(file, callee) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "(") != 0) {
         return 1;
     }
-    if (lm_trans_emit_call_args(file, &frame->body) != 0) {
+    if (lm_trans_emit_call_args(file, &frame->body, namespace_) != 0) {
         return 1;
     }
     return lm_trans_put(file, ")");
 }
 
-static int lm_trans_emit_expr_node(FILE *file, const LmP0Node *node) {
+static int lm_trans_emit_expr_node(FILE *file, const LmP0Node *node, const LmTransNamespace *namespace_) {
     if (node == NULL) {
         return 0;
     }
 
     if (node->kind == LM_P0_NODE_ATOM) {
-        return lm_trans_emit_name(file, node->as.atom);
+        return lm_trans_emit_expr_atom(file, node->as.atom, namespace_);
     }
 
     if (node->kind == LM_P0_NODE_FRAME) {
-        return lm_trans_emit_expr_frame(file, &node->as.frame);
+        return lm_trans_emit_expr_frame(file, &node->as.frame, namespace_);
     }
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         if (lm_trans_put(file, "(") != 0) {
             return 1;
         }
-        if (lm_trans_emit_expr_fields(file, node->as.structure.first_field) != 0) {
+        if (lm_trans_emit_expr_fields(file, node->as.structure.first_field, namespace_) != 0) {
             return 1;
         }
         return lm_trans_put(file, ")");
@@ -433,11 +759,16 @@ static int lm_trans_atom_is_operand_like(LmP0Text text) {
         !lm_trans_text_equals(text, "\\");
 }
 
-static int lm_trans_emit_expr_fields(FILE *file, const LmP0Field *first) {
-    return lm_trans_emit_expr_range(file, first, NULL);
+static int lm_trans_emit_expr_fields(FILE *file, const LmP0Field *first, const LmTransNamespace *namespace_) {
+    return lm_trans_emit_expr_range(file, first, NULL, namespace_);
 }
 
-static int lm_trans_emit_expr_range(FILE *file, const LmP0Field *first, const LmP0Field *stop) {
+static int lm_trans_emit_expr_range(
+    FILE *file,
+    const LmP0Field *first,
+    const LmP0Field *stop,
+    const LmTransNamespace *namespace_
+) {
     const LmP0Field *field;
     const LmP0Node *node;
     int wrote;
@@ -477,13 +808,13 @@ static int lm_trans_emit_expr_range(FILE *file, const LmP0Field *first, const Lm
                         previous_operand = NULL;
                     }
                 } else {
-                    if (lm_trans_emit_name(file, node->as.atom) != 0) {
+                    if (lm_trans_emit_expr_atom(file, node->as.atom, namespace_) != 0) {
                         return 1;
                     }
                     previous_operand = lm_trans_atom_is_operand_like(node->as.atom) ? node : NULL;
                 }
             } else {
-                if (lm_trans_emit_expr_node(file, node) != 0) {
+                if (lm_trans_emit_expr_node(file, node, namespace_) != 0) {
                     return 1;
                 }
                 previous_operand = node;
@@ -500,7 +831,8 @@ static int lm_trans_emit_type_and_name(
     FILE *file,
     const LmP0Node *type_node,
     LmP0Text name,
-    size_t pointer_depth
+    size_t pointer_depth,
+    const LmTransNamespace *namespace_
 ) {
     size_t i;
 
@@ -508,7 +840,7 @@ static int lm_trans_emit_type_and_name(
         return 1;
     }
 
-    if (lm_trans_emit_expr_node(file, type_node) != 0) {
+    if (lm_trans_emit_expr_node(file, type_node, namespace_) != 0) {
         return 1;
     }
     if (lm_trans_put(file, " ") != 0) {
@@ -522,7 +854,7 @@ static int lm_trans_emit_type_and_name(
     return lm_trans_write_text(file, name);
 }
 
-static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNameSet *locals) {
+static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespace *namespace_) {
     const LmP0Field *field0;
     const LmP0Field *field1;
     const LmP0Node *name_node;
@@ -553,7 +885,7 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNameSet 
         if (lm_trans_write_text(file, name_node->as.atom) != 0) {
             return 1;
         }
-        return lm_trans_names_add(locals, name_node->as.atom);
+        return lm_trans_namespace_declare(namespace_, name_node->as.atom, LM_TRANS_SYMBOL_VARIABLE);
     }
 
     if (lm_trans_text_all_char(node->as.frame.head, '@')) {
@@ -572,12 +904,13 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNameSet 
                 file,
                 field0->value,
                 name_node->as.atom,
-                node->as.frame.head.length
+                node->as.frame.head.length,
+                namespace_
             ) != 0
         ) {
             return 1;
         }
-        return lm_trans_names_add(locals, name_node->as.atom);
+        return lm_trans_namespace_declare(namespace_, name_node->as.atom, LM_TRANS_SYMBOL_VARIABLE);
     }
 
     fprintf(stderr, "trans L2 error: unsupported parameter receiver\n");
@@ -588,7 +921,7 @@ static int lm_trans_emit_statement_list(
     FILE *file,
     const LmP0Field *first,
     unsigned indent,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 );
 
 static const LmP0Field *lm_trans_control_body_start(const LmP0Frame *frame) {
@@ -614,7 +947,11 @@ static const LmP0Field *lm_trans_control_body_start(const LmP0Frame *frame) {
     return field;
 }
 
-static int lm_trans_emit_control_condition(FILE *file, const LmP0Frame *frame) {
+static int lm_trans_emit_control_condition(
+    FILE *file,
+    const LmP0Frame *frame,
+    const LmTransNamespace *namespace_
+) {
     const LmP0Field *body_start;
     const LmP0Field *first;
 
@@ -624,11 +961,11 @@ static int lm_trans_emit_control_condition(FILE *file, const LmP0Frame *frame) {
     }
 
     if (first->value != NULL && first->value->kind == LM_P0_NODE_STRUCTURE) {
-        return lm_trans_emit_expr_fields(file, first->value->as.structure.first_field);
+        return lm_trans_emit_expr_fields(file, first->value->as.structure.first_field, namespace_);
     }
 
     body_start = lm_trans_control_body_start(frame);
-    return lm_trans_emit_expr_range(file, first, body_start);
+    return lm_trans_emit_expr_range(file, first, body_start, namespace_);
 }
 
 static int lm_trans_frame_has_positional_name_role(const LmP0Frame *frame) {
@@ -754,10 +1091,8 @@ static int lm_trans_emit_trailer_statement(
     FILE *file,
     const LmP0Trailer *trailer,
     unsigned indent,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 ) {
-    (void)locals;
-
     if (trailer == NULL) {
         return 0;
     }
@@ -769,7 +1104,7 @@ static int lm_trans_emit_trailer_statement(
         if (lm_trans_put(file, "return ") != 0) {
             return 1;
         }
-        if (lm_trans_emit_expr_fields(file, trailer->body.first_field) != 0) {
+        if (lm_trans_emit_expr_fields(file, trailer->body.first_field, namespace_) != 0) {
             return 1;
         }
         return lm_trans_put(file, ";\n");
@@ -792,7 +1127,7 @@ static int lm_trans_emit_control(
     FILE *file,
     const LmP0Frame *frame,
     unsigned indent,
-    LmTransNameSet *locals,
+    LmTransNamespace *namespace_,
     const char *keyword
 ) {
     const LmP0Field *body_start;
@@ -804,15 +1139,18 @@ static int lm_trans_emit_control(
     if (lm_trans_put(file, keyword) != 0 || lm_trans_put(file, " (") != 0) {
         return 1;
     }
-    if (lm_trans_emit_control_condition(file, frame) != 0) {
+    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
         return 1;
     }
     if (lm_trans_put(file, ") {\n") != 0) {
         return 1;
     }
-    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, locals) != 0) {
+    lm_trans_namespace_enter_scope(namespace_);
+    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
         return 1;
     }
+    lm_trans_namespace_leave_scope(namespace_);
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
@@ -823,7 +1161,7 @@ static int lm_trans_emit_else(
     FILE *file,
     const LmP0Frame *frame,
     unsigned indent,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 ) {
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
@@ -831,9 +1169,12 @@ static int lm_trans_emit_else(
     if (lm_trans_put(file, "else {\n") != 0) {
         return 1;
     }
-    if (lm_trans_emit_statement_list(file, frame->body.first_field, indent + 1U, locals) != 0) {
+    lm_trans_namespace_enter_scope(namespace_);
+    if (lm_trans_emit_statement_list(file, frame->body.first_field, indent + 1U, namespace_) != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
         return 1;
     }
+    lm_trans_namespace_leave_scope(namespace_);
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
@@ -844,7 +1185,7 @@ static int lm_trans_emit_declaration(
     FILE *file,
     const LmP0Frame *frame,
     unsigned indent,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 ) {
     const LmP0Field *name_field;
     const LmP0Node *name_node;
@@ -872,44 +1213,27 @@ static int lm_trans_emit_declaration(
         if (lm_trans_put(file, " = ") != 0) {
             return 1;
         }
-        if (lm_trans_emit_expr_fields(file, name_field->next) != 0) {
+        if (lm_trans_emit_expr_fields(file, name_field->next, namespace_) != 0) {
             return 1;
         }
     }
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_names_add(locals, name_node->as.atom);
+    return lm_trans_namespace_declare(namespace_, name_node->as.atom, LM_TRANS_SYMBOL_VARIABLE);
 }
 
 static int lm_trans_atom_can_be_new_binding_name(LmP0Text text) {
-    unsigned char ch;
-
-    if (text.length == 0U || lm_trans_atom_starts_string(text)) {
-        return 0;
-    }
-
-    if (
-        lm_trans_text_is_operator_atom(text) ||
-        lm_trans_text_equals(text, "@") ||
-        lm_trans_text_equals(text, "\\")
-    ) {
-        return 0;
-    }
-
-    ch = (unsigned char)text.data[0];
-    return
-        (ch >= 'A' && ch <= 'Z') ||
-        (ch >= 'a' && ch <= 'z') ||
-        ch == '_' ||
-        ch == '`';
+    return lm_trans_atom_is_identifier_like(text);
 }
 
 static int lm_trans_frame_looks_c_declaration(
     const LmP0Frame *frame,
-    const LmTransNameSet *locals
+    const LmTransNamespace *namespace_
 ) {
     const LmP0Field *name_field;
+
+    (void)namespace_;
 
     if (
         frame == NULL ||
@@ -928,16 +1252,14 @@ static int lm_trans_frame_looks_c_declaration(
         return 0;
     }
 
-    return
-        lm_trans_atom_can_be_new_binding_name(name_field->value->as.atom) &&
-        !lm_trans_names_contains(locals, name_field->value->as.atom);
+    return lm_trans_atom_can_be_new_binding_name(name_field->value->as.atom);
 }
 
 static int lm_trans_emit_pointer_declaration(
     FILE *file,
     const LmP0Frame *frame,
     unsigned indent,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 ) {
     const LmP0Field *type_field;
     const LmP0Field *name_field;
@@ -964,7 +1286,8 @@ static int lm_trans_emit_pointer_declaration(
             file,
             type_field->value,
             name_node->as.atom,
-            frame->head.length
+            frame->head.length,
+            namespace_
         ) != 0
     ) {
         return 1;
@@ -973,25 +1296,69 @@ static int lm_trans_emit_pointer_declaration(
         if (lm_trans_put(file, " = ") != 0) {
             return 1;
         }
-        if (lm_trans_emit_expr_fields(file, name_field->next) != 0) {
+        if (lm_trans_emit_expr_fields(file, name_field->next, namespace_) != 0) {
             return 1;
         }
     }
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_names_add(locals, name_node->as.atom);
+    return lm_trans_namespace_declare(namespace_, name_node->as.atom, LM_TRANS_SYMBOL_VARIABLE);
 }
 
 static int lm_trans_emit_call_statement(
     FILE *file,
     const LmP0Frame *frame,
-    unsigned indent
+    unsigned indent,
+    const LmTransNamespace *namespace_
 ) {
+    const LmTransSymbol *symbol;
+    LmP0Text callee;
+
+    callee = frame->head;
+    if (!lm_trans_is_c_reference_name(frame->head)) {
+        symbol = lm_trans_namespace_find(namespace_, frame->head);
+        if (symbol == NULL) {
+            fprintf(
+                stderr,
+                "trans L2 error: unknown Lingvamyxa callable \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+                (int)frame->head.length,
+                frame->head.data,
+                (int)frame->head.length,
+                frame->head.data
+            );
+            return 1;
+        }
+        if (symbol->has_c_name) {
+            callee = symbol->c_name;
+        } else if (
+            symbol->kind != LM_TRANS_SYMBOL_FUNCTION &&
+            symbol->kind != LM_TRANS_SYMBOL_PROCEDURE
+        ) {
+            fprintf(
+                stderr,
+                "trans L2 error: \"%.*s\" is %s, not a callable\n",
+                (int)frame->head.length,
+                frame->head.data,
+                lm_trans_symbol_kind_name(symbol->kind)
+            );
+            return 1;
+        }
+    }
+
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
-    if (lm_trans_emit_expr_frame(file, frame) != 0) {
+    if (lm_trans_emit_name(file, callee) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_call_args(file, &frame->body, namespace_) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ")") != 0) {
         return 1;
     }
     return lm_trans_put(file, ";\n");
@@ -1000,7 +1367,8 @@ static int lm_trans_emit_call_statement(
 static int lm_trans_emit_assignment(
     FILE *file,
     const LmP0Frame *frame,
-    unsigned indent
+    unsigned indent,
+    const LmTransNamespace *namespace_
 ) {
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
@@ -1011,19 +1379,104 @@ static int lm_trans_emit_assignment(
     if (lm_trans_put(file, " = ") != 0) {
         return 1;
     }
-    if (lm_trans_emit_expr_fields(file, frame->body.first_field) != 0) {
+    if (lm_trans_emit_expr_fields(file, frame->body.first_field, namespace_) != 0) {
         return 1;
     }
     return lm_trans_put(file, ";\n");
+}
+
+static int lm_trans_frame_single_c_reference_body(
+    const LmP0Frame *frame,
+    LmP0Text *out_c_name
+) {
+    const LmP0Field *field;
+
+    if (frame == NULL || out_c_name == NULL) {
+        return 0;
+    }
+
+    field = frame->body.first_field;
+    if (
+        field == NULL ||
+        field->next != NULL ||
+        field->value == NULL ||
+        field->value->kind != LM_P0_NODE_ATOM ||
+        !lm_trans_is_c_reference_name(field->value->as.atom)
+    ) {
+        return 0;
+    }
+
+    *out_c_name = field->value->as.atom;
+    return 1;
+}
+
+static int lm_trans_emit_c_reference_binding(
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+) {
+    LmP0Text c_name;
+
+    if (!lm_trans_frame_single_c_reference_body(frame, &c_name)) {
+        return 0;
+    }
+
+    return lm_trans_namespace_bind_c_reference(namespace_, frame->head, c_name);
+}
+
+static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
+    return
+        frame != NULL &&
+        !lm_trans_is_c_reference_name(frame->head) &&
+        !lm_trans_is_reserved_receiver_name(frame->head) &&
+        (frame->flags & LM_P0_FRAME_COLON) != 0U &&
+        (frame->flags & LM_P0_FRAME_INLINE_BODY) == 0U;
+}
+
+static int lm_trans_emit_label_statement(
+    FILE *file,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    if (lm_trans_namespace_declare(namespace_, frame->head, LM_TRANS_SYMBOL_LABEL) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, frame->head) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ":\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "{\n") != 0) {
+        return 1;
+    }
+    lm_trans_namespace_enter_scope(namespace_);
+    if (lm_trans_emit_statement_list(file, frame->body.first_field, indent + 1U, namespace_) != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+    lm_trans_namespace_leave_scope(namespace_);
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, "}\n");
 }
 
 static int lm_trans_emit_statement(
     FILE *file,
     const LmP0Node *node,
     unsigned indent,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 ) {
     int status;
+    const LmTransSymbol *symbol;
+    LmP0Text c_name;
 
     if (node == NULL || (node->flags & LM_P0_NODE_INACTIVE)) {
         return 0;
@@ -1043,7 +1496,7 @@ static int lm_trans_emit_statement(
         if (lm_trans_emit_indent(file, indent) != 0) {
             return 1;
         }
-        if (lm_trans_emit_expr_node(file, node) != 0) {
+        if (lm_trans_emit_expr_node(file, node, namespace_) != 0) {
             return 1;
         }
         return lm_trans_put(file, ";\n");
@@ -1061,16 +1514,16 @@ static int lm_trans_emit_statement(
         if (lm_trans_put(file, "return ") != 0) {
             return 1;
         }
-        status = lm_trans_emit_expr_fields(file, node->as.frame.body.first_field);
+        status = lm_trans_emit_expr_fields(file, node->as.frame.body.first_field, namespace_);
         if (status == 0) {
             status = lm_trans_put(file, ";\n");
         }
     } else if (lm_trans_text_equals(node->as.frame.head, "if")) {
-        status = lm_trans_emit_control(file, &node->as.frame, indent, locals, "if");
+        status = lm_trans_emit_control(file, &node->as.frame, indent, namespace_, "if");
     } else if (lm_trans_text_equals(node->as.frame.head, "while")) {
-        status = lm_trans_emit_control(file, &node->as.frame, indent, locals, "while");
+        status = lm_trans_emit_control(file, &node->as.frame, indent, namespace_, "while");
     } else if (lm_trans_text_equals(node->as.frame.head, "else")) {
-        status = lm_trans_emit_else(file, &node->as.frame, indent, locals);
+        status = lm_trans_emit_else(file, &node->as.frame, indent, namespace_);
     } else if (lm_trans_text_equals(node->as.frame.head, "break")) {
         if (lm_trans_emit_indent(file, indent) != 0) {
             return 1;
@@ -1081,14 +1534,54 @@ static int lm_trans_emit_statement(
             return 1;
         }
         status = lm_trans_put(file, "continue;\n");
-    } else if (lm_trans_frame_looks_c_declaration(&node->as.frame, locals)) {
-        status = lm_trans_emit_declaration(file, &node->as.frame, indent, locals);
+    } else if (lm_trans_frame_looks_c_declaration(&node->as.frame, namespace_)) {
+        status = lm_trans_emit_declaration(file, &node->as.frame, indent, namespace_);
     } else if (lm_trans_text_all_char(node->as.frame.head, '@')) {
-        status = lm_trans_emit_pointer_declaration(file, &node->as.frame, indent, locals);
-    } else if (lm_trans_names_contains(locals, node->as.frame.head)) {
-        status = lm_trans_emit_assignment(file, &node->as.frame, indent);
+        status = lm_trans_emit_pointer_declaration(file, &node->as.frame, indent, namespace_);
+    } else if (
+        !lm_trans_is_c_reference_name(node->as.frame.head) &&
+        !lm_trans_is_reserved_receiver_name(node->as.frame.head) &&
+        lm_trans_frame_single_c_reference_body(&node->as.frame, &c_name)
+    ) {
+        status = lm_trans_emit_c_reference_binding(&node->as.frame, namespace_);
+    } else if (lm_trans_frame_looks_label_declaration(&node->as.frame)) {
+        status = lm_trans_emit_label_statement(file, &node->as.frame, indent, namespace_);
+    } else if (lm_trans_is_c_reference_name(node->as.frame.head)) {
+        status = lm_trans_emit_call_statement(file, &node->as.frame, indent, namespace_);
     } else {
-        status = lm_trans_emit_call_statement(file, &node->as.frame, indent);
+        symbol = lm_trans_namespace_find(namespace_, node->as.frame.head);
+        if (symbol == NULL) {
+            fprintf(
+                stderr,
+                "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+                (int)node->as.frame.head.length,
+                node->as.frame.head.data,
+                (int)node->as.frame.head.length,
+                node->as.frame.head.data
+            );
+            return 1;
+        }
+        if (symbol->kind == LM_TRANS_SYMBOL_VARIABLE) {
+            if (symbol->has_c_name) {
+                status = lm_trans_emit_call_statement(file, &node->as.frame, indent, namespace_);
+            } else {
+                status = lm_trans_emit_assignment(file, &node->as.frame, indent, namespace_);
+            }
+        } else if (
+            symbol->kind == LM_TRANS_SYMBOL_FUNCTION ||
+            symbol->kind == LM_TRANS_SYMBOL_PROCEDURE
+        ) {
+            status = lm_trans_emit_call_statement(file, &node->as.frame, indent, namespace_);
+        } else {
+            fprintf(
+                stderr,
+                "trans L2 error: \"%.*s\" is %s, not a statement receiver\n",
+                (int)node->as.frame.head.length,
+                node->as.frame.head.data,
+                lm_trans_symbol_kind_name(symbol->kind)
+            );
+            return 1;
+        }
     }
 
     if (status != 0) {
@@ -1099,20 +1592,20 @@ static int lm_trans_emit_statement(
         return 1;
     }
 
-    return lm_trans_emit_trailer_statement(file, node->as.frame.trailer, indent, locals);
+    return lm_trans_emit_trailer_statement(file, node->as.frame.trailer, indent, namespace_);
 }
 
 static int lm_trans_emit_statement_list(
     FILE *file,
     const LmP0Field *first,
     unsigned indent,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 ) {
     const LmP0Field *field;
 
     field = first;
     while (field != NULL) {
-        if (lm_trans_emit_statement(file, field->value, indent, locals) != 0) {
+        if (lm_trans_emit_statement(file, field->value, indent, namespace_) != 0) {
             return 1;
         }
         field = field->next;
@@ -1124,7 +1617,7 @@ static int lm_trans_emit_statement_list(
 static int lm_trans_emit_params(
     FILE *file,
     const LmP0Node *params,
-    LmTransNameSet *locals
+    LmTransNamespace *namespace_
 ) {
     const LmP0Field *field;
     int first;
@@ -1140,7 +1633,7 @@ static int lm_trans_emit_params(
         if (!first && lm_trans_put(file, ", ") != 0) {
             return 1;
         }
-        if (lm_trans_emit_param(file, field->value, locals) != 0) {
+        if (lm_trans_emit_param(file, field->value, namespace_) != 0) {
             return 1;
         }
         first = 0;
@@ -1154,15 +1647,38 @@ static int lm_trans_emit_params(
     return 0;
 }
 
-static int lm_trans_emit_function(FILE *file, const LmP0Frame *frame, int is_sub) {
+static int lm_trans_function_decl_name(const LmP0Frame *frame, LmP0Text *out_name) {
+    const LmP0Field *name_field;
+
+    if (frame == NULL || out_name == NULL) {
+        return 0;
+    }
+
+    name_field = lm_trans_nth_field(&frame->body, 0U);
+    if (
+        name_field == NULL ||
+        name_field->value == NULL ||
+        name_field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        return 0;
+    }
+
+    *out_name = name_field->value->as.atom;
+    return 1;
+}
+
+static int lm_trans_emit_function(
+    FILE *file,
+    const LmP0Frame *frame,
+    int is_sub,
+    LmTransNamespace *namespace_
+) {
     const LmP0Field *name_field;
     const LmP0Field *params_field;
     const LmP0Field *return_field;
     const LmP0Field *body_start;
-    LmTransNameSet locals;
     int status;
 
-    memset(&locals, 0, sizeof(locals));
     name_field = lm_trans_nth_field(&frame->body, 0U);
     params_field = lm_trans_nth_field(&frame->body, 1U);
 
@@ -1187,7 +1703,7 @@ static int lm_trans_emit_function(FILE *file, const LmP0Frame *frame, int is_sub
             fprintf(stderr, "trans L2 error: fn expects return type\n");
             return 1;
         }
-        if (lm_trans_emit_expr_node(file, return_field->value) != 0) {
+        if (lm_trans_emit_expr_node(file, return_field->value, namespace_) != 0) {
             return 1;
         }
         if (lm_trans_put(file, " ") != 0) {
@@ -1202,55 +1718,94 @@ static int lm_trans_emit_function(FILE *file, const LmP0Frame *frame, int is_sub
     if (lm_trans_put(file, "(") != 0) {
         return 1;
     }
-    if (lm_trans_emit_params(file, params_field->value, &locals) != 0) {
-        lm_trans_names_destroy(&locals);
+    lm_trans_namespace_enter_scope(namespace_);
+    if (lm_trans_emit_params(file, params_field->value, namespace_) != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
         return 1;
     }
     if (lm_trans_put(file, ") {\n") != 0) {
-        lm_trans_names_destroy(&locals);
+        lm_trans_namespace_leave_scope(namespace_);
         return 1;
     }
 
-    status = lm_trans_emit_statement_list(file, body_start, 1U, &locals);
+    status = lm_trans_emit_statement_list(file, body_start, 1U, namespace_);
     if (status == 0) {
         status = lm_trans_validate_end_trailer(frame);
     }
     if (status == 0) {
-        status = lm_trans_emit_trailer_statement(file, frame->trailer, 1U, &locals);
+        status = lm_trans_emit_trailer_statement(file, frame->trailer, 1U, namespace_);
     }
     if (status == 0) {
         status = lm_trans_put(file, "}\n\n");
     }
 
-    lm_trans_names_destroy(&locals);
+    lm_trans_namespace_leave_scope(namespace_);
     return status;
 }
 
 static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     const LmP0Field *field;
     const LmP0Node *node;
+    LmTransNamespace namespace_;
+    LmP0Text name;
+    LmP0Text c_name;
+    LmTransSymbolKind kind;
+    int status;
+
+    memset(&namespace_, 0, sizeof(namespace_));
 
     field = l2->body.first_field;
     while (field != NULL) {
         node = field->value;
         if (node != NULL && node->kind == LM_P0_NODE_FRAME) {
             if (lm_trans_text_equals(node->as.frame.head, "fn")) {
-                if (lm_trans_emit_function(file, &node->as.frame, 0) != 0) {
-                    return 1;
-                }
+                kind = LM_TRANS_SYMBOL_FUNCTION;
             } else if (lm_trans_text_equals(node->as.frame.head, "sub")) {
-                if (lm_trans_emit_function(file, &node->as.frame, 1) != 0) {
+                kind = LM_TRANS_SYMBOL_PROCEDURE;
+            } else if (
+                !lm_trans_is_c_reference_name(node->as.frame.head) &&
+                !lm_trans_is_reserved_receiver_name(node->as.frame.head) &&
+                lm_trans_frame_single_c_reference_body(&node->as.frame, &c_name)
+            ) {
+                if (lm_trans_namespace_bind_c_reference(&namespace_, node->as.frame.head, c_name) != 0) {
+                    lm_trans_namespace_destroy(&namespace_);
                     return 1;
                 }
+                field = field->next;
+                continue;
             } else {
-                fprintf(stderr, "trans L2 error: top-level L2 field must be fn or sub\n");
+                fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub or namespace binding to c.name\n");
+                lm_trans_namespace_destroy(&namespace_);
+                return 1;
+            }
+
+            if (!lm_trans_function_decl_name(&node->as.frame, &name)) {
+                fprintf(stderr, "trans L2 error: fn/sub expects name and parameters\n");
+                lm_trans_namespace_destroy(&namespace_);
+                return 1;
+            }
+            if (lm_trans_namespace_declare(&namespace_, name, kind) != 0) {
+                lm_trans_namespace_destroy(&namespace_);
+                return 1;
+            }
+            if (
+                lm_trans_emit_function(
+                    file,
+                    &node->as.frame,
+                    kind == LM_TRANS_SYMBOL_PROCEDURE,
+                    &namespace_
+                ) != 0
+            ) {
+                lm_trans_namespace_destroy(&namespace_);
                 return 1;
             }
         }
         field = field->next;
     }
 
-    return lm_trans_validate_end_trailer(l2);
+    status = lm_trans_validate_end_trailer(l2);
+    lm_trans_namespace_destroy(&namespace_);
+    return status;
 }
 
 static int lm_trans_emit_raw_atom(FILE *output, const LmP0Node *node) {

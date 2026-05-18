@@ -474,7 +474,7 @@ The source syntax itself does not hard-code object semantics, functional semanti
 
 Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals, character constants and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
 
-This reuse applies only to lexical atoms. It does not adopt C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon receiver-valence frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, receiver registration, typed model/behavior descriptors, fact/query receivers and receiver consumption.
+This reuse applies only to lexical atoms. It does not adopt C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon-governed frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, `fn` / `sub` / label / variable registration, typed model/behavior descriptors, fact/query declarations and declared head consumption.
 
 The practical rule is:
 
@@ -570,9 +570,10 @@ Different Lingvamyxa levels use different default startup conventions:
         Example:
 
         L2:
-        . main: int argc (@@: char argv)
-        . . c.puts "Hello"
+        . fn: main () c.int
+        . . c.puts: "Hello"
         . . return: 0
+        . end: main
         end: L2
 
         lowers conceptually to a C `main` function. This is a bootstrap and
@@ -1116,9 +1117,9 @@ is not primitive assignment by syntax alone. After name resolution, it may be a 
 
 A form such as:
 
-    int: x
+    Type: x
 
-is not a separate declaration grammar. It is the same receiver-valence form: the registered `int` constructor receiver consumes the raw name `x` in declaration context and introduces a typed binding.
+is not a separate declaration grammar. It is the same receiver-valence form: the registered `Type` constructor receiver consumes the raw name `x` in declaration context and introduces a typed binding.
 
 A form such as:
 
@@ -1867,7 +1868,7 @@ Invalid delimiter lines:
     ---else:
     ----else:
     --- return: x
-    --- int: x
+    --- c.int: x
     --- trailer word
 
 A dash fence is not a prefix operator and cannot be combined with a receiver or any other source item on the same physical line.
@@ -3220,54 +3221,77 @@ This is intentionally close to an ordinary C compilation environment. The same
 L2 source should not acquire a different raw C meaning because a higher-level
 registry state changed.
 
-For ANSI C ordinary identifiers, L2 uses an explicit C-visible foreign
-identifier spelling:
+For raw C-visible names and selected C-profile type words, L2 uses an explicit
+C-visible spelling:
 
     c.name
 
 `c.name` is a reserved L2 spelling form. It is not Structure field access, not
 `/` namespace path access, not `\` typed field-follow, and not high-level
-registry lookup. It denotes the C ordinary identifier `name` as seen by the
-active L2/L1 translation unit after the build profile's headers, defines and
-toolchain inputs have been applied.
+registry lookup. It denotes the C spelling `name` as seen by the active L2/L1
+translation unit after the build profile's headers, defines and toolchain
+inputs have been applied. This is the canonical and permanent L2 bridge to the
+ANSI C namespace; it is not a temporary bootstrap shortcut.
 
 The `c.` prefix may be used directly in C call, type or value position:
 
 L2:
-    c.printf "Hello C\n"
-    c.printf "%s\n" msg
-    c.strlen text
-    c.size_t: n
-    @: c.FILE file
     println: c.puts
-    println "Hello C"
+    fn: main () c.int
+        c.printf: "Hello C\n"
+        c.printf: "%s\n" "message"
+        c.size_t: n c.strlen("abc")
+        @: c.FILE file
+        c.puts: "Hello C"
+        println: "Hello through Lingvamyxa"
+        return: 0
+    end: main
 end: L2
 
 Here `c.printf`, `c.strlen`, `c.size_t`, `c.FILE` and `c.puts` do not need
 Lingvamyxa descriptors for raw L2 use. They become valid only if the L2/L1
-build profile makes the corresponding C ordinary identifiers visible, for
-example through `#include <stdio.h>`, `#include <stddef.h>` or another selected
-header. The C compiler, preprocessor and linker validate whether each spelling
-is actually a function, object, typedef, enum constant, object-like macro or
-function-like macro in that C grammar position.
+build profile makes the corresponding C spelling visible or otherwise accepted
+in that C grammar position, for example through `#include <stdio.h>`, `#include
+<stddef.h>` or another selected header. The C compiler, preprocessor and linker
+validate whether each spelling is actually a function, object, typedef, enum
+constant, object-like macro, function-like macro or selected C-profile type
+word in that position.
 
-A bare unresolved L2 head such as `printf` is not automatically treated as a
-raw C fallback. Direct C-visible access is explicit through `c.printf`, or
-through a local Lingvamyxa alias such as `println: c.puts`.
+The same source may also call ordinary Lingvamyxa names such as `println` when
+they are already visible in the active Lingvamyxa namespace, for example from a
+prelude/core `sub` declaration. Such names are language names, not
+C-visible identifiers.
 
-The `c.` spelling covers only ANSI C ordinary identifiers. It does not cover C
-tag names as tags, aggregate members, labels or declarator syntax. Those are
-provided by the minimal L2 structural bridge, by selected profile-specific L2
-forms, or by an explicit raw L1 text escape.
+The binding/update form may also place a C-visible value into the Lingvamyxa
+namespace:
 
-Known ANSI C99 primitive type words and L2 storage/address/index forms are not
-obtained through `c.`. They belong to the minimal L2 structural bridge:
+    println: c.puts
 
-    int: x
-    char: ch
-    @: int p
-    @@: char pp
-    []: int values 16
+This does not create a separate language construct and does not make bare `puts`
+visible. It binds the Lingvamyxa name `println` to the C-visible value `c.puts`
+inside the active namespace. Later `println: "text"` is resolved by ordinary
+Lingvamyxa name lookup first; only the resolved value then lowers to the C
+symbol `puts`.
+
+A bare unresolved L2 head or atom such as `printf`, `size_t` or `int` is not
+automatically treated as a raw C fallback. Direct C-visible access is explicit
+through `c.printf`, `c.size_t` or `c.int`. A bare Lingvamyxa name is not an
+implicit C fallback; after resolution it is an ordinary Lingvamyxa `fn`, `sub`,
+label or variable, and a callable value may choose to lower to C internally.
+
+The `c.` spelling covers only raw C-visible name/type tokens in the selected L2
+profile. It does not cover C tag names as tags, aggregate members, labels or
+declarator syntax. Those are provided by the minimal L2 structural bridge, by
+selected profile-specific L2 forms, or by an explicit raw L1 text escape.
+
+L2 storage/address/index forms are Lingvamyxa structural spellings; the C base
+type words used inside them still use the explicit `c.` bridge:
+
+    c.int: x
+    c.char: ch
+    @: c.int p
+    @@: c.char pp
+    []: c.int values 16
     \p
     p\field
 
@@ -3828,13 +3852,13 @@ Inside the body, `return: 1` exits with value `1` when the condition holds. The 
 
 7.3.2. Callable Values and Binding Updates
 
-Executable definitions do not create a separate source-semantic category that must be distinguished from ordinary values before resolution. A function or subroutine name denotes a callable value in the same shared namespace that also holds primitive values, Structures, model names, receivers and other bindings.
+Executable definitions do not create a separate source-semantic category that must be distinguished from ordinary values before resolution. A function or subroutine name denotes a callable value in the same shared namespace that also holds primitive values, Structures, model names, labels, variables and other bindings.
 
 The line form:
 
     i: 5
 
-has one surface shape. After name resolution, it may mean an update to a mutable value binding `i`, or a call/consumption of a callable/receiver binding `i` with argument `5`. The language does not use `=` assignment to distinguish these cases.
+has one surface shape. After name resolution, it may mean an update to a mutable value binding `i`, or a call/consumption of a callable binding `i` with argument `5`. The language does not use `=` assignment to distinguish these cases.
 
 If a callable binding is mutable, it may be updated by the same head/update form as other bindings:
 
@@ -4954,13 +4978,13 @@ Examples:
 stack: PlantBed branch
 heap: PlantBed tree
 static: PlantBed root
-int: count 5
+c.int: count 5
 []: leafs count
 
-int: x 5
-@: int p
-@@: int pp
-@@@: int ppp
+c.int: x 5
+@: c.int p
+@@: c.int pp
+@@@: c.int ppp
 
 p: @x
 pp: @p
@@ -4974,9 +4998,9 @@ Meanings:
     count   primitive value/storage initialized to `5`
     leafs   address of array/byte storage sized by `count`, according to the active `[]` receiver/profile
     x       primitive storage/value initialized to `5`
-    p       address-depth-1 slot whose base type is `int`
-    pp      address-depth-2 slot whose base type is `int`
-    ppp     address-depth-3 slot whose base type is `int`
+    p       address-depth-1 slot whose base type is `c.int`
+    pp      address-depth-2 slot whose base type is `c.int`
+    ppp     address-depth-3 slot whose base type is `c.int`
     p: @x   stores the address of storage location `x` into `p`
     pp: @p  stores the address of storage location `p` into `pp`
     ppp: @pp stores the address of storage location `pp` into `ppp`
@@ -5005,32 +5029,32 @@ In head position before `:`, `@ⁿ:` declares an address/reference slot of depth
 
 Examples:
 
-    @: int p
-    @@: int pp
-    @@@: int ppp
+    @: c.int p
+    @@: c.int pp
+    @@@: c.int ppp
 
 Meanings:
 
-    p    address-depth-1 slot whose base type is `int`
-    pp   address-depth-2 slot whose base type is `int`
-    ppp  address-depth-3 slot whose base type is `int`
+    p    address-depth-1 slot whose base type is `c.int`
+    pp   address-depth-2 slot whose base type is `c.int`
+    ppp  address-depth-3 slot whose base type is `c.int`
 
 Whitespace separates the base type and the binding name under the ordinary short-tail rule. Therefore:
 
-    @@@: int ppp
+    @@@: c.int ppp
 
-has two fields, `int` and `ppp`, while:
+has two fields, `c.int` and `ppp`, while:
 
-    @@@: int, ppp
+    @@@: c.int, ppp
 
-terminates the `@@@:` short form after `int`. The following `ppp` is not the binding-name field of that declaration; it is the next source item at the current level.
+terminates the `@@@:` short form after `c.int`. The following `ppp` is not the binding-name field of that declaration; it is the next source item at the current level.
 
 The prefix expression form `@x` remains the depth-1 address-of operation. Higher address depth is expressed by declaring deeper address slots and storing ordinary depth-1 addresses of those slots:
 
-    int: x 5
-    @: int p
-    @@: int pp
-    @@@: int ppp
+    c.int: x 5
+    @: c.int p
+    @@: c.int pp
+    @@@: c.int ppp
 
     p: @x
     pp: @p
@@ -5048,7 +5072,7 @@ The prefix form:
 
 returns the address of the storage location `x`.
 
-If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object. This is the expression-side companion of the declaration-side `@ⁿ:` family: `@@: int pp` declares an address-depth-2 slot, while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
+If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object. This is the expression-side companion of the declaration-side `@ⁿ:` family: `@@: c.int pp` declares an address-depth-2 slot, while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
 
 The prefix form:
 
@@ -5299,13 +5323,13 @@ Example:
 
 The first `print` observes `3`. The second `print` observes `4`.
 
-The update form is valid only if the head resolves to an existing mutable binding, addressable field/index location, or receiver that explicitly accepts such a call. Because Lingvamyxa uses one lexical namespace, a binding name and a receiver/type/function name cannot silently mean different things in the same scope.
+The update form is valid only if the head resolves to an existing mutable binding, addressable field/index location, or visible language name that explicitly accepts such a call. Because Lingvamyxa uses one lexical namespace, a binding name and a type/function/procedure name cannot silently mean different things in the same scope.
 
-The same surface form is used for callable consumption. For example, `i: 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable/receiver binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
+The same surface form is used for callable consumption. For example, `i: 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
 
 A bounded Structure or compact Frame in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: int(i, 0) (i < n) i++ print(i)`, the final `print(i)` is the `body` argument consumed by `for`.
 
-This is receiver consumption, not automatic execution of every Structure in an
+This is declared head consumption, not automatic execution of every Structure in an
 argument list. A direct singleton argument that resolves as a callable/method may
 be called by the active value-production rule. A Structure argument is called or
 executed only when the receiver/signature gives that Structure such a role.
@@ -7704,7 +7728,7 @@ Consequences:
 
 L2 address and field forms are:
 
-    @ⁿ: T x     reserved address-depth declaration head, for example `@@@: int ppp`
+    @ⁿ: T x     reserved address-depth declaration head, for example `@@@: c.int ppp`
     @x          address of storage location `x`
     \x          raw load from address expression `x`
     x\field     typed field-follow through address/reference `x`
@@ -7730,11 +7754,11 @@ Examples:
 stack: PlantBed branch
 heap: PlantBed tree
 static: PlantBed root
-int: count 5
+c.int: count 5
 []: leafs count
-@: int p
-@@: int pp
-@@@: int ppp
+@: c.int p
+@@: c.int pp
+@@@: c.int ppp
 
 Meanings:
 
@@ -7743,9 +7767,9 @@ Meanings:
     root    typed address of static storage with layout `PlantBed`
     count   primitive storage/value initialized to `5`
     leafs   typed address/container descriptor for `count` primitive cells, according to the active L2 profile
-    p       address-depth-1 slot to base type `int`
-    pp      address-depth-2 slot to base type `int`
-    ppp     address-depth-3 slot to base type `int`
+    p       address-depth-1 slot to base type `c.int`
+    pp      address-depth-2 slot to base type `c.int`
+    ppp     address-depth-3 slot to base type `c.int`
 
 Names that contain spaces use exact quoted identifiers as ordinary fields:
 
@@ -7755,9 +7779,9 @@ This allocates stack storage with layout `PlantBed` and introduces the exact quo
 
 The same short-tail whitespace rule applies to address-depth declarations:
 
-@@@: int ppp
+@@@: c.int ppp
 
-This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
+This declares `ppp` as an address-depth-3 slot with base type `c.int`. The spelling `@@@: c.int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `c.int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
 
 Address-producing and address-consuming forms:
 
@@ -7796,7 +7820,7 @@ Examples:
     tree\branch: branch
     leafs[3]: 10
 
-After resolution, the form may update mutable storage, update an addressable field/index slot, or consume a callable/receiver binding. This is compile-time resolution, not a separate assignment syntax.
+After resolution, the form may update mutable storage, update an addressable field/index slot, or consume a callable binding. This is compile-time resolution, not a separate assignment syntax.
 
 Operator methods such as `++i`, `--i`, `i++` and `i--` are not mandatory source syntax in the minimal L2 set. A profile may register them as compact operator-token forms that lower to ordinary read-update-write sequences using the same head/update form.
 
