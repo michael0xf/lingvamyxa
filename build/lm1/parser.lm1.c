@@ -2120,6 +2120,33 @@ static size_t lm_p0_stack_top_level(const LmP0Stack *stack) {
     return 0U;
 }
 
+static int lm_p0_stack_level_is_trailer_body(const LmP0Stack *stack, size_t level) {
+    LmP0Node *owner;
+
+    if (level >= stack->capacity || stack->parents[level] == NULL) {
+        return 0;
+    }
+
+    owner = stack->owners[level];
+    if (owner == NULL) {
+        return 0;
+    }
+
+    if (owner->kind == LM_P0_NODE_FRAME &&
+        owner->as.frame.trailer != NULL &&
+        stack->parents[level] == &owner->as.frame.trailer->body) {
+        return 1;
+    }
+
+    if (owner->kind == LM_P0_NODE_STRUCTURE &&
+        owner->as.structure.trailer != NULL &&
+        stack->parents[level] == &owner->as.structure.trailer->body) {
+        return 1;
+    }
+
+    return 0;
+}
+
 static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack *stack, size_t event_level) {
     size_t top_level;
 
@@ -2702,11 +2729,12 @@ static size_t lm_p0_stream_block_string_level(
 
     level = lm_p0_stack_top_level(stack);
     while (level > 0U) {
-        if (stack->parents[level] != NULL && stack->hard[level] != 0U) {
+        if (stack->parents[level] != NULL && !lm_p0_stack_level_is_trailer_body(stack, level)) {
             return level;
         }
         --level;
     }
+
     return 0U;
 }
 
