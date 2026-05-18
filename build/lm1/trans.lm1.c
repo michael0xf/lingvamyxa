@@ -674,6 +674,32 @@ static int lm_trans_emit_call_args(
     return 0;
 }
 
+static int lm_trans_emit_expr_list(
+    FILE *file,
+    const LmP0Field *first,
+    const LmTransNamespace *namespace_
+) {
+    const LmP0Field *field;
+    const LmP0Field *next;
+    int wrote;
+
+    wrote = 0;
+    field = first;
+    while (field != NULL) {
+        if (wrote && lm_trans_put(file, ", ") != 0) {
+            return 1;
+        }
+        next = lm_trans_expr_segment_end(field);
+        if (lm_trans_emit_expr_range(file, field, next, namespace_) != 0) {
+            return 1;
+        }
+        wrote = 1;
+        field = next;
+    }
+
+    return 0;
+}
+
 static int lm_trans_emit_expr_frame(
     FILE *file,
     const LmP0Frame *frame,
@@ -1166,6 +1192,64 @@ static int lm_trans_emit_control(
     return lm_trans_put(file, "}\n");
 }
 
+static int lm_trans_emit_synchronized(
+    FILE *file,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    const LmP0Field *body_start;
+
+    if (frame == NULL || frame->body.first_field == NULL) {
+        fprintf(stderr, "trans L2 error: synchronized expects an object expression\n");
+        return 1;
+    }
+
+    body_start = lm_trans_control_body_start(frame);
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "lm_synchronized_enter(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ");\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "{\n") != 0) {
+        return 1;
+    }
+
+    lm_trans_namespace_enter_scope(namespace_);
+    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+    lm_trans_namespace_leave_scope(namespace_);
+
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ");\n");
+}
+
 static int lm_trans_emit_else(
     FILE *file,
     const LmP0Frame *frame,
@@ -1326,6 +1410,86 @@ static int lm_trans_emit_pointer_declaration(
     return lm_trans_namespace_declare(namespace_, name_node->as.atom, LM_TRANS_SYMBOL_VARIABLE);
 }
 
+static int lm_trans_emit_array_declaration(
+    FILE *file,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    const LmP0Field *field;
+    const LmP0Field *type_field;
+    const LmP0Field *name_field;
+    const LmP0Field *size_field;
+    const LmP0Node *name_node;
+    size_t pointer_depth;
+
+    field = frame->body.first_field;
+    pointer_depth = 0U;
+    while (
+        field != NULL &&
+        field->value != NULL &&
+        field->value->kind == LM_P0_NODE_ATOM &&
+        lm_trans_text_all_char(field->value->as.atom, '@')
+    ) {
+        pointer_depth += field->value->as.atom.length;
+        field = field->next;
+    }
+
+    type_field = field;
+    name_field = type_field != NULL ? type_field->next : NULL;
+    size_field = name_field != NULL ? name_field->next : NULL;
+    if (
+        type_field == NULL ||
+        name_field == NULL ||
+        size_field == NULL ||
+        name_field->value == NULL ||
+        name_field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        fprintf(stderr, "trans L2 error: [] declaration expects [@...] type name size\n");
+        return 1;
+    }
+
+    name_node = name_field->value;
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (
+        lm_trans_emit_type_and_name(
+            file,
+            type_field->value,
+            name_node->as.atom,
+            pointer_depth,
+            namespace_
+        ) != 0
+    ) {
+        return 1;
+    }
+    if (lm_trans_put(file, "[") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_expr_node(file, size_field->value, namespace_) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "]") != 0) {
+        return 1;
+    }
+    if (size_field->next != NULL) {
+        if (lm_trans_put(file, " = {") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_expr_list(file, size_field->next, namespace_) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, "}") != 0) {
+            return 1;
+        }
+    }
+    if (lm_trans_put(file, ";\n") != 0) {
+        return 1;
+    }
+    return lm_trans_namespace_declare(namespace_, name_node->as.atom, LM_TRANS_SYMBOL_VARIABLE);
+}
+
 static int lm_trans_emit_call_statement(
     FILE *file,
     const LmP0Frame *frame,
@@ -1379,6 +1543,63 @@ static int lm_trans_emit_call_statement(
         return 1;
     }
     if (lm_trans_put(file, ")") != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ";\n");
+}
+
+static int lm_trans_text_contains_char(LmP0Text text, char ch) {
+    size_t i;
+
+    i = 0U;
+    while (i < text.length) {
+        if (text.data[i] == ch) {
+            return 1;
+        }
+        ++i;
+    }
+    return 0;
+}
+
+static int lm_trans_head_looks_assignable_target(LmP0Text head) {
+    return
+        lm_trans_text_contains_char(head, '[') ||
+        lm_trans_text_contains_char(head, '\\');
+}
+
+static int lm_trans_emit_assignment_target(FILE *file, LmP0Text target) {
+    size_t i;
+
+    i = 0U;
+    while (i < target.length) {
+        if (target.data[i] == '\\') {
+            if (lm_trans_put(file, "->") != 0) {
+                return 1;
+            }
+        } else if (lm_trans_write_all(file, target.data + i, 1U) != 0) {
+            return 1;
+        }
+        ++i;
+    }
+    return 0;
+}
+
+static int lm_trans_emit_target_assignment(
+    FILE *file,
+    const LmP0Frame *frame,
+    unsigned indent,
+    const LmTransNamespace *namespace_
+) {
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_assignment_target(file, frame->head) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " = ") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_expr_fields(file, frame->body.first_field, namespace_) != 0) {
         return 1;
     }
     return lm_trans_put(file, ";\n");
@@ -1626,7 +1847,11 @@ static int lm_trans_emit_statement(
     }
 
     if (node->kind == LM_P0_NODE_ATOM) {
-        if (lm_trans_text_equals(node->as.atom, "break") || lm_trans_text_equals(node->as.atom, "continue")) {
+        if (
+            lm_trans_text_equals(node->as.atom, "break") ||
+            lm_trans_text_equals(node->as.atom, "continue") ||
+            lm_trans_text_equals(node->as.atom, "return")
+        ) {
             if (lm_trans_emit_indent(file, indent) != 0) {
                 return 1;
             }
@@ -1672,6 +1897,8 @@ static int lm_trans_emit_statement(
         status = lm_trans_emit_control(file, &node->as.frame, indent, namespace_, "while");
     } else if (lm_trans_text_equals(node->as.frame.head, "else")) {
         status = lm_trans_emit_else(file, &node->as.frame, indent, namespace_);
+    } else if (lm_trans_text_equals(node->as.frame.head, "synchronized")) {
+        status = lm_trans_emit_synchronized(file, &node->as.frame, indent, namespace_);
     } else if (lm_trans_text_equals(node->as.frame.head, "break")) {
         if (lm_trans_emit_indent(file, indent) != 0) {
             return 1;
@@ -1682,10 +1909,14 @@ static int lm_trans_emit_statement(
             return 1;
         }
         status = lm_trans_put(file, "continue;\n");
+    } else if (lm_trans_text_equals(node->as.frame.head, "[]")) {
+        status = lm_trans_emit_array_declaration(file, &node->as.frame, indent, namespace_);
     } else if (lm_trans_frame_looks_storage_declaration(&node->as.frame, namespace_)) {
         status = lm_trans_emit_declaration(file, &node->as.frame, indent, namespace_);
     } else if (lm_trans_text_all_char(node->as.frame.head, '@')) {
         status = lm_trans_emit_pointer_declaration(file, &node->as.frame, indent, namespace_);
+    } else if (lm_trans_head_looks_assignable_target(node->as.frame.head)) {
+        status = lm_trans_emit_target_assignment(file, &node->as.frame, indent, namespace_);
     } else if (
         !lm_trans_is_c_reference_name(node->as.frame.head) &&
         !lm_trans_is_reserved_head_name(node->as.frame.head) &&

@@ -7821,7 +7821,7 @@ Minimal L2 storage/allocation and address-slot forms:
     heap: Layout name
     static: Layout name
     Primitive: name [initialValue]
-    []: name size
+    []: ElementType name size [initialValue...]
     @ⁿ: BaseType name
 
 Examples:
@@ -7830,7 +7830,7 @@ stack: PlantBed branch
 heap: PlantBed tree
 static: PlantBed root
 c.int: count 5
-[]: leafs count
+[]: c.int leafs count
 @: c.int p
 @@: c.int pp
 @@@: c.int ppp
@@ -7841,10 +7841,27 @@ Meanings:
     tree    typed address of heap storage with layout `PlantBed`
     root    typed address of static storage with layout `PlantBed`
     count   primitive storage/value initialized to `5`
-    leafs   typed address/container descriptor for `count` primitive cells, according to the active L2 profile
+    leafs   indexed storage/container descriptor for `count` primitive cells, according to the active L2 profile
     p       address-depth-1 slot to base type `c.int`
     pp      address-depth-2 slot to base type `c.int`
     ppp     address-depth-3 slot to base type `c.int`
+
+The first ANSI C bootstrap projection accepts an explicit element type:
+
+    []: c.int values 3 1 2 3
+    []: @ c.int pointers 2 @ a @ b
+
+which may lower to:
+
+---ANSI C---
+int values[3] = {1, 2, 3};
+int *pointers[2] = {&a, &b};
+---ANSI C---
+
+The leading `@` fields before the element type are address-depth fields for the
+array element type, not separate values. Higher profiles may define richer
+container descriptors, ownership policies and allocation receivers over the same
+surface form.
 
 Names that contain spaces use exact quoted identifiers as ordinary fields:
 
@@ -7993,6 +8010,7 @@ The minimal L2 executable-body control set is:
 
     if / then / else
     while
+    synchronized
     until
     for(init, condition, step)
     return
@@ -8000,6 +8018,18 @@ The minimal L2 executable-body control set is:
     continue
 
 These are source-level control receivers/parser forms. They are not raw jumps in the source semantics, even if a translator lowers them to labels and branches.
+
+The first ANSI C bootstrap translator needs only:
+
+    if / else
+    while
+    synchronized
+    return
+    break
+    continue
+
+`until` and `for` remain part of the minimal L2 semantic set, but may be added
+after the first procedural bootstrap subset.
 
 28.5.1. `if`, `then` and `else`
 
@@ -8122,6 +8152,32 @@ For `while`, `continue` transfers control to the next condition check.
 For `until`, `continue` transfers control to the post-condition check for the current iteration.
 
 For `for`, `continue` transfers control to the iteration-step Structure, then to the next condition check.
+
+28.5.7. `synchronized`
+
+`synchronized` consumes an object/address expression and an executable body
+Structure. It is a structured synchronization receiver, not a raw lock/unlock
+pair in source syntax.
+
+Example:
+
+synchronized: @ object
+    updateObject: object
+
+The first ANSI C bootstrap projection may lower this to runtime hooks:
+
+---ANSI C---
+lm_synchronized_enter(&object);
+{
+    updateObject(object);
+}
+lm_synchronized_leave(&object);
+---ANSI C---
+
+The runtime hook must implement the selected monitor policy, including
+Java-style reentrant entry for the same thread when that profile is selected.
+Full cleanup behavior for `return`, `break`, `continue` or diagnostics across a
+synchronized boundary belongs to the runtime/translator cleanup rules.
 
 28.6. Outside the Minimal L2 Set
 
