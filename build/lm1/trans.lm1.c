@@ -9,8 +9,7 @@ typedef enum LmTransSymbolKind {
     LM_TRANS_SYMBOL_FUNCTION = 2,
     LM_TRANS_SYMBOL_PROCEDURE = 3,
     LM_TRANS_SYMBOL_LABEL = 4,
-    LM_TRANS_SYMBOL_RECEIVER = 5,
-    LM_TRANS_SYMBOL_TYPE = 6
+    LM_TRANS_SYMBOL_STRUCTURE = 5
 } LmTransSymbolKind;
 
 typedef struct LmTransSymbol {
@@ -157,10 +156,8 @@ static const char *lm_trans_symbol_kind_name(LmTransSymbolKind kind) {
         return "procedure";
     case LM_TRANS_SYMBOL_LABEL:
         return "label";
-    case LM_TRANS_SYMBOL_RECEIVER:
-        return "receiver";
-    case LM_TRANS_SYMBOL_TYPE:
-        return "type";
+    case LM_TRANS_SYMBOL_STRUCTURE:
+        return "structure";
     default:
         return "symbol";
     }
@@ -247,7 +244,7 @@ static LmTransSymbol *lm_trans_namespace_find_mutable(
 
 static int lm_trans_is_c_reference_name(LmP0Text name);
 
-static int lm_trans_is_reserved_receiver_name(LmP0Text name) {
+static int lm_trans_is_reserved_head_name(LmP0Text name) {
     return
         lm_trans_text_equals(name, "L1") ||
         lm_trans_text_equals(name, "L2") ||
@@ -287,10 +284,10 @@ static int lm_trans_namespace_declare(
         return 1;
     }
 
-    if (lm_trans_is_reserved_receiver_name(name)) {
+    if (lm_trans_is_reserved_head_name(name)) {
         fprintf(
             stderr,
-            "trans L2 error: reserved receiver \"%.*s\" cannot be redeclared\n",
+            "trans L2 error: reserved head \"%.*s\" cannot be redeclared\n",
             (int)name.length,
             name.data
         );
@@ -350,10 +347,10 @@ static int lm_trans_namespace_bind_c_reference(
         return 1;
     }
 
-    if (lm_trans_is_reserved_receiver_name(name)) {
+    if (lm_trans_is_reserved_head_name(name)) {
         fprintf(
             stderr,
-            "trans L2 error: reserved receiver \"%.*s\" cannot be rebound\n",
+            "trans L2 error: reserved head \"%.*s\" cannot be rebound\n",
             (int)name.length,
             name.data
         );
@@ -499,8 +496,7 @@ static int lm_trans_validate_expr_atom(
     if (
         symbol->kind == LM_TRANS_SYMBOL_PROCEDURE ||
         symbol->kind == LM_TRANS_SYMBOL_LABEL ||
-        symbol->kind == LM_TRANS_SYMBOL_RECEIVER ||
-        symbol->kind == LM_TRANS_SYMBOL_TYPE
+        symbol->kind == LM_TRANS_SYMBOL_STRUCTURE
     ) {
         fprintf(
             stderr,
@@ -827,6 +823,15 @@ static int lm_trans_emit_expr_range(
     return 0;
 }
 
+static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
+    if (type_node == NULL || type_node->kind != LM_P0_NODE_ATOM) {
+        fprintf(stderr, "trans L2 error: type position expects a name\n");
+        return 1;
+    }
+
+    return lm_trans_emit_name(file, type_node->as.atom);
+}
+
 static int lm_trans_emit_type_and_name(
     FILE *file,
     const LmP0Node *type_node,
@@ -840,7 +845,9 @@ static int lm_trans_emit_type_and_name(
         return 1;
     }
 
-    if (lm_trans_emit_expr_node(file, type_node, namespace_) != 0) {
+    (void)namespace_;
+
+    if (lm_trans_emit_type_node(file, type_node) != 0) {
         return 1;
     }
     if (lm_trans_put(file, " ") != 0) {
@@ -853,6 +860,11 @@ static int lm_trans_emit_type_and_name(
     }
     return lm_trans_write_text(file, name);
 }
+
+static int lm_trans_head_can_declare_storage(
+    LmP0Text head,
+    const LmTransNamespace *namespace_
+);
 
 static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespace *namespace_) {
     const LmP0Field *field0;
@@ -867,12 +879,9 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespac
     field0 = lm_trans_nth_field(&node->as.frame.body, 0U);
     field1 = lm_trans_nth_field(&node->as.frame.body, 1U);
 
-    if (
-        lm_trans_is_c_reference_name(node->as.frame.head) &&
-        lm_trans_accepts_c_type_name(node->as.frame.head)
-    ) {
+    if (lm_trans_head_can_declare_storage(node->as.frame.head, namespace_)) {
         if (field0 == NULL || field0->value == NULL || field0->value->kind != LM_P0_NODE_ATOM) {
-            fprintf(stderr, "trans L2 error: c.type parameter expects a name\n");
+            fprintf(stderr, "trans L2 error: typed parameter expects a name\n");
             return 1;
         }
         name_node = field0->value;
@@ -913,7 +922,7 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespac
         return lm_trans_namespace_declare(namespace_, name_node->as.atom, LM_TRANS_SYMBOL_VARIABLE);
     }
 
-    fprintf(stderr, "trans L2 error: unsupported parameter receiver\n");
+    fprintf(stderr, "trans L2 error: unsupported parameter head\n");
     return 1;
 }
 
@@ -1065,7 +1074,7 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
     if (!lm_trans_frame_close_target(frame, &expected)) {
         fprintf(
             stderr,
-            "trans error: receiver \"%.*s\" does not expose a named close target\n",
+            "trans error: head \"%.*s\" does not expose a named close target\n",
             (int)frame->head.length,
             frame->head.data
         );
@@ -1075,7 +1084,7 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
     if (!lm_trans_text_same(actual, expected)) {
         fprintf(
             stderr,
-            "trans error: end target \"%.*s\" does not match receiver close target \"%.*s\"\n",
+            "trans error: end target \"%.*s\" does not match close target \"%.*s\"\n",
             (int)actual.length,
             actual.data,
             (int)expected.length,
@@ -1227,18 +1236,29 @@ static int lm_trans_atom_can_be_new_binding_name(LmP0Text text) {
     return lm_trans_atom_is_identifier_like(text);
 }
 
-static int lm_trans_frame_looks_c_declaration(
+static int lm_trans_head_can_declare_storage(
+    LmP0Text head,
+    const LmTransNamespace *namespace_
+) {
+    const LmTransSymbol *symbol;
+
+    if (lm_trans_is_c_reference_name(head) && lm_trans_accepts_c_type_name(head)) {
+        return 1;
+    }
+
+    symbol = lm_trans_namespace_find(namespace_, head);
+    return symbol != NULL && symbol->kind == LM_TRANS_SYMBOL_STRUCTURE;
+}
+
+static int lm_trans_frame_looks_storage_declaration(
     const LmP0Frame *frame,
     const LmTransNamespace *namespace_
 ) {
     const LmP0Field *name_field;
 
-    (void)namespace_;
-
     if (
         frame == NULL ||
-        !lm_trans_is_c_reference_name(frame->head) ||
-        !lm_trans_accepts_c_type_name(frame->head)
+        !lm_trans_head_can_declare_storage(frame->head, namespace_)
     ) {
         return 0;
     }
@@ -1423,13 +1443,136 @@ static int lm_trans_emit_c_reference_binding(
     return lm_trans_namespace_bind_c_reference(namespace_, frame->head, c_name);
 }
 
-static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
+static int lm_trans_frame_looks_named_structure_declaration(const LmP0Frame *frame) {
     return
         frame != NULL &&
         !lm_trans_is_c_reference_name(frame->head) &&
-        !lm_trans_is_reserved_receiver_name(frame->head) &&
+        !lm_trans_is_reserved_head_name(frame->head) &&
         (frame->flags & LM_P0_FRAME_COLON) != 0U &&
         (frame->flags & LM_P0_FRAME_INLINE_BODY) == 0U;
+}
+
+static int lm_trans_emit_struct_field(
+    FILE *file,
+    const LmP0Node *node,
+    unsigned indent
+) {
+    const LmP0Frame *frame;
+    const LmP0Field *type_field;
+    const LmP0Field *name_field;
+    const LmP0Node *name_node;
+
+    if (node == NULL || (node->flags & LM_P0_NODE_INACTIVE)) {
+        return 0;
+    }
+
+    if (node->kind != LM_P0_NODE_FRAME) {
+        fprintf(stderr, "trans L2 error: structure field must be a named field\n");
+        return 1;
+    }
+
+    frame = &node->as.frame;
+    if (lm_trans_text_all_char(frame->head, '@')) {
+        type_field = lm_trans_nth_field(&frame->body, 0U);
+        name_field = lm_trans_nth_field(&frame->body, 1U);
+        if (
+            type_field == NULL ||
+            name_field == NULL ||
+            name_field->next != NULL ||
+            name_field->value == NULL ||
+            name_field->value->kind != LM_P0_NODE_ATOM
+        ) {
+            fprintf(stderr, "trans L2 error: pointer structure field expects type and name\n");
+            return 1;
+        }
+        name_node = name_field->value;
+        if (lm_trans_emit_indent(file, indent) != 0) {
+            return 1;
+        }
+        if (
+            lm_trans_emit_type_and_name(
+                file,
+                type_field->value,
+                name_node->as.atom,
+                frame->head.length,
+                NULL
+            ) != 0
+        ) {
+            return 1;
+        }
+        return lm_trans_put(file, ";\n");
+    }
+
+    name_field = lm_trans_nth_field(&frame->body, 0U);
+    if (
+        name_field == NULL ||
+        name_field->next != NULL ||
+        name_field->value == NULL ||
+        name_field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        fprintf(stderr, "trans L2 error: structure field expects Type: name\n");
+        return 1;
+    }
+
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_name(file, frame->head) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " ") != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, name_field->value->as.atom) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ";\n");
+}
+
+static int lm_trans_emit_named_structure(
+    FILE *file,
+    const LmP0Frame *frame
+) {
+    const LmP0Field *field;
+
+    if (lm_trans_put(file, "typedef struct ") != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, frame->head) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " ") != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, frame->head) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ";\n\nstruct ") != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, frame->head) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " {\n") != 0) {
+        return 1;
+    }
+
+    field = frame->body.first_field;
+    while (field != NULL) {
+        if (lm_trans_emit_struct_field(file, field->value, 1U) != 0) {
+            return 1;
+        }
+        field = field->next;
+    }
+
+    if (lm_trans_put(file, "};\n\n") != 0) {
+        return 1;
+    }
+    return lm_trans_validate_end_trailer(frame);
+}
+
+static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
+    return lm_trans_frame_looks_named_structure_declaration(frame);
 }
 
 static int lm_trans_emit_label_statement(
@@ -1493,6 +1636,11 @@ static int lm_trans_emit_statement(
             return lm_trans_put(file, ";\n");
         }
 
+        if (lm_trans_atom_starts_string(node->as.atom)) {
+            fprintf(stderr, "trans L2 error: standalone string field is not consumed by any L2 receiver\n");
+            return 1;
+        }
+
         if (lm_trans_emit_indent(file, indent) != 0) {
             return 1;
         }
@@ -1534,13 +1682,13 @@ static int lm_trans_emit_statement(
             return 1;
         }
         status = lm_trans_put(file, "continue;\n");
-    } else if (lm_trans_frame_looks_c_declaration(&node->as.frame, namespace_)) {
+    } else if (lm_trans_frame_looks_storage_declaration(&node->as.frame, namespace_)) {
         status = lm_trans_emit_declaration(file, &node->as.frame, indent, namespace_);
     } else if (lm_trans_text_all_char(node->as.frame.head, '@')) {
         status = lm_trans_emit_pointer_declaration(file, &node->as.frame, indent, namespace_);
     } else if (
         !lm_trans_is_c_reference_name(node->as.frame.head) &&
-        !lm_trans_is_reserved_receiver_name(node->as.frame.head) &&
+        !lm_trans_is_reserved_head_name(node->as.frame.head) &&
         lm_trans_frame_single_c_reference_body(&node->as.frame, &c_name)
     ) {
         status = lm_trans_emit_c_reference_binding(&node->as.frame, namespace_);
@@ -1575,7 +1723,7 @@ static int lm_trans_emit_statement(
         } else {
             fprintf(
                 stderr,
-                "trans L2 error: \"%.*s\" is %s, not a statement receiver\n",
+                "trans L2 error: \"%.*s\" is %s, not a statement head\n",
                 (int)node->as.frame.head.length,
                 node->as.frame.head.data,
                 lm_trans_symbol_kind_name(symbol->kind)
@@ -1703,7 +1851,7 @@ static int lm_trans_emit_function(
             fprintf(stderr, "trans L2 error: fn expects return type\n");
             return 1;
         }
-        if (lm_trans_emit_expr_node(file, return_field->value, namespace_) != 0) {
+        if (lm_trans_emit_type_node(file, return_field->value) != 0) {
             return 1;
         }
         if (lm_trans_put(file, " ") != 0) {
@@ -1743,6 +1891,10 @@ static int lm_trans_emit_function(
     return status;
 }
 
+static int lm_trans_is_end_target(const LmP0Frame *frame, const char *target);
+static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
+static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2);
+
 static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     const LmP0Field *field;
     const LmP0Node *node;
@@ -1757,14 +1909,25 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     field = l2->body.first_field;
     while (field != NULL) {
         node = field->value;
-        if (node != NULL && node->kind == LM_P0_NODE_FRAME) {
+        if (node == NULL || (node->flags & LM_P0_NODE_INACTIVE)) {
+            field = field->next;
+            continue;
+        }
+
+        if (node->kind != LM_P0_NODE_FRAME) {
+            fprintf(stderr, "trans L2 error: top-level L2 field must be consumed by an L2 receiver\n");
+            lm_trans_namespace_destroy(&namespace_);
+            return 1;
+        }
+
+        if (node->kind == LM_P0_NODE_FRAME) {
             if (lm_trans_text_equals(node->as.frame.head, "fn")) {
                 kind = LM_TRANS_SYMBOL_FUNCTION;
             } else if (lm_trans_text_equals(node->as.frame.head, "sub")) {
                 kind = LM_TRANS_SYMBOL_PROCEDURE;
             } else if (
                 !lm_trans_is_c_reference_name(node->as.frame.head) &&
-                !lm_trans_is_reserved_receiver_name(node->as.frame.head) &&
+                !lm_trans_is_reserved_head_name(node->as.frame.head) &&
                 lm_trans_frame_single_c_reference_body(&node->as.frame, &c_name)
             ) {
                 if (lm_trans_namespace_bind_c_reference(&namespace_, node->as.frame.head, c_name) != 0) {
@@ -1773,8 +1936,18 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 }
                 field = field->next;
                 continue;
+            } else if (lm_trans_frame_looks_named_structure_declaration(&node->as.frame)) {
+                if (lm_trans_namespace_declare(&namespace_, node->as.frame.head, LM_TRANS_SYMBOL_STRUCTURE) != 0) {
+                    lm_trans_namespace_destroy(&namespace_);
+                    return 1;
+                }
+                field = field->next;
+                continue;
+            } else if (lm_trans_text_equals(node->as.frame.head, "L1")) {
+                field = field->next;
+                continue;
             } else {
-                fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub or namespace binding to c.name\n");
+                fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, L1 frame, named Structure, or namespace binding to c.name\n");
                 lm_trans_namespace_destroy(&namespace_);
                 return 1;
             }
@@ -1788,6 +1961,47 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 lm_trans_namespace_destroy(&namespace_);
                 return 1;
             }
+        }
+        field = field->next;
+    }
+
+    field = l2->body.first_field;
+    while (field != NULL) {
+        node = field->value;
+        if (
+            node != NULL &&
+            node->kind == LM_P0_NODE_FRAME &&
+            (
+                lm_trans_frame_looks_named_structure_declaration(&node->as.frame) ||
+                lm_trans_text_equals(node->as.frame.head, "L1")
+            )
+        ) {
+            if (lm_trans_text_equals(node->as.frame.head, "L1")) {
+                status = lm_trans_emit_l1_frame(file, &node->as.frame);
+            } else {
+                status = lm_trans_emit_named_structure(file, &node->as.frame);
+            }
+            if (status != 0) {
+                lm_trans_namespace_destroy(&namespace_);
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    field = l2->body.first_field;
+    while (field != NULL) {
+        node = field->value;
+        if (node != NULL && node->kind == LM_P0_NODE_FRAME) {
+            if (lm_trans_text_equals(node->as.frame.head, "fn")) {
+                kind = LM_TRANS_SYMBOL_FUNCTION;
+            } else if (lm_trans_text_equals(node->as.frame.head, "sub")) {
+                kind = LM_TRANS_SYMBOL_PROCEDURE;
+            } else {
+                field = field->next;
+                continue;
+            }
+
             if (
                 lm_trans_emit_function(
                     file,
@@ -1808,16 +2022,142 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     return status;
 }
 
-static int lm_trans_emit_raw_atom(FILE *output, const LmP0Node *node) {
-    if (node == NULL || node->kind != LM_P0_NODE_ATOM) {
-        fprintf(stderr, "trans error: L1 raw field must be atom text\n");
+static int lm_trans_inline_string_payload(LmP0Text text, LmP0Text *out_payload, size_t *out_run) {
+    char quote;
+    size_t open_run;
+    size_t close_run;
+
+    if (out_payload == NULL || out_run == NULL || text.length < 2U) {
+        return 0;
+    }
+
+    quote = text.data[0];
+    if (quote != '\'' && quote != '"') {
+        return 0;
+    }
+
+    open_run = 0U;
+    while (open_run < text.length && text.data[open_run] == quote) {
+        ++open_run;
+    }
+    if (text.length < open_run * 2U) {
+        return 0;
+    }
+
+    close_run = 0U;
+    while (close_run < text.length && text.data[text.length - close_run - 1U] == quote) {
+        ++close_run;
+    }
+    if (close_run < open_run) {
+        return 0;
+    }
+
+    out_payload->data = text.data + open_run;
+    out_payload->length = text.length - open_run * 2U;
+    *out_run = open_run;
+    return 1;
+}
+
+static int lm_trans_emit_l1_payload(FILE *output, LmP0Text text) {
+    LmP0Text payload;
+    size_t delimiter_run;
+    size_t i;
+    char ch;
+
+    if (lm_trans_inline_string_payload(text, &payload, &delimiter_run)) {
+        if (delimiter_run == 1U) {
+            i = 0U;
+            while (i < payload.length) {
+                ch = payload.data[i++];
+                if (ch == '\\' && i < payload.length) {
+                    ch = payload.data[i++];
+                    if (ch == 'n') {
+                        ch = '\n';
+                    } else if (ch == 'r') {
+                        ch = '\r';
+                    } else if (ch == 't') {
+                        ch = '\t';
+                    } else if (ch == '0') {
+                        ch = '\0';
+                    }
+                }
+                if (lm_trans_write_all(output, &ch, 1U) != 0) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        return lm_trans_write_all(output, payload.data, payload.length);
+    }
+
+    return lm_trans_write_text(output, text);
+}
+
+static int lm_trans_emit_l1_node(FILE *output, const LmP0Node *node);
+
+static int lm_trans_emit_l1_structure(FILE *output, const LmP0Structure *structure) {
+    const LmP0Field *field;
+
+    if (structure == NULL) {
+        return 0;
+    }
+
+    field = structure->first_field;
+    while (field != NULL) {
+        if (lm_trans_emit_l1_node(output, field->value) != 0) {
+            return 1;
+        }
+        field = field->next;
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_l1_node(FILE *output, const LmP0Node *node) {
+    if (node == NULL || (node->flags & LM_P0_NODE_INACTIVE)) {
+        return 0;
+    }
+
+    if (node->kind == LM_P0_NODE_ATOM) {
+        if (lm_trans_emit_l1_payload(output, node->as.atom) != 0) {
+            return 1;
+        }
+        return lm_trans_write_all(output, "\n", 1U);
+    }
+
+    if (node->kind == LM_P0_NODE_STRUCTURE) {
+        return lm_trans_emit_l1_structure(output, &node->as.structure);
+    }
+
+    if (node->kind == LM_P0_NODE_FRAME) {
+        if (lm_trans_text_equals(node->as.frame.head, "L1")) {
+            return lm_trans_emit_l1_frame(output, &node->as.frame);
+        }
+        if (lm_trans_text_equals(node->as.frame.head, "L2")) {
+            return lm_trans_emit_l2_frame(output, &node->as.frame);
+        }
+        if (lm_trans_is_end_target(&node->as.frame, "L1")) {
+            return 0;
+        }
+
+        fprintf(stderr, "trans error: unknown translator receiver inside L1\n");
         return 1;
     }
 
-    if (lm_trans_write_all(output, node->as.atom.data, node->as.atom.length) != 0) {
+    return 0;
+}
+
+static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1) {
+    if (l1 == NULL) {
         return 1;
     }
-    return lm_trans_write_all(output, "\n", 1U);
+
+    if (lm_trans_emit_l1_structure(output, &l1->body) != 0) {
+        return 1;
+    }
+
+    return lm_trans_validate_end_trailer(l1);
 }
 
 static int lm_trans_is_end_target(const LmP0Frame *frame, const char *target) {
@@ -1837,40 +2177,14 @@ static int lm_trans_is_end_target(const LmP0Frame *frame, const char *target) {
 }
 
 static int lm_trans_emit_l1_body(FILE *output, const LmP0Frame *l1, int *emitted) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-
-    field = l1->body.first_field;
-    while (field != NULL) {
-        node = field->value;
-        if (node != NULL && !(node->flags & LM_P0_NODE_INACTIVE)) {
-            if (node->kind == LM_P0_NODE_ATOM) {
-                if (lm_trans_emit_raw_atom(output, node) != 0) {
-                    return 1;
-                }
-                *emitted = 1;
-            } else if (
-                node->kind == LM_P0_NODE_FRAME &&
-                lm_trans_text_equals(node->as.frame.head, "L2")
-            ) {
-                if (lm_trans_emit_l2_frame(output, &node->as.frame) != 0) {
-                    return 1;
-                }
-                *emitted = 1;
-            } else if (
-                node->kind == LM_P0_NODE_FRAME &&
-                lm_trans_is_end_target(&node->as.frame, "L1")
-            ) {
-                return 0;
-            } else {
-                fprintf(stderr, "trans error: L1 body may contain raw text or explicit L2 frames\n");
-                return 1;
-            }
-        }
-        field = field->next;
+    if (lm_trans_emit_l1_frame(output, l1) != 0) {
+        return 1;
     }
 
-    return lm_trans_validate_end_trailer(l1);
+    if (emitted != NULL) {
+        *emitted = 1;
+    }
+    return 0;
 }
 
 static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int *emitted) {

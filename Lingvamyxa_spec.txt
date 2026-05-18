@@ -7294,6 +7294,13 @@ outerLoop:
 
 `labelName:` is an ordinary colon frame that the active profile materializes as a visible control target for the following block.
 
+The label name is visible in the ordinary namespace as a control target, but it
+is not callable merely by being mentioned. A standalone `labelName` item is a
+compile-time error in the default profile: Lingvamyxa has no implicit `goto`.
+Only control forms that define label consumption, such as `break: labelName`,
+`continue: labelName`, failure handlers or other profile-defined control
+operators, may consume a label as a target.
+
 `break: labelName` exits the labelled loop frame.
 
 `continue: labelName` continues the labelled loop frame if the target label names a loop frame.
@@ -7782,6 +7789,94 @@ The same short-tail whitespace rule applies to address-depth declarations:
 @@@: c.int ppp
 
 This declares `ppp` as an address-depth-3 slot with base type `c.int`. The spelling `@@@: c.int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `c.int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
+
+28.2.1. Named Structures and ANSI C `typedef struct` Projection
+
+At L2, an ordinary named vertical Structure at top level declares one ordinary
+Lingvamyxa namespace entry. It is not a second type namespace and it is not C
+syntax in the source. It is just a named Structure. Because that Structure has
+the same shape as an ANSI C record layout, an ANSI C projection may lower it to
+`typedef struct`.
+
+Example:
+
+L2:
+    LmTransSymbol:
+        LmP0Text: name
+        LmTransSymbolKind: kind
+        c.unsigned: depth
+        c.int: has_c_name
+        LmP0Text: c_name
+    end: LmTransSymbol
+end: L2
+
+One possible ANSI C projection:
+
+---ANSI C---
+typedef struct LmTransSymbol LmTransSymbol;
+
+struct LmTransSymbol {
+    LmP0Text name;
+    LmTransSymbolKind kind;
+    unsigned depth;
+    int has_c_name;
+    LmP0Text c_name;
+};
+---ANSI C---
+
+The field head is consumed by the L2 projection as the field descriptor. It may
+name another ordinary Lingvamyxa Structure, an explicit `c.name`, or a future
+callable/method descriptor if the profile defines such a descriptor form. Merely
+mentioning that descriptor does not call it. The general rule remains the same:
+a Structure is not executed because it exists; it is consumed by the active
+translator/profile mode.
+
+28.2.2. L1 and L2 Translator Receivers
+
+`L1` and `L2` are ordinary translator receivers that consume one body Structure.
+Since a Structure contains an ordered field sequence, this is enough to consume
+any number of source fields.
+
+The `L1` receiver walks its body fields in order. If a field is a string/payload
+atom, `L1` writes that payload at the current generated L1 position. This rule is
+not tied to one spelling: ANSI-style strings, python-like quoted raw strings and
+block strings are all string payload forms. If a field is a Lingvamyxa Structure
+or Frame, `L1` dispatches it back to the translator. Thus an `L2` frame can be
+nested inside `L1`, and an `L1` implementation fragment can be nested inside
+`L2`.
+
+The `L2` receiver also consumes one body Structure, but it does not print
+standalone strings as ANSI C. The rule is relative to the Structure being
+translated to ANSI C: if a string field appears at level 0 of the body that `L2`
+is asked to translate, and no receiver consumes that field, it is a compile-time
+error. Nested Structures owned by another receiver are not reclassified by this
+generic rule; that receiver defines what its own body fields mean. If a receiver
+asks `L2` to translate such a nested Structure, the same level-0 rule applies
+again inside that translated body. This is a phase error of the active consumer:
+for `L2` it is reported by the compiler/translator, while an interpreter profile
+would report the corresponding error in its own execution phase. The `c.name`
+form is likewise consumed by the `c` receiver/projection: it prints an ANSI C
+ordinary identifier only at the position where that explicit receiver is used.
+
+Example:
+
+L2:
+    L1:'''typedef enum LmTransSymbolKind {
+        LM_TRANS_SYMBOL_VARIABLE = 1,
+        LM_TRANS_SYMBOL_FUNCTION = 2,
+        LM_TRANS_SYMBOL_PROCEDURE = 3,
+        LM_TRANS_SYMBOL_LABEL = 4,
+        LM_TRANS_SYMBOL_STRUCTURE = 5
+    } LmTransSymbolKind;'''
+
+    fn: main () c.int
+        return: c.LM_TRANS_SYMBOL_VARIABLE
+    end: main
+end: L2
+
+The enum constants are not imported into the Lingvamyxa namespace. They remain
+ordinary ANSI C names and are referenced explicitly through the permanent C
+namespace door, for example `c.LM_TRANS_SYMBOL_VARIABLE`.
 
 Address-producing and address-consuming forms:
 
