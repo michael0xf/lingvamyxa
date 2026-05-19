@@ -177,6 +177,37 @@ typedef struct LmTransStatementStack {
     LmOwnValueStack jobs;
 } LmTransStatementStack;
 
+typedef enum LmTransStatementLoweringKind {
+    LM_TRANS_STATEMENT_LOWER_RETURN = 1,
+    LM_TRANS_STATEMENT_LOWER_IF = 2,
+    LM_TRANS_STATEMENT_LOWER_WHILE = 3,
+    LM_TRANS_STATEMENT_LOWER_ELSE = 4,
+    LM_TRANS_STATEMENT_LOWER_SYNCHRONIZED = 5,
+    LM_TRANS_STATEMENT_LOWER_BREAK = 6,
+    LM_TRANS_STATEMENT_LOWER_CONTINUE = 7,
+    LM_TRANS_STATEMENT_LOWER_CONST_DECLARATION = 8,
+    LM_TRANS_STATEMENT_LOWER_ARRAY_DECLARATION = 9,
+    LM_TRANS_STATEMENT_LOWER_STORAGE_DECLARATION = 10,
+    LM_TRANS_STATEMENT_LOWER_POINTER_DECLARATION = 11,
+    LM_TRANS_STATEMENT_LOWER_TARGET_ASSIGNMENT = 12,
+    LM_TRANS_STATEMENT_LOWER_C_REFERENCE_BINDING = 13,
+    LM_TRANS_STATEMENT_LOWER_LABEL = 14,
+    LM_TRANS_STATEMENT_LOWER_CALL = 15,
+    LM_TRANS_STATEMENT_LOWER_ASSIGNMENT = 16
+} LmTransStatementLoweringKind;
+
+typedef struct LmTransStatementLowering {
+    LmTransStatementLoweringKind kind;
+} LmTransStatementLowering;
+
+typedef enum LmTransAtomStatementLoweringKind {
+    LM_TRANS_ATOM_STATEMENT_LOWER_BREAK = 1,
+    LM_TRANS_ATOM_STATEMENT_LOWER_CONTINUE = 2,
+    LM_TRANS_ATOM_STATEMENT_LOWER_RETURN = 3,
+    LM_TRANS_ATOM_STATEMENT_LOWER_EXPR = 4,
+    LM_TRANS_ATOM_STATEMENT_LOWER_STRING_ERROR = 5
+} LmTransAtomStatementLoweringKind;
+
 typedef struct LmTransFunctionState {
     const LmP0Node *previous_return_type_node;
     int previous_return_type_is_struct;
@@ -3519,84 +3550,81 @@ static int lm_trans_statement_stack_schedule_label(
     return 0;
 }
 
-static int lm_trans_statement_stack_emit_frame(
-    FILE *file,
-    LmTransStatementStack *stack,
+static int lm_trans_lower_statement_frame(
     const LmP0Frame *frame,
-    unsigned indent,
-    LmTransNamespace *namespace_
+    const LmTransNamespace *namespace_,
+    LmTransStatementLowering *out
 ) {
-    int status;
     const LmTransSymbol *symbol;
     LmP0Text c_name;
 
-    status =
-        lm_trans_statement_stack_push_frame_job(stack, LM_TRANS_STATEMENT_JOB_TRAILER, frame, indent) ||
-        lm_trans_statement_stack_push_frame_job(stack, LM_TRANS_STATEMENT_JOB_VALIDATE_END, frame, indent);
-    if (status != 0) {
+    if (frame == NULL || out == NULL) {
         return 1;
     }
 
     if (lm_trans_text_equals(frame->head, "return")) {
-        return lm_trans_emit_return_statement(file, frame->body.first_field, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_RETURN;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "if")) {
-        return lm_trans_statement_stack_schedule_control(file, stack, frame, indent, namespace_, "if");
+        out->kind = LM_TRANS_STATEMENT_LOWER_IF;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "while")) {
-        return lm_trans_statement_stack_schedule_control(file, stack, frame, indent, namespace_, "while");
+        out->kind = LM_TRANS_STATEMENT_LOWER_WHILE;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "else")) {
-        return lm_trans_statement_stack_schedule_else(file, stack, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_ELSE;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "synchronized")) {
-        return lm_trans_statement_stack_schedule_synchronized(file, stack, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_SYNCHRONIZED;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "break")) {
-        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
-            return 1;
-        }
-        if (lm_trans_emit_indent(file, indent) != 0) {
-            return 1;
-        }
-        return lm_trans_put(file, "break;\n");
+        out->kind = LM_TRANS_STATEMENT_LOWER_BREAK;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "continue")) {
-        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
-            return 1;
-        }
-        if (lm_trans_emit_indent(file, indent) != 0) {
-            return 1;
-        }
-        return lm_trans_put(file, "continue;\n");
+        out->kind = LM_TRANS_STATEMENT_LOWER_CONTINUE;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "const")) {
-        return lm_trans_emit_const_statement(file, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_CONST_DECLARATION;
+        return 0;
     }
     if (lm_trans_text_equals(frame->head, "[]")) {
-        return lm_trans_emit_array_declaration(file, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_ARRAY_DECLARATION;
+        return 0;
     }
     if (lm_trans_frame_looks_storage_declaration(frame, namespace_)) {
-        return lm_trans_emit_declaration(file, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_STORAGE_DECLARATION;
+        return 0;
     }
     if (lm_trans_text_all_char(frame->head, '@')) {
-        return lm_trans_emit_pointer_declaration(file, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_POINTER_DECLARATION;
+        return 0;
     }
     if (lm_trans_head_looks_assignable_target(frame->head)) {
-        return lm_trans_emit_target_assignment(file, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_TARGET_ASSIGNMENT;
+        return 0;
     }
     if (
         !lm_trans_is_c_reference_name(frame->head) &&
         !lm_trans_is_reserved_head_name(frame->head) &&
         lm_trans_frame_single_c_reference_body(frame, &c_name)
     ) {
-        return lm_trans_emit_c_reference_binding(frame, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_C_REFERENCE_BINDING;
+        return 0;
     }
     if (lm_trans_frame_looks_label_declaration(frame)) {
-        return lm_trans_statement_stack_schedule_label(file, stack, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_LABEL;
+        return 0;
     }
     if (lm_trans_is_c_reference_name(frame->head)) {
-        return lm_trans_emit_call_statement(file, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_CALL;
+        return 0;
     }
 
     symbol = lm_trans_namespace_find(namespace_, frame->head);
@@ -3612,16 +3640,17 @@ static int lm_trans_statement_stack_emit_frame(
         return 1;
     }
     if (symbol->kind == LM_TRANS_SYMBOL_VARIABLE) {
-        if (symbol->has_c_name) {
-            return lm_trans_emit_call_statement(file, frame, indent, namespace_);
-        }
-        return lm_trans_emit_assignment(file, frame, indent, namespace_);
+        out->kind = symbol->has_c_name ?
+            LM_TRANS_STATEMENT_LOWER_CALL :
+            LM_TRANS_STATEMENT_LOWER_ASSIGNMENT;
+        return 0;
     }
     if (
         symbol->kind == LM_TRANS_SYMBOL_FUNCTION ||
         symbol->kind == LM_TRANS_SYMBOL_PROCEDURE
     ) {
-        return lm_trans_emit_call_statement(file, frame, indent, namespace_);
+        out->kind = LM_TRANS_STATEMENT_LOWER_CALL;
+        return 0;
     }
 
     fprintf(
@@ -3634,6 +3663,153 @@ static int lm_trans_statement_stack_emit_frame(
     return 1;
 }
 
+static int lm_trans_emit_loop_jump_statement(
+    FILE *file,
+    LmP0Text spelling,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, spelling) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ";\n");
+}
+
+static int lm_trans_statement_stack_emit_frame_lowering(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_,
+    LmTransStatementLowering lowering
+) {
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_RETURN) {
+        return lm_trans_emit_return_statement(file, frame->body.first_field, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_IF) {
+        return lm_trans_statement_stack_schedule_control(file, stack, frame, indent, namespace_, "if");
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_WHILE) {
+        return lm_trans_statement_stack_schedule_control(file, stack, frame, indent, namespace_, "while");
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_ELSE) {
+        return lm_trans_statement_stack_schedule_else(file, stack, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_SYNCHRONIZED) {
+        return lm_trans_statement_stack_schedule_synchronized(file, stack, frame, indent, namespace_);
+    }
+    if (
+        lowering.kind == LM_TRANS_STATEMENT_LOWER_BREAK ||
+        lowering.kind == LM_TRANS_STATEMENT_LOWER_CONTINUE
+    ) {
+        return lm_trans_emit_loop_jump_statement(file, frame->head, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_CONST_DECLARATION) {
+        return lm_trans_emit_const_statement(file, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_ARRAY_DECLARATION) {
+        return lm_trans_emit_array_declaration(file, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_STORAGE_DECLARATION) {
+        return lm_trans_emit_declaration(file, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_POINTER_DECLARATION) {
+        return lm_trans_emit_pointer_declaration(file, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_TARGET_ASSIGNMENT) {
+        return lm_trans_emit_target_assignment(file, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_C_REFERENCE_BINDING) {
+        return lm_trans_emit_c_reference_binding(frame, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_LABEL) {
+        return lm_trans_statement_stack_schedule_label(file, stack, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_CALL) {
+        return lm_trans_emit_call_statement(file, frame, indent, namespace_);
+    }
+    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_ASSIGNMENT) {
+        return lm_trans_emit_assignment(file, frame, indent, namespace_);
+    }
+
+    return 1;
+}
+
+static int lm_trans_statement_stack_emit_frame(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    int status;
+    LmTransStatementLowering lowering;
+
+    status =
+        lm_trans_statement_stack_push_frame_job(stack, LM_TRANS_STATEMENT_JOB_TRAILER, frame, indent) ||
+        lm_trans_statement_stack_push_frame_job(stack, LM_TRANS_STATEMENT_JOB_VALIDATE_END, frame, indent);
+    if (status != 0) {
+        return 1;
+    }
+
+    if (lm_trans_lower_statement_frame(frame, namespace_, &lowering) != 0) {
+        return 1;
+    }
+    return lm_trans_statement_stack_emit_frame_lowering(file, stack, frame, indent, namespace_, lowering);
+}
+
+static LmTransAtomStatementLoweringKind lm_trans_lower_atom_statement(LmP0Text atom) {
+    if (lm_trans_text_equals(atom, "break")) {
+        return LM_TRANS_ATOM_STATEMENT_LOWER_BREAK;
+    }
+    if (lm_trans_text_equals(atom, "continue")) {
+        return LM_TRANS_ATOM_STATEMENT_LOWER_CONTINUE;
+    }
+    if (lm_trans_text_equals(atom, "return")) {
+        return LM_TRANS_ATOM_STATEMENT_LOWER_RETURN;
+    }
+    if (lm_trans_atom_starts_string(atom)) {
+        return LM_TRANS_ATOM_STATEMENT_LOWER_STRING_ERROR;
+    }
+    return LM_TRANS_ATOM_STATEMENT_LOWER_EXPR;
+}
+
+static int lm_trans_emit_atom_statement_lowering(
+    FILE *file,
+    const LmP0Node *node,
+    unsigned indent,
+    LmTransNamespace *namespace_,
+    LmTransAtomStatementLoweringKind lowering
+) {
+    if (
+        lowering == LM_TRANS_ATOM_STATEMENT_LOWER_BREAK ||
+        lowering == LM_TRANS_ATOM_STATEMENT_LOWER_CONTINUE
+    ) {
+        return lm_trans_emit_loop_jump_statement(file, node->as.atom, indent, namespace_);
+    }
+    if (lowering == LM_TRANS_ATOM_STATEMENT_LOWER_RETURN) {
+        return lm_trans_emit_return_statement(file, NULL, indent, namespace_);
+    }
+    if (lowering == LM_TRANS_ATOM_STATEMENT_LOWER_STRING_ERROR) {
+        fprintf(stderr, "trans L2 error: standalone string field is not consumed by any L2 receiver\n");
+        return 1;
+    }
+
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_expr_node(file, node, namespace_) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ";\n");
+}
+
 static int lm_trans_statement_stack_emit_node(
     FILE *file,
     LmTransStatementStack *stack,
@@ -3641,43 +3817,15 @@ static int lm_trans_statement_stack_emit_node(
     unsigned indent,
     LmTransNamespace *namespace_
 ) {
+    LmTransAtomStatementLoweringKind lowering;
+
     if (node == NULL || (node->flags & LM_P0_NODE_INACTIVE)) {
         return 0;
     }
 
     if (node->kind == LM_P0_NODE_ATOM) {
-        if (
-            lm_trans_text_equals(node->as.atom, "break") ||
-            lm_trans_text_equals(node->as.atom, "continue")
-        ) {
-            if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
-                return 1;
-            }
-            if (lm_trans_emit_indent(file, indent) != 0) {
-                return 1;
-            }
-            if (lm_trans_write_text(file, node->as.atom) != 0) {
-                return 1;
-            }
-            return lm_trans_put(file, ";\n");
-        }
-
-        if (lm_trans_text_equals(node->as.atom, "return")) {
-            return lm_trans_emit_return_statement(file, NULL, indent, namespace_);
-        }
-
-        if (lm_trans_atom_starts_string(node->as.atom)) {
-            fprintf(stderr, "trans L2 error: standalone string field is not consumed by any L2 receiver\n");
-            return 1;
-        }
-
-        if (lm_trans_emit_indent(file, indent) != 0) {
-            return 1;
-        }
-        if (lm_trans_emit_expr_node(file, node, namespace_) != 0) {
-            return 1;
-        }
-        return lm_trans_put(file, ";\n");
+        lowering = lm_trans_lower_atom_statement(node->as.atom);
+        return lm_trans_emit_atom_statement_lowering(file, node, indent, namespace_, lowering);
     }
 
     if (node->kind == LM_P0_NODE_FRAME) {
