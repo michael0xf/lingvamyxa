@@ -1,0 +1,13 @@
+L2:
+. fn: get (c.int: a, c.int: b) c.int
+. . return: a + b
+. end: get
+. fn: print (c.int: a, c.int: b, c.int: c) c.int
+. . return: a + b + c
+. end: print
+. external:
+. . fn: main () c.int
+. . . return: print(1, 2, get(1,2)) != 6
+. . end: main
+. end: external
+end: L2

@@ -1,0 +1,10 @@
+L2:
+. fn: mix (c.int: a, c.int: b, c.int: c) c.int
+. . return: a * 100 + b * 10 + c
+. end: mix
+. external:
+. . fn: main () c.int
+. . . return: mix(1, c: 3, b: 2) != 123
+. . end: main
+. end: external
+end: L2

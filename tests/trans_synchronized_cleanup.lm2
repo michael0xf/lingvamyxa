@@ -45,10 +45,12 @@ L2:
 . . . . continue
 . . return: c.depth
 . end: leaveByContinue
-. fn: main () c.int
-. . c.int: result 0
-. . result: leaveByReturn() + leaveByWrappedReturn() + leaveByBreak() + leaveByContinue()
-. . c.printf: "%d\n" result
-. . return: result != 22
-. end: main
+. external:
+. . fn: main () c.int
+. . . c.int: result 0
+. . . result: leaveByReturn() + leaveByWrappedReturn() + leaveByBreak() + leaveByContinue()
+. . . c.printf: "%d\n" result
+. . . return: result != 22
+. . end: main
+. end: external
 end: L2

@@ -56,10 +56,11 @@ Canonical semantic pipeline:
 A Structure does not execute merely because it exists. Execution, translation, registration, validation or query handling starts only when a receiver or subroutine consumes the Structure under a defined mode.
 
 Argument position does not change that rule. A Structure supplied as an argument
-remains a Structure until the active receiver/signature consumes it. Ordinary
-call/expression resolution may consume an immediate singleton field that resolves
-in the active namespace as a callable/method item, but a bounded, anonymous or
-vertical Structure is not executed merely because it appears among arguments.
+remains a Structure for the parser. During translation or interpretation, a
+compact Frame/Structure is treated as a call only when its head resolves in the
+active namespace as a function, subroutine or registered receiver. A bounded,
+anonymous or vertical Structure is not executed merely because it appears among
+arguments.
 
 0.0.1. Language Scope
 
@@ -526,7 +527,11 @@ Lingvamyxa implementations may also act as service runtimes. The built-in HTTP L
 
 The object-oriented side is structural, not class-magical. A model descriptor defines slots, types, defaults, constraints and layout information. A behavior descriptor attaches message selectors and implementations to a model. A runtime object is a Structure or handle/reference to a Structure together with enough model information to resolve behavior. Message lookup may lower to tables, dictionaries, inline caches, static calls or query over registry facts.
 
-The functional side is also structural. A function or subroutine definition is a Structure consumed by the `fn` or `sub` receiver. A call is a Frame. A callable value is data until explicitly called or consumed by a receiver that calls it. Function return is represented by `return` receivers and terminal return, not by a separate assignment syntax.
+The functional side is also structural. A function or subroutine definition is a
+Structure consumed by the `fn` or `sub` receiver. A call spelling is a Frame, but
+it becomes a generated call only after namespace resolution proves that the head
+is a function, subroutine or registered receiver. Function return is represented
+by `return` receivers and terminal return, not by a separate assignment syntax.
 
 The logical side is represented by facts, rules, relations and query receivers. Model, union, operator, method and behavior descriptors may materialize typed registry facts. Generic dispatch, message lookup, completeness checks and validation may be expressed as queries over this registry model. This gives one uniform way to index, validate, derive and lower structural information.
 
@@ -2266,11 +2271,11 @@ This builds a Frame whose final meaning is assigned by the active `if` receiver.
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
 
 This does not mean that Structure arguments are evaluated automatically. If a
-direct argument field resolves as a callable/method in a position that expects a
-value producer, that field may be consumed as a call or expression. A Structure
-field remains a Structure unless the receiver signature consumes it as body,
-callable/executable value, expression, tuple/data, model fragment or another
-explicit role.
+direct argument field resolves as a function, subroutine or registered receiver
+in a position that expects a value producer, that field may be lowered as a call
+or expression. A Structure field remains a Structure unless the receiver
+signature consumes it as a statement tail, expression, tuple/data, model fragment
+or another explicit role.
 
 This is an intentional property of the language, not an accidental ambiguity. In ordinary colon line forms, whitespace creates short-tail fields and expression operators may bind neighboring fields into expression Structures. In vertical form, child items at the next source level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
 
@@ -2442,8 +2447,8 @@ A receiver may consume a field as one of the following semantic modes:
     primitive value
     expression
     value-producing Structure
-    body Structure
-    callable/executable value
+    statement/body Structure
+    named function/subroutine/receiver reference
     declaration
     model fragment
     configuration message
@@ -2452,15 +2457,27 @@ A receiver may consume a field as one of the following semantic modes:
     relation frame
     query frame
 
-The mode is receiver-defined. The parser does not decide that a field is executable merely because it looks like code. Likewise, ordinary argument passing does not execute Structure fields merely because they are present in argument position. Execution happens only when the receiver/signature consumes that field in an executable/callable/body/value-producing mode.
+The mode is receiver-defined. The parser does not decide that a field is
+executable merely because it looks like code. Likewise, ordinary argument passing
+does not execute Structure fields merely because they are present in argument
+position. A translator lowers a Frame as a call only after its head has been
+resolved through the active namespace as a function, subroutine or registered
+receiver.
 
 5.3. Expected Field Positions and Anonymous Bodies
 
 Parentheses create ordinary bounded Structures. A bounded Structure is not executable merely because it is parenthesized.
 
-A receiver signature assigns an expected role to each field. If a field position is defined as a body, the receiver consumes the supplied Structure as an executable body Structure. This is the ordinary rule used by control receivers and definition receivers; it does not require a separate body keyword or separate anonymous-function syntax.
+A receiver signature assigns an expected role to each field. If a field position
+is defined as a statement/body role, the receiver consumes the supplied
+Structure as its own statement list or control tail. This is receiver-defined
+translation/interpretation of Structure data; it does not create a separate
+anonymous-function syntax.
 
-If a field position expects a callable/executable value and the source supplies a bounded Structure or vertical body Structure, the receiver consumes that Structure as an anonymous executable/callable value. Its argument and return profile come from the expected field position.
+If a field position expects a named function, subroutine or receiver reference,
+the supplied name must resolve through the ordinary namespace. A bounded
+Structure supplied in argument position remains Structure data unless the active
+receiver explicitly consumes it under its own rule.
 
 If a field position expects a primitive/scalar value and the source supplies a bounded Structure that is not already a direct primitive/scalar value, the receiver consumes that Structure as a value producer for the expected type. An operator-consumed Structure is the usual compact case of this rule.
 
@@ -2476,14 +2493,17 @@ The `for` receiver consumes:
 
     field0 -> initialization Structure
     field1 -> boolean-producing condition expression
-    field2 -> iteration-step executable Structure
-    body   -> vertical executable body Structure
+    field2 -> iteration-step statement Structure
+    body   -> vertical statement Structure consumed by `for`
 
 Compact body example:
 
     for: int(i, 0) (i < n) i++ print(i)
 
-Here `print(i)` is the last argument Structure of `for`. The `for` receiver signature names that position as `body` and consumes it as the executable loop body. The compact body example uses only compact Frames and contains no inline short colon-form.
+Here `print(i)` is the last argument Structure of `for`. The `for` receiver
+signature names that position as its statement tail and lowers it as the loop
+body. The compact body example uses only compact Frames and contains no inline
+short colon-form.
 
 5.4. Example: `if`
 
@@ -2496,8 +2516,8 @@ For a computational L3 `if`, the receiver may define fields:
 and consume them as:
 
     condition -> boolean-producing expression
-    then      -> body Structure
-    else      -> body Structure
+    then      -> statement Structure
+    else      -> statement Structure
 
 During translation, the receiver lowers these fields into target control flow. During interpretation, the receiver evaluates the condition and then interprets only the selected body.
 
@@ -2508,7 +2528,7 @@ For an `fn` definition receiver, fields may be consumed as:
     name -> function name
     args -> argument Structure
     ret  -> return Structure
-    body -> function body Structure
+    body -> function statement Structure
 
 The receiver creates or registers an executable definition. The `fn` frame itself is not a function call.
 
@@ -2672,10 +2692,10 @@ write/update step uses the ordinary head/update form:
     i: newValue
 
 If `i` resolves to mutable storage, the sequence may lower to a direct storage
-update. If `i` resolves to a callable value that can be consumed as a
-zero-argument read and one-argument update, the sequence may lower to generated
-temporary code that calls/consumes `i` to read, computes the new value, then
-calls/consumes `i: newValue` to write.
+update. If `i` resolves to a function, subroutine or registered receiver that
+defines zero-argument read and one-argument update consumption, the sequence may
+lower to generated temporary code that calls/consumes `i` to read, computes the
+new value, then calls/consumes `i: newValue` to write.
 
 The exact operator methods, temporary names, evaluation order, numeric rules and
 diagnostics belong to the operator-consumption specification. The core point is
@@ -3360,7 +3380,8 @@ A bare unresolved L2 head or atom such as `printf`, `size_t` or `int` is not
 automatically treated as a raw C fallback. Direct C-visible access is explicit
 through `c.printf`, `c.size_t` or `c.int`. A bare Lingvamyxa name is not an
 implicit C fallback; after resolution it is an ordinary Lingvamyxa `fn`, `sub`,
-label or variable, and a callable value may choose to lower to C internally.
+label, variable or registered receiver, and that binding may choose to lower to
+C internally.
 
 The `c.` spelling covers only raw C-visible name/type tokens in the selected L2
 profile. It does not cover C tag names as tags, aggregate members, labels or
@@ -3677,11 +3698,13 @@ The source-visible mathematical model is:
 
 7.1. `fn` and `sub` Are Receivers
 
-`fn` and `sub` are definition receivers. Each consumes a Structure, builds an executable/callable value and binds that value in the shared namespace. During bootstrap they may be present in an L1 prelude table or parser switch.
+`fn` and `sub` are definition receivers. Each consumes a Structure and registers
+a function or subroutine name in the shared namespace. During bootstrap they may
+be present in an L1 prelude table or parser switch.
 
-An `fn` frame consumes a Structure and creates a function callable value.
+An `fn` frame consumes a Structure and creates a function namespace binding.
 
-A `sub` frame consumes a Structure and creates a subroutine callable value.
+A `sub` frame consumes a Structure and creates a subroutine namespace binding.
 
 For the parser-facing L1 / ANSI C bootstrap, a registered receiver such as `fn` is represented as an L1 function whose first argument is the already-built frame argument Structure. Any parser context, symbol table, arena or diagnostic object is an implementation argument after that Structure.
 
@@ -3752,7 +3775,51 @@ The `fn` frame's logical argument Structure is not the same thing as the formal 
     name -> field 0
     args -> field 1, required bounded formal argument Structure
     ret  -> field 2, required return descriptor Structure
-    body -> fields 3..end as one executable body Structure
+    body -> fields 3..end as the statement Structure consumed by fn/sub
+
+Function definition is not function call syntax. The first compact `fn`/`sub`
+field must be the declared name as its own field. A spelling with no separator
+before the bounded argument Structure is parsed as a Frame/call-like Structure
+and is syntactically correct P0 source, but it is a receiver-level semantic
+error for `fn`:
+
+    fn: test(body) int     # syntactically valid, semantically invalid for fn
+                           # field 0 is Frame test(...), not name atom test
+    fn: test (body) int    # valid shape: field 0 is name atom test, field 1 is args Structure
+
+The `fn` receiver must not try to extract the declared function name from the
+inner Frame `test(body)`. That Frame is ordinary source data produced by compact
+call syntax. If the active receiver is `fn`, the declared function name is the
+separate field consumed as the `name` argument.
+
+Calls intentionally use the no-space callable form:
+
+    test()
+    test
+
+Likewise, ordinary head/update consumption remains separate from call syntax:
+
+    test: <int: 5>
+
+Before lowering or interpreting a function body, `fn`/`sub` consumes the formal
+argument Structure and introduces the formal bindings into the local namespace.
+A direct call consumes its actual argument Structure against that formal
+signature. Positional fields are assigned first in order. Once a named argument
+field is encountered, all following actual fields in that call must be named
+fields; the receiver/translating profile maps them by formal parameter name and
+reports unknown, duplicate, missing or out-of-order arguments.
+
+P0 does not know that a nested compact Frame is a function call. For example:
+
+    print(1, 2, get(1,2))
+
+is parsed as the `print` Frame with three fields; the third field is the nested
+Structure/Frame `get(1,2)`. During L2 lowering, `get(1,2)` becomes a generated
+call only if `get` is already visible in the namespace as an `fn`/`sub` or other
+registered receiver. If `get` is a variable, label or named Structure, the same
+source field is not a function call. If it is unknown, the translator reports an
+unknown Lingvamyxa name unless the source explicitly uses the permanent ANSI C
+door, such as `c.get(1,2)`.
 
 P0 does not know these receiver-specific meanings. It only builds the field
 sequence. After receiver normalization, a valid `name` argument is privileged
@@ -3923,7 +3990,11 @@ A local variable cannot reuse the name of a visible type. A local `fn` or `sub` 
 
 L5 message selectors are looked up through a receiver object's behavior table. A selector is not automatically a lexical binding unless it is also imported or registered as an ordinary receiver/generic operation. The implementation name attached to a message is a lexical executable binding and follows the single-namespace rule.
 
-In expression position, a visible `fn` name is callable. The canonical way to return a value is `return: value`, including terminal return at the source level of the current function. The function name remains an ordinary namespace binding for callable lookup unless ordinary binding-update rules explicitly change that visible binding.
+In expression position, a visible `fn` name can be lowered as a call after
+namespace resolution. The canonical way to return a value is `return: value`,
+including terminal return at the source level of the current function. The
+function name remains an ordinary namespace binding for function lookup unless
+ordinary binding-update rules explicitly change that visible binding.
 
 Example:
 
@@ -3934,25 +4005,43 @@ return: n * factorial(n - 1)
 
 Inside the body, `return: 1` exits with value `1` when the condition holds. The expression `factorial(n - 1)` is a recursive function call because it appears in expression position. The final `return:` line is terminal return and closes the function.
 
-7.3.2. Callable Values and Binding Updates
+7.3.2. Function/Subroutine Names and Binding Updates
 
-Executable definitions do not create a separate source-semantic category that must be distinguished from ordinary values before resolution. A function or subroutine name denotes a callable value in the same shared namespace that also holds primitive values, Structures, model names, labels, variables and other bindings.
+Executable definitions do not create a separate source-semantic category that
+must be distinguished from ordinary values before resolution. A function or
+subroutine name is an ordinary binding in the same shared namespace that also
+holds primitive values, Structures, model names, labels, variables and other
+bindings. A Frame is lowered as a call only when its head resolves to such a
+function/subroutine binding or to a registered receiver.
 
 The line form:
 
     i: 5
 
-has one surface shape. After name resolution, it may mean an update to a mutable value binding `i`, or a call/consumption of a callable binding `i` with argument `5`. The language does not use `=` assignment to distinguish these cases.
+has one surface shape. After name resolution, it may mean an update to a mutable
+value binding `i`, or a call/receiver consumption of a function/subroutine
+binding `i` with argument `5`. The language does not use `=` assignment to
+distinguish these cases.
 
-If a callable binding is mutable, it may be updated by the same head/update form as other bindings:
+If a function/subroutine binding is declared mutable by a higher profile, it may
+be updated by the same head/update form as other bindings:
 
     i: otherCallable
 
-When `otherCallable` resolves to a callable value with a compatible callable Structure/signature, the binding `i` receives that callable value. Source semantics does not require a separate function-pointer syntax for this operation.
+When `otherCallable` resolves to a compatible function/subroutine binding, the
+binding `i` receives that binding/reference. Source semantics does not require a
+separate function-pointer syntax for this operation.
 
-For a callable with no required arguments, value-like consumption may be receiver/profile-defined. For example, an operator method or receiver may lower a read of `i` to a zero-argument call `i()`, and a write/update of `i` to a one-argument call or binding update `i(newValue)`, depending on the resolved binding and active profile.
+For a function/subroutine binding or registered receiver with no required
+arguments, value-like consumption may be receiver/profile-defined. For example,
+an operator method or receiver may lower a read of `i` to a zero-argument call
+`i()`, and a write/update of `i` to a one-argument call or binding update
+`i(newValue)`, depending on the resolved binding and active profile.
 
-The exact mutability, compatibility and callable-signature rules are part of the execution-model and type/model specifications. The structural core only requires that callable values are ordinary namespace values and that the same head/update surface form is used after resolution.
+The exact mutability, compatibility and signature rules are part of the
+execution-model and type/model specifications. The structural core only requires
+that function/subroutine names live in the ordinary namespace and that the same
+head/update surface form is used after resolution.
 
 7.3.3. Nested `fn` and `sub` Definitions
 
@@ -4882,7 +4971,7 @@ Here `while` is the opened frame and therefore may close as `end: while` or be c
 The active L3 `while` receiver consumes its argument Structure according to its registered signature, typically as:
 
     condition -> expression
-    body      -> body Structure
+    body      -> statement Structure
 
 11.3. Multiple Level-Specific Implementations
 
@@ -4995,12 +5084,12 @@ Both mechanisms may be represented as registry facts. They are different source-
 L3 `if` is a computational control-flow receiver. It consumes:
 
     condition -> boolean-producing expression
-    then      -> executable body Structure
-    else      -> executable body Structure
+    then      -> statement Structure consumed by `if`
+    else      -> statement Structure consumed by `if`
 
 At interpretation time, only the selected body is interpreted.
 
-At translation time, the receiver lowers the condition and body Structures into target control flow.
+At translation time, the receiver lowers the condition and statement Structures into target control flow.
 
 12.2. L4 `if`
 
@@ -5060,6 +5149,16 @@ At L2, the source model uses primitive values and typed address values. Aggregat
 
 Allocation and storage receivers create storage and bind the requested name to the address of that storage.
 
+Bare L2 value reading is intentionally narrow. A primitive/scalar storage slot
+such as `u32`, `c.int`, `c.size_t`, an enum-like scalar or an address slot may
+be read as a direct value by naming it. An aggregate storage slot may be embedded
+physically by the target backend, but source-level L2 does not treat the whole
+aggregate as an ordinary expression value merely because it has a name. Aggregate
+storage is consumed through its typed address, through field-follow/index forms,
+or by an explicit copy/serialization receiver. In the hosted ANSI C profile this
+allows a backend to lower an aggregate storage slot to a C automatic object or
+embedded struct field while keeping L2 source semantics address-oriented.
+
 Examples:
 
 stack: PlantBed branch
@@ -5097,6 +5196,12 @@ The receivers `stack`, `heap`, `static`, primitive constructors such as `int`, a
 An L2 address value is not necessarily a source-level integer. It may carry, or be statically associated with, layout/type metadata. Receivers and L1 lowering may use that metadata to treat an address as a typed reference rather than as a printable numeric address.
 
 The core L2 syntax does not use a separate `*` or `^` marker for address types. Address-ness is introduced by storage/allocation forms, by the reserved address-depth operator family `@ⁿ`, by address-producing expressions, and by typed field or index operations.
+
+If a C source fragment would normally write `value.field`, L2 should first make
+the storage address explicit and then use field-follow, for example
+`(@ value)\field`. If the binding is already a typed address, `value\field` is
+the direct field-follow form. A profile may optimize either spelling to `.` or
+`->` during L1 lowering; that is a backend decision, not separate L2 syntax.
 
 13.2.1. Reserved Address-Depth Operator Family `@ⁿ`
 
@@ -5176,6 +5281,7 @@ follows typed address/reference `a` to the named field `field`. It uses the know
 C-profile mnemonic table:
 
     @: char c        # C declarator role: char *c
+    const: @: T p    # C declarator role: const T *p
     @c               # C expression role: &c
 
     parent\child     # C expression role: parent->child
@@ -5412,14 +5518,22 @@ The first `print` observes `3`. The second `print` observes `4`.
 
 The update form is valid only if the head resolves to an existing mutable binding, addressable field/index location, or visible language name that explicitly accepts such a call. Because Lingvamyxa uses one lexical namespace, a binding name and a type/function/procedure name cannot silently mean different things in the same scope.
 
-The same surface form is used for callable consumption. For example, `i: 5` is parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable storage, the form may update storage. If `i` resolves to a callable binding, the form may call or consume that callable value. This is a compile-time resolution choice, not a syntactic distinction.
+The same surface form is used for resolved consumption. For example, `i: 5` is
+parsed as a Frame with head `i` and argument `5`. If `i` resolves to mutable
+storage, the form may update storage. If `i` resolves to a function, subroutine
+or registered receiver, the translator may lower it as a call/receiver
+consumption. This is a compile-time resolution choice, not a syntactic
+distinction.
 
-A bounded Structure or compact Frame in an argument/update position remains one Structure after parsing. If the resolved head expects a callable or executable-body value in that position, the Structure is consumed as an anonymous executable/callable value. For example, in `for: int(i, 0) (i < n) i++ print(i)`, the final `print(i)` is the `body` argument consumed by `for`.
+A bounded Structure or compact Frame in an argument/update position remains one
+Structure after parsing. A nested compact Frame is lowered as a call only if its
+head resolves in the ordinary namespace as a function, subroutine or registered
+receiver. For example, in `print(1, 2, get(1,2))`, `get(1,2)` is just the third
+field for P0; it is generated as a call only after `get` resolves as callable
+during lowering.
 
-This is declared head consumption, not automatic execution of every Structure in an
-argument list. A direct singleton argument that resolves as a callable/method may
-be called by the active value-production rule. A Structure argument is called or
-executed only when the receiver/signature gives that Structure such a role.
+This is declared head consumption, not automatic execution of every Structure in
+an argument list.
 
 At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
 
@@ -6099,7 +6213,13 @@ Ordinary line arguments are whitespace-separated short-tail fields. A parser mus
 
 Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. When no short form is open at the current scan depth, comma may be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma inside a deeper bounded Structure or compact Frame belongs to that deeper form.
 
-Structural grammar has no separate anonymous-function syntax. A bounded Structure, compact Frame or vertical anonymous Structure becomes an anonymous executable body/callable only when the receiver consumes that field in a body/callable position. The parser never marks a Structure as executable merely because it is nested inside arguments; that role is assigned only by receiver/signature consumption.
+Structural grammar has no separate anonymous-function syntax. A bounded
+Structure, compact Frame or vertical anonymous Structure remains Structure data.
+The parser never marks a Structure as executable merely because it is nested
+inside arguments. Translation or interpretation of that Structure happens only
+when the active receiver consumes it under a receiver-defined rule, or when a
+compact Frame head resolves through the namespace as a function, subroutine or
+registered receiver.
 
 Labels are not a separate structural grammar category. A source line such as `outerLoop:` is a colon frame with an empty inline tail and a required following vertical block. The active receiver/profile decides whether that frame introduces a local nullary executable binding, a control label role, both, or an error. A later bare line such as `outerLoop` is also not special label grammar; in executable statement position it may resolve through the ordinary namespace to that zero-argument label-block binding.
 
@@ -6596,7 +6716,7 @@ Labels are written as ordinary colon frames such as `outerLoop:`. A profile may 
 
 26.1. `if`, `then` and `else`
 
-`if` consumes a condition and one or two body Structures.
+`if` consumes a condition and one or two statement Structures.
 
 Semantic form:
 
@@ -6737,9 +6857,9 @@ If the matched value is a closed union and no default pattern is present, an imp
 
 `while` is a pre-condition loop.
 
-Semantic form:
+Semantic lowering shape:
 
-    while(condition, body)
+    while(condition, statementStructure)
 
 Example:
 
@@ -6760,7 +6880,7 @@ A `while` body is a loop frame. `break`, `continue`, `redo` and labelled loop tr
 
 Semantic form:
 
-    until(currentBody, condition)
+    until(currentStatementStructure, condition)
 
 Labelled example:
 
@@ -6791,7 +6911,7 @@ The first three arguments are consumed as loop-control fields:
 
     init      -> initialization Structure
     condition -> boolean-producing expression
-    step      -> iteration-step executable Structure
+    step      -> iteration-step statement Structure
 
 The vertical child Structure is consumed as the loop body.
 
@@ -6799,7 +6919,10 @@ Single-line compact body form:
 
     for: int(i, 0) (i < n) i++ print(i)
 
-In this form, `print(i)` is the fourth argument. The `for` receiver signature consumes that fourth argument as `body`, so it is an executable body Structure. The token form `i++` is valid only in profiles that register it as an operator-token form.
+In this form, `print(i)` is the fourth argument. The `for` receiver signature
+consumes that fourth argument as its statement tail, so it lowers as the loop
+body. The token form `i++` is valid only in profiles that register it as an
+operator-token form.
 
 Range-style example:
 
@@ -7795,6 +7918,12 @@ This section defines the minimal L2 operator/parser-form set.
 
 L2 has primitive values, typed address values and Structures/descriptors. Aggregate model names denote layouts or descriptors. Storage and allocation forms produce typed address values. Receiver signatures and parser profiles assign final semantics to the Structures built from source syntax.
 
+The minimal L2 profile therefore has no separate source syntax for C-style
+direct aggregate value access. Primitive/scalar values may be direct; aggregate
+values are storage/layout objects and are normally reached by address. This
+keeps `u32: x` simple while preventing an embedded record from silently becoming
+a copyable whole-Structure expression.
+
 This section is deliberately smaller than the L3 control set in section 26. L2 is low-level and unsafe, but it does not need every L3 convenience operator by default.
 
 28.1. Pointer and Field Syntax Exclusions
@@ -7973,6 +8102,25 @@ The enum constants are not imported into the Lingvamyxa namespace. They remain
 ordinary ANSI C names and are referenced explicitly through the permanent C
 namespace door, for example `c.LM_TRANS_SYMBOL_VARIABLE`.
 
+L2 `fn` and `sub` definitions lower to `static` ANSI C functions by default.
+This keeps ordinary L2 helper procedures local to the generated translation
+unit. The `external` receiver wraps exactly one `fn` or `sub` and requests
+external ANSI C linkage for that definition:
+
+L2:
+    external:
+        fn: main () c.int
+            return: 0
+        end: main
+    end: external
+end: L2
+
+Declaration qualifiers are ordinary receiver composition in the C-profile
+projection. For example, `const: @: LmP0Node p` lowers to `const LmP0Node *p`.
+The same qualifier form may appear in structure fields, parameters and local
+declarations when the active L2 lowering profile supports the corresponding C
+declarator role.
+
 Address-producing and address-consuming forms:
 
     @count              address of the primitive storage location `count`
@@ -8010,7 +8158,9 @@ Examples:
     tree\branch: branch
     leafs[3]: 10
 
-After resolution, the form may update mutable storage, update an addressable field/index slot, or consume a callable binding. This is compile-time resolution, not a separate assignment syntax.
+After resolution, the form may update mutable storage, update an addressable
+field/index slot, or lower a function/subroutine/receiver binding. This is
+compile-time resolution, not a separate assignment syntax.
 
 Operator methods such as `++i`, `--i`, `i++` and `i--` are not mandatory source syntax in the minimal L2 set. A profile may register them as compact operator-token forms that lower to ordinary read-update-write sequences using the same head/update form.
 
@@ -8046,8 +8196,8 @@ after the first procedural bootstrap subset.
 L2 `if` consumes:
 
     condition -> boolean-producing expression
-    then      -> executable body Structure
-    else      -> optional executable body Structure
+    then      -> statement Structure consumed by the `if` receiver
+    else      -> optional statement Structure consumed by the `if` receiver
 
 Example:
 
@@ -8070,9 +8220,9 @@ if: count > 0
 
 L2 `while` is a pre-condition loop.
 
-Semantic form:
+Semantic lowering shape:
 
-    while(condition, body)
+    while(condition, statementStructure)
 
 Example:
 
@@ -8101,9 +8251,9 @@ readLoop:
     process: record
 until: endOfInput(record)
 
-Conceptual semantic form:
+Conceptual lowering shape:
 
-    until(currentBody, condition)
+    until(currentStatementStructure, condition)
 
 The body executes first. The loop repeats until the condition is true.
 
@@ -8115,8 +8265,8 @@ L2 `for` consumes:
 
     init      -> initialization Structure
     condition -> boolean-producing expression
-    step      -> iteration-step executable Structure
-    body      -> executable body Structure
+    step      -> iteration-step statement Structure
+    body      -> statement Structure consumed by the `for` receiver
 
 Vertical body form:
 
@@ -8165,12 +8315,13 @@ For `for`, `continue` transfers control to the iteration-step Structure, then to
 
 28.5.7. `synchronized`
 
-`synchronized` consumes an object/address expression and an executable body
-Structure. It is a structured synchronization receiver, not a raw lock/unlock
-pair in source syntax.
+`synchronized` consumes an object/address expression and a statement Structure
+owned by the `synchronized` receiver. It is a structured synchronization
+receiver, not a raw lock/unlock pair in source syntax.
 
-In the minimal L2 profile, `synchronized` has a `value/body` receiver signature.
-The source after `synchronized:` is still the ordinary P0 argument Structure.
+In the minimal L2 profile, `synchronized` has an object-expression plus
+statement-tail receiver signature. The source after `synchronized:` is still the
+ordinary P0 argument Structure.
 Inline fields remain ordinary fields of that Structure. If an inline object
 expression is followed by a child source level, that child part is materialized
 as a nested Structure field; therefore:
@@ -8242,7 +8393,10 @@ They may still exist in L3 or higher levels, or in a richer L2 profile.
 
 A namespace is a Structure.
 
-Before translation or receiver consumption, a namespace may be represented as a typed dictionary-like Structure whose entries bind names, exact quoted signatures, receiver names, type/model descriptors, callable values, behavior descriptors and ordinary values.
+Before translation or receiver consumption, a namespace may be represented as a
+typed dictionary-like Structure whose entries bind names, exact quoted
+signatures, receiver names, function/subroutine descriptors, type/model
+descriptors, behavior descriptors and ordinary values.
 
 Conceptual example:
 
@@ -8282,19 +8436,22 @@ Examples of invalid updates:
     a binding declared as `int` receiving a `String` value
     a binding declared as `Callable(int -> int)` receiving non-callable text
     a type descriptor slot receiving an ordinary runtime integer value
-    a receiver implementation slot receiving a callable with incompatible argument or return Structure
+    a receiver implementation slot receiving a function/subroutine descriptor with incompatible argument or return Structure
 
-Example of valid callable replacement:
+Example of valid function/subroutine binding replacement:
 
     strategy: optimized strategy
 
-is valid when both `strategy` and `optimized strategy` have compatible callable signatures, for example:
+is valid when both `strategy` and `optimized strategy` resolve to compatible
+function/subroutine bindings, for example:
 
     Callable(int -> int)
 
-29.4. Local Callable Replacement
+29.4. Local Function/Subroutine Binding Replacement
 
-Because callable values are Structures or handles/references to Structures, local replacement of a callable binding is just a typed update of the local namespace Structure.
+Because function/subroutine names are ordinary namespace bindings, local
+replacement of such a binding is just a typed update of the local namespace
+Structure.
 
 Example:
 
@@ -8329,13 +8486,18 @@ And:
 
     factorial: "hello"
 
-is invalid if `factorial` is a callable slot with signature `Callable(int -> int)`.
+is invalid if `factorial` is a function/subroutine slot with signature
+`Callable(int -> int)`.
 
 29.6. Interaction with Return and Function Names
 
 The canonical return mechanism for an `fn` is `return: value`. When `return: value` is written in a valid terminal trailer position, it also closes the `fn` source frame. The current function name is an ordinary namespace binding, not a separate return syntax.
 
-The same visible name may participate in ordinary callable lookup, recursion and local namespace overlay operations. If ordinary binding-update rules replace that visible name with a compatible non-callable value, later recursive callable lookup through that spelling is no longer available in the remaining local scope.
+The same visible name may participate in ordinary function/subroutine lookup,
+recursion and local namespace overlay operations. If ordinary binding-update
+rules replace that visible name with a compatible non-function value, later
+recursive function lookup through that spelling is no longer available in the
+remaining local scope.
 
 29.7. Translation and Optimization
 
@@ -8347,14 +8509,17 @@ A translator may optimize local namespace operations by:
     using copy-on-write for a small number of updates
     representing the overlay as a persistent map
     replacing lookups by direct references when types and bindings are static
-    inlining locally replaced callable values when the replacement is non-escaping
-    lowering compatible callable replacement to a simple local function pointer or descriptor update
+    inlining locally replaced function/subroutine bindings when the replacement is non-escaping
+    lowering compatible function/subroutine replacement to a simple local function pointer or descriptor update
     rejecting or de-optimizing cases that escape the local namespace view beyond the executable lifetime
 
 The source rule is structural and typed: local updates modify a local namespace Structure view, and every update must preserve the declared type/signature/contract of the target entry.
 
 ?
-Escaping local namespace overlays, closure capture of locally replaced callables, mutation of outer bindings and explicit global/external update syntax are not specified in this document. They belong to a future execution-model and runtime specification.
+Escaping local namespace overlays, closure capture of locally replaced
+function/subroutine bindings, mutation of outer bindings and explicit
+global/external update syntax are not specified in this document. They belong to
+a future execution-model and runtime specification.
 ?
 
 30. Memory Model

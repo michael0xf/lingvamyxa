@@ -1,0 +1,98 @@
+L1:"""#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "parser.lm1.h"
+
+typedef enum LmTransSymbolKind {
+    LM_TRANS_SYMBOL_VARIABLE = 1,
+    LM_TRANS_SYMBOL_FUNCTION = 2,
+    LM_TRANS_SYMBOL_PROCEDURE = 3,
+    LM_TRANS_SYMBOL_LABEL = 4,
+    LM_TRANS_SYMBOL_STRUCTURE = 5
+} LmTransSymbolKind;
+"""
+
+L2:
+. LmTransSymbol:
+. . LmP0Text: name
+. . LmTransSymbolKind: kind
+. . c.unsigned: depth
+. . c.int: has_c_name
+. . LmP0Text: c_name
+. end: LmTransSymbol
+.
+. LmTransCleanup:
+. . c.unsigned: id
+. end: LmTransCleanup
+.
+. LmTransLoop:
+. . c.size_t: cleanup_base
+. end: LmTransLoop
+.
+. LmTransNamespace:
+. . @: LmTransSymbol items
+. . c.size_t: count
+. . c.size_t: capacity
+. . c.unsigned: depth
+. . @: LmTransCleanup cleanups
+. . c.size_t: cleanup_count
+. . c.size_t: cleanup_capacity
+. . @: LmTransLoop loops
+. . c.size_t: loop_count
+. . c.size_t: loop_capacity
+. . c.unsigned: next_cleanup_id
+. . const: @: LmP0Node return_type_node
+. . c.unsigned: next_return_id
+. end: LmTransNamespace
+.
+. fn:
+. . lm_trans_text_equals
+. . (
+. . . const: @: LmP0Text text
+. . . const: @: c.char value
+. . )
+. . c.int
+. . c.size_t: length
+. . length: c.strlen(value)
+. . return: text\length = length && c.memcmp((text\data), value, length) = 0
+. end: lm_trans_text_equals
+.
+. external:
+. . fn: main () c.int
+. . . return: c.LM_TRANS_SYMBOL_VARIABLE != 1
+. . end: main
+. end: external
+.
+. L1:"""/* NOTE trans_test.lm2:
+With const: support, current L2 can now spell pointer fields such as
+
+    @: LmTransSymbol items
+
+which lowers to
+
+    LmTransSymbol *items;
+
+and qualified pointer fields such as
+
+    const LmP0Node *return_type_node;
+
+as
+
+    const: @: LmP0Node return_type_node
+
+L2 fn/sub now emit static C functions automatically. Use `external:` around
+`fn`/`sub` when C external linkage is required, such as for `main`.
+This file now includes such an `external:` smoke-test.
+
+The first real helper function from trans.lm2 is now represented in L2 through
+the address-oriented aggregate rule: structures are memory/layout objects and
+L2 receives them as typed addresses. C `text.length` / `text.data` is written as:
+
+    text\length
+    text\data
+
+Enum is still represented above through an L1 raw block.
+*/
+"""
+end: L2
