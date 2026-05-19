@@ -1,3 +1,5 @@
+L1:
+===
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,211 +13,246 @@ typedef enum LmTransSymbolKind {
     LM_TRANS_SYMBOL_LABEL = 4,
     LM_TRANS_SYMBOL_STRUCTURE = 5
 } LmTransSymbolKind;
+===
 
-typedef struct LmTransSymbol {
-    LmP0Text name;
-    LmTransSymbolKind kind;
-    unsigned depth;
-    int has_c_name;
-    LmP0Text c_name;
-    LmP0Text *param_names;
-    size_t param_count;
-    int has_signature;
-} LmTransSymbol;
+L2:
+    LmTransSymbol:
+        c.LmP0Text: name
+        c.LmTransSymbolKind: kind
+        c.unsigned: depth
+        c.int: has_c_name
+        c.LmP0Text: c_name
+        @: LmP0Text param_names
+        c.size_t: param_count
+        c.int: has_signature
+    end: LmTransSymbol
 
-typedef struct LmTransCleanup {
-    unsigned id;
-} LmTransCleanup;
+    LmTransCleanup:
+        c.unsigned: id
+    end: LmTransCleanup
 
-typedef struct LmTransLoop {
-    size_t cleanup_base;
-} LmTransLoop;
+    LmTransLoop:
+        c.size_t: cleanup_base
+    end: LmTransLoop
 
-typedef struct LmTransArgumentRange {
-    const LmP0Field *first;
-    const LmP0Field *stop;
-    int present;
-} LmTransArgumentRange;
+    LmTransArgumentRange:
+        const: @: LmP0Field first
+        const: @: LmP0Field stop
+        c.int: present
+    end: LmTransArgumentRange
 
-typedef struct LmTransNamespace {
-    LmTransSymbol **items;
-    size_t count;
-    size_t capacity;
-    unsigned depth;
-    LmTransCleanup **cleanups;
-    size_t cleanup_count;
-    size_t cleanup_capacity;
-    LmTransLoop **loops;
-    size_t loop_count;
-    size_t loop_capacity;
-    unsigned next_cleanup_id;
-    const LmP0Node *return_type_node;
-    int return_type_is_struct;
-    LmP0Text return_type_name;
-    unsigned next_return_id;
-} LmTransNamespace;
+    LmTransNamespace:
+        @: LmTransSymbol items
+        c.size_t: count
+        c.size_t: capacity
+        c.unsigned: depth
+        @: LmTransCleanup cleanups
+        c.size_t: cleanup_count
+        c.size_t: cleanup_capacity
+        @: LmTransLoop loops
+        c.size_t: loop_count
+        c.size_t: loop_capacity
+        c.unsigned: next_cleanup_id
+        const: @: LmP0Node return_type_node
+        c.int: return_type_is_struct
+        c.LmP0Text: return_type_name
+        c.unsigned: next_return_id
+    end: LmTransNamespace
 
-static int lm_trans_text_equals(LmP0Text text, const char *value) {
-    size_t length;
+    fn:
+        lm_trans_text_equals
+        (
+            c.LmP0Text: text
+            const: @: c.char value
+        )
+        c.int
+            c.size_t: length
+            length: c.strlen(value)
+            return: c.text.length = length && c.memcmp(c.text.data, value, length) = 0
+    end: lm_trans_text_equals
 
-    length = strlen(value);
-    return text.length == length && memcmp(text.data, value, length) == 0;
-}
+    fn:
+        lm_trans_text_same
+        (
+            c.LmP0Text: left
+            c.LmP0Text: right
+        )
+        c.int
+            if: c.left.length != c.right.length
+                return: 0
+            if: c.left.length = 0U
+                return: 1
+            return: c.memcmp(c.left.data, c.right.data, c.left.length) = 0
+    end: lm_trans_text_same
 
-static int lm_trans_text_same(LmP0Text left, LmP0Text right) {
-    if (left.length != right.length) {
-        return 0;
-    }
-    if (left.length == 0U) {
-        return 1;
-    }
-    return memcmp(left.data, right.data, left.length) == 0;
-}
+    fn:
+        lm_trans_text_starts_with
+        (
+            c.LmP0Text: text
+            const: @: c.char prefix
+        )
+        c.int
+            c.size_t: length
+            length: c.strlen(prefix)
+            return: c.text.length >= length && c.memcmp(c.text.data, prefix, length) = 0
+    end: lm_trans_text_starts_with
 
-static int lm_trans_text_starts_with(LmP0Text text, const char *prefix) {
-    size_t length;
+    fn:
+        lm_trans_text_all_char
+        (
+            c.LmP0Text: text
+            c.char: ch
+        )
+        c.int
+            c.size_t: i 0U
+            if: c.text.length = 0U
+                return: 0
+            while: i < c.text.length
+                if: c.text.data[i] != ch
+                    return: 0
+                i: i + 1U
+            return: 1
+    end: lm_trans_text_all_char
 
-    length = strlen(prefix);
-    return text.length >= length && memcmp(text.data, prefix, length) == 0;
-}
+    fn:
+        lm_trans_text_is_operator_atom
+        (
+            c.LmP0Text: text
+        )
+        c.int
+            return:
+                lm_trans_text_equals(text, "+") ||
+                lm_trans_text_equals(text, "-") ||
+                lm_trans_text_equals(text, "*") ||
+                lm_trans_text_equals(text, "/") ||
+                lm_trans_text_equals(text, "%") ||
+                lm_trans_text_equals(text, "=") ||
+                lm_trans_text_equals(text, "!=") ||
+                lm_trans_text_equals(text, "<") ||
+                lm_trans_text_equals(text, "<=") ||
+                lm_trans_text_equals(text, ">") ||
+                lm_trans_text_equals(text, ">=") ||
+                lm_trans_text_equals(text, "&&") ||
+                lm_trans_text_equals(text, "||") ||
+                lm_trans_text_equals(text, "!") ||
+                lm_trans_text_equals(text, "[") ||
+                lm_trans_text_equals(text, "]")
+    end: lm_trans_text_is_operator_atom
 
-static int lm_trans_text_all_char(LmP0Text text, char ch) {
-    size_t i;
+    fn:
+        lm_trans_write_all
+        (
+            @: c.FILE file
+            const: @: c.char data
+            c.size_t: length
+        )
+        c.int
+            if: c.fwrite(data, 1U, length, file) != length
+                return: 1
+            return: 0
+    end: lm_trans_write_all
 
-    if (text.length == 0U) {
-        return 0;
-    }
+    fn:
+        lm_trans_put
+        (
+            @: c.FILE file
+            const: @: c.char text
+        )
+        c.int
+            if: c.fputs(text, file) < 0
+                return: 1
+            return: 0
+    end: lm_trans_put
 
-    for (i = 0U; i < text.length; ++i) {
-        if (text.data[i] != ch) {
-            return 0;
-        }
-    }
+    fn:
+        lm_trans_write_text
+        (
+            @: c.FILE file
+            c.LmP0Text: text
+        )
+        c.int
+            return: lm_trans_write_all(file, c.text.data, c.text.length)
+    end: lm_trans_write_text
 
-    return 1;
-}
+    fn:
+        lm_trans_emit_indent
+        (
+            @: c.FILE file
+            c.unsigned: indent
+        )
+        c.int
+            c.unsigned: i 0U
+            while: i < indent
+                if: lm_trans_put(file, "    ") != 0
+                    return: 1
+                i: i + 1U
+            return: 0
+    end: lm_trans_emit_indent
 
-static int lm_trans_text_is_operator_atom(LmP0Text text) {
-    return
-        lm_trans_text_equals(text, "+") ||
-        lm_trans_text_equals(text, "-") ||
-        lm_trans_text_equals(text, "*") ||
-        lm_trans_text_equals(text, "/") ||
-        lm_trans_text_equals(text, "%") ||
-        lm_trans_text_equals(text, "=") ||
-        lm_trans_text_equals(text, "!=") ||
-        lm_trans_text_equals(text, "<") ||
-        lm_trans_text_equals(text, "<=") ||
-        lm_trans_text_equals(text, ">") ||
-        lm_trans_text_equals(text, ">=") ||
-        lm_trans_text_equals(text, "&&") ||
-        lm_trans_text_equals(text, "||") ||
-        lm_trans_text_equals(text, "!") ||
-        lm_trans_text_equals(text, "[") ||
-        lm_trans_text_equals(text, "]");
-}
+    fn:
+        lm_trans_nth_field
+        (
+            const: @: LmP0Structure structure
+            c.size_t: index
+        )
+        const(@: LmP0Field)
+            const: @: LmP0Field field
+            c.size_t: i 0U
+            field: structure\first_field
+            while: field != c.NULL && i < index
+                field: field\next
+                i: i + 1U
+            return: field
+    end: lm_trans_nth_field
 
-static int lm_trans_write_all(FILE *file, const char *data, size_t length) {
-    return fwrite(data, 1U, length, file) == length ? 0 : 1;
-}
+    fn:
+        lm_trans_trailer_single_atom
+        (
+            const: @: LmP0Trailer trailer
+            @: LmP0Text out_text
+        )
+        c.int
+            const: @: LmP0Field field
+            if: trailer = c.NULL || out_text = c.NULL
+                return: 0
+            field: trailer\body.first_field
+            if: field = c.NULL || field\next != c.NULL || field\value = c.NULL || field\value\kind != c.LM_P0_NODE_ATOM
+                return: 0
+            out_text[0]: field\value\as.atom
+            return: 1
+    end: lm_trans_trailer_single_atom
 
-static int lm_trans_put(FILE *file, const char *text) {
-    return fputs(text, file) < 0 ? 1 : 0;
-}
+    fn:
+        lm_trans_symbol_kind_name
+        (
+            c.LmTransSymbolKind: kind
+        )
+        const(@: c.char)
+            if: kind = c.LM_TRANS_SYMBOL_VARIABLE
+                return: "variable"
+            if: kind = c.LM_TRANS_SYMBOL_FUNCTION
+                return: "function"
+            if: kind = c.LM_TRANS_SYMBOL_PROCEDURE
+                return: "procedure"
+            if: kind = c.LM_TRANS_SYMBOL_LABEL
+                return: "label"
+            if: kind = c.LM_TRANS_SYMBOL_STRUCTURE
+                return: "structure"
+            return: "symbol"
+    end: lm_trans_symbol_kind_name
+end: L2
 
-static int lm_trans_write_text(FILE *file, LmP0Text text) {
-    return lm_trans_write_all(file, text.data, text.length);
-}
-
-static int lm_trans_emit_indent(FILE *file, unsigned indent) {
-    unsigned i;
-
-    for (i = 0U; i < indent; ++i) {
-        if (lm_trans_put(file, "    ") != 0) {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-static const LmP0Field *lm_trans_nth_field(const LmP0Structure *structure, size_t index) {
-    const LmP0Field *field;
-    size_t i;
-
-    field = structure->first_field;
-    i = 0U;
-    while (field != NULL && i < index) {
-        field = field->next;
-        ++i;
-    }
-
-    return field;
-}
-
-static int lm_trans_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text) {
-    const LmP0Field *field;
-
-    if (trailer == NULL || out_text == NULL) {
-        return 0;
-    }
-
-    field = trailer->body.first_field;
-    if (
-        field == NULL ||
-        field->next != NULL ||
-        field->value == NULL ||
-        field->value->kind != LM_P0_NODE_ATOM
-    ) {
-        return 0;
-    }
-
-    *out_text = field->value->as.atom;
-    return 1;
-}
-
-static const char *lm_trans_symbol_kind_name(LmTransSymbolKind kind) {
-    switch (kind) {
-    case LM_TRANS_SYMBOL_VARIABLE:
-        return "variable";
-    case LM_TRANS_SYMBOL_FUNCTION:
-        return "function";
-    case LM_TRANS_SYMBOL_PROCEDURE:
-        return "procedure";
-    case LM_TRANS_SYMBOL_LABEL:
-        return "label";
-    case LM_TRANS_SYMBOL_STRUCTURE:
-        return "structure";
-    default:
-        return "symbol";
-    }
-}
-
-static void lm_trans_symbol_destroy(LmTransSymbol *symbol) {
-    if (symbol != NULL) {
-        free(symbol->param_names);
-        symbol->param_names = NULL;
-        symbol->param_count = 0U;
-        symbol->has_signature = 0;
-        free(symbol);
-    }
-}
-
+L1:
+===
 static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
     size_t i;
 
     if (namespace_ != NULL) {
         for (i = 0U; i < namespace_->count; ++i) {
-            lm_trans_symbol_destroy(namespace_->items[i]);
-            namespace_->items[i] = NULL;
-        }
-        for (i = 0U; i < namespace_->cleanup_count; ++i) {
-            free(namespace_->cleanups[i]);
-            namespace_->cleanups[i] = NULL;
-        }
-        for (i = 0U; i < namespace_->loop_count; ++i) {
-            free(namespace_->loops[i]);
-            namespace_->loops[i] = NULL;
+            free(namespace_->items[i].param_names);
+            namespace_->items[i].param_names = NULL;
+            namespace_->items[i].param_count = 0U;
+            namespace_->items[i].has_signature = 0;
         }
         free(namespace_->items);
         free(namespace_->cleanups);
@@ -252,12 +289,9 @@ static void lm_trans_namespace_leave_scope(LmTransNamespace *namespace_) {
 
     while (
         namespace_->count > 0U &&
-        namespace_->items[namespace_->count - 1U] != NULL &&
-        namespace_->items[namespace_->count - 1U]->depth == namespace_->depth
+        namespace_->items[namespace_->count - 1U].depth == namespace_->depth
     ) {
         --namespace_->count;
-        lm_trans_symbol_destroy(namespace_->items[namespace_->count]);
-        namespace_->items[namespace_->count] = NULL;
     }
 
     if (namespace_->depth > 0U) {
@@ -267,8 +301,7 @@ static void lm_trans_namespace_leave_scope(LmTransNamespace *namespace_) {
 
 static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
     size_t capacity;
-    LmTransCleanup **cleanups;
-    LmTransCleanup *cleanup;
+    LmTransCleanup *cleanups;
 
     if (namespace_ == NULL) {
         return 1;
@@ -276,7 +309,7 @@ static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
 
     if (namespace_->cleanup_count == namespace_->cleanup_capacity) {
         capacity = namespace_->cleanup_capacity == 0U ? 8U : namespace_->cleanup_capacity * 2U;
-        cleanups = (LmTransCleanup **)realloc(namespace_->cleanups, capacity * sizeof(*cleanups));
+        cleanups = (LmTransCleanup *)realloc(namespace_->cleanups, capacity * sizeof(*cleanups));
         if (cleanups == NULL) {
             return 1;
         }
@@ -284,12 +317,7 @@ static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
         namespace_->cleanup_capacity = capacity;
     }
 
-    cleanup = (LmTransCleanup *)calloc(1U, sizeof(*cleanup));
-    if (cleanup == NULL) {
-        return 1;
-    }
-    cleanup->id = id;
-    namespace_->cleanups[namespace_->cleanup_count] = cleanup;
+    namespace_->cleanups[namespace_->cleanup_count].id = id;
     ++namespace_->cleanup_count;
     return 0;
 }
@@ -297,15 +325,12 @@ static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
 static void lm_trans_cleanup_pop(LmTransNamespace *namespace_) {
     if (namespace_ != NULL && namespace_->cleanup_count > 0U) {
         --namespace_->cleanup_count;
-        free(namespace_->cleanups[namespace_->cleanup_count]);
-        namespace_->cleanups[namespace_->cleanup_count] = NULL;
     }
 }
 
 static int lm_trans_loop_push(LmTransNamespace *namespace_) {
     size_t capacity;
-    LmTransLoop **loops;
-    LmTransLoop *loop;
+    LmTransLoop *loops;
 
     if (namespace_ == NULL) {
         return 1;
@@ -313,7 +338,7 @@ static int lm_trans_loop_push(LmTransNamespace *namespace_) {
 
     if (namespace_->loop_count == namespace_->loop_capacity) {
         capacity = namespace_->loop_capacity == 0U ? 8U : namespace_->loop_capacity * 2U;
-        loops = (LmTransLoop **)realloc(namespace_->loops, capacity * sizeof(*loops));
+        loops = (LmTransLoop *)realloc(namespace_->loops, capacity * sizeof(*loops));
         if (loops == NULL) {
             return 1;
         }
@@ -321,12 +346,7 @@ static int lm_trans_loop_push(LmTransNamespace *namespace_) {
         namespace_->loop_capacity = capacity;
     }
 
-    loop = (LmTransLoop *)calloc(1U, sizeof(*loop));
-    if (loop == NULL) {
-        return 1;
-    }
-    loop->cleanup_base = namespace_->cleanup_count;
-    namespace_->loops[namespace_->loop_count] = loop;
+    namespace_->loops[namespace_->loop_count].cleanup_base = namespace_->cleanup_count;
     ++namespace_->loop_count;
     return 0;
 }
@@ -334,8 +354,6 @@ static int lm_trans_loop_push(LmTransNamespace *namespace_) {
 static void lm_trans_loop_pop(LmTransNamespace *namespace_) {
     if (namespace_ != NULL && namespace_->loop_count > 0U) {
         --namespace_->loop_count;
-        free(namespace_->loops[namespace_->loop_count]);
-        namespace_->loops[namespace_->loop_count] = NULL;
     }
 }
 
@@ -344,7 +362,7 @@ static size_t lm_trans_loop_cleanup_base(const LmTransNamespace *namespace_) {
         return namespace_ != NULL ? namespace_->cleanup_count : 0U;
     }
 
-    return namespace_->loops[namespace_->loop_count - 1U]->cleanup_base;
+    return namespace_->loops[namespace_->loop_count - 1U].cleanup_base;
 }
 
 static int lm_trans_emit_sync_name(FILE *file, unsigned id) {
@@ -372,11 +390,8 @@ static const LmTransSymbol *lm_trans_namespace_find(
     i = namespace_->count;
     while (i > 0U) {
         --i;
-        if (
-            namespace_->items[i] != NULL &&
-            lm_trans_symbol_name_same(namespace_->items[i]->name, name)
-        ) {
-            return namespace_->items[i];
+        if (lm_trans_symbol_name_same(namespace_->items[i].name, name)) {
+            return &namespace_->items[i];
         }
     }
 
@@ -396,11 +411,8 @@ static LmTransSymbol *lm_trans_namespace_find_mutable(
     i = namespace_->count;
     while (i > 0U) {
         --i;
-        if (
-            namespace_->items[i] != NULL &&
-            lm_trans_symbol_name_same(namespace_->items[i]->name, name)
-        ) {
-            return namespace_->items[i];
+        if (lm_trans_symbol_name_same(namespace_->items[i].name, name)) {
+            return &namespace_->items[i];
         }
     }
 
@@ -434,8 +446,7 @@ static int lm_trans_namespace_declare(
     LmP0Text name,
     LmTransSymbolKind kind
 ) {
-    LmTransSymbol **items;
-    LmTransSymbol *symbol;
+    LmTransSymbol *items;
     const LmTransSymbol *existing;
     size_t capacity;
 
@@ -477,7 +488,7 @@ static int lm_trans_namespace_declare(
 
     if (namespace_->count == namespace_->capacity) {
         capacity = namespace_->capacity == 0U ? 16U : namespace_->capacity * 2U;
-        items = (LmTransSymbol **)realloc(namespace_->items, capacity * sizeof(*items));
+        items = (LmTransSymbol *)realloc(namespace_->items, capacity * sizeof(*items));
         if (items == NULL) {
             return 1;
         }
@@ -485,20 +496,15 @@ static int lm_trans_namespace_declare(
         namespace_->capacity = capacity;
     }
 
-    symbol = (LmTransSymbol *)calloc(1U, sizeof(*symbol));
-    if (symbol == NULL) {
-        return 1;
-    }
-    symbol->name = name;
-    symbol->kind = kind;
-    symbol->depth = namespace_->depth;
-    symbol->has_c_name = 0;
-    symbol->c_name.data = NULL;
-    symbol->c_name.length = 0U;
-    symbol->param_names = NULL;
-    symbol->param_count = 0U;
-    symbol->has_signature = 0;
-    namespace_->items[namespace_->count] = symbol;
+    namespace_->items[namespace_->count].name = name;
+    namespace_->items[namespace_->count].kind = kind;
+    namespace_->items[namespace_->count].depth = namespace_->depth;
+    namespace_->items[namespace_->count].has_c_name = 0;
+    namespace_->items[namespace_->count].c_name.data = NULL;
+    namespace_->items[namespace_->count].c_name.length = 0U;
+    namespace_->items[namespace_->count].param_names = NULL;
+    namespace_->items[namespace_->count].param_count = 0U;
+    namespace_->items[namespace_->count].has_signature = 0;
     ++namespace_->count;
     return 0;
 }
@@ -539,7 +545,7 @@ static int lm_trans_namespace_bind_c_reference(
         if (lm_trans_namespace_declare(namespace_, name, LM_TRANS_SYMBOL_VARIABLE) != 0) {
             return 1;
         }
-        symbol = namespace_->items[namespace_->count - 1U];
+        symbol = &namespace_->items[namespace_->count - 1U];
     } else if (symbol->kind != LM_TRANS_SYMBOL_VARIABLE) {
         fprintf(
             stderr,
@@ -676,8 +682,6 @@ static int lm_trans_name_argument_is_valid(LmP0Text text) {
     (void)text;
     return 1;
 }
-
-static int lm_trans_text_contains_char(LmP0Text text, char ch);
 
 static int lm_trans_validate_expr_atom(
     LmP0Text atom,
@@ -1639,7 +1643,7 @@ static int lm_trans_emit_cleanups_until(
         if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
             return 1;
         }
-        if (lm_trans_emit_sync_name(file, namespace_->cleanups[index]->id) != 0) {
+        if (lm_trans_emit_sync_name(file, namespace_->cleanups[index].id) != 0) {
             return 1;
         }
         if (lm_trans_put(file, ");\n") != 0) {
@@ -2288,11 +2292,6 @@ static int lm_trans_head_looks_assignable_target(LmP0Text head) {
 
 static int lm_trans_emit_assignment_target(FILE *file, LmP0Text target) {
     size_t i;
-
-    if (!lm_trans_is_c_reference_name(target) && lm_trans_text_contains_char(target, '.')) {
-        fprintf(stderr, "trans L2 error: dot belongs only to c.* ANSI C surface names; use \\ for Lingvamyxa structures\n");
-        return 1;
-    }
 
     i = 0U;
     if (lm_trans_is_c_reference_name(target)) {
@@ -3660,4 +3659,4 @@ int main(int argc, char **argv) {
 
     return lm_trans_emit_document(argv[1], argv[2]);
 }
-
+===

@@ -1,0 +1,17 @@
+L1:
+===
+typedef struct LmRawBox {
+    int value;
+} LmRawBox;
+
+static LmRawBox c_box;
+===
+
+L2:
+. external:
+. . fn: main () c.int
+. . . c.c_box.value: 9
+. . . return: c.c_box.value != 9
+. . end: main
+. end: external
+end: L2

@@ -3419,6 +3419,10 @@ This is intentionally separate from Lingvamyxa typed field-follow. `x\field`
 means address/reference field-follow in the Lingvamyxa L2 model and may lower to
 `x->field`; `c.x.field` is a direct C value-structure/member spelling. In
 head/update position, `c.x.field: value` lowers to `x.field = value`.
+Dotted field spelling without the explicit `c.` door is not Lingvamyxa field
+access. Ordinary L2 Structures use `\` for typed field-follow; any dotted
+value/member path belongs to the explicit C surface and must be spelled through
+`c.`.
 
 The `c.` prefix may be used directly in C call, type or value position:
 

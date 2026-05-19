@@ -43,6 +43,7 @@ L2:
 . . . i: i + 1
 . . . synchronized: @ lock
 . . . . continue
+. . ---
 . . return: c.depth
 . end: leaveByContinue
 . external:
