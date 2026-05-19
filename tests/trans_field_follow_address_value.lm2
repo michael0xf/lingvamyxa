@@ -1,0 +1,19 @@
+L2:
+. LmTestText:
+. . c.unsigned: length
+. end: LmTestText
+.
+. L1:"""static LmTestText c_value;
+"""
+.
+. fn: direct (const: @: LmTestText text) c.unsigned
+. . return: text\length
+. end: direct
+.
+. external:
+. . fn: main () c.int
+. . . c.c_value.length: 9
+. . . return: direct(@ c.c_value) != 9 || c.c_value.length != 9
+. . end: main
+. end: external
+end: L2

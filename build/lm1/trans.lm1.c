@@ -558,6 +558,31 @@ static int lm_trans_is_c_reference_name(LmP0Text name) {
     return lm_trans_text_starts_with(name, "c.") && name.length > 2U;
 }
 
+static int lm_trans_c_reference_has_path_dot(LmP0Text name) {
+    size_t i;
+
+    if (!lm_trans_is_c_reference_name(name)) {
+        return 0;
+    }
+
+    i = 2U;
+    while (i < name.length) {
+        if (name.data[i] == '.') {
+            return 1;
+        }
+        ++i;
+    }
+
+    return 0;
+}
+
+static int lm_trans_node_is_c_reference_atom(const LmP0Node *node) {
+    return
+        node != NULL &&
+        node->kind == LM_P0_NODE_ATOM &&
+        lm_trans_is_c_reference_name(node->as.atom);
+}
+
 static int lm_trans_emit_expr_node(FILE *file, const LmP0Node *node, const LmTransNamespace *namespace_);
 static int lm_trans_emit_expr_fields(FILE *file, const LmP0Field *first, const LmTransNamespace *namespace_);
 static int lm_trans_emit_expr_range(
@@ -707,6 +732,7 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
     const LmP0Node *previous_operand;
     const LmP0Node *node;
     int bracket_depth;
+    int c_dot_path;
 
     if (first == NULL) {
         return NULL;
@@ -714,6 +740,7 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
 
     field = first;
     previous_operand = NULL;
+    c_dot_path = 0;
 
     node = field->value;
     if (
@@ -726,9 +753,11 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
             return NULL;
         }
         previous_operand = field->value;
+        c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
         field = field->next;
     } else {
         previous_operand = node;
+        c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
         field = field->next;
     }
 
@@ -753,12 +782,28 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
                 previous_operand = node;
                 field = field->next;
             }
+        } else if (lm_trans_text_equals(node->as.atom, ".")) {
+            if (
+                !c_dot_path ||
+                previous_operand == NULL ||
+                !lm_trans_nodes_touch(previous_operand, node)
+            ) {
+                break;
+            }
+            operand = field->next;
+            if (operand == NULL) {
+                return field;
+            }
+            previous_operand = operand->value;
+            c_dot_path = 1;
+            field = operand->next;
         } else if (lm_trans_atom_is_infix_expr_operator(node->as.atom, node, previous_operand)) {
             operand = field->next;
             if (operand == NULL) {
                 return field;
             }
             previous_operand = operand->value;
+            c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
             field = operand->next;
         } else {
             break;
@@ -1050,10 +1095,14 @@ static int lm_trans_emit_expr_range(
     int wrote;
     const LmP0Node *previous_operand;
     int expect_field_name;
+    int expect_c_field_name;
+    int c_dot_path;
 
     wrote = 0;
     previous_operand = NULL;
     expect_field_name = 0;
+    expect_c_field_name = 0;
+    c_dot_path = 0;
     field = first;
     while (field != stop) {
         node = field->value;
@@ -1073,16 +1122,44 @@ static int lm_trans_emit_expr_range(
                     }
                     previous_operand = node;
                     expect_field_name = 0;
+                    c_dot_path = 0;
+                } else if (expect_c_field_name) {
+                    if (!lm_trans_atom_is_identifier_like(node->as.atom)) {
+                        fprintf(stderr, "trans L2 error: C value-field dot expects a field name\n");
+                        return 1;
+                    }
+                    if (lm_trans_emit_name(file, node->as.atom) != 0) {
+                        return 1;
+                    }
+                    previous_operand = node;
+                    expect_c_field_name = 0;
+                    c_dot_path = 1;
+                } else if (lm_trans_text_equals(node->as.atom, ".")) {
+                    if (
+                        !c_dot_path ||
+                        previous_operand == NULL ||
+                        !lm_trans_nodes_touch(previous_operand, node)
+                    ) {
+                        fprintf(stderr, "trans L2 error: C value-field dot must follow a c.name path\n");
+                        return 1;
+                    }
+                    if (lm_trans_put(file, ".") != 0) {
+                        return 1;
+                    }
+                    previous_operand = NULL;
+                    expect_c_field_name = 1;
                 } else if (lm_trans_text_equals(node->as.atom, "=")) {
                     if (lm_trans_put(file, "==") != 0) {
                         return 1;
                     }
                     previous_operand = NULL;
+                    c_dot_path = 0;
                 } else if (lm_trans_text_equals(node->as.atom, "@")) {
                     if (lm_trans_put(file, "&") != 0) {
                         return 1;
                     }
                     previous_operand = NULL;
+                    c_dot_path = 0;
                 } else if (lm_trans_text_equals(node->as.atom, "\\")) {
                     if (previous_operand != NULL && lm_trans_nodes_touch(previous_operand, node)) {
                         if (lm_trans_put(file, "->") != 0) {
@@ -1090,17 +1167,20 @@ static int lm_trans_emit_expr_range(
                         }
                         previous_operand = NULL;
                         expect_field_name = 1;
+                        c_dot_path = 0;
                     } else {
                         if (lm_trans_put(file, "*") != 0) {
                             return 1;
                         }
                         previous_operand = NULL;
+                        c_dot_path = 0;
                     }
                 } else {
                     if (lm_trans_emit_expr_atom(file, node->as.atom, namespace_) != 0) {
                         return 1;
                     }
                     previous_operand = lm_trans_atom_is_operand_like(node->as.atom) ? node : NULL;
+                    c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
                 }
             } else {
                 if (lm_trans_emit_expr_node(file, node, namespace_) != 0) {
@@ -1108,6 +1188,8 @@ static int lm_trans_emit_expr_range(
                 }
                 previous_operand = node;
                 expect_field_name = 0;
+                expect_c_field_name = 0;
+                c_dot_path = 0;
             }
             wrote = 1;
         }
@@ -1116,6 +1198,10 @@ static int lm_trans_emit_expr_range(
 
     if (expect_field_name) {
         fprintf(stderr, "trans L2 error: field-follow expects a field name\n");
+        return 1;
+    }
+    if (expect_c_field_name) {
+        fprintf(stderr, "trans L2 error: C value-field dot expects a field name\n");
         return 1;
     }
 
@@ -2114,13 +2200,17 @@ static int lm_trans_text_contains_char(LmP0Text text, char ch) {
 static int lm_trans_head_looks_assignable_target(LmP0Text head) {
     return
         lm_trans_text_contains_char(head, '[') ||
-        lm_trans_text_contains_char(head, '\\');
+        lm_trans_text_contains_char(head, '\\') ||
+        lm_trans_c_reference_has_path_dot(head);
 }
 
 static int lm_trans_emit_assignment_target(FILE *file, LmP0Text target) {
     size_t i;
 
     i = 0U;
+    if (lm_trans_is_c_reference_name(target)) {
+        i = 2U;
+    }
     while (i < target.length) {
         if (target.data[i] == '\\') {
             if (lm_trans_put(file, "->") != 0) {

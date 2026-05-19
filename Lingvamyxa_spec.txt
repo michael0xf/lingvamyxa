@@ -3336,6 +3336,21 @@ translation unit after the build profile's headers, defines and toolchain
 inputs have been applied. This is the canonical and permanent L2 bridge to the
 ANSI C namespace; it is not a temporary bootstrap shortcut.
 
+A dotted continuation after the explicit C door remains in the C surface:
+
+    c.tree.branch
+
+lowers to the ANSI C value-field spelling:
+
+---ANSI C---
+tree.branch
+---ANSI C---
+
+This is intentionally separate from Lingvamyxa typed field-follow. `x\field`
+means address/reference field-follow in the Lingvamyxa L2 model and may lower to
+`x->field`; `c.x.field` is a direct C value-structure/member spelling. In
+head/update position, `c.x.field: value` lowers to `x.field = value`.
+
 The `c.` prefix may be used directly in C call, type or value position:
 
 L2:
@@ -3383,10 +3398,11 @@ implicit C fallback; after resolution it is an ordinary Lingvamyxa `fn`, `sub`,
 label, variable or registered receiver, and that binding may choose to lower to
 C internally.
 
-The `c.` spelling covers only raw C-visible name/type tokens in the selected L2
-profile. It does not cover C tag names as tags, aggregate members, labels or
-declarator syntax. Those are provided by the minimal L2 structural bridge, by
-selected profile-specific L2 forms, or by an explicit raw L1 text escape.
+The `c.` spelling covers raw C-visible name/type tokens and explicit C
+value-field paths in the selected L2 profile. It does not cover C tag names as
+tags, labels or declarator syntax. Those are provided by the minimal L2
+structural bridge, by selected profile-specific L2 forms, or by an explicit raw
+L1 text escape.
 
 L2 storage/address/index forms are Lingvamyxa structural spellings; the C base
 type words used inside them still use the explicit `c.` bridge:
@@ -5197,11 +5213,12 @@ An L2 address value is not necessarily a source-level integer. It may carry, or 
 
 The core L2 syntax does not use a separate `*` or `^` marker for address types. Address-ness is introduced by storage/allocation forms, by the reserved address-depth operator family `@ⁿ`, by address-producing expressions, and by typed field or index operations.
 
-If a C source fragment would normally write `value.field`, L2 should first make
-the storage address explicit and then use field-follow, for example
-`(@ value)\field`. If the binding is already a typed address, `value\field` is
-the direct field-follow form. A profile may optimize either spelling to `.` or
-`->` during L1 lowering; that is a backend decision, not separate L2 syntax.
+Minimal L2 field-follow is address-oriented. If the binding is a typed address,
+`value\field` is the direct Lingvamyxa field-follow form. A direct ANSI C
+value-structure operation is written through the explicit C door:
+`c.value.field`, which lowers to `value.field`. This keeps C value-member access
+visible as C-surface syntax while leaving ordinary Lingvamyxa structures as
+typed addresses/references.
 
 13.2.1. Reserved Address-Depth Operator Family `@ⁿ`
 
@@ -5285,6 +5302,7 @@ C-profile mnemonic table:
     @c               # C expression role: &c
 
     parent\child     # C expression role: parent->child
+    c.parent.child   # C expression role: parent.child
     \parent\child    # parsed as \(parent\child); C expression role: *(parent->child)
     (\parent)\child  # explicit grouping: raw-load parent first, then follow child
 
