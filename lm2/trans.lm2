@@ -1218,6 +1218,7 @@ static int lm_trans_emit_expr_range(
 
 static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
     const LmP0Field *field;
+    size_t i;
 
     if (type_node == NULL) {
         fprintf(stderr, "trans L2 error: type position expects a name\n");
@@ -1241,6 +1242,29 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
             return 1;
         }
         return lm_trans_emit_type_node(file, field->value);
+    }
+
+    if (
+        type_node->kind == LM_P0_NODE_FRAME &&
+        lm_trans_text_all_char(type_node->as.frame.head, '@')
+    ) {
+        field = type_node->as.frame.body.first_field;
+        if (field == NULL || field->next != NULL || field->value == NULL) {
+            fprintf(stderr, "trans L2 error: pointer type expects exactly one type\n");
+            return 1;
+        }
+        if (lm_trans_emit_type_node(file, field->value) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, " ") != 0) {
+            return 1;
+        }
+        for (i = 0U; i < type_node->as.frame.head.length; ++i) {
+            if (lm_trans_put(file, "*") != 0) {
+                return 1;
+            }
+        }
+        return 0;
     }
 
     fprintf(stderr, "trans L2 error: type position expects a name\n");

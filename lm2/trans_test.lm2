@@ -63,6 +63,76 @@ L2:
     end: LmTransNamespace
 
     fn:
+        lm_trans_write_all
+        (
+            @: c.FILE file
+            const: @: c.char bytes
+            c.size_t: length
+        )
+        c.int
+            c.size_t: written c.fwrite(bytes, 1U, length, file)
+            if: length != written
+                return: 1
+            return: 0
+    end: lm_trans_write_all
+
+    fn:
+        lm_trans_put
+        (
+            @: c.FILE file
+            const: @: c.char text
+        )
+        c.int
+            c.int: status c.fputs(text, file)
+            if: 0 > status
+                return: 1
+            return: 0
+    end: lm_trans_put
+
+    fn:
+        lm_trans_write_text
+        (
+            @: c.FILE file
+            const: @: LmP0Text text
+        )
+        c.int
+            return: lm_trans_write_all(file, text\data, text\length)
+    end: lm_trans_write_text
+
+    fn:
+        lm_trans_emit_indent
+        (
+            @: c.FILE file
+            c.unsigned: indent
+        )
+        c.int
+            c.unsigned: i 0
+            c.int: status 0
+            while: i < indent
+                status: lm_trans_put(file, "    ")
+                if: status != 0
+                    return: 1
+                i: i + 1
+            return: 0
+    end: lm_trans_emit_indent
+
+    fn:
+        lm_trans_nth_field
+        (
+            const: @: LmP0Structure structure
+            c.size_t: index
+        )
+        const(@: LmP0Field)
+            const: @: LmP0Field field
+            c.size_t: i 0
+            field: structure\first_field
+            while: field != c.NULL && i < index
+                field: field\next
+                i: i + 1
+            return: field
+    end: lm_trans_nth_field
+
+    fn:
         lm_trans_text_equals
         (
             const: @: LmP0Text text
@@ -152,7 +222,8 @@ L2:
                     lm_trans_text_same(@ c.lm_test_hello, @ c.lm_test_other) ||
                     ! lm_trans_text_starts_with(@ c.lm_test_hello, "he") ||
                     lm_trans_text_all_char(@ c.lm_test_hello, 'h') ||
-                    lm_trans_text_is_operator_atom(@ c.lm_test_hello)
+                    lm_trans_text_is_operator_atom(@ c.lm_test_hello) ||
+                    lm_trans_put(c.stdout, "trans_test ok\n") != 0
         end: main
     end: external
 end: L2
