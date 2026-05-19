@@ -647,7 +647,7 @@ Different Lingvamyxa levels use different default startup conventions:
         Example:
 
         L2:
-        . fn: main () c.int
+        . fn: main () int
         . . c.puts: "Hello"
         . . return: 0
         . end: main
@@ -2040,7 +2040,7 @@ Invalid delimiter lines:
     ---else:
     ----else:
     --- return: x
-    --- c.int: x
+    --- int: x
     --- trailer word
 
 A dash fence is not a prefix operator and cannot be combined with a receiver or any other source item on the same physical line.
@@ -3393,8 +3393,7 @@ This is intentionally close to an ordinary C compilation environment. The same
 L2 source should not acquire a different raw C meaning because a higher-level
 registry state changed.
 
-For raw C-visible names and selected C-profile type words, L2 uses an explicit
-C-visible spelling:
+For raw C-visible names, L2 uses an explicit C-surface spelling:
 
     c.name
 
@@ -3402,8 +3401,8 @@ C-visible spelling:
 `/` namespace path access, not `\` typed field-follow, and not high-level
 registry lookup. It denotes the C spelling `name` as seen by the active L2/L1
 translation unit after the build profile's headers, defines and toolchain
-inputs have been applied. This is the canonical and permanent L2 bridge to the
-ANSI C namespace; it is not a temporary bootstrap shortcut.
+inputs have been applied. This is the canonical and permanent L2 C-surface
+escape; it is not a Lingvamyxa namespace and not a temporary bootstrap shortcut.
 
 A dotted continuation after the explicit C door remains in the C surface:
 
@@ -3446,29 +3445,31 @@ This is an intentional low-level L2 C-surface escape. It does not introduce
 Lingvamyxa dot syntax or Lingvamyxa array/member semantics outside the explicit
 `c.` door; the copied spelling is checked by the selected ANSI C toolchain.
 
-The `c.` prefix may be used directly in C call, type or value position:
+The `c.` prefix may be used directly in C call or value position. Primitive
+L2/C-profile type receivers such as `int`, `char`, `size_t`, `u32`, `i32` and
+`FILE` are ordinary bare L2 type spellings and do not use `c.`:
 
 L2:
     println: c.puts
-    fn: main () c.int
+    fn: main () int
         c.printf: "Hello C\n"
         c.printf: "%s\n" "message"
-        c.size_t: n c.strlen("abc")
-        @: c.FILE file
+        size_t: n c.strlen("abc")
+        @: FILE file
         c.puts: "Hello C"
         println: "Hello through Lingvamyxa"
         return: 0
     end: main
 end: L2
 
-Here `c.printf`, `c.strlen`, `c.size_t`, `c.FILE` and `c.puts` do not need
+Here `c.printf`, `c.strlen`, `size_t`, `FILE` and `c.puts` do not need
 Lingvamyxa descriptors for raw L2 use. They become valid only if the L2/L1
 build profile makes the corresponding C spelling visible or otherwise accepted
 in that C grammar position, for example through `#include <stdio.h>`, `#include
 <stddef.h>` or another selected header. The C compiler, preprocessor and linker
 validate whether each spelling is actually a function, object, typedef, enum
-constant, object-like macro, function-like macro or selected C-profile type
-word in that position.
+constant, object-like macro or function-like macro in that position. Bare
+primitive type receivers are checked by the L2 profile before ANSI C lowering.
 
 The same source may also call ordinary Lingvamyxa names such as `println` when
 they are already visible in the active Lingvamyxa namespace, for example from a
@@ -3486,27 +3487,28 @@ inside the active namespace. Later `println: "text"` is resolved by ordinary
 Lingvamyxa name lookup first; only the resolved value then lowers to the C
 symbol `puts`.
 
-A bare unresolved L2 head or atom such as `printf`, `size_t` or `int` is not
-automatically treated as a raw C fallback. Direct C-visible access is explicit
-through `c.printf`, `c.size_t` or `c.int`. A bare Lingvamyxa name is not an
-implicit C fallback; after resolution it is an ordinary Lingvamyxa `fn`, `sub`,
-label, variable or registered receiver, and that binding may choose to lower to
-C internally.
+A bare unresolved L2 head or atom such as `printf` is not automatically treated
+as a raw C fallback. Direct C-visible access is explicit through `c.printf`.
+Bare primitive type receivers such as `size_t` or `int` are ordinary L2
+receivers. A bare Lingvamyxa name is not an implicit C fallback; after
+resolution it is an ordinary Lingvamyxa `fn`, `sub`, label, variable or
+registered receiver, and that binding may choose to lower to C internally.
 
-The `c.` spelling covers raw C-visible name/type tokens and explicit C
-value-field paths in the selected L2 profile. It does not cover C tag names as
-tags, labels or declarator syntax. Those are provided by the minimal L2
+The `c.` spelling covers raw C-visible names, C preprocessor-like spellings,
+object-like macros, function-like macros and explicit C value-field paths in
+the selected L2 profile. It does not cover primitive type receivers, C tag
+names as tags, labels or declarator syntax. Those are provided by the minimal L2
 structural bridge, by selected profile-specific L2 forms, or by an explicit raw
 L1 text escape.
 
 L2 storage/address/index forms are Lingvamyxa structural spellings; the C base
-type words used inside them still use the explicit `c.` bridge:
+type words used inside them are ordinary bare primitive/type receivers:
 
-    c.int: x
-    c.char: ch
-    @: c.int p
-    @@: c.char pp
-    []: c.int values 16
+    int: x
+    char: ch
+    @: int p
+    @@: char pp
+    []: int values 16
     \p
     p\field
 
@@ -5322,7 +5324,7 @@ At L2, the source model uses primitive values and typed address values. Aggregat
 Allocation and storage receivers create storage and bind the requested name to the address of that storage.
 
 Bare L2 value reading is intentionally narrow. A primitive/scalar storage slot
-such as `u32`, `c.int`, `c.size_t`, an enum-like scalar or an address slot may
+such as `u32`, `int`, `size_t`, an enum-like scalar or an address slot may
 be read as a direct value by naming it. An aggregate storage slot may be embedded
 physically by the target backend, but source-level L2 does not treat the whole
 aggregate as an ordinary expression value merely because it has a name. Aggregate
@@ -5336,13 +5338,13 @@ Examples:
 stack: PlantBed branch
 heap: PlantBed tree
 static: PlantBed root
-c.int: count 5
+int: count 5
 []: leafs count
 
-c.int: x 5
-@: c.int p
-@@: c.int pp
-@@@: c.int ppp
+int: x 5
+@: int p
+@@: int pp
+@@@: int ppp
 
 p: @x
 pp: @p
@@ -5356,9 +5358,9 @@ Meanings:
     count   primitive value/storage initialized to `5`
     leafs   address of array/byte storage sized by `count`, according to the active `[]` receiver/profile
     x       primitive storage/value initialized to `5`
-    p       address-depth-1 slot whose base type is `c.int`
-    pp      address-depth-2 slot whose base type is `c.int`
-    ppp     address-depth-3 slot whose base type is `c.int`
+    p       address-depth-1 slot whose base type is `int`
+    pp      address-depth-2 slot whose base type is `int`
+    ppp     address-depth-3 slot whose base type is `int`
     p: @x   stores the address of storage location `x` into `p`
     pp: @p  stores the address of storage location `p` into `pp`
     ppp: @pp stores the address of storage location `pp` into `ppp`
@@ -5394,32 +5396,32 @@ In head position before `:`, `@ⁿ:` declares an address/reference slot of depth
 
 Examples:
 
-    @: c.int p
-    @@: c.int pp
-    @@@: c.int ppp
+    @: int p
+    @@: int pp
+    @@@: int ppp
 
 Meanings:
 
-    p    address-depth-1 slot whose base type is `c.int`
-    pp   address-depth-2 slot whose base type is `c.int`
-    ppp  address-depth-3 slot whose base type is `c.int`
+    p    address-depth-1 slot whose base type is `int`
+    pp   address-depth-2 slot whose base type is `int`
+    ppp  address-depth-3 slot whose base type is `int`
 
 Whitespace separates the base type and the binding name under the ordinary short-tail rule. Therefore:
 
-    @@@: c.int ppp
+    @@@: int ppp
 
-has two fields, `c.int` and `ppp`, while:
+has two fields, `int` and `ppp`, while:
 
-    @@@: c.int, ppp
+    @@@: int, ppp
 
-terminates the `@@@:` short form after `c.int`. The following `ppp` is not the binding-name field of that declaration; it is the next source item at the current level.
+terminates the `@@@:` short form after `int`. The following `ppp` is not the binding-name field of that declaration; it is the next source item at the current level.
 
 The prefix expression form `@x` remains the depth-1 address-of operation. Higher address depth is expressed by declaring deeper address slots and storing ordinary depth-1 addresses of those slots:
 
-    c.int: x 5
-    @: c.int p
-    @@: c.int pp
-    @@@: c.int ppp
+    int: x 5
+    @: int p
+    @@: int pp
+    @@@: int ppp
 
     p: @x
     pp: @p
@@ -5437,7 +5439,7 @@ The prefix form:
 
 returns the address of the storage location `x`.
 
-If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object. This is the expression-side companion of the declaration-side `@ⁿ:` family: `@@: c.int pp` declares an address-depth-2 slot, while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
+If `x` is already an address binding, `@x` is the address of the binding that stores that address. It is address-of-address, not the address of the target object. This is the expression-side companion of the declaration-side `@ⁿ:` family: `@@: int pp` declares an address-depth-2 slot, while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
 
 The prefix form:
 
@@ -8117,7 +8119,7 @@ Consequences:
 
 L2 address and field forms are:
 
-    @ⁿ: T x     reserved address-depth declaration head, for example `@@@: c.int ppp`
+    @ⁿ: T x     reserved address-depth declaration head, for example `@@@: int ppp`
     @x          address of storage location `x`
     \x          raw load from address expression `x`
     x\field     typed field-follow through address/reference `x`
@@ -8143,11 +8145,11 @@ Examples:
 stack: PlantBed branch
 heap: PlantBed tree
 static: PlantBed root
-c.int: count 5
-[]: c.int leafs count
-@: c.int p
-@@: c.int pp
-@@@: c.int ppp
+int: count 5
+[]: int leafs count
+@: int p
+@@: int pp
+@@@: int ppp
 
 Meanings:
 
@@ -8156,14 +8158,14 @@ Meanings:
     root    typed address of static storage with layout `PlantBed`
     count   primitive storage/value initialized to `5`
     leafs   indexed storage/container descriptor for `count` primitive cells, according to the active L2 profile
-    p       address-depth-1 slot to base type `c.int`
-    pp      address-depth-2 slot to base type `c.int`
-    ppp     address-depth-3 slot to base type `c.int`
+    p       address-depth-1 slot to base type `int`
+    pp      address-depth-2 slot to base type `int`
+    ppp     address-depth-3 slot to base type `int`
 
 The first ANSI C bootstrap projection accepts an explicit element type:
 
-    []: c.int values 3 1 2 3
-    []: @ c.int pointers 2 @ a @ b
+    []: int values 3 1 2 3
+    []: @ int pointers 2 @ a @ b
 
 which may lower to:
 
@@ -8185,9 +8187,9 @@ This allocates stack storage with layout `PlantBed` and introduces the exact quo
 
 The same short-tail whitespace rule applies to address-depth declarations:
 
-@@@: c.int ppp
+@@@: int ppp
 
-This declares `ppp` as an address-depth-3 slot with base type `c.int`. The spelling `@@@: c.int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `c.int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
+This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
 
 28.2.1. Named Structures and ANSI C `typedef struct` Projection
 
@@ -8203,8 +8205,8 @@ L2:
     LmTransSymbol:
         LmP0Text: name
         LmTransSymbolKind: kind
-        c.unsigned: depth
-        c.int: has_c_name
+        unsigned: depth
+        int: has_c_name
         LmP0Text: c_name
     end: LmTransSymbol
 end: L2
@@ -8268,14 +8270,14 @@ L2:
         LM_TRANS_SYMBOL_STRUCTURE = 5
     } LmTransSymbolKind;'''
 
-    fn: main () c.int
+    fn: main () int
         return: c.LM_TRANS_SYMBOL_VARIABLE
     end: main
 end: L2
 
 The enum constants are not imported into the Lingvamyxa namespace. They remain
 ordinary ANSI C names and are referenced explicitly through the permanent C
-namespace door, for example `c.LM_TRANS_SYMBOL_VARIABLE`.
+surface escape, for example `c.LM_TRANS_SYMBOL_VARIABLE`.
 
 L2 `fn` and `sub` definitions lower to `static` ANSI C functions by default.
 This keeps ordinary L2 helper procedures local to the generated translation
@@ -8284,7 +8286,7 @@ external ANSI C linkage for that definition:
 
 L2:
     external:
-        fn: main () c.int
+        fn: main () int
             return: 0
         end: main
     end: external

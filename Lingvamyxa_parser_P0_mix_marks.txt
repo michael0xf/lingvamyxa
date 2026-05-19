@@ -1,0 +1,132 @@
+Lingvamyxa Parser P0 Instruction: MIX Marks and Source/Tree Coupling
+
+Status
+
+This file is an implementation instruction for the first structural parser.
+It is not a replacement for Lingvamyxa_spec.txt.
+
+This file preserves the parser-side rule for curly-brace MIX marks and for the
+future overlapper/document layer. It is intentionally conservative: P0 still
+builds the ordinary structural tree; MIX is a side layer over the same source
+document, not a second structural parse.
+
+
+1. No Structural Reparse
+
+The parser must not build the P0 tree by doing a separate structural reparse
+after an overlay/MIX scan.
+
+The source scanner should walk the source text in character order and produce:
+
+    structural events
+        events that build the ordinary P0 Structure tree;
+
+    mark events
+        future MIX/overlapper events with absolute source offsets.
+
+The first implementation may ignore mark events after validating/skipping them,
+but it must not require a second pass that reconstructs a different P0 tree.
+
+Reason: every parser node must be linkable to the source document position that
+created it. A later overlay document can then attach marks to source intervals
+and, when useful, keep direct references to parser nodes, branches or leaves.
+If the structural tree is rebuilt by a later pass, those references become
+fragile and the editor/runtime state becomes hard to preserve.
+
+
+2. Node Span Contract
+
+Every P0 node created by the structural parser should keep its source span:
+
+    line
+    column
+    absolute source offset
+    source length
+
+This span is not just a diagnostic convenience. It is the stable bridge between
+the source document, generated/debuggable projections, future MIX marks and the
+overlapper storage model.
+
+Generated anonymous Structures should also receive a meaningful span: usually
+the delimiter/source event that created them, or the first moved child when the
+Structure is produced by postprocessing.
+
+
+3. Curly-Brace MIX Marks in P0
+
+Curly-brace forms:
+
+    { ... }
+
+belong to the MIX/overlapper layer. They are not ordinary P0 fields and do not
+create parser nodes in the structural tree.
+
+For the current P0 parser, a curly-brace mark is skipped completely in the
+structural stream:
+
+    it contributes no field;
+    it does not open a P0 Structure;
+    it does not close a P0 Structure;
+    it does not change source level;
+    it is not a receiver call;
+    it is not a disabled block;
+    it is not a line comment.
+
+The skip is balanced and counts nested braces:
+
+    {outer {inner} more}
+
+is one skipped MIX mark region for the structural parser.
+
+An unclosed curly-brace mark is a source syntax error.
+
+
+4. Marks Inside String/Text Payloads
+
+The structural value of a string/text payload is not changed by MIX syntax.
+
+For example:
+
+    "keep {mark} inside string"
+
+remains one string/text atom for P0. The substring `{mark}` is not removed from
+that atom and is not added as a P0 child field.
+
+A future MIX scanner may still record an internal payload mark at the matching
+source offsets. Such internal marks belong to the payload's own mark table or
+profile-specific namespace, not to the surrounding structural argument list.
+
+
+5. Mark-Only Source Lines
+
+A physical source line that contains only one or more curly-brace marks and
+optional horizontal whitespace is invisible to P0 structural indentation.
+
+It must not push, pop or validate the relaxed indentation stack as if it were an
+ordinary source item. This is necessary for overlay markup such as:
+
+    dataset: harvest
+        meta:
+    {color: blue}
+            title: "Regional harvest report"
+
+The mark line is present in the source document and future MIX layer, but it is
+absent from the ordinary P0 tree.
+
+
+6. Future Overlapper Hook
+
+When the overlapper/document storage is added, the low-level scanner should keep
+the same one-source-order walk and emit mark events such as:
+
+    mark_open(offset, length, parsed_mark_structure_or_slice)
+    mark_close(offset, length, parsed_mark_structure_or_slice)
+    mark_payload(offset, length, payload_owner)
+
+The exact event names and storage are not specified here.
+
+The important invariant is that source offsets, parser node spans and mark
+intervals all refer to the same source document. A mark may point to a parser
+node, and a parser node may point back to its generated/source mark, without
+requiring either side to be re-derived from text.
+

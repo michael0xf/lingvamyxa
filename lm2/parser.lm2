@@ -442,6 +442,13 @@ static int lm_p0_indent_level_from_column(
     return 1;
 }
 
+static size_t lm_p0_scan_brace_mark_unchecked(
+    const char *text,
+    size_t length,
+    size_t start,
+    int *closed
+);
+
 static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size_t start) {
     size_t i;
     size_t depth;
@@ -490,6 +497,16 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
             }
             continue;
         }
+        if (source[i] == '{') {
+            int closed;
+            size_t brace_end;
+
+            brace_end = lm_p0_scan_brace_mark_unchecked(source, length, i, &closed);
+            if (closed) {
+                i = brace_end;
+                continue;
+            }
+        }
         if (source[i] == '(') {
             ++depth;
         } else if (source[i] == ')' && depth > 0U) {
@@ -501,6 +518,102 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
     }
 
     return i;
+}
+
+static void lm_p0_position_in_slice(
+    const char *text,
+    size_t length,
+    size_t index,
+    size_t base_line,
+    size_t base_column,
+    size_t *out_line,
+    size_t *out_column
+);
+
+static size_t lm_p0_scan_brace_mark_unchecked(
+    const char *text,
+    size_t length,
+    size_t start,
+    int *closed
+) {
+    size_t i;
+    size_t depth;
+
+    i = start;
+    depth = 0U;
+    *closed = 0;
+    while (i < length) {
+        if (text[i] == '{') {
+            ++depth;
+            ++i;
+            continue;
+        }
+        if (text[i] == '}') {
+            ++i;
+            if (depth > 0U) {
+                --depth;
+                if (depth == 0U) {
+                    *closed = 1;
+                    return i;
+                }
+            }
+            continue;
+        }
+        ++i;
+    }
+
+    return i;
+}
+
+static int lm_p0_skip_brace_mark(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t *index,
+    size_t line,
+    size_t column
+) {
+    size_t start;
+    int closed;
+
+    if (*index >= length || text[*index] != '{') {
+        return 1;
+    }
+
+    start = *index;
+    *index = lm_p0_scan_brace_mark_unchecked(text, length, start, &closed);
+    if (!closed) {
+        size_t diagnostic_line;
+        size_t diagnostic_column;
+
+        lm_p0_position_in_slice(text, length, start, line, column, &diagnostic_line, &diagnostic_column);
+        lm_p0_set_diagnostic(document, 31, diagnostic_line, diagnostic_column, "unterminated brace mark");
+        return 0;
+    }
+
+    return 1;
+}
+
+static int lm_p0_skip_leading_brace_marks(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t *index
+) {
+    while (*index < length) {
+        while (*index < length && lm_p0_is_horizontal_space(text[*index])) {
+            ++(*index);
+        }
+        if (*index >= length || text[*index] != '{') {
+            return 1;
+        }
+        if (!lm_p0_skip_brace_mark(document, text, length, index, line, column)) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end) {
@@ -1370,6 +1483,13 @@ static int lm_p0_skip_field_space(
             continue;
         }
 
+        if (text[*index] == '{') {
+            if (!lm_p0_skip_brace_mark(document, text, length, index, line, column)) {
+                return 0;
+            }
+            continue;
+        }
+
         if (lm_p0_is_line_break(text[*index])) {
             size_t content_index;
             size_t next_level;
@@ -1601,6 +1721,12 @@ static int lm_p0_find_colon(
     depth = 0U;
     i = 0U;
     while (i < length) {
+        if (text[i] == '{') {
+            if (!lm_p0_skip_brace_mark(document, text, length, &i, line, column)) {
+                return -1;
+            }
+            continue;
+        }
         if (text[i] == '#') {
             while (i < length && !lm_p0_is_line_break(text[i])) {
                 ++i;
@@ -1794,6 +1920,7 @@ static int lm_p0_parse_fields_until_with_layout(
                        text[i] != '(' &&
                        text[i] != ')' &&
                        text[i] != '#' &&
+                       text[i] != '{' &&
                        text[i] != ':') {
                     if (lm_p0_starts_python_string(text, length, i) || text[i] == '"' || text[i] == '`') {
                         size_t diagnostic_line;
@@ -2852,6 +2979,12 @@ static int lm_p0_validate_disabled_item_text(
         return 0;
     }
     while (i < length) {
+        if (text[i] == '{') {
+            if (!lm_p0_skip_brace_mark(document, text, length, &i, line, column)) {
+                return 0;
+            }
+            continue;
+        }
         if (text[i] == '#') {
             while (i < length && !lm_p0_is_line_break(text[i])) {
                 ++i;
@@ -2987,8 +3120,24 @@ static int lm_p0_disabled_scan_next_event(
             }
         } else {
             size_t indent_column;
+            size_t mark_skip;
 
             lm_p0_scan_indent_column(source, p, line_start + raw_length, &p, &indent_column);
+            text = source + p;
+            text_length = (line_start + raw_length) - p;
+            lm_p0_trim_right(&text, &text_length);
+            mark_skip = 0U;
+            if (!lm_p0_skip_leading_brace_marks(
+                    document,
+                    text,
+                    text_length,
+                    *line,
+                    (size_t)(text - (source + line_start)) + 1U,
+                    &mark_skip
+                )) {
+                return 0;
+            }
+            p += mark_skip;
             text = source + p;
             text_length = (line_start + raw_length) - p;
             lm_p0_trim_right(&text, &text_length);
@@ -3013,6 +3162,25 @@ static int lm_p0_disabled_scan_next_event(
         text = source + p;
         text_length = (line_start + raw_length) - p;
         lm_p0_trim_right(&text, &text_length);
+        {
+            size_t mark_skip;
+
+            mark_skip = 0U;
+            if (!lm_p0_skip_leading_brace_marks(
+                    document,
+                    text,
+                    text_length,
+                    *line,
+                    (size_t)(text - (source + line_start)) + 1U,
+                    &mark_skip
+                )) {
+                return 0;
+            }
+            p += mark_skip;
+            text = source + p;
+            text_length = (line_start + raw_length) - p;
+            lm_p0_trim_right(&text, &text_length);
+        }
 
         if (text_length == 0U || text[0] == '#') {
             if (dotted_level && level > 0U) {
@@ -3364,8 +3532,25 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             }
         } else {
             size_t indent_column;
+            size_t mark_skip;
 
             lm_p0_scan_indent_column(source, p, line_start + raw_length, &p, &indent_column);
+            text = source + p;
+            text_length = (line_start + raw_length) - p;
+            lm_p0_trim_right(&text, &text_length);
+            mark_skip = 0U;
+            if (!lm_p0_skip_leading_brace_marks(
+                    document,
+                    text,
+                    text_length,
+                    line,
+                    (size_t)(text - (source + line_start)) + 1U,
+                    &mark_skip
+                )) {
+                status = 0;
+                break;
+            }
+            p += mark_skip;
             text = source + p;
             text_length = (line_start + raw_length) - p;
             lm_p0_trim_right(&text, &text_length);
@@ -3394,6 +3579,26 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         text = source + p;
         text_length = (line_start + raw_length) - p;
         lm_p0_trim_right(&text, &text_length);
+        {
+            size_t mark_skip;
+
+            mark_skip = 0U;
+            if (!lm_p0_skip_leading_brace_marks(
+                    document,
+                    text,
+                    text_length,
+                    line,
+                    (size_t)(text - (source + line_start)) + 1U,
+                    &mark_skip
+                )) {
+                status = 0;
+                break;
+            }
+            p += mark_skip;
+            text = source + p;
+            text_length = (line_start + raw_length) - p;
+            lm_p0_trim_right(&text, &text_length);
+        }
         node_flags = 0U;
 
         if (text_length == 0U && level == 0U) {

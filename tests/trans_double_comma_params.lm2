@@ -2,11 +2,11 @@ L1:"""#include "parser.lm1.h"
 """
 
 L2:
-. fn: doubleComma (const: @: LmP0Text text,, const: @: c.char value) c.int
+. fn: doubleComma (const: @: LmP0Text text,, const: @: char value) int
 . . return: text != c.NULL && value != c.NULL
 . end: doubleComma
 . external:
-. . fn: main () c.int
+. . fn: main () int
 . . . return: doubleComma(c.NULL, c.NULL)
 . . end: main
 . end: external

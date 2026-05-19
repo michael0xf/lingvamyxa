@@ -57,7 +57,8 @@ typedef enum LmTransExprAtomLoweringKind {
     LM_TRANS_EXPR_ATOM_LOWER_DEREF = 7,
     LM_TRANS_EXPR_ATOM_LOWER_POINTER_FOLLOW = 8,
     LM_TRANS_EXPR_ATOM_LOWER_INDEX_OPERATOR = 9,
-    LM_TRANS_EXPR_ATOM_LOWER_INFIX_OPERATOR = 10
+    LM_TRANS_EXPR_ATOM_LOWER_INFIX_OPERATOR = 10,
+    LM_TRANS_EXPR_ATOM_LOWER_C_SURFACE = 11
 } LmTransExprAtomLoweringKind;
 
 typedef struct LmTransExprAtomLowering {
@@ -760,7 +761,7 @@ static int lm_trans_namespace_declare(
     if (lm_trans_is_c_reference_name(name)) {
         fprintf(
             stderr,
-            "trans L2 error: C name \"%.*s\" belongs to the ANSI C namespace and cannot be declared in Lingvamyxa namespace\n",
+            "trans L2 error: C-surface spelling \"%.*s\" cannot be declared as a Lingvamyxa name\n",
             (int)name.length,
             name.data
         );
@@ -814,7 +815,7 @@ static int lm_trans_namespace_bind_c_reference(
     if (lm_trans_is_c_reference_name(name)) {
         fprintf(
             stderr,
-            "trans L2 error: C name \"%.*s\" belongs to the ANSI C namespace and cannot be rebound in Lingvamyxa namespace\n",
+            "trans L2 error: C-surface spelling \"%.*s\" cannot be rebound as a Lingvamyxa name\n",
             (int)name.length,
             name.data
         );
@@ -884,6 +885,34 @@ static const char *lm_trans_c_alias(LmP0Text name) {
     return NULL;
 }
 
+static int lm_trans_builtin_c_type_tail(LmP0Text name) {
+    return
+        lm_trans_c_alias(name) != NULL ||
+        lm_trans_text_equals(name, "void") ||
+        lm_trans_text_equals(name, "char") ||
+        lm_trans_text_equals(name, "short") ||
+        lm_trans_text_equals(name, "int") ||
+        lm_trans_text_equals(name, "long") ||
+        lm_trans_text_equals(name, "float") ||
+        lm_trans_text_equals(name, "double") ||
+        lm_trans_text_equals(name, "signed") ||
+        lm_trans_text_equals(name, "unsigned") ||
+        lm_trans_text_equals(name, "size_t") ||
+        lm_trans_text_equals(name, "FILE");
+}
+
+static int lm_trans_builtin_c_type_name(LmP0Text name) {
+    LmP0Text tail;
+
+    if (lm_trans_text_starts_with(name, "c.") && name.length > 2U) {
+        tail.data = name.data + 2U;
+        tail.length = name.length - 2U;
+        return lm_trans_builtin_c_type_tail(tail);
+    }
+
+    return lm_trans_builtin_c_type_tail(name);
+}
+
 static int lm_trans_emit_name(FILE *file, LmP0Text name) {
     const char *alias;
     LmP0Text tail;
@@ -901,9 +930,25 @@ static int lm_trans_emit_name(FILE *file, LmP0Text name) {
     return lm_trans_write_text(file, name);
 }
 
-static int lm_trans_accepts_c_type_name(LmP0Text name) {
-    (void)name;
-    return 1;
+static int lm_trans_emit_type_name(FILE *file, LmP0Text name) {
+    const char *alias;
+    LmP0Text tail;
+
+    if (lm_trans_text_starts_with(name, "c.") && name.length > 2U) {
+        tail.data = name.data + 2U;
+        tail.length = name.length - 2U;
+        alias = lm_trans_c_alias(tail);
+        if (alias != NULL) {
+            return lm_trans_put(file, alias);
+        }
+        return lm_trans_write_text(file, tail);
+    }
+
+    alias = lm_trans_c_alias(name);
+    if (alias != NULL) {
+        return lm_trans_put(file, alias);
+    }
+    return lm_trans_write_text(file, name);
 }
 
 static int lm_trans_is_c_reference_name(LmP0Text name) {
@@ -992,7 +1037,7 @@ static int lm_trans_validate_expr_atom(
     if (symbol == NULL) {
         fprintf(
             stderr,
-            "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+            "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for explicit C-surface spelling\n",
             (int)atom.length,
             atom.data,
             (int)atom.length,
@@ -1062,7 +1107,7 @@ static int lm_trans_lower_call(
         expected = mode == LM_TRANS_CALL_LOWER_VALUE ? "function" : "callable";
         fprintf(
             stderr,
-            "trans L2 error: unknown Lingvamyxa %s \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+            "trans L2 error: unknown Lingvamyxa %s \"%.*s\"; use c.%.*s for explicit C-surface spelling\n",
             expected,
             (int)head.length,
             head.data,
@@ -1690,6 +1735,8 @@ static LmTransExprAtomLowering lm_trans_lower_expr_atom(
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_FIELD_NAME;
     } else if (expect_c_field_name) {
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_C_FIELD_NAME;
+    } else if (lm_trans_is_c_reference_name(node->as.atom)) {
+        lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_C_SURFACE;
     } else if (lm_trans_text_equals(node->as.atom, ".")) {
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_C_DOT;
     } else if (lm_trans_text_equals(node->as.atom, "=")) {
@@ -1766,6 +1813,9 @@ static int lm_trans_update_expr_atom_lowering_state(
     ) {
         *previous_operand = NULL;
         *c_dot_path = 0;
+    } else if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_C_SURFACE) {
+        *previous_operand = node;
+        *c_dot_path = 1;
     } else {
         *previous_operand = lm_trans_atom_is_operand_like(lowering.text) ? node : NULL;
         *c_dot_path = lm_trans_node_is_c_reference_atom(*previous_operand);
@@ -1805,6 +1855,9 @@ static int lm_trans_emit_expr_atom_lowering(
         lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_INFIX_OPERATOR
     ) {
         return lm_trans_write_text(file, lowering.text);
+    }
+    if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_C_SURFACE) {
+        return lm_trans_emit_name(file, lowering.text);
     }
     return lm_trans_emit_expr_atom(file, lowering.text, namespace_);
 }
@@ -2122,7 +2175,7 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
     }
 
     if (type_node->kind == LM_P0_NODE_ATOM) {
-        return lm_trans_emit_name(file, type_node->as.atom);
+        return lm_trans_emit_type_name(file, type_node->as.atom);
     }
 
     if (
@@ -2682,7 +2735,7 @@ static int lm_trans_head_can_declare_storage(
 ) {
     const LmTransSymbol *symbol;
 
-    if (lm_trans_is_c_reference_name(head) && lm_trans_accepts_c_type_name(head)) {
+    if (lm_trans_builtin_c_type_name(head)) {
         return 1;
     }
 
@@ -3655,7 +3708,7 @@ static int lm_trans_lower_statement_frame(
     if (symbol == NULL) {
         fprintf(
             stderr,
-            "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+            "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for explicit C-surface spelling\n",
             (int)frame->head.length,
             frame->head.data,
             (int)frame->head.length,
@@ -4299,7 +4352,7 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
-    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, L1 frame, named Structure, or namespace binding to c.name\n");
+    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, L1 frame, named Structure, or Lingvamyxa binding to an explicit c.name C-surface spelling\n");
     return 1;
 }
 

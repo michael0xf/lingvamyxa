@@ -11,8 +11,8 @@ static int lm_test_next(void) {
 
 L2:
 . external:
-. . fn: main () c.int
-. . . c.int: iterations 0
+. . fn: main () int
+. . . int: iterations 0
 . . . if: c.printf("control-call\n") < 0
 . . . . return: 1
 . . . while: c.lm_test_next() != 0

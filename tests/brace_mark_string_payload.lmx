@@ -1,0 +1,3 @@
+root:
+    text: "keep {mark} inside string"
+end: root

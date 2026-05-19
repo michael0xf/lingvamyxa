@@ -1,0 +1,37 @@
+﻿
+{style: system}
+dataset: harvest
+    meta:
+{style: title}
+{color: blue}
+        title: "Regional harvest report"
+{style: date}
+        season: 2026
+{end: title}
+        month: April
+{end: date}
+        source:
+            organization: `Field Bureau`
+            system: `manual survey`
+        ---
+        location:
+{color: green}
+            country: Uruguay
+            region: `north field group`
+        ---
+        note:{color: blue}
+            "This part is {color: red} marked {end} document data over ordinary Structures."
+
+    ---
+{end: blue}
+
+    table:
+        columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
+        rows:
+                 1        `north field`       wheat       12.50       0.14
+                 2        `south field`       corn         8.75       0.19
+                 3        `east ridge`        barley      10.00       0.16
+                 4        `river lowland`     rice        21.30       0.22
+{end: green}
+end: harvest
+{end: system}

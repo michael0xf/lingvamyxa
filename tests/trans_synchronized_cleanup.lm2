@@ -16,29 +16,29 @@ static void lm_synchronized_leave(void *object) {
 ===
 
 L2:
-. fn: leaveByReturn () c.int
-. . c.int: lock 0
+. fn: leaveByReturn () int
+. . int: lock 0
 . . synchronized: @ lock
 . . . return: 10 + c.depth
 . . return: -1
 . end: leaveByReturn
-. fn: leaveByWrappedReturn () c.int
-. . c.int: lock 0
+. fn: leaveByWrappedReturn () int
+. . int: lock 0
 . . synchronized: @ lock (return: 10 + c.depth)
 . . return: -1
 . end: leaveByWrappedReturn
-. fn: leaveByBreak () c.int
-. . c.int: lock 0
-. . c.int: i 0
+. fn: leaveByBreak () int
+. . int: lock 0
+. . int: i 0
 . . while: i < 3
 . . . synchronized: @ lock
 . . . . break
 . . . i: i + 1
 . . return: c.depth
 . end: leaveByBreak
-. fn: leaveByContinue () c.int
-. . c.int: lock 0
-. . c.int: i 0
+. fn: leaveByContinue () int
+. . int: lock 0
+. . int: i 0
 . . while: i < 1
 . . . i: i + 1
 . . . synchronized: @ lock
@@ -47,8 +47,8 @@ L2:
 . . return: c.depth
 . end: leaveByContinue
 . external:
-. . fn: main () c.int
-. . . c.int: result 0
+. . fn: main () int
+. . . int: result 0
 . . . result: leaveByReturn() + leaveByWrappedReturn() + leaveByBreak() + leaveByContinue()
 . . . c.printf: "%d\n" result
 . . . return: result != 22

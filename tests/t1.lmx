@@ -1,0 +1,76 @@
+﻿L4:
+    model: HelloConfig
+        vars:
+            Text: greeting owned
+            int: maxI
+            int: maxJ
+        ---
+        condition:
+            maxI > 0 && maxJ > 0
+        ---
+    ---
+
+    relation: entryPoint
+        Symbol: targetName
+        Symbol: implementationName
+    ---
+end: L4
+
+L5:
+    behavior: HelloConfig
+        message: run helloMain
+    ---
+
+    fact: model HelloConfig
+    fact: message HelloConfig run helloMain
+    fact: entryPoint app helloMain
+
+    target:
+        app
+        kind: executable
+        sources: ("src/hello_world.lm3")
+        entry: helloMain
+        output: "build/bin/hello_world.lm0.exe"
+    ---
+
+    build: app
+end: L5
+
+L3:
+    fn: words () iterator(Text)
+        yield: "Hello"
+        yield: "World"
+    end: words
+
+    fn: factorial (int(n)) (int)
+        if: n <= 1
+            return: 1
+    return: n * factorial(n - 1)
+
+    sub: helloMain
+        HelloConfig: cfg
+            greeting: "Hello World"
+            maxI: 3
+            maxJ: 3
+        ---
+
+        System\out\println: cfg\greeting
+
+        each: word in words
+            System\out\println: word
+        end: each
+
+        outerLoop:
+            for: int(i, 1) (i <= cfg\maxI) i++
+                for: int(j, 1) (j <= cfg\maxJ) j++
+                    if: i = 2 && j = 2
+                        System\out\println: "--- continue outerLoop ---"
+                        continue: outerLoop
+                    ---
+
+                    System\out\println: ("i: " + factorial(i) + ", j: " + factorial(j))
+        end: outerLoop
+
+        System\out\println: "Done."
+    end: helloMain
+end: L3

@@ -1,18 +1,18 @@
 L2:
 . Leaf:
-. . c.int: value
+. . int: value
 . end: Leaf
 .
 . Branch:
 . . @: Leaf leaf
 . end: Branch
 .
-. fn: read (const: @: Branch branch) c.int
+. fn: read (const: @: Branch branch) int
 . . return: branch\leaf\value
 . end: read
 .
 . external:
-. . fn: main () c.int
+. . fn: main () int
 . . . return: 0
 . . end: main
 . end: external

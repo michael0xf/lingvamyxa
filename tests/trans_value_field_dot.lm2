@@ -9,7 +9,7 @@ static LmRawBox c_box;
 
 L2:
 . external:
-. . fn: main () c.int
+. . fn: main () int
 . . . c.c_box.value: 9
 . . . return: c.c_box.value != 9
 . . end: main
