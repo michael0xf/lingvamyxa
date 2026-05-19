@@ -4,6 +4,8 @@ L1:
 #include <stdlib.h>
 #include <string.h>
 
+#include "own.lm1.h"
+
 #ifdef _WIN32
 #include <direct.h>
 #define LM_VCPKG_EXE_SUFFIX ".exe"
@@ -42,7 +44,7 @@ static LmVcpkgOptions *lm_vcpkg_options_new(void) {
 }
 
 static void lm_vcpkg_options_delete(LmVcpkgOptions *options) {
-    free(options);
+    lm_own_delete(options, NULL);
 }
 
 static int lm_vcpkg_is_path_separator(char value) {

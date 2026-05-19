@@ -95,9 +95,9 @@ set(LM1_GENERATED_MAKE_C "${LM1_GENERATED_DIR}/make.lm1.c")
 set(LM1_GENERATED_VCPKG_FETCH_C "${LM1_GENERATED_DIR}/vcpkgFetch.lm1.c")
 set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
 
-# ---- Generated L1 parser snapshot ----
+# ---- Generated L1 ownership helper ----
 
-if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0)
+if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0 OR BUILD_VCPKG_FETCH_LM0 OR BUILD_BUILD_CORE_LM0)
     add_library(own.lm1 STATIC
         "${LM1_GENERATED_OWN_C}"
         "${CMAKE_CURRENT_SOURCE_DIR}/lm1/own.lm1.h"
@@ -116,7 +116,11 @@ if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0)
     else()
         target_compile_options(own.lm1 PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+endif()
 
+# ---- Generated L1 parser snapshot ----
+
+if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0)
     add_library(parser.lm1 STATIC
         "${LM1_GENERATED_PARSER_C}"
         "${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser.lm1.h"
@@ -271,6 +275,14 @@ if (BUILD_VCPKG_FETCH_LM0)
     add_executable(vcpkgFetch.lm0
         "${LM1_GENERATED_VCPKG_FETCH_C}"
     )
+
+    target_include_directories(vcpkgFetch.lm0 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
+    )
+
+    target_link_libraries(vcpkgFetch.lm0 PRIVATE
+        own.lm1
+    )
 endif()
 
 # ---- L0 core build driver ----
@@ -278,6 +290,14 @@ endif()
 if (BUILD_BUILD_CORE_LM0)
     add_executable(buildCore.lm0
         "${LM1_GENERATED_BUILD_CORE_C}"
+    )
+
+    target_include_directories(buildCore.lm0 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
+    )
+
+    target_link_libraries(buildCore.lm0 PRIVATE
+        own.lm1
     )
 
     set(LM_RUN_BUILD_CORE_DEPS buildCore.lm0)

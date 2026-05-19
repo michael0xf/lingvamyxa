@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "own.lm1.h"
+
 #ifdef _WIN32
 #include <direct.h>
 #define LM_BUILD_EXE_SUFFIX ".exe"
@@ -25,7 +27,7 @@ static LmBuildOptions *lm_build_options_new(void) {
 }
 
 static void lm_build_options_delete(LmBuildOptions *options) {
-    free(options);
+    lm_own_delete(options, NULL);
 }
 
 static int lm_build_is_path_separator(char value) {
@@ -438,7 +440,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/vcpkgFetch.lm1.c\" -o \"build/lm0/vcpkgFetch.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/vcpkgFetch.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/vcpkgFetch.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
@@ -458,7 +460,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/buildCore.lm1.c\" -o \"build/lm0/buildCore.next.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/buildCore.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/buildCore.next.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     return lm_build_make(make_tool, "link", command);
