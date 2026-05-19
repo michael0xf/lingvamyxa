@@ -37,6 +37,14 @@ typedef struct LmVcpkgOptions {
     int dry_run;
 } LmVcpkgOptions;
 
+static LmVcpkgOptions *lm_vcpkg_options_new(void) {
+    return (LmVcpkgOptions *)calloc(1U, sizeof(LmVcpkgOptions));
+}
+
+static void lm_vcpkg_options_delete(LmVcpkgOptions *options) {
+    free(options);
+}
+
 static int lm_vcpkg_is_path_separator(char value) {
     return value == '/' || value == '\\';
 }
@@ -431,25 +439,36 @@ static int lm_vcpkg_build_command(const LmVcpkgOptions *options, char *command, 
 }
 
 int main(int argc, char **argv) {
-    LmVcpkgOptions options;
+    LmVcpkgOptions *options;
     char command[8192];
     int status;
 
-    status = lm_vcpkg_parse_options(argc, argv, &options);
+    options = lm_vcpkg_options_new();
+    if (options == NULL) {
+        return 1;
+    }
+
+    status = lm_vcpkg_parse_options(argc, argv, options);
     if (status == 2) {
+        lm_vcpkg_options_delete(options);
         return 0;
     }
     if (status != 0) {
+        lm_vcpkg_options_delete(options);
         return 1;
     }
 
     if (lm_vcpkg_enter_project_root(argv[0]) != 0) {
+        lm_vcpkg_options_delete(options);
         return 1;
     }
 
-    if (lm_vcpkg_build_command(&options, command, sizeof(command)) != 0) {
+    if (lm_vcpkg_build_command(options, command, sizeof(command)) != 0) {
+        lm_vcpkg_options_delete(options);
         return 1;
     }
+
+    lm_vcpkg_options_delete(options);
 
     printf("%s\n", command);
     status = system(command);

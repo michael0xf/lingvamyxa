@@ -36,7 +36,7 @@ struct LmP0Document {
 
 typedef struct LmP0PendingDelimiter {
     int active;
-    LmP0StreamEvent event;
+    LmP0StreamEvent *event;
 } LmP0PendingDelimiter;
 
 typedef struct LmP0IndentStack {
@@ -303,6 +303,33 @@ static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stac
     return lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U);
 }
 
+static LmP0IndentStack *lm_p0_indent_stack_new_empty(void) {
+    return (LmP0IndentStack *)calloc(1U, sizeof(LmP0IndentStack));
+}
+
+static LmP0IndentStack *lm_p0_indent_stack_new(LmP0Document *document) {
+    LmP0IndentStack *stack;
+
+    stack = lm_p0_indent_stack_new_empty();
+    if (stack == NULL) {
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating indentation stack");
+        return NULL;
+    }
+    if (!lm_p0_indent_stack_init(document, stack)) {
+        lm_p0_indent_stack_free(stack);
+        free(stack);
+        return NULL;
+    }
+    return stack;
+}
+
+static void lm_p0_indent_stack_delete(LmP0IndentStack *stack) {
+    if (stack != NULL) {
+        lm_p0_indent_stack_free(stack);
+        free(stack);
+    }
+}
+
 static int lm_p0_indent_stack_copy(
     LmP0Document *document,
     LmP0IndentStack *target,
@@ -327,6 +354,26 @@ static int lm_p0_indent_stack_copy(
     target->count = source->count;
     target->capacity = capacity;
     return 1;
+}
+
+static LmP0IndentStack *lm_p0_indent_stack_clone(
+    LmP0Document *document,
+    const LmP0IndentStack *source,
+    size_t line,
+    size_t column
+) {
+    LmP0IndentStack *target;
+
+    target = lm_p0_indent_stack_new_empty();
+    if (target == NULL) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
+        return NULL;
+    }
+    if (!lm_p0_indent_stack_copy(document, target, source, line, column)) {
+        lm_p0_indent_stack_delete(target);
+        return NULL;
+    }
+    return target;
 }
 
 static size_t lm_p0_indent_tab_column(size_t column) {
@@ -1907,13 +1954,17 @@ static int lm_p0_parse_fields_until(
     size_t initial_source_level,
     size_t *index
 ) {
-    LmP0IndentStack indent_stack;
+    LmP0IndentStack *indent_stack;
     int status;
 
-    memset(&indent_stack, 0, sizeof(indent_stack));
+    indent_stack = lm_p0_indent_stack_new_empty();
+    if (indent_stack == NULL) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack");
+        return 0;
+    }
     status = lm_p0_parse_fields_until_with_layout(
         document,
-        &indent_stack,
+        indent_stack,
         structure,
         text,
         length,
@@ -1926,7 +1977,7 @@ static int lm_p0_parse_fields_until(
         initial_source_level,
         index
     );
-    lm_p0_indent_stack_free(&indent_stack);
+    lm_p0_indent_stack_delete(indent_stack);
     return status;
 }
 
@@ -2136,6 +2187,89 @@ static void lm_p0_stack_free(LmP0Stack *stack) {
     stack->owners = NULL;
     stack->hard = NULL;
     stack->capacity = 0U;
+}
+
+static LmP0Stack *lm_p0_stack_new(void) {
+    return (LmP0Stack *)calloc(1U, sizeof(LmP0Stack));
+}
+
+static void lm_p0_stack_delete(LmP0Stack *stack) {
+    if (stack != NULL) {
+        lm_p0_stack_free(stack);
+        free(stack);
+    }
+}
+
+static LmP0PendingDelimiter *lm_p0_pending_delimiter_new(void) {
+    return (LmP0PendingDelimiter *)calloc(1U, sizeof(LmP0PendingDelimiter));
+}
+
+static LmP0StreamEvent *lm_p0_stream_event_new_copy(const LmP0StreamEvent *event) {
+    LmP0StreamEvent *copy;
+
+    if (event == NULL) {
+        return NULL;
+    }
+    copy = (LmP0StreamEvent *)calloc(1U, sizeof(*copy));
+    if (copy != NULL) {
+        *copy = *event;
+    }
+    return copy;
+}
+
+static void lm_p0_stream_event_delete(LmP0StreamEvent *event) {
+    free(event);
+}
+
+static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter *pending) {
+    if (pending != NULL) {
+        lm_p0_stream_event_delete(pending->event);
+        pending->event = NULL;
+        pending->active = 0;
+    }
+}
+
+static int lm_p0_pending_delimiter_set(
+    LmP0Document *document,
+    LmP0PendingDelimiter *pending,
+    const LmP0StreamEvent *event
+) {
+    if (pending == NULL) {
+        return 0;
+    }
+
+    lm_p0_pending_delimiter_clear(pending);
+    pending->event = lm_p0_stream_event_new_copy(event);
+    if (pending->event == NULL) {
+        lm_p0_set_diagnostic(document, 1, event != NULL ? event->line : 0U, event != NULL ? event->column : 0U, "out of memory while storing pending delimiter");
+        return 0;
+    }
+    pending->active = 1;
+    return 1;
+}
+
+static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter *pending) {
+    if (pending != NULL) {
+        lm_p0_pending_delimiter_clear(pending);
+        free(pending);
+    }
+}
+
+static LmP0DisabledState *lm_p0_disabled_state_new(size_t base_level) {
+    LmP0DisabledState *state;
+
+    state = (LmP0DisabledState *)calloc(1U, sizeof(*state));
+    if (state != NULL) {
+        state->base_level = base_level;
+        state->top_level = base_level;
+        state->pending_item = 1;
+        state->pending_level = base_level;
+    }
+    return state;
+}
+
+static void lm_p0_disabled_state_delete(LmP0DisabledState *state) {
+    free(state);
 }
 
 static int lm_p0_node_keeps_source_child_level(LmP0Node *node) {
@@ -2414,11 +2548,11 @@ static int lm_p0_stream_resolve_pending_delimiter(
     size_t top_level;
     LmP0Structure *parent;
 
-    if (!pending->active) {
+    if (!pending->active || pending->event == NULL) {
         return 1;
     }
 
-    event = &pending->event;
+    event = pending->event;
     if (!lm_p0_stack_ensure(document, stack, event->level + 1U)) {
         return 0;
     }
@@ -2466,7 +2600,7 @@ static int lm_p0_stream_resolve_pending_delimiter(
         lm_p0_stack_truncate_deeper(stack, event->level);
     }
 
-    pending->active = 0;
+    lm_p0_pending_delimiter_clear(pending);
     return 1;
 }
 
@@ -2664,9 +2798,7 @@ static int lm_p0_stream_apply_event(
         if (!lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event->level)) {
             return 0;
         }
-        pending->active = 1;
-        pending->event = *event;
-        return 1;
+        return lm_p0_pending_delimiter_set(document, pending, event);
     }
 
     if (!lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event->level)) {
@@ -2674,9 +2806,10 @@ static int lm_p0_stream_apply_event(
     }
     if (event->kind == LM_P0_STREAM_EVENT_ITEM &&
         lm_p0_dash_fence_status_after_comment_trim(event->text, event->text_length, NULL) == LM_P0_DASH_FENCE_VALID) {
-        pending->active = 1;
-        pending->event = *event;
-        pending->event.kind = LM_P0_STREAM_EVENT_DELIM;
+        if (!lm_p0_pending_delimiter_set(document, pending, event)) {
+            return 0;
+        }
+        pending->event->kind = LM_P0_STREAM_EVENT_DELIM;
         return 1;
     }
     return lm_p0_stream_apply_item_event(document, stack, event);
@@ -2688,8 +2821,8 @@ static size_t lm_p0_stream_block_string_level(
 ) {
     size_t level;
 
-    if (pending->active) {
-        return pending->event.level + 1U;
+    if (pending->active && pending->event != NULL) {
+        return pending->event->level + 1U;
     }
 
     level = lm_p0_stack_top_level(stack);
@@ -3023,8 +3156,8 @@ static int lm_p0_validate_disabled_block(
     size_t *out_offset,
     size_t *out_line
 ) {
-    LmP0IndentStack local_indent;
-    LmP0DisabledState state;
+    LmP0IndentStack *local_indent;
+    LmP0DisabledState *state;
     size_t offset;
     size_t line;
     int status;
@@ -3032,15 +3165,17 @@ static int lm_p0_validate_disabled_block(
     if (!lm_p0_validate_disabled_item_text(document, header_text, header_length, header_line, header_column)) {
         return 0;
     }
-    if (!lm_p0_indent_stack_copy(document, &local_indent, indent_stack, header_line, header_column)) {
+    local_indent = lm_p0_indent_stack_clone(document, indent_stack, header_line, header_column);
+    if (local_indent == NULL) {
         return 0;
     }
 
-    memset(&state, 0, sizeof(state));
-    state.base_level = base_level;
-    state.top_level = base_level;
-    state.pending_item = 1;
-    state.pending_level = base_level;
+    state = lm_p0_disabled_state_new(base_level);
+    if (state == NULL) {
+        lm_p0_set_diagnostic(document, 1, header_line, header_column, "out of memory while creating disabled block state");
+        lm_p0_indent_stack_delete(local_indent);
+        return 0;
+    }
 
     offset = first_next_offset;
     line = first_next_line;
@@ -3056,12 +3191,12 @@ static int lm_p0_validate_disabled_block(
 
         event_offset = offset;
         event_line = line;
-        if (!lm_p0_disabled_scan_next_event(document, &local_indent, &offset, &line, &event, &has_event)) {
+        if (!lm_p0_disabled_scan_next_event(document, local_indent, &offset, &line, &event, &has_event)) {
             status = 0;
             break;
         }
         if (!has_event) {
-            if (state.body_started && state.top_level > state.base_level) {
+            if (state->body_started && state->top_level > state->base_level) {
                 lm_p0_set_diagnostic(document, 22, header_line, header_column, "unterminated disabled block");
                 status = 0;
             }
@@ -3070,7 +3205,7 @@ static int lm_p0_validate_disabled_block(
 
         if (!lm_p0_disabled_state_accept_event(
                 document,
-                &state,
+                state,
                 &event,
                 &done_after_event,
                 &done_before_event
@@ -3088,7 +3223,8 @@ static int lm_p0_validate_disabled_block(
         }
     }
 
-    lm_p0_indent_stack_free(&local_indent);
+    lm_p0_disabled_state_delete(state);
+    lm_p0_indent_stack_delete(local_indent);
     *out_offset = offset;
     *out_line = line;
     return status && document->diagnostic.code == 0;
@@ -3099,9 +3235,9 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     size_t length;
     size_t offset;
     size_t line;
-    LmP0IndentStack indent_stack;
-    LmP0Stack stack;
-    LmP0PendingDelimiter pending;
+    LmP0IndentStack *indent_stack;
+    LmP0Stack *stack;
+    LmP0PendingDelimiter *pending;
     int status;
     int has_last_physical_level;
     size_t last_physical_level;
@@ -3113,23 +3249,32 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     status = 1;
     has_last_physical_level = 0;
     last_physical_level = 0U;
-    memset(&indent_stack, 0, sizeof(indent_stack));
-    memset(&stack, 0, sizeof(stack));
-    memset(&pending, 0, sizeof(pending));
+    indent_stack = NULL;
+    stack = NULL;
+    pending = NULL;
 
     document->root = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
     if (document->root == NULL) {
         return 0;
     }
 
-    if (!lm_p0_indent_stack_init(document, &indent_stack) ||
-        !lm_p0_stack_ensure(document, &stack, 0U)) {
-        lm_p0_indent_stack_free(&indent_stack);
-        lm_p0_stack_free(&stack);
+    indent_stack = lm_p0_indent_stack_new(document);
+    stack = lm_p0_stack_new();
+    pending = lm_p0_pending_delimiter_new();
+    if (indent_stack == NULL ||
+        stack == NULL ||
+        pending == NULL ||
+        !lm_p0_stack_ensure(document, stack, 0U)) {
+        if (pending == NULL) {
+            lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating pending delimiter");
+        }
+        lm_p0_indent_stack_delete(indent_stack);
+        lm_p0_stack_delete(stack);
+        lm_p0_pending_delimiter_delete(pending);
         return 0;
     }
-    stack.parents[0] = &document->root->as.structure;
-    stack.owners[0] = document->root;
+    stack->parents[0] = &document->root->as.structure;
+    stack->owners[0] = document->root;
 
     while (offset <= length) {
         size_t line_start;
@@ -3170,8 +3315,8 @@ static int lm_p0_parse_stream(LmP0Document *document) {
                 &offset,
                 &line
             )) {
-            event.level = lm_p0_stream_block_string_level(&stack, &pending);
-            if (!lm_p0_stream_apply_event(document, &stack, &pending, &event)) {
+            event.level = lm_p0_stream_block_string_level(stack, pending);
+            if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
                 status = 0;
                 break;
             }
@@ -3233,7 +3378,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
 
             if (!lm_p0_indent_level_from_column(
                     document,
-                    &indent_stack,
+                    indent_stack,
                     indent_column,
                     line,
                     (size_t)(text - (source + line_start)) + 1U,
@@ -3297,7 +3442,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             lm_p0_advance_layout_line(source, length, line_start, line_end, &next_offset, &next_line);
             if (!lm_p0_validate_disabled_block(
                     document,
-                    &indent_stack,
+                    indent_stack,
                     next_offset,
                     next_line,
                     level,
@@ -3322,7 +3467,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             event.column = header_column;
             event.offset = (size_t)(text - source);
 
-            if (!lm_p0_stream_apply_event(document, &stack, &pending, &event)) {
+            if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
                 status = 0;
                 break;
             }
@@ -3363,7 +3508,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             }
         }
 
-        if (!lm_p0_stream_apply_event(document, &stack, &pending, &event)) {
+        if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
             status = 0;
             break;
         }
@@ -3376,12 +3521,13 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         lm_p0_advance_layout_line(source, length, line_start, line_end, &offset, &line);
     }
 
-    if (status && !lm_p0_stream_resolve_pending_delimiter(document, &stack, &pending, (size_t)-1)) {
+    if (status && !lm_p0_stream_resolve_pending_delimiter(document, stack, pending, (size_t)-1)) {
         status = 0;
     }
 
-    lm_p0_indent_stack_free(&indent_stack);
-    lm_p0_stack_free(&stack);
+    lm_p0_indent_stack_delete(indent_stack);
+    lm_p0_stack_delete(stack);
+    lm_p0_pending_delimiter_delete(pending);
     return status && document->diagnostic.code == 0;
 }
 
@@ -3849,21 +3995,53 @@ static void lm_p0_dump_structure(LmP0Dump *dump, const LmP0Structure *structure,
     }
 }
 
-char *lm_p0_dump_alloc(const LmP0Document *document) {
-    LmP0Dump dump;
+static LmP0Dump *lm_p0_dump_new(void) {
+    return (LmP0Dump *)calloc(1U, sizeof(LmP0Dump));
+}
 
-    memset(&dump, 0, sizeof(dump));
-    if (document == NULL || document->root == NULL) {
-        lm_p0_dump_append_cstr(&dump, "");
-        return dump.data;
-    }
+static char *lm_p0_dump_take_data(LmP0Dump *dump) {
+    char *data;
 
-    lm_p0_dump_node(&dump, document->root, 0U);
-    if (dump.failed) {
-        free(dump.data);
+    if (dump == NULL) {
         return NULL;
     }
-    return dump.data;
+    data = dump->data;
+    dump->data = NULL;
+    dump->length = 0U;
+    dump->capacity = 0U;
+    return data;
+}
+
+static void lm_p0_dump_delete(LmP0Dump *dump) {
+    if (dump != NULL) {
+        free(dump->data);
+        free(dump);
+    }
+}
+
+char *lm_p0_dump_alloc(const LmP0Document *document) {
+    LmP0Dump *dump;
+    char *data;
+
+    dump = lm_p0_dump_new();
+    if (dump == NULL) {
+        return NULL;
+    }
+    if (document == NULL || document->root == NULL) {
+        lm_p0_dump_append_cstr(dump, "");
+        data = lm_p0_dump_take_data(dump);
+        lm_p0_dump_delete(dump);
+        return data;
+    }
+
+    lm_p0_dump_node(dump, document->root, 0U);
+    if (dump->failed) {
+        lm_p0_dump_delete(dump);
+        return NULL;
+    }
+    data = lm_p0_dump_take_data(dump);
+    lm_p0_dump_delete(dump);
+    return data;
 }
 
 ===

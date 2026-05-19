@@ -20,6 +20,14 @@ typedef struct LmBuildOptions {
     int full_build;
 } LmBuildOptions;
 
+static LmBuildOptions *lm_build_options_new(void) {
+    return (LmBuildOptions *)calloc(1U, sizeof(LmBuildOptions));
+}
+
+static void lm_build_options_delete(LmBuildOptions *options) {
+    free(options);
+}
+
 static int lm_build_is_path_separator(char value) {
     return value == '/' || value == '\\';
 }
@@ -673,18 +681,27 @@ int main(int argc, char **argv) {
     const char *trusted_make;
     char trusted_make_buffer[128];
     char built_trans_buffer[128];
-    LmBuildOptions options;
+    LmBuildOptions *options;
     int parse_status;
+    int result;
 
-    parse_status = lm_build_parse_options(argc, argv, &options);
+    options = lm_build_options_new();
+    if (options == NULL) {
+        return 1;
+    }
+
+    parse_status = lm_build_parse_options(argc, argv, options);
     if (parse_status == 2) {
+        lm_build_options_delete(options);
         return 0;
     }
     if (parse_status != 0) {
+        lm_build_options_delete(options);
         return 1;
     }
 
     if (lm_build_enter_project_root(argv[0]) != 0) {
+        lm_build_options_delete(options);
         return 1;
     }
 
@@ -707,44 +724,50 @@ int main(int argc, char **argv) {
 
     trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
 
+    result = 1;
     if (lm_build_make(trusted_make, "mkdir", "\"build/lm1\" \"build/obj\" \"build/lm0\"") != 0) {
-        return 1;
+        goto done;
     }
 
     if (lm_build_generate_all(built_trans_buffer) != 0) {
-        return 1;
+        goto done;
     }
 
     if (lm_build_parser_library(trusted_make) != 0) {
-        return 1;
+        goto done;
     }
 
     if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a") != 0) {
-        return 1;
+        goto done;
     }
 
     if (lm_build_generate_all(built_trans_buffer) != 0) {
-        return 1;
+        goto done;
     }
 
     if (lm_build_parser_library(trusted_make) != 0) {
-        return 1;
+        goto done;
     }
 
     if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a") != 0) {
-        return 1;
+        goto done;
     }
 
     if (lm_build_compile_generated_tools(trusted_make) != 0) {
-        return 1;
+        goto done;
     }
 
-    if (options.full_build) {
+    if (options->full_build) {
         if (lm_build_full_project() != 0) {
-            return 1;
+            goto done;
         }
-        return lm_build_defer_finalize();
+        result = lm_build_defer_finalize();
+        goto done;
     }
 
-    return lm_build_defer_finalize();
+    result = lm_build_defer_finalize();
+
+done:
+    lm_build_options_delete(options);
+    return result;
 }

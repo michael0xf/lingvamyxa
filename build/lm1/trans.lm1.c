@@ -13,12 +13,12 @@ typedef enum LmTransSymbolKind {
 } LmTransSymbolKind;
 
 typedef struct LmTransSymbol {
-    LmP0Text name;
+    LmP0Text *name;
     LmTransSymbolKind kind;
     unsigned depth;
     int has_c_name;
-    LmP0Text c_name;
-    LmP0Text *param_names;
+    LmP0Text *c_name;
+    LmP0Text **param_names;
     size_t param_count;
     int has_signature;
 } LmTransSymbol;
@@ -51,7 +51,7 @@ typedef struct LmTransNamespace {
     unsigned next_cleanup_id;
     const LmP0Node *return_type_node;
     int return_type_is_struct;
-    LmP0Text return_type_name;
+    LmP0Text *return_type_name;
     unsigned next_return_id;
 } LmTransNamespace;
 
@@ -93,6 +93,51 @@ static int lm_trans_text_all_char(LmP0Text text, char ch) {
     }
 
     return 1;
+}
+
+static LmP0Text *lm_trans_text_ref_new(LmP0Text text) {
+    LmP0Text *copy;
+
+    copy = (LmP0Text *)calloc(1U, sizeof(*copy));
+    if (copy != NULL) {
+        *copy = text;
+    }
+    return copy;
+}
+
+static void lm_trans_text_ref_destroy(LmP0Text **text) {
+    if (text != NULL && *text != NULL) {
+        free(*text);
+        *text = NULL;
+    }
+}
+
+static int lm_trans_text_ref_set(LmP0Text **target, LmP0Text text) {
+    LmP0Text *copy;
+
+    if (target == NULL) {
+        return 1;
+    }
+
+    copy = lm_trans_text_ref_new(text);
+    if (copy == NULL) {
+        return 1;
+    }
+
+    lm_trans_text_ref_destroy(target);
+    *target = copy;
+    return 0;
+}
+
+static void lm_trans_text_ref_array_destroy(LmP0Text **items, size_t count) {
+    size_t i;
+
+    if (items != NULL) {
+        for (i = 0U; i < count; ++i) {
+            lm_trans_text_ref_destroy(&items[i]);
+        }
+        free(items);
+    }
 }
 
 static int lm_trans_text_is_operator_atom(LmP0Text text) {
@@ -193,12 +238,69 @@ static const char *lm_trans_symbol_kind_name(LmTransSymbolKind kind) {
 
 static void lm_trans_symbol_destroy(LmTransSymbol *symbol) {
     if (symbol != NULL) {
-        free(symbol->param_names);
+        lm_trans_text_ref_destroy(&symbol->name);
+        lm_trans_text_ref_destroy(&symbol->c_name);
+        lm_trans_text_ref_array_destroy(symbol->param_names, symbol->param_count);
         symbol->param_names = NULL;
         symbol->param_count = 0U;
         symbol->has_signature = 0;
         free(symbol);
     }
+}
+
+static LmTransSymbol *lm_trans_symbol_new(
+    LmP0Text name,
+    LmTransSymbolKind kind,
+    unsigned depth
+) {
+    LmTransSymbol *symbol;
+
+    symbol = (LmTransSymbol *)calloc(1U, sizeof(*symbol));
+    if (symbol == NULL) {
+        return NULL;
+    }
+
+    symbol->name = lm_trans_text_ref_new(name);
+    if (symbol->name == NULL) {
+        lm_trans_symbol_destroy(symbol);
+        return NULL;
+    }
+
+    symbol->kind = kind;
+    symbol->depth = depth;
+    return symbol;
+}
+
+static LmTransCleanup *lm_trans_cleanup_new(unsigned id) {
+    LmTransCleanup *cleanup;
+
+    cleanup = (LmTransCleanup *)calloc(1U, sizeof(*cleanup));
+    if (cleanup != NULL) {
+        cleanup->id = id;
+    }
+    return cleanup;
+}
+
+static void lm_trans_cleanup_destroy(LmTransCleanup *cleanup) {
+    free(cleanup);
+}
+
+static LmTransLoop *lm_trans_loop_new(size_t cleanup_base) {
+    LmTransLoop *loop;
+
+    loop = (LmTransLoop *)calloc(1U, sizeof(*loop));
+    if (loop != NULL) {
+        loop->cleanup_base = cleanup_base;
+    }
+    return loop;
+}
+
+static void lm_trans_loop_destroy(LmTransLoop *loop) {
+    free(loop);
+}
+
+static LmTransNamespace *lm_trans_namespace_new(void) {
+    return (LmTransNamespace *)calloc(1U, sizeof(LmTransNamespace));
 }
 
 static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
@@ -210,11 +312,11 @@ static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
             namespace_->items[i] = NULL;
         }
         for (i = 0U; i < namespace_->cleanup_count; ++i) {
-            free(namespace_->cleanups[i]);
+            lm_trans_cleanup_destroy(namespace_->cleanups[i]);
             namespace_->cleanups[i] = NULL;
         }
         for (i = 0U; i < namespace_->loop_count; ++i) {
-            free(namespace_->loops[i]);
+            lm_trans_loop_destroy(namespace_->loops[i]);
             namespace_->loops[i] = NULL;
         }
         free(namespace_->items);
@@ -233,9 +335,15 @@ static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
         namespace_->next_cleanup_id = 0U;
         namespace_->return_type_node = NULL;
         namespace_->return_type_is_struct = 0;
-        namespace_->return_type_name.data = NULL;
-        namespace_->return_type_name.length = 0U;
+        lm_trans_text_ref_destroy(&namespace_->return_type_name);
         namespace_->next_return_id = 0U;
+    }
+}
+
+static void lm_trans_namespace_delete(LmTransNamespace *namespace_) {
+    if (namespace_ != NULL) {
+        lm_trans_namespace_destroy(namespace_);
+        free(namespace_);
     }
 }
 
@@ -284,11 +392,10 @@ static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
         namespace_->cleanup_capacity = capacity;
     }
 
-    cleanup = (LmTransCleanup *)calloc(1U, sizeof(*cleanup));
+    cleanup = lm_trans_cleanup_new(id);
     if (cleanup == NULL) {
         return 1;
     }
-    cleanup->id = id;
     namespace_->cleanups[namespace_->cleanup_count] = cleanup;
     ++namespace_->cleanup_count;
     return 0;
@@ -297,7 +404,7 @@ static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
 static void lm_trans_cleanup_pop(LmTransNamespace *namespace_) {
     if (namespace_ != NULL && namespace_->cleanup_count > 0U) {
         --namespace_->cleanup_count;
-        free(namespace_->cleanups[namespace_->cleanup_count]);
+        lm_trans_cleanup_destroy(namespace_->cleanups[namespace_->cleanup_count]);
         namespace_->cleanups[namespace_->cleanup_count] = NULL;
     }
 }
@@ -321,11 +428,10 @@ static int lm_trans_loop_push(LmTransNamespace *namespace_) {
         namespace_->loop_capacity = capacity;
     }
 
-    loop = (LmTransLoop *)calloc(1U, sizeof(*loop));
+    loop = lm_trans_loop_new(namespace_->cleanup_count);
     if (loop == NULL) {
         return 1;
     }
-    loop->cleanup_base = namespace_->cleanup_count;
     namespace_->loops[namespace_->loop_count] = loop;
     ++namespace_->loop_count;
     return 0;
@@ -334,7 +440,7 @@ static int lm_trans_loop_push(LmTransNamespace *namespace_) {
 static void lm_trans_loop_pop(LmTransNamespace *namespace_) {
     if (namespace_ != NULL && namespace_->loop_count > 0U) {
         --namespace_->loop_count;
-        free(namespace_->loops[namespace_->loop_count]);
+        lm_trans_loop_destroy(namespace_->loops[namespace_->loop_count]);
         namespace_->loops[namespace_->loop_count] = NULL;
     }
 }
@@ -355,8 +461,8 @@ static int lm_trans_emit_return_name(FILE *file, unsigned id) {
     return fprintf(file, "lm_return_%u", id) < 0 ? 1 : 0;
 }
 
-static int lm_trans_symbol_name_same(LmP0Text left, LmP0Text right) {
-    return left.length == right.length && memcmp(left.data, right.data, left.length) == 0;
+static int lm_trans_symbol_name_same(const LmP0Text *left, LmP0Text right) {
+    return left != NULL && lm_trans_text_same(*left, right);
 }
 
 static const LmTransSymbol *lm_trans_namespace_find(
@@ -485,19 +591,10 @@ static int lm_trans_namespace_declare(
         namespace_->capacity = capacity;
     }
 
-    symbol = (LmTransSymbol *)calloc(1U, sizeof(*symbol));
+    symbol = lm_trans_symbol_new(name, kind, namespace_->depth);
     if (symbol == NULL) {
         return 1;
     }
-    symbol->name = name;
-    symbol->kind = kind;
-    symbol->depth = namespace_->depth;
-    symbol->has_c_name = 0;
-    symbol->c_name.data = NULL;
-    symbol->c_name.length = 0U;
-    symbol->param_names = NULL;
-    symbol->param_count = 0U;
-    symbol->has_signature = 0;
     namespace_->items[namespace_->count] = symbol;
     ++namespace_->count;
     return 0;
@@ -551,8 +648,10 @@ static int lm_trans_namespace_bind_c_reference(
         return 1;
     }
 
+    if (lm_trans_text_ref_set(&symbol->c_name, c_name) != 0) {
+        return 1;
+    }
     symbol->has_c_name = 1;
-    symbol->c_name = c_name;
     return 0;
 }
 
@@ -733,7 +832,7 @@ static int lm_trans_emit_expr_atom(
 
     symbol = lm_trans_namespace_find(namespace_, atom);
     if (symbol != NULL && symbol->has_c_name) {
-        return lm_trans_emit_name(file, symbol->c_name);
+        return lm_trans_emit_name(file, *symbol->c_name);
     }
 
     return lm_trans_emit_name(file, atom);
@@ -880,7 +979,7 @@ static int lm_trans_signature_param_index(
     }
 
     for (i = 0U; i < callee->param_count; ++i) {
-        if (lm_trans_text_same(callee->param_names[i], name)) {
+        if (callee->param_names[i] != NULL && lm_trans_text_same(*callee->param_names[i], name)) {
             *out_index = i;
             return 1;
         }
@@ -1075,7 +1174,7 @@ static int lm_trans_emit_expr_frame(
             return 1;
         }
         if (symbol->has_c_name) {
-            callee = symbol->c_name;
+            callee = *symbol->c_name;
         } else if (symbol->kind != LM_TRANS_SYMBOL_FUNCTION) {
             fprintf(
                 stderr,
@@ -1327,7 +1426,10 @@ static int lm_trans_emit_function_return_struct_type_name(FILE *file, LmP0Text f
 
 static int lm_trans_emit_current_return_type(FILE *file, const LmTransNamespace *namespace_) {
     if (namespace_ != NULL && namespace_->return_type_is_struct) {
-        return lm_trans_emit_function_return_struct_type_name(file, namespace_->return_type_name);
+        if (namespace_->return_type_name == NULL) {
+            return 1;
+        }
+        return lm_trans_emit_function_return_struct_type_name(file, *namespace_->return_type_name);
     }
     return lm_trans_emit_type_node(file, namespace_ != NULL ? namespace_->return_type_node : NULL);
 }
@@ -2230,7 +2332,7 @@ static int lm_trans_emit_call_statement(
             return 1;
         }
         if (symbol->has_c_name) {
-            callee = symbol->c_name;
+            callee = *symbol->c_name;
         } else if (
             symbol->kind != LM_TRANS_SYMBOL_FUNCTION &&
             symbol->kind != LM_TRANS_SYMBOL_PROCEDURE
@@ -2920,7 +3022,7 @@ static int lm_trans_namespace_set_signature(
     const LmP0Field *params_field;
     const LmP0Field *field;
     LmP0Text param_name;
-    LmP0Text *param_names;
+    LmP0Text **param_names;
     size_t count;
     size_t index;
     size_t i;
@@ -2953,7 +3055,7 @@ static int lm_trans_namespace_set_signature(
 
     param_names = NULL;
     if (count > 0U) {
-        param_names = (LmP0Text *)calloc(count, sizeof(*param_names));
+        param_names = (LmP0Text **)calloc(count, sizeof(*param_names));
         if (param_names == NULL) {
             return 1;
         }
@@ -2964,22 +3066,26 @@ static int lm_trans_namespace_set_signature(
     while (field != NULL) {
         if (!lm_trans_formal_param_name(field->value, &param_name)) {
             fprintf(stderr, "trans L2 error: function parameter must expose a binding name\n");
-            free(param_names);
+            lm_trans_text_ref_array_destroy(param_names, count);
             return 1;
         }
         for (i = 0U; i < index; ++i) {
-            if (lm_trans_text_same(param_names[i], param_name)) {
+            if (param_names[i] != NULL && lm_trans_text_same(*param_names[i], param_name)) {
                 fprintf(stderr, "trans L2 error: duplicate function parameter name\n");
-                free(param_names);
+                lm_trans_text_ref_array_destroy(param_names, count);
                 return 1;
             }
         }
-        param_names[index] = param_name;
+        param_names[index] = lm_trans_text_ref_new(param_name);
+        if (param_names[index] == NULL) {
+            lm_trans_text_ref_array_destroy(param_names, count);
+            return 1;
+        }
         ++index;
         field = field->next;
     }
 
-    free(symbol->param_names);
+    lm_trans_text_ref_array_destroy(symbol->param_names, symbol->param_count);
     symbol->param_names = param_names;
     symbol->param_count = count;
     symbol->has_signature = 1;
@@ -3092,12 +3198,14 @@ static int lm_trans_emit_function(
     const LmP0Field *body_start;
     const LmP0Node *previous_return_type_node;
     int previous_return_type_is_struct;
-    LmP0Text previous_return_type_name;
+    LmP0Text *previous_return_type_name;
+    LmP0Text *current_return_type_name;
     unsigned previous_next_return_id;
     size_t previous_cleanup_count;
     size_t previous_loop_count;
     int is_struct_return;
     int status;
+    current_return_type_name = NULL;
 
     name_field = lm_trans_nth_field(&frame->body, 0U);
     params_field = lm_trans_nth_field(&frame->body, 1U);
@@ -3196,6 +3304,14 @@ static int lm_trans_emit_function(
         return 1;
     }
 
+    if (is_struct_return) {
+        current_return_type_name = lm_trans_text_ref_new(name_field->value->as.atom);
+        if (current_return_type_name == NULL) {
+            lm_trans_namespace_leave_scope(namespace_);
+            return 1;
+        }
+    }
+
     previous_return_type_node = namespace_->return_type_node;
     previous_return_type_is_struct = namespace_->return_type_is_struct;
     previous_return_type_name = namespace_->return_type_name;
@@ -3204,7 +3320,7 @@ static int lm_trans_emit_function(
     previous_loop_count = namespace_->loop_count;
     namespace_->return_type_node = is_sub ? NULL : return_field->value;
     namespace_->return_type_is_struct = is_struct_return;
-    namespace_->return_type_name = is_struct_return ? name_field->value->as.atom : previous_return_type_name;
+    namespace_->return_type_name = is_struct_return ? current_return_type_name : previous_return_type_name;
     namespace_->next_return_id = 0U;
     namespace_->cleanup_count = 0U;
     namespace_->loop_count = 0U;
@@ -3226,6 +3342,7 @@ static int lm_trans_emit_function(
     namespace_->next_return_id = previous_next_return_id;
     namespace_->cleanup_count = previous_cleanup_count;
     namespace_->loop_count = previous_loop_count;
+    lm_trans_text_ref_destroy(&current_return_type_name);
     lm_trans_namespace_leave_scope(namespace_);
     return status;
 }
@@ -3237,7 +3354,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2);
 static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransNamespace namespace_;
+    LmTransNamespace *namespace_;
     LmP0Text name;
     LmP0Text c_name;
     const LmP0Frame *function_frame;
@@ -3246,7 +3363,10 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     int is_external;
     int status;
 
-    memset(&namespace_, 0, sizeof(namespace_));
+    namespace_ = lm_trans_namespace_new();
+    if (namespace_ == NULL) {
+        return 1;
+    }
 
     field = l2->body.first_field;
     while (field != NULL) {
@@ -3258,7 +3378,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
 
         if (node->kind != LM_P0_NODE_FRAME) {
             fprintf(stderr, "trans L2 error: top-level L2 field must be consumed by an L2 receiver\n");
-            lm_trans_namespace_destroy(&namespace_);
+            lm_trans_namespace_delete(namespace_);
             return 1;
         }
 
@@ -3270,22 +3390,22 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 &is_external
             );
             if (function_info < 0) {
-                lm_trans_namespace_destroy(&namespace_);
+                lm_trans_namespace_delete(namespace_);
                 return 1;
             }
 
             if (function_info > 0) {
                 if (!lm_trans_function_decl_name(function_frame, &name)) {
                     fprintf(stderr, "trans L2 error: fn/sub expects name and parameters\n");
-                    lm_trans_namespace_destroy(&namespace_);
+                    lm_trans_namespace_delete(namespace_);
                     return 1;
                 }
-                if (lm_trans_namespace_declare(&namespace_, name, kind) != 0) {
-                    lm_trans_namespace_destroy(&namespace_);
+                if (lm_trans_namespace_declare(namespace_, name, kind) != 0) {
+                    lm_trans_namespace_delete(namespace_);
                     return 1;
                 }
-                if (lm_trans_namespace_set_signature(&namespace_, name, function_frame) != 0) {
-                    lm_trans_namespace_destroy(&namespace_);
+                if (lm_trans_namespace_set_signature(namespace_, name, function_frame) != 0) {
+                    lm_trans_namespace_delete(namespace_);
                     return 1;
                 }
             } else if (
@@ -3293,15 +3413,15 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 !lm_trans_is_reserved_head_name(node->as.frame.head) &&
                 lm_trans_frame_single_c_reference_body(&node->as.frame, &c_name)
             ) {
-                if (lm_trans_namespace_bind_c_reference(&namespace_, node->as.frame.head, c_name) != 0) {
-                    lm_trans_namespace_destroy(&namespace_);
+                if (lm_trans_namespace_bind_c_reference(namespace_, node->as.frame.head, c_name) != 0) {
+                    lm_trans_namespace_delete(namespace_);
                     return 1;
                 }
                 field = field->next;
                 continue;
             } else if (lm_trans_frame_looks_named_structure_declaration(&node->as.frame)) {
-                if (lm_trans_namespace_declare(&namespace_, node->as.frame.head, LM_TRANS_SYMBOL_STRUCTURE) != 0) {
-                    lm_trans_namespace_destroy(&namespace_);
+                if (lm_trans_namespace_declare(namespace_, node->as.frame.head, LM_TRANS_SYMBOL_STRUCTURE) != 0) {
+                    lm_trans_namespace_delete(namespace_);
                     return 1;
                 }
                 field = field->next;
@@ -3311,7 +3431,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 continue;
             } else {
                 fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, L1 frame, named Structure, or namespace binding to c.name\n");
-                lm_trans_namespace_destroy(&namespace_);
+                lm_trans_namespace_delete(namespace_);
                 return 1;
             }
         }
@@ -3335,7 +3455,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 status = lm_trans_emit_named_structure(file, &node->as.frame);
             }
             if (status != 0) {
-                lm_trans_namespace_destroy(&namespace_);
+                lm_trans_namespace_delete(namespace_);
                 return 1;
             }
         }
@@ -3353,7 +3473,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 &is_external
             );
             if (function_info < 0) {
-                lm_trans_namespace_destroy(&namespace_);
+                lm_trans_namespace_delete(namespace_);
                 return 1;
             }
             if (function_info == 0) {
@@ -3367,14 +3487,14 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                     function_frame,
                     kind == LM_TRANS_SYMBOL_PROCEDURE,
                     is_external,
-                    &namespace_
+                    namespace_
                 ) != 0
             ) {
-                lm_trans_namespace_destroy(&namespace_);
+                lm_trans_namespace_delete(namespace_);
                 return 1;
             }
             if (is_external && lm_trans_validate_end_trailer(&node->as.frame) != 0) {
-                lm_trans_namespace_destroy(&namespace_);
+                lm_trans_namespace_delete(namespace_);
                 return 1;
             }
         }
@@ -3382,7 +3502,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     }
 
     status = lm_trans_validate_end_trailer(l2);
-    lm_trans_namespace_destroy(&namespace_);
+    lm_trans_namespace_delete(namespace_);
     return status;
 }
 
