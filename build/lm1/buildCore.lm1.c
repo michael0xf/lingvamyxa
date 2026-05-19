@@ -345,6 +345,9 @@ static int lm_build_trans(const char *trans_tool, const char *source_path, const
 }
 
 static int lm_build_generate_all(const char *trans_tool) {
+    if (lm_build_trans(trans_tool, "lm2/own.lm2", "build/lm1/own.lm1.c") != 0) {
+        return 1;
+    }
     if (lm_build_trans(trans_tool, "lm2/trans.lm2", "build/lm1/trans.lm1.c") != 0) {
         return 1;
     }
@@ -380,14 +383,26 @@ static int lm_build_parser_library(const char *make_tool) {
     return lm_build_make(make_tool, "ranlib", "\"build/lm0/libparser.lm0.a\"");
 }
 
-static int lm_build_compile_trans(const char *make_tool, const char *parser_library) {
+static int lm_build_own_library(const char *make_tool) {
+    if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"build/lm1/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0) {
+        return 1;
+    }
+    remove("build/lm0/libown.lm0.a");
+    if (lm_build_make(make_tool, "ar", "rcs \"build/lm0/libown.lm0.a\" \"build/obj/own.lm1.o\"") != 0) {
+        return 1;
+    }
+    return lm_build_make(make_tool, "ranlib", "\"build/lm0/libown.lm0.a\"");
+}
+
+static int lm_build_compile_trans(const char *make_tool, const char *parser_library, const char *own_library) {
     char command[4096];
 
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" -o \"build/lm0/trans.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\"",
         parser_library,
+        own_library,
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
@@ -737,7 +752,11 @@ int main(int argc, char **argv) {
         goto done;
     }
 
-    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a") != 0) {
+    if (lm_build_own_library(trusted_make) != 0) {
+        goto done;
+    }
+
+    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a", "build/lm0/libown.lm0.a") != 0) {
         goto done;
     }
 
@@ -749,7 +768,11 @@ int main(int argc, char **argv) {
         goto done;
     }
 
-    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a") != 0) {
+    if (lm_build_own_library(trusted_make) != 0) {
+        goto done;
+    }
+
+    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a", "build/lm0/libown.lm0.a") != 0) {
         goto done;
     }
 

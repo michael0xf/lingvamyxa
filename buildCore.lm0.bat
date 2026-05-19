@@ -10,6 +10,7 @@ if not defined LM_AR set "LM_AR=C:\Qt\Tools\mingw1310_64\bin\ar.exe"
 if not defined LM_RANLIB set "LM_RANLIB=C:\Qt\Tools\mingw1310_64\bin\ranlib.exe"
 
 set "PARSER_SOURCE=build\lm1\parser.lm1.c"
+set "OWN_SOURCE=build\lm1\own.lm1.c"
 set "TRANS_SOURCE=build\lm1\trans.lm1.c"
 set "MAKE_SOURCE=build\lm1\make.lm1.c"
 set "FINALIZE_SOURCE=build\lm1\finalize.lm1.c"
@@ -17,6 +18,11 @@ set "BUILD_CORE_SOURCE=build\lm1\buildCore.lm1.c"
 
 if not exist "%PARSER_SOURCE%" (
     echo buildCore.lm0.bat: source file not found: %PARSER_SOURCE% 1>&2
+    exit /b 1
+)
+
+if not exist "%OWN_SOURCE%" (
+    echo buildCore.lm0.bat: source file not found: %OWN_SOURCE% 1>&2
     exit /b 1
 )
 
@@ -71,7 +77,11 @@ if not exist "%LM_RANLIB%" (
 "%LM_AR%" rcs build\lm0\libparser.lm0.a build\obj\parser.lm1.o || exit /b 1
 "%LM_RANLIB%" build\lm0\libparser.lm0.a || exit /b 1
 
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "%TRANS_SOURCE%" build\lm0\libparser.lm0.a -o build\lm0\trans.lm0.exe || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c "%OWN_SOURCE%" -o build\obj\own.lm1.o || exit /b 1
+"%LM_AR%" rcs build\lm0\libown.lm0.a build\obj\own.lm1.o || exit /b 1
+"%LM_RANLIB%" build\lm0\libown.lm0.a || exit /b 1
+
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "%TRANS_SOURCE%" build\lm0\libparser.lm0.a build\lm0\libown.lm0.a -o build\lm0\trans.lm0.exe || exit /b 1
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic "%MAKE_SOURCE%" -o build\lm0\make.lm0.exe || exit /b 1
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic "%FINALIZE_SOURCE%" -o build\lm0\finalize.lm0.exe || exit /b 1
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic "%BUILD_CORE_SOURCE%" -o build\lm0\buildCore.lm0.exe || exit /b 1

@@ -87,6 +87,7 @@ if (LM_THIRD_PARTY_TARGETS)
 endif()
 
 set(LM1_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/lm1")
+set(LM1_GENERATED_OWN_C "${LM1_GENERATED_DIR}/own.lm1.c")
 set(LM1_GENERATED_TRANS_C "${LM1_GENERATED_DIR}/trans.lm1.c")
 set(LM1_GENERATED_PARSER_C "${LM1_GENERATED_DIR}/parser.lm1.c")
 set(LM1_GENERATED_PRINT_TREE_C "${LM1_GENERATED_DIR}/printTree.lm1.c")
@@ -120,6 +121,25 @@ endif()
 # ---- L2 to L1 translator and generated L1 mirror ----
 
 if (BUILD_TRANS_LM0)
+    add_library(own.lm1 STATIC
+        "${LM1_GENERATED_OWN_C}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/lm1/own.lm1.h"
+    )
+
+    set_target_properties(own.lm1 PROPERTIES
+        OUTPUT_NAME "own.lm0"
+    )
+
+    target_include_directories(own.lm1 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
+    )
+
+    if (MSVC)
+        target_compile_options(own.lm1 PRIVATE /W4)
+    else()
+        target_compile_options(own.lm1 PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
     add_executable(trans.lm0
         "${LM1_GENERATED_TRANS_C}"
     )
@@ -130,6 +150,19 @@ if (BUILD_TRANS_LM0)
 
     target_link_libraries(trans.lm0 PRIVATE
         parser.lm1
+        own.lm1
+    )
+
+    add_custom_target(refresh_own_lm1
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/own.lm2"
+            "${LM1_GENERATED_OWN_C}"
+        DEPENDS
+            trans.lm0
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/own.lm2"
+        COMMENT "Refreshing build/lm1/own.lm1.c from lm2/own.lm2"
+        VERBATIM
     )
 
     add_custom_target(refresh_trans_lm1
@@ -210,6 +243,7 @@ if (BUILD_TRANS_LM0)
 
     add_custom_target(lm2_to_lm1
         DEPENDS
+            refresh_own_lm1
             refresh_trans_lm1
             refresh_parser_lm1
             "${LM1_GENERATED_PRINT_TREE_C}"

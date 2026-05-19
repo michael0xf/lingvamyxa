@@ -10,12 +10,13 @@ cd "$project_root"
 : "${LM_RANLIB:=ranlib}"
 
 parser_source="build/lm1/parser.lm1.c"
+own_source="build/lm1/own.lm1.c"
 trans_source="build/lm1/trans.lm1.c"
 make_source="build/lm1/make.lm1.c"
 finalize_source="build/lm1/finalize.lm1.c"
 build_core_source="build/lm1/buildCore.lm1.c"
 
-for source_file in "$parser_source" "$trans_source" "$make_source" "$finalize_source" "$build_core_source"; do
+for source_file in "$parser_source" "$own_source" "$trans_source" "$make_source" "$finalize_source" "$build_core_source"; do
     if [ ! -f "$source_file" ]; then
         echo "buildCore.lm0.sh: source file not found: $source_file" >&2
         exit 1
@@ -53,7 +54,11 @@ fi
 "$LM_AR" rcs build/lm0/libparser.lm0.a build/obj/parser.lm1.o
 "$LM_RANLIB" build/lm0/libparser.lm0.a
 
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "$trans_source" build/lm0/libparser.lm0.a -o build/lm0/trans.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c "$own_source" -o build/obj/own.lm1.o
+"$LM_AR" rcs build/lm0/libown.lm0.a build/obj/own.lm1.o
+"$LM_RANLIB" build/lm0/libown.lm0.a
+
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "$trans_source" build/lm0/libparser.lm0.a build/lm0/libown.lm0.a -o build/lm0/trans.lm0
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$make_source" -o build/lm0/make.lm0
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$finalize_source" -o build/lm0/finalize.lm0
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$build_core_source" -o build/lm0/buildCore.lm0

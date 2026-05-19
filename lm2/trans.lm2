@@ -4,6 +4,7 @@ L1:
 #include <stdlib.h>
 #include <string.h>
 
+#include "own.lm1.h"
 #include "parser.lm1.h"
 
 typedef enum LmTransSymbolKind {
@@ -109,9 +110,13 @@ static LmP0Text *lm_trans_text_ref_new(LmP0Text text) {
 
 static void lm_trans_text_ref_destroy(LmP0Text **text) {
     if (text != NULL && *text != NULL) {
-        free(*text);
+        lm_own_delete(*text, NULL);
         *text = NULL;
     }
+}
+
+static void lm_trans_text_ref_delete_any(void *object) {
+    lm_own_delete(object, NULL);
 }
 
 static int lm_trans_text_ref_set(LmP0Text **target, LmP0Text text) {
@@ -132,14 +137,7 @@ static int lm_trans_text_ref_set(LmP0Text **target, LmP0Text text) {
 }
 
 static void lm_trans_text_ref_array_destroy(LmP0Text **items, size_t count) {
-    size_t i;
-
-    if (items != NULL) {
-        for (i = 0U; i < count; ++i) {
-            lm_trans_text_ref_destroy(&items[i]);
-        }
-        free(items);
-    }
+    lm_own_pointer_array_delete((void **)items, count, lm_trans_text_ref_delete_any);
 }
 
 static int lm_trans_text_is_operator_atom(LmP0Text text) {
@@ -238,7 +236,7 @@ static const char *lm_trans_symbol_kind_name(LmTransSymbolKind kind) {
     }
 }
 
-static void lm_trans_symbol_destroy(LmTransSymbol *symbol) {
+static void lm_trans_symbol_destroy_fields(LmTransSymbol *symbol) {
     if (symbol != NULL) {
         lm_trans_text_ref_destroy(&symbol->name);
         lm_trans_text_ref_destroy(&symbol->c_name);
@@ -246,8 +244,19 @@ static void lm_trans_symbol_destroy(LmTransSymbol *symbol) {
         symbol->param_names = NULL;
         symbol->param_count = 0U;
         symbol->has_signature = 0;
-        free(symbol);
     }
+}
+
+static void lm_trans_symbol_destroy_fields_any(void *object) {
+    lm_trans_symbol_destroy_fields((LmTransSymbol *)object);
+}
+
+static void lm_trans_symbol_destroy(LmTransSymbol *symbol) {
+    lm_own_delete(symbol, lm_trans_symbol_destroy_fields_any);
+}
+
+static void lm_trans_symbol_delete_any(void *object) {
+    lm_trans_symbol_destroy((LmTransSymbol *)object);
 }
 
 static LmTransSymbol *lm_trans_symbol_new(
@@ -284,7 +293,11 @@ static LmTransCleanup *lm_trans_cleanup_new(unsigned id) {
 }
 
 static void lm_trans_cleanup_destroy(LmTransCleanup *cleanup) {
-    free(cleanup);
+    lm_own_delete(cleanup, NULL);
+}
+
+static void lm_trans_cleanup_delete_any(void *object) {
+    lm_trans_cleanup_destroy((LmTransCleanup *)object);
 }
 
 static LmTransLoop *lm_trans_loop_new(size_t cleanup_base) {
@@ -298,7 +311,11 @@ static LmTransLoop *lm_trans_loop_new(size_t cleanup_base) {
 }
 
 static void lm_trans_loop_destroy(LmTransLoop *loop) {
-    free(loop);
+    lm_own_delete(loop, NULL);
+}
+
+static void lm_trans_loop_delete_any(void *object) {
+    lm_trans_loop_destroy((LmTransLoop *)object);
 }
 
 static LmTransNamespace *lm_trans_namespace_new(void) {
@@ -306,24 +323,10 @@ static LmTransNamespace *lm_trans_namespace_new(void) {
 }
 
 static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
-    size_t i;
-
     if (namespace_ != NULL) {
-        for (i = 0U; i < namespace_->count; ++i) {
-            lm_trans_symbol_destroy(namespace_->items[i]);
-            namespace_->items[i] = NULL;
-        }
-        for (i = 0U; i < namespace_->cleanup_count; ++i) {
-            lm_trans_cleanup_destroy(namespace_->cleanups[i]);
-            namespace_->cleanups[i] = NULL;
-        }
-        for (i = 0U; i < namespace_->loop_count; ++i) {
-            lm_trans_loop_destroy(namespace_->loops[i]);
-            namespace_->loops[i] = NULL;
-        }
-        free(namespace_->items);
-        free(namespace_->cleanups);
-        free(namespace_->loops);
+        lm_own_pointer_array_delete((void **)namespace_->items, namespace_->count, lm_trans_symbol_delete_any);
+        lm_own_pointer_array_delete((void **)namespace_->cleanups, namespace_->cleanup_count, lm_trans_cleanup_delete_any);
+        lm_own_pointer_array_delete((void **)namespace_->loops, namespace_->loop_count, lm_trans_loop_delete_any);
         namespace_->items = NULL;
         namespace_->cleanups = NULL;
         namespace_->loops = NULL;
@@ -342,11 +345,12 @@ static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
     }
 }
 
+static void lm_trans_namespace_destroy_any(void *object) {
+    lm_trans_namespace_destroy((LmTransNamespace *)object);
+}
+
 static void lm_trans_namespace_delete(LmTransNamespace *namespace_) {
-    if (namespace_ != NULL) {
-        lm_trans_namespace_destroy(namespace_);
-        free(namespace_);
-    }
+    lm_own_delete(namespace_, lm_trans_namespace_destroy_any);
 }
 
 static void lm_trans_namespace_enter_scope(LmTransNamespace *namespace_) {
