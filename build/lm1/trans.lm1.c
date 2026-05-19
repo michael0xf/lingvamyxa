@@ -198,7 +198,7 @@ static int lm_trans_text_all_char(LmP0Text text, char ch) {
 static LmP0Text *lm_trans_text_ref_new(LmP0Text text) {
     LmP0Text *copy;
 
-    copy = (LmP0Text *)calloc(1U, sizeof(*copy));
+    copy = (LmP0Text *)lm_own_new_zero(sizeof(*copy));
     if (copy != NULL) {
         *copy = text;
     }
@@ -234,7 +234,7 @@ static int lm_trans_text_ref_set(LmP0Text **target, LmP0Text text) {
 }
 
 static LmTransFunctionState *lm_trans_function_state_new(void) {
-    return (LmTransFunctionState *)calloc(1U, sizeof(LmTransFunctionState));
+    return (LmTransFunctionState *)lm_own_new_zero(sizeof(LmTransFunctionState));
 }
 
 static void lm_trans_function_state_destroy(LmTransFunctionState *state) {
@@ -380,7 +380,7 @@ static LmTransSymbol *lm_trans_symbol_new(
 ) {
     LmTransSymbol *symbol;
 
-    symbol = (LmTransSymbol *)calloc(1U, sizeof(*symbol));
+    symbol = (LmTransSymbol *)lm_own_new_zero(sizeof(*symbol));
     if (symbol == NULL) {
         return NULL;
     }
@@ -400,7 +400,7 @@ static LmTransSymbol *lm_trans_symbol_new(
 static LmTransCleanup *lm_trans_cleanup_new(unsigned id) {
     LmTransCleanup *cleanup;
 
-    cleanup = (LmTransCleanup *)calloc(1U, sizeof(*cleanup));
+    cleanup = (LmTransCleanup *)lm_own_new_zero(sizeof(*cleanup));
     if (cleanup != NULL) {
         cleanup->id = id;
     }
@@ -418,7 +418,7 @@ static void lm_trans_cleanup_delete_any(void *object) {
 static LmTransLoop *lm_trans_loop_new(size_t cleanup_base) {
     LmTransLoop *loop;
 
-    loop = (LmTransLoop *)calloc(1U, sizeof(*loop));
+    loop = (LmTransLoop *)lm_own_new_zero(sizeof(*loop));
     if (loop != NULL) {
         loop->cleanup_base = cleanup_base;
     }
@@ -436,7 +436,7 @@ static void lm_trans_loop_delete_any(void *object) {
 static LmTransNamespace *lm_trans_namespace_new(void) {
     LmTransNamespace *namespace_;
 
-    namespace_ = (LmTransNamespace *)calloc(1U, sizeof(LmTransNamespace));
+    namespace_ = (LmTransNamespace *)lm_own_new_zero(sizeof(LmTransNamespace));
     if (namespace_ != NULL) {
         lm_own_ptr_stack_init(&namespace_->items, lm_trans_symbol_delete_any);
         lm_own_ptr_stack_init(&namespace_->cleanups, lm_trans_cleanup_delete_any);

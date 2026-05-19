@@ -2,6 +2,10 @@
 
 #include <stdlib.h>
 
+void *lm_own_new_zero(size_t size) {
+    return calloc(1U, size);
+}
+
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields) {
     if (object != NULL) {
         if (destroy_fields != NULL) {

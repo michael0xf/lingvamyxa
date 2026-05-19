@@ -13,6 +13,7 @@ typedef struct LmOwnPtrStack {
     LmOwnDelete delete_item;
 } LmOwnPtrStack;
 
+void *lm_own_new_zero(size_t size);
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
 void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item);
 void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item);
