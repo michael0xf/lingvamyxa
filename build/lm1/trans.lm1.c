@@ -1419,26 +1419,18 @@ static int lm_trans_emit_statement_list(
 );
 
 static const LmP0Field *lm_trans_control_body_start(const LmP0Frame *frame) {
-    const LmP0Field *field;
+    const LmP0Field *end;
 
-    field = frame->body.first_field;
-    if (field == NULL) {
+    if (frame == NULL || frame->body.first_field == NULL) {
         return NULL;
     }
 
-    if (field->value != NULL && field->value->kind == LM_P0_NODE_STRUCTURE) {
-        return field->next;
+    end = lm_trans_expr_segment_end(frame->body.first_field);
+    if (end != NULL && end->value != NULL && end->value->kind == LM_P0_NODE_STRUCTURE) {
+        return end;
     }
 
-    while (
-        field != NULL &&
-        field->value != NULL &&
-        field->value->kind == LM_P0_NODE_ATOM
-    ) {
-        field = field->next;
-    }
-
-    return field;
+    return NULL;
 }
 
 static int lm_trans_emit_control_condition(
@@ -1452,10 +1444,6 @@ static int lm_trans_emit_control_condition(
     first = frame->body.first_field;
     if (first == NULL) {
         return 0;
-    }
-
-    if (first->value != NULL && first->value->kind == LM_P0_NODE_STRUCTURE) {
-        return lm_trans_emit_expr_fields(file, first->value->as.structure.first_field, namespace_);
     }
 
     body_start = lm_trans_control_body_start(frame);
