@@ -1601,15 +1601,6 @@ static int lm_p0_find_colon(
     return 0;
 }
 
-static LmP0Node *lm_p0_parse_line_item(
-    LmP0Document *document,
-    const char *text,
-    size_t length,
-    size_t line,
-    size_t column,
-    size_t offset
-);
-
 static int lm_p0_parse_fields_into(
     LmP0Document *document,
     LmP0Structure *structure,
@@ -1943,104 +1934,6 @@ static int lm_p0_parse_fields_into(
 
     index = 0U;
     return lm_p0_parse_fields_until(document, structure, text, length, line, column, offset, 0U, 0U, 0U, &index);
-}
-
-static LmP0Node *lm_p0_parse_line_item(
-    LmP0Document *document,
-    const char *text,
-    size_t length,
-    size_t line,
-    size_t column,
-    size_t offset
-) {
-    size_t colon_index;
-    LmP0Node *node;
-
-    {
-        int colon_status;
-
-        colon_status = lm_p0_find_colon(document, text, length, line, column, &colon_index);
-        if (colon_status < 0) {
-            return NULL;
-        }
-        if (colon_status == 0) {
-            colon_index = length;
-        }
-    }
-
-    if (colon_index < length) {
-        size_t head_length;
-        size_t body_start;
-
-        head_length = colon_index;
-        while (head_length > 0U && lm_p0_is_horizontal_space(text[head_length - 1U])) {
-            --head_length;
-        }
-        if (head_length == 0U) {
-            lm_p0_set_diagnostic(document, 7, line, column, "frame head is empty");
-            return NULL;
-        }
-
-        node = lm_p0_new_node(document, LM_P0_NODE_FRAME);
-        if (node == NULL) {
-            return NULL;
-        }
-        node->span.line = line;
-        node->span.column = column;
-        node->span.offset = offset;
-        node->span.length = length;
-        node->as.frame.head.data = text;
-        node->as.frame.head.length = head_length;
-        node->as.frame.flags = LM_P0_FRAME_COLON;
-
-        body_start = colon_index + 1U;
-        while (body_start < length && lm_p0_is_horizontal_space(text[body_start])) {
-            ++body_start;
-        }
-        if (body_start < length) {
-            node->as.frame.flags |= LM_P0_FRAME_INLINE_BODY;
-        }
-        if (!lm_p0_parse_fields_into(
-                document,
-                &node->as.frame.body,
-                text + body_start,
-                length - body_start,
-                line,
-                column + body_start,
-                offset + body_start
-            )) {
-            lm_p0_free_node(node);
-            return NULL;
-        }
-        return node;
-    }
-
-    node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
-    if (node == NULL) {
-        return NULL;
-    }
-    node->span.line = line;
-    node->span.column = column;
-    node->span.offset = offset;
-    node->span.length = length;
-
-    if (!lm_p0_parse_fields_into(document, &node->as.structure, text, length, line, column, offset)) {
-        lm_p0_free_node(node);
-        return NULL;
-    }
-
-    if (node->as.structure.field_count == 1U) {
-        LmP0Field *field;
-        LmP0Node *single;
-
-        field = node->as.structure.first_field;
-        single = field->value;
-        free(field);
-        free(node);
-        return single;
-    }
-
-    return node;
 }
 
 static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t level) {
@@ -2641,6 +2534,37 @@ static int lm_p0_stream_apply_item_event(
         return 0;
     }
 
+    if (event->kind == LM_P0_STREAM_EVENT_ITEM) {
+        LmP0Field *previous_last;
+        LmP0Field *field;
+
+        previous_last = parent->last_field;
+        if (!lm_p0_parse_fields_into(
+                document,
+                parent,
+                event->text,
+                event->text_length,
+                event->line,
+                event->column,
+                event->offset
+            )) {
+            return 0;
+        }
+
+        field = previous_last != NULL ? previous_last->next : parent->first_field;
+        while (field != NULL) {
+            if (field->value != NULL) {
+                field->value->flags |= event->node_flags;
+            }
+            field = field->next;
+        }
+
+        if (parent->last_field == previous_last || parent->last_field == NULL) {
+            return 1;
+        }
+        return lm_p0_stack_install_node_lineage(document, stack, event->level, parent->last_field->value);
+    }
+
     if (event->kind == LM_P0_STREAM_EVENT_DISABLED_BLOCK) {
         node = lm_p0_new_node(document, LM_P0_NODE_DISABLED);
         if (node == NULL) {
@@ -2663,18 +2587,6 @@ static int lm_p0_stream_apply_item_event(
         node->span.column = event->column;
         node->span.offset = event->offset;
         node->span.length = event->text_length;
-    } else {
-        node = lm_p0_parse_line_item(
-            document,
-            event->text,
-            event->text_length,
-            event->line,
-            event->column,
-            event->offset
-        );
-        if (node == NULL) {
-            return 0;
-        }
     }
     node->flags |= event->node_flags;
 
@@ -3440,8 +3352,7 @@ static void lm_p0_structure_recount(LmP0Structure *structure) {
 
 static int lm_p0_postprocess_structure(
     LmP0Document *document,
-    LmP0Structure *structure,
-    int group_same_line_items
+    LmP0Structure *structure
 );
 
 static int lm_p0_wrap_fields_from_line(
@@ -3454,20 +3365,16 @@ static int lm_p0_postprocess_trailer(LmP0Document *document, LmP0Trailer *traile
     if (trailer == NULL) {
         return 1;
     }
-    return lm_p0_postprocess_structure(document, &trailer->body, 0);
+    return lm_p0_postprocess_structure(document, &trailer->body);
 }
 
 static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
-    int group_body;
-
     if (node == NULL) {
         return 1;
     }
 
     if (node->kind == LM_P0_NODE_FRAME) {
-        group_body = (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U &&
-            (node->as.frame.flags & LM_P0_FRAME_INLINE_BODY) == 0U;
-        if (!lm_p0_postprocess_structure(document, &node->as.frame.body, group_body)) {
+        if (!lm_p0_postprocess_structure(document, &node->as.frame.body)) {
             return 0;
         }
         if ((node->as.frame.flags & LM_P0_FRAME_INLINE_BODY) != 0U &&
@@ -3478,85 +3385,12 @@ static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
     }
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        if (!lm_p0_postprocess_structure(document, &node->as.structure, 0)) {
+        if (!lm_p0_postprocess_structure(document, &node->as.structure)) {
             return 0;
         }
         return lm_p0_postprocess_trailer(document, node->as.structure.trailer);
     }
 
-    return 1;
-}
-
-static int lm_p0_group_same_line_items(LmP0Document *document, LmP0Structure *structure) {
-    LmP0Field *field;
-    LmP0Field *previous;
-
-    previous = NULL;
-    field = structure->first_field;
-    while (field != NULL) {
-        LmP0Field *group_first;
-        LmP0Field *group_last;
-        LmP0Field *after_group;
-        size_t line;
-        size_t count;
-
-        group_first = field;
-        group_last = field;
-        line = field->value != NULL ? field->value->span.line : 0U;
-        count = 1U;
-        while (group_last->next != NULL &&
-               group_last->next->value != NULL &&
-               group_last->next->value->span.line == line) {
-            group_last = group_last->next;
-            ++count;
-        }
-
-        if (count > 1U) {
-            LmP0Node *group_node;
-            LmP0Field *move;
-            LmP0Field *stop;
-
-            group_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
-            if (group_node == NULL) {
-                return 0;
-            }
-            group_node->span = group_first->value->span;
-            after_group = group_last->next;
-            stop = after_group;
-            move = group_first;
-            while (move != stop) {
-                LmP0Field *next_move;
-                LmP0Node *value;
-
-                next_move = move->next;
-                value = move->value;
-                move->value = NULL;
-                if (!lm_p0_append_field(document, &group_node->as.structure, value)) {
-                    lm_p0_free_node(group_node);
-                    return 0;
-                }
-                if (move != group_first) {
-                    free(move);
-                }
-                move = next_move;
-            }
-
-            group_first->value = group_node;
-            group_first->next = after_group;
-            if (previous == NULL) {
-                structure->first_field = group_first;
-            } else {
-                previous->next = group_first;
-            }
-            previous = group_first;
-            field = after_group;
-        } else {
-            previous = field;
-            field = field->next;
-        }
-    }
-
-    lm_p0_structure_recount(structure);
     return 1;
 }
 
@@ -3624,8 +3458,7 @@ static int lm_p0_wrap_fields_from_line(
 
 static int lm_p0_postprocess_structure(
     LmP0Document *document,
-    LmP0Structure *structure,
-    int group_same_line_items
+    LmP0Structure *structure
 ) {
     LmP0Field *field;
 
@@ -3639,9 +3472,6 @@ static int lm_p0_postprocess_structure(
     }
 
     lm_p0_structure_recount(structure);
-    if (group_same_line_items) {
-        return lm_p0_group_same_line_items(document, structure);
-    }
     return 1;
 }
 
