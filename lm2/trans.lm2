@@ -135,6 +135,16 @@ typedef struct LmTransStatementStack {
     size_t capacity;
 } LmTransStatementStack;
 
+typedef struct LmTransFunctionState {
+    const LmP0Node *previous_return_type_node;
+    int previous_return_type_is_struct;
+    LmP0Text *previous_return_type_name;
+    LmP0Text *current_return_type_name;
+    unsigned previous_next_return_id;
+    size_t previous_cleanup_count;
+    size_t previous_loop_count;
+} LmTransFunctionState;
+
 typedef struct LmTransNamespace {
     LmTransSymbol **items;
     size_t count;
@@ -229,6 +239,24 @@ static int lm_trans_text_ref_set(LmP0Text **target, LmP0Text text) {
     lm_trans_text_ref_destroy(target);
     *target = copy;
     return 0;
+}
+
+static LmTransFunctionState *lm_trans_function_state_new(void) {
+    return (LmTransFunctionState *)calloc(1U, sizeof(LmTransFunctionState));
+}
+
+static void lm_trans_function_state_destroy(LmTransFunctionState *state) {
+    if (state != NULL) {
+        lm_trans_text_ref_destroy(&state->current_return_type_name);
+    }
+}
+
+static void lm_trans_function_state_destroy_any(void *object) {
+    lm_trans_function_state_destroy((LmTransFunctionState *)object);
+}
+
+static void lm_trans_function_state_delete(LmTransFunctionState *state) {
+    lm_own_delete(state, lm_trans_function_state_destroy_any);
 }
 
 static void lm_trans_text_ref_array_destroy(LmP0Text **items, size_t count) {
@@ -3746,16 +3774,10 @@ static int lm_trans_emit_function(
     const LmP0Field *return_field;
     const LmP0Field *body_field;
     const LmP0Field *body_start;
-    const LmP0Node *previous_return_type_node;
-    int previous_return_type_is_struct;
-    LmP0Text *previous_return_type_name;
-    LmP0Text *current_return_type_name;
-    unsigned previous_next_return_id;
-    size_t previous_cleanup_count;
-    size_t previous_loop_count;
+    LmTransFunctionState *state;
     int is_struct_return;
     int status;
-    current_return_type_name = NULL;
+    state = NULL;
 
     name_field = lm_trans_nth_field(&frame->body, 0U);
     params_field = lm_trans_nth_field(&frame->body, 1U);
@@ -3854,23 +3876,30 @@ static int lm_trans_emit_function(
         return 1;
     }
 
+    state = lm_trans_function_state_new();
+    if (state == NULL) {
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+
     if (is_struct_return) {
-        current_return_type_name = lm_trans_text_ref_new(name_field->value->as.atom);
-        if (current_return_type_name == NULL) {
+        state->current_return_type_name = lm_trans_text_ref_new(name_field->value->as.atom);
+        if (state->current_return_type_name == NULL) {
+            lm_trans_function_state_delete(state);
             lm_trans_namespace_leave_scope(namespace_);
             return 1;
         }
     }
 
-    previous_return_type_node = namespace_->return_type_node;
-    previous_return_type_is_struct = namespace_->return_type_is_struct;
-    previous_return_type_name = namespace_->return_type_name;
-    previous_next_return_id = namespace_->next_return_id;
-    previous_cleanup_count = namespace_->cleanup_count;
-    previous_loop_count = namespace_->loop_count;
+    state->previous_return_type_node = namespace_->return_type_node;
+    state->previous_return_type_is_struct = namespace_->return_type_is_struct;
+    state->previous_return_type_name = namespace_->return_type_name;
+    state->previous_next_return_id = namespace_->next_return_id;
+    state->previous_cleanup_count = namespace_->cleanup_count;
+    state->previous_loop_count = namespace_->loop_count;
     namespace_->return_type_node = is_sub ? NULL : return_field->value;
     namespace_->return_type_is_struct = is_struct_return;
-    namespace_->return_type_name = is_struct_return ? current_return_type_name : previous_return_type_name;
+    namespace_->return_type_name = is_struct_return ? state->current_return_type_name : state->previous_return_type_name;
     namespace_->next_return_id = 0U;
     namespace_->cleanup_count = 0U;
     namespace_->loop_count = 0U;
@@ -3886,13 +3915,13 @@ static int lm_trans_emit_function(
         status = lm_trans_put(file, "}\n\n");
     }
 
-    namespace_->return_type_node = previous_return_type_node;
-    namespace_->return_type_is_struct = previous_return_type_is_struct;
-    namespace_->return_type_name = previous_return_type_name;
-    namespace_->next_return_id = previous_next_return_id;
-    namespace_->cleanup_count = previous_cleanup_count;
-    namespace_->loop_count = previous_loop_count;
-    lm_trans_text_ref_destroy(&current_return_type_name);
+    namespace_->return_type_node = state->previous_return_type_node;
+    namespace_->return_type_is_struct = state->previous_return_type_is_struct;
+    namespace_->return_type_name = state->previous_return_type_name;
+    namespace_->next_return_id = state->previous_next_return_id;
+    namespace_->cleanup_count = state->previous_cleanup_count;
+    namespace_->loop_count = state->previous_loop_count;
+    lm_trans_function_state_delete(state);
     lm_trans_namespace_leave_scope(namespace_);
     return status;
 }
