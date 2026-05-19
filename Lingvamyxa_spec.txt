@@ -3424,6 +3424,28 @@ access. Ordinary L2 Structures use `\` for typed field-follow; any dotted
 value/member path belongs to the explicit C surface and must be spelled through
 `c.`.
 
+For convenience, the L2 parser treats a compact token that starts with `c.` as
+one C-surface token up to the next Lingvamyxa field boundary, such as horizontal
+whitespace, a physical line break, comma, `(`, `)`, `:`, a line comment start,
+or the end of the current source item. The L2 lowering then drops the `c.`
+prefix and copies the remaining ANSI C spelling directly into the generated C
+code. For example:
+
+L2:
+    c.boxes[1].value: 7
+    return: c.boxes[1].value != 7
+
+may lower as:
+
+---ANSI C---
+boxes[1].value = 7;
+return boxes[1].value != 7;
+---ANSI C---
+
+This is an intentional low-level L2 C-surface escape. It does not introduce
+Lingvamyxa dot syntax or Lingvamyxa array/member semantics outside the explicit
+`c.` door; the copied spelling is checked by the selected ANSI C toolchain.
+
 The `c.` prefix may be used directly in C call, type or value position:
 
 L2:

@@ -992,6 +992,10 @@ static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end, size_t
         return start;
     }
 
+    if (start + 2U < end && text[start] == 'c' && text[start + 1U] == '.') {
+        return end;
+    }
+
     if (lm_p0_is_bare_identifier_start(text[start])) {
         i = start + 1U;
         while (i < end && lm_p0_is_bare_identifier_rest(text[i])) {
