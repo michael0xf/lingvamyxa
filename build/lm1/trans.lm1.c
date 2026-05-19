@@ -31,11 +31,11 @@ typedef struct LmTransLoop {
     size_t cleanup_base;
 } LmTransLoop;
 
-typedef struct LmTransArgumentRange {
+typedef struct LmTransExprSegment {
     const LmP0Field *first;
     const LmP0Field *stop;
     int present;
-} LmTransArgumentRange;
+} LmTransExprSegment;
 
 typedef enum LmTransExprJobKind {
     LM_TRANS_EXPR_JOB_TEXT = 1,
@@ -1190,38 +1190,61 @@ static int lm_trans_expr_stack_push_call_args(
     return lm_trans_expr_stack_push(stack, job);
 }
 
-static int lm_trans_argument_ranges_append(
-    LmOwnValueStack *ranges,
+static void lm_trans_expr_segments_init(LmOwnValueStack *segments) {
+    lm_own_value_stack_init(segments, sizeof(LmTransExprSegment));
+}
+
+static int lm_trans_expr_segments_append(
+    LmOwnValueStack *segments,
     const LmP0Field *first,
     const LmP0Field *stop
 ) {
-    LmTransArgumentRange range;
+    LmTransExprSegment segment;
 
-    range.first = first;
-    range.stop = stop;
-    range.present = 1;
-    return lm_own_value_stack_push(ranges, &range);
+    segment.first = first;
+    segment.stop = stop;
+    segment.present = 1;
+    return lm_own_value_stack_push(segments, &segment);
 }
 
-static int lm_trans_expr_stack_push_argument_ranges(
+static int lm_trans_expr_segments_parse_fields(
+    LmOwnValueStack *segments,
+    const LmP0Field *first
+) {
+    const LmP0Field *field;
+    const LmP0Field *next;
+
+    field = first;
+    while (field != NULL) {
+        next = lm_trans_expr_segment_end(field);
+        if (lm_trans_expr_segments_append(segments, field, next) != 0) {
+            return 1;
+        }
+        field = next;
+    }
+
+    return 0;
+}
+
+static int lm_trans_expr_stack_push_segments(
     LmTransExprStack *stack,
-    const LmOwnValueStack *ranges
+    const LmOwnValueStack *segments
 ) {
     size_t index;
-    const LmTransArgumentRange *range;
+    const LmTransExprSegment *segment;
 
-    if (ranges == NULL) {
+    if (segments == NULL) {
         return 0;
     }
 
-    index = ranges->count;
+    index = segments->count;
     while (index > 0U) {
         --index;
-        range = (const LmTransArgumentRange *)lm_own_value_stack_at(ranges, index);
-        if (range == NULL) {
+        segment = (const LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        if (segment == NULL) {
             return 1;
         }
-        if (lm_trans_expr_stack_push_range(stack, range->first, range->stop) != 0) {
+        if (lm_trans_expr_stack_push_range(stack, segment->first, segment->stop) != 0) {
             return 1;
         }
         if (index > 0U && lm_trans_expr_stack_push_text(stack, ", ") != 0) {
@@ -1252,107 +1275,112 @@ static const LmP0Field *lm_trans_call_body_first_field(const LmP0Structure *body
     return field;
 }
 
-static int lm_trans_expr_stack_schedule_call_args(
-    LmTransExprStack *stack,
-    const LmP0Structure *body,
+static int lm_trans_call_args_layout_signature(
+    LmOwnValueStack *segments,
+    const LmP0Field *field,
     const LmTransSymbol *callee
 ) {
-    const LmP0Field *field;
     const LmP0Field *next;
-    LmOwnValueStack ranges;
-    LmTransArgumentRange *range;
+    LmTransExprSegment *segment;
     const LmP0Frame *named_frame;
     size_t index;
     size_t named_index;
     int named_started;
     int is_named;
-    int status;
 
-    field = lm_trans_call_body_first_field(body);
-    lm_own_value_stack_init(&ranges, sizeof(LmTransArgumentRange));
-
-    if (callee != NULL && callee->has_signature) {
-        if (lm_own_value_stack_resize_zero(&ranges, callee->param_names.count) != 0) {
-            lm_own_value_stack_destroy(&ranges);
-            return 1;
-        }
-
-        index = 0U;
-        named_started = 0;
-        while (field != NULL) {
-            is_named = lm_trans_call_field_is_named_argument(field, callee, &named_index);
-            if (is_named) {
-                named_started = 1;
-                range = (LmTransArgumentRange *)lm_own_value_stack_at(&ranges, named_index);
-                if (range == NULL) {
-                    lm_own_value_stack_destroy(&ranges);
-                    return 1;
-                }
-                if (range->present) {
-                    fprintf(stderr, "trans L2 error: duplicate named argument\n");
-                    lm_own_value_stack_destroy(&ranges);
-                    return 1;
-                }
-                named_frame = &field->value->as.frame;
-                range->first = named_frame->body.first_field;
-                range->stop = NULL;
-                range->present = 1;
-                field = field->next;
-                continue;
-            }
-
-            if (named_started) {
-                fprintf(stderr, "trans L2 error: positional argument after named argument\n");
-                lm_own_value_stack_destroy(&ranges);
-                return 1;
-            }
-            if (index >= callee->param_names.count) {
-                fprintf(stderr, "trans L2 error: too many arguments\n");
-                lm_own_value_stack_destroy(&ranges);
-                return 1;
-            }
-            next = lm_trans_expr_segment_end(field);
-            range = (LmTransArgumentRange *)lm_own_value_stack_at(&ranges, index);
-            if (range == NULL) {
-                lm_own_value_stack_destroy(&ranges);
-                return 1;
-            }
-            range->first = field;
-            range->stop = next;
-            range->present = 1;
-            ++index;
-            field = next;
-        }
-
-        for (index = 0U; index < callee->param_names.count; ++index) {
-            range = (LmTransArgumentRange *)lm_own_value_stack_at(&ranges, index);
-            if (range == NULL) {
-                lm_own_value_stack_destroy(&ranges);
-                return 1;
-            }
-            if (!range->present) {
-                fprintf(stderr, "trans L2 error: missing function argument\n");
-                lm_own_value_stack_destroy(&ranges);
-                return 1;
-            }
-        }
-
-        status = lm_trans_expr_stack_push_argument_ranges(stack, &ranges);
-        lm_own_value_stack_destroy(&ranges);
-        return status;
+    if (callee == NULL) {
+        return 1;
     }
 
+    if (lm_own_value_stack_resize_zero(segments, callee->param_names.count) != 0) {
+        return 1;
+    }
+
+    index = 0U;
+    named_started = 0;
     while (field != NULL) {
-        next = lm_trans_expr_segment_end(field);
-        if (lm_trans_argument_ranges_append(&ranges, field, next) != 0) {
-            lm_own_value_stack_destroy(&ranges);
+        is_named = lm_trans_call_field_is_named_argument(field, callee, &named_index);
+        if (is_named) {
+            named_started = 1;
+            segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, named_index);
+            if (segment == NULL) {
+                return 1;
+            }
+            if (segment->present) {
+                fprintf(stderr, "trans L2 error: duplicate named argument\n");
+                return 1;
+            }
+            named_frame = &field->value->as.frame;
+            segment->first = named_frame->body.first_field;
+            segment->stop = NULL;
+            segment->present = 1;
+            field = field->next;
+            continue;
+        }
+
+        if (named_started) {
+            fprintf(stderr, "trans L2 error: positional argument after named argument\n");
             return 1;
         }
+        if (index >= callee->param_names.count) {
+            fprintf(stderr, "trans L2 error: too many arguments\n");
+            return 1;
+        }
+        next = lm_trans_expr_segment_end(field);
+        segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        if (segment == NULL) {
+            return 1;
+        }
+        segment->first = field;
+        segment->stop = next;
+        segment->present = 1;
+        ++index;
         field = next;
     }
 
-    status = lm_trans_expr_stack_push_argument_ranges(stack, &ranges);
-    lm_own_value_stack_destroy(&ranges);
+    for (index = 0U; index < callee->param_names.count; ++index) {
+        segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        if (segment == NULL) {
+            return 1;
+        }
+        if (!segment->present) {
+            fprintf(stderr, "trans L2 error: missing function argument\n");
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int lm_trans_call_args_layout(
+    LmOwnValueStack *segments,
+    const LmP0Structure *body,
+    const LmTransSymbol *callee
+) {
+    const LmP0Field *field;
+
+    field = lm_trans_call_body_first_field(body);
+    if (callee != NULL && callee->has_signature) {
+        return lm_trans_call_args_layout_signature(segments, field, callee);
+    }
+
+    return lm_trans_expr_segments_parse_fields(segments, field);
+}
+
+static int lm_trans_expr_stack_schedule_call_args(
+    LmTransExprStack *stack,
+    const LmP0Structure *body,
+    const LmTransSymbol *callee
+) {
+    LmOwnValueStack segments;
+    int status;
+
+    lm_trans_expr_segments_init(&segments);
+    status = lm_trans_call_args_layout(&segments, body, callee);
+    if (status == 0) {
+        status = lm_trans_expr_stack_push_segments(stack, &segments);
+    }
+    lm_own_value_stack_destroy(&segments);
     return status;
 }
 
