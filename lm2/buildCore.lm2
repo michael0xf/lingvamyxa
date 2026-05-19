@@ -367,6 +367,7 @@ static int lm_build_parser_library(const char *make_tool) {
     if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"build/lm1/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0) {
         return 1;
     }
+    remove("build/lm0/libparser.lm0.a");
     if (lm_build_make(make_tool, "ar", "rcs \"build/lm0/libparser.lm0.a\" \"build/obj/parser.lm1.o\"") != 0) {
         return 1;
     }

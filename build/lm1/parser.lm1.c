@@ -2614,10 +2614,6 @@ static int lm_p0_stream_apply_item_event(
         top_level = lm_p0_stack_top_level(stack);
     }
 
-    if (!lm_p0_stack_ensure_root_level_alias(document, stack, event->level)) {
-        return 0;
-    }
-
     if (stack->parents[event->level] == NULL && event->level > top_level) {
         if (event->level != top_level + 1U) {
             lm_p0_set_diagnostic(document, 13, event->line, event->column, "source level jumps too deep");
@@ -2633,6 +2629,10 @@ static int lm_p0_stream_apply_item_event(
             )) {
             return 0;
         }
+    }
+
+    if (!lm_p0_stack_ensure_root_level_alias(document, stack, event->level)) {
+        return 0;
     }
 
     parent = stack->parents[event->level];
@@ -3444,6 +3444,12 @@ static int lm_p0_postprocess_structure(
     int group_same_line_items
 );
 
+static int lm_p0_wrap_fields_from_line(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    size_t head_line
+);
+
 static int lm_p0_postprocess_trailer(LmP0Document *document, LmP0Trailer *trailer) {
     if (trailer == NULL) {
         return 1;
@@ -3462,6 +3468,10 @@ static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
         group_body = (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U &&
             (node->as.frame.flags & LM_P0_FRAME_INLINE_BODY) == 0U;
         if (!lm_p0_postprocess_structure(document, &node->as.frame.body, group_body)) {
+            return 0;
+        }
+        if ((node->as.frame.flags & LM_P0_FRAME_INLINE_BODY) != 0U &&
+            !lm_p0_wrap_fields_from_line(document, &node->as.frame.body, node->span.line)) {
             return 0;
         }
         return lm_p0_postprocess_trailer(document, node->as.frame.trailer);
@@ -3544,6 +3554,68 @@ static int lm_p0_group_same_line_items(LmP0Document *document, LmP0Structure *st
             previous = field;
             field = field->next;
         }
+    }
+
+    lm_p0_structure_recount(structure);
+    return 1;
+}
+
+static int lm_p0_wrap_fields_from_line(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    size_t head_line
+) {
+    LmP0Field *field;
+    LmP0Field *previous;
+    LmP0Field *group_first;
+    LmP0Node *group_node;
+    LmP0Field *move;
+
+    previous = NULL;
+    field = structure->first_field;
+    while (field != NULL) {
+        if (field->value != NULL && field->value->span.line != head_line) {
+            break;
+        }
+        previous = field;
+        field = field->next;
+    }
+
+    if (field == NULL) {
+        return 1;
+    }
+
+    group_first = field;
+    group_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
+    if (group_node == NULL) {
+        return 0;
+    }
+    group_node->span = group_first->value->span;
+
+    move = group_first;
+    while (move != NULL) {
+        LmP0Field *next_move;
+        LmP0Node *value;
+
+        next_move = move->next;
+        value = move->value;
+        move->value = NULL;
+        if (!lm_p0_append_field(document, &group_node->as.structure, value)) {
+            lm_p0_free_node(group_node);
+            return 0;
+        }
+        if (move != group_first) {
+            free(move);
+        }
+        move = next_move;
+    }
+
+    group_first->value = group_node;
+    group_first->next = NULL;
+    if (previous == NULL) {
+        structure->first_field = group_first;
+    } else {
+        previous->next = group_first;
     }
 
     lm_p0_structure_recount(structure);
@@ -3870,7 +3942,7 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
     } else if (node->kind == LM_P0_NODE_FRAME) {
         lm_p0_dump_append_cstr(dump, "Frame head=");
         lm_p0_dump_text(dump, node->as.frame.head);
-        lm_p0_dump_appendf(dump, " fields=%lu\n", (unsigned long)node->as.frame.body.field_count);
+        lm_p0_dump_appendf(dump, " body=Structure fields=%lu\n", (unsigned long)node->as.frame.body.field_count);
         lm_p0_dump_structure(dump, &node->as.frame.body, indent + 1U);
         lm_p0_dump_trailer(dump, node->as.frame.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_ATOM) {

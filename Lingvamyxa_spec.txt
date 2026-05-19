@@ -469,7 +469,9 @@ This example should be read with five simple structural rules in mind:
    terminal return forms become tail-cutter trailers only in a valid
    source-level tail-cutter position. They may close source-level/block tails,
    but they do not close unmatched parenthesized/bounded Structures; those must
-   still be closed by `)`.
+   still be closed by `)`. Short colon forms are not bounded by `)`, so an
+   admitted `end: name` may terminate a short form in a valid source-level
+   tail-cutter position.
 
 5. `end: name`, `---` and terminal return forms are not competing block systems.
 
@@ -1195,7 +1197,35 @@ A form such as:
 
 is not a YAML key-value pair by syntax alone. It is the receiver/head `name` consuming the argument field `Alice`; a model/configuration receiver may later interpret that child Structure as a semantic field.
 
-Compact call form and colon form are two surface ways to build Frames/Structures. The compact form makes the bounded argument list explicit with parentheses. The colon form makes the governing head explicit through valence/government and then uses the short tail or vertical source-level children as its argument Structure.
+Compact call form and colon form are two surface ways to build Frames/Structures. The compact form makes the bounded argument list explicit with parentheses. The colon form makes the governing head explicit through valence/government and then uses the short tail or vertical source-level children as its argument Structure. There is no semantic "flat field" after `:`, `(` or a source-level increase: fields are always fields of the current Structure. In a dump, `Frame head=f body=Structure ...` means the named frame `f` owns that argument Structure.
+
+Syntactically anonymous Structures are not semantically ownerless. Every
+Structure is reached through a parent edge: a receiver body, a declared argument
+slot, a positional argument index, a rest/list argument, an array index, a table
+row, a document root or another consumer-defined edge. That edge gives the
+Structure its semantic identity. For example, in `token: (@ lock)`, the bounded
+Structure `(@ lock)` is still an argument of the `token` Frame. A receiver or
+function signature may consume an ordinary argument named exactly `name`; some
+receivers also define their first positional field as their `name` argument.
+The value of that argument is used as the visible semantic name / close target
+only if it is a single atom accepted by the close-name table. This table is much
+broader than the executable namespace: it may store identifiers, exact quoted
+identifiers, strings, operators or other literal atoms, because its only job is
+to make `end: <name>` readable and checkable. If the argument does not pass that
+structural check, it is treated as absent for close-target selection, and the
+whole Structure defaults to the receiver/head name, such as `token`. This target
+class is structural, literal and is compared by atom equality; it is not computed
+through ordinary namespace evaluation. Other consumed fields get their names
+from declared argument slots; repeated or variadic slots have that slot name
+plus a positional index.
+
+In L2, consumed arguments are expected to be named by the active receiver,
+function, subroutine, operator or generated lowering rule. A consumed field
+therefore has a name, or a name plus an index for repeated/variadic positions.
+When L2 lowers to L1 / ANSI C, the same semantic identity may become a C formal
+parameter name, a generated temporary name, a generated indexed field name or an
+implementation-only argument descriptor; this is a lowering choice, not a
+different source syntax.
 
 4.1. Compact Call Form
 
@@ -1223,7 +1253,7 @@ It creates the same logical Frame as:
 
     f(a, b, c)
 
-The token before `:` is the head identifier or symbolic head. The tail after `:` is the line argument Structure. In an ordinary physical short line, whitespace separates argument fields. A physical newline ends the physical line but is not by itself the trailer of the short form; the next source level determines whether the frame continues with vertical fields or is complete. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure terminates the open continuation and the parser then resumes according to the surrounding line/block rules.
+The token before `:` is the head identifier or symbolic head. The tail after `:` is the line argument Structure. In an ordinary physical short line, whitespace separates fields inside that Structure. A physical newline ends the physical line but is not by itself the trailer of the short form; the next source level determines whether the frame continues with vertical fields or is complete. If a line command already has inline fields and the next source item is written at the child level, that child-level part is a nested Structure field, so `receiver: value` followed by an indented body is structurally the same body boundary as `receiver: value (body)`. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure terminates the open continuation and the parser then resumes according to the surrounding line/block rules.
 
 Bare heads do not contain spaces in the portable profile. A receiver/procedure name or entity name that contains spaces must be written as an exact quoted identifier.
 
@@ -2133,14 +2163,14 @@ not:
     end: [] matrix
 
 The close target is not blindly the receiver/head spelling. A receiver defines
-which visible target it introduces. The privileged receiver role is `name`: if a
-receiver consumes one of its fields as semantic role `name`, that value becomes
-the visible close target. This is why `[]: matrix` closes as `end: matrix`, and
-why `fn: square ...` closes as `end: square`. If an opening receiver has no
-`name` role, the general named-close default is its own head spelling, so
-`if: ...` closes as `end: if` and `Label: ...` closes as `end: Label`. A
-receiver may explicitly define a nameless/anonymous opening form, but that is an
-opt-out from named close, not the default.
+which visible target it introduces. The privileged spelling is the ordinary
+argument name `name`: if a receiver consumes a valid `name` argument, that
+argument value becomes the visible close target. This is why `[]: matrix` closes
+as `end: matrix`, and why `fn: square ...` closes as `end: square`. If an
+opening receiver has no valid `name` argument, the general named-close default
+is its own head spelling, so `if: ...` closes as `end: if` and `Label: ...`
+closes as `end: Label`. A receiver may explicitly define a nameless/anonymous
+opening form, but that is an opt-out from named close, not the default.
 
 `end:` may close several currently open implicit vertical levels at once, as long as the target matches a visible open target at or above the current source level and no receiver-specific rule forbids that jump. This makes `end:` a readable tail-cutter for deeply nested named vertical code.
 
@@ -2606,33 +2636,18 @@ numeric field, subject to the active profile's conversion rules.
 The important semantic rule is that operator-token consumption produces ordinary
 Structures or typed semantic Structures; it is not an ordinary runtime action.
 
-?
-The final operator-consumption specification is not complete here. It must define
-the accepted operator tokens, precedence and associativity where a
-receiver/operator profile needs them, grouping behavior, expression Structure
-layout and translation rules. It may borrow an established
-mathematical/operator-precedence convention, but it works over the same
-structural fields produced by P0.
-?
+The bootstrap expression profile keeps expression handling inside ordinary P0
+tokenization. P0 produces ordinary token fields and registered
+receiver/operator consumption works over those fields.
 
-variant 1:
-Use a compact C-like precedence table for arithmetic, comparison and boolean
-operators during operator-token consumption.
+For the ANSI C projection, arithmetic, comparison and boolean token sequences
+keep ANSI C precedence and associativity. Higher Lingvamyxa levels that lower
+to ANSI C use the same projection rule; they may add semantic checks around an
+expression, but they do not need to reorder primitive C-like expressions.
 
-variant 2:
-Use a minimal bootstrap profile that recognizes operator-token fields but does
-not perform precedence grouping. Receivers then consume explicit Structures or
-registered simple operator patterns.
-
-variant 3:
-Use profile-based operator-consumption rules selected by level, module or build
-configuration.
-
----ANSI C---
-A translator may lower expression/operator Structures to ANSI C expressions when
-precedence, evaluation order and side effects are fully known. Otherwise it may
-lower them to helper calls, temporary Structures or generated evaluator code.
----ANSI C---
+Backends that do not target ANSI C may define their own lowering for the same
+token Structures. Such a backend-specific rule belongs to that backend profile,
+not to the source syntax.
 
 6.4. Registered Operator Forms
 
@@ -3730,7 +3745,7 @@ fn:
         return: r1 r2
 end: myFunc
 
-The L1 receiver function registered as `fn` receives the whole frame argument Structure as its first argument and consumes that Structure by receiver-defined semantic roles. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures inside that first argument Structure. They are not `=` named fields.
+The L1 receiver function registered as `fn` receives the whole frame argument Structure as its first argument and consumes that Structure by receiver-defined argument positions. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures inside that first argument Structure. They are not `=` named fields.
 
 The `fn` frame's logical argument Structure is not the same thing as the formal parameter Structure of the function being defined. In the compact short definition profile, `fn` consumes its fields as:
 
@@ -3739,13 +3754,14 @@ The `fn` frame's logical argument Structure is not the same thing as the formal 
     ret  -> field 2, required return descriptor Structure
     body -> fields 3..end as one executable body Structure
 
-P0 does not know these roles. It only builds the field sequence.
-After receiver normalization, the `name` role is privileged visible metadata of
-the normalized Structure. Editors, highlighters and translators may use that
-metadata to show the introduced name and to validate `end: <target>` against the
-receiver-exposed close target. A receiver that consumes no field as `name` still
-uses the general named-close default, its own head spelling, unless it explicitly
-defines an anonymous/nameless close form.
+P0 does not know these receiver-specific meanings. It only builds the field
+sequence. After receiver normalization, a valid `name` argument is privileged
+visible metadata of the normalized Structure. Editors, highlighters and
+translators may use that metadata to show the introduced name and to validate
+`end: <target>` against the receiver-exposed close target. A receiver that
+consumes no valid `name` argument still uses the general named-close default,
+its own head spelling, unless it explicitly defines an anonymous/nameless close
+form.
 
 The formal argument field must be an argument-list Structure even when there is only one formal argument. Therefore:
 
@@ -3984,11 +4000,12 @@ The bare form `end` and the old-looking form `end <target>` are not valid Lingva
 `end:` validates `<target>` against a visible open close target: a frame/entity
 name introduced by the active receiver, a labelled block or another
 receiver-defined visible target. The target is not necessarily the receiver/head
-spelling. The privileged receiver role is `name`: when a receiver consumes an
-argument or child frame as semantic role `name`, that value is the close target.
-If the receiver has no `name` role, the default close target is the receiver's
-own head spelling. Multi-word target names must be written as exact quoted
-identifiers.
+spelling. The privileged source spelling is the ordinary argument name `name`:
+when a receiver consumes a valid `name` argument, that value is the close target.
+If the receiver has no valid `name` argument, the default close target is the
+receiver's own head spelling. Multi-word target names may be written as exact
+quoted identifiers or as string close targets, depending on what the receiver
+accepted into its close-name table.
 
 The `<target>` operand of `end:` is outside the ordinary namespace expression
 rules. It is a literal close target consumed by the structural validation layer,
@@ -4055,12 +4072,12 @@ fn:
         return: i
 end: myFunc
 
-This is also valid because close-target validation uses the semantic `name` role
-after receiver normalization, not the physical position of the `name:` field.
+This is also valid because close-target validation uses the normalized valid
+`name` argument, not the physical position of the `name:` field.
 
-The same rule applies to any receiver that defines `name` as its semantic name
-role. In this example the receiver/head is `hello`, but the visible close target
-is `world`:
+The same rule applies to any receiver that consumes a valid `name` argument as
+its visible name. In this example the receiver/head is `hello`, but the visible
+close target is `world`:
 
 hello: name: world
 . "!"
@@ -4091,16 +4108,18 @@ hello: name: world  # world #1
 end: world    # closes world #1
 
 All core examples above close by the receiver-exposed visible target. For
-receivers with a `name` role, that role is the close target. For receivers
-without such a role, the ordinary default is the receiver/head spelling. A
-receiver that wants no named close target must define that explicitly.
+receivers with a valid `name` argument, that argument value is the close target.
+For receivers without a valid `name` argument, the ordinary default is the
+receiver/head spelling. A receiver that wants no named close target must define
+that explicitly.
 
-The `name` role is privileged in the same practical sense as a conventional
-entry name such as `main` in other languages: tools may highlight it specially,
-the normalized Structure exposes it as the introduced visible name, calls and
-namespace lookup use it where the receiver defines a callable/entity binding,
-and `end: <target>` validation uses it as the only valid named close target for
-that opened Structure.
+The argument name `name` is privileged for readable structural closing, not for
+ordinary execution semantics. Tools may highlight it specially, the normalized
+Structure exposes its value as the introduced visible close name, and
+`end: <target>` validation uses it as the only valid named close target for that
+opened Structure. If the `name` argument value fails the close-name table check,
+the receiver behaves for named close as though no such argument was supplied and
+therefore falls back to the head target.
 
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
@@ -6415,18 +6434,9 @@ Field-follow failure semantics are not fixed. A final source-semantic rule must 
 
 25.2. External or Undescribed Specification Areas
 
-?
-The final operator-consumption specification is not complete in this document. It must define operator tokens, precedence, grouping, expression Structure layout and translation rules over the structural fields produced by P0.
-?
-
-variant 1:
-Borrow a compact C-like operator precedence table.
-
-variant 2:
-Define a smaller token-boundary-only numeric/operator profile for the first implementation.
-
-variant 3:
-Allow profiles so the active level or module can select operator-token consumption rules.
+The exact operator token set and backend lowering rules may be extended by
+profiles, but the ANSI C projection deliberately keeps C precedence and
+associativity for primitive arithmetic, comparison and boolean expressions.
 
 ?
 Model/type syntax is not specified in full. It must define model receivers, slot declarations, defaults, constraints, aliases, layouts and relation signatures.
@@ -8159,6 +8169,29 @@ For `for`, `continue` transfers control to the iteration-step Structure, then to
 Structure. It is a structured synchronization receiver, not a raw lock/unlock
 pair in source syntax.
 
+In the minimal L2 profile, `synchronized` has a `value/body` receiver signature.
+The source after `synchronized:` is still the ordinary P0 argument Structure.
+Inline fields remain ordinary fields of that Structure. If an inline object
+expression is followed by a child source level, that child part is materialized
+as a nested Structure field; therefore:
+
+    synchronized: @ lock
+        break
+
+is structurally equivalent to:
+
+    synchronized: @ lock (break)
+
+while:
+
+    synchronized: @ lock break
+
+keeps `break` in the inline object-expression field sequence. A receiver may
+then reject that expression semantically, but P0 must not silently reinterpret
+the same-line word as a body. If the consumed body tail is a single Structure,
+that Structure is consumed as its fields, as in the general
+single-Structure-as-N-arguments rule.
+
 Example:
 
 synchronized: @ object
@@ -8176,8 +8209,16 @@ lm_synchronized_leave(&object);
 
 The runtime hook must implement the selected monitor policy, including
 Java-style reentrant entry for the same thread when that profile is selected.
-Full cleanup behavior for `return`, `break`, `continue` or diagnostics across a
-synchronized boundary belongs to the runtime/translator cleanup rules.
+
+The first ANSI C bootstrap translator registers each active `synchronized`
+monitor as a cleanup entry. Ordinary `return`, `break` and `continue` transfers
+emit the required `lm_synchronized_leave(...)` calls before leaving the protected
+region. A value-return inside `synchronized` is lowered through a temporary of
+the current function return type, then the active monitors are released, then
+the temporary is returned.
+
+Diagnostic failure across a synchronized boundary belongs to the wider
+runtime/translator cleanup rules.
 
 28.6. Outside the Minimal L2 Set
 

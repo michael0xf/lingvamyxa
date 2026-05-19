@@ -20,11 +20,28 @@ typedef struct LmTransSymbol {
     LmP0Text c_name;
 } LmTransSymbol;
 
+typedef struct LmTransCleanup {
+    unsigned id;
+} LmTransCleanup;
+
+typedef struct LmTransLoop {
+    size_t cleanup_base;
+} LmTransLoop;
+
 typedef struct LmTransNamespace {
     LmTransSymbol *items;
     size_t count;
     size_t capacity;
     unsigned depth;
+    LmTransCleanup *cleanups;
+    size_t cleanup_count;
+    size_t cleanup_capacity;
+    LmTransLoop *loops;
+    size_t loop_count;
+    size_t loop_capacity;
+    unsigned next_cleanup_id;
+    const LmP0Node *return_type_node;
+    unsigned next_return_id;
 } LmTransNamespace;
 
 static int lm_trans_text_equals(LmP0Text text, const char *value) {
@@ -166,10 +183,21 @@ static const char *lm_trans_symbol_kind_name(LmTransSymbolKind kind) {
 static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
     if (namespace_ != NULL) {
         free(namespace_->items);
+        free(namespace_->cleanups);
+        free(namespace_->loops);
         namespace_->items = NULL;
+        namespace_->cleanups = NULL;
+        namespace_->loops = NULL;
         namespace_->count = 0U;
         namespace_->capacity = 0U;
         namespace_->depth = 0U;
+        namespace_->cleanup_count = 0U;
+        namespace_->cleanup_capacity = 0U;
+        namespace_->loop_count = 0U;
+        namespace_->loop_capacity = 0U;
+        namespace_->next_cleanup_id = 0U;
+        namespace_->return_type_node = NULL;
+        namespace_->next_return_id = 0U;
     }
 }
 
@@ -194,6 +222,80 @@ static void lm_trans_namespace_leave_scope(LmTransNamespace *namespace_) {
     if (namespace_->depth > 0U) {
         --namespace_->depth;
     }
+}
+
+static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
+    size_t capacity;
+    LmTransCleanup *cleanups;
+
+    if (namespace_ == NULL) {
+        return 1;
+    }
+
+    if (namespace_->cleanup_count == namespace_->cleanup_capacity) {
+        capacity = namespace_->cleanup_capacity == 0U ? 8U : namespace_->cleanup_capacity * 2U;
+        cleanups = (LmTransCleanup *)realloc(namespace_->cleanups, capacity * sizeof(*cleanups));
+        if (cleanups == NULL) {
+            return 1;
+        }
+        namespace_->cleanups = cleanups;
+        namespace_->cleanup_capacity = capacity;
+    }
+
+    namespace_->cleanups[namespace_->cleanup_count].id = id;
+    ++namespace_->cleanup_count;
+    return 0;
+}
+
+static void lm_trans_cleanup_pop(LmTransNamespace *namespace_) {
+    if (namespace_ != NULL && namespace_->cleanup_count > 0U) {
+        --namespace_->cleanup_count;
+    }
+}
+
+static int lm_trans_loop_push(LmTransNamespace *namespace_) {
+    size_t capacity;
+    LmTransLoop *loops;
+
+    if (namespace_ == NULL) {
+        return 1;
+    }
+
+    if (namespace_->loop_count == namespace_->loop_capacity) {
+        capacity = namespace_->loop_capacity == 0U ? 8U : namespace_->loop_capacity * 2U;
+        loops = (LmTransLoop *)realloc(namespace_->loops, capacity * sizeof(*loops));
+        if (loops == NULL) {
+            return 1;
+        }
+        namespace_->loops = loops;
+        namespace_->loop_capacity = capacity;
+    }
+
+    namespace_->loops[namespace_->loop_count].cleanup_base = namespace_->cleanup_count;
+    ++namespace_->loop_count;
+    return 0;
+}
+
+static void lm_trans_loop_pop(LmTransNamespace *namespace_) {
+    if (namespace_ != NULL && namespace_->loop_count > 0U) {
+        --namespace_->loop_count;
+    }
+}
+
+static size_t lm_trans_loop_cleanup_base(const LmTransNamespace *namespace_) {
+    if (namespace_ == NULL || namespace_->loop_count == 0U) {
+        return namespace_ != NULL ? namespace_->cleanup_count : 0U;
+    }
+
+    return namespace_->loops[namespace_->loop_count - 1U].cleanup_base;
+}
+
+static int lm_trans_emit_sync_name(FILE *file, unsigned id) {
+    return fprintf(file, "lm_sync_%u", id) < 0 ? 1 : 0;
+}
+
+static int lm_trans_emit_return_name(FILE *file, unsigned id) {
+    return fprintf(file, "lm_return_%u", id) < 0 ? 1 : 0;
 }
 
 static int lm_trans_symbol_name_same(LmP0Text left, LmP0Text right) {
@@ -468,6 +570,11 @@ static int lm_trans_atom_is_identifier_like(LmP0Text text) {
         (ch >= 'a' && ch <= 'z') ||
         ch == '_' ||
         ch == '`';
+}
+
+static int lm_trans_name_argument_is_valid(LmP0Text text) {
+    (void)text;
+    return 1;
 }
 
 static int lm_trans_validate_expr_atom(
@@ -1003,7 +1110,7 @@ static int lm_trans_emit_control_condition(
     return lm_trans_emit_expr_range(file, first, body_start, namespace_);
 }
 
-static int lm_trans_frame_has_positional_name_role(const LmP0Frame *frame) {
+static int lm_trans_frame_has_positional_name_argument(const LmP0Frame *frame) {
     if (frame == NULL) {
         return 0;
     }
@@ -1016,7 +1123,7 @@ static int lm_trans_frame_has_positional_name_role(const LmP0Frame *frame) {
         lm_trans_text_equals(frame->head, "entry");
 }
 
-static int lm_trans_named_role_from_frame(const LmP0Frame *frame, LmP0Text *out_name) {
+static int lm_trans_name_argument_from_frame(const LmP0Frame *frame, LmP0Text *out_name) {
     const LmP0Field *field;
     const LmP0Field *name_field;
     const LmP0Frame *child_frame;
@@ -1035,7 +1142,8 @@ static int lm_trans_named_role_from_frame(const LmP0Frame *frame, LmP0Text *out_
                     name_field != NULL &&
                     name_field->next == NULL &&
                     name_field->value != NULL &&
-                    name_field->value->kind == LM_P0_NODE_ATOM
+                    name_field->value->kind == LM_P0_NODE_ATOM &&
+                    lm_trans_name_argument_is_valid(name_field->value->as.atom)
                 ) {
                     *out_name = name_field->value->as.atom;
                     return 1;
@@ -1045,7 +1153,7 @@ static int lm_trans_named_role_from_frame(const LmP0Frame *frame, LmP0Text *out_
         field = field->next;
     }
 
-    if (!lm_trans_frame_has_positional_name_role(frame)) {
+    if (!lm_trans_frame_has_positional_name_argument(frame)) {
         return 0;
     }
 
@@ -1054,13 +1162,11 @@ static int lm_trans_named_role_from_frame(const LmP0Frame *frame, LmP0Text *out_
         return 0;
     }
 
-    if (field->value->kind == LM_P0_NODE_ATOM) {
+    if (
+        field->value->kind == LM_P0_NODE_ATOM &&
+        lm_trans_name_argument_is_valid(field->value->as.atom)
+    ) {
         *out_name = field->value->as.atom;
-        return 1;
-    }
-
-    if (field->value->kind == LM_P0_NODE_FRAME) {
-        *out_name = field->value->as.frame.head;
         return 1;
     }
 
@@ -1072,7 +1178,7 @@ static int lm_trans_frame_close_target(const LmP0Frame *frame, LmP0Text *out_tar
         return 0;
     }
 
-    if (lm_trans_named_role_from_frame(frame, out_target)) {
+    if (lm_trans_name_argument_from_frame(frame, out_target)) {
         return 1;
     }
 
@@ -1122,6 +1228,121 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
     return 0;
 }
 
+static int lm_trans_emit_cleanups_until(
+    FILE *file,
+    unsigned indent,
+    const LmTransNamespace *namespace_,
+    size_t cleanup_base
+) {
+    size_t index;
+
+    if (namespace_ == NULL || cleanup_base > namespace_->cleanup_count) {
+        return 0;
+    }
+
+    index = namespace_->cleanup_count;
+    while (index > cleanup_base) {
+        --index;
+        if (lm_trans_emit_indent(file, indent) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_sync_name(file, namespace_->cleanups[index].id) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, ");\n") != 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_return_statement(
+    FILE *file,
+    const LmP0Field *return_fields,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    unsigned return_id;
+
+    if (return_fields == NULL) {
+        if (lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(file, indent) != 0) {
+            return 1;
+        }
+        return lm_trans_put(file, "return;\n");
+    }
+
+    if (namespace_ != NULL && namespace_->cleanup_count > 0U && namespace_->return_type_node != NULL) {
+        return_id = namespace_->next_return_id++;
+        if (lm_trans_emit_indent(file, indent) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, "{\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(file, indent + 1U) != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_type_node(file, namespace_->return_type_node) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, " ") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_return_name(file, return_id) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, " = ") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_expr_fields(file, return_fields, namespace_) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, ";\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(file, indent + 1U) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, "return ") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_return_name(file, return_id) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, ";\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(file, indent) != 0) {
+            return 1;
+        }
+        return lm_trans_put(file, "}\n");
+    }
+
+    if (lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "return ") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_expr_fields(file, return_fields, namespace_) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ";\n");
+}
+
 static int lm_trans_emit_trailer_statement(
     FILE *file,
     const LmP0Trailer *trailer,
@@ -1133,16 +1354,7 @@ static int lm_trans_emit_trailer_statement(
     }
 
     if (lm_trans_text_equals(trailer->spelling, "return")) {
-        if (lm_trans_emit_indent(file, indent) != 0) {
-            return 1;
-        }
-        if (lm_trans_put(file, "return ") != 0) {
-            return 1;
-        }
-        if (lm_trans_emit_expr_fields(file, trailer->body.first_field, namespace_) != 0) {
-            return 1;
-        }
-        return lm_trans_put(file, ";\n");
+        return lm_trans_emit_return_statement(file, trailer->body.first_field, indent, namespace_);
     }
 
     if (lm_trans_text_equals(trailer->spelling, "end")) {
@@ -1166,7 +1378,9 @@ static int lm_trans_emit_control(
     const char *keyword
 ) {
     const LmP0Field *body_start;
+    int is_loop;
 
+    is_loop = strcmp(keyword, "while") == 0;
     body_start = lm_trans_control_body_start(frame);
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
@@ -1181,9 +1395,19 @@ static int lm_trans_emit_control(
         return 1;
     }
     lm_trans_namespace_enter_scope(namespace_);
-    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
+    if (is_loop && lm_trans_loop_push(namespace_) != 0) {
         lm_trans_namespace_leave_scope(namespace_);
         return 1;
+    }
+    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
+        if (is_loop) {
+            lm_trans_loop_pop(namespace_);
+        }
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+    if (is_loop) {
+        lm_trans_loop_pop(namespace_);
     }
     lm_trans_namespace_leave_scope(namespace_);
     if (lm_trans_emit_indent(file, indent) != 0) {
@@ -1199,20 +1423,40 @@ static int lm_trans_emit_synchronized(
     LmTransNamespace *namespace_
 ) {
     const LmP0Field *body_start;
+    unsigned cleanup_id;
 
     if (frame == NULL || frame->body.first_field == NULL) {
         fprintf(stderr, "trans L2 error: synchronized expects an object expression\n");
         return 1;
     }
 
+    cleanup_id = namespace_->next_cleanup_id++;
     body_start = lm_trans_control_body_start(frame);
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void *") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " = (void *)(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ");\n") != 0) {
+        return 1;
+    }
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "lm_synchronized_enter(") != 0) {
         return 1;
     }
-    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
+    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
         return 1;
     }
     if (lm_trans_put(file, ");\n") != 0) {
@@ -1226,10 +1470,16 @@ static int lm_trans_emit_synchronized(
     }
 
     lm_trans_namespace_enter_scope(namespace_);
-    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
+    if (lm_trans_cleanup_push(namespace_, cleanup_id) != 0) {
         lm_trans_namespace_leave_scope(namespace_);
         return 1;
     }
+    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
+        lm_trans_cleanup_pop(namespace_);
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+    lm_trans_cleanup_pop(namespace_);
     lm_trans_namespace_leave_scope(namespace_);
 
     if (lm_trans_emit_indent(file, indent) != 0) {
@@ -1244,7 +1494,7 @@ static int lm_trans_emit_synchronized(
     if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
         return 1;
     }
-    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
+    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
         return 1;
     }
     return lm_trans_put(file, ");\n");
@@ -1849,9 +2099,11 @@ static int lm_trans_emit_statement(
     if (node->kind == LM_P0_NODE_ATOM) {
         if (
             lm_trans_text_equals(node->as.atom, "break") ||
-            lm_trans_text_equals(node->as.atom, "continue") ||
-            lm_trans_text_equals(node->as.atom, "return")
+            lm_trans_text_equals(node->as.atom, "continue")
         ) {
+            if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
+                return 1;
+            }
             if (lm_trans_emit_indent(file, indent) != 0) {
                 return 1;
             }
@@ -1859,6 +2111,10 @@ static int lm_trans_emit_statement(
                 return 1;
             }
             return lm_trans_put(file, ";\n");
+        }
+
+        if (lm_trans_text_equals(node->as.atom, "return")) {
+            return lm_trans_emit_return_statement(file, NULL, indent, namespace_);
         }
 
         if (lm_trans_atom_starts_string(node->as.atom)) {
@@ -1881,16 +2137,7 @@ static int lm_trans_emit_statement(
 
     status = 0;
     if (lm_trans_text_equals(node->as.frame.head, "return")) {
-        if (lm_trans_emit_indent(file, indent) != 0) {
-            return 1;
-        }
-        if (lm_trans_put(file, "return ") != 0) {
-            return 1;
-        }
-        status = lm_trans_emit_expr_fields(file, node->as.frame.body.first_field, namespace_);
-        if (status == 0) {
-            status = lm_trans_put(file, ";\n");
-        }
+        status = lm_trans_emit_return_statement(file, node->as.frame.body.first_field, indent, namespace_);
     } else if (lm_trans_text_equals(node->as.frame.head, "if")) {
         status = lm_trans_emit_control(file, &node->as.frame, indent, namespace_, "if");
     } else if (lm_trans_text_equals(node->as.frame.head, "while")) {
@@ -1900,11 +2147,17 @@ static int lm_trans_emit_statement(
     } else if (lm_trans_text_equals(node->as.frame.head, "synchronized")) {
         status = lm_trans_emit_synchronized(file, &node->as.frame, indent, namespace_);
     } else if (lm_trans_text_equals(node->as.frame.head, "break")) {
+        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
+            return 1;
+        }
         if (lm_trans_emit_indent(file, indent) != 0) {
             return 1;
         }
         status = lm_trans_put(file, "break;\n");
     } else if (lm_trans_text_equals(node->as.frame.head, "continue")) {
+        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
+            return 1;
+        }
         if (lm_trans_emit_indent(file, indent) != 0) {
             return 1;
         }
@@ -1982,7 +2235,16 @@ static int lm_trans_emit_statement_list(
 ) {
     const LmP0Field *field;
 
-    field = first;
+    if (
+        first != NULL &&
+        first->next == NULL &&
+        first->value != NULL &&
+        first->value->kind == LM_P0_NODE_STRUCTURE
+    ) {
+        field = first->value->as.structure.first_field;
+    } else {
+        field = first;
+    }
     while (field != NULL) {
         if (lm_trans_emit_statement(file, field->value, indent, namespace_) != 0) {
             return 1;
@@ -2056,6 +2318,10 @@ static int lm_trans_emit_function(
     const LmP0Field *params_field;
     const LmP0Field *return_field;
     const LmP0Field *body_start;
+    const LmP0Node *previous_return_type_node;
+    unsigned previous_next_return_id;
+    size_t previous_cleanup_count;
+    size_t previous_loop_count;
     int status;
 
     name_field = lm_trans_nth_field(&frame->body, 0U);
@@ -2107,6 +2373,15 @@ static int lm_trans_emit_function(
         return 1;
     }
 
+    previous_return_type_node = namespace_->return_type_node;
+    previous_next_return_id = namespace_->next_return_id;
+    previous_cleanup_count = namespace_->cleanup_count;
+    previous_loop_count = namespace_->loop_count;
+    namespace_->return_type_node = is_sub ? NULL : return_field->value;
+    namespace_->next_return_id = 0U;
+    namespace_->cleanup_count = 0U;
+    namespace_->loop_count = 0U;
+
     status = lm_trans_emit_statement_list(file, body_start, 1U, namespace_);
     if (status == 0) {
         status = lm_trans_validate_end_trailer(frame);
@@ -2118,6 +2393,10 @@ static int lm_trans_emit_function(
         status = lm_trans_put(file, "}\n\n");
     }
 
+    namespace_->return_type_node = previous_return_type_node;
+    namespace_->next_return_id = previous_next_return_id;
+    namespace_->cleanup_count = previous_cleanup_count;
+    namespace_->loop_count = previous_loop_count;
     lm_trans_namespace_leave_scope(namespace_);
     return status;
 }
