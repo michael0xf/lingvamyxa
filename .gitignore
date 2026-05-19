@@ -46,6 +46,8 @@ target_wrapper.*
 
 # QtCreator CMake
 CMakeLists.txt.user*
+*/.cmake/api/v1/reply/
+*/.qtc_clangd/.cache/
 
 # QtCreator 4.8< compilation database
 compile_commands.json

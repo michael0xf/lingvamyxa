@@ -1,3 +1,4 @@
+#include "own.lm1.h"
 #include "parser.lm1.h"
 #include <ctype.h>
 #include <stdarg.h>
@@ -271,6 +272,10 @@ static void lm_p0_indent_stack_free(LmP0IndentStack *stack) {
     stack->capacity = 0U;
 }
 
+static void lm_p0_indent_stack_free_any(void *object) {
+    lm_p0_indent_stack_free((LmP0IndentStack *)object);
+}
+
 static int lm_p0_indent_stack_push(
     LmP0Document *document,
     LmP0IndentStack *stack,
@@ -314,18 +319,14 @@ static LmP0IndentStack *lm_p0_indent_stack_new(LmP0Document *document) {
         return NULL;
     }
     if (!lm_p0_indent_stack_init(document, stack)) {
-        lm_p0_indent_stack_free(stack);
-        free(stack);
+        lm_own_delete(stack, lm_p0_indent_stack_free_any);
         return NULL;
     }
     return stack;
 }
 
 static void lm_p0_indent_stack_delete(LmP0IndentStack *stack) {
-    if (stack != NULL) {
-        lm_p0_indent_stack_free(stack);
-        free(stack);
-    }
+    lm_own_delete(stack, lm_p0_indent_stack_free_any);
 }
 
 static int lm_p0_indent_stack_copy(
@@ -1176,7 +1177,7 @@ static void lm_p0_free_trailer(LmP0Trailer *trailer) {
         return;
     }
     lm_p0_free_structure_fields(&trailer->body);
-    free(trailer);
+    lm_own_delete(trailer, NULL);
 }
 
 static void lm_p0_free_structure_fields(LmP0Structure *structure) {
@@ -1188,7 +1189,7 @@ static void lm_p0_free_structure_fields(LmP0Structure *structure) {
 
         next = field->next;
         lm_p0_free_node(field->value);
-        free(field);
+        lm_own_delete(field, NULL);
         field = next;
     }
     structure->first_field = NULL;
@@ -1211,7 +1212,7 @@ static void lm_p0_free_node(LmP0Node *node) {
         node->as.frame.trailer = NULL;
     }
 
-    free(node);
+    lm_own_delete(node, NULL);
 }
 
 static int lm_p0_relaxed_level_from_column(
@@ -2187,15 +2188,16 @@ static void lm_p0_stack_free(LmP0Stack *stack) {
     stack->capacity = 0U;
 }
 
+static void lm_p0_stack_free_any(void *object) {
+    lm_p0_stack_free((LmP0Stack *)object);
+}
+
 static LmP0Stack *lm_p0_stack_new(void) {
     return (LmP0Stack *)calloc(1U, sizeof(LmP0Stack));
 }
 
 static void lm_p0_stack_delete(LmP0Stack *stack) {
-    if (stack != NULL) {
-        lm_p0_stack_free(stack);
-        free(stack);
-    }
+    lm_own_delete(stack, lm_p0_stack_free_any);
 }
 
 static LmP0PendingDelimiter *lm_p0_pending_delimiter_new(void) {
@@ -2216,7 +2218,7 @@ static LmP0StreamEvent *lm_p0_stream_event_new_copy(const LmP0StreamEvent *event
 }
 
 static void lm_p0_stream_event_delete(LmP0StreamEvent *event) {
-    free(event);
+    lm_own_delete(event, NULL);
 }
 
 static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter *pending) {
@@ -2249,7 +2251,7 @@ static int lm_p0_pending_delimiter_set(
 static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter *pending) {
     if (pending != NULL) {
         lm_p0_pending_delimiter_clear(pending);
-        free(pending);
+        lm_own_delete(pending, NULL);
     }
 }
 
@@ -2267,7 +2269,7 @@ static LmP0DisabledState *lm_p0_disabled_state_new(size_t base_level) {
 }
 
 static void lm_p0_disabled_state_delete(LmP0DisabledState *state) {
-    free(state);
+    lm_own_delete(state, NULL);
 }
 
 static int lm_p0_node_keeps_source_child_level(LmP0Node *node) {
@@ -3756,7 +3758,7 @@ int lm_p0_parse_bytes(
     document->source_length = source_length;
     document->source = lm_p0_copy_bytes(source, document->source_length);
     if (document->source == NULL) {
-        free(document);
+        lm_own_delete(document, NULL);
         return 1;
     }
 
@@ -3831,8 +3833,8 @@ void lm_p0_document_destroy(LmP0Document *document) {
         return;
     }
     lm_p0_free_node(document->root);
-    free(document->source);
-    free(document);
+    lm_own_delete(document->source, NULL);
+    lm_own_delete(document, NULL);
 }
 
 const LmP0Node *lm_p0_document_root(const LmP0Document *document) {
@@ -3847,7 +3849,7 @@ const LmP0Diagnostic *lm_p0_document_diagnostic(const LmP0Document *document) {
 }
 
 void lm_p0_free(void *ptr) {
-    free(ptr);
+    lm_own_delete(ptr, NULL);
 }
 
 static int lm_p0_dump_reserve(LmP0Dump *dump, size_t extra) {
@@ -4012,8 +4014,8 @@ static char *lm_p0_dump_take_data(LmP0Dump *dump) {
 
 static void lm_p0_dump_delete(LmP0Dump *dump) {
     if (dump != NULL) {
-        free(dump->data);
-        free(dump);
+        lm_own_delete(dump->data, NULL);
+        lm_own_delete(dump, NULL);
     }
 }
 

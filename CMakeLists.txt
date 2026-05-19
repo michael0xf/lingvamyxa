@@ -98,29 +98,6 @@ set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
 # ---- Generated L1 parser snapshot ----
 
 if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0)
-    add_library(parser.lm1 STATIC
-        "${LM1_GENERATED_PARSER_C}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser.lm1.h"
-    )
-
-    set_target_properties(parser.lm1 PROPERTIES
-        OUTPUT_NAME "parser.lm0"
-    )
-
-    target_include_directories(parser.lm1 PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
-    )
-
-    if (MSVC)
-        target_compile_options(parser.lm1 PRIVATE /W4)
-    else()
-        target_compile_options(parser.lm1 PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-endif()
-
-# ---- L2 to L1 translator and generated L1 mirror ----
-
-if (BUILD_TRANS_LM0)
     add_library(own.lm1 STATIC
         "${LM1_GENERATED_OWN_C}"
         "${CMAKE_CURRENT_SOURCE_DIR}/lm1/own.lm1.h"
@@ -140,6 +117,33 @@ if (BUILD_TRANS_LM0)
         target_compile_options(own.lm1 PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
+    add_library(parser.lm1 STATIC
+        "${LM1_GENERATED_PARSER_C}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/lm1/parser.lm1.h"
+    )
+
+    set_target_properties(parser.lm1 PROPERTIES
+        OUTPUT_NAME "parser.lm0"
+    )
+
+    target_include_directories(parser.lm1 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
+    )
+
+    target_link_libraries(parser.lm1 PUBLIC
+        own.lm1
+    )
+
+    if (MSVC)
+        target_compile_options(parser.lm1 PRIVATE /W4)
+    else()
+        target_compile_options(parser.lm1 PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
+
+# ---- L2 to L1 translator and generated L1 mirror ----
+
+if (BUILD_TRANS_LM0)
     add_executable(trans.lm0
         "${LM1_GENERATED_TRANS_C}"
     )

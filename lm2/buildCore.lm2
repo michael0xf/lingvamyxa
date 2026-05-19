@@ -450,7 +450,7 @@ static int lm_build_compile_generated_tools(const char *make_tool) {
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" -o \"build/lm0/printTree.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/printTree.lm0%s\"",
         LM_BUILD_EXE_SUFFIX
     );
     if (lm_build_make(make_tool, "link", command) != 0) {
