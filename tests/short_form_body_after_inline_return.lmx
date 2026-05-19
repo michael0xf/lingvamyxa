@@ -1,0 +1,5 @@
+fn: lm_trans_text_equals ( const: @: LmP0Text text,, const: @: c.char value ) (c.int)
+    c.size_t: length
+    length: c.strlen(value)
+    return: text\length = length && c.memcmp(text\data, value, length) = 0
+end: lm_trans_text_equals

@@ -456,17 +456,23 @@ This example should be read with five simple structural rules in mind:
 
 3. Source levels build the tree.
 
-   Indentation in relaxed notation, or dots in canonical notation, determines
-   the source-level tree. Child items are written at the next deeper source
-   level. Returning by one source level completes the currently open Structure
-   before the next source item is parsed. Cutting more than one level at once is
-   reserved for admitted tail-cutter semantics in the next layer.
+   The parser tracks source-level changes, not physical source lines as
+   containers. Dots in canonical notation, indentation in relaxed notation,
+   colon short-form, comma, bounded parentheses, source-level markers and
+   physical newline separators may all affect the current level model. Child
+   items are written at the next deeper source level. An atomic increase of the
+   current source level opens a Structure. Returning by one source level
+   completes the currently open Structure before the next source item is parsed.
+   Cutting more than one level at once is reserved for admitted tail-cutter
+   semantics in the next layer.
 
 4. A source-level cut is the ordinary trailer event.
 
    A block does not need an explicit close merely because it is named. The
-   ordinary trailer event is the source-level cut itself. It is not the text of
-   the following lower-level line. Explicit forms such as `end: name` and
+   ordinary trailer event is the source-level cut when a following source item
+   or admitted marker makes that cut visible. It is not the physical newline
+   character by itself, and it is not the text of the following lower-level
+   item. Explicit forms such as `end: name` and
    terminal return forms become tail-cutter trailers only in a valid
    source-level tail-cutter position. They may close source-level/block tails,
    but they do not close unmatched parenthesized/bounded Structures; those must
@@ -1258,7 +1264,7 @@ It creates the same logical Frame as:
 
     f(a, b, c)
 
-The token before `:` is the head identifier or symbolic head. The tail after `:` is the line argument Structure. In an ordinary physical short line, whitespace separates fields inside that Structure. A physical newline ends the physical line but is not by itself the trailer of the short form; the next source level determines whether the frame continues with vertical fields or is complete. If a line command already has inline fields and the next source item is written at the child level, that child-level part is a nested Structure field, so `receiver: value` followed by an indented body is structurally the same body boundary as `receiver: value (body)`. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure terminates the open continuation and the parser then resumes according to the surrounding line/block rules.
+The token before `:` is the head identifier or symbolic head. The tail after `:` is the line argument Structure. In an ordinary physical short line, whitespace separates fields inside that Structure. A physical newline separator in an open short form performs the short-form level step from the implicit argument level N + 1 back to the form's source level N, but it is not by itself the trailer of the short form. The following source item determines whether the frame continues with vertical fields or is complete. If a line command already has inline fields and the next source item is written at the child level, the level step N -> N + 1 opens a Structure field of the same short-form argument sequence, so `receiver: value` followed by an indented body is structurally the same body boundary as `receiver: value (body)`. If the line command opens a bounded continuation, such as `fn: i(`, the matching close of that bounded Structure terminates the open continuation and the parser then resumes according to the surrounding line/block rules.
 
 Bare heads do not contain spaces in the portable profile. A receiver/procedure name or entity name that contains spaces must be written as an exact quoted identifier.
 
@@ -1341,7 +1347,40 @@ where `2 dim` is one exact identifier field.
 
 When a short colon-form is open at source level N, its argument fields live at the implicit argument level N + 1. Inline tail fields on the same physical line are simply the first fields at that implicit argument level.
 
-Physical newline is not a short-form trailer. It only ends the physical line. The source level of the following non-empty source item decides whether the current short form continues or closes:
+Parser event view for a short colon-form opened at source level N:
+
+    syntax/event                          atomic level effect          structural effect
+    head:                                 N -> N + 1                   opens the short argument Structure
+    horizontal whitespace                 no level change              separates neighboring fields
+    physical newline separator            N + 1 -> N                   delimiter only; not a trailer
+    following source item at N + 1         N -> N + 1                   continues the same short form as a new field
+    following source item at N             visible item/trailer at N    completes the short form; the item is a sibling
+    following admitted tail-cutter         tail-cutter-specific         may close the admitted target
+    comma                                 scan-depth trailer           completes the current open short form immediately
+    matching )                            bounded-context trailer      closes the bounded form and any open short form inside it
+
+The important point is that the parser watches source-level changes, not
+physical source lines as containers. Physical newline in a short form performs
+the N + 1 -> N step, but that step alone does not complete the form: the
+following source item/trailer does. If the following source item is written at
+N + 1, the parser observes the atomic down/up sequence N + 1 -> N -> N + 1.
+That source-level increase opens a Structure boundary instead of merging the
+vertical item flatly with the previous inline field sequence.
+
+This rule is intentionally asymmetric. Any atomic source-level increase opens a
+Structure, because a deeper source level is already a visible request for a
+nested object. Closing is not triggered by a bare separator in the same way:
+the close needs a following source item, a visible source-level marker, comma,
+`)` or an admitted tail-cutter. This preserves one shared mechanism for
+anonymous block separation with the minimum number of logical markers while
+still allowing many surface forms. In particular, after a short form has
+accepted a vertical block as one of its arguments, there are few remaining
+logical anchors, but the down/up level event is explicit enough to identify the
+next structural field unambiguously.
+
+Physical newline is not a short-form trailer. It only performs the short-form
+separator step described above. The source level of the following non-empty
+source item decides whether the current short form continues or closes:
 
     next item at N + 1  -> another argument field of the current short form
     next item at N      -> the current short form is complete; the next item is a sibling
@@ -1412,7 +1451,16 @@ normalizes as two neighboring items at the current scan depth:
 
 Here `c` is not an argument of `print`. Its later validity depends on the surrounding receiver/profile and statement/value position.
 
-Physical newline alone does not close a short form. A decrease from the short form's implicit argument level closes it. Comma closes it immediately. A matching `)` closes the current bounded/compact form; if a short form is still open inside that bounded form, the short form is completed as part of closing the bounded context. None of those boundary tokens is a whitespace field separator inside the short form.
+Physical newline alone does not close a short form. In a short form, the
+newline separator changes the current short-form level from N + 1 back to N,
+but the visible completion is caused by the following source item/trailer at N
+or below, not by the newline character itself. If the following source item is
+again at N + 1, the short form continues and the atomic N -> N + 1 step opens
+a new Structure field in the same argument sequence. Comma closes the current
+open short form immediately. A matching `)` closes the current
+bounded/compact form; if a short form is still open inside that bounded form,
+the short form is completed as part of closing the bounded context. None of
+those boundary tokens is a whitespace field separator inside the short form.
 
 Example of continuation by implicit argument level:
 
@@ -1620,24 +1668,40 @@ Relaxed indentation notation is a readability notation over the same source-leve
 
 Shared source-level rule after either surface notation has been mapped to source levels:
 
-    A source line has a source level.
+    The parser observes a stream of source items and source-level events.
+    Physical source lines are not semantic containers. The phrase "line" in
+    this section names the usual visual spelling of the next source item, not a
+    separate AST object.
+
+    A source item has a source level.
 
     In canonical dotted notation, source level is the count of leading dots.
 
     In relaxed indentation notation, source level is computed from the
     leading spaces/tabs indentation stack.
 
+    Source levels are not only indentation. All surface syntax that opens,
+    continues, bounds, separates or closes a Structure participates in the
+    level model. A colon short-form opens an implicit argument level N + 1.
+    Inside that short-form scan, physical newline performs the separator step
+    N + 1 -> N. Parentheses bound a compact Structure. Comma is a trailer at
+    the current scan depth. `---` and canonical dotted delimiter lines
+    materialize source-level points.
+
     Internal spaces remain ordinary source characters and may still participate
     in exact quoted identifiers, short-tail field separation and manual
     alignment.
 
-    A line at a source level deeper than the previous structural head is a
+    An atomic source-level increase opens a Structure. A source item at a
+    source level deeper than the previous structural head is a
     child item of that head.
 
-    A line that returns by one source level is a level delimiter and closes the
-    open structure above that level before the line text is parsed as an
-    ordinary source item at its own level. Returning by more than one level is
-    not a plain P0 level transition; it requires an admitted tail-cutter layer.
+    A following source item that returns by one source level is a level
+    delimiter and closes the open structure above that level before that source
+    item is parsed as an ordinary item at its own level. The separator that
+    precedes it, such as a physical newline, is not the trailer by itself.
+    Returning by more than one level is not a plain P0 level transition; it
+    requires an admitted tail-cutter layer.
 
     A source-level cut is the ordinary structural trailer event. The event is
     the level transition itself, not any receiver/data written on the following
@@ -1694,15 +1758,20 @@ Terminology:
         A transition from the current open source item to a source point that
         cannot remain inside it: a sibling level or a surrounding level. It
         completes the current open item and any deeper open Structures before
-        the new source item is parsed.
+        the new source item is parsed. The cut is observed when the next source
+        item or admitted marker appears at that level. A physical newline may
+        be the separator that makes the next item visually start elsewhere, but
+        it is not the cut/trailer object by itself.
 
     trailer
         The structural completion event of an opened frame or anonymous
-        Structure. In ordinary P0 source this is usually a one-step
-        source-level cut: a change from level N to level N - 1 that completes
-        the open item before the new source line is parsed. The next line's
-        text is not the trailer. Larger cuts are not ordinary P0 level
-        transitions; they require an admitted tail-cutter layer.
+        Structure. In ordinary P0 source this is usually a following source
+        item at the sibling/surrounding source level: the parser has observed
+        that the next item cannot remain inside the open Structure. The
+        physical newline separator is not the trailer. The next item's text is
+        also not automatically a special trailer receiver; ordinary text at the
+        sibling level is just the next item. Larger cuts are not ordinary P0
+        level transitions; they require an admitted tail-cutter layer.
         Explicit forms such as `end: name` and terminal `return` become
         specialized tail-cutter trailers only in admitted source-level
         tail-cutter positions. A tail-cutter may close source-level/block
@@ -1758,11 +1827,11 @@ The final `return: inner(a)` is at the source level of `fn: outer`; therefore it
 
 A source item at level N may open a frame/Structure. Its vertical child arguments are written at level N + 1.
 
-A physical source line at level N + 1 is one positional child item of the open frame/Structure at level N.
+A following source item at level N + 1 is one positional child item of the open frame/Structure at level N.
 
-A physical source line at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. If no such open item exists, the level increase itself materializes an anonymous positional Structure at the intervening parent level. Scalar literals and ordinary value items do not become headers merely because a deeper line follows them.
+A following source item at level greater than N + 1 belongs to the immediately preceding child item only when that preceding child item is a Structure-opening item. If no such open item exists, the level increase itself materializes an anonymous positional Structure at the intervening parent level. Scalar literals and ordinary value items do not become headers merely because a deeper item follows them.
 
-A physical source line one level smaller than the current open child resumes the parent level and starts a sibling item there. The smaller-level line itself is the level delimiter. A larger decrease is reserved for an admitted tail-cutter layer. If the next item starts at the same level as the current anonymous/implicit section, use a canonical dotted delimiter line or relaxed `---` at that level.
+A following source item one level smaller than the current open child resumes the parent level and starts a sibling item there. That smaller-level source item makes the level delimiter visible; the physical newline before it is not the delimiter by itself. A larger decrease is reserved for an admitted tail-cutter layer. If the next item starts at the same level as the current anonymous/implicit section, use a canonical dotted delimiter line or relaxed `---` at that level.
 
 A smaller-level ordinary item is still an ordinary item. It is not treated as a
 named trailer merely because it closes deeper open structure before it is read.
@@ -3836,6 +3905,14 @@ registered receiver. If `get` is a variable, label or named Structure, the same
 source field is not a function call. If it is unknown, the translator reports an
 unknown Lingvamyxa name unless the source explicitly uses the permanent ANSI C
 door, such as `c.get(1,2)`.
+
+Structures are never executed merely because they exist. A translator or
+interpreter may lower a named Structure/Frame as a call only when that field is
+in an executable/consumed position and namespace resolution has already proven
+that the head is an `fn`, `sub` or registered receiver/operator that consumes
+the supplied argument Structure as executable input. Anonymous Structures and
+named Structures whose heads resolve to variables, labels, records, arrays,
+tables or ordinary data remain data until a receiver explicitly consumes them.
 
 P0 does not know these receiver-specific meanings. It only builds the field
 sequence. After receiver normalization, a valid `name` argument is privileged
@@ -6114,7 +6191,8 @@ This grammar sketch describes the structural parser only. It does not define fin
                             source-level normalization prepass
 
     source-level normalization prepass:
-                            maps each physical line to a source-level event
+                            maps the physical source spelling to source-level
+                            item/level events
                             before the structural grammar consumes it;
                             in canonical dotted notation, source_level is the
                             count of leading dot characters;
@@ -6217,9 +6295,9 @@ This grammar sketch describes the structural parser only. It does not define fin
                           | bounded_structure
                           | atom_or_value
 
-The vertical Structure tree is produced by source levels and explicit visible delimiters: one-step smaller source-level lines as level delimiters, canonical dotted delimiter lines, relaxed dash-fence lines, and admitted source-level tail-cutter forms such as `end:` or terminal return where valid.
+The vertical Structure tree is produced by source levels and explicit visible delimiters: following source items at one-step smaller source level as level delimiters, canonical dotted delimiter lines, relaxed dash-fence lines, and admitted source-level tail-cutter forms such as `end:` or terminal return where valid. The physical newline separator is not itself the trailer; it only helps expose the next source item and its level.
 
-For a source item at level N, vertical child arguments are written at level N + 1. A source line at level N + 1 is one positional child item of that frame/Structure. In a short colon-form, the inline tail fields are also treated as fields at the implicit argument level N + 1. A source line deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and identifier values do not become headers merely because a deeper line follows.
+For a source item at level N, vertical child arguments are written at level N + 1. A following source item at level N + 1 is one positional child item of that frame/Structure. In a short colon-form, the inline tail fields are also treated as fields at the implicit argument level N + 1. A following source item deeper than N + 1 belongs to the immediately preceding child item only if that child item opens a Structure. Scalar literals and identifier values do not become headers merely because a deeper item follows.
 
 A canonical dotted delimiter line or relaxed dash-fence line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at level K - 1 closes that anonymous Structure by the ordinary one-step cut. A larger cut is not ordinary P0 syntax and requires an admitted tail-cutter layer.
 

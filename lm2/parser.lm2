@@ -69,7 +69,10 @@ typedef struct LmP0Dump {
 
 typedef enum LmP0TrailerRole {
     LM_P0_TRAILER_ROLE_NONE = 0,
-    LM_P0_TRAILER_ROLE_TAIL_CUTTER = 1
+    LM_P0_TRAILER_ROLE_DASH_CUTTER = 1,
+    LM_P0_TRAILER_ROLE_END = 2,
+    LM_P0_TRAILER_ROLE_RETURN = 3,
+    LM_P0_TRAILER_ROLE_UNTIL = 4
 } LmP0TrailerRole;
 
 typedef enum LmP0DashFenceStatus {
@@ -2079,23 +2082,46 @@ static int lm_p0_text_has_prefix_name(
 
 static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
     if (lm_p0_dash_fence_status_after_comment_trim(text, length, NULL) == LM_P0_DASH_FENCE_VALID) {
-        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+        return LM_P0_TRAILER_ROLE_DASH_CUTTER;
     }
     if (lm_p0_text_has_prefix_name(text, length, "end", 0)) {
-        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+        return LM_P0_TRAILER_ROLE_END;
     }
     if (lm_p0_text_has_prefix_name(text, length, "return", 1)) {
-        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+        return LM_P0_TRAILER_ROLE_RETURN;
     }
     if (lm_p0_text_has_prefix_name(text, length, "until", 0)) {
-        return LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+        return LM_P0_TRAILER_ROLE_UNTIL;
     }
     return LM_P0_TRAILER_ROLE_NONE;
 }
 
+static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role) {
+    return role != LM_P0_TRAILER_ROLE_NONE;
+}
+
+static int lm_p0_node_head_is(const LmP0Node *node, const char *name) {
+    size_t name_length;
+
+    if (node == NULL || node->kind != LM_P0_NODE_FRAME) {
+        return 0;
+    }
+
+    name_length = strlen(name);
+    return node->as.frame.head.length == name_length &&
+        memcmp(node->as.frame.head.data, name, name_length) == 0;
+}
+
+static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target) {
+    if (role == LM_P0_TRAILER_ROLE_RETURN) {
+        return lm_p0_node_head_is(target, "fn");
+    }
+    return lm_p0_trailer_role_is_tail_cutter(role);
+}
+
 static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event) {
     return event->kind == LM_P0_STREAM_EVENT_ITEM &&
-        lm_p0_trailer_role(event->text, event->text_length) == LM_P0_TRAILER_ROLE_TAIL_CUTTER;
+        lm_p0_trailer_role_is_tail_cutter(lm_p0_trailer_role(event->text, event->text_length));
 }
 
 static void lm_p0_stack_free(LmP0Stack *stack) {
@@ -2446,6 +2472,8 @@ static int lm_p0_stream_apply_item_event(
     size_t top_level;
     LmP0Structure *parent;
     LmP0Node *node;
+    int trailer_target_available;
+    int trailer_target_accepted;
 
     if (!lm_p0_stack_ensure(document, stack, event->level + 1U)) {
         return 0;
@@ -2460,18 +2488,29 @@ static int lm_p0_stream_apply_item_event(
         ? lm_p0_trailer_role(event->text, event->text_length)
         : LM_P0_TRAILER_ROLE_NONE;
     top_level = lm_p0_stack_top_level(stack);
-    if (trailer_role != LM_P0_TRAILER_ROLE_TAIL_CUTTER ||
-        event->level + 1U > top_level ||
-        stack->owners[event->level + 1U] == NULL) {
+    trailer_target_available = lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
+        event->level + 1U <= top_level &&
+        stack->owners[event->level + 1U] != NULL;
+    trailer_target_accepted = trailer_target_available &&
+        lm_p0_trailer_role_accepts_target(trailer_role, stack->owners[event->level + 1U]);
+
+    if (lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
+        event->level + 1U < top_level &&
+        !trailer_target_accepted) {
+        lm_p0_set_diagnostic(document, 13, event->line, event->column, "tail-cutter target is not valid for this receiver");
+        return 0;
+    }
+
+    if (!lm_p0_trailer_role_is_tail_cutter(trailer_role) ||
+        !trailer_target_accepted) {
         top_level = lm_p0_stack_collapse_soft_to_event(stack, event->level);
         if (event->level == top_level && stack->hard[top_level] == 0U) {
             stack->hard[top_level] = 1U;
         }
     }
 
-    if (trailer_role == LM_P0_TRAILER_ROLE_TAIL_CUTTER &&
-        event->level + 1U <= top_level &&
-        stack->owners[event->level + 1U] != NULL) {
+    if (lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
+        trailer_target_accepted) {
         LmP0Structure *trailer_body;
         LmP0Node *target;
         size_t target_level;
