@@ -78,6 +78,61 @@ typedef struct LmTransExprStack {
     size_t capacity;
 } LmTransExprStack;
 
+typedef enum LmTransStatementJobKind {
+    LM_TRANS_STATEMENT_JOB_LIST = 1,
+    LM_TRANS_STATEMENT_JOB_NODE = 2,
+    LM_TRANS_STATEMENT_JOB_VALIDATE_END = 3,
+    LM_TRANS_STATEMENT_JOB_TRAILER = 4,
+    LM_TRANS_STATEMENT_JOB_LEAVE_SCOPE = 5,
+    LM_TRANS_STATEMENT_JOB_LOOP_POP = 6,
+    LM_TRANS_STATEMENT_JOB_CLEANUP_POP = 7,
+    LM_TRANS_STATEMENT_JOB_INDENT_TEXT = 8,
+    LM_TRANS_STATEMENT_JOB_SYNC_LEAVE = 9
+} LmTransStatementJobKind;
+
+typedef struct LmTransStatementListJob {
+    const LmP0Field *field;
+    unsigned indent;
+    int unwrap_single_structure;
+} LmTransStatementListJob;
+
+typedef struct LmTransStatementNodeJob {
+    const LmP0Node *node;
+    unsigned indent;
+} LmTransStatementNodeJob;
+
+typedef struct LmTransStatementFrameJob {
+    const LmP0Frame *frame;
+    unsigned indent;
+} LmTransStatementFrameJob;
+
+typedef struct LmTransStatementTextJob {
+    unsigned indent;
+    const char *text;
+} LmTransStatementTextJob;
+
+typedef struct LmTransStatementSyncLeaveJob {
+    unsigned indent;
+    unsigned cleanup_id;
+} LmTransStatementSyncLeaveJob;
+
+typedef struct LmTransStatementJob {
+    LmTransStatementJobKind kind;
+    union {
+        LmTransStatementListJob list;
+        LmTransStatementNodeJob node;
+        LmTransStatementFrameJob frame;
+        LmTransStatementTextJob text;
+        LmTransStatementSyncLeaveJob sync_leave;
+    } as;
+} LmTransStatementJob;
+
+typedef struct LmTransStatementStack {
+    LmTransStatementJob *items;
+    size_t count;
+    size_t capacity;
+} LmTransStatementStack;
+
 typedef struct LmTransNamespace {
     LmTransSymbol **items;
     size_t count;
@@ -2148,160 +2203,6 @@ static int lm_trans_emit_trailer_statement(
     return 1;
 }
 
-static int lm_trans_emit_control(
-    FILE *file,
-    const LmP0Frame *frame,
-    unsigned indent,
-    LmTransNamespace *namespace_,
-    const char *keyword
-) {
-    const LmP0Field *body_start;
-    int is_loop;
-
-    is_loop = strcmp(keyword, "while") == 0;
-    body_start = lm_trans_control_body_start(frame);
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, keyword) != 0 || lm_trans_put(file, " (") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, ") {\n") != 0) {
-        return 1;
-    }
-    lm_trans_namespace_enter_scope(namespace_);
-    if (is_loop && lm_trans_loop_push(namespace_) != 0) {
-        lm_trans_namespace_leave_scope(namespace_);
-        return 1;
-    }
-    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
-        if (is_loop) {
-            lm_trans_loop_pop(namespace_);
-        }
-        lm_trans_namespace_leave_scope(namespace_);
-        return 1;
-    }
-    if (is_loop) {
-        lm_trans_loop_pop(namespace_);
-    }
-    lm_trans_namespace_leave_scope(namespace_);
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    return lm_trans_put(file, "}\n");
-}
-
-static int lm_trans_emit_synchronized(
-    FILE *file,
-    const LmP0Frame *frame,
-    unsigned indent,
-    LmTransNamespace *namespace_
-) {
-    const LmP0Field *body_start;
-    unsigned cleanup_id;
-
-    if (frame == NULL || frame->body.first_field == NULL) {
-        fprintf(stderr, "trans L2 error: synchronized expects an object expression\n");
-        return 1;
-    }
-
-    cleanup_id = namespace_->next_cleanup_id++;
-    body_start = lm_trans_control_body_start(frame);
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "void *") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, " = (void *)(") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, ");\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "lm_synchronized_enter(") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, ");\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "{\n") != 0) {
-        return 1;
-    }
-
-    lm_trans_namespace_enter_scope(namespace_);
-    if (lm_trans_cleanup_push(namespace_, cleanup_id) != 0) {
-        lm_trans_namespace_leave_scope(namespace_);
-        return 1;
-    }
-    if (lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0) {
-        lm_trans_cleanup_pop(namespace_);
-        lm_trans_namespace_leave_scope(namespace_);
-        return 1;
-    }
-    lm_trans_cleanup_pop(namespace_);
-    lm_trans_namespace_leave_scope(namespace_);
-
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "}\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
-        return 1;
-    }
-    return lm_trans_put(file, ");\n");
-}
-
-static int lm_trans_emit_else(
-    FILE *file,
-    const LmP0Frame *frame,
-    unsigned indent,
-    LmTransNamespace *namespace_
-) {
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "else {\n") != 0) {
-        return 1;
-    }
-    lm_trans_namespace_enter_scope(namespace_);
-    if (lm_trans_emit_statement_list(file, frame->body.first_field, indent + 1U, namespace_) != 0) {
-        lm_trans_namespace_leave_scope(namespace_);
-        return 1;
-    }
-    lm_trans_namespace_leave_scope(namespace_);
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    return lm_trans_put(file, "}\n");
-}
-
 static int lm_trans_emit_declaration_with_qualifier(
     FILE *file,
     const LmP0Frame *frame,
@@ -2990,12 +2891,288 @@ static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
     return lm_trans_frame_looks_named_structure_declaration(frame);
 }
 
-static int lm_trans_emit_label_statement(
+static void lm_trans_statement_stack_destroy(LmTransStatementStack *stack) {
+    if (stack != NULL) {
+        lm_own_delete(stack->items, NULL);
+        stack->items = NULL;
+        stack->count = 0U;
+        stack->capacity = 0U;
+    }
+}
+
+static int lm_trans_statement_stack_push(LmTransStatementStack *stack, LmTransStatementJob job) {
+    size_t capacity;
+    LmTransStatementJob *items;
+
+    if (stack->count == stack->capacity) {
+        capacity = stack->capacity == 0U ? 32U : stack->capacity * 2U;
+        items = (LmTransStatementJob *)realloc(stack->items, capacity * sizeof(*items));
+        if (items == NULL) {
+            return 1;
+        }
+        stack->items = items;
+        stack->capacity = capacity;
+    }
+
+    stack->items[stack->count++] = job;
+    return 0;
+}
+
+static int lm_trans_statement_stack_push_list(
+    LmTransStatementStack *stack,
+    const LmP0Field *field,
+    unsigned indent,
+    int unwrap_single_structure
+) {
+    LmTransStatementJob job;
+
+    job.kind = LM_TRANS_STATEMENT_JOB_LIST;
+    job.as.list.field = field;
+    job.as.list.indent = indent;
+    job.as.list.unwrap_single_structure = unwrap_single_structure;
+    return lm_trans_statement_stack_push(stack, job);
+}
+
+static int lm_trans_statement_stack_push_node(
+    LmTransStatementStack *stack,
+    const LmP0Node *node,
+    unsigned indent
+) {
+    LmTransStatementJob job;
+
+    job.kind = LM_TRANS_STATEMENT_JOB_NODE;
+    job.as.node.node = node;
+    job.as.node.indent = indent;
+    return lm_trans_statement_stack_push(stack, job);
+}
+
+static int lm_trans_statement_stack_push_frame_job(
+    LmTransStatementStack *stack,
+    LmTransStatementJobKind kind,
+    const LmP0Frame *frame,
+    unsigned indent
+) {
+    LmTransStatementJob job;
+
+    job.kind = kind;
+    job.as.frame.frame = frame;
+    job.as.frame.indent = indent;
+    return lm_trans_statement_stack_push(stack, job);
+}
+
+static int lm_trans_statement_stack_push_simple(LmTransStatementStack *stack, LmTransStatementJobKind kind) {
+    LmTransStatementJob job;
+
+    job.kind = kind;
+    return lm_trans_statement_stack_push(stack, job);
+}
+
+static int lm_trans_statement_stack_push_indent_text(
+    LmTransStatementStack *stack,
+    unsigned indent,
+    const char *text
+) {
+    LmTransStatementJob job;
+
+    job.kind = LM_TRANS_STATEMENT_JOB_INDENT_TEXT;
+    job.as.text.indent = indent;
+    job.as.text.text = text;
+    return lm_trans_statement_stack_push(stack, job);
+}
+
+static int lm_trans_statement_stack_push_sync_leave(
+    LmTransStatementStack *stack,
+    unsigned indent,
+    unsigned cleanup_id
+) {
+    LmTransStatementJob job;
+
+    job.kind = LM_TRANS_STATEMENT_JOB_SYNC_LEAVE;
+    job.as.sync_leave.indent = indent;
+    job.as.sync_leave.cleanup_id = cleanup_id;
+    return lm_trans_statement_stack_push(stack, job);
+}
+
+static const LmP0Field *lm_trans_statement_list_first_field(
+    const LmP0Field *first,
+    int unwrap_single_structure
+) {
+    if (
+        unwrap_single_structure &&
+        first != NULL &&
+        first->next == NULL &&
+        first->value != NULL &&
+        first->value->kind == LM_P0_NODE_STRUCTURE
+    ) {
+        return first->value->as.structure.first_field;
+    }
+
+    return first;
+}
+
+static int lm_trans_statement_stack_schedule_control(
     FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_,
+    const char *keyword
+) {
+    const LmP0Field *body_start;
+    int is_loop;
+    int status;
+
+    is_loop = strcmp(keyword, "while") == 0;
+    body_start = lm_trans_control_body_start(frame);
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, keyword) != 0 || lm_trans_put(file, " (") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ") {\n") != 0) {
+        return 1;
+    }
+
+    lm_trans_namespace_enter_scope(namespace_);
+    if (is_loop && lm_trans_loop_push(namespace_) != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+
+    status =
+        lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
+        lm_trans_statement_stack_push_simple(stack, LM_TRANS_STATEMENT_JOB_LEAVE_SCOPE) ||
+        (is_loop && lm_trans_statement_stack_push_simple(stack, LM_TRANS_STATEMENT_JOB_LOOP_POP)) ||
+        lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1);
+    if (status != 0) {
+        if (is_loop) {
+            lm_trans_loop_pop(namespace_);
+        }
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_trans_statement_stack_schedule_synchronized(
+    FILE *file,
+    LmTransStatementStack *stack,
     const LmP0Frame *frame,
     unsigned indent,
     LmTransNamespace *namespace_
 ) {
+    const LmP0Field *body_start;
+    unsigned cleanup_id;
+    int status;
+
+    if (frame == NULL || frame->body.first_field == NULL) {
+        fprintf(stderr, "trans L2 error: synchronized expects an object expression\n");
+        return 1;
+    }
+
+    cleanup_id = namespace_->next_cleanup_id++;
+    body_start = lm_trans_control_body_start(frame);
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void *") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " = (void *)(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_control_condition(file, frame, namespace_) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ");\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "lm_synchronized_enter(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ");\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "{\n") != 0) {
+        return 1;
+    }
+
+    lm_trans_namespace_enter_scope(namespace_);
+    if (lm_trans_cleanup_push(namespace_, cleanup_id) != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+
+    status =
+        lm_trans_statement_stack_push_sync_leave(stack, indent, cleanup_id) ||
+        lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
+        lm_trans_statement_stack_push_simple(stack, LM_TRANS_STATEMENT_JOB_LEAVE_SCOPE) ||
+        lm_trans_statement_stack_push_simple(stack, LM_TRANS_STATEMENT_JOB_CLEANUP_POP) ||
+        lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1);
+    if (status != 0) {
+        lm_trans_cleanup_pop(namespace_);
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_trans_statement_stack_schedule_else(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    int status;
+
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "else {\n") != 0) {
+        return 1;
+    }
+
+    lm_trans_namespace_enter_scope(namespace_);
+    status =
+        lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
+        lm_trans_statement_stack_push_simple(stack, LM_TRANS_STATEMENT_JOB_LEAVE_SCOPE) ||
+        lm_trans_statement_stack_push_list(stack, frame->body.first_field, indent + 1U, 1);
+    if (status != 0) {
+        lm_trans_namespace_leave_scope(namespace_);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_trans_statement_stack_schedule_label(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    int status;
+
     if (lm_trans_namespace_declare(namespace_, frame->head, LM_TRANS_SYMBOL_LABEL) != 0) {
         return 1;
     }
@@ -3014,21 +3191,24 @@ static int lm_trans_emit_label_statement(
     if (lm_trans_put(file, "{\n") != 0) {
         return 1;
     }
+
     lm_trans_namespace_enter_scope(namespace_);
-    if (lm_trans_emit_statement_list(file, frame->body.first_field, indent + 1U, namespace_) != 0) {
+    status =
+        lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
+        lm_trans_statement_stack_push_simple(stack, LM_TRANS_STATEMENT_JOB_LEAVE_SCOPE) ||
+        lm_trans_statement_stack_push_list(stack, frame->body.first_field, indent + 1U, 1);
+    if (status != 0) {
         lm_trans_namespace_leave_scope(namespace_);
         return 1;
     }
-    lm_trans_namespace_leave_scope(namespace_);
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    return lm_trans_put(file, "}\n");
+
+    return 0;
 }
 
-static int lm_trans_emit_statement(
+static int lm_trans_statement_stack_emit_frame(
     FILE *file,
-    const LmP0Node *node,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
     unsigned indent,
     LmTransNamespace *namespace_
 ) {
@@ -3036,6 +3216,117 @@ static int lm_trans_emit_statement(
     const LmTransSymbol *symbol;
     LmP0Text c_name;
 
+    status =
+        lm_trans_statement_stack_push_frame_job(stack, LM_TRANS_STATEMENT_JOB_TRAILER, frame, indent) ||
+        lm_trans_statement_stack_push_frame_job(stack, LM_TRANS_STATEMENT_JOB_VALIDATE_END, frame, indent);
+    if (status != 0) {
+        return 1;
+    }
+
+    if (lm_trans_text_equals(frame->head, "return")) {
+        return lm_trans_emit_return_statement(file, frame->body.first_field, indent, namespace_);
+    }
+    if (lm_trans_text_equals(frame->head, "if")) {
+        return lm_trans_statement_stack_schedule_control(file, stack, frame, indent, namespace_, "if");
+    }
+    if (lm_trans_text_equals(frame->head, "while")) {
+        return lm_trans_statement_stack_schedule_control(file, stack, frame, indent, namespace_, "while");
+    }
+    if (lm_trans_text_equals(frame->head, "else")) {
+        return lm_trans_statement_stack_schedule_else(file, stack, frame, indent, namespace_);
+    }
+    if (lm_trans_text_equals(frame->head, "synchronized")) {
+        return lm_trans_statement_stack_schedule_synchronized(file, stack, frame, indent, namespace_);
+    }
+    if (lm_trans_text_equals(frame->head, "break")) {
+        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(file, indent) != 0) {
+            return 1;
+        }
+        return lm_trans_put(file, "break;\n");
+    }
+    if (lm_trans_text_equals(frame->head, "continue")) {
+        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(file, indent) != 0) {
+            return 1;
+        }
+        return lm_trans_put(file, "continue;\n");
+    }
+    if (lm_trans_text_equals(frame->head, "const")) {
+        return lm_trans_emit_const_statement(file, frame, indent, namespace_);
+    }
+    if (lm_trans_text_equals(frame->head, "[]")) {
+        return lm_trans_emit_array_declaration(file, frame, indent, namespace_);
+    }
+    if (lm_trans_frame_looks_storage_declaration(frame, namespace_)) {
+        return lm_trans_emit_declaration(file, frame, indent, namespace_);
+    }
+    if (lm_trans_text_all_char(frame->head, '@')) {
+        return lm_trans_emit_pointer_declaration(file, frame, indent, namespace_);
+    }
+    if (lm_trans_head_looks_assignable_target(frame->head)) {
+        return lm_trans_emit_target_assignment(file, frame, indent, namespace_);
+    }
+    if (
+        !lm_trans_is_c_reference_name(frame->head) &&
+        !lm_trans_is_reserved_head_name(frame->head) &&
+        lm_trans_frame_single_c_reference_body(frame, &c_name)
+    ) {
+        return lm_trans_emit_c_reference_binding(frame, namespace_);
+    }
+    if (lm_trans_frame_looks_label_declaration(frame)) {
+        return lm_trans_statement_stack_schedule_label(file, stack, frame, indent, namespace_);
+    }
+    if (lm_trans_is_c_reference_name(frame->head)) {
+        return lm_trans_emit_call_statement(file, frame, indent, namespace_);
+    }
+
+    symbol = lm_trans_namespace_find(namespace_, frame->head);
+    if (symbol == NULL) {
+        fprintf(
+            stderr,
+            "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
+            (int)frame->head.length,
+            frame->head.data,
+            (int)frame->head.length,
+            frame->head.data
+        );
+        return 1;
+    }
+    if (symbol->kind == LM_TRANS_SYMBOL_VARIABLE) {
+        if (symbol->has_c_name) {
+            return lm_trans_emit_call_statement(file, frame, indent, namespace_);
+        }
+        return lm_trans_emit_assignment(file, frame, indent, namespace_);
+    }
+    if (
+        symbol->kind == LM_TRANS_SYMBOL_FUNCTION ||
+        symbol->kind == LM_TRANS_SYMBOL_PROCEDURE
+    ) {
+        return lm_trans_emit_call_statement(file, frame, indent, namespace_);
+    }
+
+    fprintf(
+        stderr,
+        "trans L2 error: \"%.*s\" is %s, not a statement head\n",
+        (int)frame->head.length,
+        frame->head.data,
+        lm_trans_symbol_kind_name(symbol->kind)
+    );
+    return 1;
+}
+
+static int lm_trans_statement_stack_emit_node(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Node *node,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
     if (node == NULL || (node->flags & LM_P0_NODE_INACTIVE)) {
         return 0;
     }
@@ -3075,102 +3366,28 @@ static int lm_trans_emit_statement(
         return lm_trans_put(file, ";\n");
     }
 
-    if (node->kind != LM_P0_NODE_FRAME) {
-        return 0;
+    if (node->kind == LM_P0_NODE_FRAME) {
+        return lm_trans_statement_stack_emit_frame(file, stack, &node->as.frame, indent, namespace_);
     }
 
-    status = 0;
-    if (lm_trans_text_equals(node->as.frame.head, "return")) {
-        status = lm_trans_emit_return_statement(file, node->as.frame.body.first_field, indent, namespace_);
-    } else if (lm_trans_text_equals(node->as.frame.head, "if")) {
-        status = lm_trans_emit_control(file, &node->as.frame, indent, namespace_, "if");
-    } else if (lm_trans_text_equals(node->as.frame.head, "while")) {
-        status = lm_trans_emit_control(file, &node->as.frame, indent, namespace_, "while");
-    } else if (lm_trans_text_equals(node->as.frame.head, "else")) {
-        status = lm_trans_emit_else(file, &node->as.frame, indent, namespace_);
-    } else if (lm_trans_text_equals(node->as.frame.head, "synchronized")) {
-        status = lm_trans_emit_synchronized(file, &node->as.frame, indent, namespace_);
-    } else if (lm_trans_text_equals(node->as.frame.head, "break")) {
-        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
-            return 1;
-        }
-        if (lm_trans_emit_indent(file, indent) != 0) {
-            return 1;
-        }
-        status = lm_trans_put(file, "break;\n");
-    } else if (lm_trans_text_equals(node->as.frame.head, "continue")) {
-        if (lm_trans_emit_cleanups_until(file, indent, namespace_, lm_trans_loop_cleanup_base(namespace_)) != 0) {
-            return 1;
-        }
-        if (lm_trans_emit_indent(file, indent) != 0) {
-            return 1;
-        }
-        status = lm_trans_put(file, "continue;\n");
-    } else if (lm_trans_text_equals(node->as.frame.head, "const")) {
-        status = lm_trans_emit_const_statement(file, &node->as.frame, indent, namespace_);
-    } else if (lm_trans_text_equals(node->as.frame.head, "[]")) {
-        status = lm_trans_emit_array_declaration(file, &node->as.frame, indent, namespace_);
-    } else if (lm_trans_frame_looks_storage_declaration(&node->as.frame, namespace_)) {
-        status = lm_trans_emit_declaration(file, &node->as.frame, indent, namespace_);
-    } else if (lm_trans_text_all_char(node->as.frame.head, '@')) {
-        status = lm_trans_emit_pointer_declaration(file, &node->as.frame, indent, namespace_);
-    } else if (lm_trans_head_looks_assignable_target(node->as.frame.head)) {
-        status = lm_trans_emit_target_assignment(file, &node->as.frame, indent, namespace_);
-    } else if (
-        !lm_trans_is_c_reference_name(node->as.frame.head) &&
-        !lm_trans_is_reserved_head_name(node->as.frame.head) &&
-        lm_trans_frame_single_c_reference_body(&node->as.frame, &c_name)
-    ) {
-        status = lm_trans_emit_c_reference_binding(&node->as.frame, namespace_);
-    } else if (lm_trans_frame_looks_label_declaration(&node->as.frame)) {
-        status = lm_trans_emit_label_statement(file, &node->as.frame, indent, namespace_);
-    } else if (lm_trans_is_c_reference_name(node->as.frame.head)) {
-        status = lm_trans_emit_call_statement(file, &node->as.frame, indent, namespace_);
-    } else {
-        symbol = lm_trans_namespace_find(namespace_, node->as.frame.head);
-        if (symbol == NULL) {
-            fprintf(
-                stderr,
-                "trans L2 error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for ANSI C namespace access\n",
-                (int)node->as.frame.head.length,
-                node->as.frame.head.data,
-                (int)node->as.frame.head.length,
-                node->as.frame.head.data
-            );
-            return 1;
-        }
-        if (symbol->kind == LM_TRANS_SYMBOL_VARIABLE) {
-            if (symbol->has_c_name) {
-                status = lm_trans_emit_call_statement(file, &node->as.frame, indent, namespace_);
-            } else {
-                status = lm_trans_emit_assignment(file, &node->as.frame, indent, namespace_);
-            }
-        } else if (
-            symbol->kind == LM_TRANS_SYMBOL_FUNCTION ||
-            symbol->kind == LM_TRANS_SYMBOL_PROCEDURE
-        ) {
-            status = lm_trans_emit_call_statement(file, &node->as.frame, indent, namespace_);
-        } else {
-            fprintf(
-                stderr,
-                "trans L2 error: \"%.*s\" is %s, not a statement head\n",
-                (int)node->as.frame.head.length,
-                node->as.frame.head.data,
-                lm_trans_symbol_kind_name(symbol->kind)
-            );
-            return 1;
-        }
-    }
+    return 0;
+}
 
-    if (status != 0) {
-        return status;
-    }
-
-    if (lm_trans_validate_end_trailer(&node->as.frame) != 0) {
+static int lm_trans_statement_stack_emit_sync_leave(
+    FILE *file,
+    unsigned indent,
+    unsigned cleanup_id
+) {
+    if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
-
-    return lm_trans_emit_trailer_statement(file, node->as.frame.trailer, indent, namespace_);
+    if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ");\n");
 }
 
 static int lm_trans_emit_statement_list(
@@ -3179,26 +3396,71 @@ static int lm_trans_emit_statement_list(
     unsigned indent,
     LmTransNamespace *namespace_
 ) {
+    LmTransStatementStack stack;
+    LmTransStatementJob job;
     const LmP0Field *field;
+    int status;
 
-    if (
-        first != NULL &&
-        first->next == NULL &&
-        first->value != NULL &&
-        first->value->kind == LM_P0_NODE_STRUCTURE
-    ) {
-        field = first->value->as.structure.first_field;
-    } else {
-        field = first;
-    }
-    while (field != NULL) {
-        if (lm_trans_emit_statement(file, field->value, indent, namespace_) != 0) {
-            return 1;
+    stack.items = NULL;
+    stack.count = 0U;
+    stack.capacity = 0U;
+    status = lm_trans_statement_stack_push_list(&stack, first, indent, 1);
+
+    while (status == 0 && stack.count > 0U) {
+        job = stack.items[--stack.count];
+        if (job.kind == LM_TRANS_STATEMENT_JOB_LIST) {
+            field = lm_trans_statement_list_first_field(
+                job.as.list.field,
+                job.as.list.unwrap_single_structure
+            );
+            if (field != NULL) {
+                if (field->next != NULL) {
+                    status = lm_trans_statement_stack_push_list(&stack, field->next, job.as.list.indent, 0);
+                }
+                if (status == 0) {
+                    status = lm_trans_statement_stack_push_node(&stack, field->value, job.as.list.indent);
+                }
+            }
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_NODE) {
+            status = lm_trans_statement_stack_emit_node(
+                file,
+                &stack,
+                job.as.node.node,
+                job.as.node.indent,
+                namespace_
+            );
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_VALIDATE_END) {
+            status = lm_trans_validate_end_trailer(job.as.frame.frame);
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_TRAILER) {
+            status = lm_trans_emit_trailer_statement(
+                file,
+                job.as.frame.frame->trailer,
+                job.as.frame.indent,
+                namespace_
+            );
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_LEAVE_SCOPE) {
+            lm_trans_namespace_leave_scope(namespace_);
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_LOOP_POP) {
+            lm_trans_loop_pop(namespace_);
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_CLEANUP_POP) {
+            lm_trans_cleanup_pop(namespace_);
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_INDENT_TEXT) {
+            if (lm_trans_emit_indent(file, job.as.text.indent) != 0) {
+                status = 1;
+            } else {
+                status = lm_trans_put(file, job.as.text.text);
+            }
+        } else if (job.kind == LM_TRANS_STATEMENT_JOB_SYNC_LEAVE) {
+            status = lm_trans_statement_stack_emit_sync_leave(
+                file,
+                job.as.sync_leave.indent,
+                job.as.sync_leave.cleanup_id
+            );
         }
-        field = field->next;
     }
 
-    return 0;
+    lm_trans_statement_stack_destroy(&stack);
+    return status;
 }
 
 static int lm_trans_emit_params(
