@@ -20,12 +20,12 @@ static LmP0Text lm_test_other = { "other", 5U };
 
 L2:
     LmTransSymbol:
-        LmP0Text: name
+        @: LmP0Text name
         LmTransSymbolKind: kind
         c.unsigned: depth
         c.int: has_c_name
-        LmP0Text: c_name
-        @: LmP0Text param_names
+        @: LmP0Text c_name
+        @@: LmP0Text param_names
         c.size_t: param_count
         c.int: has_signature
     end: LmTransSymbol
@@ -45,14 +45,14 @@ L2:
     end: LmTransArgumentRange
 
     LmTransNamespace:
-        @: LmTransSymbol items
+        @@: LmTransSymbol items
         c.size_t: count
         c.size_t: capacity
         c.unsigned: depth
-        @: LmTransCleanup cleanups
+        @@: LmTransCleanup cleanups
         c.size_t: cleanup_count
         c.size_t: cleanup_capacity
-        @: LmTransLoop loops
+        @@: LmTransLoop loops
         c.size_t: loop_count
         c.size_t: loop_capacity
         c.unsigned: next_cleanup_id
@@ -146,11 +146,11 @@ The next helpers in trans.lm2 are still intentionally left for the next pass:
     lm_trans_write_all(FILE *file, const char *data, size_t length)
     lm_trans_put(FILE *file, const char *text)
     lm_trans_nth_field(const LmP0Structure *structure, size_t index)
-    namespace functions over namespace_->items[index].field
+    namespace functions over pointer arrays, for example namespace\items[index]\name
 
-They require finishing the small C-surface/details around file APIs and
-array-element value-member access. Until that is nailed down, this file stays a
-compiling checkpoint instead of pretending to be the full translator.
+They require settling ownership/allocation for L2 pointer arrays and the small
+C-surface details around file APIs. Until that is nailed down, this file stays
+a compiling checkpoint instead of pretending to be the full translator.
 */
 ===
 
