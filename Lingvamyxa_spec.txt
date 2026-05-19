@@ -1378,6 +1378,34 @@ accepted a vertical block as one of its arguments, there are few remaining
 logical anchors, but the down/up level event is explicit enough to identify the
 next structural field unambiguously.
 
+The same mechanism gives short colon-form three common writing modes. These are
+style modes over the same source-level machine, not three separate grammars.
+
+1. Mostly-inline argument spelling:
+
+    receiver: arg0 arg1 arg2
+
+2. Mostly-vertical argument spelling, useful when the argument list is too long
+   for one readable line:
+
+    receiver:
+    . arg0
+    . arg1
+    . arg2
+
+3. A short header followed by block or positional argument Structures. This is
+   useful when the first fields name/configure the receiver and the remaining
+   tail is naturally written as a body:
+
+    fn: test (int: arg) (int)
+    . body
+    . body
+    end: test
+
+   The existing `match: value` examples in the anonymous-branch and shorter
+   positional sections below show the same mode used both with visible nameless
+   block arguments and with a direct positional argument stream.
+
 Physical newline is not a short-form trailer. It only performs the short-form
 separator step described above. The source level of the following non-empty
 source item decides whether the current short form continues or closes:
