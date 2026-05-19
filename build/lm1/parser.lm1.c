@@ -2132,8 +2132,11 @@ static void lm_p0_stack_free(LmP0Stack *stack) {
     stack->capacity = 0U;
 }
 
-static int lm_p0_node_can_own_children(LmP0Node *node) {
-    return node->kind == LM_P0_NODE_FRAME || node->kind == LM_P0_NODE_STRUCTURE;
+static int lm_p0_node_keeps_source_child_level(LmP0Node *node) {
+    if (node->kind == LM_P0_NODE_FRAME) {
+        return (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U;
+    }
+    return 0;
 }
 
 static LmP0Structure *lm_p0_node_child_structure(LmP0Node *node) {
@@ -2171,7 +2174,7 @@ static int lm_p0_stack_install_node_lineage(
     LmP0Node *owner;
     size_t level;
 
-    if (!lm_p0_node_can_own_children(node)) {
+    if (!lm_p0_node_keeps_source_child_level(node)) {
         if (!lm_p0_stack_ensure(document, stack, base_level + 1U)) {
             return 0;
         }
@@ -2184,7 +2187,7 @@ static int lm_p0_stack_install_node_lineage(
 
     owner = node;
     level = base_level + 1U;
-    while (lm_p0_node_can_own_children(owner)) {
+    while (lm_p0_node_keeps_source_child_level(owner)) {
         LmP0Structure *body;
         LmP0Node *next_owner;
 
@@ -2492,19 +2495,24 @@ static int lm_p0_stream_apply_item_event(
     trailer_target_accepted = trailer_target_available &&
         lm_p0_trailer_role_accepts_target(trailer_role, stack->owners[event->level + 1U]);
 
-    if (lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
-        event->level + 1U < top_level &&
-        !trailer_target_accepted) {
-        lm_p0_set_diagnostic(document, 13, event->line, event->column, "tail-cutter target is not valid for this receiver");
-        return 0;
-    }
-
     if (!lm_p0_trailer_role_is_tail_cutter(trailer_role) ||
         !trailer_target_accepted) {
         top_level = lm_p0_stack_collapse_soft_to_event(stack, event->level);
         if (event->level == top_level && stack->hard[top_level] == 0U) {
             stack->hard[top_level] = 1U;
         }
+        trailer_target_available = lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
+            event->level + 1U <= top_level &&
+            stack->owners[event->level + 1U] != NULL;
+        trailer_target_accepted = trailer_target_available &&
+            lm_p0_trailer_role_accepts_target(trailer_role, stack->owners[event->level + 1U]);
+    }
+
+    if (lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
+        event->level + 1U < top_level &&
+        !trailer_target_accepted) {
+        lm_p0_set_diagnostic(document, 13, event->line, event->column, "tail-cutter target is not valid for this receiver");
+        return 0;
     }
 
     if (lm_p0_trailer_role_is_tail_cutter(trailer_role) &&

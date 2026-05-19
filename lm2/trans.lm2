@@ -2948,6 +2948,7 @@ static int lm_trans_emit_function(
     const LmP0Field *name_field;
     const LmP0Field *params_field;
     const LmP0Field *return_field;
+    const LmP0Field *body_field;
     const LmP0Field *body_start;
     const LmP0Node *previous_return_type_node;
     unsigned previous_next_return_id;
@@ -2978,7 +2979,17 @@ static int lm_trans_emit_function(
         if (lm_trans_put(file, "void ") != 0) {
             return 1;
         }
-        body_start = params_field->next;
+        body_field = lm_trans_nth_field(&frame->body, 2U);
+        if (
+            body_field != NULL &&
+            body_field->next == NULL &&
+            body_field->value != NULL &&
+            body_field->value->kind == LM_P0_NODE_STRUCTURE
+        ) {
+            body_start = body_field->value->as.structure.first_field;
+        } else {
+            body_start = params_field->next;
+        }
     } else {
         return_field = lm_trans_nth_field(&frame->body, 2U);
         if (return_field == NULL || return_field->value == NULL) {
@@ -2991,7 +3002,17 @@ static int lm_trans_emit_function(
         if (lm_trans_put(file, " ") != 0) {
             return 1;
         }
-        body_start = return_field->next;
+        body_field = lm_trans_nth_field(&frame->body, 3U);
+        if (
+            body_field != NULL &&
+            body_field->next == NULL &&
+            body_field->value != NULL &&
+            body_field->value->kind == LM_P0_NODE_STRUCTURE
+        ) {
+            body_start = body_field->value->as.structure.first_field;
+        } else {
+            body_start = return_field->next;
+        }
     }
 
     if (lm_trans_write_text(file, name_field->value->as.atom) != 0) {
