@@ -72,9 +72,7 @@ typedef struct LmTransExprJob {
 } LmTransExprJob;
 
 typedef struct LmTransExprStack {
-    LmTransExprJob *items;
-    size_t count;
-    size_t capacity;
+    LmOwnValueStack jobs;
 } LmTransExprStack;
 
 typedef enum LmTransStatementJobKind {
@@ -127,9 +125,7 @@ typedef struct LmTransStatementJob {
 } LmTransStatementJob;
 
 typedef struct LmTransStatementStack {
-    LmTransStatementJob *items;
-    size_t count;
-    size_t capacity;
+    LmOwnValueStack jobs;
 } LmTransStatementStack;
 
 typedef struct LmTransFunctionState {
@@ -1117,29 +1113,16 @@ static int lm_trans_call_field_is_named_argument(
 
 static void lm_trans_expr_stack_destroy(LmTransExprStack *stack) {
     if (stack != NULL) {
-        lm_own_delete(stack->items, NULL);
-        stack->items = NULL;
-        stack->count = 0U;
-        stack->capacity = 0U;
+        lm_own_value_stack_destroy(&stack->jobs);
     }
 }
 
 static int lm_trans_expr_stack_push(LmTransExprStack *stack, LmTransExprJob job) {
-    size_t capacity;
-    LmTransExprJob *items;
-
-    if (stack->count == stack->capacity) {
-        capacity = stack->capacity == 0U ? 32U : stack->capacity * 2U;
-        items = (LmTransExprJob *)realloc(stack->items, capacity * sizeof(*items));
-        if (items == NULL) {
-            return 1;
-        }
-        stack->items = items;
-        stack->capacity = capacity;
+    if (stack == NULL) {
+        return 1;
     }
 
-    stack->items[stack->count++] = job;
-    return 0;
+    return lm_own_value_stack_push(&stack->jobs, &job);
 }
 
 static int lm_trans_expr_stack_push_text(LmTransExprStack *stack, const char *text) {
@@ -1604,16 +1587,17 @@ static int lm_trans_emit_expr_stack_run(
     LmTransExprJob job;
     int status;
 
-    stack.items = NULL;
-    stack.count = 0U;
-    stack.capacity = 0U;
+    lm_own_value_stack_init(&stack.jobs, sizeof(LmTransExprJob));
     if (lm_trans_expr_stack_push(&stack, initial) != 0) {
         return 1;
     }
 
     status = 0;
-    while (status == 0 && stack.count > 0U) {
-        job = stack.items[--stack.count];
+    while (status == 0 && stack.jobs.count > 0U) {
+        if (lm_own_value_stack_pop(&stack.jobs, &job) != 0) {
+            status = 1;
+            break;
+        }
         if (job.kind == LM_TRANS_EXPR_JOB_TEXT) {
             status = lm_trans_put(file, job.as.text);
         } else if (job.kind == LM_TRANS_EXPR_JOB_NODE) {
@@ -2901,29 +2885,16 @@ static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
 
 static void lm_trans_statement_stack_destroy(LmTransStatementStack *stack) {
     if (stack != NULL) {
-        lm_own_delete(stack->items, NULL);
-        stack->items = NULL;
-        stack->count = 0U;
-        stack->capacity = 0U;
+        lm_own_value_stack_destroy(&stack->jobs);
     }
 }
 
 static int lm_trans_statement_stack_push(LmTransStatementStack *stack, LmTransStatementJob job) {
-    size_t capacity;
-    LmTransStatementJob *items;
-
-    if (stack->count == stack->capacity) {
-        capacity = stack->capacity == 0U ? 32U : stack->capacity * 2U;
-        items = (LmTransStatementJob *)realloc(stack->items, capacity * sizeof(*items));
-        if (items == NULL) {
-            return 1;
-        }
-        stack->items = items;
-        stack->capacity = capacity;
+    if (stack == NULL) {
+        return 1;
     }
 
-    stack->items[stack->count++] = job;
-    return 0;
+    return lm_own_value_stack_push(&stack->jobs, &job);
 }
 
 static int lm_trans_statement_stack_push_list(
@@ -3409,13 +3380,14 @@ static int lm_trans_emit_statement_list(
     const LmP0Field *field;
     int status;
 
-    stack.items = NULL;
-    stack.count = 0U;
-    stack.capacity = 0U;
+    lm_own_value_stack_init(&stack.jobs, sizeof(LmTransStatementJob));
     status = lm_trans_statement_stack_push_list(&stack, first, indent, 1);
 
-    while (status == 0 && stack.count > 0U) {
-        job = stack.items[--stack.count];
+    while (status == 0 && stack.jobs.count > 0U) {
+        if (lm_own_value_stack_pop(&stack.jobs, &job) != 0) {
+            status = 1;
+            break;
+        }
         if (job.kind == LM_TRANS_STATEMENT_JOB_LIST) {
             field = lm_trans_statement_list_first_field(
                 job.as.list.field,

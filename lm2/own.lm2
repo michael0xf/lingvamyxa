@@ -3,6 +3,7 @@ L1:
 #include "own.lm1.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 void *lm_own_new_zero(size_t size) {
     return calloc(1U, size);
@@ -116,6 +117,85 @@ void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count) {
         if (item != NULL && stack->delete_item != NULL) {
             stack->delete_item(item);
         }
+    }
+}
+
+void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size) {
+    if (stack != NULL) {
+        stack->items = NULL;
+        stack->count = 0U;
+        stack->capacity = 0U;
+        stack->item_size = item_size;
+    }
+}
+
+void lm_own_value_stack_destroy(LmOwnValueStack *stack) {
+    if (stack != NULL) {
+        free(stack->items);
+        stack->items = NULL;
+        stack->count = 0U;
+        stack->capacity = 0U;
+        stack->item_size = 0U;
+    }
+}
+
+int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
+    unsigned char *items;
+    size_t capacity;
+
+    if (stack == NULL || item == NULL || stack->item_size == 0U) {
+        return 1;
+    }
+
+    if (stack->count == stack->capacity) {
+        capacity = stack->capacity == 0U ? 8U : stack->capacity * 2U;
+        items = (unsigned char *)realloc(stack->items, capacity * stack->item_size);
+        if (items == NULL) {
+            return 1;
+        }
+        stack->items = items;
+        stack->capacity = capacity;
+    }
+
+    memcpy((unsigned char *)stack->items + stack->count * stack->item_size, item, stack->item_size);
+    ++stack->count;
+    return 0;
+}
+
+int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item) {
+    unsigned char *source;
+
+    if (stack == NULL || stack->count == 0U || stack->item_size == 0U) {
+        return 1;
+    }
+
+    --stack->count;
+    source = (unsigned char *)stack->items + stack->count * stack->item_size;
+    if (out_item != NULL) {
+        memcpy(out_item, source, stack->item_size);
+    }
+    return 0;
+}
+
+void *lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index) {
+    if (stack == NULL || index >= stack->count || stack->item_size == 0U) {
+        return NULL;
+    }
+
+    return (unsigned char *)stack->items + index * stack->item_size;
+}
+
+void *lm_own_value_stack_top(const LmOwnValueStack *stack) {
+    if (stack == NULL || stack->count == 0U || stack->item_size == 0U) {
+        return NULL;
+    }
+
+    return (unsigned char *)stack->items + (stack->count - 1U) * stack->item_size;
+}
+
+void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
+    if (stack != NULL && count < stack->count) {
+        stack->count = count;
     }
 }
 ===
