@@ -50,6 +50,8 @@ typedef struct LmTransNamespace {
     size_t loop_capacity;
     unsigned next_cleanup_id;
     const LmP0Node *return_type_node;
+    int return_type_is_struct;
+    LmP0Text return_type_name;
     unsigned next_return_id;
 } LmTransNamespace;
 
@@ -214,6 +216,9 @@ static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
         namespace_->loop_capacity = 0U;
         namespace_->next_cleanup_id = 0U;
         namespace_->return_type_node = NULL;
+        namespace_->return_type_is_struct = 0;
+        namespace_->return_type_name.data = NULL;
+        namespace_->return_type_name.length = 0U;
         namespace_->next_return_id = 0U;
     }
 }
@@ -368,6 +373,7 @@ static int lm_trans_is_reserved_head_name(LmP0Text name) {
         lm_trans_text_equals(name, "L1") ||
         lm_trans_text_equals(name, "L2") ||
         lm_trans_text_equals(name, "fn") ||
+        lm_trans_text_equals(name, "fm") ||
         lm_trans_text_equals(name, "sub") ||
         lm_trans_text_equals(name, "if") ||
         lm_trans_text_equals(name, "else") ||
@@ -1239,6 +1245,20 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
     return 1;
 }
 
+static int lm_trans_emit_function_return_struct_type_name(FILE *file, LmP0Text function_name) {
+    if (lm_trans_write_text(file, function_name) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, "Return");
+}
+
+static int lm_trans_emit_current_return_type(FILE *file, const LmTransNamespace *namespace_) {
+    if (namespace_ != NULL && namespace_->return_type_is_struct) {
+        return lm_trans_emit_function_return_struct_type_name(file, namespace_->return_type_name);
+    }
+    return lm_trans_emit_type_node(file, namespace_ != NULL ? namespace_->return_type_node : NULL);
+}
+
 static int lm_trans_emit_type_and_name(
     FILE *file,
     const LmP0Node *type_node,
@@ -1425,6 +1445,7 @@ static int lm_trans_frame_has_positional_name_argument(const LmP0Frame *frame) {
 
     return
         lm_trans_text_equals(frame->head, "fn") ||
+        lm_trans_text_equals(frame->head, "fm") ||
         lm_trans_text_equals(frame->head, "sub") ||
         lm_trans_text_equals(frame->head, "synchronized") ||
         lm_trans_text_equals(frame->head, "[]") ||
@@ -1597,7 +1618,7 @@ static int lm_trans_emit_return_statement(
         if (lm_trans_emit_indent(file, indent + 1U) != 0) {
             return 1;
         }
-        if (lm_trans_emit_type_node(file, namespace_->return_type_node) != 0) {
+        if (lm_trans_emit_current_return_type(file, namespace_) != 0) {
             return 1;
         }
         if (lm_trans_put(file, " ") != 0) {
@@ -2462,6 +2483,55 @@ static int lm_trans_emit_named_structure(
     return lm_trans_validate_end_trailer(frame);
 }
 
+static int lm_trans_emit_function_return_structure(
+    FILE *file,
+    LmP0Text function_name,
+    const LmP0Node *return_node
+) {
+    const LmP0Field *field;
+
+    if (return_node == NULL || return_node->kind != LM_P0_NODE_STRUCTURE) {
+        fprintf(stderr, "trans L2 error: fm expects a return Structure\n");
+        return 1;
+    }
+
+    if (lm_trans_put(file, "typedef struct ") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_function_return_struct_type_name(file, function_name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " ") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_function_return_struct_type_name(file, function_name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ";\n\nstruct ") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_function_return_struct_type_name(file, function_name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " {\n") != 0) {
+        return 1;
+    }
+
+    field = return_node->as.structure.first_field;
+    if (field == NULL) {
+        fprintf(stderr, "trans L2 error: fm return Structure must not be empty\n");
+        return 1;
+    }
+    while (field != NULL) {
+        if (lm_trans_emit_struct_field(file, field->value, 1U) != 0) {
+            return 1;
+        }
+        field = field->next;
+    }
+
+    return lm_trans_put(file, "};\n\n");
+}
+
 static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
     return lm_trans_frame_looks_named_structure_declaration(frame);
 }
@@ -2888,7 +2958,10 @@ static int lm_trans_top_level_function_frame_info(
         return 0;
     }
 
-    if (lm_trans_text_equals(frame->head, "fn")) {
+    if (
+        lm_trans_text_equals(frame->head, "fn") ||
+        lm_trans_text_equals(frame->head, "fm")
+    ) {
         *out_function = frame;
         *out_kind = LM_TRANS_SYMBOL_FUNCTION;
         *out_external = 0;
@@ -2918,7 +2991,10 @@ static int lm_trans_top_level_function_frame_info(
     }
 
     inner = &field->value->as.frame;
-    if (lm_trans_text_equals(inner->head, "fn")) {
+    if (
+        lm_trans_text_equals(inner->head, "fn") ||
+        lm_trans_text_equals(inner->head, "fm")
+    ) {
         *out_function = inner;
         *out_kind = LM_TRANS_SYMBOL_FUNCTION;
         *out_external = 1;
@@ -2949,9 +3025,12 @@ static int lm_trans_emit_function(
     const LmP0Field *body_field;
     const LmP0Field *body_start;
     const LmP0Node *previous_return_type_node;
+    int previous_return_type_is_struct;
+    LmP0Text previous_return_type_name;
     unsigned previous_next_return_id;
     size_t previous_cleanup_count;
     size_t previous_loop_count;
+    int is_struct_return;
     int status;
 
     name_field = lm_trans_nth_field(&frame->body, 0U);
@@ -2967,13 +3046,14 @@ static int lm_trans_emit_function(
         return 1;
     }
 
-    if (!is_external) {
-        if (lm_trans_put(file, "static ") != 0) {
-            return 1;
-        }
-    }
+    is_struct_return = !is_sub && lm_trans_text_equals(frame->head, "fm");
 
     if (is_sub) {
+        if (!is_external) {
+            if (lm_trans_put(file, "static ") != 0) {
+                return 1;
+            }
+        }
         if (lm_trans_put(file, "void ") != 0) {
             return 1;
         }
@@ -2994,8 +3074,29 @@ static int lm_trans_emit_function(
             fprintf(stderr, "trans L2 error: fn expects return type\n");
             return 1;
         }
-        if (lm_trans_emit_type_node(file, return_field->value) != 0) {
-            return 1;
+        if (is_struct_return) {
+            if (lm_trans_emit_function_return_structure(file, name_field->value->as.atom, return_field->value) != 0) {
+                return 1;
+            }
+        } else {
+            if (return_field->value->kind == LM_P0_NODE_STRUCTURE) {
+                fprintf(stderr, "trans L2 error: fn expects a single-value return type; use fm for Structure return\n");
+                return 1;
+            }
+        }
+        if (!is_external) {
+            if (lm_trans_put(file, "static ") != 0) {
+                return 1;
+            }
+        }
+        if (is_struct_return) {
+            if (lm_trans_emit_function_return_struct_type_name(file, name_field->value->as.atom) != 0) {
+                return 1;
+            }
+        } else {
+            if (lm_trans_emit_type_node(file, return_field->value) != 0) {
+                return 1;
+            }
         }
         if (lm_trans_put(file, " ") != 0) {
             return 1;
@@ -3030,10 +3131,14 @@ static int lm_trans_emit_function(
     }
 
     previous_return_type_node = namespace_->return_type_node;
+    previous_return_type_is_struct = namespace_->return_type_is_struct;
+    previous_return_type_name = namespace_->return_type_name;
     previous_next_return_id = namespace_->next_return_id;
     previous_cleanup_count = namespace_->cleanup_count;
     previous_loop_count = namespace_->loop_count;
     namespace_->return_type_node = is_sub ? NULL : return_field->value;
+    namespace_->return_type_is_struct = is_struct_return;
+    namespace_->return_type_name = is_struct_return ? name_field->value->as.atom : previous_return_type_name;
     namespace_->next_return_id = 0U;
     namespace_->cleanup_count = 0U;
     namespace_->loop_count = 0U;
@@ -3050,6 +3155,8 @@ static int lm_trans_emit_function(
     }
 
     namespace_->return_type_node = previous_return_type_node;
+    namespace_->return_type_is_struct = previous_return_type_is_struct;
+    namespace_->return_type_name = previous_return_type_name;
     namespace_->next_return_id = previous_next_return_id;
     namespace_->cleanup_count = previous_cleanup_count;
     namespace_->loop_count = previous_loop_count;

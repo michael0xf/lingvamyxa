@@ -1,0 +1,158 @@
+L1:
+===
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "parser.lm1.h"
+
+typedef enum LmTransSymbolKind {
+    LM_TRANS_SYMBOL_VARIABLE = 1,
+    LM_TRANS_SYMBOL_FUNCTION = 2,
+    LM_TRANS_SYMBOL_PROCEDURE = 3,
+    LM_TRANS_SYMBOL_LABEL = 4,
+    LM_TRANS_SYMBOL_STRUCTURE = 5
+} LmTransSymbolKind;
+
+static LmP0Text lm_test_hello = { "hello", 5U };
+static LmP0Text lm_test_other = { "other", 5U };
+===
+
+L2:
+    LmTransSymbol:
+        @: LmP0Text name
+        LmTransSymbolKind: kind
+        c.unsigned: depth
+        c.int: has_c_name
+        @: LmP0Text c_name
+        @@: LmP0Text param_names
+        c.size_t: param_count
+        c.int: has_signature
+    end: LmTransSymbol
+
+    LmTransCleanup:
+        c.unsigned: id
+    end: LmTransCleanup
+
+    LmTransLoop:
+        c.size_t: cleanup_base
+    end: LmTransLoop
+
+    LmTransArgumentRange:
+        const: @: LmP0Field first
+        const: @: LmP0Field stop
+        c.int: present
+    end: LmTransArgumentRange
+
+    LmTransNamespace:
+        @@: LmTransSymbol items
+        c.size_t: count
+        c.size_t: capacity
+        c.unsigned: depth
+        @@: LmTransCleanup cleanups
+        c.size_t: cleanup_count
+        c.size_t: cleanup_capacity
+        @@: LmTransLoop loops
+        c.size_t: loop_count
+        c.size_t: loop_capacity
+        c.unsigned: next_cleanup_id
+        const: @: LmP0Node return_type_node
+        c.int: return_type_is_struct
+        LmP0Text: return_type_name
+        c.unsigned: next_return_id
+    end: LmTransNamespace
+
+    fn:
+        lm_trans_text_equals
+        (
+            const: @: LmP0Text text
+            const: @: c.char value
+        )
+        c.int
+            c.size_t: length
+            length: c.strlen(value)
+            return: text\length = length && c.memcmp(text\data, value, length) = 0
+    end: lm_trans_text_equals
+
+    fn:
+        lm_trans_text_same
+        (
+            const: @: LmP0Text left
+            const: @: LmP0Text right
+        )
+        c.int
+            if: left\length != right\length
+                return: 0
+            if: left\length = 0
+                return: 1
+            return: c.memcmp(left\data, right\data, left\length) = 0
+    end: lm_trans_text_same
+
+    fn:
+        lm_trans_text_starts_with
+        (
+            const: @: LmP0Text text
+            const: @: c.char prefix
+        )
+        c.int
+            c.size_t: length
+            length: c.strlen(prefix)
+            return: text\length >= length && c.memcmp(text\data, prefix, length) = 0
+    end: lm_trans_text_starts_with
+
+    fn:
+        lm_trans_text_all_char
+        (
+            const: @: LmP0Text text
+            c.char: ch
+        )
+        c.int
+            c.size_t: i 0
+            if: text\length = 0
+                return: 0
+            while: i < text\length
+                if: text\data[i] != ch
+                    return: 0
+                i: i + 1
+            return: 1
+    end: lm_trans_text_all_char
+
+    fn:
+        lm_trans_text_is_operator_atom
+        (
+            const: @: LmP0Text text
+        )
+        c.int
+            return:
+                lm_trans_text_equals(text, "+") ||
+                lm_trans_text_equals(text, "-") ||
+                lm_trans_text_equals(text, "*") ||
+                lm_trans_text_equals(text, "/") ||
+                lm_trans_text_equals(text, "%") ||
+                lm_trans_text_equals(text, "=") ||
+                lm_trans_text_equals(text, "!=") ||
+                lm_trans_text_equals(text, "<") ||
+                lm_trans_text_equals(text, "<=") ||
+                lm_trans_text_equals(text, ">") ||
+                lm_trans_text_equals(text, ">=") ||
+                lm_trans_text_equals(text, "&&") ||
+                lm_trans_text_equals(text, "||") ||
+                lm_trans_text_equals(text, "!") ||
+                lm_trans_text_equals(text, "[") ||
+                lm_trans_text_equals(text, "]")
+    end: lm_trans_text_is_operator_atom
+
+    external:
+        fn:
+            main
+            ()
+            c.int
+                return:
+                    ! lm_trans_text_equals(@ c.lm_test_hello, "hello") ||
+                    lm_trans_text_same(@ c.lm_test_hello, @ c.lm_test_other) ||
+                    ! lm_trans_text_starts_with(@ c.lm_test_hello, "he") ||
+                    lm_trans_text_all_char(@ c.lm_test_hello, 'h') ||
+                    lm_trans_text_is_operator_atom(@ c.lm_test_hello)
+        end: main
+    end: external
+end: L2

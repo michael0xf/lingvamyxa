@@ -1603,7 +1603,7 @@ The inline tail contributes initial fields. The vertical child lines at level N 
 
 A physical newline ends the physical source line, but it is not a short-form trailer. If the following source item is at level N + 1, it continues the open frame's logical argument Structure. If the following source item is at level N or smaller, the open frame is complete and ordinary sibling/close rules apply.
 
-Do not confuse the logical argument Structure of a Frame with semantic arguments declared by a receiver. For example, the fields of an `fn` frame are fields consumed by the `fn` receiver; they are not automatically formal parameters of the function being defined. The `fn` receiver later classifies its fields as function name, formal parameter Structure, return descriptor Structure and executable body fields.
+Do not confuse the logical argument Structure of a Frame with semantic arguments declared by a receiver. For example, the fields of an `fn` frame are fields consumed by the `fn` receiver; they are not automatically formal parameters of the function being defined. The `fn` receiver later classifies its fields as function name, formal parameter Structure, single-value return type and executable body fields. The related `fm` receiver uses a return-description Structure for multiple return.
 
 4.4. Parenthesized Bounded Structure
 
@@ -3853,14 +3853,30 @@ fn:
         return: r1 r2
 end: myFunc
 
-The L1 receiver function registered as `fn` receives the whole frame argument Structure as its first argument and consumes that Structure by receiver-defined argument positions. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures inside that first argument Structure. They are not `=` named fields.
+The L1 receiver function registered as `fn` or `fm` receives the whole frame argument Structure as its first argument and consumes that Structure by receiver-defined argument positions. The explicit nested forms `name(...)`, `args(...)`, `ret(...)` and `body(...)` are ordinary Structures inside that first argument Structure. They are not `=` named fields.
 
-The `fn` frame's logical argument Structure is not the same thing as the formal parameter Structure of the function being defined. In the compact short definition profile, `fn` consumes its fields as:
+The `fn`/`fm` frame's logical argument Structure is not the same thing as the formal parameter Structure of the function being defined. In the compact short definition profile, `fn` consumes its fields as:
 
     name -> field 0
     args -> field 1, required bounded formal argument Structure
-    ret  -> field 2, required return descriptor Structure
+    ret  -> field 2, required single-value return type
     body -> fields 3..end as the statement Structure consumed by fn/sub
+
+The `fn` receiver returns one source-level value. The difference between `fn`
+and `fm` is not primitive versus non-primitive. A single `fn` value may be
+lowered by the active translator as a primitive, pointer, reference, handle or
+another single-value representation. A pointer/reference/handle to a Structure
+is still one returned value; it is not a multiple return.
+
+The `fm` receiver uses the same field order, but field 2 is a return-description
+Structure. That Structure explicitly declares the returned fields. `fm` is the
+multiple-return form: the source result is one return Structure, and consumers
+may treat that Structure as one value or unpack/map it as a sequence of returned
+values where their receiver signature admits it. The explicit return Structure
+also gives the translator an optimization surface: it may lower the same source
+result as a C struct returned by value, a hidden output pointer, direct scalar
+returns, register-like internal convention, arena handle or another
+profile-defined representation.
 
 Function definition is not function call syntax. The first compact `fn`/`sub`
 field must be the declared name as its own field. A spelling with no separator
@@ -3925,15 +3941,27 @@ form.
 
 The formal argument field must be an argument-list Structure even when there is only one formal argument. Therefore:
 
-    fn: factorial (int(n)) (int)
+    fn: factorial (int(n)) int
 
 is valid, while:
 
-    fn: factorial int(n) (int)
+    fn: factorial int(n) int
 
 is invalid in the compact `fn` definition profile. The second form gives `fn` the declaration Frame `int(n)` directly where the `fn` receiver expects the bounded formal argument Structure that contains it. The empty formal argument list is written as `()`.
 
-The return descriptor field must also be a Structure. A primitive return descriptor may be written as a bounded one-field Structure such as `(int)`. A descriptor Frame such as `iterator(Text)` is already a Structure and may be consumed as the return descriptor.
+The `fn` return field is a single-value type field, not a return-description
+Structure. Write the visible single-value type descriptor admitted by the active
+profile. Use `fm` when the source return itself is a Structure with explicitly
+declared returned fields:
+
+    fm: `split harvest` (PlantBed(bed))
+        (
+            f32: harvest
+            f32: redApples
+            f32: greenApples
+        )
+        return: bed\area 0 0
+    end: `split harvest`
 
 Example with no required formal parameters:
 
@@ -4511,11 +4539,16 @@ This is equivalent to appending a body-level `return: harvest redApples greenApp
 
 8.5. Named Return Variables
 
-Return values may be represented by declared return variables inside an executable body when the return signature gives them names.
+Multiple return values may be represented by declared return variables inside an executable body when the `fm` return-description Structure gives them names.
 
 Example:
 
-fn: `estimate harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
+fm: `estimate harvest` (PlantBed(bed))
+    (
+        f32: harvest
+        f32: redApples
+        f32: greenApples
+    )
     harvest: bed\area
     redApples: 0
     greenApples: 0
@@ -4523,11 +4556,16 @@ return: harvest redApples greenApples
 
 The terminal `return:` returns the current values of the declared return variables and closes the function definition.
 
-A function return signature with several fields defines one return Structure. Updating several declared return fields and returning one Structure-compatible value are source-semantically equivalent when the produced Structure matches the declared return Structure.
+An `fm` return-description Structure with several fields defines one return Structure. Updating several declared return fields and returning one Structure-compatible value are source-semantically equivalent when the produced Structure matches the declared return Structure.
 
 Example positional structural return:
 
-fn: `split harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
+fm: `split harvest` (PlantBed(bed))
+    (
+        f32: harvest
+        f32: redApples
+        f32: greenApples
+    )
 return: bed\area 0 0
 
 Here the `return:` tail is one logical return Structure with three fields consumed by the return signature.
@@ -4561,7 +4599,18 @@ rather than relying on a value left in a local binding at structural close.
 
 8.8. Return Source Semantics
 
-At the source-semantic level, every `fn` has one logical return value. That value may be a primitive value or a return Structure. A return signature with several fields defines one return Structure, not a separate non-structural mechanism.
+At the source-semantic level, every `fn` has one logical single-value return.
+That value may be lowered as a primitive, pointer, reference, handle or another
+single-value representation by the active translator. A pointer/reference/handle
+to a Structure is still one value returned by `fn`.
+
+At the source-semantic level, `fm` has one logical return Structure. The
+return-description Structure explicitly declares the returned fields. This is
+the multiple-return mechanism. The returned Structure may be consumed as one
+value or unpacked/mapped as a sequence of returned values where the receiving
+receiver signature admits it. The field types themselves do not define the
+`fn`/`fm` boundary; the boundary is whether the source return is one value or an
+explicit return Structure.
 
 The `return:` receiver consumes its tail as the current function result and exits. For a `sub` or no-value label/procedure executable, a bare `return` exits without producing a value. Terminal return additionally closes the current executable definition in source structure when the active executable receiver admits that return form in a trailer position.
 
@@ -4577,21 +4626,25 @@ The general error/status system is not specified in this document. It may be def
 Possible return-lowering variants for an ANSI C implementation:
 
 variant 1:
-A single primitive `return: value` lowers to a direct C primitive return.
+A single-value `fn` return lowers to the active profile's chosen single-value C representation.
 
 variant 2:
-A multi-field source return lowers to a caller-provided output Structure passed through a hidden or explicit implementation-level address.
+An `fm` multi-field source return lowers to a caller-provided output Structure passed through a hidden or explicit implementation-level address.
 
 variant 3:
-A small return Structure lowers to a C struct returned by value if the translator/runtime profile allows it.
+A small `fm` return Structure lowers to a C struct returned by value if the translator/runtime profile allows it.
 
 variant 4:
 A structural return lowers to a handle/address allocated or managed by a runtime arena, heap, region or other implementation-owned storage.
 
+variant 4b:
+An `fm` return Structure may be optimized away when the translator can map its
+fields directly to the consuming context without changing source semantics.
+
 variant 5:
 Terminal return lowers as an ordinary body-level return followed by no further generated body statements. Source-level structural closure is resolved before lowering.
 
-These variants are implementation strategies only. The language-level rule remains that `return: value` returns the declared primitive value or return Structure from an `fn`, bare `return` exits a no-value executable when admitted, and terminal return also closes the current executable definition.
+These variants are implementation strategies only. The language-level rule remains that `return: value` returns the declared single value from an `fn` or the declared return Structure from an `fm`, bare `return` exits a no-value executable when admitted, and terminal return also closes the current executable definition.
 ---ANSI C---
 
 9. Type and Model Forms
