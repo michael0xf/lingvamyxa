@@ -33,6 +33,7 @@ void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count);
 void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size);
 void lm_own_value_stack_destroy(LmOwnValueStack *stack);
 int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item);
+int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count);
 int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
 void *lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void *lm_own_value_stack_top(const LmOwnValueStack *stack);

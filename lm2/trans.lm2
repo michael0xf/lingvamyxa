@@ -1193,43 +1193,37 @@ static int lm_trans_expr_stack_push_call_args(
 }
 
 static int lm_trans_argument_ranges_append(
-    LmTransArgumentRange **ranges,
-    size_t *count,
-    size_t *capacity,
+    LmOwnValueStack *ranges,
     const LmP0Field *first,
     const LmP0Field *stop
 ) {
-    size_t new_capacity;
-    LmTransArgumentRange *items;
+    LmTransArgumentRange range;
 
-    if (*count == *capacity) {
-        new_capacity = *capacity == 0U ? 8U : *capacity * 2U;
-        items = (LmTransArgumentRange *)realloc(*ranges, new_capacity * sizeof(*items));
-        if (items == NULL) {
-            return 1;
-        }
-        *ranges = items;
-        *capacity = new_capacity;
-    }
-
-    (*ranges)[*count].first = first;
-    (*ranges)[*count].stop = stop;
-    (*ranges)[*count].present = 1;
-    ++*count;
-    return 0;
+    range.first = first;
+    range.stop = stop;
+    range.present = 1;
+    return lm_own_value_stack_push(ranges, &range);
 }
 
 static int lm_trans_expr_stack_push_argument_ranges(
     LmTransExprStack *stack,
-    const LmTransArgumentRange *ranges,
-    size_t count
+    const LmOwnValueStack *ranges
 ) {
     size_t index;
+    const LmTransArgumentRange *range;
 
-    index = count;
+    if (ranges == NULL) {
+        return 0;
+    }
+
+    index = ranges->count;
     while (index > 0U) {
         --index;
-        if (lm_trans_expr_stack_push_range(stack, ranges[index].first, ranges[index].stop) != 0) {
+        range = (const LmTransArgumentRange *)lm_own_value_stack_at(ranges, index);
+        if (range == NULL) {
+            return 1;
+        }
+        if (lm_trans_expr_stack_push_range(stack, range->first, range->stop) != 0) {
             return 1;
         }
         if (index > 0U && lm_trans_expr_stack_push_text(stack, ", ") != 0) {
@@ -1267,10 +1261,9 @@ static int lm_trans_expr_stack_schedule_call_args(
 ) {
     const LmP0Field *field;
     const LmP0Field *next;
-    LmTransArgumentRange *ranges;
+    LmOwnValueStack ranges;
+    LmTransArgumentRange *range;
     const LmP0Frame *named_frame;
-    size_t count;
-    size_t capacity;
     size_t index;
     size_t named_index;
     int named_started;
@@ -1278,14 +1271,12 @@ static int lm_trans_expr_stack_schedule_call_args(
     int status;
 
     field = lm_trans_call_body_first_field(body);
+    lm_own_value_stack_init(&ranges, sizeof(LmTransArgumentRange));
 
     if (callee != NULL && callee->has_signature) {
-        ranges = NULL;
-        if (callee->param_names.count > 0U) {
-            ranges = (LmTransArgumentRange *)calloc(callee->param_names.count, sizeof(*ranges));
-            if (ranges == NULL) {
-                return 1;
-            }
+        if (lm_own_value_stack_resize_zero(&ranges, callee->param_names.count) != 0) {
+            lm_own_value_stack_destroy(&ranges);
+            return 1;
         }
 
         index = 0U;
@@ -1294,64 +1285,76 @@ static int lm_trans_expr_stack_schedule_call_args(
             is_named = lm_trans_call_field_is_named_argument(field, callee, &named_index);
             if (is_named) {
                 named_started = 1;
-                if (ranges[named_index].present) {
+                range = (LmTransArgumentRange *)lm_own_value_stack_at(&ranges, named_index);
+                if (range == NULL) {
+                    lm_own_value_stack_destroy(&ranges);
+                    return 1;
+                }
+                if (range->present) {
                     fprintf(stderr, "trans L2 error: duplicate named argument\n");
-                    lm_own_delete(ranges, NULL);
+                    lm_own_value_stack_destroy(&ranges);
                     return 1;
                 }
                 named_frame = &field->value->as.frame;
-                ranges[named_index].first = named_frame->body.first_field;
-                ranges[named_index].stop = NULL;
-                ranges[named_index].present = 1;
+                range->first = named_frame->body.first_field;
+                range->stop = NULL;
+                range->present = 1;
                 field = field->next;
                 continue;
             }
 
             if (named_started) {
                 fprintf(stderr, "trans L2 error: positional argument after named argument\n");
-                lm_own_delete(ranges, NULL);
+                lm_own_value_stack_destroy(&ranges);
                 return 1;
             }
             if (index >= callee->param_names.count) {
                 fprintf(stderr, "trans L2 error: too many arguments\n");
-                lm_own_delete(ranges, NULL);
+                lm_own_value_stack_destroy(&ranges);
                 return 1;
             }
             next = lm_trans_expr_segment_end(field);
-            ranges[index].first = field;
-            ranges[index].stop = next;
-            ranges[index].present = 1;
+            range = (LmTransArgumentRange *)lm_own_value_stack_at(&ranges, index);
+            if (range == NULL) {
+                lm_own_value_stack_destroy(&ranges);
+                return 1;
+            }
+            range->first = field;
+            range->stop = next;
+            range->present = 1;
             ++index;
             field = next;
         }
 
         for (index = 0U; index < callee->param_names.count; ++index) {
-            if (!ranges[index].present) {
+            range = (LmTransArgumentRange *)lm_own_value_stack_at(&ranges, index);
+            if (range == NULL) {
+                lm_own_value_stack_destroy(&ranges);
+                return 1;
+            }
+            if (!range->present) {
                 fprintf(stderr, "trans L2 error: missing function argument\n");
-                lm_own_delete(ranges, NULL);
+                lm_own_value_stack_destroy(&ranges);
                 return 1;
             }
         }
 
-        status = lm_trans_expr_stack_push_argument_ranges(stack, ranges, callee->param_names.count);
-        lm_own_delete(ranges, NULL);
+        status = lm_trans_expr_stack_push_argument_ranges(stack, &ranges);
+        lm_own_value_stack_destroy(&ranges);
         return status;
     }
 
-    ranges = NULL;
-    count = 0U;
-    capacity = 0U;
     while (field != NULL) {
         next = lm_trans_expr_segment_end(field);
-        if (lm_trans_argument_ranges_append(&ranges, &count, &capacity, field, next) != 0) {
-            lm_own_delete(ranges, NULL);
+        if (lm_trans_argument_ranges_append(&ranges, field, next) != 0) {
+            lm_own_value_stack_destroy(&ranges);
             return 1;
         }
         field = next;
     }
 
-    status = lm_trans_expr_stack_push_argument_ranges(stack, ranges, count);
-    lm_own_delete(ranges, NULL);
+    status = lm_trans_expr_stack_push_argument_ranges(stack, &ranges);
+    lm_own_value_stack_destroy(&ranges);
     return status;
 }
 

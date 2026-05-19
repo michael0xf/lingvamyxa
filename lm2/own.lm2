@@ -162,6 +162,40 @@ int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
     return 0;
 }
 
+int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count) {
+    unsigned char *items;
+    size_t capacity;
+    size_t previous_count;
+
+    if (stack == NULL || stack->item_size == 0U) {
+        return 1;
+    }
+
+    if (count > stack->capacity) {
+        capacity = stack->capacity == 0U ? 8U : stack->capacity;
+        while (capacity < count) {
+            capacity *= 2U;
+        }
+        items = (unsigned char *)realloc(stack->items, capacity * stack->item_size);
+        if (items == NULL) {
+            return 1;
+        }
+        stack->items = items;
+        stack->capacity = capacity;
+    }
+
+    previous_count = stack->count;
+    if (count > previous_count) {
+        memset(
+            (unsigned char *)stack->items + previous_count * stack->item_size,
+            0,
+            (count - previous_count) * stack->item_size
+        );
+    }
+    stack->count = count;
+    return 0;
+}
+
 int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item) {
     unsigned char *source;
 
