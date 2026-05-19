@@ -65,12 +65,30 @@ typedef struct LmTransExprAtomLowering {
     LmP0Text text;
 } LmTransExprAtomLowering;
 
+typedef enum LmTransExprPieceKind {
+    LM_TRANS_EXPR_PIECE_ATOM = 1,
+    LM_TRANS_EXPR_PIECE_NODE = 2
+} LmTransExprPieceKind;
+
+typedef struct LmTransExprPiece {
+    LmTransExprPieceKind kind;
+    int leading_space;
+    const LmP0Node *node;
+    LmTransExprAtomLowering atom;
+} LmTransExprPiece;
+
+typedef struct LmTransExprLoweredRange {
+    LmOwnValueStack pieces;
+    size_t index;
+} LmTransExprLoweredRange;
+
 typedef enum LmTransExprJobKind {
     LM_TRANS_EXPR_JOB_TEXT = 1,
     LM_TRANS_EXPR_JOB_NODE = 2,
     LM_TRANS_EXPR_JOB_FRAME = 3,
     LM_TRANS_EXPR_JOB_RANGE = 4,
-    LM_TRANS_EXPR_JOB_CALL_ARGS = 5
+    LM_TRANS_EXPR_JOB_CALL_ARGS = 5,
+    LM_TRANS_EXPR_JOB_LOWERED_RANGE = 6
 } LmTransExprJobKind;
 
 typedef struct LmTransExprRangeJob {
@@ -96,6 +114,7 @@ typedef struct LmTransExprJob {
         const LmP0Frame *frame;
         LmTransExprRangeJob range;
         LmTransExprCallArgsJob call_args;
+        LmTransExprLoweredRange *lowered_range;
     } as;
 } LmTransExprJob;
 
@@ -1207,8 +1226,45 @@ static int lm_trans_call_field_is_named_argument(
     return lm_trans_signature_param_index(callee, frame->head, out_index);
 }
 
+static LmTransExprLoweredRange *lm_trans_expr_lowered_range_new(void) {
+    LmTransExprLoweredRange *range;
+
+    range = (LmTransExprLoweredRange *)lm_own_new_zero(sizeof(LmTransExprLoweredRange));
+    if (range != NULL) {
+        lm_own_value_stack_init(&range->pieces, sizeof(LmTransExprPiece));
+    }
+    return range;
+}
+
+static void lm_trans_expr_lowered_range_destroy(LmTransExprLoweredRange *range) {
+    if (range != NULL) {
+        lm_own_value_stack_destroy(&range->pieces);
+        range->index = 0U;
+    }
+}
+
+static void lm_trans_expr_lowered_range_destroy_any(void *object) {
+    lm_trans_expr_lowered_range_destroy((LmTransExprLoweredRange *)object);
+}
+
+static void lm_trans_expr_lowered_range_delete(LmTransExprLoweredRange *range) {
+    lm_own_delete(range, lm_trans_expr_lowered_range_destroy_any);
+}
+
+static void lm_trans_expr_job_destroy(LmTransExprJob *job) {
+    if (job != NULL && job->kind == LM_TRANS_EXPR_JOB_LOWERED_RANGE) {
+        lm_trans_expr_lowered_range_delete(job->as.lowered_range);
+        job->as.lowered_range = NULL;
+    }
+}
+
 static void lm_trans_expr_stack_destroy(LmTransExprStack *stack) {
+    LmTransExprJob job;
+
     if (stack != NULL) {
+        while (lm_own_value_stack_pop(&stack->jobs, &job) == 0) {
+            lm_trans_expr_job_destroy(&job);
+        }
         lm_own_value_stack_destroy(&stack->jobs);
     }
 }
@@ -1283,6 +1339,17 @@ static int lm_trans_expr_stack_push_call_args(
     job.kind = LM_TRANS_EXPR_JOB_CALL_ARGS;
     job.as.call_args.body = body;
     job.as.call_args.callee = callee;
+    return lm_trans_expr_stack_push(stack, job);
+}
+
+static int lm_trans_expr_stack_push_lowered_range(
+    LmTransExprStack *stack,
+    LmTransExprLoweredRange *range
+) {
+    LmTransExprJob job;
+
+    job.kind = LM_TRANS_EXPR_JOB_LOWERED_RANGE;
+    job.as.lowered_range = range;
     return lm_trans_expr_stack_push(stack, job);
 }
 
@@ -1588,11 +1655,9 @@ static LmTransExprAtomLowering lm_trans_lower_expr_atom(
     return lowering;
 }
 
-static int lm_trans_emit_expr_atom_lowering(
-    FILE *file,
+static int lm_trans_update_expr_atom_lowering_state(
     LmTransExprAtomLowering lowering,
     const LmP0Node *node,
-    const LmTransNamespace *namespace_,
     const LmP0Node **previous_operand,
     int *expect_field_name,
     int *expect_c_field_name,
@@ -1603,18 +1668,12 @@ static int lm_trans_emit_expr_atom_lowering(
             fprintf(stderr, "trans L2 error: field-follow expects a field name\n");
             return 1;
         }
-        if (lm_trans_emit_name(file, lowering.text) != 0) {
-            return 1;
-        }
         *previous_operand = node;
         *expect_field_name = 0;
         *c_dot_path = 0;
     } else if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_C_FIELD_NAME) {
         if (!lm_trans_atom_is_identifier_like(lowering.text)) {
             fprintf(stderr, "trans L2 error: C value-field dot expects a field name\n");
-            return 1;
-        }
-        if (lm_trans_emit_name(file, lowering.text) != 0) {
             return 1;
         }
         *previous_operand = node;
@@ -1629,49 +1688,28 @@ static int lm_trans_emit_expr_atom_lowering(
             fprintf(stderr, "trans L2 error: C value-field dot must follow a c.name path\n");
             return 1;
         }
-        if (lm_trans_put(file, ".") != 0) {
-            return 1;
-        }
         *previous_operand = NULL;
         *expect_c_field_name = 1;
     } else if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_EQUAL) {
-        if (lm_trans_put(file, "==") != 0) {
-            return 1;
-        }
         *previous_operand = NULL;
         *c_dot_path = 0;
     } else if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_ADDRESS) {
-        if (lm_trans_put(file, "&") != 0) {
-            return 1;
-        }
         *previous_operand = NULL;
         *c_dot_path = 0;
     } else if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_POINTER_FOLLOW) {
-        if (lm_trans_put(file, "->") != 0) {
-            return 1;
-        }
         *previous_operand = NULL;
         *expect_field_name = 1;
         *c_dot_path = 0;
     } else if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_DEREF) {
-        if (lm_trans_put(file, "*") != 0) {
-            return 1;
-        }
         *previous_operand = NULL;
         *c_dot_path = 0;
     } else if (
         lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_INDEX_OPERATOR ||
         lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_INFIX_OPERATOR
     ) {
-        if (lm_trans_write_text(file, lowering.text) != 0) {
-            return 1;
-        }
         *previous_operand = NULL;
         *c_dot_path = 0;
     } else {
-        if (lm_trans_emit_expr_atom(file, lowering.text, namespace_) != 0) {
-            return 1;
-        }
         *previous_operand = lm_trans_atom_is_operand_like(lowering.text) ? node : NULL;
         *c_dot_path = lm_trans_node_is_c_reference_atom(*previous_operand);
     }
@@ -1679,11 +1717,75 @@ static int lm_trans_emit_expr_atom_lowering(
     return 0;
 }
 
-static int lm_trans_expr_stack_emit_range(
+static int lm_trans_emit_expr_atom_lowering(
     FILE *file,
-    LmTransExprStack *stack,
-    LmTransExprRangeJob range,
+    LmTransExprAtomLowering lowering,
     const LmTransNamespace *namespace_
+) {
+    if (
+        lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_FIELD_NAME ||
+        lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_C_FIELD_NAME
+    ) {
+        return lm_trans_emit_name(file, lowering.text);
+    }
+    if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_C_DOT) {
+        return lm_trans_put(file, ".");
+    }
+    if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_EQUAL) {
+        return lm_trans_put(file, "==");
+    }
+    if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_ADDRESS) {
+        return lm_trans_put(file, "&");
+    }
+    if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_POINTER_FOLLOW) {
+        return lm_trans_put(file, "->");
+    }
+    if (lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_DEREF) {
+        return lm_trans_put(file, "*");
+    }
+    if (
+        lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_INDEX_OPERATOR ||
+        lowering.kind == LM_TRANS_EXPR_ATOM_LOWER_INFIX_OPERATOR
+    ) {
+        return lm_trans_write_text(file, lowering.text);
+    }
+    return lm_trans_emit_expr_atom(file, lowering.text, namespace_);
+}
+
+static int lm_trans_expr_lowered_range_append_atom(
+    LmTransExprLoweredRange *range,
+    int leading_space,
+    const LmP0Node *node,
+    LmTransExprAtomLowering lowering
+) {
+    LmTransExprPiece piece;
+
+    piece.kind = LM_TRANS_EXPR_PIECE_ATOM;
+    piece.leading_space = leading_space;
+    piece.node = node;
+    piece.atom = lowering;
+    return lm_own_value_stack_push(&range->pieces, &piece);
+}
+
+static int lm_trans_expr_lowered_range_append_node(
+    LmTransExprLoweredRange *range,
+    int leading_space,
+    const LmP0Node *node
+) {
+    LmTransExprPiece piece;
+
+    piece.kind = LM_TRANS_EXPR_PIECE_NODE;
+    piece.leading_space = leading_space;
+    piece.node = node;
+    piece.atom.kind = LM_TRANS_EXPR_ATOM_LOWER_VALUE;
+    piece.atom.text.data = NULL;
+    piece.atom.text.length = 0U;
+    return lm_own_value_stack_push(&range->pieces, &piece);
+}
+
+static int lm_trans_expr_lowered_range_build(
+    LmTransExprLoweredRange *lowered,
+    LmTransExprRangeJob range
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
@@ -1691,8 +1793,11 @@ static int lm_trans_expr_stack_emit_range(
     int expect_field_name;
     int expect_c_field_name;
     int c_dot_path;
-    LmTransExprAtomLowering lowering;
-    LmTransExprRangeJob continuation;
+    LmTransExprAtomLowering atom;
+
+    if (lowered == NULL) {
+        return 1;
+    }
 
     field = range.field;
     previous_operand = range.previous_operand;
@@ -1702,12 +1807,8 @@ static int lm_trans_expr_stack_emit_range(
     while (field != range.stop) {
         node = field->value;
         if (node != NULL && !(node->flags & LM_P0_NODE_INACTIVE)) {
-            if (range.wrote && lm_trans_put(file, " ") != 0) {
-                return 1;
-            }
-
             if (node->kind == LM_P0_NODE_ATOM) {
-                lowering = lm_trans_lower_expr_atom(
+                atom = lm_trans_lower_expr_atom(
                     node,
                     previous_operand,
                     expect_field_name,
@@ -1715,11 +1816,9 @@ static int lm_trans_expr_stack_emit_range(
                     c_dot_path
                 );
                 if (
-                    lm_trans_emit_expr_atom_lowering(
-                        file,
-                        lowering,
+                    lm_trans_update_expr_atom_lowering_state(
+                        atom,
                         node,
-                        namespace_,
                         &previous_operand,
                         &expect_field_name,
                         &expect_c_field_name,
@@ -1728,21 +1827,30 @@ static int lm_trans_expr_stack_emit_range(
                 ) {
                     return 1;
                 }
+                if (
+                    lm_trans_expr_lowered_range_append_atom(
+                        lowered,
+                        range.wrote,
+                        node,
+                        atom
+                    ) != 0
+                ) {
+                    return 1;
+                }
             } else {
-                continuation.field = field->next;
-                continuation.stop = range.stop;
-                continuation.wrote = 1;
-                continuation.previous_operand = node;
-                continuation.expect_field_name = 0;
-                continuation.expect_c_field_name = 0;
-                continuation.c_dot_path = 0;
-                if (lm_trans_expr_stack_push_range_state(stack, continuation) != 0) {
+                if (
+                    lm_trans_expr_lowered_range_append_node(
+                        lowered,
+                        range.wrote,
+                        node
+                    ) != 0
+                ) {
                     return 1;
                 }
-                if (lm_trans_expr_stack_push_node(stack, node) != 0) {
-                    return 1;
-                }
-                return 0;
+                previous_operand = node;
+                expect_field_name = 0;
+                expect_c_field_name = 0;
+                c_dot_path = 0;
             }
             range.wrote = 1;
         }
@@ -1759,6 +1867,73 @@ static int lm_trans_expr_stack_emit_range(
     }
 
     return 0;
+}
+
+static int lm_trans_expr_stack_emit_lowered_range(
+    FILE *file,
+    LmTransExprStack *stack,
+    LmTransExprLoweredRange *lowered,
+    const LmTransNamespace *namespace_
+) {
+    const LmTransExprPiece *piece;
+    LmTransExprJob discard;
+
+    if (lowered == NULL) {
+        return 0;
+    }
+
+    while (lowered->index < lowered->pieces.count) {
+        piece = (const LmTransExprPiece *)lm_own_value_stack_at(&lowered->pieces, lowered->index);
+        if (piece == NULL) {
+            lm_trans_expr_lowered_range_delete(lowered);
+            return 1;
+        }
+        if (piece->leading_space && lm_trans_put(file, " ") != 0) {
+            lm_trans_expr_lowered_range_delete(lowered);
+            return 1;
+        }
+        if (piece->kind == LM_TRANS_EXPR_PIECE_ATOM) {
+            if (lm_trans_emit_expr_atom_lowering(file, piece->atom, namespace_) != 0) {
+                lm_trans_expr_lowered_range_delete(lowered);
+                return 1;
+            }
+            ++lowered->index;
+        } else {
+            ++lowered->index;
+            if (lm_trans_expr_stack_push_lowered_range(stack, lowered) != 0) {
+                lm_trans_expr_lowered_range_delete(lowered);
+                return 1;
+            }
+            if (lm_trans_expr_stack_push_node(stack, piece->node) != 0) {
+                (void)lm_own_value_stack_pop(&stack->jobs, &discard);
+                lm_trans_expr_lowered_range_delete(lowered);
+                return 1;
+            }
+            return 0;
+        }
+    }
+
+    lm_trans_expr_lowered_range_delete(lowered);
+    return 0;
+}
+
+static int lm_trans_expr_stack_emit_range(
+    FILE *file,
+    LmTransExprStack *stack,
+    LmTransExprRangeJob range,
+    const LmTransNamespace *namespace_
+) {
+    LmTransExprLoweredRange *lowered;
+
+    lowered = lm_trans_expr_lowered_range_new();
+    if (lowered == NULL) {
+        return 1;
+    }
+    if (lm_trans_expr_lowered_range_build(lowered, range) != 0) {
+        lm_trans_expr_lowered_range_delete(lowered);
+        return 1;
+    }
+    return lm_trans_expr_stack_emit_lowered_range(file, stack, lowered, namespace_);
 }
 
 static int lm_trans_emit_expr_stack_run(
@@ -1794,6 +1969,13 @@ static int lm_trans_emit_expr_stack_run(
                 &stack,
                 job.as.call_args.body,
                 job.as.call_args.callee
+            );
+        } else if (job.kind == LM_TRANS_EXPR_JOB_LOWERED_RANGE) {
+            status = lm_trans_expr_stack_emit_lowered_range(
+                file,
+                &stack,
+                job.as.lowered_range,
+                namespace_
             );
         }
     }
