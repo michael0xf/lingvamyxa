@@ -1,40 +1,125 @@
 Mixa Manager
-Architectural note: text UI + raster overlay + embedded terminal backend
-Version: draft 0.1
+Architectural model: text rectangle + transparent raster overlay + child console modes
+Version: draft 0.3
 
 0. Purpose
 
-Mixa Manager is a future cross-platform text-oriented manager application
-with a strictly cell-based text surface and an equally sized transparent
-raster/graphics overlay.
+Mixa Manager is a future cross-platform manager application with a strict
+text-cell UI and an equally sized transparent raster/graphics overlay.
 
-It should be able to operate in two different roles:
+The UI is visually close to the Norton Commander / FAR Manager / Midnight
+Commander family: panels, command line, menus, viewers, editors, status bars,
+keyboard-oriented navigation and fast textual interaction.
 
-1. As its own text UI application, similar in spirit to Norton Commander,
-   FAR Manager or Midnight Commander, but rendered inside a GUI window.
+The distinctive feature is that Mixa Manager does not treat text output and
+raster graphics as separate worlds. Every visible text area is represented as a
+text rectangle, and every such text rectangle may have a matching transparent
+raster rectangle drawn over it.
 
-2. As a terminal host for child console applications, so that programs such
-   as FAR, mc, vim, shells, build tools or REPLs can run inside a rectangular
-   text viewport owned by Mixa Manager.
+0.1. Execution model
 
-The key design idea is that text and graphics are not separate worlds.
-Mixa Manager owns a visual rectangular surface consisting of:
+0.1.1. Full embedded-terminal mode
 
-    - a text cell rectangle;
-    - a transparent raster/vector overlay with the same pixel geometry.
+If the platform and Qt build allow a real pseudo-terminal backend, Mixa Manager
+starts a PTY/ConPTY session and runs libvterm inside the application.
 
-The text rectangle may be produced by Mixa Manager itself, by a child terminal
-program through PTY/ConPTY + terminal emulation, or by a simpler pipe-based
-stdout/stderr adapter.
+    Unix-like platforms:
+        PTY / forkpty() / openpty() / posix_openpt()
 
-The renderer does not need to know which producer created the text screen.
+    Windows:
+        ConPTY / CreatePseudoConsole()
+
+    Terminal emulator core:
+        libvterm or a compatible terminal-state engine
+
+In this mode, child programs such as FAR, mc, vim, shells, REPLs and full-screen
+console applications run inside a Mixa Manager text rectangle. The child program
+believes it is connected to a real terminal. Mixa Manager remains the owner of
+rendering and may draw a transparent overlay above the child screen.
+
+0.1.2. Norton Commander delegation mode
+
+If the platform or Qt environment does not provide a usable PTY/ConPTY backend,
+Mixa Manager uses the lighter Norton Commander style model.
+
+In this mode, Mixa Manager does not embed the child program as a terminal inside
+its own viewport. Instead, it delegates the available console/process input and
+output to the child application in the same spirit as Norton Commander:
+
+    1. Mixa Manager owns the screen and draws its UI.
+    2. The user launches a child command.
+    3. Mixa Manager temporarily gives the available console/process IO to the
+       child process, or connects the child through the simplest available
+       stdin/stdout/stderr mechanism.
+    4. The child program runs outside Mixa Manager's embedded terminal model.
+    5. Mixa Manager waits for completion or return.
+    6. Mixa Manager redraws its own UI.
+
+This mode is intentionally lighter than 0.1.1. It is not a full terminal host
+and does not require libvterm. It is the compatibility mode for platforms where
+full embedded terminal hosting is not available or not worth implementing.
+
+0.2. Transparent terminal-facing features
+
+The following features must be implemented as transparently as possible for the
+child program in mode 0.1.1, and degraded as gracefully as possible in mode
+0.1.2:
+
+    Qt key events          -> terminal input sequences
+    resize window          -> PTY/ConPTY resize
+    mouse events           -> terminal mouse protocol, if needed
+    clipboard / paste      -> terminal paste / bracketed paste, if supported
+    encoding               -> UTF-8 / selected terminal encoding
+    colors / palette       -> terminal colors / Mixa Manager palette mapping
+
+The purpose of this layer is not to invent a new private input/output protocol
+for every child program. The purpose is to make the child program see the
+nearest possible equivalent of the terminal or console it expects.
+
+In mode 0.1.1 this transparency is implemented through PTY/ConPTY plus a
+terminal-state engine.
+
+In mode 0.1.2 transparency is limited: Mixa Manager can pass text, run commands,
+inherit or connect standard streams, and redraw itself afterwards, but it does
+not promise that full-screen terminal programs can live inside a Mixa Manager
+viewport.
+
+0.3. Shared visual API
+
+0.3.0. The module defined by 0.1 provides the visual API used for drawing both
+Mixa Manager itself and child-program screens.
+
+This API exposes two equal rectangles:
+
+    TextRect
+        a strict rows x cols cell rectangle
+
+    OverlayRect
+        a transparent raster/vector rectangle with the same visible extent
+
+The 0.1 module composites OverlayRect over TextRect during output.
+
+The important consequence is that Mixa Manager's own UI, a libvterm-backed
+child terminal, and a lightweight NC-style child-output adapter can all end at
+the same visual abstraction:
+
+    producer
+        ->
+    TextRect + OverlayRect
+        ->
+    Qt renderer
+
+The renderer should not care whether a cell was produced by Mixa Manager's own
+file panels, by libvterm, or by a lightweight child-output adapter.
 
 
 1. Main visual model
 
-The core visual object is a text surface:
+This section formalizes 0.3.
 
-    TextSurface
+The core visible object is a text rectangle:
+
+    TextRect
         rows
         cols
         cells[rows][cols]
@@ -51,14 +136,14 @@ A typical initial configuration may be:
     cols = 80
     rows = 40
 
-The window size is derived from the font metrics:
+The pixel size is derived from the selected monospace font:
 
     pixel_width  = cols * cell_width
     pixel_height = rows * cell_height
 
-The overlay surface has the same pixel rectangle:
+The overlay rectangle is paired with the text rectangle:
 
-    OverlaySurface
+    OverlayRect
         width  = cols * cell_width
         height = rows * cell_height
         RGBA pixels and/or vector primitives
@@ -71,7 +156,7 @@ Composition order:
     4. transparent raster/vector overlay
     5. optional cursor / selection / UI decorations
 
-The overlay should support both coordinate systems:
+OverlayRect must support two coordinate systems:
 
     Cell coordinates:
         row, col
@@ -80,55 +165,65 @@ The overlay should support both coordinate systems:
         x = col * cell_width
         y = row * cell_height
 
-This allows graphics to be anchored to text objects:
+This makes the overlay useful for cell-anchored graphics:
 
     - highlight a rectangular block of cells;
     - draw a border around a table;
     - draw arrows between tokens;
     - place a heatmap over a text table;
     - annotate build output;
-    - visualize code/data structures over a strict textual view.
+    - visualize code/data structures above a strict textual view.
+
+All later modules must end in this visual model. The difference between 0.1.1
+and 0.1.2 is not the renderer. The difference is how the TextRect is produced
+and how much terminal behavior is available to the child program.
 
 
 2. Producers
 
-The core renderer should not care where the text comes from.
+This section maps the 0.1 execution model to producers of TextRect content.
 
 Possible producers:
 
     OwnUIProducer
-        Mixa Manager writes directly to TextSurface.
-        This is used for file panels, menus, dialogs, status bars,
-        command line, viewers and editors.
+        Mixa Manager writes directly to TextRect.
+        This is used for panels, menus, dialogs, status bars, command line,
+        viewers and editors.
 
-    PtyTerminalProducer
+    EmbeddedTerminalProducer
+        Implements mode 0.1.1.
         Runs a child terminal application through PTY/ConPTY.
-        Output is interpreted by a terminal emulator core, such as libvterm.
-        The resulting terminal screen is copied into TextSurface.
+        Output is interpreted by libvterm or a compatible terminal core.
+        The resulting screen is copied into TextRect.
 
-    PipeOutputProducer
-        Runs a child process through ordinary stdin/stdout/stderr pipes.
-        Suitable for simple commands, logs and compiler output.
-        Not a full terminal.
+    NCDelegationProducer
+        Implements mode 0.1.2.
+        Runs a child program using the lightest available console/process IO
+        model. Mixa Manager temporarily yields interaction to the child or
+        captures simple output, then redraws itself.
+        This producer does not promise embedded full-screen terminal behavior.
 
     TestProducer
         Synthetic text screens for tests, demos and renderer debugging.
 
+Only EmbeddedTerminalProducer is a real terminal host. NCDelegationProducer is
+included because the project must remain useful on platforms where 0.1.1 is not
+available.
+
 
 3. Own UI path
 
-For Mixa Manager's own interface, do not generate ANSI escape sequences and
-do not feed them into libvterm.
+Mixa Manager's own interface should not emulate a terminal for itself.
 
-The native UI path should be direct:
+The native UI path is direct:
 
     Mixa Manager UI logic
         ->
-    TextSurface API
+    TextRect API
         ->
-    Renderer
+    OverlayRect API, if needed
         ->
-    OverlaySurface composition
+    Qt renderer
 
 Examples:
 
@@ -138,24 +233,24 @@ Examples:
     viewer.draw(...)
     statusLine.draw(...)
 
-This avoids unnecessary self-emulation.
+The own UI does not generate ANSI escape sequences and does not feed itself
+through libvterm. It writes into TextRect directly.
 
-Mixa Manager's own UI should treat keyboard input as structured input events,
-not terminal bytes. For example:
+Keyboard input for the own UI is also direct:
 
     F5        -> CopyCommand
     F6        -> MoveCommand
     Ctrl+R    -> RefreshCommand
     ArrowDown -> MoveSelectionDown
 
-Terminal encoding is needed only when sending input to a child program running
-behind PTY/ConPTY.
+Terminal encoding is used only when focus is inside an EmbeddedTerminalProducer
+from 0.1.1. In mode 0.1.2, own UI still remains direct; child execution is a
+separate delegated action.
 
 
-4. Full terminal host path
+4. Full embedded-terminal mode: 0.1.1
 
-When Mixa Manager runs an interactive child console program inside its own
-rectangular viewport, it must act as a terminal host.
+Mode 0.1.1 is the strong mode.
 
 Architecture:
 
@@ -171,83 +266,98 @@ Architecture:
         ->
     PTY / ConPTY output
         ->
-    terminal emulator core, for example libvterm
+    libvterm or compatible terminal emulator core
         ->
-    TextSurface
+    TextRect
         ->
     Qt renderer
         ->
-    OverlaySurface
+    OverlayRect composition
 
-Platform backends:
+Platform backends for 0.1.1:
 
-    Unix-like desktop systems:
-        forkpty(), openpty(), posix_openpt(), /dev/pts
+    Linux desktop:
+        PTY + libvterm + Qt renderer
 
     macOS:
-        forkpty() / openpty()
+        PTY + libvterm + Qt renderer
+
+    BSD-like systems:
+        PTY + libvterm + Qt renderer, subject to platform details
 
     Windows 10 1809+ / Windows 11:
-        ConPTY / CreatePseudoConsole()
+        ConPTY + libvterm + Qt renderer
 
-    ChromeOS with Linux/Crostini:
-        normal Linux PTY model, if Mixa Manager is built and run as a Linux
-        application inside the Linux environment.
+    ChromeOS Linux/Crostini:
+        treated as Linux target when Mixa Manager runs as a Linux application
+        inside the Linux environment
 
-    Browser / WebAssembly:
-        no normal local PTY/ConPTY for arbitrary local child programs.
-        Only UI emulation, in-browser programs, or remote backend.
+Mode 0.1.1 is required when the child program must live inside a Mixa Manager
+rectangle while Mixa Manager keeps owning the frame, overlay and surrounding UI.
 
-    iOS / Android:
-        possible only with platform-specific limitations and sandboxing.
-        Not a primary target for full terminal hosting.
+Examples of children that require 0.1.1 for embedded operation:
 
-The important distinction:
-
-    Mixa Manager as terminal host:
-        child program lives inside a Mixa Manager viewport.
-
-    Classic Norton Commander style:
-        parent temporarily gives the whole real console to the child process,
-        waits for it to finish, and then redraws itself.
-
-These are different models.
+    FAR
+    mc
+    vim
+    nano
+    top
+    less
+    shells
+    REPLs with terminal behavior
+    curses/full-screen terminal applications
 
 
-5. Why Norton Commander and FAR are not terminal hosts
+5. Norton Commander delegation mode: 0.1.2
 
-Norton Commander in DOS did not emulate a terminal. It was a text UI program
-that directly drew its own panels into the DOS/VGA text screen, often through
-video memory or BIOS/DOS services.
+Mode 0.1.2 is the light mode.
 
-FAR Manager in Windows is a Win32 console application. It draws its own UI
-through the Windows Console API and receives keyboard events from the Windows
-console subsystem.
+It preserves the historical Norton Commander idea: a manager application does
+not become a terminal host for the child; it temporarily gives the available
+console/process IO to the child and returns afterwards.
 
-Neither NC nor FAR, in their normal historical roles, was a terminal host for
-an embedded child program. When they launched another program, the cheap and
-classic trick was:
+Classic sequence:
 
-    1. parent UI is on screen;
-    2. user launches child command;
-    3. parent gives the real console to the child;
-    4. child runs in the same full console;
-    5. parent waits;
-    6. parent redraws its own panels.
+    1. Mixa Manager UI is visible.
+    2. User launches a child command.
+    3. Mixa Manager stores enough state to redraw itself later.
+    4. Child runs through inherited console/process IO or simple pipes.
+    5. Child exits or returns control.
+    6. Mixa Manager redraws TextRect and OverlayRect.
 
-This is not "child inside parent". It is "child instead of parent for a while".
+This is not:
 
-Mixa Manager should support this simple model where useful, but the distinctive
-future model is stronger:
+    child terminal inside parent rectangle
 
-    child terminal program inside a Mixa Manager viewport,
-    with Mixa Manager still owning rendering and overlay composition.
+It is:
+
+    child instead of parent for a while
+
+Mode 0.1.2 is useful for:
+
+    - simple command execution;
+    - build commands;
+    - scripts;
+    - utilities that produce ordinary text output;
+    - platforms where full PTY/ConPTY is not a target;
+    - a cheap, familiar NC-like launch behavior.
+
+Mode 0.1.2 should still use the common visual API when control returns:
+
+    NC-style child execution
+        ->
+    Mixa Manager redraws
+        ->
+    TextRect + OverlayRect
+        ->
+    Qt renderer
+
+But it does not use libvterm as the central child-screen model.
 
 
-6. Degraded pipe backend
+6. Pipe / simple output adapter inside 0.1.2
 
-If PTY/ConPTY is not available, Mixa Manager may still run child processes
-through ordinary pipes:
+A practical implementation of 0.1.2 may include a simple pipe adapter:
 
     child stdout/stderr
         ->
@@ -255,31 +365,33 @@ through ordinary pipes:
         ->
     simple text parser
         ->
-    TextSurface
+    TextRect
 
-This is suitable for:
+This is useful for:
 
-    - git status;
-    - compiler output;
-    - logs;
-    - simple scripts;
-    - one-shot command output.
+    git status
+    compiler output
+    logs
+    simple scripts
+    one-shot command output
 
-It is not suitable as a full replacement for PTY/ConPTY.
+This adapter is part of 0.1.2, not a replacement for 0.1.1.
 
-Programs such as FAR, mc, vim, nano, top, less, curses applications and many
-interactive REPLs expect a real terminal or console-like environment. With
-ordinary pipes, they may disable full-screen mode, change buffering, lose
-cursor control, or fail to behave correctly.
+The pipe adapter may parse only simple text features:
 
-Therefore the degraded backend should be explicit:
+    newline
+    carriage return
+    tab
+    optional ANSI colors
+    optional clear-screen subset
 
-    PipeOutputProducer
-        simple output only;
-        no guarantee of full terminal semantics.
+It should not claim that it can host all full-screen terminal software inside a
+Mixa Manager rectangle. That guarantee belongs to 0.1.1.
 
 
 7. Input model
+
+This section implements 0.2 for both 0.1.1 and 0.1.2.
 
 Keyboard input must not be modeled as "one key press equals one byte".
 
@@ -299,7 +411,7 @@ There are at least three levels:
             λ
             漢
 
-Qt gives useful information at several levels:
+Qt provides useful information at several levels:
 
     QKeyEvent:
         key()
@@ -330,8 +442,10 @@ If focus is in Mixa Manager's own UI:
     InputEvent
         ->
     OwnCommandMapper
+        ->
+    direct TextRect / OverlayRect changes
 
-If focus is in an embedded terminal viewport:
+If focus is in an embedded terminal viewport from 0.1.1:
 
     InputEvent
         ->
@@ -339,10 +453,21 @@ If focus is in an embedded terminal viewport:
         ->
     PTY/ConPTY input stream
 
+If the current operation is a 0.1.2 delegated child process:
+
+    Mixa Manager passes only what the light mode can honestly pass:
+        inherited console/process IO, simple stdin, or platform-specific
+        delegated input.
+
+The important rule is that unknown native non-text key events cannot be blindly
+sent to a PTY byte stream. If there is no committed text and no known terminal
+semantic key, there is no universal byte representation to pass through.
+
 
 8. Text input
 
-Ordinary text should be delegated to Qt/OS/input method as much as possible.
+Ordinary text input should be delegated to Qt/OS/input method as much as
+possible.
 
 For normal typing:
 
@@ -350,12 +475,12 @@ For normal typing:
         ->
     UTF-8 bytes
         ->
-    PTY/ConPTY input
+    PTY/ConPTY input in 0.1.1
 
 This means Mixa Manager should not manually derive characters from scan codes
 or keyboard layouts.
 
-The OS/Qt should handle:
+Qt/OS should handle:
 
     - Russian layout;
     - Latin layout;
@@ -364,14 +489,18 @@ The OS/Qt should handle:
     - IME;
     - Unicode text input.
 
-Mixa Manager sends the committed Unicode text to the child terminal as UTF-8,
-unless a specific terminal mode requires otherwise.
+In 0.1.1 the committed Unicode text is sent to the embedded child terminal as
+UTF-8 unless a selected terminal profile says otherwise.
+
+In 0.1.2 the same committed text may be sent only when the delegated child IO
+model has a meaningful stdin path. Otherwise text input belongs to Mixa
+Manager's own UI and the child owns interaction only while the parent is in the
+delegated state.
 
 
 9. Special keys
 
-Special keys do not have universal "raw native" byte representation for a
-terminal child.
+Special keys implement the non-text part of 0.2.
 
 Examples:
 
@@ -388,12 +517,10 @@ Examples:
     Alt+keys
     keypad keys
 
-For these keys Mixa Manager needs a TerminalInputEncoder.
+These keys do not have a universal native byte representation for child
+terminal programs.
 
-The encoder should not be a giant hardcoded table directly from Qt key to bytes
-if this can be avoided.
-
-Better model:
+In 0.1.1 Mixa Manager needs a TerminalInputEncoder:
 
     Qt key event
         ->
@@ -419,10 +546,7 @@ Examples of semantic keys:
     TerminalKey::PageUp
     TerminalKey::PageDown
 
-The child terminal program does not receive Qt events. It receives terminal
-input. Therefore unknown non-text key events cannot be blindly passed through.
-
-Correct rule:
+Correct rule for 0.1.1:
 
     if event produces committed text:
         send text as UTF-8
@@ -436,13 +560,17 @@ Correct rule:
     else:
         ignore, log, or allow user-configurable binding
 
-There is no universal pass-through for "unknown non-text native key events"
-through a PTY byte stream.
+For 0.1.2, special keys are either handled by Mixa Manager itself or delegated
+only through whatever real console/process mechanism is actually active during
+the temporary child run. 0.1.2 must not pretend to be a universal special-key
+terminal bridge.
 
 
 10. Terminal identity and profiles
 
-Mixa Manager should define a terminal identity for child programs.
+This section belongs primarily to 0.1.1.
+
+Mixa Manager should define a terminal identity for embedded child programs.
 
 Possible baseline:
 
@@ -468,25 +596,27 @@ Input profiles may include:
     far-compatible tweaks
     custom/user profile
 
-Future support may include enhanced keyboard protocols, for example modern
-terminal protocols that represent more key combinations than classic VT/xterm.
-However, old terminal software will still require conservative xterm/vt-like
-behavior.
+Mode 0.1.2 does not need to claim such a terminal identity unless its current
+implementation actually provides a terminal-like adapter. In the normal NC
+style case, the child uses the platform's available console/process IO and
+Mixa Manager redraws afterwards.
 
 
 11. Clipboard and paste
+
+Clipboard is part of the 0.2 transparency layer.
 
 Qt can handle OS clipboard integration.
 
 Copy from Mixa Manager:
 
-    TextSurface selection
+    TextRect selection
         ->
     QString selectedText
         ->
     QClipboard::setText(...)
 
-Paste into embedded terminal:
+Paste into embedded terminal in 0.1.1:
 
     QClipboard::text()
         ->
@@ -496,14 +626,18 @@ Paste into embedded terminal:
         ->
     PTY/ConPTY input
 
-Bracketed paste should be supported for terminal child programs:
+Bracketed paste should be supported for terminal child programs in 0.1.1:
 
     ESC [ 200 ~
     pasted text
     ESC [ 201 ~
 
 If libvterm keyboard helpers are used, they may assist with start/end paste
-depending on terminal mode.
+according to terminal mode.
+
+In 0.1.2, clipboard belongs primarily to Mixa Manager's own UI. It may be sent
+to a delegated child only if that child has an active stdin/console path under
+the current platform implementation.
 
 On X11 there may be both:
 
@@ -515,15 +649,18 @@ On Windows and macOS there is usually only the normal global clipboard model.
 
 12. Mouse input
 
-Mouse input should be optional and added after the keyboard/text path is stable.
+Mouse input is part of the 0.2 transparency layer, but should be added after
+keyboard and text input are stable.
 
 For Mixa Manager's own UI:
 
     Qt mouse event
         ->
     Own UI hit testing and commands
+        ->
+    TextRect / OverlayRect changes
 
-For embedded child terminal:
+For embedded child terminal in 0.1.1:
 
     Qt mouse event
         ->
@@ -539,27 +676,32 @@ Potential supported terminal mouse modes:
     - button press/release;
     - drag tracking, if needed.
 
-This should be profile- and mode-dependent. Terminal child programs normally
-enable mouse tracking by sending escape sequences. The terminal emulator core
-or surrounding terminal state should remember whether mouse reporting is active.
+Mouse reporting in 0.1.1 is mode-dependent. Terminal child programs normally
+enable mouse tracking by sending escape sequences. The terminal state layer must
+remember whether mouse reporting is active.
+
+In 0.1.2, mouse input remains mostly Mixa Manager's own UI input. During a
+classic delegated child run, the child owns whatever platform interaction is
+available, but Mixa Manager does not translate mouse events into an embedded
+terminal viewport unless 0.1.1 is active.
 
 
 13. Resize model
 
-Resize is a synchronization problem.
+Resize is a 0.2 transparency requirement and must be synchronized with 0.3.
 
 When the Qt window or font changes:
 
     1. measure cell_width and cell_height;
     2. compute cols and rows;
-    3. resize TextSurface;
-    4. resize OverlaySurface;
-    5. notify PTY/ConPTY about new terminal size;
-    6. resize terminal emulator screen;
+    3. resize TextRect;
+    4. resize OverlayRect;
+    5. in 0.1.1, notify PTY/ConPTY about the new terminal size;
+    6. in 0.1.1, resize libvterm screen;
     7. repaint.
 
-The terminal child must be told the same size that Mixa Manager is actually
-rendering.
+The terminal child in 0.1.1 must be told the same size that Mixa Manager is
+actually rendering.
 
 Otherwise:
 
@@ -567,10 +709,17 @@ Otherwise:
     - renderer shows 100x50;
     - output, cursor, scrolling and overlay alignment become wrong.
 
+In 0.1.2 there may be no embedded child viewport to resize. Resize affects the
+Mixa Manager UI and its own TextRect/OverlayRect; any child process uses the
+platform's delegated console/process model.
+
 
 14. Unicode and glyph issues
 
-TextSurface should not be a naive char[rows][cols].
+This section applies to the shared 0.3 visual API regardless of whether content
+comes from own UI, 0.1.1 or 0.1.2.
+
+TextRect should not be a naive char[rows][cols].
 
 Important issues:
 
@@ -585,11 +734,17 @@ Important issues:
     - bold, underline, italic, inverse;
     - truecolor, 256-color and palette modes.
 
-For a file manager style UI, box drawing and exact cell alignment are critical.
+For a file-manager style UI, box drawing and exact cell alignment are critical.
 The visual style should remain sharp, strict and readable.
 
 The renderer should be designed so that pseudographic lines align cleanly with
 the cell grid.
+
+In 0.1.1, libvterm or the terminal core contributes terminal semantics, but the
+final glyph rendering still belongs to Mixa Manager.
+
+In 0.1.2, the same renderer draws Mixa Manager's own restored UI and any simple
+captured output that was converted into TextRect.
 
 
 15. Renderer choices
@@ -608,9 +763,9 @@ Possible rendering implementations:
         GPU alpha blending
 
     Alternative:
-        Qt Quick / QML, if it does not make text cell precision harder
+        Qt Quick / QML, if it does not make text-cell precision harder
 
-The renderer should support:
+The renderer must support the 0.3 model:
 
     - fixed cell grid;
     - cached glyph atlas or efficient text drawing;
@@ -620,48 +775,75 @@ The renderer should support:
     - cursor;
     - scaling / DPI awareness.
 
-The renderer should not know whether a cell came from own UI, libvterm or pipe
-output.
+The renderer must not know whether a cell came from:
+
+    - OwnUIProducer;
+    - EmbeddedTerminalProducer in 0.1.1;
+    - NCDelegationProducer / simple pipe adapter in 0.1.2;
+    - TestProducer.
 
 
-16. Platform summary
+16. Platform summary by model mode
 
-Full desktop targets:
+The project should classify platforms by supported Mixa Manager mode, not by a
+vague statement that a platform is "full" or "not full".
+
+Mode 0.1.1 targets:
 
     Windows 10 1809+ / Windows 11:
-        ConPTY + terminal emulator core + Qt renderer.
+        0.1.1 through ConPTY + libvterm + Qt renderer.
+        0.1.2 also available as a fallback/compatibility behavior.
 
     Linux desktop:
-        PTY + terminal emulator core + Qt renderer.
+        0.1.1 through PTY + libvterm + Qt renderer.
+        0.1.2 also available.
 
     macOS:
-        PTY + terminal emulator core + Qt renderer.
+        0.1.1 through PTY + libvterm + Qt renderer.
+        0.1.2 also available.
 
     BSD-like systems:
-        PTY + terminal emulator core + Qt renderer, subject to platform details.
+        0.1.1 through PTY + libvterm + Qt renderer, subject to platform details.
+        0.1.2 also available.
 
     ChromeOS Linux/Crostini:
-        treat as Linux target inside the Linux environment.
+        0.1.1 when Mixa Manager runs as a Linux application inside the Linux
+        environment.
+        0.1.2 also available.
 
-Partial / non-primary targets:
+Mode 0.1.2-light targets:
+
+    Android:
+        supports only the 0.1.2 lightweight version as a project target.
+        The application should still use TextRect + OverlayRect for its own UI,
+        but it should not require embedded PTY/ConPTY terminal hosting.
+
+    iOS:
+        supports only the 0.1.2 lightweight version as a project target.
+        The application should still use TextRect + OverlayRect for its own UI,
+        but it should not require embedded PTY/ConPTY terminal hosting.
 
     WebAssembly/browser:
-        no local arbitrary child-process PTY;
-        possible UI demo, remote backend, or in-browser emulated process.
-
-    Android/iOS:
-        possible only with platform-specific restrictions;
-        not the baseline for full terminal hosting.
+        supports only the 0.1.2 lightweight version as a project target.
+        Mixa Manager may render its UI and demonstrate TextRect + OverlayRect,
+        but child execution must be limited to in-browser emulation, remote
+        backend, or simple model-specific adapters.
 
     Embedded Linux:
-        possible if the system has normal userspace, process launching and PTY.
+        0.1.1 if the system has normal userspace, process launching and PTY.
+        Otherwise 0.1.2-light.
+
+This wording keeps the document tied to the model: every platform is described
+by which 0.1 mode it supports.
 
 
 17. Recommended module structure
 
+The module structure follows 0.1, 0.2 and 0.3.
+
     core/
-        TextSurface
-        OverlaySurface
+        TextRect
+        OverlayRect
         VisualRect
         Cell
         Style
@@ -685,7 +867,7 @@ Partial / non-primary targets:
         MouseEncoder
 
     terminal/
-        TerminalSession
+        EmbeddedTerminalSession      // mode 0.1.1
         TerminalScreenAdapter
         VtermAdapter
         TerminalProfile
@@ -693,11 +875,12 @@ Partial / non-primary targets:
         TerminalModes
 
     backend/
-        PtyBackend interface
-        UnixPtyBackend
-        WindowsConptyBackend
-        PipeProcessBackend
-        DummyBackend
+        ChildBackend interface
+        UnixPtyBackend               // mode 0.1.1
+        WindowsConptyBackend         // mode 0.1.1
+        NCDelegationBackend          // mode 0.1.2
+        PipeProcessBackend           // simple adapter inside 0.1.2
+        DummyBackend                 // tests / demos / 0.1.2-light targets
 
     ui/
         FilePanels
@@ -718,7 +901,12 @@ Partial / non-primary targets:
 
 18. Backend interface sketch
 
-    class PtyBackend
+The backend interface should not be called only PtyBackend, because 0.1.2 is
+not a PTY backend.
+
+Better base interface:
+
+    class ChildBackend
         start(program, args, environment, cols, rows)
         writeInput(bytes)
         resize(cols, rows)
@@ -727,107 +915,129 @@ Partial / non-primary targets:
 
         signal output(bytes)
         signal exited(code)
+        signal modeChanged(...)
 
 Implementations:
 
     UnixPtyBackend:
+        mode 0.1.1
         forkpty/openpty/posix_openpt
 
     WindowsConptyBackend:
+        mode 0.1.1
         CreatePseudoConsole and pipes
 
+    NCDelegationBackend:
+        mode 0.1.2
+        temporarily delegates available console/process IO to child and returns
+        control to Mixa Manager afterwards
+
     PipeProcessBackend:
-        QProcess pipes;
-        not a terminal
+        mode 0.1.2 helper
+        QProcess pipes; useful for simple output, not a terminal
 
     DummyBackend:
-        tests, demos, non-desktop targets
+        tests, demos, non-desktop and 0.1.2-light targets
+
+The output of every backend that produces visible text must ultimately be
+converted into TextRect or trigger a redraw of Mixa Manager's own TextRect.
 
 
-19. Important weak spots
+19. Important weak spots, expressed through the 0.1 model
 
-The project is realistic, but the weak spots must be acknowledged.
+The project is realistic, but the weak spots must remain explicit.
 
-1. No PTY/ConPTY, no full terminal child.
-   Pipe output is useful but not a real terminal.
+1. Mode 0.1.1 is the only real embedded-terminal mode.
+   If there is no PTY/ConPTY-equivalent backend, a child program should not be
+   promised a live terminal rectangle inside Mixa Manager.
 
-2. Input is the hardest compatibility layer.
+2. Mode 0.1.2 is useful but intentionally lighter.
+   It can reproduce the classic NC behavior: launch child, delegate interaction
+   or simple IO, return, redraw. It does not replace libvterm-backed hosting.
+
+3. Input is the hardest 0.2 layer.
    Normal text can be delegated to Qt/OS, but special terminal keys need an
-   encoder/profile.
+   encoder/profile in 0.1.1.
 
-3. Unknown non-text keys cannot be universally passed through.
+4. Unknown non-text keys cannot be universally passed through.
    PTY/ConPTY input is bytes, not native Qt/OS event objects.
 
-4. Unicode and cell width are easy to underestimate.
+5. Unicode and cell width belong to 0.3 and affect every mode.
    Terminal rendering is not just drawing ASCII.
 
-5. Resize must be synchronized across window, TextSurface, overlay, PTY/ConPTY
-   and terminal emulator core.
-
-6. Windows support should target modern Windows only.
-   Pre-ConPTY Windows requires old hacks such as hidden console/screen scraping
-   or winpty-like compatibility layers.
+6. Resize must be synchronized across window, TextRect, OverlayRect, PTY/ConPTY
+   and libvterm in 0.1.1.
 
 7. Own UI should not go through terminal emulation.
-   Mixa Manager should write directly into TextSurface.
+   Mixa Manager should write directly into TextRect and OverlayRect.
 
 8. Terminal child programs and own UI should share the same visual API, not the
    same input/output path.
 
-9. Overlay should be tied to cell geometry.
-   Otherwise text and graphics will drift apart.
+9. Overlay must be tied to cell geometry.
+   Otherwise text and graphics drift apart.
 
-10. Clipboard is easy for simple text, but terminal paste needs bracketed paste
-    and mode awareness.
+10. Clipboard is simple for TextRect copy, but terminal paste in 0.1.1 needs
+    bracketed paste and mode awareness.
+
+11. Platform notes must be expressed as mode support.
+    For example: Android supports only 0.1.2-light as a project target, rather
+    than being described vaguely as lacking a full terminal.
 
 
 20. Final design formula
 
-Mixa Manager should be built around a visual surface, not around stdout.
+Mixa Manager is built around this model:
 
-The central abstraction:
+    0.1.1 Full embedded-terminal mode:
+        PTY/ConPTY
+            ->
+        libvterm / terminal core
+            ->
+        TextRect
+            +
+        OverlayRect
+            ->
+        Qt renderer
 
-    TextSurface + OverlaySurface
+    0.1.2 Norton Commander delegation mode:
+        Mixa Manager UI
+            ->
+        launch/delegate child through available console/process IO
+            ->
+        child exits or returns
+            ->
+        Mixa Manager redraws
+            ->
+        TextRect
+            +
+        OverlayRect
+            ->
+        Qt renderer
 
-The native Mixa Manager UI writes directly:
+    Own UI path:
+        Mixa Manager commands
+            ->
+        TextRect
+            +
+        OverlayRect
+            ->
+        Qt renderer
 
-    Own UI
-        ->
-    TextSurface
+The central abstraction is not stdout.
 
-Embedded terminal programs go through:
+The central abstraction is:
 
-    PTY/ConPTY
-        ->
-    terminal emulator core
-        ->
-    TextSurface
+    TextRect + OverlayRect
 
-Simple child commands may go through:
-
-    QProcess pipes
-        ->
-    simple output adapter
-        ->
-    TextSurface
-
-All visual output becomes:
-
-    TextSurface
-        +
-    OverlaySurface
-        ->
-    Qt renderer
-
-The result is a file-manager-like application that can still host real terminal
-programs, while also allowing transparent raster/vector graphics over a strict
-text cell grid.
-
-This is the essential difference from a classic Norton Commander clone:
+The essential difference from a classic Norton Commander clone is therefore
+precise:
 
     classic NC clone:
-        text UI that temporarily gives the whole console to child programs;
+        primarily mode 0.1.2: text UI that temporarily gives the whole console
+        or process interaction to child programs and redraws itself afterwards;
 
     Mixa Manager:
-        owns a GUI text/graphics surface and can embed child terminal sessions
-        inside it through PTY/ConPTY + terminal emulation.
+        supports mode 0.1.2 for cheap compatibility, but its strong desktop
+        model is mode 0.1.1: embedded child terminal sessions inside its own
+        text rectangles, with transparent raster/vector overlays above them.
