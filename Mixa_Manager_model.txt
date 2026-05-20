@@ -1,20 +1,45 @@
 Mixa Manager
 Architectural model: text rectangle + transparent raster overlay + child console modes
-Version: draft 0.3
+Version: draft 0.4
 
 0. Purpose
 
-Mixa Manager is a future cross-platform manager application with a strict
-text-cell UI and an equally sized transparent raster/graphics overlay.
+0.0. Core visual concept
 
-The UI is visually close to the Norton Commander / FAR Manager / Midnight
+Mixa Manager is a future cross-platform text-oriented manager application
+with a strictly cell-based text surface and an equally sized transparent
+raster/graphics overlay.
+
+Its UI is visually close to the Norton Commander / FAR Manager / Midnight
 Commander family: panels, command line, menus, viewers, editors, status bars,
 keyboard-oriented navigation and fast textual interaction.
 
-The distinctive feature is that Mixa Manager does not treat text output and
-raster graphics as separate worlds. Every visible text area is represented as a
-text rectangle, and every such text rectangle may have a matching transparent
-raster rectangle drawn over it.
+It should be able to operate in two different roles:
+
+1. As its own text UI application, similar in spirit to Norton Commander,
+   FAR Manager or Midnight Commander, but rendered inside a GUI window.
+
+2. As a terminal host for child console applications, so that programs such
+   as FAR, mc, vim, shells, build tools or REPLs can run inside a rectangular
+   text viewport owned by Mixa Manager.
+
+The key design idea is that text and graphics are not separate worlds.
+Mixa Manager owns a visual rectangular surface consisting of:
+
+    - a text cell rectangle;
+    - a transparent raster/vector overlay with the same pixel geometry.
+
+The text rectangle may be produced by Mixa Manager itself, by a child terminal
+program through PTY/ConPTY + terminal emulation, or by a simpler pipe-based
+stdout/stderr adapter.
+
+The renderer does not need to know which producer created the text screen.
+
+The rest of the document is only a decomposition of this core idea. Section
+0.1 defines how child programs are connected. Section 0.2 defines which
+terminal-facing features must be made transparent for child programs when the
+strong mode is available. Section 0.3 defines the shared visual API used by
+both Mixa Manager's own UI and child-program screens.
 
 0.1. Execution model
 
@@ -115,7 +140,7 @@ file panels, by libvterm, or by a lightweight child-output adapter.
 
 1. Main visual model
 
-This section formalizes 0.3.
+This section formalizes 0.0 and 0.3: the common visual surface used by both roles of Mixa Manager.
 
 The core visible object is a text rectangle:
 
@@ -181,7 +206,7 @@ and how much terminal behavior is available to the child program.
 
 2. Producers
 
-This section maps the 0.1 execution model to producers of TextRect content.
+This section maps the two roles from 0.0 and the 0.1 execution model to producers of TextRect content.
 
 Possible producers:
 
@@ -785,8 +810,7 @@ The renderer must not know whether a cell came from:
 
 16. Platform summary by model mode
 
-The project should classify platforms by supported Mixa Manager mode, not by a
-vague statement that a platform is "full" or "not full".
+The project should classify platforms by supported Mixa Manager mode, while preserving the 0.0 visual idea on every target: Mixa Manager remains a TextRect + OverlayRect application even when only the light child-execution mode is available.
 
 Mode 0.1.1 targets:
 
@@ -839,7 +863,7 @@ by which 0.1 mode it supports.
 
 17. Recommended module structure
 
-The module structure follows 0.1, 0.2 and 0.3.
+The module structure follows 0.0, 0.1, 0.2 and 0.3.
 
     core/
         TextRect
@@ -987,7 +1011,7 @@ The project is realistic, but the weak spots must remain explicit.
 
 20. Final design formula
 
-Mixa Manager is built around this model:
+Mixa Manager is built around the 0.0 visual concept and the following execution modes:
 
     0.1.1 Full embedded-terminal mode:
         PTY/ConPTY
