@@ -22,8 +22,9 @@ L2:
                 if: status != 0
                     diagnostic: c.lm_p0_document_diagnostic(document)
                     if: diagnostic != c.NULL
-                        c.fprintf: c.stderr "P0 parse error %d at %zu:%zu: %s\n" 
-				diagnostic\code diagnostic\line diagnostic\column diagnostic\message
+                        c.fprintf:
+                            c.stderr "P0 parse error %d at %zu:%zu: %s\n"
+                            diagnostic\code diagnostic\line diagnostic\column diagnostic\message
                         c.lm_p0_document_destroy: document
                         return: 1
                     c.fprintf: c.stderr "P0 parse error while reading %s\n" argv[1]
