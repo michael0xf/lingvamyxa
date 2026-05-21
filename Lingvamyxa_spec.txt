@@ -152,8 +152,13 @@ Ordinary structural forms are also markable source-interval entities. Curly
 braces are only the explicit document-facing spelling for adding extra active
 marks to the same overlay model.
 
-Curly-brace marks are part of the language. The text inside `{...}` is parsed
-as Lingvamyxa source. A mark frame such as:
+Curly-brace marks are part of the language. For the outer structural P0 parser,
+a `{...}` span is an opaque MIX mark span: P0 checks brace balance and skips the
+whole span without adding ordinary Structure fields. Physical line breaks inside
+that span do not create source-level/layout events for the surrounding
+Structure. A MIX or document consumer may parse the text inside `{...}` as
+Lingvamyxa source in its own local level-0 context; the opener column of `{`
+does not become that local context's indentation base. A mark frame such as:
 
     {color: red}
 
@@ -985,7 +990,7 @@ Lingvamyxa also supports Python-like triple-quoted text/string literals. They ar
 
 A Python-like string starts with exactly three double quotes or exactly three single quotes in ordinary token position. It closes at the next matching run of exactly three opening-quote characters. Longer same-quote runs inside the literal are content by the quote-run shortening rule below. It may appear inline, inside a short form, inside a parenthesized form or as a vertical child item with ordinary source-level indentation.
 
-Physical line breaks inside the literal are string content. Source levels, `#` comments, colons, commas, parentheses, dash delimiters, tail cutters and other structural syntax are not recognized inside the literal before the matching closing delimiter is reached.
+Physical line breaks inside the literal are string content. Source levels, `#` comments, colons, commas, parentheses, dash delimiters, tail cutters and other structural syntax are not recognized inside the literal before the matching closing delimiter is reached. For the surrounding structural parser, the whole literal is one source item even when it crosses physical lines; those internal line breaks do not create outer source-level/layout events. If the closing delimiter is followed by a field boundary and another token on the same physical closing line, that following token continues the surrounding field sequence.
 
 This literal form is not an ANSI C / C99 string and does not use ANSI C / C99 escape decoding. Its purpose is readable multi-line raw text with no backslash escaping.
 
@@ -1016,7 +1021,7 @@ Examples:
     four quotes produce three: ''''
     still text'''
 
-The opening and closing triple delimiters are part of the preserved source spelling at P0. Value decoding belongs to the literal/value layer above P0 and uses the quote-run rule above. After the closing triple delimiter, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item.
+The opening and closing triple delimiters are part of the preserved source spelling at P0. Value decoding belongs to the literal/value layer above P0 and uses the quote-run rule above. After the closing triple delimiter, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, `[`, `]`, or the end of the source item.
 
 This form is different from the column-0 block string fence below. It does not create or close a source-level block by itself. For example, as a child of a frame it still needs an ordinary child level:
 

@@ -4033,7 +4033,8 @@ static int lm_p0_postprocess_structure(
 static int lm_p0_wrap_fields_from_line(
     LmP0Document *document,
     LmP0Structure *structure,
-    size_t head_line
+    size_t head_line,
+    size_t inline_event_end_offset
 );
 
 static int lm_p0_postprocess_trailer(LmP0Document *document, LmP0Trailer *trailer) {
@@ -4053,7 +4054,12 @@ static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
             return 0;
         }
         if ((node->as.frame.flags & LM_P0_FRAME_INLINE_BODY) != 0U &&
-            !lm_p0_wrap_fields_from_line(document, &node->as.frame.body, node->span.line)) {
+            !lm_p0_wrap_fields_from_line(
+                document,
+                &node->as.frame.body,
+                node->span.line,
+                node->span.offset + node->span.length
+            )) {
             return 0;
         }
         return lm_p0_postprocess_trailer(document, node->as.frame.trailer);
@@ -4072,7 +4078,8 @@ static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
 static int lm_p0_wrap_fields_from_line(
     LmP0Document *document,
     LmP0Structure *structure,
-    size_t head_line
+    size_t head_line,
+    size_t inline_event_end_offset
 ) {
     LmP0Field *field;
     LmP0Field *previous;
@@ -4083,7 +4090,9 @@ static int lm_p0_wrap_fields_from_line(
     previous = NULL;
     field = structure->first_field;
     while (field != NULL) {
-        if (field->value != NULL && field->value->span.line != head_line) {
+        if (field->value != NULL &&
+            field->value->span.line != head_line &&
+            field->value->span.offset >= inline_event_end_offset) {
             break;
         }
         previous = field;
