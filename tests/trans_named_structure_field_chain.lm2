@@ -13,7 +13,11 @@ L2:
 .
 . external:
 . . fn: main () int
-. . . return: 0
+. . . Leaf: leaf
+. . . Branch: branch
+. . . c.leaf.value: 7
+. . . c.branch.leaf: @ leaf
+. . . return: read(@ branch) != 7
 . . end: main
 . end: external
 end: L2
