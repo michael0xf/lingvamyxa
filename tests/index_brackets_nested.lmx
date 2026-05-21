@@ -1,0 +1,4 @@
+indexDemo:
+    value: array[index - other[nested(1, 2)]]
+    text: table["row one"][column: name]
+end: indexDemo

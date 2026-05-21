@@ -1,0 +1,6 @@
+array[
+. index -
+. other[nested(
+. . 1
+. . 2)]
+]

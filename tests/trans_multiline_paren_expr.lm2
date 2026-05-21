@@ -1,0 +1,17 @@
+L1:
+===
+#include <stdint.h>
+===
+
+L2:
+    external:
+        fn: main () int
+            u32:
+                v (1
+                    +
+                    1)
+                * 3
+            return: v != 6
+        end: main
+    end: external
+end: L2

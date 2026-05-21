@@ -1,4 +1,3 @@
 call(
 . int: a b
-. ret: int
-)
+. ret: int)

@@ -83,7 +83,8 @@ typedef enum LmP0DashFenceStatus {
 
 typedef enum LmP0FieldParseFlags {
     LM_P0_FIELD_PARSE_STOP_ON_COMMA = 1,
-    LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL = 2
+    LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL = 2,
+    LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL = 4
 } LmP0FieldParseFlags;
 
 #define LM_P0_MAX_FENCE_LENGTH 80U
@@ -404,6 +405,45 @@ static void lm_p0_scan_indent_column(
     *out_column = column;
 }
 
+static void lm_p0_scan_layout_prefix(
+    const char *source,
+    size_t length,
+    size_t start,
+    size_t *out_offset,
+    size_t *out_indent_column,
+    size_t *out_dot_level
+) {
+    size_t p;
+    size_t indent_column;
+    size_t dot_level;
+
+    lm_p0_scan_indent_column(source, start, length, &p, &indent_column);
+    dot_level = 0U;
+    while (p < length && source[p] == '.') {
+        ++dot_level;
+        ++p;
+        while (p < length && lm_p0_is_horizontal_space(source[p])) {
+            ++p;
+        }
+    }
+
+    *out_offset = p;
+    *out_indent_column = indent_column;
+    *out_dot_level = dot_level;
+}
+
+static int lm_p0_layout_prefix_is_deeper(
+    size_t indent_column,
+    size_t dot_level,
+    size_t base_indent_column,
+    size_t base_dot_level
+) {
+    if (dot_level > 0U || base_dot_level > 0U) {
+        return dot_level > base_dot_level;
+    }
+    return indent_column > base_indent_column;
+}
+
 static int lm_p0_indent_level_from_column(
     LmP0Document *document,
     LmP0IndentStack *stack,
@@ -448,13 +488,29 @@ static size_t lm_p0_scan_brace_mark_unchecked(
 );
 
 static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size_t start) {
+    enum { LM_P0_LAYOUT_DELIMITER_STACK_LIMIT = 256 };
     size_t i;
     size_t depth;
+    size_t current_line_indent;
+    size_t current_line_dot_level;
+    size_t ignored_content_offset;
+    size_t delimiter_indent_stack[LM_P0_LAYOUT_DELIMITER_STACK_LIMIT];
+    size_t delimiter_dot_stack[LM_P0_LAYOUT_DELIMITER_STACK_LIMIT];
+    char delimiter_stack[LM_P0_LAYOUT_DELIMITER_STACK_LIMIT];
     char quote;
 
     i = start;
     depth = 0U;
     quote = '\0';
+    lm_p0_scan_layout_prefix(
+        source,
+        length,
+        start,
+        &ignored_content_offset,
+        &current_line_indent,
+        &current_line_dot_level
+    );
+    (void)ignored_content_offset;
     while (i < length) {
         if (quote != '\0') {
             if (quote == '"' && source[i] == '\\') {
@@ -505,12 +561,63 @@ static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size
                 continue;
             }
         }
-        if (source[i] == '(') {
+        if (lm_p0_is_line_break(source[i])) {
+            size_t line_break_width;
+            size_t next_line_start;
+            size_t next_content_offset;
+            size_t next_line_indent;
+            size_t next_line_dot_level;
+            size_t base_indent;
+            size_t base_dot_level;
+            int next_line_starts_with_matching_close;
+
+            if (depth == 0U) {
+                break;
+            }
+
+            line_break_width = lm_p0_line_break_width_at(source, length, i);
+            next_line_start = i + line_break_width;
+            lm_p0_scan_layout_prefix(
+                source,
+                length,
+                next_line_start,
+                &next_content_offset,
+                &next_line_indent,
+                &next_line_dot_level
+            );
+            next_line_starts_with_matching_close = 0;
+            if (depth <= LM_P0_LAYOUT_DELIMITER_STACK_LIMIT && next_content_offset < length) {
+                char top_delimiter;
+
+                top_delimiter = delimiter_stack[depth - 1U];
+                next_line_starts_with_matching_close =
+                    (top_delimiter == '(' && source[next_content_offset] == ')') ||
+                    (top_delimiter == '[' && source[next_content_offset] == ']');
+            }
+            if (depth <= LM_P0_LAYOUT_DELIMITER_STACK_LIMIT) {
+                base_indent = delimiter_indent_stack[depth - 1U];
+                base_dot_level = delimiter_dot_stack[depth - 1U];
+                if (
+                    !next_line_starts_with_matching_close &&
+                    !lm_p0_layout_prefix_is_deeper(next_line_indent, next_line_dot_level, base_indent, base_dot_level)
+                ) {
+                    break;
+                }
+            }
+            current_line_indent = next_line_indent;
+            current_line_dot_level = next_line_dot_level;
+            i = next_line_start;
+            continue;
+        }
+        if (source[i] == '(' || source[i] == '[') {
+            if (depth < LM_P0_LAYOUT_DELIMITER_STACK_LIMIT) {
+                delimiter_indent_stack[depth] = current_line_indent;
+                delimiter_dot_stack[depth] = current_line_dot_level;
+                delimiter_stack[depth] = source[i];
+            }
             ++depth;
-        } else if (source[i] == ')' && depth > 0U) {
+        } else if ((source[i] == ')' || source[i] == ']') && depth > 0U) {
             --depth;
-        } else if (lm_p0_is_line_break(source[i]) && depth == 0U) {
-            break;
         }
         ++i;
     }
@@ -1252,6 +1359,30 @@ static int lm_p0_append_atom_slice(
     return lm_p0_append_field(document, structure, node);
 }
 
+static int lm_p0_find_matching_bracket(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t open_index,
+    size_t line,
+    size_t base_column,
+    size_t *close_index
+);
+
+static int lm_p0_parse_fields_until(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t offset,
+    unsigned flags,
+    size_t short_source_level,
+    size_t initial_source_level,
+    size_t *index
+);
+
 static int lm_p0_append_compact_atom_pieces(
     LmP0Document *document,
     LmP0Structure *structure,
@@ -1268,6 +1399,44 @@ static int lm_p0_append_compact_atom_pieces(
     i = start;
     while (i < end) {
         size_t piece_end;
+
+        if (lm_p0_is_field_space(text[i])) {
+            ++i;
+            continue;
+        }
+
+        if (text[i] == '[') {
+            size_t close_index;
+            size_t inner_index;
+
+            if (!lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, i, i + 1U)) {
+                return 0;
+            }
+            if (!lm_p0_find_matching_bracket(document, text, end, i, line, column, &close_index)) {
+                return 0;
+            }
+            inner_index = 0U;
+            if (!lm_p0_parse_fields_until(
+                    document,
+                    structure,
+                    text + i + 1U,
+                    close_index - i - 1U,
+                    line,
+                    column + i + 1U,
+                    offset + i + 1U,
+                    0U,
+                    0U,
+                    0U,
+                    &inner_index
+                )) {
+                return 0;
+            }
+            if (!lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, close_index, close_index + 1U)) {
+                return 0;
+            }
+            i = close_index + 1U;
+            continue;
+        }
 
         piece_end = lm_p0_scan_compact_atom_piece(text, end, i);
         if (piece_end <= i) {
@@ -1506,6 +1675,26 @@ static int lm_p0_skip_field_space(
                 )) {
                 return 0;
             }
+            if (
+                (flags & LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL) != 0U &&
+                next_level < short_source_level &&
+                content_index < length &&
+                text[content_index] != ')' &&
+                text[content_index] != ']'
+            ) {
+                size_t diagnostic_line;
+                size_t diagnostic_column;
+
+                lm_p0_position_in_slice(text, length, content_index, line, column, &diagnostic_line, &diagnostic_column);
+                lm_p0_set_diagnostic(
+                    document,
+                    13,
+                    diagnostic_line,
+                    diagnostic_column,
+                    "bounded form continuation must stay inside the form"
+                );
+                return 0;
+            }
             if ((flags & LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL) != 0U && next_level <= short_source_level) {
                 *stopped_by_source_level = 1;
                 return 1;
@@ -1705,6 +1894,76 @@ static int lm_p0_find_matching_paren(
     return 0;
 }
 
+static int lm_p0_find_matching_bracket(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t open_index,
+    size_t line,
+    size_t base_column,
+    size_t *close_index
+) {
+    size_t i;
+    size_t bracket_depth;
+    size_t paren_depth;
+
+    i = open_index;
+    bracket_depth = 0U;
+    paren_depth = 0U;
+    while (i < length) {
+        if (text[i] == '{') {
+            if (!lm_p0_skip_brace_mark(document, text, length, &i, line, base_column)) {
+                return 0;
+            }
+            continue;
+        }
+        if (text[i] == '#') {
+            while (i < length && !lm_p0_is_line_break(text[i])) {
+                ++i;
+            }
+            continue;
+        }
+        if (lm_p0_starts_python_string(text, length, i)) {
+            if (!lm_p0_scan_python_string(document, text, length, &i, line, base_column)) {
+                return 0;
+            }
+            continue;
+        }
+        if (text[i] == '"' || text[i] == '`') {
+            if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, base_column)) {
+                return 0;
+            }
+            continue;
+        }
+        if (text[i] == '(') {
+            ++paren_depth;
+        } else if (text[i] == ')' && paren_depth > 0U) {
+            --paren_depth;
+        } else if (text[i] == '[') {
+            ++bracket_depth;
+        } else if (text[i] == ']') {
+            if (bracket_depth == 0U) {
+                break;
+            }
+            --bracket_depth;
+            if (bracket_depth == 0U && paren_depth == 0U) {
+                *close_index = i;
+                return 1;
+            }
+        }
+        ++i;
+    }
+
+    {
+        size_t diagnostic_line;
+        size_t diagnostic_column;
+
+        lm_p0_position_in_slice(text, length, open_index, line, base_column, &diagnostic_line, &diagnostic_column);
+        lm_p0_set_diagnostic(document, 5, diagnostic_line, diagnostic_column, "unclosed index bracket form");
+    }
+    return 0;
+}
+
 static int lm_p0_find_colon(
     LmP0Document *document,
     const char *text,
@@ -1889,8 +2148,8 @@ static int lm_p0_parse_fields_until_with_layout(
                     line,
                     column + i + 1U,
                     offset + i + 1U,
-                    0U,
-                    0U,
+                    LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL,
+                    current_source_level + 1U,
                     current_source_level + 1U,
                     &inner_index
                 )) {
@@ -1920,6 +2179,18 @@ static int lm_p0_parse_fields_until_with_layout(
                        text[i] != '#' &&
                        text[i] != '{' &&
                        text[i] != ':') {
+                    if (text[i] == '[') {
+                        size_t bracket_close_index;
+
+                        if (!lm_p0_find_matching_bracket(document, text, length, i, line, column, &bracket_close_index)) {
+                            return 0;
+                        }
+                        i = bracket_close_index + 1U;
+                        continue;
+                    }
+                    if (text[i] == ']') {
+                        break;
+                    }
                     if (lm_p0_starts_python_string(text, length, i) || text[i] == '"' || text[i] == '`') {
                         size_t diagnostic_line;
                         size_t diagnostic_column;
@@ -2003,8 +2274,8 @@ static int lm_p0_parse_fields_until_with_layout(
                         line,
                         column + i + 1U,
                         offset + i + 1U,
-                        0U,
-                        0U,
+                        LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL,
+                        current_source_level + 1U,
                         current_source_level + 1U,
                         &inner_index
                     )) {

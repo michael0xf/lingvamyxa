@@ -2695,8 +2695,14 @@ static int lm_trans_emit_declaration_with_qualifier(
     if (qualifier != NULL && lm_trans_put(file, qualifier) != 0) {
         return 1;
     }
-    if (lm_trans_emit_name(file, frame->head) != 0) {
-        return 1;
+    if (lm_trans_builtin_c_type_name(frame->head)) {
+        if (lm_trans_emit_type_name(file, frame->head) != 0) {
+            return 1;
+        }
+    } else {
+        if (lm_trans_emit_name(file, frame->head) != 0) {
+            return 1;
+        }
     }
     if (lm_trans_put(file, " ") != 0) {
         return 1;

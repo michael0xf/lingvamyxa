@@ -1,0 +1,20 @@
+L1:
+===
+#include <stdint.h>
+===
+
+L2:
+    external:
+        fn: main () int
+            u8: a 1
+            u16: b 2
+            u32: c 3
+            u64: d 4
+            i8: e 1
+            i16: f 2
+            i32: g 3
+            i64: h 4
+            return: a != 1 || b != 2 || c != 3 || d != 4 || e != 1 || f != 2 || g != 3 || h != 4
+        end: main
+    end: external
+end: L2

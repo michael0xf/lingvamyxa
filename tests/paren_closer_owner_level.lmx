@@ -1,0 +1,8 @@
+call(
+. int: a b
+. ret: int
+)
+
+value (1
+. +
+. 1)

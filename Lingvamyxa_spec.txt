@@ -458,7 +458,7 @@ This example should be read with five simple structural rules in mind:
 
    The parser tracks source-level changes, not physical source lines as
    containers. Dots in canonical notation, indentation in relaxed notation,
-   colon short-form, comma, bounded parentheses, source-level markers and
+   colon short-form, comma, bounded parentheses/brackets, source-level markers and
    physical newline separators may all affect the current level model. Child
    items are written at the next deeper source level. An atomic increase of the
    current source level opens a Structure. Returning by one source level
@@ -475,8 +475,9 @@ This example should be read with five simple structural rules in mind:
    item. Explicit forms such as `end: name` and
    terminal return forms become tail-cutter trailers only in a valid
    source-level tail-cutter position. They may close source-level/block tails,
-   but they do not close unmatched parenthesized/bounded Structures; those must
-   still be closed by `)`. Short colon forms are not bounded by `)`, so an
+   but they do not close unmatched parenthesized/bracketed bounded Structures;
+   those must still be closed by the matching `)` or `]`. Short colon forms are
+   not bounded by those delimiters, so an
    admitted `end: name` may terminate a short form in a valid source-level
    tail-cutter position.
 
@@ -1357,7 +1358,7 @@ Parser event view for a short colon-form opened at source level N:
     following source item at N             visible item/trailer at N    completes the short form; the item is a sibling
     following admitted tail-cutter         tail-cutter-specific         may close the admitted target
     comma                                 scan-depth trailer           completes the current open short form immediately
-    matching )                            bounded-context trailer      closes the bounded form and any open short form inside it
+    matching ) or ]                       bounded-context trailer      closes the bounded form and any open short form inside it
 
 The important point is that the parser watches source-level changes, not
 physical source lines as containers. Physical newline in a short form performs
@@ -1485,7 +1486,7 @@ but the visible completion is caused by the following source item/trailer at N
 or below, not by the newline character itself. If the following source item is
 again at N + 1, the short form continues and the atomic N -> N + 1 step opens
 a new Structure field in the same argument sequence. Comma closes the current
-open short form immediately. A matching `)` closes the current
+open short form immediately. A matching `)` or `]` closes the current
 bounded/compact form; if a short form is still open inside that bounded form,
 the short form is completed as part of closing the bounded context. None of
 those boundary tokens is a whitespace field separator inside the short form.
@@ -1660,6 +1661,32 @@ The comma terminates `int: a b`, then `ret: int` starts the next source item ins
 
 In `call(int: a b)`, the closing `)` terminates the short form `int: a b` and closes the bounded argument Structure of `call`.
 
+When a bounded Structure continues after a physical newline, the next physical
+line must remain inside the bounded Structure. In canonical dotted notation it
+must be written at the deeper dotted level. In relaxed notation it must use a
+deeper indentation column than the line that opened the bounded form. The only
+ordinary exception is the closing line itself: a line whose next source token is
+the matching `)` or `]` may return to the level of the line that opened the
+bounded form, because that token closes the bounded Structure rather than
+continues it. The following is valid:
+
+    value (1
+    . +
+    . 1)
+
+and the relaxed spelling of the same source-level tree is:
+
+    value (1
+        +
+        1)
+
+The following is invalid because the `+` continuation returns to the owner
+level before the matching `)`:
+
+    value (1
+    +
+    1)
+
 Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric literal, character constant and string literal fields in ordinary short-tail form are separated by whitespace. Bounded Structures also use whitespace/newline composition for ordinary fields; comma terminates an open short form, and otherwise may be optional conventional notation or a trailing marker.
 
 Example:
@@ -1753,9 +1780,9 @@ Shared source-level rule after either surface notation has been mapped to source
     diagnostics and closing a long or deeply nested visible target. P0 records
     it as a tail-cutter trailer only in a valid source-level tail-cutter
     position. A tail-cutter closes only source-level/block tails; it never
-    closes an unmatched parenthesized/bounded Structure. Therefore an `end:` at
-    a source position that is still inside one or more unmatched `(` frames does
-    not replace the required `)`.
+    closes an unmatched parenthesized/bracketed bounded Structure. Therefore an
+    `end:` at a source position that is still inside one or more unmatched `(`
+    or `[` frames does not replace the required matching `)` or `]`.
 
     `end: name` closes a visible named target explicitly.
 
@@ -1804,7 +1831,8 @@ Terminology:
         specialized tail-cutter trailers only in admitted source-level
         tail-cutter positions. A tail-cutter may close source-level/block
         tails, including deeply nested ones, but it does not close unmatched
-        parenthesized/bounded Structures; those remain governed by `)`. `---`
+        parenthesized/bracketed bounded Structures; those remain governed by
+        the matching `)` or `]`. `---`
         is different: it is a visible source-level marker, not a receiver item.
 
     explicit source-level marker
@@ -1949,7 +1977,7 @@ The simple replacement rule is:
     as that dotted delimiter line or as a dash-fence line at the corresponding
     source level.
 
-4.5.2.1. Relative Indentation Pitfall
+4.5.2.1. Relative Indentation and Bounded Continuation
 
 Relaxed indentation is not a character-for-character replacement of dots.
 Canonical dots are absolute: two leading dots always spell source level 2.
@@ -1960,60 +1988,20 @@ or many spaces away. Adding more spaces to a whole relaxed block therefore
 usually changes only the chosen column spelling, not the source level of that
 block.
 
-Consider this compact form with relaxed indentation inside the parenthesized
-argument list:
+Inside a bounded form, such as `(...)` or `[...]`, a physical newline does not
+close the bounded form and does not perform the short-form newline step by
+itself. The following physical line must still be visibly inside the bounded
+form: in relaxed notation it must use an indentation column deeper than the
+line that opened the bounded form; in canonical notation it must use the
+corresponding deeper dotted source level. Returning to the owner level before
+the matching `)` or `]` is a syntax error unless the next source token on that
+line is exactly that matching closer.
 
-f( a, b, c
-d, e: hello world
- print:
-  test1
-  test2
- print
- prijt
- , f)
-
-The line `print:` is the first relaxed indentation column deeper than the
-surrounding argument lines. It therefore materializes the next source level of
-the `f(...)` argument list. In tree terms, `print:` is a sibling of `d` and
-`e:`, not a vertical child of `e:`.
-
-The canonical dotted spelling of the same source-level tree is:
-
-f3( a, b, c
-d, e: hello world
-. print:
-. . test1
-. . test2
- print
- prijt
- , f)
-
-Here `. print:` is an absolute level-1 line, matching the first relaxed
-indentation column in the previous example. The two examples therefore have the
-same structural shape.
-
-This spelling is different:
-
-f2( a, b, c
-d, e: hello world
-. . print:
-. . . test1
-. . . test2
- print
- prijt
- , f)
-
-Here `. . print:` is absolute source level 2. It is a vertical child of the
-preceding `e:` frame, so `print:` becomes part of the body of `e:` after the
-inline fields `hello` and `world`.
-
-This is the important pitfall: in the first relaxed example, merely adding more
-spaces before the `print:` block cannot make it equivalent to the third example.
-Without an already established intermediate indentation column in that layout
-scan, a deeper relaxed column is still only the next source level. To spell an
-absolute deeper level unambiguously, use canonical dots or introduce the
-intermediate relaxed indentation level explicitly through the surrounding
-layout.
+This rule keeps relaxed indentation and canonical dotted notation aligned. A
+well-formed relaxed bounded continuation has a canonical dotted spelling with
+the same source-level tree. Differences between relaxed and dotted examples are
+therefore differences in the source levels explicitly written by the author,
+not a special parenthesized-form exception.
 
 A standalone dash-fence line:
 
@@ -6388,11 +6376,18 @@ This grammar sketch describes the structural parser only. It does not define fin
     // the short-tail field separator. Comma terminates an open short form at
     // any scan depth. Newline/source-level composition is not a short-form
     // trailer by itself; the following source level determines continuation
-    // or closure. The matching RPAREN closes the bounded Structure; if a
-    // short form is still open inside it, that short form is completed as
-    // part of closing the bounded context.
+    // or closure. Inside a bounded form that continues across a physical
+    // newline, the next physical line must remain inside that bounded form:
+    // it must be at the corresponding deeper dotted source level or, in
+    // relaxed notation, at an indentation column deeper than the line that
+    // opened the bounded form. A line whose next source token is the matching
+    // RPAREN/RBRACKET is the closing line and may return to the opener level.
+    // The matching RPAREN/RBRACKET closes the bounded Structure; if a short
+    // form is still open inside it, that short form is completed as part of
+    // closing the bounded context.
 
     bounded_structure   ::= "(" [ argument_list | vertical_argument_list ] ")"
+                          | "[" [ argument_list | vertical_argument_list ] "]"
 
     vertical_argument_list
                          ::= newline source_line { source_line }
@@ -6486,7 +6481,7 @@ The notation uses `Structure(...)` and `Frame(...)` as semantic constructors:
         ::= Frame(Head, BoundedBody, RPAREN_BOUNDED)
 
     BoundedStructure
-        ::= Structure({ BoundedElement })
+        ::= Structure({ BoundedElement }, RPAREN_BOUNDED | RBRACKET_BOUNDED)
 
     BoundedElement
         ::= FrameElement(bounded)
@@ -6515,6 +6510,7 @@ This semantic EBNF is read with these structural rules:
     FrameTrailer
         ::= COMMA_SHORT
          |  RPAREN_BOUNDED
+         |  RBRACKET_BOUNDED
          |  LEVEL_DROP
          |  DELIM_NAMELESS
          |  RECEIVER_TRAILER
@@ -6542,12 +6538,13 @@ Physical newline semantics:
     at the short form's own source level or smaller, the short form is complete
     and ordinary sibling/level-close rules apply.
 
-Parenthesis semantics:
+Bounded delimiter semantics:
 
-    RPAREN_BOUNDED closes the current BoundedStructure or CompactFrame.
-    If a short form is open inside that bounded form, that short form is
-    completed as part of closing the bounded context, and then the bounded form
-    itself is closed.
+    RPAREN_BOUNDED closes the current parenthesized BoundedStructure or
+    CompactFrame. RBRACKET_BOUNDED closes the current bracketed
+    BoundedStructure. If a short form is open inside that bounded form, that
+    short form is completed as part of closing the bounded context, and then
+    the bounded form itself is closed.
 
 Source-level semantics:
 
