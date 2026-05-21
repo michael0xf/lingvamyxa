@@ -3471,14 +3471,12 @@ L2/C-profile type receivers such as `int`, `char`, `size_t`, `u32`, `i32` and
 `FILE` are ordinary bare L2 type spellings and do not use `c.`:
 
 L2:
-    println: c.puts
     fn: main () int
         c.printf: "Hello C\n"
         c.printf: "%s\n" "message"
         size_t: n c.strlen("abc")
         @: FILE file
         c.puts: "Hello C"
-        println: "Hello through Lingvamyxa"
         return: 0
     end: main
 end: L2
@@ -3496,17 +3494,6 @@ The same source may also call ordinary Lingvamyxa names such as `println` when
 they are already visible in the active Lingvamyxa namespace, for example from a
 prelude/core `sub` declaration. Such names are language names, not
 C-visible identifiers.
-
-The binding/update form may also place a C-visible value into the Lingvamyxa
-namespace:
-
-    println: c.puts
-
-This does not create a separate language construct and does not make bare `puts`
-visible. It binds the Lingvamyxa name `println` to the C-visible value `c.puts`
-inside the active namespace. Later `println: "text"` is resolved by ordinary
-Lingvamyxa name lookup first; only the resolved value then lowers to the C
-symbol `puts`.
 
 A bare unresolved L2 head or atom such as `printf` is not automatically treated
 as a raw C fallback. Direct C-visible access is explicit through `c.printf`.
@@ -8236,8 +8223,6 @@ L2:
         LmP0Text: name
         LmTransSymbolKind: kind
         unsigned: depth
-        int: has_c_name
-        LmP0Text: c_name
     end: LmTransSymbol
 end: L2
 
@@ -8250,8 +8235,6 @@ struct LmTransSymbol {
     LmP0Text name;
     LmTransSymbolKind kind;
     unsigned depth;
-    int has_c_name;
-    LmP0Text c_name;
 };
 ---ANSI C---
 

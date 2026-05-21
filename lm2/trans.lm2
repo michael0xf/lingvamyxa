@@ -19,8 +19,6 @@ typedef struct LmTransSymbol {
     LmP0Text *name;
     LmTransSymbolKind kind;
     unsigned depth;
-    int has_c_name;
-    LmP0Text *c_name;
     LmOwnPtrStack param_names;
     int has_signature;
 } LmTransSymbol;
@@ -191,10 +189,9 @@ typedef enum LmTransStatementLoweringKind {
     LM_TRANS_STATEMENT_LOWER_STORAGE_DECLARATION = 10,
     LM_TRANS_STATEMENT_LOWER_POINTER_DECLARATION = 11,
     LM_TRANS_STATEMENT_LOWER_TARGET_ASSIGNMENT = 12,
-    LM_TRANS_STATEMENT_LOWER_C_REFERENCE_BINDING = 13,
-    LM_TRANS_STATEMENT_LOWER_LABEL = 14,
-    LM_TRANS_STATEMENT_LOWER_CALL = 15,
-    LM_TRANS_STATEMENT_LOWER_ASSIGNMENT = 16
+    LM_TRANS_STATEMENT_LOWER_LABEL = 13,
+    LM_TRANS_STATEMENT_LOWER_CALL = 14,
+    LM_TRANS_STATEMENT_LOWER_ASSIGNMENT = 15
 } LmTransStatementLoweringKind;
 
 typedef struct LmTransStatementLowering {
@@ -223,9 +220,8 @@ typedef struct LmTransFunctionState {
 typedef enum LmTransTopLevelItemKind {
     LM_TRANS_TOP_LEVEL_ITEM_NONE = 0,
     LM_TRANS_TOP_LEVEL_ITEM_FUNCTION = 1,
-    LM_TRANS_TOP_LEVEL_ITEM_C_REFERENCE_BINDING = 2,
-    LM_TRANS_TOP_LEVEL_ITEM_NAMED_STRUCTURE = 3,
-    LM_TRANS_TOP_LEVEL_ITEM_L1 = 4
+    LM_TRANS_TOP_LEVEL_ITEM_NAMED_STRUCTURE = 2,
+    LM_TRANS_TOP_LEVEL_ITEM_L1 = 3
 } LmTransTopLevelItemKind;
 
 typedef struct LmTransFunctionHeader {
@@ -317,23 +313,6 @@ static void lm_trans_text_ref_destroy(LmP0Text **text) {
 
 static void lm_trans_text_ref_delete_any(void *object) {
     lm_own_delete(object, 0);
-}
-
-static int lm_trans_text_ref_set(LmP0Text **target, LmP0Text text) {
-    LmP0Text *copy;
-
-    if (target == 0) {
-        return 1;
-    }
-
-    copy = lm_trans_text_ref_new(text);
-    if (copy == 0) {
-        return 1;
-    }
-
-    lm_trans_text_ref_destroy(target);
-    *target = copy;
-    return 0;
 }
 
 static LmTransFunctionState *lm_trans_function_state_new(void) {
@@ -458,7 +437,6 @@ static const char *lm_trans_symbol_kind_name(LmTransSymbolKind kind) {
 static void lm_trans_symbol_destroy_fields(LmTransSymbol *symbol) {
     if (symbol != 0) {
         lm_trans_text_ref_destroy(&symbol->name);
-        lm_trans_text_ref_destroy(&symbol->c_name);
         lm_own_ptr_stack_destroy(&symbol->param_names);
         symbol->has_signature = 0;
     }
@@ -803,62 +781,7 @@ static int lm_trans_namespace_declare(
     return 0;
 }
 
-static int lm_trans_namespace_bind_c_reference(
-    LmTransNamespace *namespace_,
-    LmP0Text name,
-    LmP0Text c_name
-) {
-    LmTransSymbol *symbol;
-
-    if (namespace_ == 0) {
-        return 1;
-    }
-
-    if (lm_trans_is_c_reference_name(name)) {
-        fprintf(
-            stderr,
-            "trans L2 error: C-surface spelling \"%.*s\" cannot be rebound as a Lingvamyxa name\n",
-            (int)name.length,
-            name.data
-        );
-        return 1;
-    }
-
-    if (lm_trans_is_reserved_head_name(name)) {
-        fprintf(
-            stderr,
-            "trans L2 error: reserved head \"%.*s\" cannot be rebound\n",
-            (int)name.length,
-            name.data
-        );
-        return 1;
-    }
-
-    symbol = lm_trans_namespace_find_mutable(namespace_, name);
-    if (symbol == 0) {
-        if (lm_trans_namespace_declare(namespace_, name, LM_TRANS_SYMBOL_VARIABLE) != 0) {
-            return 1;
-        }
-        symbol = (LmTransSymbol *)lm_own_ptr_stack_top(&namespace_->items);
-    } else if (symbol->kind != LM_TRANS_SYMBOL_VARIABLE) {
-        fprintf(
-            stderr,
-            "trans L2 error: name \"%.*s\" is already visible as %s and cannot be rebound to a C value\n",
-            (int)name.length,
-            name.data,
-            lm_trans_symbol_kind_name(symbol->kind)
-        );
-        return 1;
-    }
-
-    if (lm_trans_text_ref_set(&symbol->c_name, c_name) != 0) {
-        return 1;
-    }
-    symbol->has_c_name = 1;
-    return 0;
-}
-
-static const char *lm_trans_c_alias(LmP0Text name) {
+static const char *lm_trans_c_spelling(LmP0Text name) {
     if (lm_trans_text_equals(name, "u8")) {
         return "uint8_t";
     }
@@ -889,7 +812,7 @@ static const char *lm_trans_c_alias(LmP0Text name) {
 
 static int lm_trans_builtin_c_type_tail(LmP0Text name) {
     return
-        lm_trans_c_alias(name) != 0 ||
+        lm_trans_c_spelling(name) != 0 ||
         lm_trans_text_equals(name, "void") ||
         lm_trans_text_equals(name, "char") ||
         lm_trans_text_equals(name, "short") ||
@@ -916,15 +839,15 @@ static int lm_trans_builtin_c_type_name(LmP0Text name) {
 }
 
 static int lm_trans_emit_name(FILE *file, LmP0Text name) {
-    const char *alias;
+    const char *spelling;
     LmP0Text tail;
 
     if (lm_trans_text_starts_with(name, "c.")) {
         tail.data = name.data + 2U;
         tail.length = name.length - 2U;
-        alias = lm_trans_c_alias(tail);
-        if (alias != 0) {
-            return lm_trans_put(file, alias);
+        spelling = lm_trans_c_spelling(tail);
+        if (spelling != 0) {
+            return lm_trans_put(file, spelling);
         }
         return lm_trans_write_text(file, tail);
     }
@@ -933,22 +856,22 @@ static int lm_trans_emit_name(FILE *file, LmP0Text name) {
 }
 
 static int lm_trans_emit_type_name(FILE *file, LmP0Text name) {
-    const char *alias;
+    const char *spelling;
     LmP0Text tail;
 
     if (lm_trans_text_starts_with(name, "c.") && name.length > 2U) {
         tail.data = name.data + 2U;
         tail.length = name.length - 2U;
-        alias = lm_trans_c_alias(tail);
-        if (alias != 0) {
-            return lm_trans_put(file, alias);
+        spelling = lm_trans_c_spelling(tail);
+        if (spelling != 0) {
+            return lm_trans_put(file, spelling);
         }
         return lm_trans_write_text(file, tail);
     }
 
-    alias = lm_trans_c_alias(name);
-    if (alias != 0) {
-        return lm_trans_put(file, alias);
+    spelling = lm_trans_c_spelling(name);
+    if (spelling != 0) {
+        return lm_trans_put(file, spelling);
     }
     return lm_trans_write_text(file, name);
 }
@@ -1071,15 +994,8 @@ static int lm_trans_emit_expr_atom(
     LmP0Text atom,
     const LmTransNamespace *namespace_
 ) {
-    const LmTransSymbol *symbol;
-
     if (lm_trans_validate_expr_atom(atom, namespace_) != 0) {
         return 1;
-    }
-
-    symbol = lm_trans_namespace_find(namespace_, atom);
-    if (symbol != 0 && symbol->has_c_name) {
-        return lm_trans_emit_name(file, *symbol->c_name);
     }
 
     return lm_trans_emit_name(file, atom);
@@ -1117,11 +1033,6 @@ static int lm_trans_lower_call(
             head.data
         );
         return 1;
-    }
-
-    if (symbol->has_c_name) {
-        out->name = *symbol->c_name;
-        return 0;
     }
 
     if (mode == LM_TRANS_CALL_LOWER_VALUE) {
@@ -3085,44 +2996,6 @@ static int lm_trans_emit_assignment(
     return lm_trans_put(file, ";\n");
 }
 
-static int lm_trans_frame_single_c_reference_body(
-    const LmP0Frame *frame,
-    LmP0Text *out_c_name
-) {
-    const LmP0Field *field;
-
-    if (frame == 0 || out_c_name == 0) {
-        return 0;
-    }
-
-    field = frame->body.first_field;
-    if (
-        field == 0 ||
-        field->next != 0 ||
-        field->value == 0 ||
-        field->value->kind != LM_P0_NODE_ATOM ||
-        !lm_trans_is_c_reference_name(field->value->as.atom)
-    ) {
-        return 0;
-    }
-
-    *out_c_name = field->value->as.atom;
-    return 1;
-}
-
-static int lm_trans_emit_c_reference_binding(
-    const LmP0Frame *frame,
-    LmTransNamespace *namespace_
-) {
-    LmP0Text c_name;
-
-    if (!lm_trans_frame_single_c_reference_body(frame, &c_name)) {
-        return 0;
-    }
-
-    return lm_trans_namespace_bind_c_reference(namespace_, frame->head, c_name);
-}
-
 static int lm_trans_frame_looks_named_structure_declaration(const LmP0Frame *frame) {
     return
         frame != 0 &&
@@ -3641,7 +3514,6 @@ static int lm_trans_lower_statement_frame(
     LmTransStatementLowering *out
 ) {
     const LmTransSymbol *symbol;
-    LmP0Text c_name;
 
     if (frame == 0 || out == 0) {
         return 1;
@@ -3695,14 +3567,6 @@ static int lm_trans_lower_statement_frame(
         out->kind = LM_TRANS_STATEMENT_LOWER_TARGET_ASSIGNMENT;
         return 0;
     }
-    if (
-        !lm_trans_is_c_reference_name(frame->head) &&
-        !lm_trans_is_reserved_head_name(frame->head) &&
-        lm_trans_frame_single_c_reference_body(frame, &c_name)
-    ) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_C_REFERENCE_BINDING;
-        return 0;
-    }
     if (lm_trans_frame_looks_label_declaration(frame)) {
         out->kind = LM_TRANS_STATEMENT_LOWER_LABEL;
         return 0;
@@ -3725,9 +3589,7 @@ static int lm_trans_lower_statement_frame(
         return 1;
     }
     if (symbol->kind == LM_TRANS_SYMBOL_VARIABLE) {
-        out->kind = symbol->has_c_name ?
-            LM_TRANS_STATEMENT_LOWER_CALL :
-            LM_TRANS_STATEMENT_LOWER_ASSIGNMENT;
+        out->kind = LM_TRANS_STATEMENT_LOWER_ASSIGNMENT;
         return 0;
     }
     if (
@@ -3809,9 +3671,6 @@ static int lm_trans_statement_stack_emit_frame_lowering(
     }
     if (lowering.kind == LM_TRANS_STATEMENT_LOWER_TARGET_ASSIGNMENT) {
         return lm_trans_emit_target_assignment(file, frame, indent, namespace_);
-    }
-    if (lowering.kind == LM_TRANS_STATEMENT_LOWER_C_REFERENCE_BINDING) {
-        return lm_trans_emit_c_reference_binding(frame, namespace_);
     }
     if (lowering.kind == LM_TRANS_STATEMENT_LOWER_LABEL) {
         return lm_trans_statement_stack_schedule_label(file, stack, frame, indent, namespace_);
@@ -4312,7 +4171,6 @@ static int lm_trans_lower_top_level_item(
     LmTransTopLevelItem *out
 ) {
     int function_status;
-    LmP0Text c_name;
 
     if (out == 0) {
         return 1;
@@ -4341,15 +4199,6 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
-    if (
-        !lm_trans_is_c_reference_name(out->frame->head) &&
-        !lm_trans_is_reserved_head_name(out->frame->head) &&
-        lm_trans_frame_single_c_reference_body(out->frame, &c_name)
-    ) {
-        out->kind = LM_TRANS_TOP_LEVEL_ITEM_C_REFERENCE_BINDING;
-        return 0;
-    }
-
     if (lm_trans_frame_looks_named_structure_declaration(out->frame)) {
         out->kind = LM_TRANS_TOP_LEVEL_ITEM_NAMED_STRUCTURE;
         return 0;
@@ -4360,7 +4209,7 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
-    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, L1 frame, named Structure, or Lingvamyxa binding to an explicit c.name C-surface spelling\n");
+    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, L1 frame, or named Structure\n");
     return 1;
 }
 
@@ -4523,11 +4372,6 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
                 return 1;
             }
             if (lm_trans_namespace_set_signature(namespace_, item.function.name, item.function.frame) != 0) {
-                lm_trans_namespace_delete(namespace_);
-                return 1;
-            }
-        } else if (item.kind == LM_TRANS_TOP_LEVEL_ITEM_C_REFERENCE_BINDING) {
-            if (lm_trans_emit_c_reference_binding(item.frame, namespace_) != 0) {
                 lm_trans_namespace_delete(namespace_);
                 return 1;
             }
