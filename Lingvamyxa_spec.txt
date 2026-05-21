@@ -1522,7 +1522,11 @@ Whitespace separates short-tail fields. The core structural parser keeps
 operator-looking spellings in the same structural token stream as ordinary
 fields.
 
-Operator spellings such as `+`, `-`, `*`, `/`, `=`, `<`, `>`, `<=`, `>=` and `!=` are not valid bare namespace identifiers in the portable profile. The parser classifies them as operator-token fields. An operator-token field is not a head/name frame and does not require the colon marker that ordinary head/frame forms require.
+Operator spellings such as `+`, `-`, `*`, `/`, `%`, `=`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, `~`, `&`, `|`, `^`, `++`, `--`, `[` and `]` are not valid bare namespace identifiers in the portable profile. The parser classifies them as operator-token fields. An operator-token field is not a head/name frame and does not require the colon marker that ordinary head/frame forms require.
+
+The structural parser does not decide whether an operator token is prefix,
+postfix or infix. That role is assigned by the active receiver/operator profile.
+For the C-profile L2 operator categories, see section 28.3.
 
 Example:
 
@@ -8324,17 +8328,25 @@ Address-producing and address-consuming forms:
 
 28.3. Primitive Expression Operators
 
-The minimal L2 primitive operator profile includes:
+The minimal L2 primitive operator profile assigns explicit operator roles:
 
     grouping        (expr)
-    unary numeric   +expr, -expr
-    arithmetic      +, -, *, /, %
-    comparison      =, !=, <, <=, >, >=
-    boolean words   not, and, or
+    prefix          @expr, \expr, ++expr, --expr, +expr, -expr, !expr, ~expr
+    postfix         expr++, expr--
+    infix           +, -, *, /, %, =, !=, <, <=, >, >=, &&, ||, &, |, ^
+
+Indexing remains the bracket form `target[index]`, specified with storage and
+address forms above. Field-follow remains the L2 `\field` form, not ANSI C `.`
+or `->` source syntax.
 
 The token `=` is comparison/equality for expression/operator consumers. It is not native assignment.
 
-Bitwise operators, shifts, overflow rules, integer division rules, floating-point rules and conversion rules are L2 profile details unless a later specification selects a mandatory set.
+The C-profile lowering maps the listed primitive operators to ANSI C operator
+spellings, except that Lingvamyxa `=` lowers to ANSI C `==`, `@expr` lowers to
+address-of and `\expr` lowers to raw load/dereference when it is not a
+field-follow token. Shifts, overflow rules, integer division rules,
+floating-point rules and conversion rules remain L2 profile details unless a
+later specification selects a mandatory set.
 
 28.4. Update and Callable Consumption
 
@@ -8352,7 +8364,10 @@ After resolution, the form may update mutable storage, update an addressable
 field/index slot, or lower a function/subroutine/receiver binding. This is
 compile-time resolution, not a separate assignment syntax.
 
-Operator methods such as `++i`, `--i`, `i++` and `i--` are not mandatory source syntax in the minimal L2 set. A profile may register them as compact operator-token forms that lower to ordinary read-update-write sequences using the same head/update form.
+The update operator tokens `++` and `--` are part of the minimal L2 C-profile as
+both prefix and postfix expression operators. They are expression operators, not
+a second assignment syntax. Other profiles may lower them differently, but they
+still compose with the same operator-token consumption model.
 
 28.5. Minimal L2 Control Receivers
 

@@ -338,6 +338,8 @@ static void lm_trans_function_state_delete(LmTransFunctionState *state) {
 
 static int lm_trans_text_is_operator_atom(LmP0Text text) {
     return
+        lm_trans_text_equals(text, "++") ||
+        lm_trans_text_equals(text, "--") ||
         lm_trans_text_equals(text, "+") ||
         lm_trans_text_equals(text, "-") ||
         lm_trans_text_equals(text, "*") ||
@@ -351,7 +353,13 @@ static int lm_trans_text_is_operator_atom(LmP0Text text) {
         lm_trans_text_equals(text, ">=") ||
         lm_trans_text_equals(text, "&&") ||
         lm_trans_text_equals(text, "||") ||
+        lm_trans_text_equals(text, "&") ||
+        lm_trans_text_equals(text, "|") ||
+        lm_trans_text_equals(text, "^") ||
         lm_trans_text_equals(text, "!") ||
+        lm_trans_text_equals(text, "~") ||
+        lm_trans_text_equals(text, "@") ||
+        lm_trans_text_equals(text, "\\") ||
         lm_trans_text_equals(text, "[") ||
         lm_trans_text_equals(text, "]");
 }
@@ -1064,9 +1072,20 @@ static int lm_trans_lower_call(
 
 static int lm_trans_atom_is_prefix_expr_operator(LmP0Text text) {
     return
+        lm_trans_text_equals(text, "++") ||
+        lm_trans_text_equals(text, "--") ||
+        lm_trans_text_equals(text, "+") ||
+        lm_trans_text_equals(text, "-") ||
         lm_trans_text_equals(text, "@") ||
         lm_trans_text_equals(text, "\\") ||
-        lm_trans_text_equals(text, "!");
+        lm_trans_text_equals(text, "!") ||
+        lm_trans_text_equals(text, "~");
+}
+
+static int lm_trans_atom_is_postfix_expr_operator(LmP0Text text) {
+    return
+        lm_trans_text_equals(text, "++") ||
+        lm_trans_text_equals(text, "--");
 }
 
 static int lm_trans_nodes_touch(const LmP0Node *left, const LmP0Node *right) {
@@ -1101,7 +1120,10 @@ static int lm_trans_atom_is_infix_expr_operator(
         lm_trans_text_equals(text, ">") ||
         lm_trans_text_equals(text, ">=") ||
         lm_trans_text_equals(text, "&&") ||
-        lm_trans_text_equals(text, "||");
+        lm_trans_text_equals(text, "||") ||
+        lm_trans_text_equals(text, "&") ||
+        lm_trans_text_equals(text, "|") ||
+        lm_trans_text_equals(text, "^");
 }
 
 static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
@@ -1121,7 +1143,7 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
     c_dot_path = 0;
 
     node = field->value;
-    if (
+    while (
         node != 0 &&
         node->kind == LM_P0_NODE_ATOM &&
         lm_trans_atom_is_prefix_expr_operator(node->as.atom)
@@ -1130,14 +1152,11 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
         if (field == 0) {
             return 0;
         }
-        previous_operand = field->value;
-        c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
-        field = field->next;
-    } else {
-        previous_operand = node;
-        c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
-        field = field->next;
+        node = field->value;
     }
+    previous_operand = node;
+    c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
+    field = field->next;
 
     while (field != 0) {
         node = field->value;
@@ -1175,10 +1194,27 @@ static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
             previous_operand = operand->value;
             c_dot_path = 1;
             field = operand->next;
+        } else if (lm_trans_atom_is_postfix_expr_operator(node->as.atom)) {
+            if (previous_operand == 0) {
+                break;
+            }
+            previous_operand = node;
+            c_dot_path = 0;
+            field = field->next;
         } else if (lm_trans_atom_is_infix_expr_operator(node->as.atom, node, previous_operand)) {
             operand = field->next;
             if (operand == 0) {
                 return field;
+            }
+            while (
+                operand->value != 0 &&
+                operand->value->kind == LM_P0_NODE_ATOM &&
+                lm_trans_atom_is_prefix_expr_operator(operand->value->as.atom)
+            ) {
+                operand = operand->next;
+                if (operand == 0) {
+                    return field;
+                }
             }
             previous_operand = operand->value;
             c_dot_path = lm_trans_node_is_c_reference_atom(previous_operand);
