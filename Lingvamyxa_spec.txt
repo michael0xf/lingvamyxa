@@ -8335,9 +8335,13 @@ The minimal L2 primitive operator profile assigns explicit operator roles:
     postfix         expr++, expr--
     infix           +, -, *, /, %, =, !=, <, <=, >, >=, &&, ||, &, |, ^
 
-Indexing remains the bracket form `target[index]`, specified with storage and
-address forms above. Field-follow remains the L2 `\field` form, not ANSI C `.`
-or `->` source syntax.
+Indexing is a postfix expression operator with the bracket form `target[index]`,
+specified with storage and address forms above. The `index` part is consumed as
+its own expression range by the active L2 expression profile. Nested index
+operators, calls, bounded Structures, strings and ordinary operator tokens
+inside the brackets are therefore lowered by the same expression machinery as
+ordinary argument expressions. Field-follow remains the L2 `\field` form, not
+ANSI C `.` or `->` source syntax.
 
 The token `=` is comparison/equality for expression/operator consumers. It is not native assignment.
 

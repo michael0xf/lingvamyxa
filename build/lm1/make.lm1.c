@@ -4,7 +4,7 @@
 static char * lm_make_env_or_default(char *name, char *fallback) {
     char *value;
     value = getenv(name);
-    if (value == 0 || value [ 0 ] == '\0') {
+    if (value == 0 || value[0] == '\0') {
         return fallback;
     }
     return value;
@@ -55,7 +55,7 @@ static int lm_make_run_tool(char *tool, int argc, char **argv, int start) {
         return 1;
     }
     while (index < argc) {
-        used = lm_make_append_arg(command, sizeof(command), used, argv [ index ]);
+        used = lm_make_append_arg(command, sizeof(command), used, argv[index]);
         if (used == sizeof(command)) {
             return 1;
         }
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
     cc = lm_make_env_or_default("LM_CC", "gcc");
     ar = lm_make_env_or_default("LM_AR", "ar");
     ranlib = lm_make_env_or_default("LM_RANLIB", "ranlib");
-    if (strcmp(argv [ 1 ], "mkdir") == 0) {
+    if (strcmp(argv[1], "mkdir") == 0) {
         char command[8192];
         size_t used = 0U;
         int index = 2;
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         while (index < argc) {
-            used = lm_make_append_arg(command, sizeof(command), used, argv [ index ]);
+            used = lm_make_append_arg(command, sizeof(command), used, argv[index]);
             if (used == sizeof(command)) {
                 return 1;
             }
@@ -153,21 +153,21 @@ int main(int argc, char **argv) {
         }
         return lm_make_run_command(command);
     }
-    if (strcmp(argv [ 1 ], "cc") == 0 || strcmp(argv [ 1 ], "link") == 0) {
+    if (strcmp(argv[1], "cc") == 0 || strcmp(argv[1], "link") == 0) {
         return lm_make_run_tool(cc, argc, argv, 2);
     }
-    if (strcmp(argv [ 1 ], "ar") == 0) {
+    if (strcmp(argv[1], "ar") == 0) {
         return lm_make_run_tool(ar, argc, argv, 2);
     }
-    if (strcmp(argv [ 1 ], "ranlib") == 0) {
+    if (strcmp(argv[1], "ranlib") == 0) {
         return lm_make_run_tool(ranlib, argc, argv, 2);
     }
-    if (strcmp(argv [ 1 ], "copy") == 0) {
+    if (strcmp(argv[1], "copy") == 0) {
         if (argc != 4) {
             lm_make_print_usage();
             return 1;
         }
-        return lm_make_copy_file(argv [ 2 ], argv [ 3 ]);
+        return lm_make_copy_file(argv[2], argv[3]);
     }
     lm_make_print_usage();
     return 1;

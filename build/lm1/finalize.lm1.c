@@ -32,10 +32,10 @@ static int lm_finalize_is_path_separator(char value) {
 }
 
 static int lm_finalize_is_absolute_path(char *path) {
-    if (path == 0 || path [ 0 ] == '\0') {
+    if (path == 0 || path[0] == '\0') {
         return 0;
     }
-    if (lm_finalize_is_path_separator(path [ 0 ])) {
+    if (lm_finalize_is_path_separator(path[0])) {
         return 1;
     }
     if (LM_FINALIZE_IS_DRIVE_ABSOLUTE(path)) {
@@ -47,13 +47,13 @@ static int lm_finalize_is_absolute_path(char *path) {
 static int lm_finalize_trim_last_path_part(char *path) {
     size_t length;
     length = strlen(path);
-    while (length > 0U && lm_finalize_is_path_separator(path [ length - 1U ])) {
+    while (length > 0U && lm_finalize_is_path_separator(path[length - 1U])) {
         path[length-1U] = '\0';
         length = length - 1U;
     }
     while (length > 0U) {
         length = length - 1U;
-        if (lm_finalize_is_path_separator(path [ length ])) {
+        if (lm_finalize_is_path_separator(path[length])) {
             path[length] = '\0';
             return 0;
         }
@@ -75,7 +75,7 @@ static int lm_finalize_enter_project_root(char *program_path) {
     lm_finalize_trim_last_path_part(root_path);
     lm_finalize_trim_last_path_part(root_path);
     lm_finalize_trim_last_path_part(root_path);
-    if (root_path [ 0 ] == '\0') {
+    if (root_path[0] == '\0') {
         return 0;
     }
     if (LM_FINALIZE_CHDIR(root_path) != 0) {
@@ -206,13 +206,13 @@ static int lm_finalize_defer(void) {
 }
 
 int main(int argc, char **argv) {
-    if (lm_finalize_enter_project_root(argv [ 0 ]) != 0) {
+    if (lm_finalize_enter_project_root(argv[0]) != 0) {
         return 1;
     }
-    if (argc == 2 && strcmp(argv [ 1 ], "--defer") == 0) {
+    if (argc == 2 && strcmp(argv[1], "--defer") == 0) {
         return lm_finalize_defer();
     }
-    if (argc != 1 && (argc != 2 || strcmp(argv [ 1 ], "--copy") != 0)) {
+    if (argc != 1 && (argc != 2 || strcmp(argv[1], "--copy") != 0)) {
         fprintf(stderr, "usage: finalize.lm0[.exe] [--defer|--copy]\n");
         return 1;
     }
