@@ -27,7 +27,7 @@ static LmBuildOptions *lm_build_options_new(void) {
 }
 
 static void lm_build_options_delete(LmBuildOptions *options) {
-    lm_own_delete(options, NULL);
+    lm_own_delete(options, 0);
 }
 
 static int lm_build_is_path_separator(char value) {
@@ -35,7 +35,7 @@ static int lm_build_is_path_separator(char value) {
 }
 
 static int lm_build_has_path_separator(const char *path) {
-    return strchr(path, '/') != NULL || strchr(path, '\\') != NULL;
+    return strchr(path, '/') != 0 || strchr(path, '\\') != 0;
 }
 
 static int lm_build_is_absolute_path(const char *path) {
@@ -101,7 +101,7 @@ static int lm_build_file_exists(const char *path) {
     FILE *file;
 
     file = fopen(path, "rb");
-    if (file == NULL) {
+    if (file == 0) {
         return 0;
     }
 
@@ -125,12 +125,12 @@ static int lm_build_enter_project_root(const char *program_path) {
     char cwd[1024];
     int depth;
 
-    if (LM_BUILD_GETCWD(cwd, sizeof(cwd)) == NULL) {
+    if (LM_BUILD_GETCWD(cwd, sizeof(cwd)) == 0) {
         fprintf(stderr, "buildCore.lm0: cannot read current directory\n");
         return 1;
     }
 
-    if (program_path != NULL && program_path[0] != '\0' && lm_build_has_path_separator(program_path)) {
+    if (program_path != 0 && program_path[0] != '\0' && lm_build_has_path_separator(program_path)) {
         if (lm_build_is_absolute_path(program_path)) {
             if (strlen(program_path) >= sizeof(executable_path)) {
                 fprintf(stderr, "buildCore.lm0: executable path is too long\n");
@@ -166,7 +166,7 @@ static const char *lm_build_env_or_default(const char *name, const char *fallbac
     const char *value;
 
     value = getenv(name);
-    if (value == NULL || value[0] == '\0') {
+    if (value == 0 || value[0] == '\0') {
         return fallback;
     }
 
@@ -314,7 +314,7 @@ static int lm_build_make(const char *make_tool, const char *operation, const cha
     if (lm_build_append_arg(command, sizeof(command), &used, operation) != 0) {
         return 1;
     }
-    if (args != NULL && args[0] != '\0') {
+    if (args != 0 && args[0] != '\0') {
         if (lm_build_append(command, sizeof(command), &used, " ") != 0) {
             return 1;
         }
@@ -703,7 +703,7 @@ int main(int argc, char **argv) {
     int result;
 
     options = lm_build_options_new();
-    if (options == NULL) {
+    if (options == 0) {
         return 1;
     }
 

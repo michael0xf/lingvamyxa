@@ -116,8 +116,8 @@ static char *lm_p0_copy_bytes(const char *source, size_t length) {
     char *copy;
 
     copy = (char *)malloc(length + 1U);
-    if (copy == NULL) {
-        return NULL;
+    if (copy == 0) {
+        return 0;
     }
 
     if (length > 0U) {
@@ -268,7 +268,7 @@ static void lm_p0_trim_trailing_line_comment(const char **text, size_t *length) 
 
 static void lm_p0_indent_stack_free(LmP0IndentStack *stack) {
     free(stack->columns);
-    stack->columns = NULL;
+    stack->columns = 0;
     stack->count = 0U;
     stack->capacity = 0U;
 }
@@ -290,7 +290,7 @@ static int lm_p0_indent_stack_push(
     if (stack->count == stack->capacity) {
         new_capacity = stack->capacity == 0U ? 8U : stack->capacity * 2U;
         columns = (size_t *)realloc(stack->columns, new_capacity * sizeof(*columns));
-        if (columns == NULL) {
+        if (columns == 0) {
             lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels");
             return 0;
         }
@@ -315,13 +315,13 @@ static LmP0IndentStack *lm_p0_indent_stack_new(LmP0Document *document) {
     LmP0IndentStack *stack;
 
     stack = lm_p0_indent_stack_new_empty();
-    if (stack == NULL) {
+    if (stack == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating indentation stack");
-        return NULL;
+        return 0;
     }
     if (!lm_p0_indent_stack_init(document, stack)) {
         lm_own_delete(stack, lm_p0_indent_stack_free_any);
-        return NULL;
+        return 0;
     }
     return stack;
 }
@@ -346,7 +346,7 @@ static int lm_p0_indent_stack_copy(
     }
 
     target->columns = (size_t *)malloc(capacity * sizeof(*target->columns));
-    if (target->columns == NULL) {
+    if (target->columns == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
         return 0;
     }
@@ -365,13 +365,13 @@ static LmP0IndentStack *lm_p0_indent_stack_clone(
     LmP0IndentStack *target;
 
     target = lm_p0_indent_stack_new_empty();
-    if (target == NULL) {
+    if (target == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
-        return NULL;
+        return 0;
     }
     if (!lm_p0_indent_stack_copy(document, target, source, line, column)) {
         lm_p0_indent_stack_delete(target);
-        return NULL;
+        return 0;
     }
     return target;
 }
@@ -746,7 +746,7 @@ static LmP0DashFenceStatus lm_p0_dash_fence_status(
     while (dash_count < length && text[dash_count] == '-') {
         ++dash_count;
     }
-    if (out_dash_count != NULL) {
+    if (out_dash_count != 0) {
         *out_dash_count = dash_count;
     }
     if (dash_count < 3U) {
@@ -789,7 +789,7 @@ static int lm_p0_validate_dash_fence_line(
 ) {
     LmP0DashFenceStatus status;
 
-    status = lm_p0_dash_fence_status_after_comment_trim(text, length, NULL);
+    status = lm_p0_dash_fence_status_after_comment_trim(text, length, 0);
     if (status == LM_P0_DASH_FENCE_TOO_LONG) {
         lm_p0_set_diagnostic(document, 25, line, column, "dash delimiter fence length exceeds 80 characters");
         return 0;
@@ -1096,9 +1096,9 @@ static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
     LmP0Node *node;
 
     node = (LmP0Node *)calloc(1U, sizeof(*node));
-    if (node == NULL) {
+    if (node == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node");
-        return NULL;
+        return 0;
     }
 
     node->kind = kind;
@@ -1109,13 +1109,13 @@ static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, 
     LmP0Field *field;
 
     field = (LmP0Field *)calloc(1U, sizeof(*field));
-    if (field == NULL) {
-        lm_p0_set_diagnostic(document, 1, node != NULL ? node->span.line : 0U, node != NULL ? node->span.column : 0U, "out of memory while allocating parser field");
+    if (field == 0) {
+        lm_p0_set_diagnostic(document, 1, node != 0 ? node->span.line : 0U, node != 0 ? node->span.column : 0U, "out of memory while allocating parser field");
         return 0;
     }
 
     field->value = node;
-    if (structure->last_field == NULL) {
+    if (structure->last_field == 0) {
         structure->first_field = field;
     } else {
         structure->last_field->next = field;
@@ -1346,7 +1346,7 @@ static int lm_p0_append_atom_slice(
     LmP0Node *node;
 
     node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
-    if (node == NULL) {
+    if (node == 0) {
         return 0;
     }
     node->as.atom.data = text + start;
@@ -1455,34 +1455,34 @@ static void lm_p0_free_node(LmP0Node *node);
 static void lm_p0_free_structure_fields(LmP0Structure *structure);
 
 static void lm_p0_free_trailer(LmP0Trailer *trailer) {
-    if (trailer == NULL) {
+    if (trailer == 0) {
         return;
     }
     lm_p0_free_structure_fields(&trailer->body);
-    lm_own_delete(trailer, NULL);
+    lm_own_delete(trailer, 0);
 }
 
 static void lm_p0_free_structure_fields(LmP0Structure *structure) {
     LmP0Field *field;
 
     field = structure->first_field;
-    while (field != NULL) {
+    while (field != 0) {
         LmP0Field *next;
 
         next = field->next;
         lm_p0_free_node(field->value);
-        lm_own_delete(field, NULL);
+        lm_own_delete(field, 0);
         field = next;
     }
-    structure->first_field = NULL;
-    structure->last_field = NULL;
+    structure->first_field = 0;
+    structure->last_field = 0;
     structure->field_count = 0U;
     lm_p0_free_trailer(structure->trailer);
-    structure->trailer = NULL;
+    structure->trailer = 0;
 }
 
 static void lm_p0_free_node(LmP0Node *node) {
-    if (node == NULL) {
+    if (node == 0) {
         return;
     }
 
@@ -1491,10 +1491,10 @@ static void lm_p0_free_node(LmP0Node *node) {
     } else if (node->kind == LM_P0_NODE_FRAME) {
         lm_p0_free_structure_fields(&node->as.frame.body);
         lm_p0_free_trailer(node->as.frame.trailer);
-        node->as.frame.trailer = NULL;
+        node->as.frame.trailer = 0;
     }
 
-    lm_own_delete(node, NULL);
+    lm_own_delete(node, 0);
 }
 
 static int lm_p0_relaxed_level_from_column(
@@ -2127,7 +2127,7 @@ static int lm_p0_parse_fields_until_with_layout(
 
         start = i;
         head_end = i;
-        node = NULL;
+        node = 0;
 
         if (text[i] == '(') {
             size_t inner_index;
@@ -2136,7 +2136,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 return 0;
             }
             node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
-            if (node == NULL) {
+            if (node == 0) {
                 return 0;
             }
             inner_index = 0U;
@@ -2210,7 +2210,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 int has_inline_body;
 
                 node = lm_p0_new_node(document, LM_P0_NODE_FRAME);
-                if (node == NULL) {
+                if (node == 0) {
                     return 0;
                 }
                 node->as.frame.head.data = text + start;
@@ -2256,7 +2256,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 size_t inner_index;
 
                 node = lm_p0_new_node(document, LM_P0_NODE_FRAME);
-                if (node == NULL) {
+                if (node == 0) {
                     return 0;
                 }
                 node->as.frame.head.data = text + start;
@@ -2316,7 +2316,7 @@ static int lm_p0_parse_fields_until_with_layout(
                     continue;
                 }
                 node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
-                if (node == NULL) {
+                if (node == 0) {
                     return 0;
                 }
                 node->as.atom.data = text + start;
@@ -2355,7 +2355,7 @@ static int lm_p0_parse_fields_until(
     int status;
 
     indent_stack = lm_p0_indent_stack_new_empty();
-    if (indent_stack == NULL) {
+    if (indent_stack == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack");
         return 0;
     }
@@ -2412,18 +2412,18 @@ static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t l
     }
 
     parents = (LmP0Structure **)realloc(stack->parents, new_capacity * sizeof(*parents));
-    if (parents == NULL) {
+    if (parents == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
         return 0;
     }
     owners = (LmP0Node **)realloc(stack->owners, new_capacity * sizeof(*owners));
-    if (owners == NULL) {
+    if (owners == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
         stack->parents = parents;
         return 0;
     }
     hard = (unsigned char *)realloc(stack->hard, new_capacity * sizeof(*hard));
-    if (hard == NULL) {
+    if (hard == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
         stack->parents = parents;
         stack->owners = owners;
@@ -2435,8 +2435,8 @@ static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t l
     stack->hard = hard;
     stack->capacity = new_capacity;
     for (i = old_capacity; i < new_capacity; ++i) {
-        stack->parents[i] = NULL;
-        stack->owners[i] = NULL;
+        stack->parents[i] = 0;
+        stack->owners[i] = 0;
         stack->hard[i] = 0U;
     }
 
@@ -2451,8 +2451,8 @@ static void lm_p0_stack_truncate_deeper(LmP0Stack *stack, size_t level) {
     }
 
     for (i = level + 1U; i < stack->capacity; ++i) {
-        stack->parents[i] = NULL;
-        stack->owners[i] = NULL;
+        stack->parents[i] = 0;
+        stack->owners[i] = 0;
         stack->hard[i] = 0U;
     }
 }
@@ -2463,7 +2463,7 @@ static size_t lm_p0_stack_top_level(const LmP0Stack *stack) {
     i = stack->capacity;
     while (i > 0U) {
         --i;
-        if (stack->parents[i] != NULL) {
+        if (stack->parents[i] != 0) {
             return i;
         }
     }
@@ -2473,23 +2473,23 @@ static size_t lm_p0_stack_top_level(const LmP0Stack *stack) {
 static int lm_p0_stack_level_is_trailer_body(const LmP0Stack *stack, size_t level) {
     LmP0Node *owner;
 
-    if (level >= stack->capacity || stack->parents[level] == NULL) {
+    if (level >= stack->capacity || stack->parents[level] == 0) {
         return 0;
     }
 
     owner = stack->owners[level];
-    if (owner == NULL) {
+    if (owner == 0) {
         return 0;
     }
 
     if (owner->kind == LM_P0_NODE_FRAME &&
-        owner->as.frame.trailer != NULL &&
+        owner->as.frame.trailer != 0 &&
         stack->parents[level] == &owner->as.frame.trailer->body) {
         return 1;
     }
 
     if (owner->kind == LM_P0_NODE_STRUCTURE &&
-        owner->as.structure.trailer != NULL &&
+        owner->as.structure.trailer != 0 &&
         stack->parents[level] == &owner->as.structure.trailer->body) {
         return 1;
     }
@@ -2533,7 +2533,7 @@ static int lm_p0_text_has_prefix_name(
 }
 
 static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
-    if (lm_p0_dash_fence_status_after_comment_trim(text, length, NULL) == LM_P0_DASH_FENCE_VALID) {
+    if (lm_p0_dash_fence_status_after_comment_trim(text, length, 0) == LM_P0_DASH_FENCE_VALID) {
         return LM_P0_TRAILER_ROLE_DASH_CUTTER;
     }
     if (lm_p0_text_has_prefix_name(text, length, "end", 0)) {
@@ -2555,7 +2555,7 @@ static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role) {
 static int lm_p0_node_head_is(const LmP0Node *node, const char *name) {
     size_t name_length;
 
-    if (node == NULL || node->kind != LM_P0_NODE_FRAME) {
+    if (node == 0 || node->kind != LM_P0_NODE_FRAME) {
         return 0;
     }
 
@@ -2580,9 +2580,9 @@ static void lm_p0_stack_free(LmP0Stack *stack) {
     free(stack->parents);
     free(stack->owners);
     free(stack->hard);
-    stack->parents = NULL;
-    stack->owners = NULL;
-    stack->hard = NULL;
+    stack->parents = 0;
+    stack->owners = 0;
+    stack->hard = 0;
     stack->capacity = 0U;
 }
 
@@ -2605,24 +2605,24 @@ static LmP0PendingDelimiter *lm_p0_pending_delimiter_new(void) {
 static LmP0StreamEvent *lm_p0_stream_event_new_copy(const LmP0StreamEvent *event) {
     LmP0StreamEvent *copy;
 
-    if (event == NULL) {
-        return NULL;
+    if (event == 0) {
+        return 0;
     }
     copy = (LmP0StreamEvent *)calloc(1U, sizeof(*copy));
-    if (copy != NULL) {
+    if (copy != 0) {
         *copy = *event;
     }
     return copy;
 }
 
 static void lm_p0_stream_event_delete(LmP0StreamEvent *event) {
-    lm_own_delete(event, NULL);
+    lm_own_delete(event, 0);
 }
 
 static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter *pending) {
-    if (pending != NULL) {
+    if (pending != 0) {
         lm_p0_stream_event_delete(pending->event);
-        pending->event = NULL;
+        pending->event = 0;
         pending->active = 0;
     }
 }
@@ -2632,14 +2632,14 @@ static int lm_p0_pending_delimiter_set(
     LmP0PendingDelimiter *pending,
     const LmP0StreamEvent *event
 ) {
-    if (pending == NULL) {
+    if (pending == 0) {
         return 0;
     }
 
     lm_p0_pending_delimiter_clear(pending);
     pending->event = lm_p0_stream_event_new_copy(event);
-    if (pending->event == NULL) {
-        lm_p0_set_diagnostic(document, 1, event != NULL ? event->line : 0U, event != NULL ? event->column : 0U, "out of memory while storing pending delimiter");
+    if (pending->event == 0) {
+        lm_p0_set_diagnostic(document, 1, event != 0 ? event->line : 0U, event != 0 ? event->column : 0U, "out of memory while storing pending delimiter");
         return 0;
     }
     pending->active = 1;
@@ -2647,9 +2647,9 @@ static int lm_p0_pending_delimiter_set(
 }
 
 static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter *pending) {
-    if (pending != NULL) {
+    if (pending != 0) {
         lm_p0_pending_delimiter_clear(pending);
-        lm_own_delete(pending, NULL);
+        lm_own_delete(pending, 0);
     }
 }
 
@@ -2657,7 +2657,7 @@ static LmP0DisabledState *lm_p0_disabled_state_new(size_t base_level) {
     LmP0DisabledState *state;
 
     state = (LmP0DisabledState *)calloc(1U, sizeof(*state));
-    if (state != NULL) {
+    if (state != 0) {
         state->base_level = base_level;
         state->top_level = base_level;
         state->pending_item = 1;
@@ -2667,7 +2667,7 @@ static LmP0DisabledState *lm_p0_disabled_state_new(size_t base_level) {
 }
 
 static void lm_p0_disabled_state_delete(LmP0DisabledState *state) {
-    lm_own_delete(state, NULL);
+    lm_own_delete(state, 0);
 }
 
 static int lm_p0_node_keeps_source_child_level(LmP0Node *node) {
@@ -2684,14 +2684,14 @@ static LmP0Structure *lm_p0_node_child_structure(LmP0Node *node) {
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         return &node->as.structure;
     }
-    return NULL;
+    return 0;
 }
 
 static LmP0Node *lm_p0_structure_last_colon_frame(LmP0Structure *structure) {
     LmP0Node *node;
 
-    if (structure->last_field == NULL || structure->last_field->value == NULL) {
-        return NULL;
+    if (structure->last_field == 0 || structure->last_field->value == 0) {
+        return 0;
     }
 
     node = structure->last_field->value;
@@ -2700,7 +2700,7 @@ static LmP0Node *lm_p0_structure_last_colon_frame(LmP0Structure *structure) {
         return node;
     }
 
-    return NULL;
+    return 0;
 }
 
 static int lm_p0_stack_install_node_lineage(
@@ -2716,8 +2716,8 @@ static int lm_p0_stack_install_node_lineage(
         if (!lm_p0_stack_ensure(document, stack, base_level + 1U)) {
             return 0;
         }
-        stack->parents[base_level + 1U] = NULL;
-        stack->owners[base_level + 1U] = NULL;
+        stack->parents[base_level + 1U] = 0;
+        stack->owners[base_level + 1U] = 0;
         stack->hard[base_level + 1U] = 0U;
         lm_p0_stack_truncate_deeper(stack, base_level + 1U);
         return 1;
@@ -2739,7 +2739,7 @@ static int lm_p0_stack_install_node_lineage(
         stack->hard[level] = body->field_count == 0U ? 1U : 0U;
 
         next_owner = lm_p0_structure_last_colon_frame(body);
-        if (next_owner == NULL) {
+        if (next_owner == 0) {
             break;
         }
 
@@ -2752,7 +2752,7 @@ static int lm_p0_stack_install_node_lineage(
 }
 
 static int lm_p0_stack_ensure_root_level_alias(LmP0Document *document, LmP0Stack *stack, size_t level) {
-    if (level != 1U || stack->parents[1] != NULL) {
+    if (level != 1U || stack->parents[1] != 0) {
         return 1;
     }
     if (!lm_p0_stack_ensure(document, stack, 1U)) {
@@ -2776,13 +2776,13 @@ static int lm_p0_stack_open_implicit_anonymous(
     LmP0Structure *parent;
 
     parent = stack->parents[parent_level];
-    if (parent == NULL) {
+    if (parent == 0) {
         lm_p0_set_diagnostic(document, 8, line, column, "source level has no open parent structure");
         return 0;
     }
 
     anonymous_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
-    if (anonymous_node == NULL) {
+    if (anonymous_node == 0) {
         return 0;
     }
     anonymous_node->span.line = line;
@@ -2812,7 +2812,7 @@ static LmP0Trailer **lm_p0_node_trailer_slot(LmP0Node *node) {
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         return &node->as.structure.trailer;
     }
-    return NULL;
+    return 0;
 }
 
 static LmP0Trailer *lm_p0_attach_trailer(
@@ -2828,19 +2828,19 @@ static LmP0Trailer *lm_p0_attach_trailer(
     LmP0Trailer *trailer;
 
     slot = lm_p0_node_trailer_slot(node);
-    if (slot == NULL) {
+    if (slot == 0) {
         lm_p0_set_diagnostic(document, 10, line, column, "this parser node cannot receive a trailer");
-        return NULL;
+        return 0;
     }
-    if (*slot != NULL) {
+    if (*slot != 0) {
         lm_p0_set_diagnostic(document, 11, line, column, "parser node already has a trailer");
-        return NULL;
+        return 0;
     }
 
     trailer = (LmP0Trailer *)calloc(1U, sizeof(*trailer));
-    if (trailer == NULL) {
+    if (trailer == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer");
-        return NULL;
+        return 0;
     }
     trailer->spelling.data = spelling;
     trailer->spelling.length = spelling_length;
@@ -2865,7 +2865,7 @@ static int lm_p0_parse_trailer_item(
     size_t body_start;
     LmP0Trailer *trailer;
 
-    *out_body = NULL;
+    *out_body = 0;
 
     {
         int colon_status;
@@ -2916,7 +2916,7 @@ static int lm_p0_parse_trailer_item(
     }
 
     trailer = lm_p0_attach_trailer(document, target, text, spelling_length, flags, line, column);
-    if (trailer == NULL) {
+    if (trailer == 0) {
         return 0;
     }
 
@@ -2946,7 +2946,7 @@ static int lm_p0_stream_resolve_pending_delimiter(
     size_t top_level;
     LmP0Structure *parent;
 
-    if (!pending->active || pending->event == NULL) {
+    if (!pending->active || pending->event == 0) {
         return 1;
     }
 
@@ -2966,10 +2966,10 @@ static int lm_p0_stream_resolve_pending_delimiter(
     }
 
     parent = stack->parents[event->level];
-    if (parent == NULL && event->level == 1U) {
+    if (parent == 0 && event->level == 1U) {
         parent = stack->parents[0];
     }
-    if (parent == NULL) {
+    if (parent == 0) {
         lm_p0_set_diagnostic(document, 8, event->line, event->column, "source level has no open parent structure");
         return 0;
     }
@@ -2978,7 +2978,7 @@ static int lm_p0_stream_resolve_pending_delimiter(
         LmP0Node *anonymous_node;
 
         anonymous_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
-        if (anonymous_node == NULL) {
+        if (anonymous_node == 0) {
             return 0;
         }
         anonymous_node->span.line = event->line;
@@ -3029,7 +3029,7 @@ static int lm_p0_stream_apply_item_event(
     top_level = lm_p0_stack_top_level(stack);
     trailer_target_available = lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
         event->level + 1U <= top_level &&
-        stack->owners[event->level + 1U] != NULL;
+        stack->owners[event->level + 1U] != 0;
     trailer_target_accepted = trailer_target_available &&
         lm_p0_trailer_role_accepts_target(trailer_role, stack->owners[event->level + 1U]);
 
@@ -3041,7 +3041,7 @@ static int lm_p0_stream_apply_item_event(
         }
         trailer_target_available = lm_p0_trailer_role_is_tail_cutter(trailer_role) &&
             event->level + 1U <= top_level &&
-            stack->owners[event->level + 1U] != NULL;
+            stack->owners[event->level + 1U] != 0;
         trailer_target_accepted = trailer_target_available &&
             lm_p0_trailer_role_accepts_target(trailer_role, stack->owners[event->level + 1U]);
     }
@@ -3092,7 +3092,7 @@ static int lm_p0_stream_apply_item_event(
         top_level = lm_p0_stack_top_level(stack);
     }
 
-    if (stack->parents[event->level] == NULL && event->level > top_level) {
+    if (stack->parents[event->level] == 0 && event->level > top_level) {
         if (event->level != top_level + 1U) {
             lm_p0_set_diagnostic(document, 13, event->line, event->column, "source level jumps too deep");
             return 0;
@@ -3114,7 +3114,7 @@ static int lm_p0_stream_apply_item_event(
     }
 
     parent = stack->parents[event->level];
-    if (parent == NULL) {
+    if (parent == 0) {
         lm_p0_set_diagnostic(document, 8, event->line, event->column, "source level has no open parent structure");
         return 0;
     }
@@ -3136,15 +3136,15 @@ static int lm_p0_stream_apply_item_event(
             return 0;
         }
 
-        field = previous_last != NULL ? previous_last->next : parent->first_field;
-        while (field != NULL) {
-            if (field->value != NULL) {
+        field = previous_last != 0 ? previous_last->next : parent->first_field;
+        while (field != 0) {
+            if (field->value != 0) {
                 field->value->flags |= event->node_flags;
             }
             field = field->next;
         }
 
-        if (parent->last_field == previous_last || parent->last_field == NULL) {
+        if (parent->last_field == previous_last || parent->last_field == 0) {
             return 1;
         }
         return lm_p0_stack_install_node_lineage(document, stack, event->level, parent->last_field->value);
@@ -3152,7 +3152,7 @@ static int lm_p0_stream_apply_item_event(
 
     if (event->kind == LM_P0_STREAM_EVENT_DISABLED_BLOCK) {
         node = lm_p0_new_node(document, LM_P0_NODE_DISABLED);
-        if (node == NULL) {
+        if (node == 0) {
             return 0;
         }
         node->as.atom.data = event->text;
@@ -3163,7 +3163,7 @@ static int lm_p0_stream_apply_item_event(
         node->span.length = event->text_length;
     } else if (event->kind == LM_P0_STREAM_EVENT_BLOCK_STRING) {
         node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
-        if (node == NULL) {
+        if (node == 0) {
             return 0;
         }
         node->as.atom.data = event->text;
@@ -3203,7 +3203,7 @@ static int lm_p0_stream_apply_event(
         return 0;
     }
     if (event->kind == LM_P0_STREAM_EVENT_ITEM &&
-        lm_p0_dash_fence_status_after_comment_trim(event->text, event->text_length, NULL) == LM_P0_DASH_FENCE_VALID) {
+        lm_p0_dash_fence_status_after_comment_trim(event->text, event->text_length, 0) == LM_P0_DASH_FENCE_VALID) {
         if (!lm_p0_pending_delimiter_set(document, pending, event)) {
             return 0;
         }
@@ -3219,13 +3219,13 @@ static size_t lm_p0_stream_block_string_level(
 ) {
     size_t level;
 
-    if (pending->active && pending->event != NULL) {
+    if (pending->active && pending->event != 0) {
         return pending->event->level + 1U;
     }
 
     level = lm_p0_stack_top_level(stack);
     while (level > 0U) {
-        if (stack->parents[level] != NULL && !lm_p0_stack_level_is_trailer_body(stack, level)) {
+        if (stack->parents[level] != 0 && !lm_p0_stack_level_is_trailer_body(stack, level)) {
             return level;
         }
         --level;
@@ -3605,12 +3605,12 @@ static int lm_p0_validate_disabled_block(
         return 0;
     }
     local_indent = lm_p0_indent_stack_clone(document, indent_stack, header_line, header_column);
-    if (local_indent == NULL) {
+    if (local_indent == 0) {
         return 0;
     }
 
     state = lm_p0_disabled_state_new(base_level);
-    if (state == NULL) {
+    if (state == 0) {
         lm_p0_set_diagnostic(document, 1, header_line, header_column, "out of memory while creating disabled block state");
         lm_p0_indent_stack_delete(local_indent);
         return 0;
@@ -3688,23 +3688,23 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     status = 1;
     has_last_physical_level = 0;
     last_physical_level = 0U;
-    indent_stack = NULL;
-    stack = NULL;
-    pending = NULL;
+    indent_stack = 0;
+    stack = 0;
+    pending = 0;
 
     document->root = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
-    if (document->root == NULL) {
+    if (document->root == 0) {
         return 0;
     }
 
     indent_stack = lm_p0_indent_stack_new(document);
     stack = lm_p0_stack_new();
     pending = lm_p0_pending_delimiter_new();
-    if (indent_stack == NULL ||
-        stack == NULL ||
-        pending == NULL ||
+    if (indent_stack == 0 ||
+        stack == 0 ||
+        pending == 0 ||
         !lm_p0_stack_ensure(document, stack, 0U)) {
-        if (pending == NULL) {
+        if (pending == 0) {
             lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating pending delimiter");
         }
         lm_p0_indent_stack_delete(indent_stack);
@@ -4016,9 +4016,9 @@ static void lm_p0_structure_recount(LmP0Structure *structure) {
     LmP0Field *field;
 
     structure->field_count = 0U;
-    structure->last_field = NULL;
+    structure->last_field = 0;
     field = structure->first_field;
-    while (field != NULL) {
+    while (field != 0) {
         ++structure->field_count;
         structure->last_field = field;
         field = field->next;
@@ -4038,14 +4038,14 @@ static int lm_p0_wrap_fields_from_line(
 );
 
 static int lm_p0_postprocess_trailer(LmP0Document *document, LmP0Trailer *trailer) {
-    if (trailer == NULL) {
+    if (trailer == 0) {
         return 1;
     }
     return lm_p0_postprocess_structure(document, &trailer->body);
 }
 
 static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
-    if (node == NULL) {
+    if (node == 0) {
         return 1;
     }
 
@@ -4087,10 +4087,10 @@ static int lm_p0_wrap_fields_from_line(
     LmP0Node *group_node;
     LmP0Field *move;
 
-    previous = NULL;
+    previous = 0;
     field = structure->first_field;
-    while (field != NULL) {
-        if (field->value != NULL &&
+    while (field != 0) {
+        if (field->value != 0 &&
             field->value->span.line != head_line &&
             field->value->span.offset >= inline_event_end_offset) {
             break;
@@ -4099,25 +4099,25 @@ static int lm_p0_wrap_fields_from_line(
         field = field->next;
     }
 
-    if (field == NULL) {
+    if (field == 0) {
         return 1;
     }
 
     group_first = field;
     group_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
-    if (group_node == NULL) {
+    if (group_node == 0) {
         return 0;
     }
     group_node->span = group_first->value->span;
 
     move = group_first;
-    while (move != NULL) {
+    while (move != 0) {
         LmP0Field *next_move;
         LmP0Node *value;
 
         next_move = move->next;
         value = move->value;
-        move->value = NULL;
+        move->value = 0;
         if (!lm_p0_append_field(document, &group_node->as.structure, value)) {
             lm_p0_free_node(group_node);
             return 0;
@@ -4129,8 +4129,8 @@ static int lm_p0_wrap_fields_from_line(
     }
 
     group_first->value = group_node;
-    group_first->next = NULL;
-    if (previous == NULL) {
+    group_first->next = 0;
+    if (previous == 0) {
         structure->first_field = group_first;
     } else {
         previous->next = group_first;
@@ -4147,8 +4147,8 @@ static int lm_p0_postprocess_structure(
     LmP0Field *field;
 
     field = structure->first_field;
-    while (field != NULL) {
-        if (field->value != NULL && !lm_p0_postprocess_node(document, field->value)) {
+    while (field != 0) {
+        if (field->value != 0 && !lm_p0_postprocess_node(document, field->value)) {
             return 0;
         }
 
@@ -4163,14 +4163,14 @@ static int lm_p0_validate_nonempty_colon_frames_in_trailer(
     LmP0Document *document,
     const LmP0Trailer *trailer
 ) {
-    if (trailer == NULL) {
+    if (trailer == 0) {
         return 1;
     }
     return lm_p0_validate_nonempty_colon_frames_in_structure(document, &trailer->body);
 }
 
 static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, const LmP0Node *node) {
-    if (node == NULL) {
+    if (node == 0) {
         return 1;
     }
 
@@ -4208,7 +4208,7 @@ static int lm_p0_validate_nonempty_colon_frames_in_structure(
     const LmP0Field *field;
 
     field = structure->first_field;
-    while (field != NULL) {
+    while (field != 0) {
         if (!lm_p0_validate_nonempty_colon_frames_in_node(document, field->value)) {
             return 0;
         }
@@ -4225,25 +4225,25 @@ int lm_p0_parse_bytes(
 ) {
     LmP0Document *document;
 
-    if (out_document == NULL) {
+    if (out_document == 0) {
         return 1;
     }
-    *out_document = NULL;
+    *out_document = 0;
 
     document = (LmP0Document *)calloc(1U, sizeof(*document));
-    if (document == NULL) {
+    if (document == 0) {
         return 1;
     }
 
-    if (source == NULL) {
+    if (source == 0) {
         source = "";
         source_length = 0U;
     }
 
     document->source_length = source_length;
     document->source = lm_p0_copy_bytes(source, document->source_length);
-    if (document->source == NULL) {
-        lm_own_delete(document, NULL);
+    if (document->source == 0) {
+        lm_own_delete(document, 0);
         return 1;
     }
 
@@ -4258,7 +4258,7 @@ int lm_p0_parse_bytes(
 }
 
 int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
-    if (source == NULL) {
+    if (source == 0) {
         source = "";
     }
     return lm_p0_parse_bytes(source, strlen(source), out_document);
@@ -4271,13 +4271,13 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     size_t read_size;
     int status;
 
-    if (out_document == NULL) {
+    if (out_document == 0) {
         return 1;
     }
-    *out_document = NULL;
+    *out_document = 0;
 
     file = fopen(path, "rb");
-    if (file == NULL) {
+    if (file == 0) {
         return 1;
     }
 
@@ -4296,7 +4296,7 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     }
 
     buffer = (char *)malloc((size_t)size + 1U);
-    if (buffer == NULL) {
+    if (buffer == 0) {
         fclose(file);
         return 1;
     }
@@ -4314,27 +4314,27 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
 }
 
 void lm_p0_document_destroy(LmP0Document *document) {
-    if (document == NULL) {
+    if (document == 0) {
         return;
     }
     lm_p0_free_node(document->root);
-    lm_own_delete(document->source, NULL);
-    lm_own_delete(document, NULL);
+    lm_own_delete(document->source, 0);
+    lm_own_delete(document, 0);
 }
 
 const LmP0Node *lm_p0_document_root(const LmP0Document *document) {
-    return document != NULL ? document->root : NULL;
+    return document != 0 ? document->root : 0;
 }
 
 const LmP0Diagnostic *lm_p0_document_diagnostic(const LmP0Document *document) {
-    if (document == NULL || document->diagnostic.code == 0) {
-        return NULL;
+    if (document == 0 || document->diagnostic.code == 0) {
+        return 0;
     }
     return &document->diagnostic;
 }
 
 void lm_p0_free(void *ptr) {
-    lm_own_delete(ptr, NULL);
+    lm_own_delete(ptr, 0);
 }
 
 static int lm_p0_dump_reserve(LmP0Dump *dump, size_t extra) {
@@ -4354,7 +4354,7 @@ static int lm_p0_dump_reserve(LmP0Dump *dump, size_t extra) {
     }
 
     data = (char *)realloc(dump->data, new_capacity);
-    if (data == NULL) {
+    if (data == 0) {
         dump->failed = 1;
         return 0;
     }
@@ -4396,7 +4396,7 @@ static void lm_p0_dump_appendf(LmP0Dump *dump, const char *format, ...) {
         char *heap_buffer;
 
         heap_buffer = (char *)malloc((size_t)needed + 1U);
-        if (heap_buffer == NULL) {
+        if (heap_buffer == 0) {
             dump->failed = 1;
             return;
         }
@@ -4425,7 +4425,7 @@ static void lm_p0_dump_text(LmP0Dump *dump, LmP0Text text) {
 static void lm_p0_dump_structure(LmP0Dump *dump, const LmP0Structure *structure, size_t indent);
 
 static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_t indent) {
-    if (trailer == NULL) {
+    if (trailer == 0) {
         return;
     }
 
@@ -4441,7 +4441,7 @@ static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_
 }
 
 static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent) {
-    if (node == NULL) {
+    if (node == 0) {
         return;
     }
 
@@ -4474,7 +4474,7 @@ static void lm_p0_dump_structure(LmP0Dump *dump, const LmP0Structure *structure,
     const LmP0Field *field;
 
     field = structure->first_field;
-    while (field != NULL) {
+    while (field != 0) {
         lm_p0_dump_node(dump, field->value, indent);
         field = field->next;
     }
@@ -4487,20 +4487,20 @@ static LmP0Dump *lm_p0_dump_new(void) {
 static char *lm_p0_dump_take_data(LmP0Dump *dump) {
     char *data;
 
-    if (dump == NULL) {
-        return NULL;
+    if (dump == 0) {
+        return 0;
     }
     data = dump->data;
-    dump->data = NULL;
+    dump->data = 0;
     dump->length = 0U;
     dump->capacity = 0U;
     return data;
 }
 
 static void lm_p0_dump_delete(LmP0Dump *dump) {
-    if (dump != NULL) {
-        lm_own_delete(dump->data, NULL);
-        lm_own_delete(dump, NULL);
+    if (dump != 0) {
+        lm_own_delete(dump->data, 0);
+        lm_own_delete(dump, 0);
     }
 }
 
@@ -4509,10 +4509,10 @@ char *lm_p0_dump_alloc(const LmP0Document *document) {
     char *data;
 
     dump = lm_p0_dump_new();
-    if (dump == NULL) {
-        return NULL;
+    if (dump == 0) {
+        return 0;
     }
-    if (document == NULL || document->root == NULL) {
+    if (document == 0 || document->root == 0) {
         lm_p0_dump_append_cstr(dump, "");
         data = lm_p0_dump_take_data(dump);
         lm_p0_dump_delete(dump);
@@ -4522,7 +4522,7 @@ char *lm_p0_dump_alloc(const LmP0Document *document) {
     lm_p0_dump_node(dump, document->root, 0U);
     if (dump->failed) {
         lm_p0_dump_delete(dump);
-        return NULL;
+        return 0;
     }
     data = lm_p0_dump_take_data(dump);
     lm_p0_dump_delete(dump);

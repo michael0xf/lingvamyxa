@@ -24,15 +24,15 @@
 #define LM_FINALIZE_EXE_SUFFIX ""
 #define LM_FINALIZE_PATH_SEP "/"
 #define LM_FINALIZE_IS_DRIVE_ABSOLUTE(path) 0
-#define LM_FINALIZE_SLEEP_RETRY() do { struct timespec request; request.tv_sec = 0; request.tv_nsec = 250000000L; nanosleep(&request, NULL); } while (0)
-#define LM_FINALIZE_DEFER_COMMAND_FORMAT "cd \"%s\" && \"%s\" \"--copy\" >/dev/null 2>&1 &"
+#define LM_FINALIZE_SLEEP_RETRY() do { struct timespec request; request.tv_sec = 0; request.tv_nsec = 250000000L; nanosleep(&request, 0); } while (0)
+#define LM_FINALIZE_DEFER_COMMAND_FORMAT "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &"
 #endif
 static int lm_finalize_is_path_separator(char value) {
     return value == '/' || value == '\\';
 }
 
 static int lm_finalize_is_absolute_path(char *path) {
-    if (path == NULL || path [ 0 ] == '\0') {
+    if (path == 0 || path [ 0 ] == '\0') {
         return 0;
     }
     if (lm_finalize_is_path_separator(path [ 0 ])) {
@@ -88,7 +88,7 @@ static int lm_finalize_enter_project_root(char *program_path) {
 static void lm_finalize_log(char *message) {
     FILE *log_file;
     log_file = fopen("build/lm0/finalize.log", "a");
-    if (log_file == NULL) {
+    if (log_file == 0) {
         return;
     }
     fprintf(log_file, "%s\n", message);
@@ -110,14 +110,14 @@ static int lm_finalize_copy_once(char *source_path, char *output_path, int quiet
     size_t count;
     int status;
     source = fopen(source_path, "rb");
-    if (source == NULL) {
+    if (source == 0) {
         if (quiet == 0) {
             fprintf(stderr, "finalize.lm0: cannot open input file %s\n", source_path);
         }
         return 1;
     }
     output = fopen(output_path, "wb");
-    if (output == NULL) {
+    if (output == 0) {
         if (quiet == 0) {
             fprintf(stderr, "finalize.lm0: cannot open output file %s\n", output_path);
         }
@@ -188,7 +188,7 @@ static int lm_finalize_defer(void) {
     char finalize_path[1400];
     char command[4096];
     int status;
-    if (LM_FINALIZE_GETCWD(root_path, sizeof(root_path)) == NULL) {
+    if (LM_FINALIZE_GETCWD(root_path, sizeof(root_path)) == 0) {
         fprintf(stderr, "finalize.lm0: cannot get current directory\n");
         return 1;
     }

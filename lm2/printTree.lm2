@@ -4,8 +4,8 @@ L1:
 #include "parser.lm1.h"
 
 static void lm_print_tree_prepare_stdio(void) {
-    setvbuf(stdout, NULL, _IONBF, 0);
-    setvbuf(stderr, NULL, _IONBF, 0);
+    setvbuf(stdout, 0, _IONBF, 0);
+    setvbuf(stderr, 0, _IONBF, 0);
 }
 ===
 
@@ -14,14 +14,14 @@ L2:
         fn: main (int: argc, @@: char argv) int
             c.lm_print_tree_prepare_stdio()
             if: argc = 2
-                @: LmP0Document document c.NULL
+                @: LmP0Document document 0
                 const: @: LmP0Diagnostic diagnostic
                 @: char dump
                 int: status
                 status: c.lm_p0_parse_file(argv[1], @ document)
                 if: status != 0
                     diagnostic: c.lm_p0_document_diagnostic(document)
-                    if: diagnostic != c.NULL
+                    if: diagnostic != 0
                         c.fprintf:
                             c.stderr "P0 parse error %d at %zu:%zu: %s\n"
                             diagnostic\code diagnostic\line diagnostic\column diagnostic\message
@@ -31,7 +31,7 @@ L2:
                     c.lm_p0_document_destroy: document
                     return: 1
                 dump: c.lm_p0_dump_alloc(document)
-                if: dump = c.NULL
+                if: dump = 0
                     c.fprintf: c.stderr "P0 dump allocation failed\n"
                     c.lm_p0_document_destroy: document
                     return: 1

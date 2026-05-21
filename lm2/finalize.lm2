@@ -26,8 +26,8 @@ L1:
 #define LM_FINALIZE_EXE_SUFFIX ""
 #define LM_FINALIZE_PATH_SEP "/"
 #define LM_FINALIZE_IS_DRIVE_ABSOLUTE(path) 0
-#define LM_FINALIZE_SLEEP_RETRY() do { struct timespec request; request.tv_sec = 0; request.tv_nsec = 250000000L; nanosleep(&request, NULL); } while (0)
-#define LM_FINALIZE_DEFER_COMMAND_FORMAT "cd \"%s\" && \"%s\" \"--copy\" >/dev/null 2>&1 &"
+#define LM_FINALIZE_SLEEP_RETRY() do { struct timespec request; request.tv_sec = 0; request.tv_nsec = 250000000L; nanosleep(&request, 0); } while (0)
+#define LM_FINALIZE_DEFER_COMMAND_FORMAT "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &"
 #endif
 ===
 
@@ -37,7 +37,7 @@ L2:
     end: lm_finalize_is_path_separator
 
     fn: lm_finalize_is_absolute_path (@: char path) int
-        if: path = c.NULL || path[0] = '\0'
+        if: path = 0 || path[0] = '\0'
             return: 0
         if: lm_finalize_is_path_separator(path[0])
             return: 1
@@ -93,7 +93,7 @@ L2:
         @: FILE log_file
 
         log_file: c.fopen("build/lm0/finalize.log", "a")
-        if: log_file = c.NULL
+        if: log_file = 0
             return
 
         c.fprintf: log_file "%s\n" message
@@ -118,13 +118,13 @@ L2:
         int: status
 
         source: c.fopen(source_path, "rb")
-        if: source = c.NULL
+        if: source = 0
             if: quiet = 0
                 c.fprintf: c.stderr "finalize.lm0: cannot open input file %s\n" source_path
             return: 1
 
         output: c.fopen(output_path, "wb")
-        if: output = c.NULL
+        if: output = 0
             if: quiet = 0
                 c.fprintf: c.stderr "finalize.lm0: cannot open output file %s\n" output_path
             c.fclose: source
@@ -194,7 +194,7 @@ L2:
         []: char command 4096
         int: status
 
-        if: c.LM_FINALIZE_GETCWD(root_path, c.sizeof(root_path)) = c.NULL
+        if: c.LM_FINALIZE_GETCWD(root_path, c.sizeof(root_path)) = 0
             c.fprintf: c.stderr "finalize.lm0: cannot get current directory\n"
             return: 1
 

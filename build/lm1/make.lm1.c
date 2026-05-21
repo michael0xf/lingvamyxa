@@ -4,7 +4,7 @@
 static char * lm_make_env_or_default(char *name, char *fallback) {
     char *value;
     value = getenv(name);
-    if (value == NULL || value [ 0 ] == '\0') {
+    if (value == 0 || value [ 0 ] == '\0') {
         return fallback;
     }
     return value;
@@ -71,12 +71,12 @@ static int lm_make_copy_file(char *source_path, char *output_path) {
     size_t count;
     int status;
     source = fopen(source_path, "rb");
-    if (source == NULL) {
+    if (source == 0) {
         fprintf(stderr, "make.lm0: cannot open input file %s\n", source_path);
         return 1;
     }
     output = fopen(output_path, "wb");
-    if (output == NULL) {
+    if (output == 0) {
         fprintf(stderr, "make.lm0: cannot open output file %s\n", output_path);
         fclose(source);
         return 1;

@@ -9,7 +9,7 @@ L2:
     fn: lm_make_env_or_default (@: char name,, @: char fallback) @: char
         @: char value
         value: c.getenv(name)
-        if: value = c.NULL || value[0] = '\0'
+        if: value = 0 || value[0] = '\0'
             return: fallback
         return: value
     end: lm_make_env_or_default
@@ -73,12 +73,12 @@ L2:
         int: status
 
         source: c.fopen(source_path, "rb")
-        if: source = c.NULL
+        if: source = 0
             c.fprintf: c.stderr "make.lm0: cannot open input file %s\n" source_path
             return: 1
 
         output: c.fopen(output_path, "wb")
-        if: output = c.NULL
+        if: output = 0
             c.fprintf: c.stderr "make.lm0: cannot open output file %s\n" output_path
             c.fclose: source
             return: 1
