@@ -152,22 +152,23 @@ Ordinary structural forms are also markable source-interval entities. Curly
 braces are only the explicit document-facing spelling for adding extra active
 marks to the same overlay model.
 
-Curly braces are a bounded structural form like parentheses and index brackets,
-but their result is a MIX payload Structure. When the P0 parser sees `{` outside
-ordinary string/comment/raw payload, it enters MIX payload parsing. The payload
-between `{` and its matching `}` is parsed by the same structural parser in its
-own local level-0 context, so quoted strings, python-like raw strings, exact
-identifiers, block strings and comments keep their ordinary payload rules. A
-`}` inside such a payload is payload text, not the closing delimiter of the
-surrounding MIX form.
+Curly braces introduce MIX bounded forms `{...}`. They are bounded structural
+forms like parentheses and index brackets, but their result is a MIX payload
+Structure. When the P0 parser sees `{` outside ordinary string/comment/raw
+payload, it enters MIX payload parsing. The payload between `{` and its
+matching `}` is parsed by the same structural parser in its own local level-0
+context, so quoted strings, python-like raw strings, exact identifiers, block
+strings and comments keep their ordinary payload rules. A `}` inside such a
+payload is payload text, not the closing delimiter of the surrounding MIX
+bounded form.
 
-The resulting MIX payload Structure is stored immediately as a parser node with
-the source position/span of the mark and a MIX flag. Physical line breaks inside
-the mark do not create source-level/layout events for the surrounding
-Structure. The opener column of `{` does not become the local indentation base
-for the MIX payload. Ordinary structural consumers and translators may ignore
-MIX-flagged nodes, while document/MIX consumers project them into the active
-mark/overlay view. A mark frame such as:
+The resulting MIX bounded form payload Structure is stored immediately as a
+parser node with the source position/span of the mark and a MIX flag. Physical
+line breaks inside the mark do not create source-level/layout events for the
+surrounding Structure. The opener column of `{` does not become the local
+indentation base for the MIX payload. Ordinary structural consumers and
+translators may ignore MIX-flagged nodes, while document/MIX consumers project
+them into the active mark/overlay view. A mark frame such as:
 
     {color: red}
 
@@ -6280,11 +6281,228 @@ The exact syntax and core status of `?name` logical variables, list literals, ru
 22. Structural Grammar Sketch
 
 This grammar sketch describes the structural parser only. It does not define final receiver semantics.
-The implementation view is an event automaton over source positions: level
-events, short-form level steps, comma trailers, bounded `(...)`, postfix index
-`[...]`, bounded MIX `{...}` nodes, strings/raw strings and admitted
-tail-cutters all produce source events. Physical lines are input fragments, not
-containers in the abstract tree.
+
+22.0. P0 Source-Event Automaton
+
+This subsection is normative for P0 structure recognition. The grammar below is
+only a compact readable projection of the same machine.
+
+P0 is one recursive source-event automaton over source positions:
+
+    P0 = (S, E, delta, O)
+
+where:
+
+    S  is the parser state;
+    E  is the stream of source events produced by the source scanner;
+    delta consumes one event and updates the state;
+    O  is the produced parser tree with source spans and node flags.
+
+There is no separate line parser, brace parser, bracket parser or expression
+parser at P0. Physical lines are input fragments, not containers in the
+abstract tree. Parentheses, index brackets and MIX braces all enter nested P0
+contexts; their difference is the channel where the resulting Structure is
+used.
+
+State:
+
+    S.position
+        current source position and absolute span base.
+
+    S.lexical_mode
+        SOURCE
+        C_STRING
+        EXACT_IDENTIFIER
+        PYTHON_RAW_QUOTE
+        BLOCK_STRING
+        RAW_COMMENT
+        LINE_COMMENT
+
+    S.level_state
+        the normalized source level state. Canonical dotted spelling maps
+        leading dots to integer source levels. Relaxed indentation maps
+        indentation columns to the same integer source levels through the
+        indentation-stack rule.
+
+    S.form_stack
+        ROOT(level 0)
+        VERTICAL(level K)
+        SHORT(head at level N, implicit argument level N + 1)
+        BOUNDED_PAREN(base level B)
+        BOUNDED_INDEX(base level B)
+        BOUNDED_MIX(local base level 0)
+
+    S.output_cursor
+        the current ordinary Structure insertion point, plus the current
+        source span being attached to the next node.
+
+Events:
+
+    LEVEL(K)
+        next source item is at normalized source level K.
+
+    ATOM(value)
+        ordinary token/value after operator splitting and payload recognition.
+
+    HEAD(value)
+        head token before `:`.
+
+    COLON
+        opens a short form for the preceding HEAD.
+
+    NEWLINE
+        physical newline separator.
+
+    COMMA
+        comma separator/trailer at the current scan depth.
+
+    OPEN_PAREN / CLOSE_PAREN
+        `(` and matching `)` bounded Structure delimiters.
+
+    OPEN_INDEX / CLOSE_INDEX
+        `[` and matching `]` bounded index/access delimiters.
+
+    OPEN_MIX / CLOSE_MIX
+        `{` and matching `}` MIX bounded form delimiters.
+
+    TAIL_CUTTER(candidate)
+        a candidate visible close/cut form, such as `end`, `return`, `until`
+        or a dash-fence delimiter. Candidate status is later validated by the
+        current receiver/profile context.
+
+    EOF
+        end of source.
+
+Lexical shielding:
+
+    If S.lexical_mode is not SOURCE, braces, parentheses, brackets, commas,
+    colons, dots, indentation and tail-cutter words are payload characters for
+    that lexical mode. They do not produce structural events until that lexical
+    mode closes.
+
+    C_STRING closes by its C string delimiter rules.
+    EXACT_IDENTIFIER closes by its exact identifier delimiter rules.
+    PYTHON_RAW_QUOTE closes by its matching raw quote run.
+    BLOCK_STRING closes by its matching column-0 `===...` fence.
+    RAW_COMMENT closes by its matching column-0 `***...` fence.
+    LINE_COMMENT closes at physical newline.
+
+    Therefore a `}` inside a string, exact identifier, raw string, block string
+    or comment inside a MIX bounded form does not close that MIX bounded form.
+
+Level transitions:
+
+    delta(LEVEL(K -> K + 1))
+        opens one Structure field under the current source parent. Portable P0
+        source-level syntax opens block structure by one atomic level increase.
+
+    delta(LEVEL(K -> K))
+        produces a sibling item at the current source level, unless the current
+        scan depth is controlled by an open short/bounded form.
+
+    delta(LEVEL(K -> K - 1))
+        closes the current visible vertical Structure by the ordinary one-step
+        source-level cut.
+
+    delta(LEVEL(K -> K - M), M > 1)
+        is not ordinary block syntax. It is admitted only when the current
+        source event is consumed by a valid tail-cutter layer for that context.
+
+    An empty physical line is a level-0 boundary event. It may close an open
+    level-1 vertical tail by the ordinary level decrease, but it is not a
+    same-level delimiter below level 1.
+
+Short-form transitions:
+
+    HEAD COLON at source level N creates:
+
+        Frame(head, BodyStructure at implicit argument level N + 1)
+
+    Inline tail fields after `:` are appended to that BodyStructure at the
+    implicit argument level N + 1.
+
+    NEWLINE inside an open short form performs the synthetic short-form level
+    step from N + 1 back to N. This step is only a separator step. It is not by
+    itself the trailer of the short form.
+
+    After that newline:
+
+        if the next source item appears at level N + 1, the atomic level
+        increase N -> N + 1 opens a new Structure field in the same short-form
+        argument sequence;
+
+        if the next source item appears at level N or smaller, the short form
+        is complete and the next item is handled by ordinary sibling, cut or
+        receiver-trailer rules.
+
+    COMMA at the current scan depth terminates the current open short form. It
+    does not append an empty field. If no short form is open at that scan
+    depth, it is an ordinary bounded/sequence separator or a cosmetic trailing
+    marker according to the surrounding context.
+
+Bounded-form transitions:
+
+    OPEN_PAREN starts a nested BOUNDED_PAREN context. Its contents are parsed by
+    the same P0 source/token rules, with source-level composition measured
+    relative to the bounded opener. CLOSE_PAREN closes that context. If a short
+    form is still open inside the bounded context, it is completed as part of
+    closing the bounded context.
+
+    OPEN_INDEX after a target starts a nested BOUNDED_INDEX context. Its
+    contents are parsed by the same P0 source/token rules. CLOSE_INDEX closes
+    that context and attaches the resulting Structure as an index/access suffix
+    to the preceding target or to a receiver form that admits bracket syntax.
+
+    OPEN_MIX starts a nested BOUNDED_MIX context for a MIX bounded form `{...}`.
+    Its contents are parsed by
+    the same P0 source/token rules in a local level-0 context. CLOSE_MIX closes
+    that context. The resulting Structure is stored as a MIX-flagged parser
+    node with its source position/span. Ordinary structural consumers may skip
+    MIX-flagged nodes; document/MIX consumers project them into active overlay
+    intervals and marks.
+
+    A matching closing delimiter line may return to the opener level. The
+    closer token itself is the bounded-form close event, not an ordinary
+    sibling source item.
+
+Tail-cutter transitions:
+
+    Tail-cutters are not magic words in P0 by spelling alone. A token such as
+    `return` or `until` becomes a tail-cutter only when it appears at a source
+    event where a valid receiver/profile context admits that close/cut role.
+    Otherwise it remains an ordinary item/operator/receiver token for later
+    semantic processing.
+
+    `end: name` is a visible structural close form. Its argument is not
+    evaluated as a runtime expression. It is compared with the visible close
+    target supplied by the receiver being closed: normally the privileged
+    `name` argument of that receiver, or the receiver head when no such valid
+    close name exists.
+
+    `return`, `return: value`, `until` and dash-fence delimiter forms are
+    members of the same tail-cutter family, but each is admitted only in the
+    receiver/profile positions defined for it.
+
+EOF transition:
+
+    EOF closes the root context after all open structures that may be closed by
+    EOF have been completed. Any remaining open bounded form or lexical mode is
+    a syntax error.
+
+Output invariants:
+
+    P0 constructs Structure, Frame, Atom/value and MIX-flagged nodes with source
+    spans. It does not execute Structures, evaluate expressions, resolve
+    functions, declare variables or decide type semantics.
+
+    A named Structure is translated or interpreted as a call/function/subroutine
+    only when a later semantic layer resolves its head through the active
+    namespace. An anonymous Structure remains Structure data until a receiver
+    consumes it under a receiver-defined rule.
+
+    Any search for a matching `)`, `]` or `}` must use the same lexical modes as
+    P0 itself. There is no separate opaque boundary walker that merely counts
+    characters.
 
     program             ::= { empty_line | physical_item }
 
