@@ -487,6 +487,86 @@ static size_t lm_p0_scan_brace_mark_unchecked(
     int *closed
 );
 
+static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start);
+
+static int lm_p0_match_block_string_fence_line(
+    const char *source,
+    size_t line_start,
+    size_t line_end,
+    size_t eq_count
+);
+
+static int lm_p0_match_raw_comment_fence_line(
+    const char *source,
+    size_t line_start,
+    size_t line_end,
+    size_t star_count
+);
+
+static int lm_p0_index_is_line_start(const char *text, size_t index) {
+    if (index == 0U) {
+        return 1;
+    }
+    return text[index - 1U] == '\n' || text[index - 1U] == '\r';
+}
+
+static size_t lm_p0_skip_fence_block_unchecked(
+    const char *text,
+    size_t length,
+    size_t start,
+    char fence_char
+) {
+    size_t fence_count;
+    size_t line_end;
+    size_t scan_start;
+
+    line_end = lm_p0_find_physical_line_end(text, length, start);
+    fence_count = 0U;
+    while (start + fence_count < line_end && text[start + fence_count] == fence_char) {
+        ++fence_count;
+    }
+    if (fence_count < 3U || fence_count > LM_P0_MAX_FENCE_LENGTH) {
+        return start;
+    }
+
+    if (fence_char == '=') {
+        if (!lm_p0_match_block_string_fence_line(text, start, line_end, fence_count)) {
+            return start;
+        }
+    } else if (fence_char == '*') {
+        if (!lm_p0_match_raw_comment_fence_line(text, start, line_end, fence_count)) {
+            return start;
+        }
+    } else {
+        return start;
+    }
+
+    scan_start = line_end;
+    if (scan_start < length) {
+        scan_start += lm_p0_line_break_width_at(text, length, scan_start);
+    }
+
+    while (scan_start <= length) {
+        size_t current_end;
+
+        current_end = lm_p0_find_physical_line_end(text, length, scan_start);
+        if (fence_char == '=' &&
+            lm_p0_match_block_string_fence_line(text, scan_start, current_end, fence_count)) {
+            return current_end + (current_end < length ? lm_p0_line_break_width_at(text, length, current_end) : 0U);
+        }
+        if (fence_char == '*' &&
+            lm_p0_match_raw_comment_fence_line(text, scan_start, current_end, fence_count)) {
+            return current_end + (current_end < length ? lm_p0_line_break_width_at(text, length, current_end) : 0U);
+        }
+        if (current_end == length) {
+            break;
+        }
+        scan_start = current_end + lm_p0_line_break_width_at(text, length, current_end);
+    }
+
+    return length;
+}
+
 static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size_t start) {
     enum { LM_P0_LAYOUT_DELIMITER_STACK_LIMIT = 256 };
     size_t i;
@@ -635,6 +715,34 @@ static void lm_p0_position_in_slice(
     size_t *out_column
 );
 
+static int lm_p0_parse_fields_into(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t offset
+);
+
+static int lm_p0_parse_stream(LmP0Document *document);
+
+static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node);
+static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, const LmP0Node *node);
+
+static void lm_p0_free_node(LmP0Node *node);
+
+static int lm_p0_record_mix_mark(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t start,
+    size_t end,
+    size_t line,
+    size_t column
+);
+
 static size_t lm_p0_scan_brace_mark_unchecked(
     const char *text,
     size_t length,
@@ -648,6 +756,53 @@ static size_t lm_p0_scan_brace_mark_unchecked(
     depth = 0U;
     *closed = 0;
     while (i < length) {
+        if (lm_p0_index_is_line_start(text, i) && (text[i] == '=' || text[i] == '*')) {
+            size_t fence_end;
+
+            fence_end = lm_p0_skip_fence_block_unchecked(text, length, i, text[i]);
+            if (fence_end > i) {
+                i = fence_end;
+                continue;
+            }
+        }
+        if (lm_p0_starts_python_string(text, length, i)) {
+            i = lm_p0_skip_python_string_unchecked(text, length, i);
+            continue;
+        }
+        if (text[i] == '"' || text[i] == '`') {
+            char quote;
+
+            quote = text[i++];
+            while (i < length) {
+                if (quote == '"' && text[i] == '\\') {
+                    size_t line_break_width;
+
+                    line_break_width = i + 1U < length
+                        ? lm_p0_line_break_width_at(text, length, i + 1U)
+                        : 0U;
+                    if (line_break_width > 0U) {
+                        i += 1U + line_break_width;
+                    } else {
+                        i += i + 1U < length ? 2U : 1U;
+                    }
+                    continue;
+                }
+                if (quote == '`' && text[i] == '`' && i + 1U < length && text[i + 1U] == '`') {
+                    i += 2U;
+                    continue;
+                }
+                if (text[i++] == quote) {
+                    break;
+                }
+            }
+            continue;
+        }
+        if (text[i] == '#') {
+            while (i < length && !lm_p0_is_line_break(text[i])) {
+                ++i;
+            }
+            continue;
+        }
         if (text[i] == '{') {
             ++depth;
             ++i;
@@ -670,15 +825,18 @@ static size_t lm_p0_scan_brace_mark_unchecked(
     return i;
 }
 
-static int lm_p0_skip_brace_mark(
+static int lm_p0_skip_brace_mark_ex(
     LmP0Document *document,
+    LmP0Structure *structure,
     const char *text,
     size_t length,
     size_t *index,
     size_t line,
-    size_t column
+    size_t column,
+    int record
 ) {
     size_t start;
+    size_t end;
     int closed;
 
     if (*index >= length || text[*index] != '{') {
@@ -686,7 +844,8 @@ static int lm_p0_skip_brace_mark(
     }
 
     start = *index;
-    *index = lm_p0_scan_brace_mark_unchecked(text, length, start, &closed);
+    end = lm_p0_scan_brace_mark_unchecked(text, length, start, &closed);
+    *index = end;
     if (!closed) {
         size_t diagnostic_line;
         size_t diagnostic_column;
@@ -696,6 +855,56 @@ static int lm_p0_skip_brace_mark(
         return 0;
     }
 
+    if (record && !lm_p0_record_mix_mark(document, structure, text, length, start, end, line, column)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int lm_p0_skip_brace_mark(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t *index,
+    size_t line,
+    size_t column
+) {
+    return lm_p0_skip_brace_mark_ex(document, 0, text, length, index, line, column, 0);
+}
+
+static int lm_p0_consume_brace_mark(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t *index,
+    size_t line,
+    size_t column
+) {
+    return lm_p0_skip_brace_mark_ex(document, structure, text, length, index, line, column, 1);
+}
+
+static int lm_p0_skip_leading_brace_marks_ex(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t *index,
+    int record
+) {
+    while (*index < length) {
+        while (*index < length && lm_p0_is_horizontal_space(text[*index])) {
+            ++(*index);
+        }
+        if (*index >= length || text[*index] != '{') {
+            return 1;
+        }
+        if (!lm_p0_skip_brace_mark_ex(document, 0, text, length, index, line, column, record)) {
+            return 0;
+        }
+    }
     return 1;
 }
 
@@ -707,18 +916,7 @@ static int lm_p0_skip_leading_brace_marks(
     size_t column,
     size_t *index
 ) {
-    while (*index < length) {
-        while (*index < length && lm_p0_is_horizontal_space(text[*index])) {
-            ++(*index);
-        }
-        if (*index >= length || text[*index] != '{') {
-            return 1;
-        }
-        if (!lm_p0_skip_brace_mark(document, text, length, index, line, column)) {
-            return 0;
-        }
-    }
-    return 1;
+    return lm_p0_skip_leading_brace_marks_ex(document, text, length, line, column, index, 0);
 }
 
 static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end) {
@@ -1122,6 +1320,217 @@ static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, 
     }
     structure->last_field = field;
     ++structure->field_count;
+    return 1;
+}
+
+static int lm_p0_pointer_source_offset(
+    const LmP0Document *document,
+    const char *pointer,
+    size_t *out_offset
+) {
+    const char *begin;
+    const char *end;
+
+    if (document == 0 || document->source == 0 || pointer == 0) {
+        return 0;
+    }
+
+    begin = document->source;
+    end = document->source + document->source_length;
+    if (pointer < begin || pointer > end) {
+        return 0;
+    }
+
+    *out_offset = (size_t)(pointer - begin);
+    return 1;
+}
+
+static void lm_p0_adjust_structure_spans_to_document(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    size_t base_offset
+);
+
+static size_t lm_p0_offset_from_line_column(
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column
+) {
+    size_t i;
+    size_t current_line;
+    size_t current_column;
+
+    i = 0U;
+    current_line = 1U;
+    current_column = 1U;
+    while (i < length) {
+        if (current_line == line && current_column == column) {
+            return i;
+        }
+        if (text[i] == '\r') {
+            ++current_line;
+            current_column = 1U;
+            if (i + 1U < length && text[i + 1U] == '\n') {
+                ++i;
+            }
+        } else if (text[i] == '\n') {
+            ++current_line;
+            current_column = 1U;
+        } else {
+            ++current_column;
+        }
+        ++i;
+    }
+    return i;
+}
+
+static void lm_p0_copy_payload_diagnostic(
+    LmP0Document *document,
+    const LmP0Document *payload_document,
+    size_t payload_offset
+) {
+    size_t local_offset;
+
+    if (document == 0 || payload_document == 0 || payload_document->diagnostic.code == 0) {
+        return;
+    }
+
+    document->diagnostic = payload_document->diagnostic;
+    local_offset = lm_p0_offset_from_line_column(
+        payload_document->source,
+        payload_document->source_length,
+        payload_document->diagnostic.line,
+        payload_document->diagnostic.column
+    );
+    lm_p0_position_in_slice(
+        document->source,
+        document->source_length,
+        payload_offset + local_offset,
+        1U,
+        1U,
+        &document->diagnostic.line,
+        &document->diagnostic.column
+    );
+}
+
+static void lm_p0_adjust_node_span_to_document(
+    LmP0Document *document,
+    LmP0Node *node,
+    size_t base_offset
+) {
+    if (node == 0) {
+        return;
+    }
+
+    node->span.offset += base_offset;
+    lm_p0_position_in_slice(
+        document->source,
+        document->source_length,
+        node->span.offset,
+        1U,
+        1U,
+        &node->span.line,
+        &node->span.column
+    );
+
+    if (node->kind == LM_P0_NODE_STRUCTURE) {
+        lm_p0_adjust_structure_spans_to_document(document, &node->as.structure, base_offset);
+        if (node->as.structure.trailer != 0) {
+            lm_p0_adjust_structure_spans_to_document(document, &node->as.structure.trailer->body, base_offset);
+        }
+    } else if (node->kind == LM_P0_NODE_FRAME) {
+        lm_p0_adjust_structure_spans_to_document(document, &node->as.frame.body, base_offset);
+        if (node->as.frame.trailer != 0) {
+            lm_p0_adjust_structure_spans_to_document(document, &node->as.frame.trailer->body, base_offset);
+        }
+    }
+}
+
+static void lm_p0_adjust_structure_spans_to_document(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    size_t base_offset
+) {
+    LmP0Field *field;
+
+    field = structure->first_field;
+    while (field != 0) {
+        lm_p0_adjust_node_span_to_document(document, field->value, base_offset);
+        field = field->next;
+    }
+}
+
+static int lm_p0_record_mix_mark(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t start,
+    size_t end,
+    size_t line,
+    size_t column
+) {
+    LmP0Node *node;
+    LmP0Document payload_document;
+    size_t span_line;
+    size_t span_column;
+    size_t absolute_offset;
+    size_t payload_offset;
+    size_t payload_length;
+
+    if (document == 0 || structure == 0 || end <= start || text[start] != '{') {
+        return 1;
+    }
+
+    node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
+    if (node == 0) {
+        return 0;
+    }
+
+    node->flags |= LM_P0_NODE_MIX;
+    lm_p0_position_in_slice(text, length, start, line, column, &span_line, &span_column);
+    node->span.line = span_line;
+    node->span.column = span_column;
+    node->span.length = end - start;
+    if (lm_p0_pointer_source_offset(document, text + start, &absolute_offset)) {
+        node->span.offset = absolute_offset;
+    }
+
+    if (!lm_p0_append_field(document, structure, node)) {
+        lm_p0_free_node(node);
+        return 0;
+    }
+
+    payload_offset = node->span.offset + 1U;
+    payload_length = end > start + 2U ? end - start - 2U : 0U;
+    if (payload_length > 0U) {
+        memset(&payload_document, 0, sizeof(payload_document));
+        payload_document.source = (char *)(text + start + 1U);
+        payload_document.source_length = payload_length;
+
+        if (!lm_p0_parse_stream(&payload_document)) {
+            lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
+            lm_p0_free_node(payload_document.root);
+            return 0;
+        }
+        if (!lm_p0_postprocess_node(&payload_document, payload_document.root)) {
+            lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
+            lm_p0_free_node(payload_document.root);
+            return 0;
+        }
+        if (!lm_p0_validate_nonempty_colon_frames_in_node(&payload_document, payload_document.root)) {
+            lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
+            lm_p0_free_node(payload_document.root);
+            return 0;
+        }
+
+        node->as.structure = payload_document.root->as.structure;
+        memset(&payload_document.root->as.structure, 0, sizeof(payload_document.root->as.structure));
+        lm_p0_free_node(payload_document.root);
+        lm_p0_adjust_structure_spans_to_document(document, &node->as.structure, payload_offset);
+    }
+
     return 1;
 }
 
@@ -1625,6 +2034,7 @@ static int lm_p0_source_level_after_line_break(
 static int lm_p0_skip_field_space(
     LmP0Document *document,
     LmP0IndentStack *indent_stack,
+    LmP0Structure *structure,
     const char *text,
     size_t length,
     size_t *index,
@@ -1651,7 +2061,7 @@ static int lm_p0_skip_field_space(
         }
 
         if (text[*index] == '{') {
-            if (!lm_p0_skip_brace_mark(document, text, length, index, line, column)) {
+            if (!lm_p0_consume_brace_mark(document, structure, text, length, index, line, column)) {
                 return 0;
             }
             continue;
@@ -2095,6 +2505,7 @@ static int lm_p0_parse_fields_until_with_layout(
         if (!lm_p0_skip_field_space(
                 document,
                 indent_stack,
+                structure,
                 text,
                 length,
                 &i,
@@ -2113,6 +2524,43 @@ static int lm_p0_parse_fields_until_with_layout(
         }
         if (i >= length) {
             break;
+        }
+        if (lm_p0_index_is_line_start(text, i)) {
+            size_t field_line;
+            size_t field_column;
+            size_t next_offset;
+            size_t next_line;
+            LmP0StreamEvent block_event;
+
+            lm_p0_position_in_slice(text, length, i, line, column, &field_line, &field_column);
+            if (lm_p0_scan_raw_comment_block(document, text, length, i, field_line, &next_offset, &next_line)) {
+                i = next_offset;
+                continue;
+            }
+            if (document->diagnostic.code != 0) {
+                return 0;
+            }
+            if (lm_p0_scan_block_string_event(document, text, length, i, field_line, &block_event, &next_offset, &next_line)) {
+                node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
+                if (node == 0) {
+                    return 0;
+                }
+                node->as.atom.data = block_event.text;
+                node->as.atom.length = block_event.text_length;
+                node->span.line = field_line;
+                node->span.column = field_column;
+                node->span.offset = offset + i;
+                node->span.length = next_offset - i;
+                if (!lm_p0_append_field(document, structure, node)) {
+                    lm_p0_free_node(node);
+                    return 0;
+                }
+                i = next_offset;
+                continue;
+            }
+            if (document->diagnostic.code != 0) {
+                return 0;
+            }
         }
         if (text[i] == ',') {
             ++i;
@@ -3696,6 +4144,8 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     if (document->root == 0) {
         return 0;
     }
+    document->root->span.offset = 0U;
+    document->root->span.length = document->source_length;
 
     indent_stack = lm_p0_indent_stack_new(document);
     stack = lm_p0_stack_new();
@@ -3801,25 +4251,8 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             }
         } else {
             size_t indent_column;
-            size_t mark_skip;
 
             lm_p0_scan_indent_column(source, p, line_start + raw_length, &p, &indent_column);
-            text = source + p;
-            text_length = (line_start + raw_length) - p;
-            lm_p0_trim_right(&text, &text_length);
-            mark_skip = 0U;
-            if (!lm_p0_skip_leading_brace_marks(
-                    document,
-                    text,
-                    text_length,
-                    line,
-                    (size_t)(text - (source + line_start)) + 1U,
-                    &mark_skip
-                )) {
-                status = 0;
-                break;
-            }
-            p += mark_skip;
             text = source + p;
             text_length = (line_start + raw_length) - p;
             lm_p0_trim_right(&text, &text_length);
@@ -3848,26 +4281,6 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         text = source + p;
         text_length = (line_start + raw_length) - p;
         lm_p0_trim_right(&text, &text_length);
-        {
-            size_t mark_skip;
-
-            mark_skip = 0U;
-            if (!lm_p0_skip_leading_brace_marks(
-                    document,
-                    text,
-                    text_length,
-                    line,
-                    (size_t)(text - (source + line_start)) + 1U,
-                    &mark_skip
-                )) {
-                status = 0;
-                break;
-            }
-            p += mark_skip;
-            text = source + p;
-            text_length = (line_start + raw_length) - p;
-            lm_p0_trim_right(&text, &text_length);
-        }
         node_flags = 0U;
 
         if (text_length == 0U && level == 0U) {
@@ -4448,6 +4861,9 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
     lm_p0_dump_indent(dump, indent);
     if ((node->flags & LM_P0_NODE_INACTIVE) != 0U) {
         lm_p0_dump_append_cstr(dump, "Inactive ");
+    }
+    if ((node->flags & LM_P0_NODE_MIX) != 0U) {
+        lm_p0_dump_append_cstr(dump, "MIX ");
     }
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         lm_p0_dump_appendf(dump, "Structure fields=%lu\n", (unsigned long)node->as.structure.field_count);

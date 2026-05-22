@@ -152,13 +152,22 @@ Ordinary structural forms are also markable source-interval entities. Curly
 braces are only the explicit document-facing spelling for adding extra active
 marks to the same overlay model.
 
-Curly-brace marks are part of the language. For the outer structural P0 parser,
-a `{...}` span is an opaque MIX mark span: P0 checks brace balance and skips the
-whole span without adding ordinary Structure fields. Physical line breaks inside
-that span do not create source-level/layout events for the surrounding
-Structure. A MIX or document consumer may parse the text inside `{...}` as
-Lingvamyxa source in its own local level-0 context; the opener column of `{`
-does not become that local context's indentation base. A mark frame such as:
+Curly braces are a bounded structural form like parentheses and index brackets,
+but their result is a MIX payload Structure. When the P0 parser sees `{` outside
+ordinary string/comment/raw payload, it enters MIX payload parsing. The payload
+between `{` and its matching `}` is parsed by the same structural parser in its
+own local level-0 context, so quoted strings, python-like raw strings, exact
+identifiers, block strings and comments keep their ordinary payload rules. A
+`}` inside such a payload is payload text, not the closing delimiter of the
+surrounding MIX form.
+
+The resulting MIX payload Structure is stored immediately as a parser node with
+the source position/span of the mark and a MIX flag. Physical line breaks inside
+the mark do not create source-level/layout events for the surrounding
+Structure. The opener column of `{` does not become the local indentation base
+for the MIX payload. Ordinary structural consumers and translators may ignore
+MIX-flagged nodes, while document/MIX consumers project them into the active
+mark/overlay view. A mark frame such as:
 
     {color: red}
 
@@ -181,6 +190,17 @@ Explicit close forms operate over the active mark stack:
 most recent still-active explicit mark whose close name/value is `name`.
 Closing `red` in the example above closes the `{color: red}` entry; the
 `{color: green}` entry remains open until it is closed separately.
+
+When several active entries share the same close name/value, the most recent
+matching entry wins, regardless of the mark head:
+
+    {style: red}
+    {color: red}
+    text
+    {end: red}
+
+Here `{end: red}` closes `{color: red}`, not `{style: red}`. The close operand is
+the active close value, not an XML-style repeated element name.
 
 This is intentionally different from XML and HTML nesting. Closing names the
 active value that is no longer wanted; it is not a repeated tag name and it
@@ -1811,6 +1831,20 @@ Visible structural transition forms in the full language are:
     a canonical source-level delimiter line
     a following source item at the same parent level
     a following source item one source level smaller
+
+These forms belong to one closer/trailer family, but they are admitted in
+different contexts:
+
+    form                              admitted context                         closes or materializes
+    source-level cut                  ordinary vertical source structure        the current open source frame by one visible level step
+    dotted delimiter / ---            explicit source-level marker             anonymous same-level section boundary or level point
+    end: name                         valid structural tail-cutter position     the visible target named by the receiver's close target
+    return: value                     valid fn/fm terminal trailer position     runtime return plus executable source-frame close
+    return                            admitted no-value executable trailer      runtime return plus executable source-frame close
+    until: condition                  admitted post-condition loop position     loop body tail plus its condition
+
+This table is not a list of competing block syntaxes. It is the shared
+source-level close model with receiver/profile-specific admission rules.
 
 Visible named Structures may be completed by the ordinary one-step source-level cut. `end: name` is the explicit named close form, normally used when a visible, checked or long-distance close is clearer than relying on the next one-step smaller-level or same-parent-level source item. Executable definitions may also be closed by an admitted terminal return form: `return: value` for a core `fn`, or bare `return` for no-value executable profiles such as `sub` or labels. Anonymous positional Structures and nameless implicit sections are closed by a one-step smaller-level source line when the source tree dedents. They are opened, separated or closed at the same source level by a canonical source-level delimiter line in canonical source-level notation or by `---` in relaxed indentation notation.
 
@@ -6246,6 +6280,11 @@ The exact syntax and core status of `?name` logical variables, list literals, ru
 22. Structural Grammar Sketch
 
 This grammar sketch describes the structural parser only. It does not define final receiver semantics.
+The implementation view is an event automaton over source positions: level
+events, short-form level steps, comma trailers, bounded `(...)`, postfix index
+`[...]`, bounded MIX `{...}` nodes, strings/raw strings and admitted
+tail-cutters all produce source events. Physical lines are input fragments, not
+containers in the abstract tree.
 
     program             ::= { empty_line | physical_item }
 
@@ -6321,7 +6360,7 @@ This grammar sketch describes the structural parser only. It does not define fin
 
     source_item         ::= colon_frame_body
                           | nullary_line_body
-                          | atom_or_value
+                          | structural_value
 
     colon_frame_body    ::= head ":" [ line_arguments ]
 
@@ -6383,7 +6422,18 @@ This grammar sketch describes the structural parser only. It does not define fin
     // closing the bounded context.
 
     bounded_structure   ::= "(" [ argument_list | vertical_argument_list ] ")"
-                          | "[" [ argument_list | vertical_argument_list ] "]"
+
+    source_fragment     ::= P0 source parsed in a local level-0 context
+
+    mix_structure       ::= "{" source_fragment "}"
+                            parsed by the same P0 source/token rules in a
+                            local level-0 context and stored as a MIX-flagged
+                            Structure node
+
+    index_access_suffix ::= "[" [ argument_list | vertical_argument_list ] "]"
+                            attached to a preceding target by an expression,
+                            update or receiver profile that admits index/access
+                            syntax
 
     vertical_argument_list
                          ::= newline source_line { source_line }
@@ -6393,7 +6443,15 @@ This grammar sketch describes the structural parser only. It does not define fin
     structural_value
                          ::= compact_frame
                           | bounded_structure
+                          | mix_structure
                           | atom_or_value
+
+Square brackets in the portable core are not a free-standing replacement for
+parentheses. `target[...]` is bounded index/access syntax attached to a preceding
+target or to a receiver form that explicitly admits bracket syntax. `[]:` in
+head position is a symbolic receiver spelling, such as an array/storage
+constructor, not the same thing as an index suffix. A standalone `[a b]` has no
+portable core meaning unless a profile explicitly admits it.
 
 The vertical Structure tree is produced by source levels and explicit visible delimiters: following source items at one-step smaller source level as level delimiters, canonical dotted delimiter lines, relaxed dash-fence lines, and admitted source-level tail-cutter forms such as `end:` or terminal return where valid. The physical newline separator is not itself the trailer; it only helps expose the next source item and its level.
 
@@ -6732,7 +6790,7 @@ Conceptual form:
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
-    []                         L2 indexed address access; L3+ checked array-Structure access
+    []                         head receiver spelling for array/storage forms; postfix `target[...]` is index/access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
     relation/fact/rule/query   receiver-defined relational Structures
@@ -8342,6 +8400,12 @@ operators, calls, bounded Structures, strings and ordinary operator tokens
 inside the brackets are therefore lowered by the same expression machinery as
 ordinary argument expressions. Field-follow remains the L2 `\field` form, not
 ANSI C `.` or `->` source syntax.
+
+This bracket form is separate from the `[]:` receiver spelling. `[]:` is a head
+symbol used by receivers such as array/storage constructors. `target[...]` is a
+postfix index/access suffix. A bare `[a b]` is not a portable L2 grouping form;
+use `(a b)` for a bounded Structure unless a profile explicitly admits standalone
+square-bracket values.
 
 The token `=` is comparison/equality for expression/operator consumers. It is not native assignment.
 

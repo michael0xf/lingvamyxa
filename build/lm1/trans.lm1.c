@@ -405,6 +405,10 @@ static const LmP0Field *lm_trans_nth_field(const LmP0Structure *structure, size_
     return field;
 }
 
+static int lm_trans_node_is_ignored(const LmP0Node *node) {
+    return node == 0 || (node->flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U;
+}
+
 static int lm_trans_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text) {
     const LmP0Field *field;
 
@@ -1924,7 +1928,7 @@ static int lm_trans_expr_lowered_range_build(
     c_dot_path = range.c_dot_path;
     while (field != range.stop) {
         node = field->value;
-        if (node != 0 && !(node->flags & LM_P0_NODE_INACTIVE)) {
+        if (!lm_trans_node_is_ignored(node)) {
             if (lm_trans_field_is_atom(field, "[")) {
                 const LmP0Field *close;
 
@@ -3155,7 +3159,7 @@ static int lm_trans_emit_struct_field_with_qualifier(
     const LmP0Field *name_field;
     const LmP0Node *name_node;
 
-    if (node == 0 || (node->flags & LM_P0_NODE_INACTIVE)) {
+    if (lm_trans_node_is_ignored(node)) {
         return 0;
     }
 
@@ -3902,7 +3906,7 @@ static int lm_trans_statement_stack_emit_node(
 ) {
     LmTransAtomStatementLoweringKind lowering;
 
-    if (node == 0 || (node->flags & LM_P0_NODE_INACTIVE)) {
+    if (lm_trans_node_is_ignored(node)) {
         return 0;
     }
 
@@ -4317,7 +4321,7 @@ static int lm_trans_lower_top_level_item(
 
     memset(out, 0, sizeof(*out));
 
-    if (node == 0 || (node->flags & LM_P0_NODE_INACTIVE)) {
+    if (lm_trans_node_is_ignored(node)) {
         out->kind = LM_TRANS_TOP_LEVEL_ITEM_NONE;
         return 0;
     }
@@ -4689,7 +4693,7 @@ static int lm_trans_emit_l1_structure(FILE *output, const LmP0Structure *structu
 }
 
 static int lm_trans_emit_l1_node(FILE *output, const LmP0Node *node) {
-    if (node == 0 || (node->flags & LM_P0_NODE_INACTIVE)) {
+    if (lm_trans_node_is_ignored(node)) {
         return 0;
     }
 
@@ -4772,7 +4776,7 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int *
     field = root->as.structure.first_field;
     while (field != 0) {
         node = field->value;
-        if (node != 0 && !(node->flags & LM_P0_NODE_INACTIVE)) {
+        if (!lm_trans_node_is_ignored(node)) {
             if (node->kind == LM_P0_NODE_ATOM) {
                 fprintf(stderr, "trans error: root raw text must be inside L1\n");
                 return 1;

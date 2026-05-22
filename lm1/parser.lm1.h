@@ -21,7 +21,8 @@ typedef enum LmP0FrameFlags {
 } LmP0FrameFlags;
 
 typedef enum LmP0NodeFlags {
-    LM_P0_NODE_INACTIVE = 1
+    LM_P0_NODE_INACTIVE = 1,
+    LM_P0_NODE_MIX = 2
 } LmP0NodeFlags;
 
 typedef enum LmP0TrailerFlags {

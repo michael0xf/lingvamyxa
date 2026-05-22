@@ -1,4 +1,4 @@
 root:
-{outer {inner} more}
+    {outer {inner} more}
     child: ok
 end: root

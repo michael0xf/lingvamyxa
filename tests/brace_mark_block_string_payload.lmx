@@ -1,0 +1,7 @@
+root:
+    {text:
+===
+} stays literal
+===
+}
+end: root
