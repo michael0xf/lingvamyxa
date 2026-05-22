@@ -504,6 +504,13 @@ The registry core has these mandatory concepts:
         behavior descriptor: selectors, method signatures, method targets,
         message dispatch entries, role behavior and dynamic dispatch policy.
 
+    MessageSpec
+        message descriptor or contract: receiver/target model or role,
+        selector, payload shape, expected result, declared effects,
+        validation requirements, transfer policy and implementation query.
+        A message descriptor describes when a message Structure may become an
+        executable message. It does not execute the message by itself.
+
     RelationSpec
         typed relation descriptor: relation name, argument slots, argument
         types, admissible unknown/binding positions and validation rules.
@@ -556,7 +563,8 @@ L5 consumes Structures as behavior, message, registry, build, query and startup
 input. L5 may register or normalize:
 
     behavior descriptors;
-    message routes;
+    message descriptors, contracts and routes;
+    message validation and dispatch evidence;
     role descriptors;
     adapter descriptors;
     facts;
@@ -612,6 +620,10 @@ A `BehaviorSpec` must at least be able to represent:
     result signature
         normalized result descriptor.
 
+    effect signature
+        declared effect/effect-domain descriptor, such as pure, local state
+        change, message send, I/O, build-time effect or profile-defined effect.
+
     implementation target
         concrete L3 `fn`/`sub` or implementation descriptor selected by the
         behavior entry.
@@ -621,6 +633,38 @@ A `BehaviorSpec` must at least be able to represent:
 
     conflict policy
         local override, overload, drop, alias, prefer, replace or profile rule.
+
+A `MessageSpec` must at least be able to represent:
+
+    receiver or target requirement
+        target model, role, service, thread, behavior entry or profile-defined
+        receiver class accepted by the message.
+
+    selector
+        message name, receiver name, operation tag or event selector.
+
+    payload signature
+        normalized argument Structure descriptor, including field names,
+        positional fields, validators and transfer requirements.
+
+    result signature
+        normalized result descriptor or reply payload descriptor.
+
+    effect signature
+        effect/effect-domain descriptor used by the type/evidence layer to
+        decide whether the message is admissible in the current context.
+
+    validation requirements
+        facts, validators, capabilities, state predicates or other evidence
+        required before the message may be executed or scheduled.
+
+    implementation query
+        registry/query shape that resolves the message to a concrete L3 target,
+        L5 handler, service route or profile-defined action.
+
+    transfer and scheduling policy
+        copy/move/serialize/immutable-share policy, priority, ordering and
+        optional reply/failure channel requirements.
 
 A `RelationSpec` must at least be able to represent:
 
@@ -836,6 +880,19 @@ Value evidence facts:
     fact: valueMethod valueName selector inputSignature implementationName
     fact: valueGuarantee valueName guaranteeName guaranteeValue
 
+Message evidence facts:
+
+    fact: messageCandidate messageId
+    fact: messageReceiver messageId receiverValueOrTarget
+    fact: messageSelector messageId selector
+    fact: messagePayload messageId payloadDescriptorOrValue
+    fact: messageExpectedResult messageId resultDescriptor
+    fact: messageEffect messageId effectDescriptor
+    fact: messageRequires messageId validatorOrEvidence
+    fact: messageValidated messageId ValidatorName
+    fact: messageImplementation messageId implementationName
+    fact: messageStatus messageId proposedOrTypedOrValidatedOrScheduled
+
 Build facts:
 
     fact: target targetName
@@ -863,7 +920,9 @@ For a concrete value, the evidence graph may contain:
     slots known on the value;
     methods available for the value;
     adapters or projections available for the value;
-    ownership/security/capability facts when the active profile supplies them.
+    ownership/security/capability facts when the active profile supplies them;
+    message candidates, message contracts and validated-message evidence when
+        the value is used as a receiver, payload or proposed action.
 
 Example concrete values:
 
@@ -915,11 +974,16 @@ working value can be consumed as evidence facts about that value.
 
 18.2. Validator Evidence
 
-Validator/type contracts use the same registry-fact mechanism. A typed
-container or view does not become a generic container class merely because it
-validates contents. The container remains storage. Registry facts attach a
-named validator/contract to the value, binding, field, write channel or view
-that must be checked.
+Validator/type contracts use the same registry-fact mechanism. A validator
+checks whether a Structure may be consumed in a declared role. The role may be a
+value, binding, field, type parameter, operator operand, message receiver,
+message payload, write channel, read view, handler candidate or profile-defined
+consumption position.
+
+A typed container or view does not become a generic container class merely
+because it validates contents. The container remains storage. Registry facts
+attach a named validator/contract to the value, binding, field, write channel,
+message field or view that must be checked.
 
 Example:
 
@@ -937,6 +1001,14 @@ A write into `passengers` must satisfy `LightPassenger`. A value read from
 IDEs and diagnostics should show these guarantees as part of the value's
 available type information.
 
+The same mechanism validates messages. A raw or proposed message is not yet an
+action. It becomes a typed or validated message only when the registry/evidence
+layer proves that its receiver, selector, payload, result, effect and
+implementation requirements are satisfied. This is analogous to Haskell-style
+constraint/evidence resolution: the message Structure is accepted only when the
+required evidence is available, derivable or explicitly checked at validation
+time.
+
 18.3. Evidence Lifetime and Invalidations
 
 Evidence is valid only while the facts that produced it remain valid.
@@ -948,7 +1020,10 @@ An implementation must invalidate or recompute evidence when:
     ownership/capability evidence expires;
     a behavior descriptor is replaced during a build/runtime update;
     an adapter/projection changes its source component;
-    a persistent fact store reloads or invalidates facts.
+    a persistent fact store reloads or invalidates facts;
+    a proposed or typed message depends on receiver, payload, capability,
+        permission, state or implementation evidence that has changed before
+        the message is scheduled or executed.
 
 A profile may choose static-only evidence, runtime evidence, cached evidence or
 persistent evidence. It must define when cached evidence becomes stale.
@@ -1142,20 +1217,35 @@ A composed object/value can be consumed in several modes. Each mode consumes the
 same descriptors and evidence facts differently. The modes do not create
 separate object systems.
 
+A message is the common Structure used by the object/event, type/evidence,
+procedural and logical layers. A message is not an action merely because it
+exists. A message may be proposed by a logical rule, built by an object/event
+receiver, checked by the type/evidence layer, scheduled by the runtime and only
+then executed by the procedural machine.
+
 The required modes are:
 
     procedural consumption
         executes a selected concrete L3 `fn` or `sub` target.
 
     object/event consumption
-        selects a message behavior implementation by message dispatch.
+        builds or accepts a message Structure and selects a message behavior
+        implementation by message dispatch.
+
+    type/evidence consumption
+        validates a raw or proposed message Structure against target, selector,
+        payload, result, effect, capability and implementation requirements,
+        producing a typed/validated message with evidence.
 
     functional/expression consumption
         resolves a generic expression or operator over abstract data types.
 
     logical consumption
         treats descriptors/evidence as facts and derives bindings, answers,
-        evidence or diagnostics.
+        evidence, diagnostics or proposed message Structures.
+
+Only messages admitted by the active validation/scheduling profile may be
+executed. Logical prediction proposes messages; it does not execute them.
 
 20.1. Procedural Consumption
 
@@ -1179,23 +1269,46 @@ because the names exist.
 
 20.2. Object/Event Consumption
 
-An object/event receiver consumes the evidence graph to resolve a message.
+An object/event receiver consumes the evidence graph to build, validate and
+resolve a message. The source form creates a message candidate. The validation
+layer must prove that the receiver, selector, payload and effects satisfy the
+registered message contract before the procedural target is invoked.
 
 Example:
 
     send: okButton press MouseEvent(...)
 
-Conceptual lookup:
+Conceptual raw message:
+
+RawMessage
+    receiver: okButton
+    selector: press
+    payload: MouseEvent(...)
+---
+
+Conceptual validation/lookup:
 
     value          = okButton
     selector       = press
     signature      = MouseEvent
     model          = registry valueModel(okButton)
+    role/evidence  = registry valueSatisfies(okButton, ClickableRole)
+    payloadCheck   = registry payload satisfies MouseEvent
     implementation = registry valueMethod(okButton, press, MouseEvent)
+    result/effect  = registry message result/effect descriptors
 
 Result:
 
-    implementation = buttonPress
+ValidatedMessage
+    receiver: okButton
+    selector: press
+    payload: MouseEvent(...)
+    implementation: buttonPress
+    evidence:
+        valueSatisfies okButton ClickableRole
+        payloadSatisfies MouseEvent
+        messageAccepted press (MouseEvent)
+---
 
 The procedural machine then executes the selected concrete target:
 
@@ -1205,14 +1318,14 @@ For:
 
     send: powerToggle press MouseEvent(...)
 
-the same lookup resolves to:
+the same validation/lookup resolves to:
 
     toggleButtonPress(powerToggle, MouseEvent(...))
 
 If the concrete model is known statically, a translator may lower directly to
-the concrete L3 target. If the value is known only through a role/reference,
-the translator may lower through a behavior table, method lookup cache or
-another selected profile strategy.
+the concrete L3 target after validation. If the value is known only through a
+role/reference, the translator may lower through a behavior table, method lookup
+cache or another selected profile strategy.
 
 20.3. Functional/Expression Consumption
 
@@ -1275,6 +1388,27 @@ Possible solutions:
 No message is dispatched by this query. No button is pressed. Logical mode only
 consumes the evidence graph and derives bindings.
 
+Logical mode may also propose new messages from facts, goals and rules. A
+proposed message is data until it is accepted by type/evidence validation and
+scheduling.
+
+Example conceptual proposal:
+
+query:
+. valueSatisfies ?value ClickableRole
+. valueGuarantee ?value enabled true
+. goal: userWantsClick ?value
+. propose:
+. . message:
+. . . receiver: ?value
+. . . selector: press
+. . . payload: MouseEvent(...)
+end: query
+
+The proposed message then returns to the validation path described by
+object/event consumption. The query itself does not execute the proposed
+message.
+
 20.5. Generic Dispatch as Query
 
 Generic dispatch may be derived by querying registry facts.
@@ -1299,20 +1433,34 @@ the translator may query:
 
 and lower directly to the returned implementation.
 
-20.6. Message Lookup as Query
+20.6. Message Lookup and Validation as Query
 
-Message lookup may also be represented as a query over facts.
+Message lookup and message validation may also be represented as queries over
+facts. This gives the message layer a Haskell-like evidence shape: a message may
+be executed only when the resolver can derive the constraints/evidence required
+by its receiver, selector, payload, result and effects.
 
 For a send:
 
     shape: drawOn canvas
 
-where `shape` has model evidence `Circle`, the runtime or translator queries:
+where `shape` has model evidence `Circle`, the runtime or translator may query:
 
+    valueModel: shape Circle
     message: Circle drawOn ?implementation
+    payloadAccepted: drawOn canvas ?payloadEvidence
+    messageEffect: drawOn ?effect
+    messageResult: drawOn ?result
 
-and calls the returned implementation with the receiver object and message
-arguments.
+and produce a validated message containing the returned implementation and
+validation evidence. The implementation is called only after this validation
+step:
+
+    drawCircleOn(shape, canvas)
+
+A profile may combine lookup and validation into one query relation such as
+`message_handler` or `message_accepts`, but it must preserve the distinction
+between a raw/proposed message and an executable validated message.
 
 20.7. Query, Rules and Unification
 
@@ -1443,9 +1591,10 @@ execution of a Structure.
 
 21.5. Type Reconciliation Algorithm
 
-When a receiver, assignment target, message argument, field, validator or query
-expects type/evidence `E` and the source expression produces type/evidence `A`,
-the translator should return a typed match result, not just a boolean.
+When a receiver, assignment target, message argument, field, validator, message
+contract or query expects type/evidence `E` and the source expression or message
+Structure produces type/evidence `A`, the translator should return a typed match
+result, not just a boolean.
 
 The result must distinguish at least:
 
@@ -1456,6 +1605,7 @@ The result must distinguish at least:
     validator evidence match;
     union/domain membership;
     explicit adapter/conversion;
+    message contract match;
     rejection.
 
 Suggested order:
@@ -1481,11 +1631,24 @@ Suggested order:
     7. If an explicit adapter exists and the active profile permits it, lower
        through the adapter.
 
-    8. Otherwise reject and report expected type/evidence, actual type/evidence
-       and available explicit projections/adapters/validators.
+    8. If E is a message contract, reconcile the receiver, selector, payload,
+       result, effect, capability and implementation requirements. If all
+       required evidence is available, return a validated-message match carrying
+       that evidence and the selected implementation. If some requirements are
+       permitted runtime checks, return a typed message plus required validation
+       steps. Otherwise reject.
+
+    9. Otherwise reject and report expected type/evidence, actual type/evidence
+       and available explicit projections/adapters/validators/message contracts.
 
 Multiple assignment and Structure consumption are named-field unpacking. They
 are not inheritance and not implicit structural subtyping.
+
+Message validation is a type/evidence reconciliation over a Message Structure.
+It may transform a RawMessage or ProposedMessage into a TypedMessage or
+ValidatedMessage. It must preserve why the validation succeeded: target role,
+payload validator, capability, effect permission, result descriptor and selected
+implementation are evidence, not hidden side effects.
 
 21.6. ANSI C Projection Profile
 
@@ -1751,8 +1914,9 @@ defined by sections 17-20.
 
 ?
 L5 behavior/message semantics require a final rule for missing messages, method
-overriding, dynamic message addition, selector identity and method-table
-consistency.
+overriding, dynamic message addition, selector identity, method-table
+consistency, canonical message-state names and validation timing for raw,
+proposed, typed, validated and scheduled messages.
 ?
 
 ?
@@ -1908,12 +2072,16 @@ thread or handler.
 
 27.5. Message Structure
 
-A message is a typed Structure. A profile may choose exact field names, but the
-conceptual fields are:
+A message is a Structure that may become executable only after validation. A
+profile may choose exact field names, but the conceptual fields are:
 
     receiver          target L5 Thread, object, behavior or service selector;
     selector          message name / receiver name / operation tag;
-    payload           typed argument Structure;
+    payload           typed or untyped argument Structure awaiting validation;
+    expected result   optional result/reply descriptor;
+    effect descriptor optional effect/effect-domain descriptor;
+    validation        required validators, capabilities, permissions or state facts;
+    implementation    selected handler target after validation/dispatch;
     transfer mode     copy, move, serialize, immutable-share or profile-defined mode;
     reply channel     optional Future/Task/reply receiver;
     failure channel   optional failure receiver or result sink;
@@ -1924,6 +2092,37 @@ conceptual fields are:
 The payload is a Structure, not a raw pointer bag. The receiver consumes the
 Structure according to its registered receiver signature, type model and message
 descriptor.
+
+A message may pass through conceptual states:
+
+    ProposedMessage
+        a candidate produced by logic, UI, another message handler or another
+        receiver. It is data only.
+
+    RawMessage
+        a constructed message Structure whose fields have not yet been fully
+        validated.
+
+    TypedMessage
+        a message whose receiver, selector and payload have been assigned
+        type/evidence descriptors, but which may still require runtime checks.
+
+    ValidatedMessage
+        a message whose required evidence has been proved or checked and whose
+        implementation/result/effect descriptors are known.
+
+    ScheduledMessage
+        a validated message accepted by the scheduler or queue profile.
+
+    ExecutedMessage
+        a message consumed by the procedural execution target.
+
+    FailedMessage
+        a message rejected by validation, scheduling or execution.
+
+Only a message state admitted by the active validation/scheduling profile may be
+placed in an executable queue. Logical prediction and message construction do
+not execute messages.
 
 27.6. Message Transfer Modes
 
@@ -2012,7 +2211,8 @@ The loop is conceptual. A runtime may lower it to an OS thread, event-loop task,
 actor turn, fiber or scheduler step if the same L5 message and cleanup semantics
 are preserved.
 
-Sending a message appends it to a synchronized FIFO container and returns.
+Sending a message validates/schedules a message according to the active profile,
+appends the admitted message to a synchronized FIFO container and returns.
 
 Basic operation:
 
@@ -2020,7 +2220,9 @@ Basic operation:
 
 Semantic effect:
 
-    append message to target thread inbox;
+    build or accept a Message Structure;
+    validate the message contract when the profile requires immediate validation;
+    append the admitted message to the target thread inbox;
     do not execute the handler in the sender thread;
     return immediately.
 
@@ -2049,41 +2251,57 @@ synchronized inbox
 The unsafe pattern is forbidden by this profile because it executes user/L5
 behavior while holding the inbox lock.
 
-27.9. Dispatch as Registry Query
+27.9. Dispatch and Validation as Registry Query
 
 Message dispatch is not special object magic. It is resolved through receiver
-signatures, descriptors and the logical registry/query layer.
+signatures, descriptors and the logical registry/query layer. The same query
+layer may validate the message before dispatch.
 
-A dispatch query may use facts such as:
+A dispatch/validation query may use facts such as:
 
     receiver type;
+    receiver role/evidence;
     selector name;
-    payload type;
+    payload type/evidence;
     protocol/behavior descriptor;
     capability descriptor;
     visibility level;
+    expected result descriptor;
+    effect descriptor and effect permission;
     target implementation;
     failure contract;
-    transfer policy.
+    transfer policy;
+    current state facts admitted by the profile.
 
 Conceptual query:
 
 query:
-    relation: message_handler
+    relation: message_accepts
     receiver: ?receiverType
     selector: parse
     payload: SourceText
+    result: ?resultType
+    effect: ?effect
     implementation: ?impl
+    evidence: ?evidence
 
-The resulting handler implementation is then invoked by the scheduler with a
-typed payload Structure. Generic dispatch, behavior lookup, operator/message
-specialization and validation may all use the same registry facts and relation
-rules described in sections 18 and 20.
+The result of this query is a typed/validated message descriptor. The handler
+implementation is invoked by the scheduler only after the message has the
+evidence required by the active profile. This is the message analogue of
+Haskell-style constraint resolution: a message send is accepted only when the
+registry can derive the required receiver, selector, payload, effect, result and
+implementation evidence, or when the profile inserts explicit runtime
+validation steps.
+
+Generic dispatch, behavior lookup, operator/message specialization and
+validation may all use the same registry facts and relation rules described in
+sections 18 and 20.
 
 If the target belongs to the current thread and the source form is a local L5
 message, the translator/runtime may use direct synchronous dispatch as an
-optimization. If the target belongs to another thread or the source form is an
-explicit event send, delivery is asynchronous through the target inbox.
+optimization after validation. If the target belongs to another thread or the
+source form is an explicit event send, delivery is asynchronous through the
+target inbox.
 
 27.10. Reply, Future and Task Structures
 
