@@ -12878,6 +12878,491 @@ source-level call может опуститься напрямую:
 все равно является разобранными registry data: `ModelSpec`, `BehaviorSpec`,
 facts, roles, adapters и derivations.
 
+35A.En. Composed Working Object as an Evidence Graph
+
+35A.En.0. Purpose
+
+Section 35 shows how a registry entry is built from concrete L4 model
+descriptors, L5 behavior descriptors and concrete L3 procedure/function targets.
+
+This section states the next rule:
+
+    a composed working object/value is also an evidence graph.
+
+The evidence graph is not a separate inheritance hierarchy and not a new runtime
+heap model. It is the normalized registry-visible set of facts saying that a
+concrete value, its fields, components, projections, validators, roles and
+behavior entries satisfy particular descriptors.
+
+This graph may be consumed by several modes:
+
+    object/event consumption
+        selects a message behavior implementation;
+
+    functional/expression consumption
+        resolves a generic expression over abstract data types;
+
+    logical consumption
+        treats the graph as facts and derives answers, bindings or further
+        evidence;
+
+    procedural consumption
+        executes the selected concrete L3 procedure or function.
+
+The same composed object therefore supplies material for object-oriented,
+functional and logical use, while the final executable target remains ordinary
+procedural code.
+
+35A.En.1. Concrete L3 Targets
+
+Assume the previous `Button` and `ToggleButton` entries from section 35. Their
+methods name concrete L3 procedure targets:
+
+    buttonDraw
+    buttonPress
+    buttonKeyPress
+    toggleButtonDraw
+    toggleButtonPress
+    toggleButtonKeyPress
+
+The source-level behavior descriptors do not execute these names merely because
+they exist. They register them as implementation candidates for normalized
+selectors and signatures.
+
+Conceptually:
+
+L3:
+    sub: buttonPress
+        # concrete procedure body omitted
+    end: buttonPress
+
+    sub: toggleButtonPress
+        # concrete procedure body omitted
+    end: toggleButtonPress
+end: L3
+
+35A.En.2. Concrete Values
+
+Now assume two concrete values:
+
+L3:
+    Button: okButton
+        label: "OK"
+        enabled: true
+    ---
+
+    ToggleButton: powerToggle
+        label: "Power"
+        enabled: true
+        checked: false
+    ---
+end: L3
+
+The exact construction syntax is profile-defined. The important point is that
+`okButton` is a concrete value whose model is `Button`, and `powerToggle` is a
+concrete value whose model is `ToggleButton`.
+
+After model construction, behavior registration and validator checks, the
+implementation may expose registry-visible evidence facts for those concrete
+values.
+
+Conceptual evidence graph:
+
+L5:
+    fact: valueModel okButton Button
+    fact: valueModel powerToggle ToggleButton
+
+    fact: valueSatisfies okButton Button
+    fact: valueSatisfies powerToggle ToggleButton
+
+    fact: valueSatisfies okButton ClickableRole
+    fact: valueSatisfies powerToggle ClickableRole
+
+    fact: valueSlot okButton label String
+    fact: valueSlot okButton enabled bool
+
+    fact: valueSlot powerToggle label String
+    fact: valueSlot powerToggle enabled bool
+    fact: valueSlot powerToggle checked bool
+
+    fact: valueMethod okButton press (MouseEvent) buttonPress
+    fact: valueMethod okButton press (KeyEvent) buttonKeyPress
+
+    fact: valueMethod powerToggle press (MouseEvent) toggleButtonPress
+    fact: valueMethod powerToggle press (KeyEvent) toggleButtonKeyPress
+
+    fact: valueGuarantee okButton enabled true
+    fact: valueGuarantee powerToggle enabled true
+end: L5
+
+The exact fact names are profile-defined. The important rule is that a composed
+working value may be viewed as a set of evidence facts about that value.
+
+35A.En.3. Object/Event Consumption
+
+An object/event receiver consumes the evidence graph to resolve a message.
+
+Example:
+
+    send: okButton press MouseEvent(...)
+
+Conceptual lookup:
+
+    value          = okButton
+    selector       = press
+    signature      = MouseEvent
+    model          = registry valueModel(okButton)
+    implementation = registry valueMethod(okButton, press, MouseEvent)
+
+Result:
+
+    implementation = buttonPress
+
+The procedural machine then executes the selected concrete target:
+
+    buttonPress(okButton, MouseEvent(...))
+
+For the second value:
+
+    send: powerToggle press MouseEvent(...)
+
+the same lookup resolves to:
+
+    toggleButtonPress(powerToggle, MouseEvent(...))
+
+If the concrete model is known statically, a translator may lower directly to
+the concrete L3 target. If the value is known only through a role/reference, the
+translator may lower through a behavior table, method lookup cache or another
+selected profile strategy.
+
+35A.En.4. Functional/Expression Consumption
+
+A functional/expression receiver consumes the same evidence graph differently.
+
+Assume a generic expression written against an abstract clickable value:
+
+    press(control, event)
+
+This expression does not name `buttonPress` or `toggleButtonPress` directly.
+It asks the registry/evidence graph which pure or admitted operation is
+available for the concrete value currently bound to `control`.
+
+For a binding:
+
+    control = okButton
+    event   = MouseEvent(...)
+
+the expression resolver may query:
+
+    valueSatisfies control ClickableRole
+    valueMethod control press (MouseEvent) ?implementation
+
+and resolve:
+
+    implementation = buttonPress
+
+For a binding:
+
+    control = powerToggle
+    event   = MouseEvent(...)
+
+the same generic expression resolves:
+
+    implementation = toggleButtonPress
+
+Thus a generic expression over an abstract data type is not a separate language
+mechanism. It is a Structure consumed against the evidence graph of concrete
+values and registry descriptors.
+
+35A.En.5. Logical Consumption
+
+A logical receiver may consume the same graph as facts.
+
+Example query:
+
+    query:
+        valueSatisfies ?value ClickableRole
+        valueMethod ?value press (MouseEvent) ?implementation
+    end: query
+
+Possible solutions:
+
+    ?value = okButton
+    ?implementation = buttonPress
+
+    ?value = powerToggle
+    ?implementation = toggleButtonPress
+
+No message is dispatched by this query. No button is pressed. The logical mode
+only consumes the evidence graph and derives bindings.
+
+35A.En.6. Standard Statement
+
+A composed working object/value is both:
+
+    an executable object candidate
+        because it can receive messages that resolve to concrete L3 targets;
+
+    an expression operand
+        because generic expressions may resolve operations over it through
+        registry-visible type and validator evidence;
+
+    a logical fact source
+        because its normalized descriptors, roles, validators, slots, methods,
+        guarantees and implementation links are facts.
+
+This does not add a new object system. It describes how the already normalized
+`ModelSpec`, `BehaviorSpec`, validator data, roles and concrete implementation
+links may be consumed in different modes.
+
+Procedural mode executes the selected target.
+Object/event mode selects the target by message dispatch.
+Functional/expression mode selects the target or typed operation by expression
+resolution.
+Logical mode derives evidence, bindings or diagnostics from the same graph.
+
+35A.Ru. Собранный рабочий объект как граф свидетельств
+
+35A.Ru.0. Назначение
+
+Раздел 35 показывает, как registry entry собирается из конкретных L4 model
+descriptors, L5 behavior descriptors и конкретных L3 procedure/function targets.
+
+Этот раздел фиксирует следующее правило:
+
+    собранный рабочий объект/значение одновременно является графом свидетельств.
+
+Граф свидетельств не является отдельной inheritance hierarchy и не вводит новую
+runtime heap model. Это нормализованный registry-visible набор фактов о том, что
+конкретное значение, его поля, компоненты, projections, validators, roles и
+behavior entries удовлетворяют конкретным descriptors.
+
+Этот граф может потребляться несколькими режимами:
+
+    object/event consumption
+        выбирает реализацию behavior для сообщения;
+
+    functional/expression consumption
+        разрешает generic expression над abstract data types;
+
+    logical consumption
+        рассматривает граф как facts и выводит answers, bindings или новые
+        evidence;
+
+    procedural consumption
+        выполняет выбранную конкретную L3 procedure или function.
+
+Один и тот же собранный объект поэтому дает материал для объектного,
+функционального и логического использования, а конечная исполняемая цель
+остается обычным процедурным кодом.
+
+35A.Ru.1. Конкретные L3 targets
+
+Пусть используются `Button` и `ToggleButton` из раздела 35. Их methods называют
+конкретные L3 procedure targets:
+
+    buttonDraw
+    buttonPress
+    buttonKeyPress
+    toggleButtonDraw
+    toggleButtonPress
+    toggleButtonKeyPress
+
+Behavior descriptors не выполняют эти имена только потому, что они существуют.
+Они регистрируют их как implementation candidates для нормализованных selectors
+и signatures.
+
+Концептуально:
+
+L3:
+    sub: buttonPress
+        # тело конкретной procedure опущено
+    end: buttonPress
+
+    sub: toggleButtonPress
+        # тело конкретной procedure опущено
+    end: toggleButtonPress
+end: L3
+
+35A.Ru.2. Конкретные значения
+
+Теперь зададим два конкретных значения:
+
+L3:
+    Button: okButton
+        label: "OK"
+        enabled: true
+    ---
+
+    ToggleButton: powerToggle
+        label: "Power"
+        enabled: true
+        checked: false
+    ---
+end: L3
+
+Точный синтаксис создания значений определяется profile. Важно, что `okButton`
+является конкретным значением с model `Button`, а `powerToggle` является
+конкретным значением с model `ToggleButton`.
+
+После построения model, регистрации behavior и validator checks реализация может
+экспортировать registry-visible evidence facts для этих конкретных значений.
+
+Концептуальный граф свидетельств:
+
+L5:
+    fact: valueModel okButton Button
+    fact: valueModel powerToggle ToggleButton
+
+    fact: valueSatisfies okButton Button
+    fact: valueSatisfies powerToggle ToggleButton
+
+    fact: valueSatisfies okButton ClickableRole
+    fact: valueSatisfies powerToggle ClickableRole
+
+    fact: valueSlot okButton label String
+    fact: valueSlot okButton enabled bool
+
+    fact: valueSlot powerToggle label String
+    fact: valueSlot powerToggle enabled bool
+    fact: valueSlot powerToggle checked bool
+
+    fact: valueMethod okButton press (MouseEvent) buttonPress
+    fact: valueMethod okButton press (KeyEvent) buttonKeyPress
+
+    fact: valueMethod powerToggle press (MouseEvent) toggleButtonPress
+    fact: valueMethod powerToggle press (KeyEvent) toggleButtonKeyPress
+
+    fact: valueGuarantee okButton enabled true
+    fact: valueGuarantee powerToggle enabled true
+end: L5
+
+Точные имена facts определяются profile. Главное правило: собранное рабочее
+значение может рассматриваться как набор evidence facts об этом значении.
+
+35A.Ru.3. Object/event consumption
+
+Object/event receiver потребляет граф свидетельств, чтобы разрешить сообщение.
+
+Пример:
+
+    send: okButton press MouseEvent(...)
+
+Концептуальный lookup:
+
+    value          = okButton
+    selector       = press
+    signature      = MouseEvent
+    model          = registry valueModel(okButton)
+    implementation = registry valueMethod(okButton, press, MouseEvent)
+
+Результат:
+
+    implementation = buttonPress
+
+После этого процедурная машина выполняет выбранный конкретный target:
+
+    buttonPress(okButton, MouseEvent(...))
+
+Для второго значения:
+
+    send: powerToggle press MouseEvent(...)
+
+тот же lookup разрешается в:
+
+    toggleButtonPress(powerToggle, MouseEvent(...))
+
+Если concrete model известна статически, translator может опустить вызов прямо
+в concrete L3 target. Если значение известно только через role/reference,
+translator может использовать behavior table, method lookup cache или другую
+выбранную profile strategy.
+
+35A.Ru.4. Functional/expression consumption
+
+Functional/expression receiver потребляет тот же граф свидетельств иначе.
+
+Пусть есть generic expression, написанное для abstract clickable value:
+
+    press(control, event)
+
+Это expression не называет `buttonPress` или `toggleButtonPress` напрямую.
+Оно спрашивает registry/evidence graph, какая pure или admitted operation
+доступна для конкретного значения, которое сейчас связано с `control`.
+
+Для binding:
+
+    control = okButton
+    event   = MouseEvent(...)
+
+expression resolver может запросить:
+
+    valueSatisfies control ClickableRole
+    valueMethod control press (MouseEvent) ?implementation
+
+и получить:
+
+    implementation = buttonPress
+
+Для binding:
+
+    control = powerToggle
+    event   = MouseEvent(...)
+
+то же generic expression разрешается в:
+
+    implementation = toggleButtonPress
+
+Таким образом, generic expression над abstract data type не является отдельным
+языковым механизмом. Это Structure, потребляемая на фоне evidence graph
+конкретных значений и registry descriptors.
+
+35A.Ru.5. Logical consumption
+
+Logical receiver может потреблять тот же граф как facts.
+
+Пример query:
+
+    query:
+        valueSatisfies ?value ClickableRole
+        valueMethod ?value press (MouseEvent) ?implementation
+    end: query
+
+Возможные solutions:
+
+    ?value = okButton
+    ?implementation = buttonPress
+
+    ?value = powerToggle
+    ?implementation = toggleButtonPress
+
+Этот query не dispatch-ит сообщение. Он не нажимает кнопку. Logical mode только
+потребляет evidence graph и выводит bindings.
+
+35A.Ru.6. Нормативная формулировка
+
+Собранный рабочий объект/значение одновременно является:
+
+    executable object candidate
+        потому что он может получать messages, которые разрешаются в concrete
+        L3 targets;
+
+    expression operand
+        потому что generic expressions могут разрешать операции над ним через
+        registry-visible type и validator evidence;
+
+    logical fact source
+        потому что его normalized descriptors, roles, validators, slots,
+        methods, guarantees и implementation links являются facts.
+
+Это не вводит новую object system. Это описывает, как уже нормализованные
+`ModelSpec`, `BehaviorSpec`, validator data, roles и concrete implementation
+links могут потребляться в разных режимах.
+
+Procedural mode выполняет выбранный target.
+Object/event mode выбирает target через message dispatch.
+Functional/expression mode выбирает target или typed operation через expression
+resolution.
+Logical mode выводит evidence, bindings или diagnostics из того же графа.
 
 36.En. Core Authentication, Delegated Tickets and Guarantees
 
