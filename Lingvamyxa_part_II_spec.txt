@@ -18,7 +18,7 @@ The old section number is shown in parentheses after each new heading.
 1.1. Class (new, old 17-21)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In Part II, `class` is the general word for a named registry form/table/entity.
+In Part II, `class` is the general word for a named registry form/table/key.
 When this wider meaning must be distinguished from an object-oriented class,
 this document may use the phrase `registry class`.
 
@@ -72,7 +72,7 @@ A cell may be written in short form as a single atom such as `decimal_int_eq`,
 `decimal_int_add` or `c.==`. A consuming profile normalizes such a short form to
 a terminal cell payload kind and payload. Optional result, effect, lifetime,
 authority, priority, cost and provenance metadata may be stored in side tables
-keyed by the payload entity or by an implementation-generated cell id.
+keyed by the payload class/key or by an implementation-generated cell id.
 
 If a row, column or cell is absent, the relation is absent. Adding a new class
 does not require adding it to every table.
@@ -88,7 +88,7 @@ class-centered view:
     equals    decimal_eq       decimal_real_eq  decimal_int_eq
 
 These are not separate semantic systems. They are convenient table layouts over
-terminal relation facts.
+terminal relation rows.
 
 Classes and tables may import other classes or tables. Import here means
 explicit table extension/overlay, not hidden copying of code or method bodies. A
@@ -128,7 +128,7 @@ technique; source syntax remains ordinary LMX expressions.
 1.3. Registry Source and MIX Definitions (new, old 17.3, 18, 32)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The source of registry facts is LMX itself. A profile may load one or more LMX
+The source of registry rows is LMX itself. A profile may load one or more LMX
 files before interpreting or translating a target file:
 
     registry:
@@ -240,7 +240,7 @@ Mandatory payload kinds are:
         further resolution.
 
     tableKey
-        An intermediate registry entity used to continue n-ary or graph
+        An intermediate registry class/key used to continue n-ary or graph
         resolution through another table.
 
     validator
@@ -276,8 +276,8 @@ may normalize conceptually as:
     plus[u32][u32]     -> CellPayload(binding, c.+)
 
 A terminal cell payload is not required to be a heavy record in source form. The
-payload atom may itself be a registry class/entity. The payload entity may then
-be used as a key into additional descriptor tables:
+payload atom may itself be a registry class/key. That class/key may then be
+used as a key into additional descriptor tables:
 
     table: result
         decimal_int_add: decimal
@@ -368,9 +368,10 @@ yet been moved into registry tables.
 2.1. Message (new, old 20.2, 27.5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A message is a concrete effectful expression candidate: a proposed LMX
-expression addressed to a receiver and capable of becoming an action after
-validation. It is not a transport packet and is not executed on arrival.
+A message is a proposed, possibly effectful/action-capable LMX expression
+candidate addressed to a receiver. It may become an action after validation,
+but it is not concrete before validation, is not a transport packet and is not
+executed on arrival.
 
 It may be a full LMX subtree or a very small LMX subset. The language does not
 bake in a fixed restriction such as "one command only" or "no explicit classes".
@@ -466,7 +467,9 @@ execution plan that the executor is allowed to run.
 2.3. Expression Executor (new, old 20.1, 20.3, 27)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The executor consumes only a validated/resolved expression or ExecutionPlan.
+The executor consumes only an ExecutionPlan produced by validation/merge. That
+plan may carry a ConcreteExpression, selected terminal cells, evidence and
+effect/lifetime rules.
 
 It does not decide which implementation is meant. It runs the implementation
 already selected by validation:
@@ -581,8 +584,8 @@ Dispatch over a union is a table query. A generic operation over a union is
 complete only when the required operation has cells for all admitted variants,
 or when a profile defines a fallback cell.
 
-3.4. Generated Facts and Extension Policy (old 9.6, 9.7)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3.4. Generated Rows and Extension Policy (old 9.6, 9.7)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Descriptors generate table rows. Extension is table insertion. Conflict policy
 is table policy:
@@ -593,14 +596,14 @@ is table policy:
     missing row/column/cell            -> relation absent.
 
 
-4. Behavior, Operators and Receivers (old 10, 11, 12, 23.4-23.6)
-----------------------------------------------------------------
+4. Operation Tables, Operators and Receivers (old 10, 11, 12, 23.4-23.6)
+-----------------------------------------------------------------------
 
-4.1. Behavior as Operation Tables (old 10)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+4.1. Operation Dispatch as Tables (old 10)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-L5 behavior is not object magic. It is a set of tables mapping receiver/class
-and selector/expression shape to concrete implementations.
+L5 operation dispatch is not object magic. It is a set of tables mapping
+receiver/class and selector/expression shape to concrete implementations.
 
 Example:
 
@@ -637,7 +640,7 @@ operation table entries with terminal lowering rules.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A generic operation is an expression with unresolved table coordinates. It is
-not a separate language entity.
+not a separate language mechanism.
 
 Example:
 
@@ -659,14 +662,14 @@ configuration or startup expressions. The syntax is the same; the table context
 changes.
 
 
-5. Registry Facts, Evidence and Validation (old 17-21)
-------------------------------------------------------
+5. Registry Rows, Evidence and Validation (old 17-21)
+-----------------------------------------------------
 
-5.1. Fact Store Rule (old 18.0)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+5.1. Row Store Rule (old 18.0)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-All descriptor, behavior, validation, message and authority information may be
-stored as rows in registry tables.
+All descriptor, operation-dispatch, validation, message and authority
+information may be stored as rows in registry tables.
 
 Examples:
 
@@ -690,7 +693,7 @@ successfully resolves a message or value against the receiving registry.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A validator is an expression/table cell that checks data and may create more
-specific facts:
+specific evidence rows:
 
     validator[LightPassenger][Person] = check_weight
     guarantee[LightPassenger][weight] = "<80"
@@ -786,7 +789,7 @@ The high-level pipeline is:
         -> P0 Structure
         -> registry table loading
         -> expression resolution
-        -> validated/resolved expression
+        -> ExecutionPlan
         -> execution or L1/L0 lowering
 
 The current bootstrap may merge some of these steps in ANSI C. That is an
@@ -796,7 +799,7 @@ implementation stage, not the high-level model.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 L4 sources primarily add registry/configuration rows. L5 sources primarily
-describe messages, services, runtime behavior, startup and query rules.
+describe messages, services, runtime policy, startup and query rules.
 
 8.3. Arguments and Return Lowering (old 21.3, 21.4)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -831,7 +834,7 @@ Lingvamyxa namespace lookup.
 primitive values and low-level handles admitted by a profile, should have
 explicit codec rows if they are serializable.
 
-Persistent registry facts may be stored as LMX files, generated database rows
+Persistent registry rows may be stored as LMX files, generated database rows
 or cached binary indexes. LMX remains the source form.
 
 
@@ -1161,7 +1164,7 @@ A protected object may require:
     a quorum of users/sessions;
     creator-parent tracking.
 
-Parent/creator facts do not grant content rights by themselves.
+Parent/creator rows do not grant content rights by themselves.
 
 15.5. Delegated Ticket (old 36.En.3, 36.Ru.3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1184,8 +1187,8 @@ only through validator/evidence rows admitted by the receiver. They do not
 replace the core verifier table. They may request or receive delegated tickets
 after the primary policy allows it.
 
-15.7. Authentication Evidence Facts (old 36.En.5, 36.Ru.5)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+15.7. Authentication Evidence Rows (old 36.En.5, 36.Ru.5)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Authentication validation emits evidence:
 
@@ -1227,14 +1230,14 @@ role hierarchy.
 
 Part II reduces to these rules:
 
-    class = named registry form/table/entity;
+    class = named registry form/table/key;
     class/table import = explicit table import/overlay with priority/conflict policy;
     table row/column/cell = relation;
     missing row/column/cell = no relation;
     expression = Structure requiring table cells;
-    message = concrete effectful/action expression candidate;
+    message = proposed possibly effectful/action-capable LMX expression candidate;
     validation = staged merge from IncomingMessageStructure to ExecutionPlan;
-    executor = run only validated/resolved ExecutionPlans;
+    executor = run only ExecutionPlans produced by validation/merge;
     generator = create new messages from result/state/table rules;
     L5 Thread = minimal isolated LMX machine that receives, validates, executes
                 and sends messages;
