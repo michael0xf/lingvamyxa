@@ -4555,11 +4555,12 @@ A label block can also be closed by the ordinary source-level cut when the
 surrounding structure makes the target clear. `end: Label` is the explicit
 checked form for long or visually separated label bodies.
 
-A label-block binding is a local executable binding with no source arguments and no normal return value:
-
-    Callable(() -> void)
-
-or an equivalent implementation-level contract. It shares the same lexical namespace as variables, functions, subroutines, receivers, model names and other bindings. There is no separate label namespace.
+A label-block binding is a local executable binding with no source arguments and
+no normal return value. Its compatibility descriptor is the no-argument,
+no-value executable profile admitted by the active label/control receiver, not a
+separate parser syntax. It shares the same lexical namespace as variables,
+functions, subroutines, receivers, model names and other bindings. There is no
+separate label namespace.
 
 In executable statement position, a bare identifier or exact identifier may resolve to a visible zero-argument label-block binding. In that context, the bare or exact name is the canonical call/consumption syntax for the label block:
 
@@ -7697,9 +7698,10 @@ descriptors and ordinary values.
 Conceptual example:
 
 namespace:
-    factorial: Callable(int -> int)
+    fn: IntToInt (int) int
+    factorial: IntToInt
     print: Sub(...)
-    AddX: CallableDescriptor(int -> int)
+    fn: AddX (int) int
     String: TypeDescriptor
     int: TypeDescriptor
     ---
@@ -7745,7 +7747,7 @@ Updating an entry is valid only if the new value is compatible with that descrip
 Examples of invalid updates:
 
     a binding declared as `int` receiving a `String` value
-    a binding declared as `Callable(int -> int)` receiving non-callable text
+    a binding declared by `fn: IntToInt (int) int` receiving non-callable text
     a type descriptor entry receiving an ordinary runtime integer value
     a receiver implementation entry receiving a function/subroutine descriptor with incompatible argument or return Structure
 
@@ -7756,7 +7758,7 @@ Example of valid function/subroutine binding replacement:
 is valid when both `strategy` and `optimized strategy` resolve to compatible
 function/subroutine bindings, for example:
 
-    Callable(int -> int)
+    fn: IntToInt (int) int
 
 21.4. Local Function/Subroutine Binding Replacement
 
@@ -7798,7 +7800,7 @@ And:
     factorial: "hello"
 
 is invalid if `factorial` is a function/subroutine binding with signature
-`Callable(int -> int)`.
+`fn: IntToInt (int) int`.
 
 21.6. Interaction with Return and Function Names
 
