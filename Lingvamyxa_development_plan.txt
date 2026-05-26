@@ -1,0 +1,173 @@
+Lingvamyxa Development Plan
+===========================
+
+Status
+
+This file is a working implementation plan. It is not a language
+specification. It records the current intended order for moving from the
+bootstrap parser/translator to table-driven L3/L4/L5 semantics.
+
+
+1. Move ANSI C Surface Rules to Registry Tables
+-----------------------------------------------
+
+Move ANSI C term, lowering and receiver rules into registry tables.
+
+The first table-covered area should include:
+
+    primitive receivers;
+    C/L1 names and `c.*`;
+    `@`, `\`, `[]`;
+    prefix, postfix and infix operators;
+    `fn`, `fm`, `sub`;
+    `if`, `while`, `return`, `break`, `continue`, `synchronized`;
+    L1/L2 lowering targets.
+
+The goal is not to remove the old implementation immediately. The goal is to
+make the new table path express the same decisions as the current hardcoded
+path.
+
+
+2. Dual Lowering Check
+----------------------
+
+Keep the old ANSI C hardcoded lowering path and the new table-driven lowering
+path side by side.
+
+For every supported construct, compare:
+
+    old ANSI C hardcode result
+    new registry-table result
+
+The outputs should match for the same source input. Mismatches are either bugs
+in the new tables, bugs in the old hardcode, or intentional semantic changes
+that must be made explicit.
+
+
+3. Rewrite Remaining ANSI C as L2
+---------------------------------
+
+Continue rewriting the project source from ANSI C into L2.
+
+The L1 escape remains valid as the external bootstrap substrate. The point is
+not to pretend that L1 disappears, but to make the core tools self-hosting at
+the L2 level wherever that is already practical.
+
+
+4. Port the MIX Container
+-------------------------
+
+Port the Java MIX/overlapper container to the current C/L2 codebase.
+
+The existing parser should later fill this container while it builds ordinary
+P0 Structures. MIX must not require a separate structural reparse.
+
+See:
+
+    Lingvamyxa_MIX_design_note.txt
+
+
+5. Let the Parser Fill MIX
+--------------------------
+
+The structural parser should create:
+
+    ordinary P0 Structure tree;
+    MIX tags/sets/attributes over the same dynamic document;
+    links between parser-created Structures and MIX positions where useful.
+
+The parser remains the structural parser. MIX is the dynamic overlapping
+document layer that lets editor, markup, diagnostics and later semantic layers
+ask what attributes are active at a position.
+
+
+6. Bring Up L3 Expression Resolution
+------------------------------------
+
+After the L2 table path is stable, implement L3 expression resolution as the
+first full high-level semantic consumer of registry tables.
+
+L3 expression resolution should:
+
+    consume generic LMX Structures;
+    query registry classes and relation tables;
+    select CellPayload values;
+    build ConcreteExpression / ExecutionPlan candidates;
+    report diagnostics when cells are absent, conflicting or ambiguous.
+
+This is the first major proof that the table-driven semantic core is real.
+
+
+7. Implement Validator/Merge at the L4/L5 Boundary
+--------------------------------------------------
+
+L4 supplies registry classes, relation tables, validators, effects, lifetimes
+and authority policy.
+
+L5 message/receiver boundaries run Validator/Merge.
+
+The useful formulation is:
+
+    L4 supplies tables.
+    L5 boundary runs validator/merge over incoming messages and receiver state.
+
+Validator/Merge should not become a separate semantic world. It is the
+table-walking driver that turns a proposed message/expression into a
+ConcreteExpression / ExecutionPlan.
+
+
+8. Lift Common Algorithms from L2 to L3
+---------------------------------------
+
+Once L3 resolution is real, move general algorithms out of L2 where possible.
+
+L2 should remain focused on:
+
+    storage;
+    address/reference forms;
+    low-level bindings;
+    unsafe/implementation-facing operations;
+    L1/L0 lowering.
+
+L3 should host reusable safe algorithms that no longer need low-level direct
+control.
+
+
+9. Implement L5 Threads
+-----------------------
+
+Implement L5 Threads after the message pipeline and table-driven validation are
+usable.
+
+L5 Threads should provide:
+
+    message queues;
+    local registry view/cache;
+    validate/merge stage;
+    executor stage;
+    outgoing message generation;
+    reply/failure/continuation records;
+    memory and ownership boundaries.
+
+
+10. Implement HTTP Profile
+--------------------------
+
+Implement the HTTP profile as an L5 transport envelope and adapter.
+
+HTTP is not the semantic message model. It accepts or produces LMX messages
+that enter the ordinary L5 validation/merge pipeline.
+
+
+11. Implement Authentication and Authorization
+----------------------------------------------
+
+Implement auth last in this sequence.
+
+Authentication and authorization are validator/evidence/authority table layers
+over the message pipeline. They should use libsodium or another explicitly
+chosen runtime primitive at the L1/L2 boundary where required, but the L5
+semantic model remains:
+
+    credential/verifier -> evidence rows -> authority tables -> message validation
+

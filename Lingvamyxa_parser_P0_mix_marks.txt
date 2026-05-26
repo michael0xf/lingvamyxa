@@ -116,6 +116,14 @@ absent from the ordinary P0 tree.
 
 6. Future Overlapper Hook
 
+Bootstrap note:
+
+    This section uses `offset` in the narrow current-parser sense. The future
+    MIX container must use abstract dynamic document positions instead of fixed
+    byte offsets or immutable source spans. See:
+
+        Lingvamyxa_MIX_design_note.txt
+
 When the overlapper/document storage is added, the low-level scanner should keep
 the same one-source-order walk and emit mark events such as:
 
@@ -129,4 +137,3 @@ The important invariant is that source offsets, parser node spans and mark
 intervals all refer to the same source document. A mark may point to a parser
 node, and a parser node may point back to its generated/source mark, without
 requiring either side to be re-derived from text.
-
