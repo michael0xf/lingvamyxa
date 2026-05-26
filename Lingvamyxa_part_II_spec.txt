@@ -55,15 +55,16 @@ directly as a sparse matrix:
     real      real_decimal_eq  real_eq          real_int_eq
     int       int_decimal_eq   int_real_eq      c.==
 
-The cell is a terminal decision for the resolver/interpreter/translator. It may
-contain:
+The selected cell is the terminal payload returned by table lookup for the
+current table and lookup keys. The table name and the keys that selected the
+cell are the access path; they are not required to be repeated inside the cell
+payload.
 
-    implementation name;
-    primitive lowering rule;
-    result type;
-    effect/lifetime policy id;
-    priority/cost;
-    diagnostic/error marker.
+A cell may be written in short form as a single atom such as `decimal_int_eq`,
+`decimal_int_add` or `c.==`. A consuming profile normalizes such a short form to
+a terminal cell payload kind and payload. Optional result, effect, lifetime,
+authority, priority, cost and provenance metadata may be stored in side tables
+keyed by the payload entity or by an implementation-generated cell id.
 
 If a row, column or cell is absent, the relation is absent. Adding a new type
 does not require adding it to every table.
@@ -157,22 +158,169 @@ Generic resolution is the process of filling those table coordinates with
 concrete types and terminal cells. There is no special generic syntax required
 by this model.
 
-1.5. Concrete Implementation Records (new, old 21)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1.5. Terminal Cell Payloads and Descriptors (new, old 21)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A terminal cell must eventually resolve to something executable or lowerable:
+A terminal cell is the payload returned by a registry table lookup.
 
-    inline C operator;
-    C function name;
-    L2/L3 expression body;
-    primitive value;
-    validator result;
-    message target;
-    diagnostic.
+The lookup path is separate from the payload. For example:
+
+    plus[decimal][int] = decimal_int_add
+
+The table `plus` and the lookup keys `decimal` and `int` are already known from
+the lookup context. They are not mandatory fields of the returned cell payload.
+The returned payload is `decimal_int_add`.
+
+In an implementation view this may be represented as:
+
+    CellKey(table_id, key_id*) -> CellPayload(kind, payload)
+
+The key tuple selects the cell. The payload says what the selected cell means.
+
+The minimal normalized terminal cell payload has two fields:
+
+    kind
+        The payload kind.
+
+    payload
+        The value, binding, expression, table key, validator target, message
+        target or diagnostic Structure carried by the cell.
+
+Mandatory payload kinds are:
+
+    primitive
+        A primitive/scalar value or literal result.
+
+    binding
+        A reference to an executable or lowerable binding, such as an L2/L3
+        function/subroutine target, an L1/C symbol, an inline primitive lowering
+        rule or a generated trampoline.
+
+    expression
+        An L2/L3/L4/L5 expression Structure admitted by the selected profile.
+        The resolver or executor consumes that expression after substitution or
+        further resolution.
+
+    tableKey
+        An intermediate registry entity used to continue n-ary or graph
+        resolution through another table.
+
+    validator
+        A validator target or validation expression that may produce acceptance,
+        rejection, diagnostic information or stronger evidence.
+
+    messageTarget
+        A message/action target selected for a validated message expression.
+
+    diagnostic
+        A rejection, missing relation, ambiguity, conflict or profile-defined
+        diagnostic Structure.
+
+    empty
+        Explicit absence of the relation. A profile may also represent absence
+        by not storing a cell at all.
+
+    conflict
+        An explicit conflict marker produced by registry loading or resolution.
+
+A short source spelling may normalize directly to a payload. Examples:
+
+    table: plus
+        decimal:
+            int: decimal_int_add
+        u32:
+            u32: c.+
+    end: plus
+
+may normalize conceptually as:
+
+    plus[decimal][int] -> CellPayload(binding, decimal_int_add)
+    plus[u32][u32]     -> CellPayload(binding, c.+)
+
+A terminal cell payload is not required to be a heavy record in source form. The
+payload entity itself may be used as a key into additional descriptor tables:
+
+    table: result
+        decimal_int_add: decimal
+        c.+: u32
+    end: result
+
+    table: effects
+        decimal_int_add: pure
+        c.+: pure
+    end: effects
+
+    table: level
+        decimal_int_add: L2
+        c.+: L1
+    end: level
+
+    table: cost
+        decimal_int_add: 10
+        c.+: 1
+    end: cost
+
+Therefore optional cell descriptor information may be stored inline, derived
+from the table and lookup keys, or stored in side tables. Common optional
+descriptor rows are:
+
+    result
+        Result type, result model, result table key or result expression.
+
+    effects
+        Pure/effect/action policy: pure, read-only, mutates receiver, sends
+        message, filesystem write or profile-defined effect.
+
+    level / visibleFrom
+        The level or profile where the payload is callable or lowerable.
+
+    validators / evidence requirements
+        Additional validators or evidence that must hold before the payload may
+        be consumed.
+
+    lifetime / ownership
+        Primitive value, owned result, borrowed result, moved result, external
+        handle, arena-owned result or another profile-defined memory policy.
+
+    authority / capability
+        Required permission, ticket, verifier or capability for message/action
+        cells.
+
+    priority / cost
+        Deterministic ranking information used when a profile admits multiple
+        candidate cells.
+
+    conflict policy
+        Duplicate, override, replace, prefer, reject or profile-defined conflict
+        handling.
+
+    diagnostic policy
+        Diagnostic code, severity and message produced for missing, rejected,
+        ambiguous or conflicting cells.
+
+    source / provenance
+        File, line, receiver, generated origin, builtin origin or imported
+        registry origin for diagnostics and incremental rebuilds.
+
+A diagnostic payload may be written explicitly:
+
+    table: plus
+        decimal:
+            String:
+                diagnostic:
+                    code: incompatibleOperands
+                    message: "plus(decimal, String) is not defined"
+                end: diagnostic
+    end: plus
+
+A graph or n-ary relation may use a `tableKey` payload to continue resolution:
+
+    multiply[Matrix][Matrix] -> MatrixMultiplySignature
+    MatrixMultiplySignature[leftCols][rightRows] -> matrix_mul_impl
 
 The current bootstrap may still contain hardcoded ANSI C lowering for L2/L1
-surface forms. Those hardcoded rules are implementation cells that have not yet
-been moved into registry tables.
+surface forms. Those hardcoded rules are terminal cell payloads that have not
+yet been moved into registry tables.
 
 
 2. Four-Stage Message Model (new, old 20.2, 20.6, 27.5, 27.9)
@@ -632,7 +780,7 @@ Example L5 conditional route:
 Open points for this part:
 
     exact LMX source shape for sparse registry tables;
-    exact terminal cell schema;
+    exact bootstrap storage layout for CellKey -> CellPayload and optional side tables;
     whether the first registry backend is hash tables, SQLite or both;
     resolver ranking/ambiguity defaults;
     how much of current L2 hardcoded lowering moves into registry tables first;
