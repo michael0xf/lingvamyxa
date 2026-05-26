@@ -6327,6 +6327,7 @@ Operator summary:
     10. guard / fail / throws / failure labels / handlers  L3 recoverable failure flow
     11. retry / retryable                                 L3 retry frame
     12. assert                                            L3 diagnostic failure flow
+    12a. log / error                                      L3 observation receivers
     13. redo                                              L3 loop frame
     14. yield                                             L3 iterator-profile fn
     15. labelled break / labelled continue                L3 labelled loop frame
@@ -6923,6 +6924,40 @@ Default L4 model-time use, if exposed by a level profile:
     an assertion violation terminates the current model-loading or translation pass with a diagnostic error.
 
 `assert` is intended for impossible states, broken invariants, corrupted internal assumptions or translator/model errors. Expected input failure must use `guard` and `fail`.
+
+19.13.1. `log` and `error`
+
+`log` and `error` are observation receivers.
+
+Canonical forms:
+
+    log: value
+    error: value
+
+The tail may be a constant/literal value or a name visible in the active local
+namespace view. The receiver consumes the resolved value and records it through
+the active observation profile.
+
+Examples:
+
+    log: "matched one"
+    log: matchedValue
+    error: "parse failed"
+    error: diagnostic
+
+`log` records an ordinary observation, trace, note, audit event, metric payload
+or profile-defined informational record.
+
+`error` records an error/diagnostic observation. It is not reserved parser
+syntax and it is not automatically equivalent to `fail`, `assert`, `return` or
+thread termination. If a profile wants an error observation to also fail,
+abort, throw, send an L5 failure message or terminate a task, that behavior must
+be defined by that profile or by an explicit surrounding receiver.
+
+Both receivers use ordinary namespace resolution for non-literal tails. A bare
+unknown name is not magically logged as text unless the active profile admits
+such symbol logging explicitly. Write a string/exact identifier when the source
+wants a literal textual record.
 
 19.14. `redo`
 
