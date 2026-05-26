@@ -9,6 +9,43 @@ around one mechanism:
     LMX expressions + registry tables -> resolved expressions -> execution or
     lowering.
 
+Semantic core:
+
+    Message
+        Proposed LMX expression candidate; an external or internal request for
+        action or computation.
+
+    L3 expression
+        Structure tree describing algorithmic composition: which operations,
+        receivers, values and nested expressions are connected, and what result
+        is requested.
+
+    Registry classes + relation tables
+        Meaning space. Any meaningful term may be a registry class/key: value
+        class, operation, field, validator, message kind, evidence, authority,
+        service route or implementation binding.
+
+    L2/L1 procedural bindings
+        Executable leaves: primitive lowering, C/L1 target, L2 function,
+        L2 procedure or other low-level implementation.
+
+    Validator/Merge
+        Table-walking resolver. It reads registry tables, accumulates evidence
+        and builds a ConcreteExpression / ExecutionPlan.
+
+    Executor
+        Minimal runner of already resolved plans. It calls the selected
+        procedural bindings and emits result/failure/outgoing-message records.
+
+Short formula:
+
+    Message supplies the candidate.
+    Expression supplies the structural algorithm.
+    Registry tables supply compatibility and selected cells.
+    Procedural bindings supply executable leaves.
+    Validator/Merge turns candidates into concrete plans.
+    Executor runs only concrete plans.
+
 The old section number is shown in parentheses after each new heading.
 
 
@@ -49,6 +86,14 @@ The language does not need a separate primary mechanism for interface, trait,
 generic constraint or overload set. These are class/table patterns. A
 traditional object class is one possible class profile, not the definition of
 the term.
+
+This is why a Lingvamyxa class is not a Java/C++/C# class as a base concept.
+It is not primarily a code container with hidden method lookup and inheritance.
+It is a registry form/table/key. A class may describe object-like values, but
+it may also describe operations such as `Equals`, validators, messages,
+evidence records, authority rows, routes or implementation-selection keys.
+Object-style classes are built from the same table mechanism rather than being
+the root of the mechanism.
 
 1.2. Relation Tables and Class/Table Import/Overlay (new, old 18, 19, 20.5, 20.6, 21.5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -385,6 +430,12 @@ because they appear in the message. They become executable only after
 validation/merge has reconciled them with the receiver registry and produced a
 ConcreteExpression / ExecutionPlan.
 
+There is no separate Smalltalk-style selector syntax required by the message
+model. The selector/call/receiver shape is already an LMX Structure. If a
+profile wants selector-like dispatch, it reads that Structure through registry
+tables during validation/merge. Message richness therefore comes from LMX
+itself, not from a second message mini-language.
+
 "Effectful/action-oriented" does not mean that every message must mutate
 something. A query, read request or validation-only request may also be a
 message. The point is that a message is capable of becoming an action after
@@ -455,6 +506,21 @@ implementation may fuse them, but the semantic outputs are distinct:
         ExecutionPlan.
 
 The validator does not execute the expression.
+
+Algorithmically, Validator/Merge is the small table-walking driver of the
+semantic core. It does not hardcode what `plus`, `authority`, `validator`,
+`payload` or `messageTarget` mean. It hardcodes only the general mechanics:
+
+    lookup;
+    payload-kind dispatch;
+    evidence accumulation;
+    conflict/priority handling;
+    dependency cycle and termination rules;
+    diagnostic construction;
+    execution-plan assembly.
+
+Everything domain-specific is represented by registry tables and terminal cell
+payloads.
 
 For example:
 
@@ -714,6 +780,21 @@ specific evidence rows:
 
 If validation succeeds, later expressions may use the stronger table coordinate
 `LightPassenger`.
+
+A validator is not required to be a boolean predicate. It may produce:
+
+    acceptance;
+    rejection;
+    diagnostic;
+    stronger evidence;
+    obligation for a later stage;
+    tableKey for continued resolution;
+    conflict/empty payload.
+
+Validator dependencies are ordinary registry graph dependencies. The
+Validator/Merge driver must therefore define cycle detection, memoization of
+evidence and termination/diagnostic rules, but it does not need custom
+semantics for each validator class.
 
 5.4. Evidence Lifetime (old 18.3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
