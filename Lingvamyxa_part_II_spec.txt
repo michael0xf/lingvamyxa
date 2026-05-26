@@ -1086,6 +1086,38 @@ The execution step may produce result values, diagnostics, state updates and
 outgoing ProposedMessage records. Outgoing records re-enter the same message
 pipeline at their receiving side.
 
+Core message semantics are intentionally smaller than broker/runtime policy:
+
+    message = executable proposed expression;
+    validation/merge -> ExecutionPlan;
+    execution -> result / failure;
+    boundary -> reply/failure message to caller, reply target or continuation.
+
+The core language does not require a broker-style acknowledgement, dead-letter
+queue, topic partition, consumer group, retry scheduler or supervision tree as
+message semantics. A message is considered semantically handled when execution
+produces its result or failure, just as a local function call is handled when it
+returns a value or failure. The L5 difference is only that a boundary may wrap
+that result or failure into an ordinary message record.
+
+Delivery, ordering, scheduling, supervision and observability policies are
+runtime/profile/library concerns around accepted message execution. Examples:
+
+    FIFO or priority ordering;
+    one message at a time or interleaving;
+    queue capacity and overflow policy;
+    retry after transport/runtime failure;
+    pause, resume or cancellation;
+    L5 Thread restart or termination policy;
+    diagnostics, audit, trace, metrics and event history.
+
+Such policies may be described by registry tables and may themselves emit
+diagnostics or messages, but they are not the meaning of a source message. In
+particular, a semantic failure is normally returned to the sender, reply target
+or continuation as a failure message. If that target is absent, expired or
+unreachable, the situation belongs to runtime/delivery policy, not to the core
+message expression semantics.
+
 11.8. Reply, Future, Failure and Continuation (old 27.10-27.13)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
