@@ -550,6 +550,22 @@ already selected by validation:
 
     ExecutionPlan -> ExecutionContext -> result / failure
 
+The result produced here is an execution result inside the current execution
+context. It is not yet a reply message merely because it exists. The consumer of
+that result is defined by the surrounding context:
+
+    local expression context        -> value consumed by the caller/expression;
+    local rule/generator context    -> value consumed by generation rules;
+    L5 request with reply target    -> value wrapped as a reply ProposedMessage;
+    L5 request with no reply target -> value may be discarded, logged or consumed
+                                      by profile-defined local rules.
+
+Therefore the L5 reply mechanism does not require a separate source-level
+`return`. The ordinary L3 `return` receiver exits the current executable body
+and produces the declared result value. If that executable body was run as the
+implementation of an L5 request with a reply target, the L5 boundary wrapper
+turns the produced result into a reply message automatically.
+
 The executor may run:
 
     an L2/L3 lowered function;
@@ -604,6 +620,7 @@ The standard high-level pipeline is:
         -> execution-plan construction -> ExecutionPlan
         -> Executor
         -> Result / Failure
+        -> Boundary Result Consumer
         -> Logical Message Generator
         -> New IncomingMessage(s)
 
@@ -1082,8 +1099,43 @@ addressed to that target. A failure is wrapped into a failure message. Reply
 and failure messages are ordinary message records and must pass the normal
 validation rules of the receiving side.
 
+This wrapping is automatic at the message boundary. It is not a second
+source-level `return` form. Keep the following meanings separate:
+
+    L3 executable return
+        `return` / `return: value` exits the current executable body and
+        produces the declared local execution result.
+
+    computational injection
+        a pure/monadic "return" notion, if a profile needs it, should be named
+        `pure`, `unit` or another profile-defined receiver. It injects a value
+        into a computational context; it is not the L3 control-exit receiver.
+
+    L5 reply wrapping
+        a produced result is wrapped as a reply ProposedMessage only when the
+        executing message boundary supplies a reply target, future,
+        continuation or correlation id.
+
+If a message has no reply target and no profile rule consumes the result, the
+result is not forced into a hidden reply. The profile may discard it, log it,
+use it for local generation rules, or report that the message kind must declare
+a result destination. The important rule is that crossing the boundary uses an
+ordinary message record, not a hidden call-stack return.
+
+A reply payload may itself be a Structure, callable descriptor, callable
+reference, residual executable or future/continuation record, if the receiving
+side admits that payload by its normal validation rules. The message boundary
+does not inspect such a value as "code to run" merely because it is callable. It
+wraps the produced result as data; the receiver decides later whether that data
+is executable, callable, storable, displayable or invalid.
+
 `async`, `await` and `yield`, if present, are scheduling expressions that create
-or consume message/continuation records.
+or consume message/continuation records. `yield` is the sequence-oriented lazy
+production protocol: it produces one value, records resume state and lets a
+consumer such as `next`, `each`, `awaitNext` or an L5 scheduler request a later
+step. This does not imply global non-strict evaluation for every expression.
+Deferred single values, futures and streams are ordinary descriptor/receiver
+profiles over the same message/continuation model.
 
 11.9. Determinism and Atomic Operations (old 27.14, 27.15)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1346,7 +1398,8 @@ Part II reduces to these rules:
     validation = staged merge from IncomingMessageStructure to ExecutionPlan;
     executor = run only ExecutionPlans produced by validation/merge;
     generator = create proposed messages from result/state/table rules;
-    reply/failure across a message boundary = ordinary message record;
+    L3 return = executable-body control exit producing local execution result;
+    L5 reply = boundary wrapper from result/failure to ordinary message record;
     L5 Thread = minimal isolated LMX machine that receives, validates, executes
                 and sends messages;
     memory/auth/service rules = table/evidence policies over the same pipeline.

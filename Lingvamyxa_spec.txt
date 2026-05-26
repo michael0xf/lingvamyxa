@@ -742,7 +742,11 @@ Primitive/scalar/reference/handle values include numbers, booleans, atoms, symbo
 
 All non-primitive values are Structures or handles/references to Structures. This includes arrays, text, objects, call frames, bodies, configurations, expressions, model fragments and executable/callable descriptors.
 
-At source-semantic level, executable definitions are ordinary values bound in the shared namespace. A translator may lower such a value to any implementation-level callable representation, such as a descriptor Structure, registry index, trampoline, closure record or target-language callable primitive. That lowering choice is not a separate source-level kind.
+At source-semantic level, executable definitions are ordinary values bound in
+the active lexical namespace view. A translator may lower such a value to any
+implementation-level callable representation, such as a descriptor Structure,
+registry index, trampoline, closure record or target-language callable
+primitive. That lowering choice is not a separate source-level kind.
 
 A Structure can contain fields. A field can be positional, named or derived during normalization from a receiver signature.
 
@@ -2819,7 +2823,7 @@ name `i`. The operator profile may consume that sequence as:
 
     decBefore("i")
 
-The operator method resolves `i` in the same shared namespace used by ordinary
+The operator method resolves `i` in the same active lexical namespace view used by ordinary
 source. It may lower the operation as a read-update-write sequence. The
 write/update step uses the ordinary head/update form:
 
@@ -3253,7 +3257,7 @@ The special mathematical types are not primitive C values:
         decimal arithmetic backed by decNumber and a decimal context.
 
 `bigint`, `real` and `decimal` are ordinary names/receivers/descriptors in the
-shared namespace when the active profile registers them. Their physical
+active lexical namespace view when the active profile registers them. Their physical
 representation and linked libraries belong to the selected L1/runtime profile.
 
 6.6.1. Mathematics Uses Registry Resolution
@@ -3600,7 +3604,7 @@ Canonical rule:
     L4 may provide that build profile as compiler/linker configuration data;
     L4 wrappers define high-level contracts and visibility;
     registry validation accepts or rejects high-level descriptors;
-    accepted high-level descriptors enter the L3+ shared namespace;
+    accepted high-level descriptors enter the L3+ lexical/registry view;
     expression/operator resolution uses accepted descriptors only.
 
 An L5 system message may also propose a candidate descriptor at runtime. Such a
@@ -3864,12 +3868,12 @@ The source-visible mathematical model is:
 7.1. `fn` and `sub` Are Receivers
 
 `fn` and `sub` are definition receivers. Each consumes a Structure and registers
-a function or subroutine name in the shared namespace. During bootstrap they may
-be present in an L1 prelude table or parser switch.
+a function or subroutine binding in the active lexical namespace view. During
+bootstrap they may be present in an L1 prelude table or parser switch.
 
-An `fn` frame consumes a Structure and creates a function namespace binding.
+An `fn` frame consumes a Structure and creates an executable function binding.
 
-A `sub` frame consumes a Structure and creates a subroutine namespace binding.
+A `sub` frame consumes a Structure and creates an executable subroutine binding.
 
 For the parser-facing L1 / ANSI C bootstrap, a registered receiver such as `fn` is represented as an L1 function whose first argument is the already-built frame argument Structure. Any parser context, symbol table, arena or diagnostic object is an implementation argument after that Structure.
 
@@ -4146,6 +4150,109 @@ It does not secretly create `args(int(v, j))`; that interpretation requires a co
 
 Here `j: v / 2` updates the visible binding `j`. The final result is returned with `return: v`.
 
+7.2.1. Descriptor-Only `fn` Form
+
+A profile may admit an `fn` form without executable body as a callable
+descriptor declaration:
+
+    fn: AddX (int) int
+
+This is not a separate parser feature. It is ordinary receiver consumption of
+an ordinary `fn` Structure. The active descriptor/model profile may consume this
+shape when the normalized `fn` Structure has a name field, a formal argument
+Structure, a result descriptor and no body fields.
+
+The receiver-level algorithm is:
+
+    1. Consume the same `fn` Structure shape used by executable `fn`.
+    2. Normalize field 0 as the descriptor name.
+    3. Normalize field 1 as the callable formal argument Structure.
+    4. Normalize field 2 as the callable result descriptor.
+    5. Verify that fields 3..end are empty for the descriptor-only profile.
+    6. Create a callable descriptor value with no executable body.
+    7. Bind that descriptor value in the current lexical namespace view or in
+       the active registry view, according to the consuming profile.
+    8. Reject the declaration if it silently conflicts with a visible
+       incompatible binding in the same lexical namespace chain.
+
+Conceptual registry rows produced by this consumption may be:
+
+    callableName[AddX]   -> AddX
+    callableArgs[AddX]   -> (int)
+    callableResult[AddX] -> int
+    callableKind[AddX]   -> callableDescriptor
+
+The descriptor is data. It does not define an implementation and cannot be
+called merely because its name is visible. It may be used as a compatibility
+descriptor for arguments, return values, local bindings, table rows, validators
+or message targets. A later executable binding or returned executable reference
+may be checked against that descriptor.
+
+Example:
+
+fn: AddX (int) int
+
+fn: makeAdder (int: x) AddX
+    fn: addX (int: y) int
+        return: x + y
+    end: addX
+
+    return: addX
+end: makeAdder
+
+Here `AddX` is a callable descriptor binding in the visible lexical/registry
+view. `makeAdder` is an executable binding. `x` is a formal binding in
+`makeAdder`'s local namespace view. `addX` is a nested executable binding in
+that local view, and `y` is local to `addX`. The final `return: addX` returns
+the local executable binding/reference if it is compatible with `AddX`. If that
+reference escapes the lifetime of `makeAdder`, the implementation must
+materialize whatever environment/capture representation is required for `x`.
+This is a lexical namespace rule, not a global namespace rule.
+
+7.2.2. Returned Callable as Residual Executable
+
+Because functions may return references or handles to Structures, and because a
+Structure may be an executable/callable Structure, a function may return a
+callable value. When that returned callable carries captured values, resolved
+cells, evidence or other already-bound context, it may be viewed as a residual
+executable produced by partial evaluation.
+
+In the example above:
+
+    makeAdder(10) -> residual callable compatible with AddX
+
+The call has already bound `x = 10`. The returned `addX` callable represents the
+remaining computation:
+
+    y -> 10 + y
+
+This is partial evaluation in the source-semantic sense: part of the expression
+has been consumed/resolved/bound, and the result is a callable residual
+Structure or callable reference that can be consumed later.
+
+Not every returned callable is partial evaluation. If a function simply returns
+an already-existing callable with no specialization, no captured values and no
+additional evidence, it is just a callable reference. The partial-evaluation
+reading applies when the returned callable preserves some already-computed
+environment, bound argument, selected registry cell, validator evidence or other
+specialized context.
+
+Keep this distinct from the two other deferred/result mechanisms:
+
+    lazy / yield
+        delays production of sequence values. A consumer asks for one step at a
+        time through `next(env)`, `each`, `awaitNext` or an equivalent receiver.
+
+    returned callable / residual executable
+        returns a callable Structure/reference whose environment already
+        contains some bound or resolved information. Calling it later consumes
+        the remaining arguments/computation.
+
+    L5 reply wrapping
+        wraps any produced result, including a callable/residual Structure, as a
+        reply ProposedMessage only when the message boundary supplies a reply
+        target, future, continuation or correlation id.
+
 7.3. Subroutine Definition Form
 
 Example source:
@@ -4179,9 +4286,18 @@ end: l5_if
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
 
-7.3.1. Single Namespace and No Silent Shadowing
+7.3.1. Shared Lexical Namespace View and No Silent Shadowing
 
-Types, variables, functions, subroutines, receivers, model names, generic operation names and local executable definitions share one lexical namespace within a lexical scope chain.
+Types, variables, functions, subroutines, receivers, callable descriptors, model
+names, generic operation names, labels and local executable definitions share
+one active lexical namespace view within a lexical scope chain. There is no
+separate local function namespace, variable namespace or label namespace inside
+the same active view.
+
+This does not mean that Lingvamyxa defines one global namespace for all programs,
+registries and services. Executable definitions, blocks, receivers, modules,
+registry imports and service/runtime profiles may create local namespace views
+or overlays over enclosing views.
 
 A new binding may be introduced only if the same name is not already visible in the active lexical scope chain. This includes names introduced by declarations, nested `fn` definitions, nested `sub` definitions, imports and model/type constructors.
 
@@ -4212,10 +4328,11 @@ Inside the body, `return: 1` exits with value `1` when the condition holds. The 
 
 Executable definitions do not create a separate source-semantic category that
 must be distinguished from ordinary values before resolution. A function or
-subroutine name is an ordinary binding in the same shared namespace that also
-holds primitive values, Structures, model names, labels, variables and other
-bindings. A Frame is lowered as a call only when its head resolves to such a
-function/subroutine binding or to a registered receiver.
+subroutine name is an ordinary binding in the same active lexical namespace view
+that also holds primitive values, Structures, model names, labels, variables,
+callable descriptors and other bindings. A Frame is lowered as a call only when
+its head resolves to such a function/subroutine binding or to a registered
+receiver.
 
 The line form:
 
@@ -4662,7 +4779,11 @@ fn: square (int(x)) (int)
     square: x * x
 return: square
 
-This is not a dedicated return form. The line `square: x * x` is an ordinary binding update in the shared namespace. After that update, the visible name `square` denotes the updated result binding, so recursive lookup through `square(...)` is no longer available through that same visible name in the remaining local scope.
+This is not a dedicated return form. The line `square: x * x` is an ordinary
+binding update in the active lexical namespace view. After that update, the
+visible name `square` denotes the updated result binding, so recursive lookup
+through `square(...)` is no longer available through that same visible name in
+the remaining local scope.
 
 The function still returns explicitly with `return: square`. The canonical return mechanism for an `fn` is `return: value`. When written in a valid terminal trailer position, `return: value` also closes the function definition.
 
@@ -4752,7 +4873,11 @@ depend on live package-manager libraries. The bundled PCRE2 profile builds
 interpreted by the receiver profile instead of being forced through a single
 null-terminated UTF-8-only representation.
 
-The `i/u` family denotes implementation-profile integer types over C integer storage. `bigint`, `real`, `decimal`, `SQL` and `Regex` are ordinary names/receivers/descriptors in the shared namespace when the active profile registers them. Their physical representation and linked libraries belong to the selected L1/runtime profile.
+The `i/u` family denotes implementation-profile integer types over C integer
+storage. `bigint`, `real`, `decimal`, `SQL` and `Regex` are ordinary
+names/receivers/descriptors in the active lexical namespace view when the active
+profile registers them. Their physical representation and linked libraries
+belong to the selected L1/runtime profile.
 
 9.1. Type and Model Information
 
@@ -6824,7 +6949,10 @@ The standard iterator-like profile is expressed by ordinary namespace names:
 
     iterator(T)
 
-Here `iterator` and `T` are not parser keywords. They are ordinary identifier values resolved in the shared namespace by the active L3/profile receiver set. For example, `Text` or `Point` must be visible type/model names if they are used in `iterator(Text)` or `iterator(Point)`.
+Here `iterator` and `T` are not parser keywords. They are ordinary identifier
+values resolved in the active lexical namespace view by the active L3/profile
+receiver set. For example, `Text` or `Point` must be visible type/model names if
+they are used in `iterator(Text)` or `iterator(Point)`.
 
 Calling a function with an iterator-compatible return descriptor does not execute its body to completion. It creates an iterator state Structure.
 
@@ -6833,6 +6961,58 @@ The translator lowers the iterator body into a `next(env)` implementation.
 Each `yield` consumes one produced value. It inspects the current function's return descriptor, verifies that the descriptor defines a yield-protocol, checks the produced value against that protocol, emits one value from `next(env)` and records the resume state in `env`.
 
 The `each` receiver consumes iterator-compatible Structures by repeatedly calling their `next(env)` implementation until no value is produced.
+
+This is the standard lazy-production protocol for sequences. A call to an
+iterator-compatible function creates a resumable state Structure; it does not
+force every later produced value immediately. One consumer step asks for one
+value, `next(env)` runs until the next `yield` or termination, then the state is
+saved for a later step.
+
+For example:
+
+    fn: words () iterator(Text)
+        yield: "Hello"
+        yield: "World"
+    end: words
+
+is not source-semantically:
+
+    words() -> Array("Hello", "World")
+
+It is:
+
+    words() -> iterator state Structure
+    next(env) -> "Hello"
+    next(env) -> "World"
+    next(env) -> noValue
+
+Therefore `yield` provides demand-driven production:
+
+    one value now;
+    state saved;
+    next value later;
+    later value may never be requested.
+
+This does not make all Lingvamyxa evaluation globally non-strict. Without a
+receiver/profile that admits deferred consumption, an expression such as:
+
+    print: expensive()
+
+is ordinary value-producing input to the `print` receiver, not automatically a
+thunk. Laziness is attached to descriptors, receivers and registry protocols.
+Examples of such profiles may be:
+
+    iterator(T)  zero or more T, forced by next(env);
+    stream(T)    zero or more T, possibly asynchronous, forced by next/awaitNext;
+    thunk(T)     one deferred T, forced by value(thunk) or an equivalent receiver;
+    future(T)    one scheduled/deferred T or failure, forced by await(future);
+    continuation(T) profile-defined resumable computation.
+
+The common rule is that Structures are data until a receiver consumes them. A
+lazy profile is a receiver/descriptor/table protocol that decides when to
+consume the next step. This is different from Haskell-style global laziness:
+Lingvamyxa does not make every argument and every data field lazy by default.
+That keeps effects, ownership, validation and message scheduling explicit.
 
 19.15.1. Iterator function
 
@@ -7504,25 +7684,41 @@ They may still exist in L3 or higher levels, or in a richer L2 profile.
 
 21. Structural Operation on a Local Copy of Namespace-Structure
 
-21.1. Namespace as Structure
+21.1. Lexical Namespace View as Structure
 
-A namespace is a Structure.
+A lexical namespace view is a Structure.
 
-Before translation or receiver consumption, a namespace may be represented as a
-typed dictionary-like Structure whose entries bind names, exact quoted
-signatures, receiver names, function/subroutine descriptors, type/model
-descriptors, message/table descriptors and ordinary values.
+Before translation or receiver consumption, an active namespace view may be
+represented as a typed dictionary-like Structure whose entries bind names, exact
+quoted signatures, receiver names, function/subroutine descriptors, callable
+descriptor bindings, label bindings, type/model descriptors, message/table
+descriptors and ordinary values.
 
 Conceptual example:
 
 namespace:
     factorial: Callable(int -> int)
     print: Sub(...)
+    AddX: CallableDescriptor(int -> int)
     String: TypeDescriptor
     int: TypeDescriptor
     ---
 
 This representation is source-semantic. A translator may lower it to lexical tables, symbol indexes, direct references, C identifiers, dispatch tables, persistent maps or any other implementation representation.
+
+The rule is shared lexical lookup, not global lookup. A view may be local to an
+executable definition, block, receiver context, module, service, imported
+registry overlay or runtime profile. Names in the visible chain share lookup and
+conflict rules, but the language does not define one global dictionary for all
+programs and services.
+
+Inside one active lexical namespace view, Lingvamyxa does not use separate
+function, variable and label namespaces. A name introduced as a variable,
+function, subroutine, label, local executable, callable descriptor, receiver,
+model/class descriptor or imported descriptor is one visible name in that view.
+It may have several compatible roles only when a profile explicitly defines that
+combined binding. It must not silently mean incompatible things depending on
+whether the next source form looks like a call, an update or a control target.
 
 21.2. Local Namespace View
 
