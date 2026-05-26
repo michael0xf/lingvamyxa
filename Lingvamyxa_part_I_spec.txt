@@ -7,8 +7,8 @@ Split draft extracted from Lingvamyxa_new.txt.
 
 This part contains the common structural description, source syntax, P0 grammar,
 receiver consumption rules and the L0/L1/L2/L3 execution-facing core. Sections
-or subsections that define L4/L5 registry, behavior, runtime services or core
-authentication are moved to Part II.
+or subsections that define L4/L5 registry tables, message runtime services or
+core authentication are moved to Part II.
 
 0. Core Formula
 
@@ -35,7 +35,7 @@ Canonical semantic pipeline:
         -> core structural parse
         -> generic Structure values
         -> receiver/operator/subroutine consumption
-        -> typed semantic structures
+        -> resolved semantic Structures or table-cell decisions
         -> interpretation or lowering
 
 A Structure does not execute merely because it exists. Execution, translation, registration, validation or query handling starts only when a receiver or subroutine consumes the Structure under a defined mode.
@@ -53,7 +53,12 @@ Lingvamyxa is one structural language with several consumption modes.
 
 The same source mechanism builds Structures. Different receivers and profiles
 consume those Structures as data, executable code, model descriptors, registry
-facts, messages, service routes, build instructions or transport payloads.
+table rows, messages, service routes, build instructions or transport payloads.
+
+Part II defines the high-level registry model as tables. In that model, a
+`type` is a named registry table/entity, expressions ask for table cells, and
+validation/resolution turns generic Structures into concrete expressions or
+terminal lowering decisions.
 
 0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
@@ -274,19 +279,20 @@ chains, with fast access and without requiring large contiguous memory blocks.
 
 MIX overlay data is produced below or alongside the level receivers; it is not
 ordinary L5 execution by itself. However, L5 receivers may consume accepted
-MIX-derived intervals, annotations and structural facts through the ordinary
-fact, query, registry, message and validation machinery.
+MIX-derived intervals, annotations and structural evidence through the ordinary
+relation/table, query, registry, message and validation machinery.
 
 0.0.3.0. Thirdly, Lingvamyxa is a high-level programming language.
 
 The executable layer supplies ordinary algorithmic computation, function and
 subroutine definitions, control receivers, expressions and calls.
 
-The model layer describes structural models, types, contracts, constraints,
-protocols and registry descriptors.
+The model layer describes structural models, types-as-registry-tables,
+contracts, constraints, protocols and registry descriptors.
 
-The message and behavior layer describes behavior, messages, configuration,
-facts, rules, build/query/startup receivers and high-level dispatch.
+The message and table-driven dispatch layer describes messages,
+validation/merge, expression execution, logical message generation,
+configuration, table/rule/query receivers and high-level dispatch.
 
 Low-level programming is not a foreign escape hatch. The low-level and
 implementation-facing layers provide controlled access to storage, addresses,
@@ -295,23 +301,23 @@ the selected profile admits them.
 
 The exact level names and their boundaries are defined in the next section.
 
-Third, Lingvamyxa is a registry-driven service and message system.
+At service level, Lingvamyxa is a registry-driven service and message system.
 
 Lingvamyxa treats compiler knowledge, runtime knowledge and service knowledge
-as one structural registry model. Descriptors, models, relations, routes,
-messages, handlers, build targets, validation rules and transport profiles are
-all Structures accepted by receivers and stored, derived, queried or lowered
-through the registry.
+as one structural registry/table model. Descriptors, models, operation tables,
+routes, messages, handlers, build targets, validation rules and transport
+profiles are all Structures accepted by receivers and stored, derived, queried
+or lowered through the registry.
 
 For this reason, a Lingvamyxa implementation is not only a compiler in the
 narrow sense. A complete implementation may also act as a runtime, build system,
 registry host and service framework for small and large services.
 
 The built-in HTTP Lingvamyxa REST profile provides a standard HTTP transport
-for typed Lingvamyxa messages between service instances, service thread groups
+for Lingvamyxa messages between service instances, service thread groups
 and external HTTP clients. HTTP is the transport envelope. REST routes are
-service/route descriptors stored as typed registry facts. Lingvamyxa typed
-messages and serialized Lingvamyxa Structures remain the semantic payload.
+service/route descriptors stored as registry table rows. Lingvamyxa messages
+and serialized Lingvamyxa Structures remain the semantic payload.
 
 JSON may be supported as a legacy or interoperability adapter, but JSON is not
 the default payload model of the HTTP Lingvamyxa REST profile and does not
@@ -320,9 +326,9 @@ define Lingvamyxa message semantics.
 0.1. Mixed L4/L5/L3 Smoke Example
 
 The following example defines no new syntax. It illustrates the core formula in
-one file: L4 consumes model/registry descriptors, L5 consumes behavior/fact/build
-descriptors, and L3 consumes executable definitions and ordinary control
-receivers.
+one file: L4 consumes model/registry table descriptors, L5 consumes message,
+route, build and rule descriptors, and L3 consumes executable definitions and
+ordinary control receivers.
 
 Short version of the "hello.lm3" file in the default executable script profile:
 
@@ -333,6 +339,11 @@ The long `.lmx` version below spells out the surrounding model, registry, build
 target and explicit executable entry point.
 
 Long version of the "hello.lmx" file:
+
+The `relation:`, `fact:` and `behavior:` receivers in this example are
+illustrative table-row or message-row receivers. Part II defines the general
+table model; this Part I example uses them only to show that the same
+structural syntax can be consumed as registry input.
 
 L4:
     model: HelloConfig
@@ -527,7 +538,7 @@ following sections.
 
 1.0. General Language Role and External Lexical Standards
 
-Lingvamyxa is a cross-platform structural language with an explicit external L1 bootstrap, implementation and lowering substrate. In the default hosted bootstrap profile, L1 may lower through ANSI C / C99, but ANSI C / C99 is a porting and implementation substrate, not the language's semantic parent and not the language's self-hosting level. Lingvamyxa source text builds Structures; registered receivers, functions, subroutines, operators, model descriptors, behavior descriptors and query receivers consume those Structures and assign typed meaning to them.
+Lingvamyxa is a cross-platform structural language with an explicit external L1 bootstrap, implementation and lowering substrate. In the default hosted bootstrap profile, L1 may lower through ANSI C / C99, but ANSI C / C99 is a porting and implementation substrate, not the language's semantic parent and not the language's self-hosting level. Lingvamyxa source text builds Structures; registered receivers, functions, subroutines, operators, model descriptors, table descriptors and query receivers consume those Structures and assign typed meaning to them.
 
 A compact description is:
 
@@ -538,12 +549,12 @@ More precisely:
     * L1 supplies the external procedural, portable, implementation-facing substrate and may map to ANSI C / C99 in a hosted bootstrap profile.
     * L2/lm2 exposes low-level typed storage, addresses, layouts and unsafe operations and is the first Lingvamyxa self-hosting infrastructure layer.
     * L3 supplies ordinary algorithmic computation and executable definitions.
-    * L4 describes structural models, types, contracts, unions, constraints and registry descriptors.
-    * L5 describes behavior, messages, configuration, facts, rules, build/query/startup receivers, L5 Threads and high-level dispatch.
+    * L4 describes structural models, types-as-tables, contracts, unions, constraints and registry descriptors.
+    * L5 describes messages, validators, expression executors, logical message generators, configuration, rules, build/query/startup receivers, L5 Threads and high-level dispatch.
 
-Lingvamyxa implementations may also act as service runtimes. The built-in HTTP Lingvamyxa REST profile provides a standard event/message transport between groups of L5 Threads and service instances. HTTP is the transport envelope; Lingvamyxa typed messages and Structures remain the semantic payload.
+Lingvamyxa implementations may also act as service runtimes. The built-in HTTP Lingvamyxa REST profile provides a standard event/message transport between groups of L5 Threads and service instances. HTTP is the transport envelope; Lingvamyxa messages and Structures remain the semantic payload.
 
-The object-oriented side is structural, not class-magical. A model descriptor defines slots, types, defaults, constraints and layout information. A behavior descriptor attaches message selectors and implementations to a model. A runtime object is a Structure or handle/reference to a Structure together with enough model information to resolve behavior. Message lookup may lower to tables, dictionaries, inline caches, static calls or query over registry facts.
+The object-oriented side is structural, not class-magical. A model descriptor contributes field, type, default, constraint and layout table rows. Operations are selected by registry tables that map receiver/type and selector/expression shape to concrete implementations. A runtime object is a Structure or handle/reference to a Structure together with enough table information to resolve the expression being consumed.
 
 The functional side is also structural. A function or subroutine definition is a
 Structure consumed by the `fn` or `sub` receiver. A call spelling is a Frame, but
@@ -551,13 +562,13 @@ it becomes a generated call only after namespace resolution proves that the head
 is a function, subroutine or registered receiver. Function return is represented
 by `return` receivers and terminal return, not by a separate assignment syntax.
 
-The logical side is represented by facts, rules, relations and query receivers. Model, union, operator, method and behavior descriptors may materialize typed registry facts. Generic dispatch, message lookup, completeness checks and validation may be expressed as queries over this registry model. This gives one uniform way to index, validate, derive and lower structural information.
+The logical side is represented by relation tables, rules and query receivers. Model, union, operator, method, message and validator descriptors may materialize registry rows. Generic dispatch, message validation, completeness checks and lowering may be expressed as table lookup over this registry model. This gives one uniform way to index, validate, derive and lower structural information.
 
-The source syntax itself does not hard-code object semantics, functional semantics or logic semantics. It builds generic Structures. The active level and the active receiver/operator registry determine which semantic domain consumes a Structure. The same surface form may describe a low-level storage declaration, a function definition, a model descriptor, a behavior descriptor, a fact, a rule, a query or a build configuration, depending on receiver consumption.
+The source syntax itself does not hard-code object semantics, functional semantics or logic semantics. It builds generic Structures. The active level and the active receiver/operator registry determine which semantic domain consumes a Structure. The same surface form may describe a low-level storage declaration, a function definition, a model descriptor, a table row, a validator, a rule, a query, a message or a build configuration, depending on receiver consumption.
 
 Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals, character constants and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
 
-This reuse applies only to lexical atoms. It does not adopt C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon-governed frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, `fn` / `sub` / label / variable registration, typed model/behavior descriptors, fact/query declarations and declared head consumption.
+This reuse applies only to lexical atoms. It does not adopt C assignment syntax, C declaration grammar, C control syntax, SQL expression syntax, SQL execution semantics, YAML mapping semantics or indentation semantics. Lingvamyxa owns the structural syntax and structural semantics: colon-governed frames, source-level tree composition, compact calls, short colon source items, short-tail field separation, terminal return, namespace Structures, `fn` / `sub` / label / variable registration, typed model/table descriptors, relation/query declarations and declared head consumption.
 
 The practical rule is:
 
@@ -598,23 +609,30 @@ L3 is the algorithmic and computational Lingvamyxa level. It supports safe top-l
 
 1.5. L4
 
-L4 is the non-executive model level. It describes models, types, protocols, contracts, constraints, relation signatures and registry metadata.
+L4 is the non-executive model level. It describes models, types as registry
+tables/entities, protocols, contracts, constraints, relation signatures and
+registry metadata.
 
 L4 may update or check the compiler/runtime model. L4 does not perform ordinary runtime actions by default.
 
 1.6. L5
 
-L5 is the level of messages, configuration, behavior descriptors, fact registries, build/run/query/startup receivers, L5 Threads and high-level dispatch.
+L5 is the level of messages, validators, expression executors, logical message
+generators, configuration, registry tables, build/run/query/startup receivers,
+L5 Threads and high-level dispatch.
 
 An L5 Thread is the ordinary source-semantic active unit for interactive, concurrent, event-driven and service-like Lingvamyxa programs. A service instance is a placement or bundling mode of one or more L5 Threads, not a separate later paradigm.
 
-L5 may attach message behavior to L4 structural models. L5 may also represent registry data as typed facts and rules. This draft places that fact/behavior layer in L5. A later specification may split this area into internal L5 profiles, bundles or subdomains, but this document keeps it within L5 as source-semantic infrastructure, not as ordinary runtime I/O.
+L5 may attach message and operation handling to L4 structural models by adding
+registry table rows. L5 may also represent registry data as relation tables and
+rules. This draft keeps that message/table layer within L5 as source-semantic
+infrastructure, not as ordinary runtime I/O.
 
 L5 may consume accepted MIX-derived intervals, annotations and structural
-facts through the ordinary registry/query/message machinery. MIX itself is
-produced by source traversal and structural overlay processing; it is not
-ordinary L5 execution merely because L5 can store or react to accepted
-MIX-derived facts.
+evidence as registry table rows through the ordinary registry/query/message
+machinery. MIX itself is produced by source traversal and structural overlay
+processing; it is not ordinary L5 execution merely because L5 can store or
+react to accepted MIX-derived rows.
 
 1.7. Level Receivers
 
@@ -680,15 +698,16 @@ Different Lingvamyxa levels use different default startup conventions:
     L4
         L4 is applied, validated and registered. It is not ordinary runtime
         control flow. An L4 source body may describe models, types, registry
-        patches, build profiles, constraints or facts; applying that body is
-        descriptor consumption, not program execution from a first statement.
+        patches, build profiles, constraints or registry table rows; applying
+        that body is descriptor consumption, not program execution from a first
+        statement.
 
     L5
-        L5 is the message, behavior, fact, service and high-level dispatch
-        layer. Its startup model is closer to a selected message/callable
-        target than to a hard-coded `main`. A runtime or build profile may
-        choose any visible L5 startup target, such as a `start` receiver, an
-        `onStart` handler, a service descriptor, or an explicit message send.
+        L5 is the message, service and high-level table-driven dispatch layer.
+        Its startup model is closer to a selected message/callable target than
+        to a hard-coded `main`. A runtime or build profile may choose any
+        visible L5 startup target, such as a `start` receiver, an `onStart`
+        handler, a service descriptor, or an explicit message send.
 
         Example conceptual target:
 
@@ -1224,7 +1243,7 @@ Compact call form and colon form are two surface ways to build Frames/Structures
 
 Syntactically anonymous Structures are not semantically ownerless. Every
 Structure is reached through a parent edge: a receiver body, a declared argument
-slot, a positional argument index, a rest/list argument, an array index, a table
+position, a positional argument index, a rest/list argument, an array index, a table
 row, a document root or another consumer-defined edge. That edge gives the
 Structure its semantic identity. For example, in `token: (@ lock)`, the bounded
 Structure `(@ lock)` is still an argument of the `token` Frame. A receiver or
@@ -1239,8 +1258,8 @@ structural check, it is treated as absent for close-target selection, and the
 whole Structure defaults to the receiver/head name, such as `token`. This target
 class is structural, literal and is compared by atom equality; it is not computed
 through ordinary namespace evaluation. Other consumed fields get their names
-from declared argument slots; repeated or variadic slots have that slot name
-plus a positional index.
+from declared argument positions; repeated or variadic positions have that
+argument name plus a positional index.
 
 In L2, consumed arguments are expected to be named by the active receiver,
 function, subroutine, operator or generated lowering rule. A consumed field
@@ -1532,7 +1551,7 @@ Operator spellings such as `+`, `-`, `*`, `/`, `%`, `=`, `!=`, `<`, `<=`, `>`, `
 
 The structural parser does not decide whether an operator token is prefix,
 postfix or infix. That role is assigned by the active receiver/operator profile.
-For the C-profile L2 operator categories, see section 28.3.
+For the C-profile L2 operator categories, see section 20.3.
 
 Example:
 
@@ -4159,8 +4178,6 @@ end: l5_if
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
 
-7.3.1. Single Namespace
-
 7.3.1. Single Namespace and No Silent Shadowing
 
 Types, variables, functions, subroutines, receivers, model names, generic operation names and local executable definitions share one lexical namespace within a lexical scope chain.
@@ -4169,7 +4186,11 @@ A new binding may be introduced only if the same name is not already visible in 
 
 A local variable cannot reuse the name of a visible type. A local `fn` or `sub` cannot reuse the name of a visible variable, type, receiver, model or executable definition. Imports must not silently shadow visible names. Conflict resolution must be explicit through a future import/qualification rule.
 
-L5 message selectors are looked up through a receiver object's behavior table. A selector is not automatically a lexical binding unless it is also imported or registered as an ordinary receiver/generic operation. The implementation name attached to a message is a lexical executable binding and follows the single-namespace rule.
+L5 message selectors are looked up through the receiver's message/operation
+tables. A selector is not automatically a lexical binding unless it is also
+imported or registered as an ordinary receiver/generic operation. The
+implementation selected by a message table cell is a lexical executable binding
+and follows the single-namespace rule.
 
 In expression position, a visible `fn` name can be lowered as a call after
 namespace resolution. The canonical way to return a value is `return: value`,
@@ -4735,8 +4756,11 @@ The `i/u` family denotes implementation-profile integer types over C integer sto
 9.1. Type and Model Information
 
 Type and model information is expressed by registered receivers and Structures.
+At L4/L5, those receivers may materialize registry table rows as defined by
+Part II. At L2/L3, they may instead lower directly to storage, address or
+function metadata used by the translator.
 
-The structural core does not require a separate `field` receiver. In declaration context, a type or model constructor consumes a raw identifier token and creates a binding/slot.
+The structural core does not require a separate `field` receiver. In declaration context, a type or model constructor consumes a raw identifier token and creates a binding, field entry or registry table row.
 
 Example:
 
@@ -4746,9 +4770,9 @@ Example:
 
 Conceptual meaning:
 
-    declare binding/slot `id` with type `u32`
-    declare binding/slot `crop` with type `Text`
-    declare binding/slot `harvest` with type `f64` and default/initial value `0.0`
+    declare binding `id` with type `u32`
+    declare binding `crop` with type `Text`
+    declare binding `harvest` with type `f64` and default/initial value `0.0`
 
 The token after the type constructor is not evaluated as an existing value. It is a raw name introduced by the declaration. If the name already exists in the current namespace, the declaration is invalid.
 
@@ -4854,8 +4878,8 @@ is meaningful only if `int` or `PlantBed` is a registered primitive/type/model c
 
 A receiver such as `fn`, `sub`, `autoModel` or `args` may consume these Structures as typed declarations.
 
-12. Conditional Structures: L3 Core Extract
-12.1. L3 `if`
+10. Conditional Structures: L3 Core Extract
+10.1. L3 `if`
 
 L3 `if` is a computational control-flow receiver. It consumes:
 
@@ -4867,7 +4891,7 @@ At interpretation time, only the selected body is interpreted.
 
 At translation time, the receiver lowers the condition and statement Structures into target control flow.
 
-12.4. Conditional Forms
+10.2. Conditional Forms
 
 Short positional conditional form:
 
@@ -4901,17 +4925,17 @@ This builds:
 
 The short positional form is valid when the active `if` receiver assigns sibling child Structures to semantic fields by signature order. Named vertical form remains available for readability or when a style/profile requires explicit names.
 
-13. L2 Addresses
+11. L2 Addresses
 
-13. L2 Addresses, References and Callable References
+11.0. L2 Addresses, References and Callable References
 
-13.1. L3 Passing Model
+11.1. L3 Passing Model
 
 At L3 and above, explicit address syntax is usually unnecessary. Structures, arrays, text, objects and other non-primitive values are passed as references or handles by default.
 
 At L3 and above, ordinary names denote primitives, symbols, handles or Structures according to the active semantic environment. They are not raw L2 addresses to executable code.
 
-13.2. L2 Address Values and Storage Allocation
+11.2. L2 Address Values and Storage Allocation
 
 At L2, the source model uses primitive values and typed address values. Aggregate model names such as `PlantBed` denote storage layouts, not ordinary source-level aggregate values.
 
@@ -4972,7 +4996,7 @@ value-structure operation is written through the explicit C door:
 visible as C-surface syntax while leaving ordinary Lingvamyxa structures as
 typed addresses/references.
 
-13.2.1. Reserved Address-Depth Operator Family `@ⁿ`
+11.2.1. Reserved Address-Depth Operator Family `@ⁿ`
 
 The token sequences:
 
@@ -5025,7 +5049,7 @@ This keeps prefix address-of simple while preserving arbitrary address depth in 
 
 The implementation of `@ⁿ` may be represented by reserved operator descriptors in the L2 operator table. The source semantics only require that `@ⁿ` is parsed as a reserved operator family and that its declaration form produces typed address slots compatible with the active L2 memory profile.
 
-13.3. Address-of, Raw Load and Callable References
+11.3. Address-of, Raw Load and Callable References
 
 The prefix form:
 
@@ -5076,7 +5100,7 @@ print: @tree\branch
 print: root\branch\branch
 print: \root\branch\branch
 
-Meanings under the declarations in section 13.2:
+Meanings under the declarations in section 11.2:
 
     print: @count
         Print the address of the primitive storage location `count`.
@@ -5140,7 +5164,7 @@ At L1 lowering time, a receiver such as `print` receives typed values or typed r
 
 Function/subroutine address forms are strictly L2. A static L2 executable binding may be addressable through `@name` if the active L2 profile exposes it as storage or callable-address metadata.
 
-At L3 and above, calls are expressed as receiver Frames and resolved by the active receiver/operator registry, not by raw callable addresses. L5 message selectors and behavior-table entries are not automatically L2 callable addresses.
+At L3 and above, calls are expressed as receiver Frames and resolved by the active receiver/operator registry, not by raw callable addresses. L5 message selectors and message-operation table entries are not automatically L2 callable addresses.
 
 ?
 The exact L2 memory profile must define primitive cell size, address arithmetic, alignment, storage duration, allocation failure, callable-address representation and which bindings are addressable through `@`.
@@ -5156,15 +5180,15 @@ variant 3:
 Allow both forms: parser-level recognition for core operators and receiver-level extension for specialized memory models.
 
 
-14. Arrays, Text and Indexing
+12. Arrays, Text and Indexing
 
-14.1. Logical Model
+12.1. Logical Model
 
 At L3 and above, an array is a Structure or handle/reference to a Structure. Text is also a Structure or handle/reference to a Structure.
 
 The logical array model includes at least a length field and an indirect storage reference. It may also include capacity, encoding, element type and storage handle.
 
-14.2. L2 Lowering
+12.2. L2 Lowering
 
 At L2, arrays and text may lower to typed addresses, length-plus-address records or other layout-specific representations.
 
@@ -5174,7 +5198,7 @@ Example conceptual lowering for an array:
 
 Lowering does not change source semantics.
 
-14.3. Indexing
+12.3. Indexing
 
 Operator-token consumption rules are specified by level and profile. Indexing is treated as a level-dependent operator/form.
 
@@ -5212,9 +5236,9 @@ Dynamic arrays lower to runtime handles with accessor calls when layout is not s
 ---ANSI C---
 
 
-15. Typed Field Follow
+13. Typed Field Follow
 
-15.1. Backslash Structural Traversal Form
+13.1. Backslash Structural Traversal Form
 
 Structural traversal / dereference-like access uses backslash syntax:
 
@@ -5224,7 +5248,7 @@ The backslash form is a built-in parser form. It exists so the translator can ge
 
 At L2, the left side is normally a typed address. At L3 and above, the left side may be a Structure, handle or reference according to the active semantic environment. In all cases, `\` implies an actual traversable source-semantic object, not a dotted or slash-separated external name.
 
-The same `\` character also has a prefix L2 raw-load form, described in section 13.3. These forms are distinguished by position:
+The same `\` character also has a prefix L2 raw-load form, described in section 11.3. These forms are distinguished by position:
 
     \address      raw L2 load from an address expression
     value\field   typed field follow/access
@@ -5235,7 +5259,7 @@ Possible normal form:
 
 or an internal field-follow expression Structure equivalent to it.
 
-15.2. Lowering
+13.2. Lowering
 
 If the model/layout of `result` is known, the translator may lower:
 
@@ -5263,9 +5287,9 @@ Dynamic Structures lower to checked runtime lookup or generated accessor calls.
 ---ANSI C---
 
 
-16. Update, Return Structures and Destructuring
+14. Update, Return Structures and Destructuring
 
-16.1. Binding Update Instead of `=` Assignment
+14.1. Binding Update Instead of `=` Assignment
 
 The native structural core does not use `=` for assignment.
 
@@ -5311,7 +5335,7 @@ At L2, update may lower to direct storage write according to the L2 memory model
 Binding, mutability, scope, initialization, reassignment and shadowing rules are not specified in full in this document. They require a dedicated execution-model specification.
 ?
 
-16.2. Return Structures
+14.2. Return Structures
 
 A function return value is one logical source-level value. That value may be primitive or structural. If the return value is structural, updating its declared fields and returning one Structure-compatible value are source-semantically equivalent under the receiver-defined return signature.
 
@@ -5334,7 +5358,7 @@ Named return variables may also be updated before an explicit terminal value ret
 
 The canonical return mechanism for an `fn` is `return: value`. In a valid terminal trailer position, `return: value` also closes the `fn` source frame. Named return variables are ordinary typed bindings whose current values may be returned explicitly.
 
-16.3. Destructuring
+14.3. Destructuring
 
 Destructuring syntax using `=` is not part of the current native structural core.
 
@@ -5371,11 +5395,11 @@ variant 2:
 For handle-based Structures, generated code reads fields through generated accessors or runtime lookup.
 ---ANSI C---
 
-22. Structural Grammar Sketch
+15. Structural Grammar Sketch
 
 This grammar sketch describes the structural parser only. It does not define final receiver semantics.
 
-22.0. P0 Source-Event Automaton
+15.0. P0 Source-Event Automaton
 
 This subsection is normative for P0 structure recognition. The grammar below is
 only a compact readable projection of the same machine.
@@ -5788,7 +5812,7 @@ registered receiver.
 
 Labels are not a separate structural grammar category. A source line such as `outerLoop:` is a colon frame with an empty inline tail and a required following vertical block. The active receiver/profile decides whether that frame introduces a local nullary executable binding, a control label role, both, or an error. A later bare line such as `outerLoop` is also not special label grammar; in executable statement position it may resolve through the ordinary namespace to that zero-argument label-block binding.
 
-22.1. Structural Semantics in EBNF Form
+15.1. Structural Semantics in EBNF Form
 
 The following EBNF describes the structural-semantic normal form produced by the
 parser. It is not a separate surface syntax and it does not assign binding,
@@ -5926,12 +5950,12 @@ Receiver semantics:
     Frame(Head, BodyStructure, FrameTrailer) is still only data after parsing.
     The receiver named by Head consumes BodyStructure and assigns semantic roles
     to positional fields, anonymous Structures, named child Frames, labels,
-    operators, declarations, model descriptors, behavior descriptors and control
+    operators, declarations, model descriptors, message/table descriptors and control
     trailers. The parser does not infer those meanings from spelling alone.
 
-23. Canonical Examples
+16. Canonical Examples
 
-23.1. Hello World
+16.1. Hello World
 
 Source:
 
@@ -5955,7 +5979,7 @@ print: Hello World
 
 `Hello` and `World` are accepted only if the active L3 `print` receiver and lexical rules allow bare atoms/symbols in that position.
 
-23.2. Function with Structural Return
+16.2. Function with Structural Return
 
 Source:
 
@@ -5973,7 +5997,7 @@ Semantic outline:
     The inner `return:` exits with the Apple-specific structural result.
     The final `return:` is terminal return. It supplies the default structural result and closes the function definition.
 
-23.3. Explicit Return with Named Return Variables
+16.3. Explicit Return with Named Return Variables
 
 Source:
 
@@ -5989,7 +6013,7 @@ Semantic outline:
     Head/update position updates existing bindings.
     Terminal `return:` exits, returns their current values as one return Structure and closes the function definition.
 
-23.3.1. Recursive Function with Terminal Return
+16.3.1. Recursive Function with Terminal Return
 
 Source:
 
@@ -6004,7 +6028,7 @@ Semantic outline:
     In expression position, `factorial(n - 1)` is a recursive call.
     The final `return:` supplies the recursive result and closes the function definition.
 
-24. Summary Table
+17. Summary Table
 
     f(a, b)                    compact Frame named f
     f: a b                     line command Frame named f with whitespace-separated short-tail fields
@@ -6042,19 +6066,19 @@ Semantic outline:
     []                         head receiver spelling for array/storage forms; postfix `target[...]` is index/access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
-    relation/fact/rule/query   receiver-defined relational Structures
+    table/relation/rule/query  receiver-defined registry/table Structures
     union                      receiver that registers a closed set of variants
     method                     receiver that registers a generic dispatch entry
-    behavior                   L5 receiver that attaches message behavior to a model
+    message/operation          L5 receiver/profile entry that contributes message/operation table rows
 
 
-25. Part I Remaining Open Points
+18. Part I Remaining Open Points
 
 This section keeps only the remaining open points that affect common syntax,
 L2/L3 execution, expressions, arrays, text, field-follow, closure and ANSI C
 projection variants.
 
-25.1. Source-Semantic or Syntax Uncertainties
+18.1. Source-Semantic or Syntax Uncertainties
 
 !!!
 Field-follow failure semantics are not fixed. A final source-semantic rule must
@@ -6063,7 +6087,7 @@ nullable handles, including whether these cases are compile-time errors,
 runtime errors or receiver-defined diagnostics.
 !!!
 
-25.2. External or Profile-Level Specification Areas
+18.2. External or Profile-Level Specification Areas
 
 The exact operator token set and backend lowering rules may be extended by
 profiles, but the ANSI C projection deliberately keeps C precedence and
@@ -6095,7 +6119,7 @@ The general error/status system is not specified. Until specified, erroneous
 results may be represented as ordinary values allowed by the declared return
 type or by receiver-defined diagnostics.
 ?
-25.3. ANSI C Implementation Variants
+18.3. ANSI C Implementation Variants
 
 ---ANSI C---
 These variants are implementation notes for a possible ANSI C based translator.
@@ -6151,9 +6175,9 @@ L3+ indexing lowers to checked access through array metadata such as `len`.
 The language does not define C slot counting, hidden runtime addresses, hidden output addresses or C storage ownership rules. Those are translator/runtime design choices.
 ---ANSI C---
 
-26. L3 Control Operators
+19. L3 Control Operators
 
-26.0. Scope of This Section
+19.0. Scope of This Section
 
 This section defines the normative L3 control-flow receiver set for executable bodies.
 
@@ -6182,7 +6206,7 @@ Operator summary:
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
-26.1. `if`, `then` and `else`
+19.1. `if`, `then` and `else`
 
 `if` consumes a condition and one or two statement Structures.
 
@@ -6236,7 +6260,7 @@ If no `else` body is provided and the condition is false, `if` completes normall
 
 In named form, `then` and `else` are structural section markers inside `if`. They are not ordinary runtime calls when consumed by the `if` receiver. In positional form, sibling child Structures are mapped to `thenBody` and `elseBody` by receiver signature order.
 
-26.2. `match` and default-pattern receivers
+19.2. `match` and default-pattern receivers
 
 `match` selects one body from a set of positional pattern/body pairs or from anonymous branch Structures. `case` (not structural syntax) is not structural syntax.
 
@@ -6321,7 +6345,7 @@ match: shape
 
 If the matched value is a closed union and no default pattern is present, an implementation may require exhaustive patterns.
 
-26.3. `while`
+19.3. `while`
 
 `while` is a pre-condition loop.
 
@@ -6342,7 +6366,7 @@ If the condition is false before the first iteration, the body is not executed.
 
 A `while` body is a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
 
-26.4. `until`
+19.4. `until`
 
 `until` is a conditional close for the current executable block. It closes the current block, executes that block as a post-condition loop body, then evaluates its condition.
 
@@ -6365,7 +6389,7 @@ The loop repeats until the condition is true. If the condition is false, control
 
 `until` creates a loop frame. `break`, `continue`, `redo` and labelled loop transfer operators may target it.
 
-26.5. `for`
+19.5. `for`
 
 `for` is a controlled loop receiver for numeric ranges, counters, index ranges or other bounded iteration policies.
 
@@ -6419,7 +6443,7 @@ Use explicit short-tail fields such as `for: i 0 n 1`, or use a future exact-ide
 variant 3:
 Treat all range policies as ordinary receiver Structures consumed by `for`.
 
-26.6. `each`
+19.6. `each`
 
 `each` iterates over a container or iterator-compatible Structure.
 
@@ -6460,9 +6484,9 @@ Therefore both forms are valid for a zero-argument iterator source:
 
 The first form lets `each` consume the callable binding as an iterator source. The second form explicitly creates the iterator state Structure before `each` consumes it. This is receiver consumption of an already parsed field; it is not hidden receiver-signature grouping.
 
-Iterator consumption by `each` is specified in section 26.15.5.
+Iterator consumption by `each` is specified in section 19.15.5.
 
-26.7. `return`
+19.7. `return`
 
 `return` exits the current `fn`, `sub` or executable-like body.
 
@@ -6491,7 +6515,7 @@ return: n * factorial(n - 1)
 
 Before control leaves the current executable frame, all `finally` cleanups registered for the exited scopes are executed in reverse registration order.
 
-26.8. `break`
+19.8. `break`
 
 `break` exits the nearest active loop frame.
 
@@ -6504,13 +6528,13 @@ while: running
     step
 
 
-`break` is valid only inside a loop frame unless a labelled form is used as described in section 26.15.
+`break` is valid only inside a loop frame unless a labelled form is used as described in section 19.15.
 
 Before control leaves the exited loop body scopes, all affected `finally` cleanups are executed in reverse registration order.
 
 `break` is not a source-level raw jump. It is a structured loop-frame exit.
 
-26.9. `continue`
+19.9. `continue`
 
 `continue` starts the next iteration of the nearest active loop frame.
 
@@ -6533,7 +6557,7 @@ For `each`, `continue` transfers control to the next container or iterator value
 
 Before control leaves the current loop body scopes, all affected `finally` cleanups are executed in reverse registration order.
 
-26.10. `finally`
+19.10. `finally`
 
 `finally` registers cleanup code in the current execution context.
 
@@ -6569,13 +6593,13 @@ Cleanups are executed in reverse registration order.
 
 A cleanup body is executed outside the registration operation. It is not executed at the point where `finally` is encountered, except when the frame exits immediately after registration.
 
-`finally` cleanups are part of the execution context model defined in section 27.
+`finally` cleanups are part of the execution context model defined in Part II section 11.
 
 !!!
 The exact semantics of a cleanup failure are not fixed. A final runtime specification must define what happens if a cleanup itself executes `fail`, `assert`, `return`, `break`, `continue`, `retry`, `redo` or another `finally` registration while cleanup processing is already active.
 !!!
 
-26.11. `guard`, `fail`, `throws`, failure labels and handlers
+19.11. `guard`, `fail`, `throws`, failure labels and handlers
 
 `guard` and `fail` define declared recoverable failure flow.
 
@@ -6587,7 +6611,7 @@ They are distinct from `assert`.
     assert:
         diagnostic invariant violation
 
-26.11.1. `throws`
+19.11.1. `throws`
 
 An executable definition may declare failure labels with `throws`.
 
@@ -6609,7 +6633,7 @@ fn: parseInt (Text(text)) (int)
 
 A caller must handle, propagate or remap a declared failure.
 
-26.11.2. `guard`
+19.11.2. `guard`
 
 `guard` executes its failure body when its condition is false.
 
@@ -6627,7 +6651,7 @@ if: not condition
 
 `guard` is a convenience control receiver. It does not itself define the failure transport mechanism. That is defined by `fail`.
 
-26.11.3. `fail`
+19.11.3. `fail`
 
 `fail` exits the current executable body with a declared failure label and optional payload.
 
@@ -6648,7 +6672,7 @@ Semantic effect:
 
 `fail` does not use the `assert` channel.
 
-26.11.4. Failure labels and handlers
+19.11.4. Failure labels and handlers
 
 Failure labels are ordinary source labels consumed under failure-control semantics. A profile may keep a separate lookup table for diagnostics and control transfer, but the surface grammar is still the same colon-frame grammar.
 
@@ -6681,7 +6705,7 @@ Represent handlers as L5 event/message handlers for failure events.
 The exact source syntax, placement, visibility and lifetime of failure handlers are not fixed. A final source specification must define whether handlers are lexical Structures, executable labels, L5 event handlers, caller-side receivers or a combination of these forms.
 !!!
 
-26.11.5. Failure propagation
+19.11.5. Failure propagation
 
 If a failure is not handled in the current body, it must be propagated by an enclosing or calling executable whose `throws` declaration includes the failure label.
 
@@ -6705,7 +6729,7 @@ A non-local transfer mechanism for a selected runtime profile, provided that Lin
 The strict default for this draft is structured failure propagation, not root-level `longjmp`.
 ---ANSI C---
 
-26.12. `retry` and `retryable`
+19.12. `retry` and `retryable`
 
 `retryable` defines a restartable frame.
 
@@ -6741,7 +6765,7 @@ Outer bindings keep their current values unless the retryable receiver defines a
 The exact interaction between `retry`, failure handlers, iterator frames, partially executed cleanups and mutable outer bindings requires a final rule. This draft defines retry as re-execution, not as transactional rollback.
 !!!
 
-26.13. `assert`
+19.13. `assert`
 
 `assert` checks a diagnostic invariant.
 
@@ -6760,7 +6784,7 @@ If the condition is false, the current execution/checking phase fails with an `A
 
 `assert` is not caught by failure labels or failure handlers.
 
-Default L3 runtime semantics in the thread profile defined in section 27:
+Default L3 runtime semantics in the thread profile defined in Part II section 11:
 
     record AssertionViolation diagnostic;
     execute all active `finally` cleanups in the current thread ExecutionContext;
@@ -6773,7 +6797,7 @@ Default L4 model-time use, if exposed by a level profile:
 
 `assert` is intended for impossible states, broken invariants, corrupted internal assumptions or translator/model errors. Expected input failure must use `guard` and `fail`.
 
-26.14. `redo`
+19.14. `redo`
 
 `redo` repeats the current loop iteration without advancing the loop source.
 
@@ -6791,7 +6815,7 @@ Before the current iteration is restarted, all `finally` cleanups registered ins
 
 `redo` is dangerous because it can create non-progressing loops. It is valid only inside a loop frame.
 
-26.15. `yield`
+19.15. `yield`
 
 `yield` is valid only inside an `fn` whose return descriptor defines a yield-protocol.
 
@@ -6809,7 +6833,7 @@ Each `yield` consumes one produced value. It inspects the current function's ret
 
 The `each` receiver consumes iterator-compatible Structures by repeatedly calling their `next(env)` implementation until no value is produced.
 
-26.15.1. Iterator function
+19.15.1. Iterator function
 
 Example:
 
@@ -6846,7 +6870,7 @@ P0 reads the first definition structurally as a plain `fn` frame:
 
 The `fn` receiver consumes field 2 as the return descriptor and fields 3..end as the executable body. The `yield` receiver then checks each produced value against the yield-protocol declared by the current function return descriptor.
 
-26.15.2. Iterator state Structure
+19.15.2. Iterator state Structure
 
 An iterator state Structure contains enough state to resume execution after each `yield`.
 
@@ -6860,7 +6884,7 @@ For a simple iterator, generated state may include:
 
 Source-level code does not depend on the physical layout of this state Structure.
 
-26.15.3. `next(env)`
+19.15.3. `next(env)`
 
 The generated `next(env)` implementation executes the iterator until it either reaches a `yield` or terminates.
 
@@ -6879,7 +6903,7 @@ Next: T
 The exact standard name and structural layout for the result of `next(env)` is not specified. A final iterator specification must choose canonical names and fields, such as `Next T`, `Option T`, `Some/None` or another equivalent representation.
 ?
 
-26.15.4. `yield` value construction
+19.15.4. `yield` value construction
 
 For the `iterator(T)` profile, the canonical source form is:
 
@@ -6903,7 +6927,7 @@ If `T` is structural, write the produced Structure explicitly:
 
 inside an `iterator(Point)` function emits one `Point` value if `Point(1.0 2.0)` is a valid Point construction in the active profile.
 
-26.15.5. Iterator consumption by `each`
+19.15.5. Iterator consumption by `each`
 
 Example:
 
@@ -6932,7 +6956,7 @@ while: true
 
 This is semantic pseudocode. A translator may lower it to a direct state machine or inline loop.
 
-26.15.6. Iterator termination
+19.15.6. Iterator termination
 
 An iterator-like `fn` terminates when its generated `next(env)` reaches the end of the executable body or reaches a profile-defined completion path.
 
@@ -6946,7 +6970,7 @@ In the core profile, a bare `return` is not a valid `fn` return. If an iterator 
 Iterator close semantics are not fully specified. A final specification must define when iterator-owned `finally` cleanups run if an iterator is abandoned before exhaustion, discarded, moved to another thread or terminated by diagnostic failure.
 !!!
 
-26.16. Labelled `break` and labelled `continue`
+19.16. Labelled `break` and labelled `continue`
 
 A control label may be attached to a loop frame.
 
@@ -6984,9 +7008,9 @@ It is a compile-time error for `continue: labelName` to target a non-loop frame.
 The exact grammar rule for attaching labels to frames is not specified beyond the form `labelName:` before a frame. A final grammar must define whether labels can attach to retryable frames, blocks, handlers, iterator frames and arbitrary Structures.
 ?
 
-28. L2 Primitive, Address and Parser Operators
+20. L2 Primitive, Address and Parser Operators
 
-28.0. Scope of This Section
+20.0. Scope of This Section
 
 This section defines the minimal L2 operator/parser-form set.
 
@@ -6998,9 +7022,9 @@ values are storage/layout objects and are normally reached by address. This
 keeps `u32: x` simple while preventing an embedded record from silently becoming
 a copyable whole-Structure expression.
 
-This section is deliberately smaller than the L3 control set in section 26. L2 is low-level and unsafe, but it does not need every L3 convenience operator by default.
+This section is deliberately smaller than the L3 control set in section 19. L2 is low-level and unsafe, but it does not need every L3 convenience operator by default.
 
-28.1. Pointer and Field Syntax Exclusions
+20.1. Pointer and Field Syntax Exclusions
 
 L2 does not use `*`, `&`, `^`, `.`, or `->` as pointer/field syntax.
 
@@ -7024,9 +7048,9 @@ L2 address and field forms are:
 
 Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
 
-The C-profile mnemonic table in section 13.3 shows how the L2 forms cover the C declarator/expression roles of `*`, `&` and `->` without using those tokens as Lingvamyxa pointer/field syntax.
+The C-profile mnemonic table in section 11.3 shows how the L2 forms cover the C declarator/expression roles of `*`, `&` and `->` without using those tokens as Lingvamyxa pointer/field syntax.
 
-28.2. Storage, Address and Indexed Forms
+20.2. Storage, Address and Indexed Forms
 
 Minimal L2 storage/allocation and address-slot forms:
 
@@ -7088,7 +7112,7 @@ The same short-tail whitespace rule applies to address-depth declarations:
 
 This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
 
-28.2.1. Named Structures and ANSI C `typedef struct` Projection
+20.2.1. Named Structures and ANSI C `typedef struct` Projection
 
 At L2, an ordinary named vertical Structure at top level declares one ordinary
 Lingvamyxa namespace entry. It is not a second type namespace and it is not C
@@ -7125,7 +7149,7 @@ mentioning that descriptor does not call it. The general rule remains the same:
 a Structure is not executed because it exists; it is consumed by the active
 translator/profile mode.
 
-28.2.2. L1 and L2 Translator Receivers
+20.2.2. L1 and L2 Translator Receivers
 
 `L1` and `L2` are ordinary translator receivers that consume one body Structure.
 Since a Structure contains an ordered field sequence, this is enough to consume
@@ -7201,7 +7225,7 @@ Address-producing and address-consuming forms:
     \(leafs + 3)        raw load after address arithmetic
 
 
-28.3. Primitive Expression Operators
+20.3. Primitive Expression Operators
 
 The minimal L2 primitive operator profile assigns explicit operator roles:
 
@@ -7233,7 +7257,7 @@ field-follow token. Shifts, overflow rules, integer division rules,
 floating-point rules and conversion rules remain L2 profile details unless a
 later specification selects a mandatory set.
 
-28.4. Update and Callable Consumption
+20.4. Update and Callable Consumption
 
 L2 uses the same head/update surface form as the rest of the structural core:
 
@@ -7254,7 +7278,7 @@ both prefix and postfix expression operators. They are expression operators, not
 a second assignment syntax. Other profiles may lower them differently, but they
 still compose with the same operator-token consumption model.
 
-28.5. Minimal L2 Control Receivers
+20.5. Minimal L2 Control Receivers
 
 The minimal L2 executable-body control set is:
 
@@ -7281,7 +7305,7 @@ The first ANSI C bootstrap translator needs only:
 `until` and `for` remain part of the minimal L2 semantic set, but may be added
 after the first procedural bootstrap subset.
 
-28.5.1. `if`, `then` and `else`
+20.5.1. `if`, `then` and `else`
 
 L2 `if` consumes:
 
@@ -7306,7 +7330,7 @@ if: count > 0
     ---
 
 
-28.5.2. `while`
+20.5.2. `while`
 
 L2 `while` is a pre-condition loop.
 
@@ -7321,7 +7345,7 @@ while: i < n
     i: (i + 1)
 
 
-28.5.3. `until`
+20.5.3. `until`
 
 L2 `until` is a conditional close for the current executable block.
 
@@ -7349,7 +7373,7 @@ The body executes first. The loop repeats until the condition is true.
 
 If the condition is false, control transfers to the beginning of the executable block closed by `until`. If the condition is true, the block completes and execution continues after the `until` line.
 
-28.5.4. `for(init, condition, step)`
+20.5.4. `for(init, condition, step)`
 
 L2 `for` consumes:
 
@@ -7368,7 +7392,7 @@ Compact body form:
 
     for: int(i, 0) (i < n) i++ print(i)
 
-28.5.5. `return`
+20.5.5. `return`
 
 L2 `return` exits the current executable body.
 
@@ -7391,7 +7415,7 @@ Example:
 fn: square (int(x)) (int)
 return: x * x
 
-28.5.6. `break` and `continue`
+20.5.6. `break` and `continue`
 
 `break` exits the nearest active L2 loop frame.
 
@@ -7403,7 +7427,7 @@ For `until`, `continue` transfers control to the post-condition check for the cu
 
 For `for`, `continue` transfers control to the iteration-step Structure, then to the next condition check.
 
-28.5.7. `synchronized`
+20.5.7. `synchronized`
 
 `synchronized` consumes an object/address expression and a statement Structure
 owned by the `synchronized` receiver. It is a structured synchronization
@@ -7461,9 +7485,9 @@ the temporary is returned.
 Diagnostic failure across a synchronized boundary belongs to the wider
 runtime/translator cleanup rules.
 
-28.6. Outside the Minimal L2 Set
+20.6. Outside the Minimal L2 Set
 
-The following section 26 operators are not part of the minimal L2 control set unless an L2 profile explicitly enables or redefines them:
+The following section 19 operators are not part of the minimal L2 control set unless an L2 profile explicitly enables or redefines them:
 
     match / default-pattern receivers
     each
@@ -7477,16 +7501,16 @@ The following section 26 operators are not part of the minimal L2 control set un
 
 They may still exist in L3 or higher levels, or in a richer L2 profile.
 
-29. Structural Operation on a Local Copy of Namespace-Structure
+21. Structural Operation on a Local Copy of Namespace-Structure
 
-29.1. Namespace as Structure
+21.1. Namespace as Structure
 
 A namespace is a Structure.
 
 Before translation or receiver consumption, a namespace may be represented as a
 typed dictionary-like Structure whose entries bind names, exact quoted
 signatures, receiver names, function/subroutine descriptors, type/model
-descriptors, behavior descriptors and ordinary values.
+descriptors, message/table descriptors and ordinary values.
 
 Conceptual example:
 
@@ -7499,7 +7523,7 @@ namespace:
 
 This representation is source-semantic. A translator may lower it to lexical tables, symbol indexes, direct references, C identifiers, dispatch tables, persistent maps or any other implementation representation.
 
-29.2. Local Namespace View
+21.2. Local Namespace View
 
 Entering an executable definition creates a local namespace view.
 
@@ -7515,9 +7539,9 @@ A binding update inside an executable body updates the local namespace view unle
 
 Local namespace updates do not mutate the outer namespace and do not change the externally visible signature of the executable definition.
 
-29.3. Typed Compatibility of Local Updates
+21.3. Typed Compatibility of Local Updates
 
-A local namespace entry has a declared slot type, callable signature, receiver contract, model descriptor or other compatibility descriptor.
+A local namespace entry has a declared type, callable signature, receiver contract, model descriptor or other compatibility descriptor.
 
 Updating an entry is valid only if the new value is compatible with that descriptor.
 
@@ -7525,8 +7549,8 @@ Examples of invalid updates:
 
     a binding declared as `int` receiving a `String` value
     a binding declared as `Callable(int -> int)` receiving non-callable text
-    a type descriptor slot receiving an ordinary runtime integer value
-    a receiver implementation slot receiving a function/subroutine descriptor with incompatible argument or return Structure
+    a type descriptor entry receiving an ordinary runtime integer value
+    a receiver implementation entry receiving a function/subroutine descriptor with incompatible argument or return Structure
 
 Example of valid function/subroutine binding replacement:
 
@@ -7537,7 +7561,7 @@ function/subroutine bindings, for example:
 
     Callable(int -> int)
 
-29.4. Local Function/Subroutine Binding Replacement
+21.4. Local Function/Subroutine Binding Replacement
 
 Because function/subroutine names are ordinary namespace bindings, local
 replacement of such a binding is just a typed update of the local namespace
@@ -7559,11 +7583,11 @@ Here `strategy` is a local callable binding. Updating `strategy` to the exact id
 
 This operation does not replace `slow path`, `fast path`, `compute`, or any outer namespace binding. It only changes the local namespace view used inside the current executable body.
 
-29.5. Difference from Dynamic Untyped Rebinding
+21.5. Difference from Dynamic Untyped Rebinding
 
 This model is not Python-like unrestricted rebinding.
 
-The namespace may be dictionary-like, but it is typed. A name may be locally rebound only to a value compatible with its declared slot type or contract.
+The namespace may be dictionary-like, but it is typed. A name may be locally rebound only to a value compatible with its declared type or contract.
 
 Therefore:
 
@@ -7576,10 +7600,10 @@ And:
 
     factorial: "hello"
 
-is invalid if `factorial` is a function/subroutine slot with signature
+is invalid if `factorial` is a function/subroutine binding with signature
 `Callable(int -> int)`.
 
-29.6. Interaction with Return and Function Names
+21.6. Interaction with Return and Function Names
 
 The canonical return mechanism for an `fn` is `return: value`. When `return: value` is written in a valid terminal trailer position, it also closes the `fn` source frame. The current function name is an ordinary namespace binding, not a separate return syntax.
 
@@ -7589,7 +7613,7 @@ rules replace that visible name with a compatible non-function value, later
 recursive function lookup through that spelling is no longer available in the
 remaining local scope.
 
-29.7. Translation and Optimization
+21.7. Translation and Optimization
 
 The source semantics allow a local namespace copy or overlay, but implementations do not have to allocate an actual dictionary at runtime.
 
