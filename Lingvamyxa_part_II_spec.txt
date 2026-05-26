@@ -19,6 +19,8 @@ The old section number is shown in parentheses after each new heading.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In Part II, `class` is the general word for a named registry form/table/entity.
+When this wider meaning must be distinguished from an object-oriented class,
+this document may use the phrase `registry class`.
 
 This is wider than an object-oriented class and wider than a value/storage
 type. The following names may all be classes in this general sense:
@@ -48,7 +50,7 @@ generic constraint or overload set. These are class/table patterns. A
 traditional object class is one possible class profile, not the definition of
 the term.
 
-1.2. Relation Tables and Class/Table Inheritance (new, old 18, 19, 20.5, 20.6, 21.5)
+1.2. Relation Tables and Class/Table Import/Overlay (new, old 18, 19, 20.5, 20.6, 21.5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tables describe relations between classes. A binary operation may be represented
@@ -88,10 +90,10 @@ class-centered view:
 These are not separate semantic systems. They are convenient table layouts over
 terminal relation facts.
 
-Classes and tables may inherit/import other classes or tables. Inheritance here
-means table extension/overlay, not hidden code inheritance. A lookup first
-checks the derived table/class, then the explicitly imported bases according to
-the declared priority policy.
+Classes and tables may import other classes or tables. Import here means
+explicit table extension/overlay, not hidden copying of code or method bodies. A
+lookup first checks the importing table/class, then the explicitly imported
+bases according to the declared priority policy.
 
 Example:
 
@@ -106,8 +108,8 @@ Example:
             String: string_eq
     end: appEquals
 
-Multiple inheritance is allowed only when the inheritance order or priority is
-explicit. If two bases provide the same cell:
+Multiple imports are allowed only when the import order or priority is
+explicit. If two imported bases provide the same cell:
 
     same cell, same payload      -> duplicate, allowed or ignored;
     same cell, different payload -> conflict unless priority/override admits it;
@@ -274,7 +276,8 @@ may normalize conceptually as:
     plus[u32][u32]     -> CellPayload(binding, c.+)
 
 A terminal cell payload is not required to be a heavy record in source form. The
-payload entity itself may be used as a key into additional descriptor tables:
+payload atom may itself be a registry class/entity. The payload entity may then
+be used as a key into additional descriptor tables:
 
     table: result
         decimal_int_add: decimal
@@ -365,9 +368,9 @@ yet been moved into registry tables.
 2.1. Message (new, old 20.2, 27.5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A message is a proposed LMX expression, often effectful/action-oriented,
-addressed to a receiver. It is not a transport packet and is not executed on
-arrival.
+A message is a concrete effectful expression candidate: a proposed LMX
+expression addressed to a receiver and capable of becoming an action after
+validation. It is not a transport packet and is not executed on arrival.
 
 It may be a full LMX subtree or a very small LMX subset. The language does not
 bake in a fixed restriction such as "one command only" or "no explicit classes".
@@ -389,13 +392,18 @@ Example:
                 mode: overwrite
     end: message
 
-The message is proposed source data. HTTP, queues, sockets and files are only
-transport/storage envelopes for such proposed expressions.
+The message is proposed source data. It may carry a local mini-model, expected
+result/effect descriptors, payload data, context, capability claims or
+implementation references. These are claims, not authority and not executable
+code. HTTP, queues, sockets and files are only transport/storage envelopes for
+such proposed expressions.
 
 2.2. Validator / Merge (new, old 18.2, 20.6, 21.5, 27.9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The validator merges the incoming message with the receiver registry.
+The validator merges the incoming message with the receiver registry. Message
+validation is expression resolution plus receiver-context, authority,
+effect/lifetime and implementation checks.
 
 The validator/merge stage is intentionally split into sub-stages. The exact
 implementation may fuse them, but the semantic outputs are distinct:
@@ -705,7 +713,7 @@ dependent evidence is invalidated.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 An entry such as `Button`, `Circle`, `ArchiveService` or `equals` is a bundle of
-table rows, not a class hierarchy node with hidden inheritance semantics.
+table rows, not a class hierarchy node with hidden copied-code semantics.
 
 Composition means adding rows under one or more tables.
 
@@ -1220,11 +1228,11 @@ role hierarchy.
 Part II reduces to these rules:
 
     class = named registry form/table/entity;
-    class/table inheritance = explicit import/overlay with priority/conflict policy;
+    class/table import = explicit table import/overlay with priority/conflict policy;
     table row/column/cell = relation;
     missing row/column/cell = no relation;
     expression = Structure requiring table cells;
-    message = proposed possibly effectful/action-capable LMX expression;
+    message = concrete effectful/action expression candidate;
     validation = staged merge from IncomingMessageStructure to ExecutionPlan;
     executor = run only validated/resolved ExecutionPlans;
     generator = create new messages from result/state/table rules;
