@@ -56,9 +56,10 @@ consume those Structures as data, executable code, model descriptors, registry
 table rows, messages, service routes, build instructions or transport payloads.
 
 Part II defines the high-level registry model as tables. In that model, a
-`type` is a named registry table/entity, expressions ask for table cells, and
-validation/resolution turns generic Structures into concrete expressions or
-terminal lowering decisions.
+`class` is a named registry form/table/entity, expressions ask for table cells,
+and validation/resolution turns generic Structures into concrete expressions or
+terminal lowering decisions. The word `type` remains available in narrower
+storage/lowering contexts such as L2 and ANSI C.
 
 0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
@@ -287,7 +288,7 @@ relation/table, query, registry, message and validation machinery.
 The executable layer supplies ordinary algorithmic computation, function and
 subroutine definitions, control receivers, expressions and calls.
 
-The model layer describes structural models, types-as-registry-tables,
+The model layer describes structural models, classes-as-registry-tables,
 contracts, constraints, protocols and registry descriptors.
 
 The message and table-driven dispatch layer describes messages,
@@ -549,12 +550,12 @@ More precisely:
     * L1 supplies the external procedural, portable, implementation-facing substrate and may map to ANSI C / C99 in a hosted bootstrap profile.
     * L2/lm2 exposes low-level typed storage, addresses, layouts and unsafe operations and is the first Lingvamyxa self-hosting infrastructure layer.
     * L3 supplies ordinary algorithmic computation and executable definitions.
-    * L4 describes structural models, types-as-tables, contracts, unions, constraints and registry descriptors.
+    * L4 describes structural models, classes-as-tables, contracts, unions, constraints and registry descriptors.
     * L5 describes messages, validators, expression executors, logical message generators, configuration, rules, build/query/startup receivers, L5 Threads and high-level dispatch.
 
 Lingvamyxa implementations may also act as service runtimes. The built-in HTTP Lingvamyxa REST profile provides a standard event/message transport between groups of L5 Threads and service instances. HTTP is the transport envelope; Lingvamyxa messages and Structures remain the semantic payload.
 
-The object-oriented side is structural, not class-magical. A model descriptor contributes field, type, default, constraint and layout table rows. Operations are selected by registry tables that map receiver/type and selector/expression shape to concrete implementations. A runtime object is a Structure or handle/reference to a Structure together with enough table information to resolve the expression being consumed.
+The object-oriented side is structural, not class-magical. A model descriptor contributes field, class/type, default, constraint and layout table rows. Operations are selected by registry tables that map receiver/class and selector/expression shape to concrete implementations. A runtime object is a Structure or handle/reference to a Structure together with enough table information to resolve the expression being consumed.
 
 The functional side is also structural. A function or subroutine definition is a
 Structure consumed by the `fn` or `sub` receiver. A call spelling is a Frame, but
@@ -609,7 +610,7 @@ L3 is the algorithmic and computational Lingvamyxa level. It supports safe top-l
 
 1.5. L4
 
-L4 is the non-executive model level. It describes models, types as registry
+L4 is the non-executive model level. It describes models, classes as registry
 tables/entities, protocols, contracts, constraints, relation signatures and
 registry metadata.
 
@@ -697,7 +698,7 @@ Different Lingvamyxa levels use different default startup conventions:
 
     L4
         L4 is applied, validated and registered. It is not ordinary runtime
-        control flow. An L4 source body may describe models, types, registry
+        control flow. An L4 source body may describe models, classes, registry
         patches, build profiles, constraints or registry table rows; applying
         that body is descriptor consumption, not program execution from a first
         statement.
@@ -1256,8 +1257,8 @@ identifiers, strings, operators or other literal atoms, because its only job is
 to make `end: <name>` readable and checkable. If the argument does not pass that
 structural check, it is treated as absent for close-target selection, and the
 whole Structure defaults to the receiver/head name, such as `token`. This target
-class is structural, literal and is compared by atom equality; it is not computed
-through ordinary namespace evaluation. Other consumed fields get their names
+category is structural, literal and is compared by atom equality; it is not
+computed through ordinary namespace evaluation. Other consumed fields get their names
 from declared argument positions; repeated or variadic positions have that
 argument name plus a positional index.
 
@@ -3277,8 +3278,8 @@ Example:
 
 Conceptual resolution:
 
-    resolve sqrt(type(x))
-    resolve +(resultType(sqrt(x)), type(y))
+    resolve sqrt(class(x))
+    resolve +(resultClass(sqrt(x)), class(y))
     select accepted numeric descriptors
     lower to L1/backend calls if the profile allows it
 
@@ -3613,7 +3614,7 @@ A raw L1 function does not need an L4 semantic wrapper declaration merely to be
 used by an L2 universal adapter. L2 is the low-level adapter boundary. Headers,
 include paths and link inputs are build-profile data. They may be written in L4
 configuration syntax, but they are passed mechanically to the toolchain rather
-than used as high-level receiver/type policy.
+than used as high-level receiver/class policy.
 
 Using MPFR from L2 may therefore be as direct as ordinary C-profile use, if the
 L2/L1 build profile provides `mpfr.h` and the MPFR link inputs.
@@ -5817,7 +5818,7 @@ Labels are not a separate structural grammar category. A source line such as `ou
 The following EBNF describes the structural-semantic normal form produced by the
 parser. It is not a separate surface syntax and it does not assign binding,
 variable, type, field, atom, class, method or execution semantics. Those meanings
-are assigned later by receiver consumption, model/type descriptors and the active
+are assigned later by receiver consumption, model/class descriptors and the active
 level/profile.
 
 The notation uses `Structure(...)` and `Frame(...)` as semantic constructors:

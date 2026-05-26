@@ -15,13 +15,13 @@ The old section number is shown in parentheses after each new heading.
 1. Core Table Model (old 17, 18, 19, 20, 21)
 --------------------------------------------
 
-1.1. Type (new, old 17-21)
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+1.1. Class (new, old 17-21)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In Part II, `type` is the general word for a named registry table/entity.
+In Part II, `class` is the general word for a named registry form/table/entity.
 
-This is wider than "value type". The following names may all be types in this
-general sense:
+This is wider than an object-oriented class and wider than a value/storage
+type. The following names may all be classes in this general sense:
 
     decimal
     u32
@@ -33,19 +33,25 @@ general sense:
     Validator
     AuthTicket
 
-A type is meaningful because tables contain rows that mention it or are owned
-by it. A concrete value type, such as `decimal`, usually has representation
-tables. An operation family, such as `equals`, usually has implementation
-tables. A message kind, validator kind or service route may also be represented
-by tables.
+A class is meaningful because tables contain rows that mention it or are owned
+by it. A concrete value class, such as `decimal`, usually has representation
+tables. An operation class, such as `Equals`, usually has implementation
+tables. A message class, validator class, evidence class or service route class
+may also be represented by tables.
 
-The language does not need a separate primary mechanism for class, interface,
-trait, generic constraint or overload set. These are table patterns.
+A class instance is any concrete Structure accepted by that registry form. It
+may be an object-like value, an operation-selection record, a validator record,
+a message, an evidence record, an authority ticket or a service descriptor.
 
-1.2. Relation Tables (new, old 18, 20.5, 20.6, 21.5)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The language does not need a separate primary mechanism for interface, trait,
+generic constraint or overload set. These are class/table patterns. A
+traditional object class is one possible class profile, not the definition of
+the term.
 
-Tables describe relations between types. A binary operation may be represented
+1.2. Relation Tables and Class/Table Inheritance (new, old 18, 19, 20.5, 20.6, 21.5)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Tables describe relations between classes. A binary operation may be represented
 directly as a sparse matrix:
 
     table equals
@@ -66,11 +72,11 @@ a terminal cell payload kind and payload. Optional result, effect, lifetime,
 authority, priority, cost and provenance metadata may be stored in side tables
 keyed by the payload entity or by an implementation-generated cell id.
 
-If a row, column or cell is absent, the relation is absent. Adding a new type
+If a row, column or cell is absent, the relation is absent. Adding a new class
 does not require adding it to every table.
 
 The same information may be viewed through another table, for example a
-type-centered view:
+class-centered view:
 
     table decimal
 
@@ -81,6 +87,36 @@ type-centered view:
 
 These are not separate semantic systems. They are convenient table layouts over
 terminal relation facts.
+
+Classes and tables may inherit/import other classes or tables. Inheritance here
+means table extension/overlay, not hidden code inheritance. A lookup first
+checks the derived table/class, then the explicitly imported bases according to
+the declared priority policy.
+
+Example:
+
+    table: appEquals
+        import:
+            numericEquals
+            textEquals
+        priority:
+            numericEquals: 20
+            textEquals: 10
+        String:
+            String: string_eq
+    end: appEquals
+
+Multiple inheritance is allowed only when the inheritance order or priority is
+explicit. If two bases provide the same cell:
+
+    same cell, same payload      -> duplicate, allowed or ignored;
+    same cell, different payload -> conflict unless priority/override admits it;
+    missing cell                 -> continue lookup in lower-priority bases.
+
+The same rule applies to class descriptors. A class may import another class to
+reuse field rows, validator rows, operation rows, authority rows or any other
+registry relation rows. The imported rows remain table data; no source-level
+method body is copied merely because a class imports another class.
 
 Any finite graph can be decomposed into binary tables by introducing
 intermediate keys. For an n-ary expression, the registry may use signature keys,
@@ -94,7 +130,7 @@ The source of registry facts is LMX itself. A profile may load one or more LMX
 files before interpreting or translating a target file:
 
     registry:
-        file: core/types.lmx
+        file: core/classes.lmx
         file: core/operators.lmx
         file: service/messages.lmx
     end: registry
@@ -124,7 +160,7 @@ In a live L5 profile, the same table source may be loaded at runtime.
 1.4. Expression Resolution (new, old 20, 21.5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-An L3+ expression is first a Structure. Type resolution does not change the
+An L3+ expression is first a Structure. Class resolution does not change the
 source tree. It selects table cells.
 
 For:
@@ -134,8 +170,8 @@ For:
 the resolver performs:
 
     op = plus
-    row = type(a)
-    column = type(b)
+    row = class(a)
+    column = class(b)
     cell = plus[row][column]
 
 If the cell is absent, the expression is invalid in that registry. If exactly
@@ -149,13 +185,13 @@ For a generic expression, some coordinates are initially unknown:
 
 The resolver derives requirements from the expression body, for example:
 
-    length[type(xs)]
-    at[type(xs)][index_type]
+    length[class(xs)]
+    at[class(xs)][index_class]
     plus[element_type][element_type]
     zero[element_type]
 
 Generic resolution is the process of filling those table coordinates with
-concrete types and terminal cells. There is no special generic syntax required
+concrete classes and terminal cells. There is no special generic syntax required
 by this model.
 
 1.5. Terminal Cell Payloads and Descriptors (new, old 21)
@@ -265,7 +301,7 @@ from the table and lookup keys, or stored in side tables. Common optional
 descriptor rows are:
 
     result
-        Result type, result model, result table key or result expression.
+        Result class, result model, result table key or result expression.
 
     effects
         Pure/effect/action policy: pure, read-only, mutates receiver, sends
@@ -329,11 +365,18 @@ yet been moved into registry tables.
 2.1. Message (new, old 20.2, 27.5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A message is an LMX structure/expression intended for a receiver.
+A message is a proposed LMX expression, often effectful/action-oriented,
+addressed to a receiver. It is not a transport packet and is not executed on
+arrival.
 
 It may be a full LMX subtree or a very small LMX subset. The language does not
-bake in a fixed restriction such as "one command only" or "no explicit types".
+bake in a fixed restriction such as "one command only" or "no explicit classes".
 Those restrictions are policy decisions of the receiving side.
+
+"Effectful/action-oriented" does not mean that every message must mutate
+something. A query, read request or validation-only request may also be a
+message. The point is that a message is capable of becoming an action after
+validation and execution-plan construction.
 
 Example:
 
@@ -346,23 +389,53 @@ Example:
                 mode: overwrite
     end: message
 
-The message is not executed merely because it was received. It is proposed
-source data.
+The message is proposed source data. HTTP, queues, sockets and files are only
+transport/storage envelopes for such proposed expressions.
 
 2.2. Validator / Merge (new, old 18.2, 20.6, 21.5, 27.9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The validator merges the incoming message with the receiver registry.
 
-The validator:
+The validator/merge stage is intentionally split into sub-stages. The exact
+implementation may fuse them, but the semantic outputs are distinct:
 
-    parses or accepts the message Structure;
-    selects receiver-local registry tables;
-    resolves names, operations and message selectors;
-    checks sender authority, verifier/ticket/capability policy;
-    checks argument shape, types, conversions and effects;
-    replaces abstract or unresolved operation references with concrete cells;
-    produces a ValidatedMessage / ConcreteExpression.
+    intake
+        Input message bytes, Structure or in-memory value become an
+        IncomingMessageStructure.
+
+    receiver registry selection
+        The target receiver, service, thread or object selects the applicable
+        receiver-local registry tables and produces a ReceiverRegistryView.
+
+    name resolution
+        Names, selectors, operation heads and referenced registry keys are
+        resolved in the selected view. Output: ResolvedNames.
+
+    signature/class resolution
+        Argument shape, class coordinates, conversions and overload candidates
+        are checked by table lookup. Output: CandidateExpression.
+
+    validator/evidence
+        Validator cells run or are checked. They may accept, reject, emit
+        diagnostics or create evidence. Output: ValidationEvidence.
+
+    authority
+        Sender identity, verifier/ticket/capability policy and authority tables
+        are checked. Output: AuthorityEvidence.
+
+    effects/lifetime
+        Effect policy, ownership, borrowing, move/copy and lifetime rules are
+        selected. Output: EffectLifetimePlan.
+
+    concrete-cell substitution
+        Abstract or unresolved operation references are replaced with concrete
+        terminal cells. Output: ConcreteExpression.
+
+    execution-plan construction
+        The concrete expression, evidence and lifetime/effect plan are packaged
+        into the executable unit accepted by the executor. Output:
+        ExecutionPlan.
 
 The validator does not execute the expression.
 
@@ -379,18 +452,18 @@ may validate into:
     effects:
         filesystem_write
 
-Validation is therefore not just yes/no. It builds the concrete expression that
-the executor is allowed to run.
+Validation is therefore not just yes/no. It builds the concrete expression and
+execution plan that the executor is allowed to run.
 
 2.3. Expression Executor (new, old 20.1, 20.3, 27)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The executor consumes only a validated/resolved expression.
+The executor consumes only a validated/resolved expression or ExecutionPlan.
 
 It does not decide which implementation is meant. It runs the implementation
 already selected by validation:
 
-    ValidatedMessage -> ExecutionContext -> result / failure
+    ExecutionPlan -> ExecutionContext -> result / failure
 
 The executor may run:
 
@@ -429,8 +502,15 @@ does not bypass the message model.
 The standard high-level pipeline is:
 
     IncomingMessage
-        -> Validator/Merge
-        -> ValidatedMessage / ConcreteExpression
+        -> intake -> IncomingMessageStructure
+        -> receiver registry selection -> ReceiverRegistryView
+        -> name resolution -> ResolvedNames
+        -> signature/class resolution -> CandidateExpression
+        -> validator/evidence -> ValidationEvidence
+        -> authority -> AuthorityEvidence
+        -> effects/lifetime -> EffectLifetimePlan
+        -> concrete-cell substitution -> ConcreteExpression
+        -> execution-plan construction -> ExecutionPlan
         -> Executor
         -> Result / Failure
         -> Logical Message Generator
@@ -455,9 +535,9 @@ Example:
         Point: center
     end: Circle
 
-normalizes to facts such as:
+normalizes to rows such as:
 
-    type Circle
+    class Circle
     field[Circle][radius] = f64
     field[Circle][center] = Point
 
@@ -472,7 +552,7 @@ A normalized descriptor is a table view over a source structure:
 
     model name;
     field names;
-    field declared types;
+    field declared classes;
     default values;
     validators;
     ownership/lifetime policy;
@@ -511,15 +591,15 @@ is table policy:
 4.1. Behavior as Operation Tables (old 10)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-L5 behavior is not object magic. It is a set of tables mapping receiver/type and
-selector/expression shape to concrete implementations.
+L5 behavior is not object magic. It is a set of tables mapping receiver/class
+and selector/expression shape to concrete implementations.
 
 Example:
 
     draw[Circle][Canvas] = draw_circle_on_canvas
     draw[Button][Canvas] = draw_button_on_canvas
 
-An object may physically contain a type descriptor or may be statically known.
+An object may physically contain a class descriptor or may be statically known.
 Both cases select table cells.
 
 4.2. Receiver Registration (old 11.1, 11.2)
@@ -557,9 +637,9 @@ Example:
 
 requires:
 
-    equals[type(x)][type(y)]
+    equals[class(x)][class(y)]
 
-The result type and implementation are read from the selected cell.
+The result class and implementation are read from the selected cell.
 
 4.4. Conditional Forms (old 12)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -843,13 +923,15 @@ cleanup before the owner is cut or reused.
 Message states:
 
     IncomingMessage / ProposedMessage
-    ValidatedMessage / ConcreteExpression
+    CandidateMessage / CandidateExpression
+    ConcreteExpression / ExecutionPlan
     ScheduledMessage
     ExecutedMessage
     FailedMessage
 
-`TypedMessage` may be used as an implementation name for a message after type
-resolution but before all authority/effect validation has completed.
+`ConcreteMessage` or `CandidateMessage` may be used as an implementation name
+for a message after class/signature resolution but before all authority/effect
+validation has completed.
 
 11.6. Transfer Modes and Borrowed Payloads (old 27.6, 27.7)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1105,7 +1187,8 @@ Authentication validation emits evidence:
     authority[flow][operation] = allowed
     guarantee[flow] = sessionQuorumSatisfied
 
-Message validators may require these rows before producing a ValidatedMessage.
+Message validators may require these rows before producing a ConcreteExpression
+or ExecutionPlan.
 
 15.8. ANSI C / libsodium Runtime Sketch (old 36.En.6, 36.Ru.6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1136,12 +1219,14 @@ role hierarchy.
 
 Part II reduces to these rules:
 
-    type = named registry table/entity;
+    class = named registry form/table/entity;
+    class/table inheritance = explicit import/overlay with priority/conflict policy;
     table row/column/cell = relation;
     missing row/column/cell = no relation;
     expression = Structure requiring table cells;
-    validation = merge incoming expression with receiver tables;
-    executor = run only validated/resolved expressions;
+    message = proposed possibly effectful/action-capable LMX expression;
+    validation = staged merge from IncomingMessageStructure to ExecutionPlan;
+    executor = run only validated/resolved ExecutionPlans;
     generator = create new messages from result/state/table rules;
     L5 Thread = minimal isolated LMX machine that receives, validates, executes
                 and sends messages;
