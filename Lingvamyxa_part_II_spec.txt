@@ -458,6 +458,39 @@ implementation references. These are claims, not authority and not executable
 code. HTTP, queues, sockets and files are only transport/storage envelopes for
 such proposed expressions.
 
+The core message model does not define a separate canonical wire-schema layer
+with built-in binary/text negotiation, schema-version migration, unknown-field
+compatibility, backward/forward/full compatibility modes, compression or
+encryption semantics. A message is already an LMX expression candidate. If a
+message contains archived, compressed, encrypted or externally encoded payload,
+the source must say so through ordinary LMX receivers, descriptors and registry
+tables:
+
+    expression:
+        archive\read:
+            compressedPart
+
+    expression:
+        decrypt:
+            ticket
+            encryptedPart
+
+    expression:
+        migrate:
+            oldPayload
+            targetClass
+
+Compatibility, migration and unknown-field policy are validator/merge rules of
+the receiving side. Compression, decompression, encryption, decryption,
+serialization and parsing are ordinary operations selected by tables and
+executed only after validation admits them. Content negotiation, when needed, is
+ordinary LMX data and table resolution, not hidden transport magic.
+
+Authorization is likewise not a transport-header convention. It is the
+auth/evidence model defined by the registry and validation pipeline. L5 Threads
+follow that model by default: capability claims inside a message become
+authority only after validation produces authority evidence.
+
 2.2. Validator / Merge (new, old 18.2, 20.6, 21.5, 27.9)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
