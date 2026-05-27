@@ -46,6 +46,29 @@ Short formula:
     Validator/Merge turns candidates into concrete plans.
     Executor runs only concrete plans.
 
+Mechanism filter:
+
+    A profile term is not a new language mechanism merely because it has a
+    name.
+
+    A term remains profile vocabulary when it can be expressed as:
+
+        LMX Structure;
+        receiver/profile consumption;
+        registry row/cell;
+        validator evidence;
+        ExecutionPlan payload;
+        executor result/failure.
+
+    Examples include provider, replayPolicy, freshness, confidence,
+    calibration, budget, effect fence, authority ticket, safeMode and
+    decision-log rows. These names are important for particular systems, but
+    they do not become core semantics while they pass the filter.
+
+    A term should be promoted to core semantics only when it cannot be modeled
+    by the existing Structure / receiver / registry / validation / plan /
+    execution pipeline without changing that pipeline.
+
 The old section number is shown in parentheses after each new heading.
 
 
@@ -1320,11 +1343,11 @@ Core message semantics are intentionally smaller than broker/runtime policy:
     boundary -> reply/failure message to caller, reply target or continuation.
 
 The core language does not require a broker-style acknowledgement, dead-letter
-queue, topic partition, consumer group, retry scheduler or supervision tree as
-message semantics. A message is considered semantically handled when execution
-produces its result or failure, just as a local function call is handled when it
-returns a value or failure. The L5 difference is only that a boundary may wrap
-that result or failure into an ordinary message record.
+queue, topic partition, consumer group, transport retry scheduler or supervision
+tree as generic message semantics. A message is considered semantically handled
+when execution produces its result or failure, just as a local function call is
+handled when it returns a value or failure. The L5 difference is only that a
+boundary may wrap that result or failure into an ordinary message record.
 
 Delivery, ordering, scheduling, supervision and observability policies are
 runtime/profile/library concerns around accepted message execution. Examples:
@@ -1332,7 +1355,7 @@ runtime/profile/library concerns around accepted message execution. Examples:
     FIFO or priority ordering;
     one message at a time or interleaving;
     queue capacity and overflow policy;
-    retry after transport/runtime failure;
+    transport retry after transport/runtime failure;
     pause, resume or cancellation;
     L5 Thread restart or termination policy;
     diagnostics, audit, trace, metrics and event history.
@@ -1343,6 +1366,105 @@ particular, a semantic failure is normally returned to the sender, reply target
 or continuation as a failure message. If that target is absent, expired or
 unreachable, the situation belongs to runtime/delivery policy, not to the core
 message expression semantics.
+
+11.7.1. Autonomous / Constrained Message Profiles
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some profiles need more than generic message execution. Autonomous, low-power,
+high-latency, degraded-link, safety-critical or heterogeneous-device systems
+may define domain message profiles with explicit tables for command lifecycle
+and physical limits.
+
+These features are not implied merely because a message is full LMX. A full LMX
+message can express algorithms, nested Structures and calls, but it does not by
+itself define command identity, freshness, physical units, safety budgets,
+idempotence, replay policy or degraded-mode behavior. Those are ordinary
+registry/message/profile relations consumed by validation/merge and execution.
+
+Typical profile rows include:
+
+    commandId / correlation / dedupKey
+        Identity rows used to recognize the same proposed operation again.
+
+    idempotent / duplicatePolicy / retryPolicy / replayPolicy
+        Whether repeated admission is allowed, rejected, coalesced, answered
+        from an earlier result, replayed from a decision log, or repaired by a
+        profile-defined recovery expression.
+
+    resource budgets
+        energy, memory, bandwidth, time, storage wear, heat, actuator cycles
+        or other profile-defined limits.
+
+    freshness
+        sampledAt, validUntil, staleAfter, calibrationValidUntil and related
+        evidence windows.
+
+    units and frames
+        physical units, coordinate frames, sensor frames, map frames and
+        conversion evidence.
+
+    uncertainty / evidence
+        confidence, errorBound, distribution, source, calibration, provenance
+        and validator-produced evidence.
+
+    plan mode
+        propose, validateOnly, execute, recordResult or another explicit
+        command lifecycle stage.
+
+    effect fences
+        mayRead, mayWrite, mayMove, mayTransmit, mayHeat, maySpendEnergy,
+        mayOverwrite, mayWakeDevice and similar effect bounds.
+
+    degradation
+        minimumMode, degradedMode, safeMode, fallbackProvider and
+        emergencyBinding.
+
+    decision log classes
+        observed, decided, executed, failed, repaired and replayed.
+
+    local-first conflict
+        localTruth, importedTruth, conflict, mergeEvidence and authoritySource.
+
+A semantic replay is different from a transport resend. A transport resend is a
+delivery/runtime policy around the envelope. A semantic replay is an ordinary
+validated LMX operation that reconstructs, repeats, repairs or answers an
+accepted command according to idempotence, evidence, authority, freshness and
+effect tables. It may use decision-log rows and previous result/failure
+messages, but it is still a proposed expression until validation/merge admits
+it.
+
+This does not introduce a second `retry` semantics. L3 already has
+`retryable` / `retry` as ordinary control receivers: `retryable` creates a
+restartable local execution frame, and `retry` re-enters the nearest or named
+retryable frame after the appropriate cleanups. An autonomous profile may use
+that L3 mechanism inside a concrete plan, for example with retryBudget,
+retryLimit, backoff, provider fallback or degraded-mode rows. Message replay is
+larger: it may construct or admit a new ProposedMessage or recovery expression
+from command identity and decision-log evidence. Transport retry is smaller:
+it resends an envelope without changing the source expression semantics.
+
+Likewise, a duplicate command is not handled by a hidden broker rule. The
+selected duplicatePolicy may reject it, return the previous result, merge it
+with an active operation, enqueue a repair expression, or allow another
+execution if the command is declared idempotent and the relevant evidence still
+holds.
+
+This keeps the boundary clean:
+
+    message-as-LMX
+        gives the executable proposed expression;
+
+    autonomous/constrained profile tables
+        give identity, budgets, freshness, uncertainty, replay/idempotence,
+        effect fences, degradation and decision-log policy;
+
+    validator/merge
+        turns the candidate plus profile rows into a concrete plan or a
+        diagnostic;
+
+    executor
+        runs only the concrete plan and records result/failure/evidence rows
+        according to the selected profile.
 
 11.8. Reply, Future, Failure and Continuation (old 27.10-27.13)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1656,6 +1778,10 @@ Part II reduces to these rules:
     validation = staged merge from IncomingMessageStructure to ExecutionPlan;
     executor = run only ExecutionPlans produced by validation/merge;
     provider = registry-described executor/lowering backend, not language syntax;
+    autonomous/constrained profiles = explicit tables for budgets, freshness,
+                uncertainty, idempotence/replay, effect fences, degradation and
+                decision logs;
+    L3 retry/retryable = local execution-frame restart, not transport resend;
     generator = create proposed messages from result/state/table rules;
     L3 return = executable-body control exit producing local execution result;
     L5 reply = boundary wrapper from result/failure to ordinary message record;
