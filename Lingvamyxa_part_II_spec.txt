@@ -386,6 +386,39 @@ descriptor rows are:
         File, line, receiver, generated origin, builtin origin or imported
         registry origin for diagnostics and incremental rebuilds.
 
+Provider/device descriptor rows may also be attached to binding payloads:
+
+    providerOf
+        The provider/device/profile that executes or lowers the payload.
+
+    binding
+        The concrete L2/L1/device/service binding selected for the payload.
+
+    precision
+        exact, bounded, approximate, calibrated, drifting or another
+        profile-defined precision policy.
+
+    latency
+        inline, slow, async, remote, cycles-counted or another profile-defined
+        execution-time policy.
+
+    determinism
+        deterministic, calibrated-deterministic, noisy, sampled or another
+        profile-defined repeatability policy.
+
+    confidence
+        none, flags, probability, u8 score or another profile-defined confidence
+        representation.
+
+    calibration
+        none, required, valid, expired, source-specific or another
+        profile-defined calibration state.
+
+    fallback
+        Alternative cells or payloads when the selected provider is unavailable,
+        rejected by policy, too expensive, insufficiently precise or below
+        required confidence.
+
 A diagnostic payload may be written explicitly:
 
     table: plus
@@ -1029,7 +1062,75 @@ ANSI C projection is a lowering table family. Cells may lower to:
 `c.*` is a permanent door to the ANSI C namespace/surface. It is not a normal
 Lingvamyxa namespace lookup.
 
-8.5. Codec and Persistence (old 21.9, 21.10)
+8.5. Provider and Device Profiles
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+External libraries, native services, device boards and remote modules are
+provider profiles over registry bindings. They are not part of the source
+syntax and not semantic parents of the language.
+
+A provider may be:
+
+    CPU/L1 primitive lowering;
+    ANSI C library binding;
+    bundled bootstrap library such as GMP, MPFR, decNumber, PCRE2, SQLite,
+    yyjson, libcurl, CivetWeb, libsodium or another hosted library;
+    generated L2/L3 executable;
+    analog, photonic, routing, neural or ROM-backed device module;
+    remote L5 service binding.
+
+The same source expression may resolve to different terminal cells in different
+RegistryViews. For example:
+
+    table: sqrt
+        BigFloat:
+            BigFloat: mpfr_sqrt_binding
+        fixedQ16:
+            fixedQ16: ana_sqrt_binding
+        f64:
+            f64: c.sqrt
+    end: sqrt
+
+    providerOf:
+        mpfr_sqrt_binding: MPFR
+        ana_sqrt_binding: ANA_SQRT
+        c.sqrt: CPU_C_Libm
+
+On a hosted bootstrap machine, `ANA_SQRT` may be simulated by an ANSI C wrapper
+around libm or MPFR. On another target, the same provider entry may lower to a
+physical analog board instruction. The source-level `sqrt` expression does not
+change; only the registry view and provider bindings change.
+
+The resolver/validator must treat provider selection as ordinary table
+resolution:
+
+    operation table chooses a semantic cell;
+    terminal cell payload names a binding;
+    provider side tables describe who/what executes that binding;
+    validator checks effects, authority, precision, latency, determinism,
+        confidence, calibration, lifetime and fallback policy;
+    ExecutionPlan fixes the selected binding so hot execution does not resolve
+        provider choice again.
+
+This discipline lets heavy hosted libraries act as earth-bootstrap surrogates
+for heterogeneous expansion boards without making those libraries part of the
+language. Examples:
+
+    MPFR / GMP / decNumber  -> high-precision math providers;
+    FFTW / BLAS / LAPACK    -> signal/matrix provider surrogates;
+    PCRE2                   -> pattern/matcher provider;
+    SQLite                  -> registry/storage provider;
+    yyjson                  -> external adapter provider;
+    libcurl / CivetWeb      -> transport/service envelope providers;
+    libsodium               -> crypto/auth provider.
+
+Direct `c.*` calls remain possible in L2/L1 substrate code, but ordinary L3+
+semantics should go through registry cells and provider validation. Removing
+MPFR and installing an `ANA_LOGEXP` provider should not require rewriting the
+source expression; it should require changing provider rows, bindings and
+RegistryView policy.
+
+8.6. Codec and Persistence (old 21.9, 21.10)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 `toLmx` and `fromLmx` are operation tables. All language values, including
@@ -1554,6 +1655,7 @@ Part II reduces to these rules:
     message expression = ordinary LMX admitted by receiver policy;
     validation = staged merge from IncomingMessageStructure to ExecutionPlan;
     executor = run only ExecutionPlans produced by validation/merge;
+    provider = registry-described executor/lowering backend, not language syntax;
     generator = create proposed messages from result/state/table rules;
     L3 return = executable-body control exit producing local execution result;
     L5 reply = boundary wrapper from result/failure to ordinary message record;
