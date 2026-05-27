@@ -139,7 +139,35 @@ and IDE indexes should be listeners/consumers above MIX. MIX only needs to
 provide efficient dynamic positions and active attribute tables.
 
 
-9. Implementation Consequence
+9. Cursor-Based Body Access
+---------------------------
+
+MIX is suitable for bodies that are too large or too active to copy into every
+message. A message may carry a cursor, tag, range, capability or storage
+reference to a MIX-backed body. The receiver then reads or writes through
+validated cursor operations.
+
+Multiple cursors may exist over the same MIX document/body. A cursor can expose:
+
+    current dynamic position;
+    active attribute table;
+    active overlapping sets;
+    linked parser/Structure context;
+    payload-local marks;
+    range/chunk projection requested by the consumer.
+
+This lets a runtime move short semantic records through a slow link while the
+large body remains in a document store, cache, local service object, MO/ROM
+storage or another profile-defined source. The body can be read in chunks or by
+position on demand.
+
+Concurrent cursor reading and writing is not hardcoded into the base semantic
+model. It belongs to the selected MIX storage/runtime profile. The base design
+only requires that cursor operations are ordinary validated LMX operations and
+that dynamic positions survive edits according to the MIX rules above.
+
+
+10. Implementation Consequence
 -----------------------------
 
 The first port should focus on the small core:
@@ -153,4 +181,3 @@ The first port should focus on the small core:
 
 Parser nodes, undo history, semantic invalidation and editor policies should
 not be hardcoded into the base MIX container.
-

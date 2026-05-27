@@ -458,6 +458,63 @@ implementation references. These are claims, not authority and not executable
 code. HTTP, queues, sockets and files are only transport/storage envelopes for
 such proposed expressions.
 
+2.1.1. Message Body, External Structures and MIX Cursors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A message expression may contain its body inline, but it is not required to do
+so. A message may also carry references, cursors, ranges or capabilities that
+identify external LMX Structures, MIX documents, storage objects or streamable
+body regions.
+
+Inline body:
+
+    message carries the Structure.
+
+External body:
+
+    message carries a cursor/reference/range/capability to a Structure.
+
+Streamed body:
+
+    cursor operations produce chunks, positions or projected Structures on
+    demand.
+
+Such external body references are ordinary LMX values. They are claims until
+validation/merge admits them. A receiver may validate the cursor, authority,
+range, lifetime and access mode before reading or writing the referenced body.
+
+The referenced body may be read incrementally. The core message model does not
+require the whole body to be present in one transport packet or one contiguous
+memory block. A profile may provide cursor-based access, chunked reading,
+chunked writing, range queries, lazy body loading or stream-like traversal.
+
+Example of a short semantic record that names a larger body:
+
+    message:
+        to: ReportService
+        expression:
+            process:
+                body:
+                    cursor: reportStore\flightLog\segment42
+                    range: current
+                    mode: readStream
+    end: message
+
+MIX-aware storage may support multiple cursors over the same document/body.
+Cursors expose the current attribute table, Structure context, active MIX sets
+and payload-local marks at their current position. Concurrent cursor use is a
+runtime/storage profile concern; the language-level rule is that cursor
+operations are ordinary validated LMX operations and may produce result/failure
+messages like any other expression.
+
+Therefore a small message may name or authorize a large body without carrying
+that body inline. Transport envelopes carry enough LMX to identify the proposed
+operation and its body references; the body itself may reside in a document
+store, MO/ROM storage, local cache, service object, stream or another
+profile-defined source. On slow links, the message frame can remain short while
+the semantic operation stays full LMX: the receiver reads the body only as
+needed and only through validated cursor operations.
+
 The core message model does not define a separate canonical wire-schema layer
 with built-in binary/text negotiation, schema-version migration, unknown-field
 compatibility, backward/forward/full compatibility modes, compression or
@@ -1058,6 +1115,41 @@ An L5 Thread owns:
 No raw mutable reference owned by one L5 Thread may point directly into another
 L5 Thread in the default profile.
 
+11.2.1. L5 Thread Registry View and Cache
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An L5 Thread does not own a complete global registry. It owns a local
+RegistryView and may own a RegistryCache.
+
+The RegistryView is an overlay/import/cache view over registry sources such as:
+
+    builtin/core tables;
+    module tables;
+    service tables;
+    device/profile tables;
+    imported base registry tables;
+    thread-local rows;
+    runtime evidence rows.
+
+Lookup, validation and execution-plan construction are performed against the
+current RegistryView. The view may cache selected cells, resolved names,
+validator evidence, authority evidence, lowered bindings and ExecutionPlans.
+The cache is an implementation optimization and does not define a separate
+namespace.
+
+Persistent registry sources may live in LMX files, ROM/MO records, generated
+database rows, server-side registry storage or cached binary indexes. A small
+node is not required to keep all persistent rows in RAM. It may keep only the
+active view and the cache entries required by its current messages, services and
+handlers.
+
+Local transient rows and evidence may be added by the L5 Thread according to
+the active profile. They are local overlays unless explicitly exported through a
+validated registry-change message or another admitted persistence operation.
+
+Registry changes may invalidate affected cached rows or emit registry-change
+messages according to the reactive registry profile.
+
 11.3. Root State and Handler Frame (old 27.2, 27.3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1467,4 +1559,6 @@ Part II reduces to these rules:
     L5 reply = boundary wrapper from result/failure to ordinary message record;
     L5 Thread = minimal isolated LMX machine that receives, validates, executes
                 and sends messages;
+    L5 RegistryView = local overlay/import/cache over persistent registry
+                      sources, not a full per-thread registry copy;
     memory/auth/service rules = table/evidence policies over the same pipeline.
