@@ -7413,6 +7413,32 @@ The enum constants are not imported into the Lingvamyxa namespace. They remain
 ordinary ANSI C names and are referenced explicitly through the permanent C
 surface escape, for example `c.LM_TRANS_SYMBOL_VARIABLE`.
 
+When a bootstrap translator reads external registry data, such as
+`lm2/trans_registry.lmx`, class/key spelling follows the same identifier rule as
+ordinary source names. If the class/key is a valid ordinary Lingvamyxa
+identifier, it is written bare:
+
+    u32
+    return
+    prefix
+    sqrt_ansi_c
+
+If the class/key contains operator characters, dots, arrows, whitespace,
+punctuation or any spelling that must round-trip exactly, it is written as an
+exact quoted identifier:
+
+    `+`
+    `!=`
+    `c.*`
+    `receiver.statement`
+    `translator type-->spelling`
+
+The backticks are not part of the class/key. They are only the exact identifier
+delimiter. The current bootstrap translator may still use a flat
+`row: table key payload` registry serialization internally; this is a temporary
+storage shape over the same class/key spelling rule, not a different semantic
+model.
+
 L2 `fn` and `sub` definitions lower to `static` ANSI C functions by default.
 This keeps ordinary L2 helper procedures local to the generated translation
 unit. The `external` receiver wraps exactly one `fn` or `sub` and requests

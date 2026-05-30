@@ -94,6 +94,11 @@ type. The following names may all be classes in this general sense:
     Message
     Validator
     AuthTicket
+    NULL
+    FORBIDDEN
+    spelling
+    implementation
+    result
 
 A class is meaningful because tables contain rows that mention it or are owned
 by it. A concrete value class, such as `decimal`, usually has representation
@@ -121,15 +126,15 @@ the root of the mechanism.
 1.2. Relation Tables and Class/Table Import/Overlay (new, old 18, 19, 20.5, 20.6, 21.5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Tables describe relations between classes. A binary operation may be represented
-directly as a sparse matrix:
+Tables describe relations between classes. A binary operation may be visualized
+as a sparse matrix:
 
     table equals
 
               decimal          real             int
     decimal   decimal_eq       decimal_real_eq  decimal_int_eq
     real      real_decimal_eq  real_eq          real_int_eq
-    int       int_decimal_eq   int_real_eq      c.==
+    int       int_decimal_eq   int_real_eq      int_eq
 
 The selected cell is the terminal payload returned by table lookup for the
 current table and lookup keys. The table name and the keys that selected the
@@ -137,13 +142,70 @@ cell are the access path; they are not required to be repeated inside the cell
 payload.
 
 A cell may be written in short form as a single atom such as `decimal_int_eq`,
-`decimal_int_add` or `c.==`. A consuming profile normalizes such a short form to
-a terminal cell payload kind and payload. Optional result, effect, lifetime,
+`decimal_int_add` or `int_eq`. A consuming profile normalizes such a short form
+to a terminal cell payload kind and payload. Optional result, effect, lifetime,
 authority, priority, cost and provenance metadata may be stored in side tables
 keyed by the payload class/key or by an implementation-generated cell id.
 
-If a row, column or cell is absent, the relation is absent. Adding a new class
-does not require adding it to every table.
+The canonical source form for a relation table is a typed table with an explicit
+name, column descriptors and rows. Class/key spelling follows the ordinary
+identifier rule:
+
+    if the class/key name is a valid ordinary Lingvamyxa identifier, write it
+        bare;
+    if it contains operator characters, whitespace, punctuation, dots, arrows,
+        external spellings or any spelling that must round-trip exactly, write
+        it as an exact quoted identifier.
+
+For example:
+
+    u32
+    result
+    implementation
+    sqrt_ansi_c
+    `+`
+    `translator type-->spelling`
+    `implementation-->L2 lowering`
+
+The semantic class/key value of an exact quoted identifier is its payload after
+backtick unescaping; the backticks are not part of the class/key.
+
+By convention the first column is `char@(class)`; it carries the row class/key.
+Later column names are also classes. The cell under such a column is the value
+of that relation coordinate:
+
+    table:
+        name: `translator type-->spelling`
+        columns: char@(class) char@(spelling)
+        rows:
+            u8  "uint8_t"
+            u16 "uint16_t"
+            u32 "uint32_t"
+    end: `translator type-->spelling`
+
+This means:
+
+    `translator type-->spelling`[u8][spelling]  -> "uint8_t"
+    `translator type-->spelling`[u16][spelling] -> "uint16_t"
+
+Here `translator type-->spelling`, class, spelling, u8 and u16 are
+registry classes/keys. The strings `"uint8_t"` and `"uint16_t"` are terminal
+primitive payloads for the active L2/L1 lowering profile unless another table
+explicitly treats those spellings as registry classes.
+
+`NULL` is the standard empty cell value. At the LMX semantic lookup boundary, a
+missing row, missing column, missing cell and an SQL-style NULL cell all
+normalize to `NULL`. An implementation resolver may still distinguish
+"not found in this overlay" from "found NULL" internally in order to support
+imports, overlays and masking, but `ABSENT` is not a separate semantic class in
+the core table model.
+
+`FORBIDDEN` is the standard explicit prohibition class/value. It is different
+from `NULL`: `NULL` means no value is present, while `FORBIDDEN` means the
+relation is present and explicitly denied.
+
+Adding a new class does not require adding it to every table. Missing cells
+become `NULL` after the full lookup path is exhausted.
 
 The same information may be viewed through another table, for example a
 class-centered view:
@@ -212,15 +274,12 @@ whose result goes to the MIX overlay stream.
 
 Example sparse registry source:
 
-    table: equals
-        {group: numeric}
-        decimal:
-            decimal: decimal_eq
-            int: decimal_int_eq
-        int:
-            int: c.==
-            decimal: int_decimal_eq
-        {end: numeric}
+    table:
+        name: equals
+        columns: char@(class) char@(decimal) char@(int)
+        rows:
+            decimal decimal_eq decimal_int_eq
+            int     int_decimal_eq int_eq
     end: equals
 
 The interpreter/resolver must be able to consume such LMX/MIX definitions and
@@ -244,10 +303,12 @@ the resolver performs:
     column = class(b)
     cell = plus[row][column]
 
-If the cell is absent, the expression is invalid in that registry. If exactly
-one cell is selected, the expression becomes resolved. If a table profile
-admits multiple candidates, priority/cost tables must reduce them to one
-candidate or report ambiguity.
+If the full lookup path returns `NULL`, the expression is invalid in that
+registry unless the consuming receiver/profile explicitly admits `NULL`. If the
+selected cell is `FORBIDDEN`, the expression is rejected with an explicit
+prohibition diagnostic. If exactly one non-NULL cell is selected, the expression
+becomes resolved. If a table profile admits multiple candidates, priority/cost
+tables must reduce them to one candidate or report ambiguity.
 
 For a generic expression, some coordinates are initially unknown:
 
@@ -295,12 +356,23 @@ The minimal normalized terminal cell payload has two fields:
 Mandatory payload kinds are:
 
     primitive
-        A primitive/scalar value or literal result.
+        A primitive/scalar value, literal result or terminal L2/L1 lowering
+        payload admitted by the active profile. In early bootstrap tables many
+        final cells are primitive lowering payloads such as `"uint32_t"`,
+        `"sqrt"` or `"=="`.
 
     binding
         A reference to an executable or lowerable binding, such as an L2/L3
         function/subroutine target, an L1/C symbol, an inline primitive lowering
         rule or a generated trampoline.
+
+    descriptor
+        A registry descriptor. In this draft the only mandatory descriptor form
+        is a class/key reference: the cell names another registry class/key and
+        the resolver may continue through tables selected by the consuming
+        profile. Structured descriptor records, callable descriptor payloads,
+        provider descriptor records and other descriptor forms are reserved for
+        later revisions.
 
     expression
         An L2/L3/L4/L5 expression Structure admitted by the selected profile.
@@ -322,49 +394,74 @@ Mandatory payload kinds are:
         A rejection, missing relation, ambiguity, conflict or profile-defined
         diagnostic Structure.
 
-    empty
-        Explicit absence of the relation. A profile may also represent absence
-        by not storing a cell at all.
+    null
+        The standard empty result. Missing row, missing column, missing cell and
+        SQL-style NULL cell all normalize to `NULL` after the full lookup path
+        is exhausted.
+
+    forbidden
+        Explicit prohibition. `FORBIDDEN` is not an empty value; it means the
+        relation exists and is denied.
 
     conflict
         An explicit conflict marker produced by registry loading or resolution.
 
 A short source spelling may normalize directly to a payload. Examples:
 
-    table: plus
-        decimal:
-            int: decimal_int_add
-        u32:
-            u32: c.+
+    table:
+        name: plus
+        columns: char@(class) char@(int) char@(u32)
+        rows:
+            decimal decimal_int_add NULL
+            u32     NULL            plus_u32_u32_l2
     end: plus
 
 may normalize conceptually as:
 
-    plus[decimal][int] -> CellPayload(binding, decimal_int_add)
-    plus[u32][u32]     -> CellPayload(binding, c.+)
+    plus[decimal][int] -> CellPayload(descriptor, decimal_int_add)
+    plus[u32][u32]     -> CellPayload(descriptor, plus_u32_u32_l2)
 
 A terminal cell payload is not required to be a heavy record in source form. The
 payload atom may itself be a registry class/key. That class/key may then be
 used as a key into additional descriptor tables:
 
-    table: result
-        decimal_int_add: decimal
-        c.+: u32
-    end: result
+    table:
+        name: `plus cell-->result`
+        columns: char@(class) char@(result)
+        rows:
+            decimal_int_add decimal
+            plus_u32_u32_l2 u32
+    end: `plus cell-->result`
 
-    table: effects
-        decimal_int_add: pure
-        c.+: pure
+    table:
+        name: effects
+        columns: char@(class) char@(effect)
+        rows:
+            decimal_int_add pure
+            plus_u32_u32_l2 pure
     end: effects
 
-    table: level
-        decimal_int_add: L2
-        c.+: L1
+    table:
+        name: level
+        columns: char@(class) char@(level)
+        rows:
+            decimal_int_add L2
+            plus_u32_u32_l2 L2
     end: level
 
-    table: cost
-        decimal_int_add: 10
-        c.+: 1
+    table:
+        name: `implementation-->L2 lowering`
+        columns: char@(class) char@(symbol)
+        rows:
+            plus_u32_u32_l2 "+"
+    end: `implementation-->L2 lowering`
+
+    table:
+        name: cost
+        columns: char@(class) int@(cost)
+        rows:
+            decimal_int_add 10
+            plus_u32_u32_l2 1
     end: cost
 
 Therefore optional cell descriptor information may be stored inline, derived
@@ -917,7 +1014,7 @@ information may be stored as rows in registry tables.
 Examples:
 
     field[Circle][radius] = f64
-    plus[u32][u32] = c.+
+    plus[u32][u32] = plus_u32_u32_l2
     equals[String][String] = string_equals
     validator[LightPassenger][Person] = check_weight
     accepts[ArchiveService][save] = save_message_validator
@@ -952,7 +1049,7 @@ A validator is not required to be a boolean predicate. It may produce:
     stronger evidence;
     obligation for a later stage;
     tableKey for continued resolution;
-    conflict/empty payload.
+    conflict/NULL/FORBIDDEN payload.
 
 Validator dependencies are ordinary registry graph dependencies. The
 Validator/Merge driver must therefore define cycle detection, memoization of
@@ -1083,7 +1180,11 @@ ANSI C projection is a lowering table family. Cells may lower to:
     raw `c.*` surface.
 
 `c.*` is a permanent door to the ANSI C namespace/surface. It is not a normal
-Lingvamyxa namespace lookup.
+Lingvamyxa namespace lookup. Ordinary L3+ registry tables should not use
+`c.*` spellings as registry classes/keys. Use a registry class/key such as
+`sqrt_ansi_c` or `plus_u32_u32_l2`, then map that class/key through an L2/L1
+lowering table to a primitive symbol or lowering payload such as `"sqrt"` or
+`"+"`.
 
 8.5. Provider and Device Profiles
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1105,19 +1206,32 @@ A provider may be:
 The same source expression may resolve to different terminal cells in different
 RegistryViews. For example:
 
-    table: sqrt
-        BigFloat:
-            BigFloat: mpfr_sqrt_binding
-        fixedQ16:
-            fixedQ16: ana_sqrt_binding
-        f64:
-            f64: c.sqrt
+    table:
+        name: sqrt
+        columns: char@(class) char@(result) char@(implementation)
+        rows:
+            BigFloat BigFloat sqrt_mpfr
+            fixedQ16 fixedQ16 sqrt_ana
+            f64      f64      sqrt_ansi_c
     end: sqrt
 
-    providerOf:
-        mpfr_sqrt_binding: MPFR
-        ana_sqrt_binding: ANA_SQRT
-        c.sqrt: CPU_C_Libm
+    table:
+        name: `implementation-->L2 lowering`
+        columns: char@(class) char@(symbol)
+        rows:
+            sqrt_mpfr   "mpfr_sqrt"
+            sqrt_ana    "ana_sqrt"
+            sqrt_ansi_c "sqrt"
+    end: `implementation-->L2 lowering`
+
+    table:
+        name: providerOf
+        columns: char@(class) char@(provider)
+        rows:
+            sqrt_mpfr MPFR
+            sqrt_ana ANA_SQRT
+            sqrt_ansi_c CPU_C_Libm
+    end: providerOf
 
 On a hosted bootstrap machine, `ANA_SQRT` may be simulated by an ANSI C wrapper
 around libm or MPFR. On another target, the same provider entry may lower to a
@@ -1172,11 +1286,12 @@ definitions plus expressions, not as special syntax.
 
 Example operator cell:
 
-    table: equals
-        u32:
-            u32: c.==
-        decimal:
-            decimal: decimal_eq
+    table:
+        name: equals
+        columns: char@(class) char@(u32) char@(decimal)
+        rows:
+            u32     u32_eq NULL
+            decimal NULL decimal_eq
     end: equals
 
 Example L5 conditional route:
@@ -1196,8 +1311,7 @@ Example L5 conditional route:
 
 Open points for this part:
 
-    exact LMX source shape for sparse registry tables;
-    exact bootstrap storage layout for CellKey -> CellPayload and optional side tables;
+    exact optimized storage layout for CellKey -> CellPayload and optional side tables;
     whether the first registry backend is hash tables, SQLite or both;
     resolver ranking/ambiguity defaults;
     how much of current L2 hardcoded lowering moves into registry tables first;

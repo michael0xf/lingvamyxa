@@ -360,6 +360,34 @@ static void lm_trans_registry_row_destroy_any(void *object) {
     lm_own_delete(row, 0);
 }
 
+static int lm_trans_registry_push_row_atoms(
+    LmP0Text table_atom,
+    LmP0Text key_atom,
+    LmP0Text payload_atom
+) {
+    LmTransRegistryRow *row;
+
+    row = (LmTransRegistryRow *)lm_own_new_zero(sizeof(*row));
+    if (row == 0) {
+        return -1;
+    }
+
+    row->table = lm_trans_registry_atom_copy_cstr(table_atom);
+    row->key = lm_trans_registry_atom_copy_cstr(key_atom);
+    row->payload = lm_trans_registry_atom_copy_cstr(payload_atom);
+    if (row->table == 0 || row->key == 0 || row->payload == 0) {
+        lm_trans_registry_row_destroy_any(row);
+        return -1;
+    }
+
+    if (lm_own_ptr_stack_push(&lm_trans_registry.rows, row) != 0) {
+        lm_trans_registry_row_destroy_any(row);
+        return -1;
+    }
+
+    return 0;
+}
+
 static const char *lm_trans_registry_lookup(LmP0Text key, const char *table) {
     size_t i;
     LmTransRegistryRow *row;
@@ -5266,7 +5294,6 @@ static int lm_trans_registry_row_from_frame(const LmP0Frame *frame) {
     const LmP0Field *table_field;
     const LmP0Field *key_field;
     const LmP0Field *payload_field;
-    LmTransRegistryRow *row;
 
     if (frame == 0 || !lm_trans_text_equals(frame->head, "row")) {
         return 0;
@@ -5291,19 +5318,277 @@ static int lm_trans_registry_row_from_frame(const LmP0Frame *frame) {
         return -1;
     }
 
-    row = (LmTransRegistryRow *)lm_own_new_zero(sizeof(*row));
-    if (row == 0) {
+    if (
+        lm_trans_registry_push_row_atoms(
+            table_field->value->as.atom,
+            key_field->value->as.atom,
+            payload_field->value->as.atom
+        ) != 0
+    ) {
         return -1;
     }
-    row->table = lm_trans_registry_atom_copy_cstr(table_field->value->as.atom);
-    row->key = lm_trans_registry_atom_copy_cstr(key_field->value->as.atom);
-    row->payload = lm_trans_registry_atom_copy_cstr(payload_field->value->as.atom);
-    if (row->table == 0 || row->key == 0 || row->payload == 0) {
-        lm_trans_registry_row_destroy_any(row);
+
+    return 1;
+}
+
+static int lm_trans_registry_frame_single_atom(
+    const LmP0Frame *frame,
+    const char *head,
+    LmP0Text *out_atom
+) {
+    const LmP0Field *field;
+
+    if (frame == 0 || head == 0 || out_atom == 0) {
+        return 0;
+    }
+    if (!lm_trans_text_equals(frame->head, head)) {
+        return 0;
+    }
+
+    field = lm_trans_nth_field(&frame->body, 0U);
+    if (
+        field == 0 ||
+        field->next != 0 ||
+        field->value == 0 ||
+        field->value->kind != LM_P0_NODE_ATOM
+    ) {
         return -1;
     }
-    if (lm_own_ptr_stack_push(&lm_trans_registry.rows, row) != 0) {
-        lm_trans_registry_row_destroy_any(row);
+
+    *out_atom = field->value->as.atom;
+    return 1;
+}
+
+static int lm_trans_registry_column_name(
+    const LmP0Field *field,
+    LmP0Text *out_name
+) {
+    const LmP0Node *node;
+
+    if (field == 0 || out_name == 0) {
+        return 0;
+    }
+
+    node = field->value;
+    if (node == 0 || node->kind != LM_P0_NODE_FRAME) {
+        return -1;
+    }
+
+    if (lm_trans_registry_frame_single_atom(&node->as.frame, "char@", out_name) > 0) {
+        return 1;
+    }
+    if (lm_trans_registry_frame_single_atom(&node->as.frame, "int@", out_name) > 0) {
+        return 1;
+    }
+    if (lm_trans_registry_frame_single_atom(&node->as.frame, "binding@", out_name) > 0) {
+        return 1;
+    }
+    if (lm_trans_registry_frame_single_atom(&node->as.frame, "class@", out_name) > 0) {
+        return 1;
+    }
+
+    return -1;
+}
+
+static int lm_trans_registry_columns_from_frame(
+    const LmP0Frame *frame,
+    size_t *out_count
+) {
+    const LmP0Field *field;
+    LmP0Text first_name;
+    LmP0Text column_name;
+    size_t count;
+    int status;
+
+    if (frame == 0 || out_count == 0 || !lm_trans_text_equals(frame->head, "columns")) {
+        return 0;
+    }
+
+    count = 0U;
+    field = frame->body.first_field;
+    while (field != 0) {
+        if (field->value != 0 && !lm_trans_node_is_ignored(field->value)) {
+            status = lm_trans_registry_column_name(field, &column_name);
+            if (status <= 0) {
+                fprintf(stderr, "trans registry error: columns expects typed column descriptors\n");
+                return -1;
+            }
+            if (count == 0U) {
+                first_name = column_name;
+            }
+            ++count;
+        }
+        field = field->next;
+    }
+
+    if (count != 2U) {
+        fprintf(stderr, "trans registry error: bootstrap table expects exactly two columns\n");
+        return -1;
+    }
+    if (!lm_trans_text_equals(first_name, "class")) {
+        fprintf(stderr, "trans registry error: first table column must be class\n");
+        return -1;
+    }
+
+    *out_count = count;
+    return 1;
+}
+
+static int lm_trans_registry_rows_from_frame(
+    const LmP0Frame *frame,
+    LmP0Text table_name,
+    size_t column_count
+) {
+    const LmP0Field *field;
+    const LmP0Node *key_node;
+    const LmP0Node *payload_node;
+    size_t field_index;
+
+    if (frame == 0 || !lm_trans_text_equals(frame->head, "rows")) {
+        return 0;
+    }
+    if (column_count != 2U) {
+        fprintf(stderr, "trans registry error: bootstrap rows require two columns\n");
+        return -1;
+    }
+
+    field_index = 0U;
+    field = frame->body.first_field;
+    while (field != 0) {
+        if (field->value != 0 && !lm_trans_node_is_ignored(field->value)) {
+            if ((field_index % column_count) == 0U) {
+                key_node = field->value;
+                if (field->next == 0 || field->next->value == 0) {
+                    fprintf(stderr, "trans registry error: rows field count is not divisible by column count\n");
+                    return -1;
+                }
+                payload_node = field->next->value;
+                if (
+                    key_node->kind != LM_P0_NODE_ATOM ||
+                    payload_node->kind != LM_P0_NODE_ATOM
+                ) {
+                    fprintf(stderr, "trans registry error: table rows currently expect atom cells\n");
+                    return -1;
+                }
+                if (
+                    lm_trans_registry_push_row_atoms(
+                        table_name,
+                        key_node->as.atom,
+                        payload_node->as.atom
+                    ) != 0
+                ) {
+                    return -1;
+                }
+            }
+            ++field_index;
+        }
+        field = field->next;
+    }
+
+    if ((field_index % column_count) != 0U) {
+        fprintf(stderr, "trans registry error: rows field count is not divisible by column count\n");
+        return -1;
+    }
+    if (field_index == 0U) {
+        fprintf(stderr, "trans registry error: table rows must not be empty\n");
+        return -1;
+    }
+
+    return 1;
+}
+
+static int lm_trans_registry_validate_table_trailer(
+    const LmP0Frame *frame,
+    LmP0Text table_name
+) {
+    LmP0Text actual;
+    LmP0Text actual_payload;
+    LmP0Text expected_payload;
+
+    if (frame == 0 || frame->trailer == 0) {
+        return 0;
+    }
+    if (!lm_trans_text_equals(frame->trailer->spelling, "end")) {
+        return 0;
+    }
+    if (!lm_trans_trailer_single_atom(frame->trailer, &actual)) {
+        fprintf(stderr, "trans registry error: table end expects exactly one target name\n");
+        return 1;
+    }
+    if (
+        !lm_trans_registry_atom_payload(actual, &actual_payload) ||
+        !lm_trans_registry_atom_payload(table_name, &expected_payload) ||
+        !lm_trans_text_same(actual_payload, expected_payload)
+    ) {
+        fprintf(stderr, "trans registry error: table end target does not match table name\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_trans_registry_table_from_frame(const LmP0Frame *frame) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    LmP0Text table_name;
+    size_t column_count;
+    int have_name;
+    int have_columns;
+    int have_rows;
+    int status;
+
+    if (frame == 0 || !lm_trans_text_equals(frame->head, "table")) {
+        return 0;
+    }
+
+    have_name = 0;
+    have_columns = 0;
+    have_rows = 0;
+    column_count = 0U;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (node != 0 && !lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans registry error: table body expects name/columns/rows frames\n");
+                return -1;
+            }
+            status = lm_trans_registry_frame_single_atom(&node->as.frame, "name", &table_name);
+            if (status < 0) {
+                fprintf(stderr, "trans registry error: table name expects exactly one atom\n");
+                return -1;
+            }
+            if (status > 0) {
+                have_name = 1;
+            } else if (lm_trans_text_equals(node->as.frame.head, "columns")) {
+                status = lm_trans_registry_columns_from_frame(&node->as.frame, &column_count);
+                if (status <= 0) {
+                    return -1;
+                }
+                have_columns = 1;
+            } else if (lm_trans_text_equals(node->as.frame.head, "rows")) {
+                if (!have_name || !have_columns) {
+                    fprintf(stderr, "trans registry error: table rows must appear after name and columns\n");
+                    return -1;
+                }
+                status = lm_trans_registry_rows_from_frame(&node->as.frame, table_name, column_count);
+                if (status <= 0) {
+                    return -1;
+                }
+                have_rows = 1;
+            } else {
+                fprintf(stderr, "trans registry error: table body expects name/columns/rows frames\n");
+                return -1;
+            }
+        }
+        field = field->next;
+    }
+
+    if (!have_name || !have_columns || !have_rows) {
+        fprintf(stderr, "trans registry error: table requires name, columns and rows\n");
+        return -1;
+    }
+    if (lm_trans_registry_validate_table_trailer(frame, table_name) != 0) {
         return -1;
     }
 
@@ -5324,15 +5609,21 @@ static int lm_trans_registry_load_rows(const LmP0Structure *structure) {
         node = field->value;
         if (!lm_trans_node_is_ignored(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "trans registry error: registry body expects row frames\n");
+                fprintf(stderr, "trans registry error: registry body expects table or row frames\n");
                 return 1;
             }
             status = lm_trans_registry_row_from_frame(&node->as.frame);
             if (status <= 0) {
-                if (status == 0) {
-                    fprintf(stderr, "trans registry error: registry body expects row frames\n");
+                if (status < 0) {
+                    return 1;
                 }
-                return 1;
+                status = lm_trans_registry_table_from_frame(&node->as.frame);
+                if (status <= 0) {
+                    if (status == 0) {
+                        fprintf(stderr, "trans registry error: registry body expects table or row frames\n");
+                    }
+                    return 1;
+                }
             }
         }
         field = field->next;
@@ -5357,7 +5648,7 @@ static int lm_trans_registry_load_root(const LmP0Node *root) {
         node = field->value;
         if (!lm_trans_node_is_ignored(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "trans registry error: root fields must be registry or row frames\n");
+                fprintf(stderr, "trans registry error: root fields must be registry, table or row frames\n");
                 return 1;
             }
             if (lm_trans_text_equals(node->as.frame.head, "registry")) {
@@ -5373,8 +5664,13 @@ static int lm_trans_registry_load_root(const LmP0Node *root) {
                     return 1;
                 }
                 loaded = 1;
+            } else if (lm_trans_text_equals(node->as.frame.head, "table")) {
+                if (lm_trans_registry_table_from_frame(&node->as.frame) <= 0) {
+                    return 1;
+                }
+                loaded = 1;
             } else {
-                fprintf(stderr, "trans registry error: root fields must be registry or row frames\n");
+                fprintf(stderr, "trans registry error: root fields must be registry, table or row frames\n");
                 return 1;
             }
         }
