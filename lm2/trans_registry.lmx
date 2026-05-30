@@ -41,22 +41,38 @@ registry:
         name: `receiver.reserved`
         columns: char@(class) char@(receiver)
         rows:
-            L1 `lower.l1`
-            L2 `lower.l2`
-            fn `function.primitive`
-            fm `function.struct`
-            sub procedure
-            if `statement.if`
-            else `statement.else`
-            while `statement.while`
-            return `statement.return`
-            break `statement.break`
-            continue `statement.continue`
-            end `trailer.end`
-            until `trailer.until`
-            synchronized `statement.synchronized`
-            const `declaration.const`
-            external `linkage.external`
+            # old payload: L1 `lower.l1`
+            L1 reserved
+            # old payload: L2 `lower.l2`
+            L2 reserved
+            # old payload: fn `function.primitive`
+            fn reserved
+            # old payload: fm `function.struct`
+            fm reserved
+            # old payload: sub procedure
+            sub reserved
+            # old payload: if `statement.if`
+            if reserved
+            # old payload: else `statement.else`
+            else reserved
+            # old payload: while `statement.while`
+            while reserved
+            # old payload: return `statement.return`
+            return reserved
+            # old payload: break `statement.break`
+            break reserved
+            # old payload: continue `statement.continue`
+            continue reserved
+            # old payload: end `trailer.end`
+            end reserved
+            # old payload: until `trailer.until`
+            until reserved
+            # old payload: synchronized `statement.synchronized`
+            synchronized reserved
+            # old payload: const `declaration.const`
+            const reserved
+            # old payload: external `linkage.external`
+            external reserved
     end: `receiver.reserved`
 
     table:
@@ -115,7 +131,7 @@ registry:
             entry name
     end: `receiver.positionalName`
 
-    table:
+    %table:
         name: `lowering.target`
         columns: char@(class) char@(lowering)
         rows:
