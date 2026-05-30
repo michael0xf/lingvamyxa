@@ -15,6 +15,19 @@ typedef enum LmTransSymbolKind {
     LM_TRANS_SYMBOL_STRUCTURE = 5
 } LmTransSymbolKind;
 
+typedef struct LmTransRegistryRow {
+    char *table;
+    char *key;
+    char *payload;
+} LmTransRegistryRow;
+
+typedef struct LmTransRegistry {
+    LmOwnPtrStack rows;
+    int loaded;
+} LmTransRegistry;
+
+static LmTransRegistry lm_trans_registry;
+
 typedef struct LmTransSymbol {
     LmP0Text *name;
     LmTransSymbolKind kind;
@@ -281,6 +294,438 @@ static int lm_trans_text_starts_with(LmP0Text text, const char *prefix) {
     return text.length >= length && memcmp(text.data, prefix, length) == 0;
 }
 
+static char *lm_trans_text_copy_cstr(LmP0Text text) {
+    char *copy;
+
+    copy = (char *)malloc(text.length + 1U);
+    if (copy == 0) {
+        return 0;
+    }
+    if (text.length > 0U) {
+        memcpy(copy, text.data, text.length);
+    }
+    copy[text.length] = '\0';
+    return copy;
+}
+
+static int lm_trans_registry_atom_payload(LmP0Text atom, LmP0Text *out_payload) {
+    char quote;
+
+    if (out_payload == 0) {
+        return 0;
+    }
+
+    *out_payload = atom;
+    if (atom.length < 2U) {
+        return 1;
+    }
+
+    quote = atom.data[0];
+    if (
+        (quote == '`' || quote == '"' || quote == '\'') &&
+        atom.data[atom.length - 1U] == quote
+    ) {
+        out_payload->data = atom.data + 1U;
+        out_payload->length = atom.length - 2U;
+    }
+
+    return 1;
+}
+
+static char *lm_trans_registry_atom_copy_cstr(LmP0Text atom) {
+    LmP0Text payload;
+
+    if (!lm_trans_registry_atom_payload(atom, &payload)) {
+        return 0;
+    }
+    return lm_trans_text_copy_cstr(payload);
+}
+
+static void lm_trans_registry_row_destroy_fields(LmTransRegistryRow *row) {
+    if (row != 0) {
+        free(row->table);
+        free(row->key);
+        free(row->payload);
+        row->table = 0;
+        row->key = 0;
+        row->payload = 0;
+    }
+}
+
+static void lm_trans_registry_row_destroy_any(void *object) {
+    LmTransRegistryRow *row;
+
+    row = (LmTransRegistryRow *)object;
+    lm_trans_registry_row_destroy_fields(row);
+    lm_own_delete(row, 0);
+}
+
+static const char *lm_trans_registry_lookup(LmP0Text key, const char *table) {
+    size_t i;
+    LmTransRegistryRow *row;
+
+    if (table == 0) {
+        return 0;
+    }
+
+    i = lm_trans_registry.rows.count;
+    while (i > 0U) {
+        --i;
+        row = (LmTransRegistryRow *)lm_own_ptr_stack_at(&lm_trans_registry.rows, i);
+        if (
+            row != 0 &&
+            row->table != 0 &&
+            row->key != 0 &&
+            strcmp(row->table, table) == 0 &&
+            lm_trans_text_equals(key, row->key)
+        ) {
+            return row->payload;
+        }
+    }
+
+    return 0;
+}
+
+static int lm_trans_registry_has(LmP0Text key, const char *table) {
+    return lm_trans_registry_lookup(key, table) != 0;
+}
+
+static int lm_trans_registry_has_prefix(LmP0Text text, const char *table) {
+    size_t i;
+    LmTransRegistryRow *row;
+
+    if (table == 0) {
+        return 0;
+    }
+
+    i = lm_trans_registry.rows.count;
+    while (i > 0U) {
+        --i;
+        row = (LmTransRegistryRow *)lm_own_ptr_stack_at(&lm_trans_registry.rows, i);
+        if (
+            row != 0 &&
+            row->table != 0 &&
+            row->key != 0 &&
+            strcmp(row->table, table) == 0 &&
+            lm_trans_text_starts_with(text, row->key)
+        ) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int lm_trans_registry_compare_enabled(void) {
+    const char *value;
+    static int initialized = 0;
+    static int enabled = 1;
+
+    if (!initialized) {
+        value = getenv("LM_TRANS_COMPARE_REGISTRY");
+        enabled = value == 0 || strcmp(value, "0") != 0;
+        initialized = 1;
+    }
+
+    return enabled;
+}
+
+static const char *lm_trans_payload_text(const char *payload) {
+    return payload != 0 ? payload : "<none>";
+}
+
+static void lm_trans_registry_compare_fail(
+    const char *table,
+    LmP0Text key,
+    const char *registry_payload,
+    const char *legacy_payload
+) {
+    fprintf(
+        stderr,
+        "trans registry mismatch: table=%s key=\"%.*s\" registry=%s legacy=%s\n",
+        table != 0 ? table : "<none>",
+        (int)key.length,
+        key.data,
+        lm_trans_payload_text(registry_payload),
+        lm_trans_payload_text(legacy_payload)
+    );
+    exit(2);
+}
+
+static const char *lm_trans_registry_lookup_compare(
+    LmP0Text key,
+    const char *table,
+    const char *legacy_payload
+) {
+    const char *registry_payload;
+
+    registry_payload = lm_trans_registry_lookup(key, table);
+    if (
+        lm_trans_registry_compare_enabled() &&
+        (
+            (registry_payload == 0 && legacy_payload != 0) ||
+            (registry_payload != 0 && legacy_payload == 0) ||
+            (registry_payload != 0 && legacy_payload != 0 && strcmp(registry_payload, legacy_payload) != 0)
+        )
+    ) {
+        lm_trans_registry_compare_fail(table, key, registry_payload, legacy_payload);
+    }
+
+    return registry_payload;
+}
+
+static int lm_trans_registry_has_compare(
+    LmP0Text key,
+    const char *table,
+    int legacy_result
+) {
+    const char *registry_payload;
+    int registry_result;
+
+    registry_payload = lm_trans_registry_lookup(key, table);
+    registry_result = registry_payload != 0;
+    if (lm_trans_registry_compare_enabled() && registry_result != legacy_result) {
+        lm_trans_registry_compare_fail(table, key, registry_payload, legacy_result ? "<present>" : 0);
+    }
+    return registry_result;
+}
+
+static int lm_trans_bool_compare(
+    const char *table,
+    LmP0Text key,
+    int registry_result,
+    int legacy_result
+) {
+    if (lm_trans_registry_compare_enabled() && registry_result != legacy_result) {
+        lm_trans_registry_compare_fail(
+            table,
+            key,
+            registry_result ? "<present>" : 0,
+            legacy_result ? "<present>" : 0
+        );
+    }
+    return registry_result;
+}
+
+static const char *lm_trans_legacy_c_spelling(LmP0Text name) {
+    if (lm_trans_text_equals(name, "u8")) {
+        return "uint8_t";
+    }
+    if (lm_trans_text_equals(name, "u16")) {
+        return "uint16_t";
+    }
+    if (lm_trans_text_equals(name, "u32")) {
+        return "uint32_t";
+    }
+    if (lm_trans_text_equals(name, "u64")) {
+        return "uint64_t";
+    }
+    if (lm_trans_text_equals(name, "i8")) {
+        return "int8_t";
+    }
+    if (lm_trans_text_equals(name, "i16")) {
+        return "int16_t";
+    }
+    if (lm_trans_text_equals(name, "i32")) {
+        return "int32_t";
+    }
+    if (lm_trans_text_equals(name, "i64")) {
+        return "int64_t";
+    }
+
+    return 0;
+}
+
+static int lm_trans_legacy_builtin_c_type_tail(LmP0Text name) {
+    return
+        lm_trans_legacy_c_spelling(name) != 0 ||
+        lm_trans_text_equals(name, "void") ||
+        lm_trans_text_equals(name, "char") ||
+        lm_trans_text_equals(name, "short") ||
+        lm_trans_text_equals(name, "int") ||
+        lm_trans_text_equals(name, "long") ||
+        lm_trans_text_equals(name, "float") ||
+        lm_trans_text_equals(name, "double") ||
+        lm_trans_text_equals(name, "signed") ||
+        lm_trans_text_equals(name, "unsigned") ||
+        lm_trans_text_equals(name, "size_t") ||
+        lm_trans_text_equals(name, "FILE");
+}
+
+static int lm_trans_legacy_text_is_operator_atom(LmP0Text text) {
+    return
+        lm_trans_text_equals(text, "++") ||
+        lm_trans_text_equals(text, "--") ||
+        lm_trans_text_equals(text, "+") ||
+        lm_trans_text_equals(text, "-") ||
+        lm_trans_text_equals(text, "*") ||
+        lm_trans_text_equals(text, "/") ||
+        lm_trans_text_equals(text, "%") ||
+        lm_trans_text_equals(text, "=") ||
+        lm_trans_text_equals(text, "!=") ||
+        lm_trans_text_equals(text, "<") ||
+        lm_trans_text_equals(text, "<=") ||
+        lm_trans_text_equals(text, ">") ||
+        lm_trans_text_equals(text, ">=") ||
+        lm_trans_text_equals(text, "&&") ||
+        lm_trans_text_equals(text, "||") ||
+        lm_trans_text_equals(text, "&") ||
+        lm_trans_text_equals(text, "|") ||
+        lm_trans_text_equals(text, "^") ||
+        lm_trans_text_equals(text, "!") ||
+        lm_trans_text_equals(text, "~") ||
+        lm_trans_text_equals(text, "@") ||
+        lm_trans_text_equals(text, "\\") ||
+        lm_trans_text_equals(text, "[") ||
+        lm_trans_text_equals(text, "]");
+}
+
+static int lm_trans_legacy_is_reserved_head_name(LmP0Text name) {
+    return
+        lm_trans_text_equals(name, "L1") ||
+        lm_trans_text_equals(name, "L2") ||
+        lm_trans_text_equals(name, "fn") ||
+        lm_trans_text_equals(name, "fm") ||
+        lm_trans_text_equals(name, "sub") ||
+        lm_trans_text_equals(name, "if") ||
+        lm_trans_text_equals(name, "else") ||
+        lm_trans_text_equals(name, "while") ||
+        lm_trans_text_equals(name, "return") ||
+        lm_trans_text_equals(name, "break") ||
+        lm_trans_text_equals(name, "continue") ||
+        lm_trans_text_equals(name, "end") ||
+        lm_trans_text_equals(name, "until") ||
+        lm_trans_text_equals(name, "synchronized") ||
+        lm_trans_text_equals(name, "const") ||
+        lm_trans_text_equals(name, "external");
+}
+
+static int lm_trans_legacy_atom_is_prefix_expr_operator(LmP0Text text) {
+    return
+        lm_trans_text_equals(text, "++") ||
+        lm_trans_text_equals(text, "--") ||
+        lm_trans_text_equals(text, "+") ||
+        lm_trans_text_equals(text, "-") ||
+        lm_trans_text_equals(text, "@") ||
+        lm_trans_text_equals(text, "\\") ||
+        lm_trans_text_equals(text, "!") ||
+        lm_trans_text_equals(text, "~");
+}
+
+static int lm_trans_legacy_atom_is_postfix_expr_operator(LmP0Text text) {
+    return
+        lm_trans_text_equals(text, "++") ||
+        lm_trans_text_equals(text, "--");
+}
+
+static int lm_trans_legacy_atom_is_index_operator(LmP0Text text) {
+    return lm_trans_text_equals(text, "[") || lm_trans_text_equals(text, "]");
+}
+
+static const char *lm_trans_legacy_expr_atom_payload(LmP0Text text) {
+    if (lm_trans_text_equals(text, ".")) {
+        return "emit.c-dot";
+    }
+    if (lm_trans_text_equals(text, "=")) {
+        return "emit.==";
+    }
+    if (lm_trans_text_equals(text, "@")) {
+        return "emit.&";
+    }
+    if (lm_trans_text_equals(text, "\\")) {
+        return "emit.*-or-->";
+    }
+    return 0;
+}
+
+static const char *lm_trans_legacy_statement_payload(LmP0Text head) {
+    if (lm_trans_text_equals(head, "return")) {
+        return "return";
+    }
+    if (lm_trans_text_equals(head, "if")) {
+        return "if";
+    }
+    if (lm_trans_text_equals(head, "while")) {
+        return "while";
+    }
+    if (lm_trans_text_equals(head, "else")) {
+        return "else";
+    }
+    if (lm_trans_text_equals(head, "synchronized")) {
+        return "synchronized";
+    }
+    if (lm_trans_text_equals(head, "break")) {
+        return "break";
+    }
+    if (lm_trans_text_equals(head, "continue")) {
+        return "continue";
+    }
+    if (lm_trans_text_equals(head, "const")) {
+        return "const";
+    }
+    if (lm_trans_text_equals(head, "[]")) {
+        return "array-declaration";
+    }
+    return 0;
+}
+
+static const char *lm_trans_legacy_atom_statement_payload(LmP0Text atom) {
+    if (lm_trans_text_equals(atom, "break")) {
+        return "break";
+    }
+    if (lm_trans_text_equals(atom, "continue")) {
+        return "continue";
+    }
+    if (lm_trans_text_equals(atom, "return")) {
+        return "return";
+    }
+    return 0;
+}
+
+static const char *lm_trans_legacy_function_receiver_payload(LmP0Text head) {
+    if (lm_trans_text_equals(head, "fn")) {
+        return "function.primitive";
+    }
+    if (lm_trans_text_equals(head, "fm")) {
+        return "function.struct";
+    }
+    if (lm_trans_text_equals(head, "sub")) {
+        return "procedure";
+    }
+    return 0;
+}
+
+static const char *lm_trans_legacy_top_level_payload(LmP0Text head) {
+    if (lm_trans_text_equals(head, "L1")) {
+        return "lower.l1";
+    }
+    if (
+        lm_trans_text_equals(head, "fn") ||
+        lm_trans_text_equals(head, "fm") ||
+        lm_trans_text_equals(head, "sub")
+    ) {
+        return "function";
+    }
+    if (lm_trans_text_equals(head, "external")) {
+        return "external-function";
+    }
+    return 0;
+}
+
+static int lm_trans_legacy_frame_has_positional_name_argument(const LmP0Frame *frame) {
+    if (frame == 0) {
+        return 0;
+    }
+
+    return
+        lm_trans_text_equals(frame->head, "fn") ||
+        lm_trans_text_equals(frame->head, "fm") ||
+        lm_trans_text_equals(frame->head, "sub") ||
+        lm_trans_text_equals(frame->head, "synchronized") ||
+        lm_trans_text_equals(frame->head, "[]") ||
+        lm_trans_text_equals(frame->head, "entry");
+}
+
 static int lm_trans_text_all_char(LmP0Text text, char ch) {
     size_t i;
 
@@ -342,31 +787,7 @@ static void lm_trans_function_state_delete(LmTransFunctionState *state) {
 }
 
 static int lm_trans_text_is_operator_atom(LmP0Text text) {
-    return
-        lm_trans_text_equals(text, "++") ||
-        lm_trans_text_equals(text, "--") ||
-        lm_trans_text_equals(text, "+") ||
-        lm_trans_text_equals(text, "-") ||
-        lm_trans_text_equals(text, "*") ||
-        lm_trans_text_equals(text, "/") ||
-        lm_trans_text_equals(text, "%") ||
-        lm_trans_text_equals(text, "=") ||
-        lm_trans_text_equals(text, "!=") ||
-        lm_trans_text_equals(text, "<") ||
-        lm_trans_text_equals(text, "<=") ||
-        lm_trans_text_equals(text, ">") ||
-        lm_trans_text_equals(text, ">=") ||
-        lm_trans_text_equals(text, "&&") ||
-        lm_trans_text_equals(text, "||") ||
-        lm_trans_text_equals(text, "&") ||
-        lm_trans_text_equals(text, "|") ||
-        lm_trans_text_equals(text, "^") ||
-        lm_trans_text_equals(text, "!") ||
-        lm_trans_text_equals(text, "~") ||
-        lm_trans_text_equals(text, "@") ||
-        lm_trans_text_equals(text, "\\") ||
-        lm_trans_text_equals(text, "[") ||
-        lm_trans_text_equals(text, "]");
+    return lm_trans_registry_has_compare(text, "operator.any", lm_trans_legacy_text_is_operator_atom(text));
 }
 
 static int lm_trans_write_all(FILE *file, const char *data, size_t length) {
@@ -722,23 +1143,7 @@ static LmTransSymbol *lm_trans_namespace_find_mutable(
 static int lm_trans_is_c_reference_name(LmP0Text name);
 
 static int lm_trans_is_reserved_head_name(LmP0Text name) {
-    return
-        lm_trans_text_equals(name, "L1") ||
-        lm_trans_text_equals(name, "L2") ||
-        lm_trans_text_equals(name, "fn") ||
-        lm_trans_text_equals(name, "fm") ||
-        lm_trans_text_equals(name, "sub") ||
-        lm_trans_text_equals(name, "if") ||
-        lm_trans_text_equals(name, "else") ||
-        lm_trans_text_equals(name, "while") ||
-        lm_trans_text_equals(name, "return") ||
-        lm_trans_text_equals(name, "break") ||
-        lm_trans_text_equals(name, "continue") ||
-        lm_trans_text_equals(name, "end") ||
-        lm_trans_text_equals(name, "until") ||
-        lm_trans_text_equals(name, "synchronized") ||
-        lm_trans_text_equals(name, "const") ||
-        lm_trans_text_equals(name, "external");
+    return lm_trans_registry_has_compare(name, "receiver.reserved", lm_trans_legacy_is_reserved_head_name(name));
 }
 
 static int lm_trans_namespace_declare(
@@ -797,48 +1202,21 @@ static int lm_trans_namespace_declare(
 }
 
 static const char *lm_trans_c_spelling(LmP0Text name) {
-    if (lm_trans_text_equals(name, "u8")) {
-        return "uint8_t";
-    }
-    if (lm_trans_text_equals(name, "u16")) {
-        return "uint16_t";
-    }
-    if (lm_trans_text_equals(name, "u32")) {
-        return "uint32_t";
-    }
-    if (lm_trans_text_equals(name, "u64")) {
-        return "uint64_t";
-    }
-    if (lm_trans_text_equals(name, "i8")) {
-        return "int8_t";
-    }
-    if (lm_trans_text_equals(name, "i16")) {
-        return "int16_t";
-    }
-    if (lm_trans_text_equals(name, "i32")) {
-        return "int32_t";
-    }
-    if (lm_trans_text_equals(name, "i64")) {
-        return "int64_t";
-    }
-
-    return 0;
+    return lm_trans_registry_lookup_compare(name, "type.spelling", lm_trans_legacy_c_spelling(name));
 }
 
 static int lm_trans_builtin_c_type_tail(LmP0Text name) {
-    return
+    int registry_result;
+
+    registry_result =
         lm_trans_c_spelling(name) != 0 ||
-        lm_trans_text_equals(name, "void") ||
-        lm_trans_text_equals(name, "char") ||
-        lm_trans_text_equals(name, "short") ||
-        lm_trans_text_equals(name, "int") ||
-        lm_trans_text_equals(name, "long") ||
-        lm_trans_text_equals(name, "float") ||
-        lm_trans_text_equals(name, "double") ||
-        lm_trans_text_equals(name, "signed") ||
-        lm_trans_text_equals(name, "unsigned") ||
-        lm_trans_text_equals(name, "size_t") ||
-        lm_trans_text_equals(name, "FILE");
+        lm_trans_registry_has(name, "type.cTail");
+    return lm_trans_bool_compare(
+        "type.cTail/type.spelling",
+        name,
+        registry_result,
+        lm_trans_legacy_builtin_c_type_tail(name)
+    );
 }
 
 static int lm_trans_builtin_c_type_name(LmP0Text name) {
@@ -892,7 +1270,12 @@ static int lm_trans_emit_type_name(FILE *file, LmP0Text name) {
 }
 
 static int lm_trans_is_c_reference_name(LmP0Text name) {
-    return lm_trans_text_starts_with(name, "c.") && name.length > 2U;
+    return lm_trans_bool_compare(
+        "surface.prefix",
+        name,
+        lm_trans_registry_has_prefix(name, "surface.prefix") && name.length > 2U,
+        lm_trans_text_starts_with(name, "c.") && name.length > 2U
+    );
 }
 
 static int lm_trans_c_reference_has_path_dot(LmP0Text name) {
@@ -1080,21 +1463,11 @@ static int lm_trans_lower_call(
 }
 
 static int lm_trans_atom_is_prefix_expr_operator(LmP0Text text) {
-    return
-        lm_trans_text_equals(text, "++") ||
-        lm_trans_text_equals(text, "--") ||
-        lm_trans_text_equals(text, "+") ||
-        lm_trans_text_equals(text, "-") ||
-        lm_trans_text_equals(text, "@") ||
-        lm_trans_text_equals(text, "\\") ||
-        lm_trans_text_equals(text, "!") ||
-        lm_trans_text_equals(text, "~");
+    return lm_trans_registry_has_compare(text, "operator.prefix", lm_trans_legacy_atom_is_prefix_expr_operator(text));
 }
 
 static int lm_trans_atom_is_postfix_expr_operator(LmP0Text text) {
-    return
-        lm_trans_text_equals(text, "++") ||
-        lm_trans_text_equals(text, "--");
+    return lm_trans_registry_has_compare(text, "operator.postfix", lm_trans_legacy_atom_is_postfix_expr_operator(text));
 }
 
 static int lm_trans_nodes_touch(const LmP0Node *left, const LmP0Node *right) {
@@ -1104,7 +1477,7 @@ static int lm_trans_nodes_touch(const LmP0Node *left, const LmP0Node *right) {
         left->span.offset + left->span.length == right->span.offset;
 }
 
-static int lm_trans_atom_is_infix_expr_operator(
+static int lm_trans_legacy_atom_is_infix_expr_operator(
     LmP0Text text,
     const LmP0Node *operator_node,
     const LmP0Node *previous_operand
@@ -1133,6 +1506,41 @@ static int lm_trans_atom_is_infix_expr_operator(
         lm_trans_text_equals(text, "&") ||
         lm_trans_text_equals(text, "|") ||
         lm_trans_text_equals(text, "^");
+}
+
+static int lm_trans_atom_is_infix_expr_operator(
+    LmP0Text text,
+    const LmP0Node *operator_node,
+    const LmP0Node *previous_operand
+) {
+    int registry_result;
+
+    if (lm_trans_text_equals(text, "\\")) {
+        if (!lm_trans_registry_has(text, "operator.infix")) {
+            return lm_trans_bool_compare(
+                "operator.infix",
+                text,
+                0,
+                lm_trans_legacy_atom_is_infix_expr_operator(text, operator_node, previous_operand)
+            );
+        }
+        registry_result =
+            previous_operand != 0 &&
+            lm_trans_nodes_touch(previous_operand, operator_node) &&
+            !(previous_operand->kind == LM_P0_NODE_ATOM && lm_trans_atom_starts_string(previous_operand->as.atom));
+        return lm_trans_bool_compare(
+            "operator.infix",
+            text,
+            registry_result,
+            lm_trans_legacy_atom_is_infix_expr_operator(text, operator_node, previous_operand)
+        );
+    }
+
+    return lm_trans_registry_has_compare(
+        text,
+        "operator.infix",
+        lm_trans_legacy_atom_is_infix_expr_operator(text, operator_node, previous_operand)
+    );
 }
 
 static const LmP0Field *lm_trans_expr_segment_end(const LmP0Field *first) {
@@ -1672,7 +2080,7 @@ static int lm_trans_atom_is_operand_like(LmP0Text text) {
 }
 
 static int lm_trans_atom_is_index_operator(LmP0Text text) {
-    return lm_trans_text_equals(text, "[") || lm_trans_text_equals(text, "]");
+    return lm_trans_registry_has_compare(text, "operator.index", lm_trans_legacy_atom_is_index_operator(text));
 }
 
 static LmTransExprAtomLowering lm_trans_lower_expr_atom(
@@ -1683,9 +2091,15 @@ static LmTransExprAtomLowering lm_trans_lower_expr_atom(
     int c_dot_path
 ) {
     LmTransExprAtomLowering lowering;
+    const char *payload;
 
     lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_VALUE;
     lowering.text = node->as.atom;
+    payload = lm_trans_registry_lookup_compare(
+        node->as.atom,
+        "expr.atom",
+        lm_trans_legacy_expr_atom_payload(node->as.atom)
+    );
 
     if (expect_field_name) {
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_FIELD_NAME;
@@ -1693,13 +2107,13 @@ static LmTransExprAtomLowering lm_trans_lower_expr_atom(
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_C_FIELD_NAME;
     } else if (lm_trans_is_c_reference_name(node->as.atom)) {
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_C_SURFACE;
-    } else if (lm_trans_text_equals(node->as.atom, ".")) {
+    } else if (payload != 0 && strcmp(payload, "emit.c-dot") == 0) {
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_C_DOT;
-    } else if (lm_trans_text_equals(node->as.atom, "=")) {
+    } else if (payload != 0 && strcmp(payload, "emit.==") == 0) {
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_EQUAL;
-    } else if (lm_trans_text_equals(node->as.atom, "@")) {
+    } else if (payload != 0 && strcmp(payload, "emit.&") == 0) {
         lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_ADDRESS;
-    } else if (lm_trans_text_equals(node->as.atom, "\\")) {
+    } else if (payload != 0 && strcmp(payload, "emit.*-or-->") == 0) {
         if (previous_operand != 0 && lm_trans_nodes_touch(previous_operand, node)) {
             lowering.kind = LM_TRANS_EXPR_ATOM_LOWER_POINTER_FOLLOW;
         } else {
@@ -2463,17 +2877,19 @@ static int lm_trans_emit_control_condition(
 }
 
 static int lm_trans_frame_has_positional_name_argument(const LmP0Frame *frame) {
+    int registry_result;
+
     if (frame == 0) {
         return 0;
     }
 
-    return
-        lm_trans_text_equals(frame->head, "fn") ||
-        lm_trans_text_equals(frame->head, "fm") ||
-        lm_trans_text_equals(frame->head, "sub") ||
-        lm_trans_text_equals(frame->head, "synchronized") ||
-        lm_trans_text_equals(frame->head, "[]") ||
-        lm_trans_text_equals(frame->head, "entry");
+    registry_result = lm_trans_registry_has(frame->head, "receiver.positionalName");
+    return lm_trans_bool_compare(
+        "receiver.positionalName",
+        frame->head,
+        registry_result,
+        lm_trans_legacy_frame_has_positional_name_argument(frame)
+    );
 }
 
 static int lm_trans_name_argument_from_frame(const LmP0Frame *frame, LmP0Text *out_name) {
@@ -3653,6 +4069,46 @@ static int lm_trans_statement_stack_schedule_label(
     return 0;
 }
 
+static int lm_trans_registry_statement_lowering(
+    LmP0Text head,
+    LmTransStatementLowering *out
+) {
+    const char *payload;
+
+    if (out == 0) {
+        return 0;
+    }
+
+    payload = lm_trans_registry_lookup_compare(head, "receiver.statement", lm_trans_legacy_statement_payload(head));
+    if (payload == 0) {
+        return 0;
+    }
+
+    if (strcmp(payload, "return") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_RETURN;
+    } else if (strcmp(payload, "if") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_IF;
+    } else if (strcmp(payload, "while") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_WHILE;
+    } else if (strcmp(payload, "else") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_ELSE;
+    } else if (strcmp(payload, "synchronized") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_SYNCHRONIZED;
+    } else if (strcmp(payload, "break") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_BREAK;
+    } else if (strcmp(payload, "continue") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_CONTINUE;
+    } else if (strcmp(payload, "const") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_CONST_DECLARATION;
+    } else if (strcmp(payload, "array-declaration") == 0) {
+        out->kind = LM_TRANS_STATEMENT_LOWER_ARRAY_DECLARATION;
+    } else {
+        return 0;
+    }
+
+    return 1;
+}
+
 static int lm_trans_lower_statement_frame(
     const LmP0Frame *frame,
     const LmTransNamespace *namespace_,
@@ -3664,40 +4120,7 @@ static int lm_trans_lower_statement_frame(
         return 1;
     }
 
-    if (lm_trans_text_equals(frame->head, "return")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_RETURN;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "if")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_IF;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "while")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_WHILE;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "else")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_ELSE;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "synchronized")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_SYNCHRONIZED;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "break")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_BREAK;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "continue")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_CONTINUE;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "const")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_CONST_DECLARATION;
-        return 0;
-    }
-    if (lm_trans_text_equals(frame->head, "[]")) {
-        out->kind = LM_TRANS_STATEMENT_LOWER_ARRAY_DECLARATION;
+    if (lm_trans_registry_statement_lowering(frame->head, out)) {
         return 0;
     }
     if (lm_trans_frame_looks_storage_declaration(frame, namespace_)) {
@@ -3854,13 +4277,16 @@ static int lm_trans_statement_stack_emit_frame(
 }
 
 static LmTransAtomStatementLoweringKind lm_trans_lower_atom_statement(LmP0Text atom) {
-    if (lm_trans_text_equals(atom, "break")) {
+    const char *payload;
+
+    payload = lm_trans_registry_lookup_compare(atom, "receiver.atomStatement", lm_trans_legacy_atom_statement_payload(atom));
+    if (payload != 0 && strcmp(payload, "break") == 0) {
         return LM_TRANS_ATOM_STATEMENT_LOWER_BREAK;
     }
-    if (lm_trans_text_equals(atom, "continue")) {
+    if (payload != 0 && strcmp(payload, "continue") == 0) {
         return LM_TRANS_ATOM_STATEMENT_LOWER_CONTINUE;
     }
-    if (lm_trans_text_equals(atom, "return")) {
+    if (payload != 0 && strcmp(payload, "return") == 0) {
         return LM_TRANS_ATOM_STATEMENT_LOWER_RETURN;
     }
     if (lm_trans_atom_starts_string(atom)) {
@@ -4193,6 +4619,7 @@ static int lm_trans_function_header_from_frame(
     const LmP0Field *params_field;
     const LmP0Field *return_field;
     const LmP0Field *body_field;
+    const char *receiver_payload;
     int is_sub;
     int is_struct_return;
 
@@ -4200,15 +4627,16 @@ static int lm_trans_function_header_from_frame(
         return 0;
     }
 
-    is_sub = lm_trans_text_equals(frame->head, "sub");
-    is_struct_return = lm_trans_text_equals(frame->head, "fm");
-    if (
-        !is_sub &&
-        !is_struct_return &&
-        !lm_trans_text_equals(frame->head, "fn")
-    ) {
+    receiver_payload = lm_trans_registry_lookup_compare(
+        frame->head,
+        "receiver.function",
+        lm_trans_legacy_function_receiver_payload(frame->head)
+    );
+    if (receiver_payload == 0) {
         return 0;
     }
+    is_sub = strcmp(receiver_payload, "procedure") == 0;
+    is_struct_return = strcmp(receiver_payload, "function.struct") == 0;
 
     name_field = lm_trans_nth_field(&frame->body, 0U);
     params_field = lm_trans_nth_field(&frame->body, 1U);
@@ -4286,7 +4714,18 @@ static int lm_trans_top_level_function_header(
         return status;
     }
 
-    if (!lm_trans_text_equals(frame->head, "external")) {
+    if (
+        strcmp(
+            lm_trans_payload_text(
+                lm_trans_registry_lookup_compare(
+                    frame->head,
+                    "receiver.topLevel",
+                    lm_trans_legacy_top_level_payload(frame->head)
+                )
+            ),
+            "external-function"
+        ) != 0
+    ) {
         return 0;
     }
 
@@ -4349,7 +4788,18 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
-    if (lm_trans_text_equals(out->frame->head, "L1")) {
+    if (
+        strcmp(
+            lm_trans_payload_text(
+                lm_trans_registry_lookup_compare(
+                    out->frame->head,
+                    "receiver.topLevel",
+                    lm_trans_legacy_top_level_payload(out->frame->head)
+                )
+            ),
+            "lower.l1"
+        ) == 0
+    ) {
         out->kind = LM_TRANS_TOP_LEVEL_ITEM_L1;
         return 0;
     }
@@ -4805,6 +5255,263 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int *
     return 0;
 }
 
+static void lm_trans_registry_destroy(void) {
+    if (lm_trans_registry.loaded) {
+        lm_own_ptr_stack_destroy(&lm_trans_registry.rows);
+        lm_trans_registry.loaded = 0;
+    }
+}
+
+static int lm_trans_registry_row_from_frame(const LmP0Frame *frame) {
+    const LmP0Field *table_field;
+    const LmP0Field *key_field;
+    const LmP0Field *payload_field;
+    LmTransRegistryRow *row;
+
+    if (frame == 0 || !lm_trans_text_equals(frame->head, "row")) {
+        return 0;
+    }
+
+    table_field = lm_trans_nth_field(&frame->body, 0U);
+    key_field = lm_trans_nth_field(&frame->body, 1U);
+    payload_field = lm_trans_nth_field(&frame->body, 2U);
+    if (
+        table_field == 0 ||
+        key_field == 0 ||
+        payload_field == 0 ||
+        payload_field->next != 0 ||
+        table_field->value == 0 ||
+        key_field->value == 0 ||
+        payload_field->value == 0 ||
+        table_field->value->kind != LM_P0_NODE_ATOM ||
+        key_field->value->kind != LM_P0_NODE_ATOM ||
+        payload_field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        fprintf(stderr, "trans registry error: row expects exactly three atom fields\n");
+        return -1;
+    }
+
+    row = (LmTransRegistryRow *)lm_own_new_zero(sizeof(*row));
+    if (row == 0) {
+        return -1;
+    }
+    row->table = lm_trans_registry_atom_copy_cstr(table_field->value->as.atom);
+    row->key = lm_trans_registry_atom_copy_cstr(key_field->value->as.atom);
+    row->payload = lm_trans_registry_atom_copy_cstr(payload_field->value->as.atom);
+    if (row->table == 0 || row->key == 0 || row->payload == 0) {
+        lm_trans_registry_row_destroy_any(row);
+        return -1;
+    }
+    if (lm_own_ptr_stack_push(&lm_trans_registry.rows, row) != 0) {
+        lm_trans_registry_row_destroy_any(row);
+        return -1;
+    }
+
+    return 1;
+}
+
+static int lm_trans_registry_load_rows(const LmP0Structure *structure) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    int status;
+
+    if (structure == 0) {
+        return 0;
+    }
+
+    field = structure->first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans registry error: registry body expects row frames\n");
+                return 1;
+            }
+            status = lm_trans_registry_row_from_frame(&node->as.frame);
+            if (status <= 0) {
+                if (status == 0) {
+                    fprintf(stderr, "trans registry error: registry body expects row frames\n");
+                }
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    return 0;
+}
+
+static int lm_trans_registry_load_root(const LmP0Node *root) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    int loaded;
+
+    if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
+        fprintf(stderr, "trans registry error: root must be a Structure\n");
+        return 1;
+    }
+
+    loaded = 0;
+    field = root->as.structure.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans registry error: root fields must be registry or row frames\n");
+                return 1;
+            }
+            if (lm_trans_text_equals(node->as.frame.head, "registry")) {
+                if (lm_trans_registry_load_rows(&node->as.frame.body) != 0) {
+                    return 1;
+                }
+                if (lm_trans_validate_end_trailer(&node->as.frame) != 0) {
+                    return 1;
+                }
+                loaded = 1;
+            } else if (lm_trans_text_equals(node->as.frame.head, "row")) {
+                if (lm_trans_registry_row_from_frame(&node->as.frame) <= 0) {
+                    return 1;
+                }
+                loaded = 1;
+            } else {
+                fprintf(stderr, "trans registry error: root fields must be registry or row frames\n");
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    if (!loaded || lm_trans_registry.rows.count == 0U) {
+        fprintf(stderr, "trans registry error: no rows loaded\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int lm_trans_registry_path_for_source(
+    const char *source_path,
+    char *buffer,
+    size_t size
+) {
+    const char *override_path;
+    size_t length;
+    size_t i;
+    size_t slash;
+    const char *file_name;
+
+    if (buffer == 0 || size == 0U) {
+        return 1;
+    }
+
+    override_path = getenv("LM_TRANS_REGISTRY");
+    if (override_path != 0 && override_path[0] != '\0') {
+        if (strlen(override_path) >= size) {
+            fprintf(stderr, "trans error: LM_TRANS_REGISTRY path is too long\n");
+            return 1;
+        }
+        strcpy(buffer, override_path);
+        return 0;
+    }
+
+    file_name = "trans_registry.lmx";
+    if (source_path == 0 || source_path[0] == '\0') {
+        if (strlen(file_name) >= size) {
+            return 1;
+        }
+        strcpy(buffer, file_name);
+        return 0;
+    }
+
+    length = strlen(source_path);
+    slash = 0U;
+    for (i = 0U; i < length; ++i) {
+        if (source_path[i] == '/' || source_path[i] == '\\') {
+            slash = i + 1U;
+        }
+    }
+
+    if (slash == 0U) {
+        if (strlen(file_name) >= size) {
+            return 1;
+        }
+        strcpy(buffer, file_name);
+        return 0;
+    }
+
+    if (slash + strlen(file_name) >= size) {
+        fprintf(stderr, "trans error: registry path is too long\n");
+        return 1;
+    }
+    memcpy(buffer, source_path, slash);
+    strcpy(buffer + slash, file_name);
+    return 0;
+}
+
+static int lm_trans_registry_load_for_source(const char *source_path) {
+    char registry_path[4096];
+    LmP0Document *document;
+    const LmP0Diagnostic *diagnostic;
+    const char *override_path;
+    int override_enabled;
+    int status;
+
+    lm_trans_registry_destroy();
+    lm_own_ptr_stack_init(&lm_trans_registry.rows, lm_trans_registry_row_destroy_any);
+    lm_trans_registry.loaded = 1;
+
+    if (lm_trans_registry_path_for_source(source_path, registry_path, sizeof(registry_path)) != 0) {
+        lm_trans_registry_destroy();
+        return 1;
+    }
+
+    document = 0;
+    override_path = getenv("LM_TRANS_REGISTRY");
+    override_enabled = override_path != 0 && override_path[0] != '\0';
+    status = lm_p0_parse_file(registry_path, &document);
+    diagnostic = status != 0 ? lm_p0_document_diagnostic(document) : 0;
+    if (
+        status != 0 &&
+        diagnostic == 0 &&
+        !override_enabled &&
+        strcmp(registry_path, "lm2/trans_registry.lmx") != 0
+    ) {
+        lm_p0_document_destroy(document);
+        document = 0;
+        strcpy(registry_path, "lm2/trans_registry.lmx");
+        status = lm_p0_parse_file(registry_path, &document);
+    }
+
+    if (status != 0) {
+        diagnostic = lm_p0_document_diagnostic(document);
+        if (diagnostic != 0) {
+            fprintf(
+                stderr,
+                "trans registry parse error %d at %lu:%lu in %s: %s\n",
+                diagnostic->code,
+                (unsigned long)diagnostic->line,
+                (unsigned long)diagnostic->column,
+                registry_path,
+                diagnostic->message
+            );
+        } else {
+            fprintf(stderr, "trans registry error: cannot read %s\n", registry_path);
+        }
+        lm_p0_document_destroy(document);
+        lm_trans_registry_destroy();
+        return 1;
+    }
+
+    status = lm_trans_registry_load_root(lm_p0_document_root(document));
+    lm_p0_document_destroy(document);
+    if (status != 0) {
+        lm_trans_registry_destroy();
+        return 1;
+    }
+
+    return 0;
+}
+
 static int lm_trans_emit_document(const char *source_path, const char *output_path) {
     LmP0Document *document;
     const LmP0Diagnostic *diagnostic;
@@ -4815,6 +5522,10 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     int emitted;
 
     document = 0;
+    if (lm_trans_registry_load_for_source(source_path) != 0) {
+        return 1;
+    }
+
     status = lm_p0_parse_file(source_path, &document);
     if (status != 0) {
         diagnostic = lm_p0_document_diagnostic(document);
@@ -4831,6 +5542,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
             fprintf(stderr, "trans parse error while reading %s\n", source_path);
         }
         lm_p0_document_destroy(document);
+        lm_trans_registry_destroy();
         return 1;
     }
 
@@ -4838,6 +5550,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     if (output == 0) {
         fprintf(stderr, "trans error: cannot open output file %s\n", output_path);
         lm_p0_document_destroy(document);
+        lm_trans_registry_destroy();
         return 1;
     }
 
@@ -4852,16 +5565,19 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     close_status = fclose(output);
     if (status != 0) {
         lm_p0_document_destroy(document);
+        lm_trans_registry_destroy();
         return 1;
     }
 
     if (close_status != 0) {
         fprintf(stderr, "trans error: cannot write output file %s\n", output_path);
         lm_p0_document_destroy(document);
+        lm_trans_registry_destroy();
         return 1;
     }
 
     lm_p0_document_destroy(document);
+    lm_trans_registry_destroy();
     return 0;
 }
 

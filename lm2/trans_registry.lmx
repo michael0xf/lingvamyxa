@@ -1,0 +1,139 @@
+registry:
+    row: `surface.prefix` `c.` `ansi-c`
+
+    row: `type.spelling` `u8` `uint8_t`
+    row: `type.spelling` `u16` `uint16_t`
+    row: `type.spelling` `u32` `uint32_t`
+    row: `type.spelling` `u64` `uint64_t`
+    row: `type.spelling` `i8` `int8_t`
+    row: `type.spelling` `i16` `int16_t`
+    row: `type.spelling` `i32` `int32_t`
+    row: `type.spelling` `i64` `int64_t`
+
+    row: `type.cTail` `void` `void`
+    row: `type.cTail` `char` `char`
+    row: `type.cTail` `short` `short`
+    row: `type.cTail` `int` `int`
+    row: `type.cTail` `long` `long`
+    row: `type.cTail` `float` `float`
+    row: `type.cTail` `double` `double`
+    row: `type.cTail` `signed` `signed`
+    row: `type.cTail` `unsigned` `unsigned`
+    row: `type.cTail` `size_t` `size_t`
+    row: `type.cTail` `FILE` `FILE`
+
+    row: `receiver.reserved` `L1` `lower.l1`
+    row: `receiver.reserved` `L2` `lower.l2`
+    row: `receiver.reserved` `fn` `function.primitive`
+    row: `receiver.reserved` `fm` `function.struct`
+    row: `receiver.reserved` `sub` `procedure`
+    row: `receiver.reserved` `if` `statement.if`
+    row: `receiver.reserved` `else` `statement.else`
+    row: `receiver.reserved` `while` `statement.while`
+    row: `receiver.reserved` `return` `statement.return`
+    row: `receiver.reserved` `break` `statement.break`
+    row: `receiver.reserved` `continue` `statement.continue`
+    row: `receiver.reserved` `end` `trailer.end`
+    row: `receiver.reserved` `until` `trailer.until`
+    row: `receiver.reserved` `synchronized` `statement.synchronized`
+    row: `receiver.reserved` `const` `declaration.const`
+    row: `receiver.reserved` `external` `linkage.external`
+
+    row: `receiver.function` `fn` `function.primitive`
+    row: `receiver.function` `fm` `function.struct`
+    row: `receiver.function` `sub` `procedure`
+
+    row: `receiver.statement` `return` `return`
+    row: `receiver.statement` `if` `if`
+    row: `receiver.statement` `while` `while`
+    row: `receiver.statement` `else` `else`
+    row: `receiver.statement` `synchronized` `synchronized`
+    row: `receiver.statement` `break` `break`
+    row: `receiver.statement` `continue` `continue`
+    row: `receiver.statement` `const` `const`
+    row: `receiver.statement` `[]` `array-declaration`
+
+    row: `receiver.atomStatement` `break` `break`
+    row: `receiver.atomStatement` `continue` `continue`
+    row: `receiver.atomStatement` `return` `return`
+
+    row: `receiver.topLevel` `L1` `lower.l1`
+    row: `receiver.topLevel` `fn` `function`
+    row: `receiver.topLevel` `fm` `function`
+    row: `receiver.topLevel` `sub` `function`
+    row: `receiver.topLevel` `external` `external-function`
+
+    row: `receiver.positionalName` `fn` `name`
+    row: `receiver.positionalName` `fm` `name`
+    row: `receiver.positionalName` `sub` `name`
+    row: `receiver.positionalName` `synchronized` `name`
+    row: `receiver.positionalName` `[]` `name`
+    row: `receiver.positionalName` `entry` `name`
+
+    row: `lowering.target` `L1` `ansi-c.raw`
+    row: `lowering.target` `L2` `lmx-to-ansi-c`
+    row: `lowering.target` `c.*` `ansi-c.surface`
+
+    row: `operator.any` `++` `operator`
+    row: `operator.any` `--` `operator`
+    row: `operator.any` `+` `operator`
+    row: `operator.any` `-` `operator`
+    row: `operator.any` `*` `operator`
+    row: `operator.any` `/` `operator`
+    row: `operator.any` `%` `operator`
+    row: `operator.any` `=` `operator.equal`
+    row: `operator.any` `!=` `operator`
+    row: `operator.any` `<` `operator`
+    row: `operator.any` `<=` `operator`
+    row: `operator.any` `>` `operator`
+    row: `operator.any` `>=` `operator`
+    row: `operator.any` `&&` `operator`
+    row: `operator.any` `||` `operator`
+    row: `operator.any` `&` `operator`
+    row: `operator.any` `|` `operator`
+    row: `operator.any` `^` `operator`
+    row: `operator.any` `!` `operator`
+    row: `operator.any` `~` `operator`
+    row: `operator.any` `@` `operator.address`
+    row: `operator.any` `\` `operator.field-follow`
+    row: `operator.any` `[` `operator.index-open`
+    row: `operator.any` `]` `operator.index-close`
+
+    row: `operator.prefix` `++` `prefix`
+    row: `operator.prefix` `--` `prefix`
+    row: `operator.prefix` `+` `prefix`
+    row: `operator.prefix` `-` `prefix`
+    row: `operator.prefix` `@` `address`
+    row: `operator.prefix` `\` `deref`
+    row: `operator.prefix` `!` `prefix`
+    row: `operator.prefix` `~` `prefix`
+
+    row: `operator.postfix` `++` `postfix`
+    row: `operator.postfix` `--` `postfix`
+
+    row: `operator.infix` `+` `infix`
+    row: `operator.infix` `-` `infix`
+    row: `operator.infix` `*` `infix`
+    row: `operator.infix` `/` `infix`
+    row: `operator.infix` `%` `infix`
+    row: `operator.infix` `=` `equal`
+    row: `operator.infix` `!=` `infix`
+    row: `operator.infix` `<` `infix`
+    row: `operator.infix` `<=` `infix`
+    row: `operator.infix` `>` `infix`
+    row: `operator.infix` `>=` `infix`
+    row: `operator.infix` `&&` `infix`
+    row: `operator.infix` `||` `infix`
+    row: `operator.infix` `&` `infix`
+    row: `operator.infix` `|` `infix`
+    row: `operator.infix` `^` `infix`
+    row: `operator.infix` `\` `pointer-follow`
+
+    row: `operator.index` `[` `index-open`
+    row: `operator.index` `]` `index-close`
+
+    row: `expr.atom` `=` `emit.==`
+    row: `expr.atom` `@` `emit.&`
+    row: `expr.atom` `\` `emit.*-or-->`
+    row: `expr.atom` `.` `emit.c-dot`
+end: registry
