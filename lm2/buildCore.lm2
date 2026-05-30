@@ -400,11 +400,17 @@ static int lm_build_own_library(const char *make_tool) {
 
 static int lm_build_compile_trans(const char *make_tool, const char *parser_library, const char *own_library) {
     char command[4096];
+    const char *legacy_compare;
+    const char *legacy_flag;
+
+    legacy_compare = getenv("LM_TRANS_ENABLE_LEGACY_COMPARE");
+    legacy_flag = legacy_compare != 0 && strcmp(legacy_compare, "0") == 0 ? " -DLM_TRANS_ENABLE_LEGACY_COMPARE=0" : "";
 
     snprintf(
         command,
         sizeof(command),
-        "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\"",
+        "-std=c99 -Wall -Wextra -Wpedantic%s -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\"",
+        legacy_flag,
         parser_library,
         own_library,
         LM_BUILD_EXE_SUFFIX

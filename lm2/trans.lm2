@@ -7,6 +7,10 @@ L1:
 #include "own.lm1.h"
 #include "parser.lm1.h"
 
+#ifndef LM_TRANS_ENABLE_LEGACY_COMPARE
+#define LM_TRANS_ENABLE_LEGACY_COMPARE 1
+#endif
+
 typedef enum LmTransSymbolKind {
     LM_TRANS_SYMBOL_VARIABLE = 1,
     LM_TRANS_SYMBOL_FUNCTION = 2,
@@ -445,6 +449,9 @@ static int lm_trans_registry_has_prefix(LmP0Text text, const char *table) {
 }
 
 static int lm_trans_registry_compare_enabled(void) {
+#if !LM_TRANS_ENABLE_LEGACY_COMPARE
+    return 0;
+#else
     const char *value;
     static int initialized = 0;
     static int enabled = 1;
@@ -456,6 +463,7 @@ static int lm_trans_registry_compare_enabled(void) {
     }
 
     return enabled;
+#endif
 }
 
 static const char *lm_trans_payload_text(const char *payload) {
@@ -1305,7 +1313,85 @@ static int lm_trans_nodes_touch(const LmP0Node *left, const LmP0Node *right) {
         left->span.offset + left->span.length == right->span.offset;
 }
 
+#if LM_TRANS_ENABLE_LEGACY_COMPARE
 #include "trans_legacy.lm1.c"
+#else
+static const char *lm_trans_legacy_c_spelling(LmP0Text name) {
+    (void)name;
+    return 0;
+}
+
+static int lm_trans_legacy_builtin_c_type_tail(LmP0Text name) {
+    (void)name;
+    return 0;
+}
+
+static int lm_trans_legacy_text_is_operator_atom(LmP0Text text) {
+    (void)text;
+    return 0;
+}
+
+static int lm_trans_legacy_is_reserved_head_name(LmP0Text name) {
+    (void)name;
+    return 0;
+}
+
+static int lm_trans_legacy_atom_is_prefix_expr_operator(LmP0Text text) {
+    (void)text;
+    return 0;
+}
+
+static int lm_trans_legacy_atom_is_postfix_expr_operator(LmP0Text text) {
+    (void)text;
+    return 0;
+}
+
+static int lm_trans_legacy_atom_is_index_operator(LmP0Text text) {
+    (void)text;
+    return 0;
+}
+
+static const char *lm_trans_legacy_expr_atom_payload(LmP0Text text) {
+    (void)text;
+    return 0;
+}
+
+static const char *lm_trans_legacy_statement_payload(LmP0Text head) {
+    (void)head;
+    return 0;
+}
+
+static const char *lm_trans_legacy_atom_statement_payload(LmP0Text atom) {
+    (void)atom;
+    return 0;
+}
+
+static const char *lm_trans_legacy_function_receiver_payload(LmP0Text head) {
+    (void)head;
+    return 0;
+}
+
+static const char *lm_trans_legacy_top_level_payload(LmP0Text head) {
+    (void)head;
+    return 0;
+}
+
+static int lm_trans_legacy_frame_has_positional_name_argument(const LmP0Frame *frame) {
+    (void)frame;
+    return 0;
+}
+
+static int lm_trans_legacy_atom_is_infix_expr_operator(
+    LmP0Text text,
+    const LmP0Node *operator_node,
+    const LmP0Node *previous_operand
+) {
+    (void)text;
+    (void)operator_node;
+    (void)previous_operand;
+    return 0;
+}
+#endif
 
 static int lm_trans_atom_is_infix_expr_operator(
     LmP0Text text,
