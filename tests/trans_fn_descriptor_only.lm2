@@ -1,0 +1,12 @@
+L2:
+    fn: AddX (int) int
+    fn: NamedAdd (int: left; const: @: char label) int
+
+    external:
+        fn: main () int
+            AddX: f 0
+            NamedAdd: g 0
+            return: f != 0 || g != 0
+        end: main
+    end: external
+end: L2

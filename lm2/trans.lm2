@@ -237,6 +237,7 @@ typedef struct LmTransFunctionHeader {
     int is_sub;
     int is_struct_return;
     int is_external;
+    int is_descriptor_only;
 } LmTransFunctionHeader;
 
 typedef int (*LmTransFunctionHeaderReceiver)(
@@ -1591,7 +1592,8 @@ static int lm_trans_validate_expr_atom(
     if (
         lm_trans_symbol_is(symbol, "procedure") ||
         lm_trans_symbol_is(symbol, "label") ||
-        lm_trans_symbol_is(symbol, "structure")
+        lm_trans_symbol_is(symbol, "structure") ||
+        lm_trans_symbol_is(symbol, "callableDescriptor")
     ) {
         fprintf(
             stderr,
@@ -3415,6 +3417,112 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
     return 1;
 }
 
+static int lm_trans_head_can_declare_storage(
+    LmP0Text head,
+    const LmTransNamespace *namespace_
+);
+
+static int lm_trans_emit_callable_descriptor_param_type(
+    FILE *file,
+    const LmP0Node *type_node,
+    const LmTransNamespace *namespace_
+);
+
+static int lm_trans_emit_callable_descriptor_param_frame(
+    FILE *file,
+    const LmP0Frame *frame,
+    const LmTransNamespace *namespace_
+) {
+    const LmP0Structure *body;
+    const LmP0Field *field;
+    const LmP0Field *type_field;
+    size_t i;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    if (lm_trans_text_equals(frame->head, "const")) {
+        field = frame->body.first_field;
+        if (field == 0 || field->next != 0 || field->value == 0) {
+            fprintf(stderr, "trans L2 error: const callable descriptor parameter expects one type\n");
+            return 1;
+        }
+        if (lm_trans_put(file, "const ") != 0) {
+            return 1;
+        }
+        return lm_trans_emit_callable_descriptor_param_type(file, field->value, namespace_);
+    }
+
+    body = lm_trans_unwrap_single_anonymous_structure(&frame->body);
+    type_field = body != 0 ? body->first_field : 0;
+
+    if (lm_trans_text_all_char(frame->head, '@')) {
+        if (type_field == 0 || type_field->value == 0) {
+            fprintf(stderr, "trans L2 error: @ callable descriptor parameter expects a type\n");
+            return 1;
+        }
+        if (lm_trans_emit_callable_descriptor_param_type(file, type_field->value, namespace_) != 0) {
+            return 1;
+        }
+        if (lm_trans_put(file, " ") != 0) {
+            return 1;
+        }
+        for (i = 0U; i < frame->head.length; ++i) {
+            if (lm_trans_put(file, "*") != 0) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if (lm_trans_text_is_array_receiver_head(frame->head)) {
+        if (type_field == 0 || type_field->value == 0) {
+            fprintf(stderr, "trans L2 error: [] callable descriptor parameter expects a type\n");
+            return 1;
+        }
+        if (lm_trans_emit_callable_descriptor_param_type(file, type_field->value, namespace_) != 0) {
+            return 1;
+        }
+        return lm_trans_put(file, " *");
+    }
+
+    if (lm_trans_head_can_declare_storage(frame->head, namespace_)) {
+        return lm_trans_emit_type_name(file, frame->head);
+    }
+
+    fprintf(stderr, "trans L2 error: unsupported callable descriptor parameter type\n");
+    return 1;
+}
+
+static int lm_trans_emit_callable_descriptor_param_type(
+    FILE *file,
+    const LmP0Node *type_node,
+    const LmTransNamespace *namespace_
+) {
+    const LmP0Field *field;
+
+    if (type_node == 0) {
+        fprintf(stderr, "trans L2 error: callable descriptor parameter expects a type\n");
+        return 1;
+    }
+
+    if (type_node->kind == LM_P0_NODE_STRUCTURE) {
+        field = type_node->as.structure.first_field;
+        if (field == 0 || field->next != 0 || field->value == 0) {
+            fprintf(stderr, "trans L2 error: callable descriptor parameter Structure must contain exactly one type\n");
+            return 1;
+        }
+        return lm_trans_emit_callable_descriptor_param_type(file, field->value, namespace_);
+    }
+
+    if (type_node->kind == LM_P0_NODE_FRAME) {
+        return lm_trans_emit_callable_descriptor_param_frame(file, &type_node->as.frame, namespace_);
+    }
+
+    return lm_trans_emit_type_node(file, type_node);
+}
+
 static int lm_trans_emit_function_return_struct_type_name(FILE *file, LmP0Text function_name) {
     if (lm_trans_write_text(file, function_name) != 0) {
         return 1;
@@ -4138,7 +4246,9 @@ static int lm_trans_head_can_declare_storage(
     }
 
     symbol = lm_trans_namespace_find(namespace_, head);
-    return lm_trans_symbol_is(symbol, "structure");
+    return
+        lm_trans_symbol_is(symbol, "structure") ||
+        lm_trans_symbol_is(symbol, "callableDescriptor");
 }
 
 static int lm_trans_frame_looks_storage_declaration(
@@ -6501,6 +6611,11 @@ static int lm_trans_function_header_common(
         out->body_start = return_field->next;
     }
 
+    if (!is_struct_return && out->body_start == 0) {
+        out->symbol_class = "callableDescriptor";
+        out->is_descriptor_only = 1;
+    }
+
     return 1;
 }
 
@@ -6765,6 +6880,9 @@ static int lm_trans_top_level_declare_function(
     if (lm_trans_namespace_declare(namespace_, item->function.name, item->function.symbol_class) != 0) {
         return 1;
     }
+    if (item->function.is_descriptor_only) {
+        return 0;
+    }
     return lm_trans_namespace_set_signature(namespace_, item->function.name, item->function.frame);
 }
 
@@ -6781,6 +6899,9 @@ static int lm_trans_top_level_declare_function_compatible(
 ) {
     if (lm_trans_namespace_declare_compatible(namespace_, item->function.name, item->function.symbol_class) != 0) {
         return 1;
+    }
+    if (item->function.is_descriptor_only) {
+        return 0;
     }
     return lm_trans_namespace_set_signature(namespace_, item->function.name, item->function.frame);
 }
@@ -6825,6 +6946,94 @@ static int lm_trans_top_level_emit_named_structure(
 ) {
     (void)namespace_;
     return lm_trans_emit_named_structure(file, item->frame);
+}
+
+static int lm_trans_emit_callable_descriptor_params(
+    FILE *file,
+    const LmP0Node *params,
+    const LmTransNamespace *namespace_
+) {
+    const LmP0Field *field;
+    int first;
+
+    if (params == 0 || params->kind != LM_P0_NODE_STRUCTURE) {
+        fprintf(stderr, "trans L2 error: callable descriptor parameters must be a Structure\n");
+        return 1;
+    }
+
+    first = 1;
+    field = params->as.structure.first_field;
+    while (field != 0) {
+        if (!first && lm_trans_put(file, ", ") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_callable_descriptor_param_type(file, field->value, namespace_) != 0) {
+            return 1;
+        }
+        first = 0;
+        field = field->next;
+    }
+
+    if (first) {
+        return lm_trans_put(file, "void");
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_callable_descriptor(
+    FILE *file,
+    const LmTransFunctionHeader *function,
+    const LmTransNamespace *namespace_
+) {
+    if (function == 0 || !function->is_descriptor_only) {
+        return 1;
+    }
+
+    if (function->return_node == 0 || function->return_node->kind == LM_P0_NODE_STRUCTURE) {
+        fprintf(stderr, "trans L2 error: descriptor-only fn expects a single return type\n");
+        return 1;
+    }
+
+    if (lm_trans_put(file, "typedef ") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_type_node(file, function->return_node) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " (*") != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, function->name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ")(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_callable_descriptor_params(file, function->params_node, namespace_) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, ");\n");
+}
+
+static int lm_trans_top_level_emit_callable_descriptor(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    int status;
+
+    status = lm_trans_emit_callable_descriptor(file, &item->function, namespace_);
+    if (status != 0) {
+        return 1;
+    }
+    if (
+        item->function.is_external &&
+        lm_trans_validate_end_trailer(item->frame) != 0
+    ) {
+        return 1;
+    }
+    return 0;
 }
 
 static int lm_trans_top_level_emit_function(
@@ -6876,7 +7085,12 @@ static int lm_trans_lower_top_level_item(
     }
     if (function_status > 0) {
         out->declare = lm_trans_top_level_declare_function;
-        out->emit_function = lm_trans_top_level_emit_function;
+        if (out->function.is_descriptor_only) {
+            out->emit_before_functions = lm_trans_top_level_emit_callable_descriptor;
+            out->emits_top_level = 1;
+        } else {
+            out->emit_function = lm_trans_top_level_emit_function;
+        }
         return 0;
     }
 
@@ -6925,6 +7139,11 @@ static int lm_trans_emit_function(
 
     frame = function->frame;
     state = 0;
+
+    if (function->is_descriptor_only) {
+        fprintf(stderr, "trans L2 error: descriptor-only fn does not have an executable body\n");
+        return 1;
+    }
 
     if (function->is_sub) {
         if (!function->is_external) {
