@@ -1,3 +1,5 @@
+include: "own.lm1.h"
+
 L2:
     fn: outer (int: base) int
         int: extra 5

@@ -229,4 +229,108 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
         stack->count = count;
     }
 }
+
+void lm_own_arena_init(LmOwnArena *arena) {
+    if (arena != 0) {
+        lm_own_ptr_stack_init(&arena->allocations, free);
+        arena->frozen = 0;
+    }
+}
+
+void lm_own_arena_destroy(LmOwnArena *arena) {
+    if (arena != 0) {
+        lm_own_ptr_stack_destroy(&arena->allocations);
+        arena->frozen = 0;
+    }
+}
+
+void *lm_own_arena_new_zero(LmOwnArena *arena, size_t size) {
+    void *object;
+
+    if (arena == 0 || arena->frozen) {
+        return 0;
+    }
+
+    object = calloc(1U, size);
+    if (object == 0) {
+        return 0;
+    }
+    if (lm_own_ptr_stack_push(&arena->allocations, object) != 0) {
+        free(object);
+        return 0;
+    }
+    return object;
+}
+
+char *lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t length) {
+    char *copy;
+
+    copy = (char *)lm_own_arena_new_zero(arena, length + 1U);
+    if (copy == 0) {
+        return 0;
+    }
+    if (source != 0 && length > 0U) {
+        memcpy(copy, source, length);
+    }
+    copy[length] = '\0';
+    return copy;
+}
+
+int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
+    void **items;
+    size_t new_count;
+    size_t capacity;
+
+    if (target == 0 || source == 0 || target->frozen || source == target) {
+        return target == source ? 0 : 1;
+    }
+
+    if (source->allocations.count == 0U) {
+        return 0;
+    }
+
+    new_count = target->allocations.count + source->allocations.count;
+    capacity = target->allocations.capacity == 0U ? 8U : target->allocations.capacity;
+    while (capacity < new_count) {
+        capacity *= 2U;
+    }
+    items = (void **)realloc(target->allocations.items, capacity * sizeof(*items));
+    if (items == 0) {
+        return 1;
+    }
+    target->allocations.items = items;
+    target->allocations.capacity = capacity;
+    memcpy(
+        target->allocations.items + target->allocations.count,
+        source->allocations.items,
+        source->allocations.count * sizeof(*source->allocations.items)
+    );
+    target->allocations.count = new_count;
+
+    free(source->allocations.items);
+    source->allocations.items = 0;
+    source->allocations.count = 0U;
+    source->allocations.capacity = 0U;
+    return 0;
+}
+
+void lm_own_arena_freeze(LmOwnArena *arena) {
+    if (arena != 0) {
+        arena->frozen = 1;
+    }
+}
+
+int lm_own_arena_is_frozen(const LmOwnArena *arena) {
+    return arena != 0 && arena->frozen;
+}
+
+int lm_own_tree_cut(LmOwnArena *arena) {
+    return lm_own_tree_cut_promote_lazy_edges(arena);
+}
+
+int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena) {
+    /* Initial parser profile pins source owners for the tree lifetime, so no lazy edge table exists yet. */
+    (void)arena;
+    return 0;
+}
 ===

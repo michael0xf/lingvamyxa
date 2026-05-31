@@ -31,6 +31,12 @@ struct LmP0Document {
     size_t source_length;
     LmP0Node *root;
     LmP0Diagnostic diagnostic;
+    LmOwnArena source_owner;
+    LmOwnArena token_arena;
+    LmOwnArena tree_arena;
+    LmOwnArena diagnostic_arena;
+    int owners_initialized;
+    int frozen;
 };
 
 typedef struct LmP0PendingDelimiter {
@@ -81,6 +87,35 @@ typedef struct LmP0Registry {
 static LmP0Registry lm_p0_registry;
 
 static int lm_p0_registry_load_default(void);
+
+static void lm_p0_document_init_owners(LmP0Document *document) {
+    if (document != 0 && !document->owners_initialized) {
+        lm_own_arena_init(&document->source_owner);
+        lm_own_arena_init(&document->token_arena);
+        lm_own_arena_init(&document->tree_arena);
+        lm_own_arena_init(&document->diagnostic_arena);
+        document->owners_initialized = 1;
+    }
+}
+
+static void lm_p0_document_destroy_owners(LmP0Document *document) {
+    if (document != 0 && document->owners_initialized) {
+        lm_own_arena_destroy(&document->diagnostic_arena);
+        lm_own_arena_destroy(&document->tree_arena);
+        lm_own_arena_destroy(&document->token_arena);
+        lm_own_arena_destroy(&document->source_owner);
+        document->owners_initialized = 0;
+        document->frozen = 0;
+    }
+}
+
+static void lm_p0_document_freeze_tree(LmP0Document *document) {
+    if (document != 0 && document->owners_initialized) {
+        lm_own_arena_freeze(&document->tree_arena);
+        lm_own_arena_freeze(&document->source_owner);
+        document->frozen = 1;
+    }
+}
 
 typedef int LmP0TrailerRole;
 
@@ -1588,7 +1623,7 @@ static void lm_p0_advance_layout_line(
 static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
     LmP0Node *node;
 
-    node = (LmP0Node *)calloc(1U, sizeof(*node));
+    node = (LmP0Node *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*node));
     if (node == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node");
         return 0;
@@ -1601,7 +1636,7 @@ static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
 static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, LmP0Node *node) {
     LmP0Field *field;
 
-    field = (LmP0Field *)calloc(1U, sizeof(*field));
+    field = (LmP0Field *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*field));
     if (field == 0) {
         lm_p0_set_diagnostic(document, 1, node != 0 ? node->span.line : 0U, node != 0 ? node->span.column : 0U, "out of memory while allocating parser field");
         return 0;
@@ -1801,28 +1836,34 @@ static int lm_p0_record_mix_mark(
     payload_length = end > start + 2U ? end - start - 2U : 0U;
     if (payload_length > 0U) {
         memset(&payload_document, 0, sizeof(payload_document));
+        lm_p0_document_init_owners(&payload_document);
         payload_document.source = (char *)(text + start + 1U);
         payload_document.source_length = payload_length;
 
         if (!lm_p0_parse_stream(&payload_document)) {
             lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
-            lm_p0_free_node(payload_document.root);
+            lm_p0_document_destroy_owners(&payload_document);
             return 0;
         }
         if (!lm_p0_postprocess_node(&payload_document, payload_document.root)) {
             lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
-            lm_p0_free_node(payload_document.root);
+            lm_p0_document_destroy_owners(&payload_document);
             return 0;
         }
         if (!lm_p0_validate_nonempty_colon_frames_in_node(&payload_document, payload_document.root)) {
             lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
-            lm_p0_free_node(payload_document.root);
+            lm_p0_document_destroy_owners(&payload_document);
             return 0;
         }
 
         node->as.structure = payload_document.root->as.structure;
         memset(&payload_document.root->as.structure, 0, sizeof(payload_document.root->as.structure));
-        lm_p0_free_node(payload_document.root);
+        if (lm_own_arena_absorb(&document->tree_arena, &payload_document.tree_arena) != 0) {
+            lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while moving MIX tree into parser arena");
+            lm_p0_document_destroy_owners(&payload_document);
+            return 0;
+        }
+        lm_p0_document_destroy_owners(&payload_document);
         lm_p0_adjust_structure_spans_to_document(document, &node->as.structure, payload_offset);
     }
 
@@ -2270,49 +2311,9 @@ static int lm_p0_append_compact_atom_pieces(
 }
 
 static void lm_p0_free_node(LmP0Node *node);
-static void lm_p0_free_structure_fields(LmP0Structure *structure);
-
-static void lm_p0_free_trailer(LmP0Trailer *trailer) {
-    if (trailer == 0) {
-        return;
-    }
-    lm_p0_free_structure_fields(&trailer->body);
-    lm_own_delete(trailer, 0);
-}
-
-static void lm_p0_free_structure_fields(LmP0Structure *structure) {
-    LmP0Field *field;
-
-    field = structure->first_field;
-    while (field != 0) {
-        LmP0Field *next;
-
-        next = field->next;
-        lm_p0_free_node(field->value);
-        lm_own_delete(field, 0);
-        field = next;
-    }
-    structure->first_field = 0;
-    structure->last_field = 0;
-    structure->field_count = 0U;
-    lm_p0_free_trailer(structure->trailer);
-    structure->trailer = 0;
-}
 
 static void lm_p0_free_node(LmP0Node *node) {
-    if (node == 0) {
-        return;
-    }
-
-    if (node->kind == LM_P0_NODE_STRUCTURE) {
-        lm_p0_free_structure_fields(&node->as.structure);
-    } else if (node->kind == LM_P0_NODE_FRAME) {
-        lm_p0_free_structure_fields(&node->as.frame.body);
-        lm_p0_free_trailer(node->as.frame.trailer);
-        node->as.frame.trailer = 0;
-    }
-
-    lm_own_delete(node, 0);
+    (void)node;
 }
 
 static int lm_p0_relaxed_level_from_column(
@@ -4148,7 +4149,7 @@ static LmP0Trailer *lm_p0_attach_trailer(
         return 0;
     }
 
-    trailer = (LmP0Trailer *)calloc(1U, sizeof(*trailer));
+    trailer = (LmP0Trailer *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*trailer));
     if (trailer == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer");
         return 0;
@@ -5420,9 +5421,6 @@ static int lm_p0_wrap_fields_from_line(
             lm_p0_free_node(group_node);
             return 0;
         }
-        if (move != group_first) {
-            free(move);
-        }
         move = next_move;
     }
 
@@ -5518,10 +5516,11 @@ int lm_p0_parse_bytes(
     }
     *out_document = 0;
 
-    document = (LmP0Document *)calloc(1U, sizeof(*document));
+    document = (LmP0Document *)lm_own_new_zero(sizeof(*document));
     if (document == 0) {
         return 1;
     }
+    lm_p0_document_init_owners(document);
 
     if (source == 0) {
         source = "";
@@ -5529,13 +5528,15 @@ int lm_p0_parse_bytes(
     }
 
     if (lm_p0_registry_load_default() != 0) {
+        lm_p0_document_destroy_owners(document);
         lm_own_delete(document, 0);
         return 1;
     }
 
     document->source_length = source_length;
-    document->source = lm_p0_copy_bytes(source, document->source_length);
+    document->source = lm_own_arena_copy_bytes(&document->source_owner, source, document->source_length);
     if (document->source == 0) {
+        lm_p0_document_destroy_owners(document);
         lm_own_delete(document, 0);
         return 1;
     }
@@ -5546,6 +5547,9 @@ int lm_p0_parse_bytes(
         }
     }
 
+    if (document->diagnostic.code == 0) {
+        lm_p0_document_freeze_tree(document);
+    }
     *out_document = document;
     return document->diagnostic.code == 0 ? 0 : document->diagnostic.code;
 }
@@ -6339,8 +6343,7 @@ void lm_p0_document_destroy(LmP0Document *document) {
     if (document == 0) {
         return;
     }
-    lm_p0_free_node(document->root);
-    lm_own_delete(document->source, 0);
+    lm_p0_document_destroy_owners(document);
     lm_own_delete(document, 0);
 }
 
