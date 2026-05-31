@@ -233,12 +233,14 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
 void lm_own_arena_init(LmOwnArena *arena) {
     if (arena != 0) {
         lm_own_ptr_stack_init(&arena->allocations, free);
+        lm_own_value_stack_init(&arena->lazy_edges, sizeof(LmOwnLazyEdge));
         arena->frozen = 0;
     }
 }
 
 void lm_own_arena_destroy(LmOwnArena *arena) {
     if (arena != 0) {
+        lm_own_value_stack_destroy(&arena->lazy_edges);
         lm_own_ptr_stack_destroy(&arena->allocations);
         arena->frozen = 0;
     }
@@ -276,41 +278,132 @@ char *lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t leng
     return copy;
 }
 
+int lm_own_arena_add_lazy_edge(
+    LmOwnArena *target,
+    LmOwnArena *source,
+    const void *source_ptr,
+    size_t size,
+    const void **patch_slot
+) {
+    LmOwnLazyEdge edge;
+
+    if (target == 0 || source == 0 || patch_slot == 0 || target->frozen) {
+        return 1;
+    }
+    if (size == 0U) {
+        return 0;
+    }
+    if (source_ptr == 0) {
+        return 1;
+    }
+
+    edge.kind = LM_OWN_EDGE_LAZY_OWNED;
+    edge.source_owner = source;
+    edge.target_owner = target;
+    edge.source = source_ptr;
+    edge.size = size;
+    edge.patch_slot = patch_slot;
+    return lm_own_value_stack_push(&target->lazy_edges, &edge);
+}
+
+int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {
+    LmOwnLazyEdge *edge;
+    void *copy;
+    size_t i;
+
+    if (arena == 0 || arena->frozen) {
+        return 1;
+    }
+
+    for (i = 0U; i < arena->lazy_edges.count; ++i) {
+        edge = (LmOwnLazyEdge *)lm_own_value_stack_at(&arena->lazy_edges, i);
+        if (edge == 0 || edge->kind != LM_OWN_EDGE_LAZY_OWNED) {
+            continue;
+        }
+        if (edge->patch_slot == 0 || edge->source == 0 || edge->size == 0U) {
+            return 1;
+        }
+
+        copy = lm_own_arena_new_zero(arena, edge->size + 1U);
+        if (copy == 0) {
+            return 1;
+        }
+        memcpy(copy, edge->source, edge->size);
+        *edge->patch_slot = copy;
+        edge->source = copy;
+        edge->source_owner = arena;
+        edge->target_owner = arena;
+        edge->kind = LM_OWN_EDGE_OWNED;
+    }
+
+    return 0;
+}
+
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
     void **items;
     size_t new_count;
     size_t capacity;
+    size_t lazy_base;
+    size_t lazy_new_count;
+    size_t i;
+    LmOwnLazyEdge *edge;
+    LmOwnLazyEdge *target_edges;
 
     if (target == 0 || source == 0 || target->frozen || source == target) {
         return target == source ? 0 : 1;
     }
 
-    if (source->allocations.count == 0U) {
-        return 0;
+    lazy_base = target->lazy_edges.count;
+    lazy_new_count = lazy_base + source->lazy_edges.count;
+    if (source->lazy_edges.count > 0U) {
+        if (lm_own_value_stack_resize_zero(&target->lazy_edges, lazy_new_count) != 0) {
+            return 1;
+        }
+        target->lazy_edges.count = lazy_base;
     }
 
-    new_count = target->allocations.count + source->allocations.count;
-    capacity = target->allocations.capacity == 0U ? 8U : target->allocations.capacity;
-    while (capacity < new_count) {
-        capacity *= 2U;
-    }
-    items = (void **)realloc(target->allocations.items, capacity * sizeof(*items));
-    if (items == 0) {
-        return 1;
-    }
-    target->allocations.items = items;
-    target->allocations.capacity = capacity;
-    memcpy(
-        target->allocations.items + target->allocations.count,
-        source->allocations.items,
-        source->allocations.count * sizeof(*source->allocations.items)
-    );
-    target->allocations.count = new_count;
+    if (source->allocations.count > 0U) {
+        new_count = target->allocations.count + source->allocations.count;
+        capacity = target->allocations.capacity == 0U ? 8U : target->allocations.capacity;
+        while (capacity < new_count) {
+            capacity *= 2U;
+        }
+        items = (void **)realloc(target->allocations.items, capacity * sizeof(*items));
+        if (items == 0) {
+            return 1;
+        }
+        target->allocations.items = items;
+        target->allocations.capacity = capacity;
+        memcpy(
+            target->allocations.items + target->allocations.count,
+            source->allocations.items,
+            source->allocations.count * sizeof(*source->allocations.items)
+        );
+        target->allocations.count = new_count;
 
-    free(source->allocations.items);
-    source->allocations.items = 0;
-    source->allocations.count = 0U;
-    source->allocations.capacity = 0U;
+        free(source->allocations.items);
+        source->allocations.items = 0;
+        source->allocations.count = 0U;
+        source->allocations.capacity = 0U;
+    }
+
+    if (source->lazy_edges.count > 0U) {
+        target_edges = (LmOwnLazyEdge *)target->lazy_edges.items;
+        memcpy(
+            target_edges + lazy_base,
+            source->lazy_edges.items,
+            source->lazy_edges.count * sizeof(*target_edges)
+        );
+        target->lazy_edges.count = lazy_new_count;
+        for (i = lazy_base; i < target->lazy_edges.count; ++i) {
+            edge = (LmOwnLazyEdge *)lm_own_value_stack_at(&target->lazy_edges, i);
+            if (edge != 0 && edge->target_owner == source) {
+                edge->target_owner = target;
+            }
+        }
+        source->lazy_edges.count = 0U;
+    }
+
     return 0;
 }
 
@@ -329,7 +422,5 @@ int lm_own_tree_cut(LmOwnArena *arena) {
 }
 
 int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena) {
-    /* Initial parser profile pins source owners for the tree lifetime, so no lazy edge table exists yet. */
-    (void)arena;
-    return 0;
+    return lm_own_arena_promote_lazy_edges(arena);
 }

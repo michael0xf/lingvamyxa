@@ -27,10 +27,22 @@ typedef int LmOwnEdgeKind;
 #define LM_OWN_EDGE_LAZY_OWNED 3
 #define LM_OWN_EDGE_EXTERNAL 4
 
-typedef struct LmOwnArena {
+typedef struct LmOwnArena LmOwnArena;
+
+typedef struct LmOwnLazyEdge {
+    LmOwnEdgeKind kind;
+    LmOwnArena *source_owner;
+    LmOwnArena *target_owner;
+    const void *source;
+    size_t size;
+    const void **patch_slot;
+} LmOwnLazyEdge;
+
+struct LmOwnArena {
     LmOwnPtrStack allocations;
+    LmOwnValueStack lazy_edges;
     int frozen;
-} LmOwnArena;
+};
 
 void *lm_own_new_zero(size_t size);
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
@@ -54,6 +66,8 @@ void lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
 void *lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
 char *lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t length);
+int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
+int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
 void lm_own_arena_freeze(LmOwnArena *arena);
 int lm_own_arena_is_frozen(const LmOwnArena *arena);

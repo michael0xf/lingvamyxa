@@ -92,6 +92,14 @@ typedef struct LmP0Registry {
 static LmP0Registry lm_p0_registry;
 
 static int lm_p0_registry_load_default(void);
+static void lm_p0_set_diagnostic(
+    LmP0Document *document,
+    int code,
+    size_t line,
+    size_t column,
+    const char *format,
+    ...
+);
 
 static void lm_p0_document_init_owners(LmP0Document *document) {
     if (document != 0 && !document->owners_initialized) {
@@ -120,6 +128,40 @@ static void lm_p0_document_freeze_tree(LmP0Document *document) {
         lm_own_arena_freeze(&document->source_owner);
         document->frozen = 1;
     }
+}
+
+static int lm_p0_document_register_lazy_text(
+    LmP0Document *document,
+    const char *source,
+    size_t length,
+    const char **patch_slot,
+    size_t line,
+    size_t column
+) {
+    if (patch_slot == 0) {
+        return 0;
+    }
+    if (length == 0U) {
+        *patch_slot = "";
+        return 1;
+    }
+    if (
+        document == 0 ||
+        !document->owners_initialized ||
+        lm_own_arena_add_lazy_edge(
+            &document->tree_arena,
+            &document->source_owner,
+            source,
+            length,
+            (const void **)patch_slot
+        ) != 0
+    ) {
+        if (document != 0) {
+            lm_p0_set_diagnostic(document, 1, line, column, "out of memory while registering parser lazy text edge");
+        }
+        return 0;
+    }
+    return 1;
 }
 
 typedef int LmP0TrailerRole;
@@ -1860,6 +1902,11 @@ static int lm_p0_record_mix_mark(
             lm_p0_document_destroy_owners(&payload_document);
             return 0;
         }
+        if (lm_own_tree_cut(&payload_document.tree_arena) != 0) {
+            lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while promoting MIX lazy text edges");
+            lm_p0_document_destroy_owners(&payload_document);
+            return 0;
+        }
 
         node->as.structure = payload_document.root->as.structure;
         memset(&payload_document.root->as.structure, 0, sizeof(payload_document.root->as.structure));
@@ -2192,6 +2239,16 @@ static int lm_p0_append_atom_slice(
     lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
     node->span.offset = offset + start;
     node->span.length = end - start;
+    if (!lm_p0_document_register_lazy_text(
+            document,
+            node->as.atom.data,
+            node->as.atom.length,
+            &node->as.atom.data,
+            node->span.line,
+            node->span.column
+        )) {
+        return 0;
+    }
 
     return lm_p0_append_field(document, structure, node);
 }
@@ -2213,7 +2270,7 @@ static int lm_p0_append_positional_skip(
         return 0;
     }
     node->flags |= LM_P0_NODE_POSITIONAL_SKIP;
-    node->as.atom.data = text + index;
+    node->as.atom.data = "";
     node->as.atom.length = 0U;
     node->span.line = line;
     lm_p0_position_in_slice(text, length, index, line, column, &node->span.line, &node->span.column);
@@ -3135,6 +3192,16 @@ static int lm_p0_parse_fields_until_with_layout(
                 node->span.column = field_column;
                 node->span.offset = offset + i;
                 node->span.length = next_offset - i;
+                if (!lm_p0_document_register_lazy_text(
+                        document,
+                        node->as.atom.data,
+                        node->as.atom.length,
+                        &node->as.atom.data,
+                        node->span.line,
+                        node->span.column
+                    )) {
+                    return 0;
+                }
                 if (!lm_p0_append_field(document, structure, node)) {
                     lm_p0_free_node(node);
                     return 0;
@@ -3243,6 +3310,16 @@ static int lm_p0_parse_fields_until_with_layout(
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
                 node->span.offset = offset + start;
                 node->span.length = body_index - start;
+                if (!lm_p0_document_register_lazy_text(
+                        document,
+                        node->as.frame.head.data,
+                        node->as.frame.head.length,
+                        &node->as.frame.head.data,
+                        node->span.line,
+                        node->span.column
+                    )) {
+                    return 0;
+                }
                 i = body_index;
             } else {
                 node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
@@ -3419,6 +3496,16 @@ static int lm_p0_parse_fields_until_with_layout(
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
                 node->span.offset = offset + start;
                 node->span.length = body_index - start;
+                if (!lm_p0_document_register_lazy_text(
+                        document,
+                        node->as.frame.head.data,
+                        node->as.frame.head.length,
+                        &node->as.frame.head.data,
+                        node->span.line,
+                        node->span.column
+                    )) {
+                    return 0;
+                }
                 i = body_index;
             } else if (i < length && text[i] == '(' && head_end > start) {
                 size_t inner_index;
@@ -3454,6 +3541,16 @@ static int lm_p0_parse_fields_until_with_layout(
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
                 node->span.offset = offset + start;
                 node->span.length = close_index - start + 1U;
+                if (!lm_p0_document_register_lazy_text(
+                        document,
+                        node->as.frame.head.data,
+                        node->as.frame.head.length,
+                        &node->as.frame.head.data,
+                        node->span.line,
+                        node->span.column
+                    )) {
+                    return 0;
+                }
                 i = close_index + 1U;
             } else {
                 if (head_end == start) {
@@ -3495,6 +3592,16 @@ static int lm_p0_parse_fields_until_with_layout(
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
                 node->span.offset = offset + start;
                 node->span.length = head_end - start;
+                if (!lm_p0_document_register_lazy_text(
+                        document,
+                        node->as.atom.data,
+                        node->as.atom.length,
+                        &node->as.atom.data,
+                        node->span.line,
+                        node->span.column
+                    )) {
+                    return 0;
+                }
                 i = head_end;
             }
         }
@@ -4162,6 +4269,16 @@ static LmP0Trailer *lm_p0_attach_trailer(
     trailer->spelling.data = spelling;
     trailer->spelling.length = spelling_length;
     trailer->flags = flags;
+    if (!lm_p0_document_register_lazy_text(
+            document,
+            trailer->spelling.data,
+            trailer->spelling.length,
+            &trailer->spelling.data,
+            line,
+            column
+        )) {
+        return 0;
+    }
     *slot = trailer;
     return trailer;
 }
@@ -4488,6 +4605,16 @@ static int lm_p0_stream_apply_item_event(
         node->span.column = event->column;
         node->span.offset = event->offset;
         node->span.length = event->text_length;
+        if (!lm_p0_document_register_lazy_text(
+                document,
+                node->as.atom.data,
+                node->as.atom.length,
+                &node->as.atom.data,
+                node->span.line,
+                node->span.column
+            )) {
+            return 0;
+        }
     } else if (event->kind == LM_P0_STREAM_EVENT_BLOCK_STRING) {
         node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
         if (node == 0) {
@@ -4499,6 +4626,16 @@ static int lm_p0_stream_apply_item_event(
         node->span.column = event->column;
         node->span.offset = event->offset;
         node->span.length = event->text_length;
+        if (!lm_p0_document_register_lazy_text(
+                document,
+                node->as.atom.data,
+                node->as.atom.length,
+                &node->as.atom.data,
+                node->span.line,
+                node->span.column
+            )) {
+            return 0;
+        }
     }
     node->flags |= event->node_flags;
 
@@ -5553,7 +5690,11 @@ int lm_p0_parse_bytes(
     }
 
     if (document->diagnostic.code == 0) {
-        lm_p0_document_freeze_tree(document);
+        if (lm_own_tree_cut(&document->tree_arena) != 0) {
+            lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while promoting parser lazy text edges");
+        } else {
+            lm_p0_document_freeze_tree(document);
+        }
     }
     *out_document = document;
     return document->diagnostic.code == 0 ? 0 : document->diagnostic.code;
