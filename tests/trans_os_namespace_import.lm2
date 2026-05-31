@@ -1,0 +1,24 @@
+os:
+    win:
+        fn: lm_os_import_value () int
+            return: 1
+        end: lm_os_import_value
+
+        fn: lm_os_import_plus_one () int
+            return: lm_os_import_value() + 1
+        end: lm_os_import_plus_one
+    default:
+        fn: lm_os_import_value () int
+            return: 2
+        end: lm_os_import_value
+
+        fn: lm_os_import_plus_one () int
+            return: lm_os_import_value() + 1
+        end: lm_os_import_plus_one
+end: os
+
+external:
+    fn: main () int
+        return: lm_os_import_plus_one() != 2 && lm_os_import_plus_one() != 3
+    end: main
+end: external

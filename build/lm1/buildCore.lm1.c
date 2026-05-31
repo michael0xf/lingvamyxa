@@ -5,26 +5,100 @@
 
 #if defined(_WIN32)
 #include <direct.h>
-#define LM_BUILD_EXE_SUFFIX ".exe"
-#define LM_BUILD_PATH_SEP "\\"
-#define LM_BUILD_CHDIR _chdir
-#define LM_BUILD_GETCWD _getcwd
-#define LM_BUILD_PLATFORM_ABSOLUTE(path) ((((path)[0] == '/' || (path)[0] == '\\') && ((path)[1] == '/' || (path)[1] == '\\')) || ((path)[0] != '\0' && (path)[1] == ':' && ((path)[2] == '/' || (path)[2] == '\\')))
-#define LM_BUILD_HAS_QT_CMAKE() lm_build_file_exists("C:/Qt/Tools/CMake_64/bin/cmake.exe")
-#define LM_BUILD_HAS_QT_MINGW_MAKE() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")
-#define LM_BUILD_HAS_QT_GCC() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe")
-#define LM_BUILD_HAS_QT_GXX() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe")
+
+static char * lm_build_exe_suffix(void) {
+    return ".exe";
+}
+
+static char * lm_build_path_sep(void) {
+    return "\\";
+}
+
+static int lm_build_platform_chdir(char *path) {
+    return _chdir(path);
+}
+
+static char * lm_build_platform_getcwd(char *buffer, size_t size) {
+    return _getcwd(buffer, size);
+}
+
+static int lm_build_platform_absolute(char *path) {
+    return ((path[0] == '/' || path[0] == '\\') && (path[1] == '/' || path[1] == '\\')) || (path[0] != '\0' && path[1] == ':' && (path[2] == '/' || path[2] == '\\'));
+}
+
+static int lm_build_file_exists(char *path) {
+    FILE *file;
+    file = fopen(path, "rb");
+    if (file == 0) {
+        return 0;
+    }
+    fclose(file);
+    return 1;
+}
+
+static int lm_build_has_qt_cmake(void) {
+    return lm_build_file_exists("C:/Qt/Tools/CMake_64/bin/cmake.exe");
+}
+
+static int lm_build_has_qt_mingw_make(void) {
+    return lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe");
+}
+
+static int lm_build_has_qt_gcc(void) {
+    return lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe");
+}
+
+static int lm_build_has_qt_gxx(void) {
+    return lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe");
+}
 #else
 #include <unistd.h>
-#define LM_BUILD_EXE_SUFFIX ""
-#define LM_BUILD_PATH_SEP "/"
-#define LM_BUILD_CHDIR chdir
-#define LM_BUILD_GETCWD getcwd
-#define LM_BUILD_PLATFORM_ABSOLUTE(path) ((path)[0] == '/')
-#define LM_BUILD_HAS_QT_CMAKE() 0
-#define LM_BUILD_HAS_QT_MINGW_MAKE() 0
-#define LM_BUILD_HAS_QT_GCC() 0
-#define LM_BUILD_HAS_QT_GXX() 0
+
+static char * lm_build_exe_suffix(void) {
+    return "";
+}
+
+static char * lm_build_path_sep(void) {
+    return "/";
+}
+
+static int lm_build_platform_chdir(char *path) {
+    return chdir(path);
+}
+
+static char * lm_build_platform_getcwd(char *buffer, size_t size) {
+    return getcwd(buffer, size);
+}
+
+static int lm_build_platform_absolute(char *path) {
+    return path[0] == '/';
+}
+
+static int lm_build_file_exists(char *path) {
+    FILE *file;
+    file = fopen(path, "rb");
+    if (file == 0) {
+        return 0;
+    }
+    fclose(file);
+    return 1;
+}
+
+static int lm_build_has_qt_cmake(void) {
+    return 0;
+}
+
+static int lm_build_has_qt_mingw_make(void) {
+    return 0;
+}
+
+static int lm_build_has_qt_gcc(void) {
+    return 0;
+}
+
+static int lm_build_has_qt_gxx(void) {
+    return 0;
+}
 #endif
 
 typedef struct LmBuildOptions LmBuildOptions;
@@ -53,7 +127,7 @@ static int lm_build_is_absolute_path(char *path) {
     if (path == 0 || path[0] == '\0') {
         return 0;
     }
-    if (LM_BUILD_PLATFORM_ABSOLUTE(path)) {
+    if (lm_build_platform_absolute(path)) {
         return 1;
     }
     return 0;
@@ -72,8 +146,8 @@ static int lm_build_join_path(char *buffer, size_t size, char *base, char *tail)
     }
     memcpy(buffer, base, base_length);
     if (base_length > 0U && tail_length > 0U && lm_build_is_path_separator(base[base_length - 1U]) == 0 && lm_build_is_path_separator(tail[0]) == 0) {
-        memcpy(buffer + used, LM_BUILD_PATH_SEP, strlen(LM_BUILD_PATH_SEP));
-        used = used + strlen(LM_BUILD_PATH_SEP);
+        memcpy(buffer + used, lm_build_path_sep(), strlen(lm_build_path_sep()));
+        used = used + strlen(lm_build_path_sep());
     }
     memcpy(buffer + used, tail, tail_length + 1U);
     return 0;
@@ -97,16 +171,6 @@ static int lm_build_trim_last_path_part(char *path) {
     return 0;
 }
 
-static int lm_build_file_exists(char *path) {
-    FILE *file;
-    file = fopen(path, "rb");
-    if (file == 0) {
-        return 0;
-    }
-    fclose(file);
-    return 1;
-}
-
 static int lm_build_has_project_marker(char *path) {
     char marker_path[2048];
     if (lm_build_join_path(marker_path, sizeof(marker_path), path, "lm2/buildCore.lm2") != 0) {
@@ -120,7 +184,7 @@ static int lm_build_enter_project_root(char *program_path) {
     char executable_path[1024];
     char cwd[1024];
     int depth;
-    if (LM_BUILD_GETCWD(cwd, sizeof(cwd)) == 0) {
+    if (lm_build_platform_getcwd(cwd, sizeof(cwd)) == 0) {
         fprintf(stderr, "buildCore.lm0: cannot read current directory\n");
         return 1;
     }
@@ -146,7 +210,7 @@ static int lm_build_enter_project_root(char *program_path) {
     depth = 0;
     while (depth < 12 && search_path[0] != '\0') {
         if (lm_build_has_project_marker(search_path)) {
-            if (LM_BUILD_CHDIR(search_path) != 0) {
+            if (lm_build_platform_chdir(search_path) != 0) {
                 fprintf(stderr, "buildCore.lm0: cannot enter project root %s\n", search_path);
                 return 1;
             }
@@ -169,35 +233,35 @@ static char * lm_build_env_or_default(char *name, char *fallback) {
 }
 
 static char * lm_build_default_cmake(void) {
-    if (LM_BUILD_HAS_QT_CMAKE()) {
+    if (lm_build_has_qt_cmake()) {
         return "C:/Qt/Tools/CMake_64/bin/cmake.exe";
     }
     return "cmake";
 }
 
 static char * lm_build_default_generator(void) {
-    if (LM_BUILD_HAS_QT_MINGW_MAKE()) {
+    if (lm_build_has_qt_mingw_make()) {
         return "MinGW Makefiles";
     }
     return "";
 }
 
 static char * lm_build_default_make_program(void) {
-    if (LM_BUILD_HAS_QT_MINGW_MAKE()) {
+    if (lm_build_has_qt_mingw_make()) {
         return "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe";
     }
     return "";
 }
 
 static char * lm_build_default_cc(void) {
-    if (LM_BUILD_HAS_QT_GCC()) {
+    if (lm_build_has_qt_gcc()) {
         return "C:/Qt/Tools/mingw1310_64/bin/gcc.exe";
     }
     return "";
 }
 
 static char * lm_build_default_cxx(void) {
-    if (LM_BUILD_HAS_QT_GXX()) {
+    if (lm_build_has_qt_gxx()) {
         return "C:/Qt/Tools/mingw1310_64/bin/g++.exe";
     }
     return "";
@@ -380,7 +444,7 @@ static int lm_build_compile_trans(char *make_tool, char *parser_library, char *o
     if (legacy_compare != 0 && strcmp(legacy_compare, "0") == 0) {
         legacy_flag = " -DLM_TRANS_ENABLE_LEGACY_COMPARE=0";
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic%s -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\"", legacy_flag, parser_library, own_library, LM_BUILD_EXE_SUFFIX);
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic%s -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\"", legacy_flag, parser_library, own_library, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
@@ -389,29 +453,29 @@ static int lm_build_compile_trans(char *make_tool, char *parser_library, char *o
 
 static int lm_build_compile_generated_tools(char *make_tool) {
     char command[4096];
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\"", LM_BUILD_EXE_SUFFIX);
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\"", lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\"", LM_BUILD_EXE_SUFFIX);
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\"", lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/vcpkgFetch.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/vcpkgFetch.lm0%s\"", LM_BUILD_EXE_SUFFIX);
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/vcpkgFetch.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/vcpkgFetch.lm0%s\"", lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/printTree.lm0%s\"", LM_BUILD_EXE_SUFFIX);
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/printTree.lm0%s\"", lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/buildCore.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/buildCore.next.lm0%s\"", LM_BUILD_EXE_SUFFIX);
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/buildCore.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/buildCore.next.lm0%s\"", lm_build_exe_suffix());
     return lm_build_make(make_tool, "link", command);
 }
 
 static int lm_build_defer_finalize(void) {
     char command[256];
-    snprintf(command, sizeof(command), "build%slm0%sfinalize.lm0%s --defer", LM_BUILD_PATH_SEP, LM_BUILD_PATH_SEP, LM_BUILD_EXE_SUFFIX);
+    snprintf(command, sizeof(command), "build%slm0%sfinalize.lm0%s --defer", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
     return lm_build_run(command);
 }
 
@@ -713,8 +777,8 @@ int main(int argc, char **argv) {
         lm_build_options_delete(options);
         return 1;
     }
-    snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", LM_BUILD_PATH_SEP, LM_BUILD_PATH_SEP, LM_BUILD_EXE_SUFFIX);
-    snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%strans.lm0%s", LM_BUILD_PATH_SEP, LM_BUILD_PATH_SEP, LM_BUILD_EXE_SUFFIX);
+    snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+    snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
     trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
     result = lm_build_run_bootstrap(options, trusted_make, built_trans_buffer);
     lm_build_options_delete(options);

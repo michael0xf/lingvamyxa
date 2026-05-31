@@ -3,30 +3,116 @@ include: "<stdio.h>" "<stdlib.h>" "<string.h>" "own.lm1.h"
 os:
     win:
         include: "<direct.h>";
-===
-#define LM_BUILD_EXE_SUFFIX ".exe"
-#define LM_BUILD_PATH_SEP "\\"
-#define LM_BUILD_CHDIR _chdir
-#define LM_BUILD_GETCWD _getcwd
-#define LM_BUILD_PLATFORM_ABSOLUTE(path) ((((path)[0] == '/' || (path)[0] == '\\') && ((path)[1] == '/' || (path)[1] == '\\')) || ((path)[0] != '\0' && (path)[1] == ':' && ((path)[2] == '/' || (path)[2] == '\\')))
-#define LM_BUILD_HAS_QT_CMAKE() lm_build_file_exists("C:/Qt/Tools/CMake_64/bin/cmake.exe")
-#define LM_BUILD_HAS_QT_MINGW_MAKE() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")
-#define LM_BUILD_HAS_QT_GCC() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe")
-#define LM_BUILD_HAS_QT_GXX() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe")
-===
+        fn: lm_build_exe_suffix () @: char
+            return: ".exe"
+        end: lm_build_exe_suffix
+
+        fn: lm_build_path_sep () @: char
+            return: "\\"
+        end: lm_build_path_sep
+
+        fn: lm_build_platform_chdir (@: char path) int
+            return: c._chdir(path)
+        end: lm_build_platform_chdir
+
+        fn: lm_build_platform_getcwd (@: char buffer;; size_t: size) @: char
+            return: c._getcwd(buffer, size)
+        end: lm_build_platform_getcwd
+
+        fn: lm_build_platform_absolute (@: char path) int
+            return:
+                (
+                    (
+                        path[0] = '/' || path[0] = '\\'
+                    )
+                    &&
+                    (
+                        path[1] = '/' || path[1] = '\\'
+                    )
+                )
+                ||
+                (
+                    path[0] != '\0' && path[1] = ':' &&
+                    (
+                        path[2] = '/' || path[2] = '\\'
+                    )
+                )
+        end: lm_build_platform_absolute
+
+        fn: lm_build_file_exists (@: char path) int
+            @: FILE file
+
+            file: c.fopen(path, "rb")
+            if: file = 0
+                return: 0
+
+            c.fclose: file
+            return: 1
+        end: lm_build_file_exists
+
+        fn: lm_build_has_qt_cmake () int
+            return: lm_build_file_exists("C:/Qt/Tools/CMake_64/bin/cmake.exe")
+        end: lm_build_has_qt_cmake
+
+        fn: lm_build_has_qt_mingw_make () int
+            return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")
+        end: lm_build_has_qt_mingw_make
+
+        fn: lm_build_has_qt_gcc () int
+            return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe")
+        end: lm_build_has_qt_gcc
+
+        fn: lm_build_has_qt_gxx () int
+            return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe")
+        end: lm_build_has_qt_gxx
     default:
         include: "<unistd.h>";
-===
-#define LM_BUILD_EXE_SUFFIX ""
-#define LM_BUILD_PATH_SEP "/"
-#define LM_BUILD_CHDIR chdir
-#define LM_BUILD_GETCWD getcwd
-#define LM_BUILD_PLATFORM_ABSOLUTE(path) ((path)[0] == '/')
-#define LM_BUILD_HAS_QT_CMAKE() 0
-#define LM_BUILD_HAS_QT_MINGW_MAKE() 0
-#define LM_BUILD_HAS_QT_GCC() 0
-#define LM_BUILD_HAS_QT_GXX() 0
-===
+        fn: lm_build_exe_suffix () @: char
+            return: ""
+        end: lm_build_exe_suffix
+
+        fn: lm_build_path_sep () @: char
+            return: "/"
+        end: lm_build_path_sep
+
+        fn: lm_build_platform_chdir (@: char path) int
+            return: c.chdir(path)
+        end: lm_build_platform_chdir
+
+        fn: lm_build_platform_getcwd (@: char buffer;; size_t: size) @: char
+            return: c.getcwd(buffer, size)
+        end: lm_build_platform_getcwd
+
+        fn: lm_build_platform_absolute (@: char path) int
+            return: path[0] = '/'
+        end: lm_build_platform_absolute
+
+        fn: lm_build_file_exists (@: char path) int
+            @: FILE file
+
+            file: c.fopen(path, "rb")
+            if: file = 0
+                return: 0
+
+            c.fclose: file
+            return: 1
+        end: lm_build_file_exists
+
+        fn: lm_build_has_qt_cmake () int
+            return: 0
+        end: lm_build_has_qt_cmake
+
+        fn: lm_build_has_qt_mingw_make () int
+            return: 0
+        end: lm_build_has_qt_mingw_make
+
+        fn: lm_build_has_qt_gcc () int
+            return: 0
+        end: lm_build_has_qt_gcc
+
+        fn: lm_build_has_qt_gxx () int
+            return: 0
+        end: lm_build_has_qt_gxx
 end: os
 
 LmBuildOptions:
@@ -52,7 +138,7 @@ end: lm_build_has_path_separator
 fn: lm_build_is_absolute_path (@: char path) int
     if: path = 0 || path[0] = '\0'
         return: 0
-    if: c.LM_BUILD_PLATFORM_ABSOLUTE(path)
+    if: lm_build_platform_absolute(path)
         return: 1
     return: 0
 end: lm_build_is_absolute_path
@@ -72,8 +158,8 @@ fn: lm_build_join_path (@: char buffer;; size_t: size;; @: char base;; @: char t
 
     c.memcpy(buffer, base, base_length)
     if: base_length > 0U && tail_length > 0U && lm_build_is_path_separator(base[base_length - 1U]) = 0 && lm_build_is_path_separator(tail[0]) = 0
-        c.memcpy(buffer + used, c.LM_BUILD_PATH_SEP, c.strlen(c.LM_BUILD_PATH_SEP))
-        used: used + c.strlen(c.LM_BUILD_PATH_SEP)
+        c.memcpy(buffer + used, lm_build_path_sep(), c.strlen(lm_build_path_sep()))
+        used: used + c.strlen(lm_build_path_sep())
     c.memcpy(buffer + used, tail, tail_length + 1U)
 
     return: 0
@@ -98,17 +184,6 @@ fn: lm_build_trim_last_path_part (@: char path) int
     return: 0
 end: lm_build_trim_last_path_part
 
-fn: lm_build_file_exists (@: char path) int
-    @: FILE file
-
-    file: c.fopen(path, "rb")
-    if: file = 0
-        return: 0
-
-    c.fclose: file
-    return: 1
-end: lm_build_file_exists
-
 fn: lm_build_has_project_marker (@: char path) int
     []: char marker_path 2048
 
@@ -124,7 +199,7 @@ fn: lm_build_enter_project_root (@: char program_path) int
     []: char cwd 1024
     int: depth
 
-    if: c.LM_BUILD_GETCWD(cwd, c.sizeof(cwd)) = 0
+    if: lm_build_platform_getcwd(cwd, c.sizeof(cwd)) = 0
         c.fprintf: c.stderr "buildCore.lm0: cannot read current directory\n"
         return: 1
 
@@ -148,7 +223,7 @@ fn: lm_build_enter_project_root (@: char program_path) int
     depth: 0
     while: depth < 12 && search_path[0] != '\0'
         if: lm_build_has_project_marker(search_path)
-            if: c.LM_BUILD_CHDIR(search_path) != 0
+            if: lm_build_platform_chdir(search_path) != 0
                 c.fprintf: c.stderr "buildCore.lm0: cannot enter project root %s\n" search_path
                 return: 1
             return: 0
@@ -170,31 +245,31 @@ fn: lm_build_env_or_default (@: char name;; @: char fallback) @: char
 end: lm_build_env_or_default
 
 fn: lm_build_default_cmake () @: char
-    if: c.LM_BUILD_HAS_QT_CMAKE()
+    if: lm_build_has_qt_cmake()
         return: "C:/Qt/Tools/CMake_64/bin/cmake.exe"
     return: "cmake"
 end: lm_build_default_cmake
 
 fn: lm_build_default_generator () @: char
-    if: c.LM_BUILD_HAS_QT_MINGW_MAKE()
+    if: lm_build_has_qt_mingw_make()
         return: "MinGW Makefiles"
     return: ""
 end: lm_build_default_generator
 
 fn: lm_build_default_make_program () @: char
-    if: c.LM_BUILD_HAS_QT_MINGW_MAKE()
+    if: lm_build_has_qt_mingw_make()
         return: "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"
     return: ""
 end: lm_build_default_make_program
 
 fn: lm_build_default_cc () @: char
-    if: c.LM_BUILD_HAS_QT_GCC()
+    if: lm_build_has_qt_gcc()
         return: "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"
     return: ""
 end: lm_build_default_cc
 
 fn: lm_build_default_cxx () @: char
-    if: c.LM_BUILD_HAS_QT_GXX()
+    if: lm_build_has_qt_gxx()
         return: "C:/Qt/Tools/mingw1310_64/bin/g++.exe"
     return: ""
 end: lm_build_default_cxx
@@ -369,7 +444,7 @@ fn: lm_build_compile_trans (@: char make_tool;; @: char parser_library;; @: char
     c.snprintf:
         command c.sizeof(command)
         "-std=c99 -Wall -Wextra -Wpedantic%s -I\"lm1\" \"build/lm1/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\""
-        legacy_flag parser_library own_library c.LM_BUILD_EXE_SUFFIX
+        legacy_flag parser_library own_library lm_build_exe_suffix()
 
     if: lm_build_make(make_tool, "link", command) != 0
         return: 1
@@ -383,35 +458,35 @@ fn: lm_build_compile_generated_tools (@: char make_tool) int
     c.snprintf:
         command c.sizeof(command)
         "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\""
-        c.LM_BUILD_EXE_SUFFIX
+        lm_build_exe_suffix()
     if: lm_build_make(make_tool, "link", command) != 0
         return: 1
 
     c.snprintf:
         command c.sizeof(command)
         "-std=c99 -Wall -Wextra -Wpedantic \"build/lm1/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\""
-        c.LM_BUILD_EXE_SUFFIX
+        lm_build_exe_suffix()
     if: lm_build_make(make_tool, "link", command) != 0
         return: 1
 
     c.snprintf:
         command c.sizeof(command)
         "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/vcpkgFetch.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/vcpkgFetch.lm0%s\""
-        c.LM_BUILD_EXE_SUFFIX
+        lm_build_exe_suffix()
     if: lm_build_make(make_tool, "link", command) != 0
         return: 1
 
     c.snprintf:
         command c.sizeof(command)
         "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/printTree.lm0%s\""
-        c.LM_BUILD_EXE_SUFFIX
+        lm_build_exe_suffix()
     if: lm_build_make(make_tool, "link", command) != 0
         return: 1
 
     c.snprintf:
         command c.sizeof(command)
         "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"build/lm1/buildCore.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/buildCore.next.lm0%s\""
-        c.LM_BUILD_EXE_SUFFIX
+        lm_build_exe_suffix()
     return: lm_build_make(make_tool, "link", command)
 end: lm_build_compile_generated_tools
 
@@ -421,7 +496,7 @@ fn: lm_build_defer_finalize () int
     c.snprintf:
         command c.sizeof(command)
         "build%slm0%sfinalize.lm0%s --defer"
-        c.LM_BUILD_PATH_SEP c.LM_BUILD_PATH_SEP c.LM_BUILD_EXE_SUFFIX
+        lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
     return: lm_build_run(command)
 end: lm_build_defer_finalize
 
@@ -702,11 +777,11 @@ external:
         c.snprintf:
             trusted_make_buffer c.sizeof(trusted_make_buffer)
             "build%slm0%smake.lm0%s"
-            c.LM_BUILD_PATH_SEP c.LM_BUILD_PATH_SEP c.LM_BUILD_EXE_SUFFIX
+            lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
         c.snprintf:
             built_trans_buffer c.sizeof(built_trans_buffer)
             "build%slm0%strans.lm0%s"
-            c.LM_BUILD_PATH_SEP c.LM_BUILD_PATH_SEP c.LM_BUILD_EXE_SUFFIX
+            lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
 
         trusted_make: lm_build_env_or_default("LM_MAKE", trusted_make_buffer)
         result: lm_build_run_bootstrap(options, trusted_make, built_trans_buffer)

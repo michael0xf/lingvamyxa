@@ -7483,6 +7483,35 @@ conditions such as `_WIN32`, `__APPLE__` or `__unix__`. The branch
 body is still ordinary L1-output content: string payload, `include`, nested `os`
 or another translator receiver admitted by the profile.
 
+In an L2 translator context, `os` is also a namespace-import receiver. If a
+branch body contains L2 declarations such as `fn`, `sub` or named Structure
+descriptors, the translator imports their visible names into the current lexical
+namespace view before later L2 bodies are lowered. Platform branches are treated
+as alternative implementations of a compatible interface: the same function or
+Structure name may appear in several `win`/`mac`/`unix`/`default` branches and
+is one imported namespace symbol, provided the visible callable signature is
+compatible. After such an import, later L2 code calls the name normally:
+
+os:
+    win:
+        fn: platformValue () int
+            return: 1
+        end: platformValue
+    default:
+        fn: platformValue () int
+            return: 2
+        end: platformValue
+end: os
+
+external:
+    fn: main () int
+        return: platformValue() = 0
+    end: main
+end: external
+
+The explicit `c.platformValue()` spelling is still available as a low-level
+C-surface escape, but it is not required for names imported by L2 `os`.
+
 The `L2` receiver also consumes one body Structure, but it does not print
 standalone strings as ANSI C. The rule is relative to the Structure being
 translated to ANSI C: if a string field appears at level 0 of the body that `L2`
