@@ -2267,7 +2267,7 @@ static int lm_trans_call_args_layout_signature(
     const LmP0Frame *named_frame;
     size_t index;
     size_t named_index;
-    int named_started;
+    int named_out_of_position;
     int is_named;
 
     if (callee == 0) {
@@ -2279,11 +2279,10 @@ static int lm_trans_call_args_layout_signature(
     }
 
     index = 0U;
-    named_started = 0;
+    named_out_of_position = 0;
     while (field != 0) {
         is_named = lm_trans_call_field_is_named_argument(field, callee, &named_index);
         if (is_named) {
-            named_started = 1;
             segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, named_index);
             if (segment == 0) {
                 return 1;
@@ -2296,12 +2295,17 @@ static int lm_trans_call_args_layout_signature(
             segment->first = named_frame->body.first_field;
             segment->stop = 0;
             segment->present = 1;
+            if (named_index == index) {
+                ++index;
+            } else {
+                named_out_of_position = 1;
+            }
             field = field->next;
             continue;
         }
 
-        if (named_started) {
-            fprintf(stderr, "trans L2 error: positional argument after named argument\n");
+        if (named_out_of_position) {
+            fprintf(stderr, "trans L2 error: positional argument after out-of-position named argument\n");
             return 1;
         }
         if (lm_trans_node_is_positional_skip(field->value)) {
@@ -3482,6 +3486,129 @@ static int lm_trans_head_can_declare_storage(
     const LmTransNamespace *namespace_
 );
 
+static int lm_trans_emit_array_param(FILE *file, const LmP0Frame *frame, LmTransNamespace *namespace_) {
+    const LmP0Structure *body;
+    const LmP0Field *field;
+    const LmP0Field *type_field;
+    const LmP0Field *name_field;
+    const LmP0Field *dimension_field;
+    const LmP0Node *name_node;
+    const LmP0Node *type_node;
+    LmP0Text head_dimension;
+    size_t head_index;
+    size_t pointer_depth;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    body = lm_trans_unwrap_single_anonymous_structure(&frame->body);
+    field = body != 0 ? body->first_field : 0;
+    pointer_depth = 0U;
+
+    while (
+        field != 0 &&
+        field->value != 0 &&
+        field->value->kind == LM_P0_NODE_ATOM &&
+        lm_trans_text_all_char(field->value->as.atom, '@')
+    ) {
+        pointer_depth += field->value->as.atom.length;
+        field = field->next;
+    }
+
+    type_field = field;
+    name_field = type_field != 0 ? type_field->next : 0;
+    if (
+        type_field == 0 ||
+        name_field == 0 ||
+        name_field->value == 0 ||
+        name_field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        fprintf(stderr, "trans L2 error: [] parameter expects [@...] type name [dimensions...]\n");
+        return 1;
+    }
+
+    type_node = type_field->value;
+    name_node = name_field->value;
+    if (
+        lm_trans_emit_type_and_name(
+            file,
+            type_node,
+            name_node->as.atom,
+            pointer_depth,
+            namespace_
+        ) != 0
+    ) {
+        return 1;
+    }
+
+    dimension_field = name_field->next;
+    head_index = 0U;
+    while (lm_trans_array_head_next_dimension(frame->head, &head_index, &head_dimension)) {
+        if (lm_trans_put(file, "[") != 0) {
+            return 1;
+        }
+        if (head_dimension.length != 0U) {
+            LmP0Document *dimension_document;
+            const LmP0Diagnostic *diagnostic;
+            const LmP0Node *dimension_root;
+            int parse_status;
+
+            dimension_document = 0;
+            parse_status = lm_p0_parse_bytes(head_dimension.data, head_dimension.length, &dimension_document);
+            if (parse_status != 0) {
+                diagnostic = dimension_document != 0 ? lm_p0_document_diagnostic(dimension_document) : 0;
+                if (diagnostic != 0) {
+                    fprintf(
+                        stderr,
+                        "trans L2 error: array parameter dimension parse error %d at %zu:%zu: %s\n",
+                        diagnostic->code,
+                        diagnostic->line,
+                        diagnostic->column,
+                        diagnostic->message
+                    );
+                } else {
+                    fprintf(stderr, "trans L2 error: array parameter dimension parse failed\n");
+                }
+                if (dimension_document != 0) {
+                    lm_p0_document_destroy(dimension_document);
+                }
+                return 1;
+            }
+            dimension_root = lm_p0_document_root(dimension_document);
+            if (
+                dimension_root == 0 ||
+                dimension_root->kind != LM_P0_NODE_STRUCTURE ||
+                dimension_root->as.structure.first_field == 0
+            ) {
+                fprintf(stderr, "trans L2 error: array parameter dimension must not be empty\n");
+                lm_p0_document_destroy(dimension_document);
+                return 1;
+            }
+            if (lm_trans_emit_expr_fields(file, dimension_root->as.structure.first_field, namespace_) != 0) {
+                lm_p0_document_destroy(dimension_document);
+                return 1;
+            }
+            lm_p0_document_destroy(dimension_document);
+        } else if (dimension_field != 0 && dimension_field->value != 0) {
+            if (lm_trans_emit_expr_node(file, dimension_field->value, namespace_) != 0) {
+                return 1;
+            }
+            dimension_field = dimension_field->next;
+        }
+        if (lm_trans_put(file, "]") != 0) {
+            return 1;
+        }
+    }
+
+    if (dimension_field != 0) {
+        fprintf(stderr, "trans L2 error: array parameter does not accept initializer/default fields\n");
+        return 1;
+    }
+
+    return lm_trans_namespace_declare(namespace_, name_node->as.atom, "variable");
+}
+
 static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespace *namespace_) {
     const LmP0Field *field0;
     const LmP0Field *field1;
@@ -3576,6 +3703,10 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespac
         return lm_trans_namespace_declare(namespace_, name_node->as.atom, "variable");
     }
 
+    if (lm_trans_text_is_array_receiver_head(node->as.frame.head)) {
+        return lm_trans_emit_array_param(file, &node->as.frame, namespace_);
+    }
+
     fprintf(stderr, "trans L2 error: unsupported parameter head\n");
     return 1;
 }
@@ -3619,30 +3750,68 @@ static int lm_trans_emit_control_condition(
     return lm_trans_emit_expr_range(file, first, body_start, namespace_);
 }
 
-static int lm_trans_frame_has_positional_name_argument(const LmP0Frame *frame) {
-    int registry_result;
+static int lm_trans_parse_size_payload(const char *payload, size_t *out_value) {
+    char *end;
+    unsigned long value;
 
-    if (frame == 0) {
+    if (payload == 0 || payload[0] == '\0' || out_value == 0) {
         return 0;
     }
 
-    if (lm_trans_text_is_array_receiver_head(frame->head)) {
+    end = 0;
+    value = strtoul(payload, &end, 10);
+    if (end == payload || end == 0 || *end != '\0') {
+        return 0;
+    }
+
+    *out_value = (size_t)value;
+    return 1;
+}
+
+static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *out_index) {
+    const char *index_payload;
+
+    if (frame == 0 || out_index == 0) {
+        return 0;
+    }
+
+    if (lm_trans_text_all_char(frame->head, '@') || lm_trans_text_is_array_receiver_head(frame->head)) {
+        *out_index = 1U;
         return 1;
     }
 
-    registry_result = lm_trans_registry_has(frame->head, "receiver.positional-name");
-    return lm_trans_bool_compare(
-        "receiver.positional-name",
-        frame->head,
-        registry_result,
-        lm_trans_legacy_frame_has_positional_name_argument(frame->head)
-    );
+    index_payload = lm_trans_registry_lookup(frame->head, "receiver.positional-name-index");
+    if (index_payload != 0) {
+        if (!lm_trans_parse_size_payload(index_payload, out_index)) {
+            fprintf(
+                stderr,
+                "trans registry error: receiver.positional-name-index for \"%.*s\" must be a non-negative integer\n",
+                (int)frame->head.length,
+                frame->head.data
+            );
+            exit(2);
+        }
+        return 1;
+    }
+
+    if (lm_trans_registry_has(frame->head, "receiver.positional-name")) {
+        *out_index = 0U;
+        return 1;
+    }
+
+    if (lm_trans_legacy_frame_has_positional_name_argument(frame->head)) {
+        *out_index = 0U;
+        return 1;
+    }
+
+    return 0;
 }
 
 static int lm_trans_name_argument_from_frame(const LmP0Frame *frame, LmP0Text *out_name) {
     const LmP0Field *field;
     const LmP0Field *name_field;
     const LmP0Frame *child_frame;
+    size_t name_index;
 
     if (frame == 0 || out_name == 0) {
         return 0;
@@ -3669,11 +3838,11 @@ static int lm_trans_name_argument_from_frame(const LmP0Frame *frame, LmP0Text *o
         field = field->next;
     }
 
-    if (!lm_trans_frame_has_positional_name_argument(frame)) {
+    if (!lm_trans_frame_positional_name_index(frame, &name_index)) {
         return 0;
     }
 
-    field = lm_trans_nth_field(&frame->body, 0U);
+    field = lm_trans_nth_field(&frame->body, name_index);
     if (field == 0 || field->value == 0) {
         return 0;
     }
@@ -6133,6 +6302,7 @@ static int lm_trans_formal_param_name(const LmP0Node *node, LmP0Text *out_name) 
     const LmP0Frame *frame;
     const LmP0Field *field;
     const LmP0Field *name_field;
+    size_t name_index;
 
     if (out_name == 0 || !lm_trans_single_frame_node(node, &frame)) {
         return 0;
@@ -6146,8 +6316,8 @@ static int lm_trans_formal_param_name(const LmP0Node *node, LmP0Text *out_name) 
         return lm_trans_formal_param_name(field->value, out_name);
     }
 
-    if (lm_trans_text_all_char(frame->head, '@') || lm_trans_text_equals(frame->head, "[]")) {
-        name_field = lm_trans_nth_field(&frame->body, 1U);
+    if (lm_trans_frame_positional_name_index(frame, &name_index)) {
+        name_field = lm_trans_nth_field(&frame->body, name_index);
     } else {
         name_field = lm_trans_nth_field(&frame->body, 0U);
     }

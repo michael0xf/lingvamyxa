@@ -117,6 +117,19 @@ table:
 end: `receiver.positional-name`
 
 table:
+    name: `receiver.positional-name-index`
+    columns: char@(class)  int@(index)
+    rows:
+        fn               0
+        fm               0
+        sub              0
+        synchronized     0
+        `()`             0
+        `[]`             1
+        entry            0
+end: `receiver.positional-name-index`
+
+table:
     name: `receiver.modifier`
     columns: char@(class)  binding@(receiver)
     rows:

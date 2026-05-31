@@ -103,6 +103,7 @@ typedef unsigned LmP0FieldParseFlags;
 #define LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL 2U
 #define LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL 4U
 #define LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS 8U
+#define LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR 16U
 
 #define LM_P0_MAX_FENCE_LENGTH 80U
 
@@ -3093,6 +3094,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 }
                 expect_field = 0;
                 headless_group_after_separator =
+                    (flags & LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U &&
                     group_index > 0U &&
                     lm_p0_is_short_form_separator(text[group_index - 1U]);
                 i = group_index;
@@ -3264,6 +3266,38 @@ static int lm_p0_parse_fields_until_with_layout(
                 node->span.length = close_index - i + 1U;
                 i = close_index + 1U;
             }
+        } else if (text[i] == '[' && !lm_p0_field_start_looks_explicit_frame(document, text, length, i, line, column)) {
+            size_t inner_index;
+
+            if (!lm_p0_find_matching_bracket(document, text, length, i, line, column, &close_index)) {
+                return 0;
+            }
+            node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
+            if (node == 0) {
+                return 0;
+            }
+            inner_index = 0U;
+            if (!lm_p0_parse_fields_until(
+                    document,
+                    &node->as.structure,
+                    text + i + 1U,
+                    close_index - i - 1U,
+                    line,
+                    column + i + 1U,
+                    offset + i + 1U,
+                    LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL |
+                    LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS,
+                    current_source_level + 1U,
+                    current_source_level + 1U,
+                    &inner_index
+                )) {
+                return 0;
+            }
+            node->span.line = line;
+            lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
+            node->span.offset = offset + i;
+            node->span.length = close_index - i + 1U;
+            i = close_index + 1U;
         } else {
             int quoted_head;
 
@@ -3471,6 +3505,7 @@ static int lm_p0_parse_fields_until_with_layout(
             expect_field = 1;
         }
         if (
+            (flags & LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U &&
             node->kind == LM_P0_NODE_FRAME &&
             (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
         ) {
@@ -3534,7 +3569,19 @@ static int lm_p0_parse_fields_into(
     size_t index;
 
     index = 0U;
-    return lm_p0_parse_fields_until(document, structure, text, length, line, column, offset, 0U, 0U, 0U, &index);
+    return lm_p0_parse_fields_until(
+        document,
+        structure,
+        text,
+        length,
+        line,
+        column,
+        offset,
+        LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR,
+        0U,
+        0U,
+        &index
+    );
 }
 
 static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t level) {

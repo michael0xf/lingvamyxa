@@ -1,0 +1,13 @@
+fn: get (int: value) int
+    return: value
+end: get
+
+fn: mix (int: a; int: b; int: c) int
+    return: a * 100 + b * 10 + c
+end: mix
+
+external:
+    fn: main () int
+        return: mix(1, get: 2; 3) != 123
+    end: main
+end: external

@@ -1,0 +1,21 @@
+L2:
+    fn: pick ([]: int values; int: index; int: fallback) int
+        return: values[index] + fallback
+    end: pick
+
+    fn: mix (int: a; int: b; int: c) int
+        return: a * 100 + b * 10 + c
+    end: mix
+
+    external:
+        fn: main () int
+            []: int values 3 10 20 30
+            if: pick(values, index: 1; 5) != 25
+                return: 1
+            if: mix(1, b: 2; 3) != 123
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L2
+

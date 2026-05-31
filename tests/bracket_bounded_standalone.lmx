@@ -1,0 +1,10 @@
+function: 1 2 3 [hello world] last_arg
+return: [1 2 3]
+index_target: array[index - other[nested(1, 2)]]
+multiline:
+    [
+        index -
+        other[nested(
+            1
+            2)]
+    ]
