@@ -1,0 +1,15 @@
+short:
+. ---
+===
+test
+===
+. arg2
+. arg3
+
+short_relaxed:
+    ---
+===
+test
+===
+    arg2
+    arg3

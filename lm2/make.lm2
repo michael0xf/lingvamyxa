@@ -1,172 +1,170 @@
 include: "<stdio.h>" "<stdlib.h>" "<string.h>"
 
-L2:
-    fn: lm_make_env_or_default (@: char name,, @: char fallback) @: char
-        @: char value
-        value: c.getenv(name)
-        if: value = 0 || value[0] = '\0'
-            return: fallback
-        return: value
-    end: lm_make_env_or_default
+fn: lm_make_env_or_default (@: char name,, @: char fallback) @: char
+    @: char value
+    value: c.getenv(name)
+    if: value = 0 || value[0] = '\0'
+        return: fallback
+    return: value
+end: lm_make_env_or_default
 
-    fn: lm_make_append (@: char buffer,, size_t: size,, size_t: used,, @: char text) size_t
-        size_t: length
-        length: c.strlen(text)
-        if: used + length >= size
-            c.fprintf: c.stderr "make.lm0: command line is too long\n"
-            return: size
-        c.memcpy(buffer + used, text, length + 1U)
-        return: used + length
-    end: lm_make_append
+fn: lm_make_append (@: char buffer,, size_t: size,, size_t: used,, @: char text) size_t
+    size_t: length
+    length: c.strlen(text)
+    if: used + length >= size
+        c.fprintf: c.stderr "make.lm0: command line is too long\n"
+        return: size
+    c.memcpy(buffer + used, text, length + 1U)
+    return: used + length
+end: lm_make_append
 
-    fn: lm_make_append_arg (@: char buffer,, size_t: size,, size_t: used,, @: char arg) size_t
-        used: lm_make_append(buffer, size, used, " \"")
-        if: used = size
-            return: size
-        used: lm_make_append(buffer, size, used, arg)
-        if: used = size
-            return: size
-        return: lm_make_append(buffer, size, used, "\"")
-    end: lm_make_append_arg
+fn: lm_make_append_arg (@: char buffer,, size_t: size,, size_t: used,, @: char arg) size_t
+    used: lm_make_append(buffer, size, used, " \"")
+    if: used = size
+        return: size
+    used: lm_make_append(buffer, size, used, arg)
+    if: used = size
+        return: size
+    return: lm_make_append(buffer, size, used, "\"")
+end: lm_make_append_arg
 
-    fn: lm_make_run_command (@: char command) int
-        int: status
-        c.printf: "%s\n" command
-        status: c.system(command)
-        if: status != 0
-            c.fprintf: c.stderr "make.lm0: command failed with status %d\n" status
-            return: 1
-        return: 0
-    end: lm_make_run_command
+fn: lm_make_run_command (@: char command) int
+    int: status
+    c.printf: "%s\n" command
+    status: c.system(command)
+    if: status != 0
+        c.fprintf: c.stderr "make.lm0: command failed with status %d\n" status
+        return: 1
+    return: 0
+end: lm_make_run_command
 
-    fn: lm_make_run_tool (@: char tool,, int: argc,, @@: char argv,, int: start) int
-        []: char command 8192
-        size_t: used 0U
-        int: index
+fn: lm_make_run_tool (@: char tool,, int: argc,, @@: char argv,, int: start) int
+    []: char command 8192
+    size_t: used 0U
+    int: index
 
-        index: start
-        command[0]: '\0'
+    index: start
+    command[0]: '\0'
 
-        used: lm_make_append(command, c.sizeof(command), used, tool)
+    used: lm_make_append(command, c.sizeof(command), used, tool)
+    if: used = c.sizeof(command)
+        return: 1
+
+    while: index < argc
+        used: lm_make_append_arg(command, c.sizeof(command), used, argv[index])
         if: used = c.sizeof(command)
             return: 1
+        index: index + 1
 
-        while: index < argc
-            used: lm_make_append_arg(command, c.sizeof(command), used, argv[index])
-            if: used = c.sizeof(command)
-                return: 1
-            index: index + 1
+    return: lm_make_run_command(command)
+end: lm_make_run_tool
 
-        return: lm_make_run_command(command)
-    end: lm_make_run_tool
+fn: lm_make_copy_file (@: char source_path,, @: char output_path) int
+    []: char buffer 32768
+    @: FILE source
+    @: FILE output
+    size_t: count
+    int: status
 
-    fn: lm_make_copy_file (@: char source_path,, @: char output_path) int
-        []: char buffer 32768
-        @: FILE source
-        @: FILE output
-        size_t: count
-        int: status
+    source: c.fopen(source_path, "rb")
+    if: source = 0
+        c.fprintf: c.stderr "make.lm0: cannot open input file %s\n" source_path
+        return: 1
 
-        source: c.fopen(source_path, "rb")
-        if: source = 0
-            c.fprintf: c.stderr "make.lm0: cannot open input file %s\n" source_path
-            return: 1
-
-        output: c.fopen(output_path, "wb")
-        if: output = 0
-            c.fprintf: c.stderr "make.lm0: cannot open output file %s\n" output_path
-            c.fclose: source
-            return: 1
-
-        status: 0
-        count: c.fread(buffer, 1U, c.sizeof(buffer), source)
-        while: count > 0U
-            if: c.fwrite(buffer, 1U, count, output) != count
-                status: 1
-                break
-            count: c.fread(buffer, 1U, c.sizeof(buffer), source)
-
-        if: c.ferror(source)
-            status: 1
-        if: c.fclose(output) != 0
-            status: 1
+    output: c.fopen(output_path, "wb")
+    if: output = 0
+        c.fprintf: c.stderr "make.lm0: cannot open output file %s\n" output_path
         c.fclose: source
+        return: 1
 
-        if: status != 0
-            c.fprintf: c.stderr "make.lm0: cannot copy %s to %s\n" source_path output_path
+    status: 0
+    count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+    while: count > 0U
+        if: c.fwrite(buffer, 1U, count, output) != count
+            status: 1
+            break
+        count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+
+    if: c.ferror(source)
+        status: 1
+    if: c.fclose(output) != 0
+        status: 1
+    c.fclose: source
+
+    if: status != 0
+        c.fprintf: c.stderr "make.lm0: cannot copy %s to %s\n" source_path output_path
+        return: 1
+
+    return: 0
+end: lm_make_copy_file
+
+sub: lm_make_print_usage ()
+    c.fprintf: c.stderr "usage:\n"
+    c.fprintf: c.stderr "  make.lm0 mkdir <dir>...\n"
+    c.fprintf: c.stderr "  make.lm0 cc <arg>...\n"
+    c.fprintf: c.stderr "  make.lm0 link <arg>...\n"
+    c.fprintf: c.stderr "  make.lm0 ar <arg>...\n"
+    c.fprintf: c.stderr "  make.lm0 ranlib <arg>...\n"
+    c.fprintf: c.stderr "  make.lm0 copy <source> <output>\n"
+end: lm_make_print_usage
+
+external:
+    fn: main (int: argc,, @@: char argv) int
+        @: char cmake
+        @: char cc
+        @: char ar
+        @: char ranlib
+
+        if: argc < 2
+            lm_make_print_usage()
             return: 1
 
-        return: 0
-    end: lm_make_copy_file
+        cmake: lm_make_env_or_default("LM_CMAKE", "cmake")
+        cc: lm_make_env_or_default("LM_CC", "gcc")
+        ar: lm_make_env_or_default("LM_AR", "ar")
+        ranlib: lm_make_env_or_default("LM_RANLIB", "ranlib")
 
-    sub: lm_make_print_usage ()
-        c.fprintf: c.stderr "usage:\n"
-        c.fprintf: c.stderr "  make.lm0 mkdir <dir>...\n"
-        c.fprintf: c.stderr "  make.lm0 cc <arg>...\n"
-        c.fprintf: c.stderr "  make.lm0 link <arg>...\n"
-        c.fprintf: c.stderr "  make.lm0 ar <arg>...\n"
-        c.fprintf: c.stderr "  make.lm0 ranlib <arg>...\n"
-        c.fprintf: c.stderr "  make.lm0 copy <source> <output>\n"
-    end: lm_make_print_usage
+        if: c.strcmp(argv[1], "mkdir") = 0
+            []: char command 8192
+            size_t: used 0U
+            int: index 2
 
-    external:
-        fn: main (int: argc,, @@: char argv) int
-            @: char cmake
-            @: char cc
-            @: char ar
-            @: char ranlib
-
-            if: argc < 2
+            if: argc < 3
                 lm_make_print_usage()
                 return: 1
 
-            cmake: lm_make_env_or_default("LM_CMAKE", "cmake")
-            cc: lm_make_env_or_default("LM_CC", "gcc")
-            ar: lm_make_env_or_default("LM_AR", "ar")
-            ranlib: lm_make_env_or_default("LM_RANLIB", "ranlib")
+            command[0]: '\0'
+            used: lm_make_append(command, c.sizeof(command), used, cmake)
+            if: used = c.sizeof(command)
+                return: 1
+            used: lm_make_append(command, c.sizeof(command), used, " -E make_directory")
+            if: used = c.sizeof(command)
+                return: 1
 
-            if: c.strcmp(argv[1], "mkdir") = 0
-                []: char command 8192
-                size_t: used 0U
-                int: index 2
-
-                if: argc < 3
-                    lm_make_print_usage()
-                    return: 1
-
-                command[0]: '\0'
-                used: lm_make_append(command, c.sizeof(command), used, cmake)
+            while: index < argc
+                used: lm_make_append_arg(command, c.sizeof(command), used, argv[index])
                 if: used = c.sizeof(command)
                     return: 1
-                used: lm_make_append(command, c.sizeof(command), used, " -E make_directory")
-                if: used = c.sizeof(command)
-                    return: 1
+                index: index + 1
 
-                while: index < argc
-                    used: lm_make_append_arg(command, c.sizeof(command), used, argv[index])
-                    if: used = c.sizeof(command)
-                        return: 1
-                    index: index + 1
+            return: lm_make_run_command(command)
 
-                return: lm_make_run_command(command)
+        if: c.strcmp(argv[1], "cc") = 0 || c.strcmp(argv[1], "link") = 0
+            return: lm_make_run_tool(cc, argc, argv, 2)
 
-            if: c.strcmp(argv[1], "cc") = 0 || c.strcmp(argv[1], "link") = 0
-                return: lm_make_run_tool(cc, argc, argv, 2)
+        if: c.strcmp(argv[1], "ar") = 0
+            return: lm_make_run_tool(ar, argc, argv, 2)
 
-            if: c.strcmp(argv[1], "ar") = 0
-                return: lm_make_run_tool(ar, argc, argv, 2)
+        if: c.strcmp(argv[1], "ranlib") = 0
+            return: lm_make_run_tool(ranlib, argc, argv, 2)
 
-            if: c.strcmp(argv[1], "ranlib") = 0
-                return: lm_make_run_tool(ranlib, argc, argv, 2)
+        if: c.strcmp(argv[1], "copy") = 0
+            if: argc != 4
+                lm_make_print_usage()
+                return: 1
+            return: lm_make_copy_file(argv[2], argv[3])
 
-            if: c.strcmp(argv[1], "copy") = 0
-                if: argc != 4
-                    lm_make_print_usage()
-                    return: 1
-                return: lm_make_copy_file(argv[2], argv[3])
-
-            lm_make_print_usage()
-            return: 1
-        end: main
-    end: external
-end: L2
+        lm_make_print_usage()
+        return: 1
+    end: main
+end: external

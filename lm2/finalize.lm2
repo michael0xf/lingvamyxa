@@ -2,8 +2,7 @@ os:
     win:
         "/* no POSIX feature macro on Windows */"
     default:
-        """#define _POSIX_C_SOURCE 199309L
-"""
+        "#define _POSIX_C_SOURCE 199309L"
 end: os
 
 include: "<stdio.h>" "<stdlib.h>" "<string.h>"
@@ -17,7 +16,8 @@ end: os
 
 os:
     win:
-        """static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
+===
+static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
     return _getcwd(buffer, (int)size);
 }
 
@@ -44,9 +44,10 @@ static void lm_finalize_platform_sleep_retry(void) {
 static const char *lm_finalize_platform_defer_command_format(void) {
     return "cd /d \"%s\" && start \"\" /B \"%s\" --copy";
 }
-"""
+===
     default:
-        """static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
+===
+static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
     return getcwd(buffer, size);
 }
 
@@ -78,220 +79,218 @@ static void lm_finalize_platform_sleep_retry(void) {
 static const char *lm_finalize_platform_defer_command_format(void) {
     return "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &";
 }
-"""
+===
 end: os
 
-L2:
-    fn: lm_finalize_is_path_separator (char: value) int
-        return: value = '/' || value = '\\'
-    end: lm_finalize_is_path_separator
+fn: lm_finalize_is_path_separator (char: value) int
+    return: value = '/' || value = '\\'
+end: lm_finalize_is_path_separator
 
-    fn: lm_finalize_is_absolute_path (@: char path) int
-        if: path = 0 || path[0] = '\0'
-            return: 0
-        if: lm_finalize_is_path_separator(path[0])
-            return: 1
-        if: c.lm_finalize_platform_is_drive_absolute(path)
-            return: 1
+fn: lm_finalize_is_absolute_path (@: char path) int
+    if: path = 0 || path[0] = '\0'
         return: 0
-    end: lm_finalize_is_absolute_path
+    if: lm_finalize_is_path_separator(path[0])
+        return: 1
+    if: c.lm_finalize_platform_is_drive_absolute(path)
+        return: 1
+    return: 0
+end: lm_finalize_is_absolute_path
 
-    fn: lm_finalize_trim_last_path_part (@: char path) int
-        size_t: length
+fn: lm_finalize_trim_last_path_part (@: char path) int
+    size_t: length
 
-        length: c.strlen(path)
-        while: length > 0U && lm_finalize_is_path_separator(path[length-1U])
-            path[length-1U]: '\0'
-            length: length - 1U
+    length: c.strlen(path)
+    while: length > 0U && lm_finalize_is_path_separator(path[length-1U])
+        path[length-1U]: '\0'
+        length: length - 1U
 
-        while: length > 0U
-            length: length - 1U
-            if: lm_finalize_is_path_separator(path[length])
-                path[length]: '\0'
-                return: 0
-        ---
-
-        path[0]: '\0'
-        return: 0
-    end: lm_finalize_trim_last_path_part
-
-    fn: lm_finalize_enter_project_root (@: char program_path) int
-        []: char root_path 1024
-
-        if: lm_finalize_is_absolute_path(program_path) = 0
+    while: length > 0U
+        length: length - 1U
+        if: lm_finalize_is_path_separator(path[length])
+            path[length]: '\0'
             return: 0
-        if: c.strlen(program_path) >= c.sizeof(root_path)
-            c.fprintf: c.stderr "finalize.lm0: executable path is too long\n"
-            return: 1
+    ---
 
-        c.strcpy(root_path, program_path)
-        lm_finalize_trim_last_path_part(root_path)
-        lm_finalize_trim_last_path_part(root_path)
-        lm_finalize_trim_last_path_part(root_path)
+    path[0]: '\0'
+    return: 0
+end: lm_finalize_trim_last_path_part
 
-        if: root_path[0] = '\0'
-            return: 0
+fn: lm_finalize_enter_project_root (@: char program_path) int
+    []: char root_path 1024
 
-        if: c.lm_finalize_platform_chdir(root_path) != 0
-            c.fprintf: c.stderr "finalize.lm0: cannot enter project root %s\n" root_path
-            return: 1
-
+    if: lm_finalize_is_absolute_path(program_path) = 0
         return: 0
-    end: lm_finalize_enter_project_root
+    if: c.strlen(program_path) >= c.sizeof(root_path)
+        c.fprintf: c.stderr "finalize.lm0: executable path is too long\n"
+        return: 1
 
-    sub: lm_finalize_log (@: char message)
-        @: FILE log_file
+    c.strcpy(root_path, program_path)
+    lm_finalize_trim_last_path_part(root_path)
+    lm_finalize_trim_last_path_part(root_path)
+    lm_finalize_trim_last_path_part(root_path)
 
-        log_file: c.fopen("build/lm0/finalize.log", "a")
-        if: log_file = 0
-            return
+    if: root_path[0] = '\0'
+        return: 0
 
-        c.fprintf: log_file "%s\n" message
-        c.fclose: log_file
-    end: lm_finalize_log
+    if: c.lm_finalize_platform_chdir(root_path) != 0
+        c.fprintf: c.stderr "finalize.lm0: cannot enter project root %s\n" root_path
+        return: 1
 
-    sub: lm_finalize_sleep_retry ()
-        c.lm_finalize_platform_sleep_retry()
-    end: lm_finalize_sleep_retry
+    return: 0
+end: lm_finalize_enter_project_root
 
-    sub: lm_finalize_tool_path (@: char path,, size_t: size,, @: char tool_name,, @: char variant)
-        c.snprintf:
-            path size "build%slm0%s%s%s.lm0%s"
-            c.lm_finalize_platform_path_sep() c.lm_finalize_platform_path_sep()
-            tool_name variant c.lm_finalize_platform_exe_suffix()
-    end: lm_finalize_tool_path
+sub: lm_finalize_log (@: char message)
+    @: FILE log_file
 
-    fn: lm_finalize_copy_once (@: char source_path,, @: char output_path,, int: quiet) int
-        []: char buffer 32768
-        @: FILE source
-        @: FILE output
-        size_t: count
-        int: status
+    log_file: c.fopen("build/lm0/finalize.log", "a")
+    if: log_file = 0
+        return
 
-        source: c.fopen(source_path, "rb")
-        if: source = 0
-            if: quiet = 0
-                c.fprintf: c.stderr "finalize.lm0: cannot open input file %s\n" source_path
-            return: 1
+    c.fprintf: log_file "%s\n" message
+    c.fclose: log_file
+end: lm_finalize_log
 
-        output: c.fopen(output_path, "wb")
-        if: output = 0
-            if: quiet = 0
-                c.fprintf: c.stderr "finalize.lm0: cannot open output file %s\n" output_path
-            c.fclose: source
-            return: 1
+sub: lm_finalize_sleep_retry ()
+    c.lm_finalize_platform_sleep_retry()
+end: lm_finalize_sleep_retry
 
-        status: 0
-        count: c.fread(buffer, 1U, c.sizeof(buffer), source)
-        while: count > 0U
-            if: c.fwrite(buffer, 1U, count, output) != count
-                status: 1
-                break
-            count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+sub: lm_finalize_tool_path (@: char path,, size_t: size,, @: char tool_name,, @: char variant)
+    c.snprintf:
+        path size "build%slm0%s%s%s.lm0%s"
+        c.lm_finalize_platform_path_sep() c.lm_finalize_platform_path_sep()
+        tool_name variant c.lm_finalize_platform_exe_suffix()
+end: lm_finalize_tool_path
 
-        if: c.ferror(source)
-            status: 1
-        if: c.fclose(output) != 0
-            status: 1
+fn: lm_finalize_copy_once (@: char source_path,, @: char output_path,, int: quiet) int
+    []: char buffer 32768
+    @: FILE source
+    @: FILE output
+    size_t: count
+    int: status
+
+    source: c.fopen(source_path, "rb")
+    if: source = 0
+        if: quiet = 0
+            c.fprintf: c.stderr "finalize.lm0: cannot open input file %s\n" source_path
+        return: 1
+
+    output: c.fopen(output_path, "wb")
+    if: output = 0
+        if: quiet = 0
+            c.fprintf: c.stderr "finalize.lm0: cannot open output file %s\n" output_path
         c.fclose: source
+        return: 1
 
-        if: status != 0
-            if: quiet = 0
-                c.fprintf: c.stderr "finalize.lm0: cannot copy %s to %s\n" source_path output_path
-            return: 1
+    status: 0
+    count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+    while: count > 0U
+        if: c.fwrite(buffer, 1U, count, output) != count
+            status: 1
+            break
+        count: c.fread(buffer, 1U, c.sizeof(buffer), source)
 
-        return: 0
-    end: lm_finalize_copy_once
+    if: c.ferror(source)
+        status: 1
+    if: c.fclose(output) != 0
+        status: 1
+    c.fclose: source
 
-    fn: lm_finalize_copy_with_retry (@: char source_path,, @: char output_path) int
-        int: attempt 0
+    if: status != 0
+        if: quiet = 0
+            c.fprintf: c.stderr "finalize.lm0: cannot copy %s to %s\n" source_path output_path
+        return: 1
 
-        while: attempt < 40
-            if: lm_finalize_copy_once(source_path, output_path, 1) = 0
-                c.printf: "finalize.lm0: copied %s to %s\n" source_path output_path
-                return: 0
-            lm_finalize_sleep_retry()
-            attempt: attempt + 1
+    return: 0
+end: lm_finalize_copy_once
 
-        if: lm_finalize_copy_once(source_path, output_path, 0) != 0
-            return: 1
+fn: lm_finalize_copy_with_retry (@: char source_path,, @: char output_path) int
+    int: attempt 0
 
-        c.printf: "finalize.lm0: copied %s to %s\n" source_path output_path
-        return: 0
-    end: lm_finalize_copy_with_retry
-
-    fn: lm_finalize_install_next_tool (@: char tool_name) int
-        []: char source_path 256
-        []: char output_path 256
-
-        lm_finalize_tool_path(source_path, c.sizeof(source_path), tool_name, ".next")
-        lm_finalize_tool_path(output_path, c.sizeof(output_path), tool_name, "")
-
-        if: lm_finalize_copy_with_retry(source_path, output_path) != 0
-            lm_finalize_log("copy failed")
-            return: 1
-
-        if: c.remove(source_path) != 0
-            c.fprintf: c.stderr "finalize.lm0: cannot remove temporary file %s\n" source_path
-            lm_finalize_log("remove failed")
-            return: 1
-
-        return: 0
-    end: lm_finalize_install_next_tool
-
-    fn: lm_finalize_defer () int
-        []: char root_path 1024
-        []: char finalize_path 1400
-        []: char command 4096
-        int: status
-
-        if: c.lm_finalize_platform_getcwd(root_path, c.sizeof(root_path)) = 0
-            c.fprintf: c.stderr "finalize.lm0: cannot get current directory\n"
-            return: 1
-
-        c.snprintf:
-            finalize_path c.sizeof(finalize_path) "%s%sbuild%slm0%sfinalize.lm0%s"
-            root_path c.lm_finalize_platform_path_sep()
-            c.lm_finalize_platform_path_sep() c.lm_finalize_platform_path_sep()
-            c.lm_finalize_platform_exe_suffix()
-
-        c.snprintf:
-            command c.sizeof(command) c.lm_finalize_platform_defer_command_format()
-            root_path finalize_path
-
-        status: c.system(command)
-        if: status != 0
-            c.fprintf: c.stderr "finalize.lm0: cannot schedule deferred finalize step\n"
-            lm_finalize_log("defer failed")
-            return: 1
-
-        lm_finalize_log("defer scheduled")
-        c.printf: "finalize.lm0: scheduled deferred buildCore install\n"
-        return: 0
-    end: lm_finalize_defer
-
-    external:
-        fn: main (int: argc,, @@: char argv) int
-            if: lm_finalize_enter_project_root(argv[0]) != 0
-                return: 1
-
-            if: argc = 2 && c.strcmp(argv[1], "--defer") = 0
-                return: lm_finalize_defer()
-
-            if: argc != 1 && (argc != 2 || c.strcmp(argv[1], "--copy") != 0)
-                c.fprintf: c.stderr "usage: finalize.lm0[.exe] [--defer|--copy]\n"
-                return: 1
-
-            lm_finalize_log("copy started")
-
-            if: lm_finalize_install_next_tool("make") != 0
-                return: 1
-
-            if: lm_finalize_install_next_tool("buildCore") != 0
-                return: 1
-
-            lm_finalize_log("copy completed")
+    while: attempt < 40
+        if: lm_finalize_copy_once(source_path, output_path, 1) = 0
+            c.printf: "finalize.lm0: copied %s to %s\n" source_path output_path
             return: 0
-        end: main
-    end: external
-end: L2
+        lm_finalize_sleep_retry()
+        attempt: attempt + 1
+
+    if: lm_finalize_copy_once(source_path, output_path, 0) != 0
+        return: 1
+
+    c.printf: "finalize.lm0: copied %s to %s\n" source_path output_path
+    return: 0
+end: lm_finalize_copy_with_retry
+
+fn: lm_finalize_install_next_tool (@: char tool_name) int
+    []: char source_path 256
+    []: char output_path 256
+
+    lm_finalize_tool_path(source_path, c.sizeof(source_path), tool_name, ".next")
+    lm_finalize_tool_path(output_path, c.sizeof(output_path), tool_name, "")
+
+    if: lm_finalize_copy_with_retry(source_path, output_path) != 0
+        lm_finalize_log("copy failed")
+        return: 1
+
+    if: c.remove(source_path) != 0
+        c.fprintf: c.stderr "finalize.lm0: cannot remove temporary file %s\n" source_path
+        lm_finalize_log("remove failed")
+        return: 1
+
+    return: 0
+end: lm_finalize_install_next_tool
+
+fn: lm_finalize_defer () int
+    []: char root_path 1024
+    []: char finalize_path 1400
+    []: char command 4096
+    int: status
+
+    if: c.lm_finalize_platform_getcwd(root_path, c.sizeof(root_path)) = 0
+        c.fprintf: c.stderr "finalize.lm0: cannot get current directory\n"
+        return: 1
+
+    c.snprintf:
+        finalize_path c.sizeof(finalize_path) "%s%sbuild%slm0%sfinalize.lm0%s"
+        root_path c.lm_finalize_platform_path_sep()
+        c.lm_finalize_platform_path_sep() c.lm_finalize_platform_path_sep()
+        c.lm_finalize_platform_exe_suffix()
+
+    c.snprintf:
+        command c.sizeof(command) c.lm_finalize_platform_defer_command_format()
+        root_path finalize_path
+
+    status: c.system(command)
+    if: status != 0
+        c.fprintf: c.stderr "finalize.lm0: cannot schedule deferred finalize step\n"
+        lm_finalize_log("defer failed")
+        return: 1
+
+    lm_finalize_log("defer scheduled")
+    c.printf: "finalize.lm0: scheduled deferred buildCore install\n"
+    return: 0
+end: lm_finalize_defer
+
+external:
+    fn: main (int: argc,, @@: char argv) int
+        if: lm_finalize_enter_project_root(argv[0]) != 0
+            return: 1
+
+        if: argc = 2 && c.strcmp(argv[1], "--defer") = 0
+            return: lm_finalize_defer()
+
+        if: argc != 1 && (argc != 2 || c.strcmp(argv[1], "--copy") != 0)
+            c.fprintf: c.stderr "usage: finalize.lm0[.exe] [--defer|--copy]\n"
+            return: 1
+
+        lm_finalize_log("copy started")
+
+        if: lm_finalize_install_next_tool("make") != 0
+            return: 1
+
+        if: lm_finalize_install_next_tool("buildCore") != 0
+            return: 1
+
+        lm_finalize_log("copy completed")
+        return: 0
+    end: main
+end: external

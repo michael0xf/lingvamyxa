@@ -2,11 +2,12 @@
 /* no POSIX feature macro on Windows */
 #else
 #define _POSIX_C_SOURCE 199309L
-
 #endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #if defined(_WIN32)
 #include <direct.h>
 #include <windows.h>
@@ -14,6 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 #endif
+
 #if defined(_WIN32)
 static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
     return _getcwd(buffer, (int)size);
@@ -42,7 +44,6 @@ static void lm_finalize_platform_sleep_retry(void) {
 static const char *lm_finalize_platform_defer_command_format(void) {
     return "cd /d \"%s\" && start \"\" /B \"%s\" --copy";
 }
-
 #else
 static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
     return getcwd(buffer, size);
@@ -76,8 +77,8 @@ static void lm_finalize_platform_sleep_retry(void) {
 static const char *lm_finalize_platform_defer_command_format(void) {
     return "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &";
 }
-
 #endif
+
 static int lm_finalize_is_path_separator(char value) {
     return value == '/' || value == '\\';
 }

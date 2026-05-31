@@ -5708,6 +5708,8 @@ static int lm_trans_top_level_function_header(
 }
 
 static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
+static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame);
+static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_function(
     FILE *file,
     const LmTransFunctionHeader *function,
@@ -5738,6 +5740,24 @@ static int lm_trans_top_level_emit_l1(
 ) {
     (void)namespace_;
     return lm_trans_emit_l1_frame(file, item->frame);
+}
+
+static int lm_trans_top_level_emit_os(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    (void)namespace_;
+    return lm_trans_emit_l1_os_frame(file, item->frame);
+}
+
+static int lm_trans_top_level_emit_include(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    (void)namespace_;
+    return lm_trans_emit_l1_include_frame(file, item->frame);
 }
 
 static int lm_trans_top_level_emit_named_structure(
@@ -5802,6 +5822,24 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
+    if (lm_trans_text_equals(out->frame->head, "L1")) {
+        out->emit_before_functions = lm_trans_top_level_emit_l1;
+        out->emits_top_level = 1;
+        return 0;
+    }
+
+    if (lm_trans_text_equals(out->frame->head, "os")) {
+        out->emit_before_functions = lm_trans_top_level_emit_os;
+        out->emits_top_level = 1;
+        return 0;
+    }
+
+    if (lm_trans_text_equals(out->frame->head, "include")) {
+        out->emit_before_functions = lm_trans_top_level_emit_include;
+        out->emits_top_level = 1;
+        return 0;
+    }
+
     if (lm_trans_frame_looks_named_structure_declaration(out->frame)) {
         out->declare = lm_trans_top_level_declare_named_structure;
         out->emit_before_functions = lm_trans_top_level_emit_named_structure;
@@ -5809,13 +5847,7 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
-    if (lm_trans_text_equals(out->frame->head, "L1")) {
-        out->emit_before_functions = lm_trans_top_level_emit_l1;
-        out->emits_top_level = 1;
-        return 0;
-    }
-
-    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, L1 frame, or named Structure\n");
+    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, L1/include/os frame, or named Structure\n");
     return 1;
 }
 
@@ -5950,7 +5982,7 @@ static int lm_trans_is_end_target(const LmP0Frame *frame, const char *target);
 static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
 static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2);
 
-static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
+static int lm_trans_emit_l2_structure(FILE *file, const LmP0Structure *body, const LmP0Frame *explicit_l2) {
     const LmP0Field *field;
     const LmP0Node *node;
     LmTransNamespace *namespace_;
@@ -5964,7 +5996,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
     }
 
     emitted_top_level = 0;
-    field = l2->body.first_field;
+    field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
         if (lm_trans_lower_top_level_item(node, &item) != 0) {
@@ -5982,7 +6014,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
         field = field->next;
     }
 
-    field = l2->body.first_field;
+    field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
         if (lm_trans_lower_top_level_item(node, &item) != 0) {
@@ -6010,7 +6042,7 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
         field = field->next;
     }
 
-    field = l2->body.first_field;
+    field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
         if (lm_trans_lower_top_level_item(node, &item) != 0) {
@@ -6033,9 +6065,17 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
         field = field->next;
     }
 
-    status = lm_trans_validate_end_trailer(l2);
+    status = explicit_l2 != 0 ? lm_trans_validate_end_trailer(explicit_l2) : 0;
     lm_trans_namespace_delete(namespace_);
     return status;
+}
+
+static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2) {
+    if (l2 == 0) {
+        return 1;
+    }
+
+    return lm_trans_emit_l2_structure(file, &l2->body, l2);
 }
 
 static int lm_trans_inline_string_payload(LmP0Text text, LmP0Text *out_payload, size_t *out_run) {
@@ -6358,12 +6398,46 @@ static int lm_trans_emit_l1_body(FILE *output, const LmP0Frame *l1, int *emitted
     return 0;
 }
 
-static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int *emitted) {
+static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+
+    if (root == 0) {
+        return 0;
+    }
+
+    field = root->first_field;
+    while (field != 0) {
+        node = field->value;
+        if (
+            node != 0 &&
+            node->kind == LM_P0_NODE_FRAME &&
+            lm_trans_text_equals(node->as.frame.head, "L2")
+        ) {
+            return 1;
+        }
+        field = field->next;
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int implicit_l2, int *emitted) {
     const LmP0Field *field;
     const LmP0Node *node;
 
     if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
         return 1;
+    }
+
+    if (implicit_l2 && !lm_trans_root_has_explicit_l2_frame(&root->as.structure)) {
+        if (lm_trans_emit_l2_structure(output, &root->as.structure, 0) != 0) {
+            return 1;
+        }
+        if (emitted != 0) {
+            *emitted = 1;
+        }
+        return 0;
     }
 
     field = root->as.structure.first_field;
@@ -6755,7 +6829,43 @@ static int lm_trans_registry_load_rows(const LmP0Structure *structure) {
     return 0;
 }
 
-static int lm_trans_registry_load_root(const LmP0Node *root) {
+static int lm_trans_path_has_extension(const char *path, const char *extension) {
+    size_t path_length;
+    size_t extension_length;
+    size_t i;
+    char left;
+    char right;
+
+    if (path == 0 || extension == 0) {
+        return 0;
+    }
+
+    path_length = strlen(path);
+    extension_length = strlen(extension);
+    if (path_length < extension_length) {
+        return 0;
+    }
+
+    i = 0U;
+    while (i < extension_length) {
+        left = path[path_length - extension_length + i];
+        right = extension[i];
+        if (left >= 'A' && left <= 'Z') {
+            left = (char)(left - 'A' + 'a');
+        }
+        if (right >= 'A' && right <= 'Z') {
+            right = (char)(right - 'A' + 'a');
+        }
+        if (left != right) {
+            return 0;
+        }
+        ++i;
+    }
+
+    return 1;
+}
+
+static int lm_trans_registry_load_root(const LmP0Node *root, int implicit_l4) {
     const LmP0Field *field;
     const LmP0Node *node;
     int loaded;
@@ -6771,7 +6881,7 @@ static int lm_trans_registry_load_root(const LmP0Node *root) {
         node = field->value;
         if (!lm_trans_node_is_ignored(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "trans registry error: root fields must be L4, registry, table or row frames\n");
+                fprintf(stderr, "trans registry error: root fields must be L4/registry frames, or table/row frames in .lm4 files\n");
                 return 1;
             }
             if (
@@ -6785,18 +6895,18 @@ static int lm_trans_registry_load_root(const LmP0Node *root) {
                     return 1;
                 }
                 loaded = 1;
-            } else if (lm_trans_text_equals(node->as.frame.head, "row")) {
+            } else if (implicit_l4 && lm_trans_text_equals(node->as.frame.head, "row")) {
                 if (lm_trans_registry_row_from_frame(&node->as.frame) <= 0) {
                     return 1;
                 }
                 loaded = 1;
-            } else if (lm_trans_text_equals(node->as.frame.head, "table")) {
+            } else if (implicit_l4 && lm_trans_text_equals(node->as.frame.head, "table")) {
                 if (lm_trans_registry_table_from_frame(&node->as.frame) <= 0) {
                     return 1;
                 }
                 loaded = 1;
             } else {
-                fprintf(stderr, "trans registry error: root fields must be L4, registry, table or row frames\n");
+                fprintf(stderr, "trans registry error: root fields must be L4/registry frames, or table/row frames in .lm4 files\n");
                 return 1;
             }
         }
@@ -6958,7 +7068,10 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
         return 1;
     }
 
-    status = lm_trans_registry_load_root(lm_p0_document_root(document));
+    status = lm_trans_registry_load_root(
+        lm_p0_document_root(document),
+        lm_trans_path_has_extension(registry_path, ".lm4")
+    );
     lm_p0_document_destroy(document);
     if (status != 0) {
         lm_trans_registry_destroy();
@@ -7012,7 +7125,12 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
 
     root = lm_p0_document_root(document);
     emitted = 0;
-    status = lm_trans_emit_root_sequence(output, root, &emitted);
+    status = lm_trans_emit_root_sequence(
+        output,
+        root,
+        lm_trans_path_has_extension(source_path, ".lm2"),
+        &emitted
+    );
     if (status == 0 && !emitted) {
         fprintf(stderr, "trans error: root L1 or L2 frame was not found\n");
         status = 1;

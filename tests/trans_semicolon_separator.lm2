@@ -1,0 +1,22 @@
+os:
+    win:
+        include: "<direct.h>"; # semicolon is the same field separator as comma
+===
+static int platform_value(void) {
+    return 1;
+}
+===
+    default:
+        include: "<unistd.h>";
+===
+static int platform_value(void) {
+    return 2;
+}
+===
+end: os
+
+external:
+    fn: main () int
+        return: c.platform_value() != 1 && c.platform_value() != 2
+    end: main
+end: external

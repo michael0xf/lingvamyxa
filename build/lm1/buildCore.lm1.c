@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "own.lm1.h"
+
 #if defined(_WIN32)
 #include <direct.h>
 #define LM_BUILD_EXE_SUFFIX ".exe"
@@ -13,7 +14,6 @@
 #define LM_BUILD_HAS_QT_MINGW_MAKE() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")
 #define LM_BUILD_HAS_QT_GCC() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe")
 #define LM_BUILD_HAS_QT_GXX() lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe")
-
 #else
 #include <unistd.h>
 #define LM_BUILD_EXE_SUFFIX ""
@@ -25,8 +25,8 @@
 #define LM_BUILD_HAS_QT_MINGW_MAKE() 0
 #define LM_BUILD_HAS_QT_GCC() 0
 #define LM_BUILD_HAS_QT_GXX() 0
-
 #endif
+
 typedef struct LmBuildOptions LmBuildOptions;
 
 struct LmBuildOptions {

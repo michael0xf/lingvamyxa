@@ -1,5 +1,4 @@
-L1:"""#include "parser.lm1.h"
-"""
+include: "parser.lm1.h"
 
 L2:
 . fn: doubleComma (const: @: LmP0Text text,, const: @: char value) int

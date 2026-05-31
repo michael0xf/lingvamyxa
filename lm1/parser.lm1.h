@@ -19,6 +19,7 @@ typedef unsigned LmP0FrameFlags;
 #define LM_P0_FRAME_COLON 1U
 #define LM_P0_FRAME_COMPACT 2U
 #define LM_P0_FRAME_INLINE_BODY 4U
+#define LM_P0_FRAME_SEPARATOR_CLOSED 8U
 
 typedef unsigned LmP0NodeFlags;
 

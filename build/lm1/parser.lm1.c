@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
 #define LM_P0_ENABLE_REGISTRY_COMPARE 1
 #endif
@@ -364,8 +365,12 @@ static int lm_p0_is_field_space(char c) {
     return lm_p0_is_horizontal_space(c) || lm_p0_is_line_break(c);
 }
 
+static int lm_p0_is_field_separator(char c) {
+    return c == ',' || c == ';';
+}
+
 static int lm_p0_is_quoted_token_boundary(char c) {
-    return lm_p0_is_field_space(c) || c == ',' || c == '(' || c == ')' || c == '#';
+    return lm_p0_is_field_space(c) || lm_p0_is_field_separator(c) || c == '(' || c == ')' || c == '#';
 }
 
 static int lm_p0_starts_python_string(const char *text, size_t length, size_t index) {
@@ -2777,7 +2782,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 return 0;
             }
         }
-        if (text[i] == ',') {
+        if (lm_p0_is_field_separator(text[i])) {
             ++i;
             if ((flags & LM_P0_FIELD_PARSE_STOP_ON_COMMA) != 0U) {
                 break;
@@ -2836,7 +2841,7 @@ static int lm_p0_parse_fields_until_with_layout(
             } else {
                 while (i < length &&
                        !lm_p0_is_field_space(text[i]) &&
-                       text[i] != ',' &&
+                       !lm_p0_is_field_separator(text[i]) &&
                        text[i] != '(' &&
                        text[i] != ')' &&
                        text[i] != '#' &&
@@ -2886,7 +2891,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 body_index = i;
                 has_inline_body = i < length &&
                     !lm_p0_is_line_break(text[i]) &&
-                    text[i] != ',' &&
+                    !lm_p0_is_field_separator(text[i]) &&
                     text[i] != ')' &&
                     text[i] != '#';
                 if (has_inline_body) {
@@ -2909,6 +2914,9 @@ static int lm_p0_parse_fields_until_with_layout(
                         &body_index
                     )) {
                     return 0;
+                }
+                if (body_index > 0U && lm_p0_is_field_separator(text[body_index - 1U])) {
+                    node->as.frame.flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
                 }
                 node->span.line = line;
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
@@ -3452,7 +3460,9 @@ static void lm_p0_disabled_state_delete(LmP0DisabledState *state) {
 
 static int lm_p0_node_keeps_source_child_level(LmP0Node *node) {
     if (node->kind == LM_P0_NODE_FRAME) {
-        return (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U;
+        return
+            (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U &&
+            (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) == 0U;
     }
     return 0;
 }
@@ -3476,7 +3486,8 @@ static LmP0Node *lm_p0_structure_last_colon_frame(LmP0Structure *structure) {
 
     node = structure->last_field->value;
     if (node->kind == LM_P0_NODE_FRAME &&
-        (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U) {
+        (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U &&
+        (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) == 0U) {
         return node;
     }
 
@@ -3679,7 +3690,7 @@ static int lm_p0_parse_trailer_item(
         } else {
             while (body_start < length &&
                    !lm_p0_is_horizontal_space(text[body_start]) &&
-                   text[body_start] != ',' &&
+                   !lm_p0_is_field_separator(text[body_start]) &&
                    text[body_start] != '#') {
                 ++body_start;
             }
@@ -5448,7 +5459,43 @@ static int lm_p0_registry_load_rows(const LmP0Structure *structure) {
     return 0;
 }
 
-static int lm_p0_registry_load_root(const LmP0Node *root) {
+static int lm_p0_path_has_extension(const char *path, const char *extension) {
+    size_t path_length;
+    size_t extension_length;
+    size_t i;
+    char left;
+    char right;
+
+    if (path == 0 || extension == 0) {
+        return 0;
+    }
+
+    path_length = strlen(path);
+    extension_length = strlen(extension);
+    if (path_length < extension_length) {
+        return 0;
+    }
+
+    i = 0U;
+    while (i < extension_length) {
+        left = path[path_length - extension_length + i];
+        right = extension[i];
+        if (left >= 'A' && left <= 'Z') {
+            left = (char)(left - 'A' + 'a');
+        }
+        if (right >= 'A' && right <= 'Z') {
+            right = (char)(right - 'A' + 'a');
+        }
+        if (left != right) {
+            return 0;
+        }
+        ++i;
+    }
+
+    return 1;
+}
+
+static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
     const LmP0Field *field;
     const LmP0Node *node;
     int loaded;
@@ -5464,7 +5511,7 @@ static int lm_p0_registry_load_root(const LmP0Node *root) {
         node = field->value;
         if (!lm_p0_node_is_ignored_for_registry(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "parser registry error: root fields must be L4, registry, table or row frames\n");
+                fprintf(stderr, "parser registry error: root fields must be L4/registry frames, or table/row frames in .lm4 files\n");
                 return 1;
             }
             if (
@@ -5475,18 +5522,18 @@ static int lm_p0_registry_load_root(const LmP0Node *root) {
                     return 1;
                 }
                 loaded = 1;
-            } else if (lm_p0_text_equals(node->as.frame.head, "row")) {
+            } else if (implicit_l4 && lm_p0_text_equals(node->as.frame.head, "row")) {
                 if (lm_p0_registry_row_from_frame(&node->as.frame) <= 0) {
                     return 1;
                 }
                 loaded = 1;
-            } else if (lm_p0_text_equals(node->as.frame.head, "table")) {
+            } else if (implicit_l4 && lm_p0_text_equals(node->as.frame.head, "table")) {
                 if (lm_p0_registry_table_from_frame(&node->as.frame) <= 0) {
                     return 1;
                 }
                 loaded = 1;
             } else {
-                fprintf(stderr, "parser registry error: root fields must be L4, registry, table or row frames\n");
+                fprintf(stderr, "parser registry error: root fields must be L4/registry frames, or table/row frames in .lm4 files\n");
                 return 1;
             }
         }
@@ -5606,6 +5653,7 @@ static int lm_p0_registry_validate_abi_constants(void) {
         lm_p0_registry_validate_abi_constant("frame.flag", "colon", LM_P0_FRAME_COLON) ||
         lm_p0_registry_validate_abi_constant("frame.flag", "compact", LM_P0_FRAME_COMPACT) ||
         lm_p0_registry_validate_abi_constant("frame.flag", "inline-body", LM_P0_FRAME_INLINE_BODY) ||
+        lm_p0_registry_validate_abi_constant("frame.flag", "separator-closed", LM_P0_FRAME_SEPARATOR_CLOSED) ||
         lm_p0_registry_validate_abi_constant("node.flag", "inactive", LM_P0_NODE_INACTIVE) ||
         lm_p0_registry_validate_abi_constant("node.flag", "mix", LM_P0_NODE_MIX) ||
         lm_p0_registry_validate_abi_constant("trailer.flag", "tail-cutter", LM_P0_TRAILER_TAIL_CUTTER);
@@ -5707,7 +5755,10 @@ static int lm_p0_registry_load_default(void) {
         return 0;
     }
 
-    status = lm_p0_registry_load_root(lm_p0_document_root(document));
+    status = lm_p0_registry_load_root(
+        lm_p0_document_root(document),
+        lm_p0_path_has_extension(registry_path, ".lm4")
+    );
     lm_p0_document_destroy(document);
     if (status != 0) {
         lm_p0_registry_destroy();

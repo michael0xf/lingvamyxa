@@ -3,8 +3,10 @@ L2:
 . . unsigned: length
 . end: LmTestText
 .
-. L1:"""static LmTestText c_value;
-"""
+. L1:
+===
+static LmTestText c_value;
+===
 .
 . fn: direct (const: @: LmTestText text) unsigned
 . . return: text\length

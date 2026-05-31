@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 static char * lm_make_env_or_default(char *name, char *fallback) {
     char *value;
     value = getenv(name);

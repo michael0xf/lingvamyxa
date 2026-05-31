@@ -339,6 +339,36 @@ In this profile, the file root is consumed as an L3 top-level executable body.
 The long `.lmx` version below spells out the surrounding model, registry, build
 target and explicit executable entry point.
 
+0.1.1. Source File Level Profiles
+
+The source file extension may select the outer level profile. This is not
+inferred from the first receiver in the file.
+
+In the default profile:
+
+    `.lm2` means that the file root is consumed as an implicit L2 body.
+    `.lm3` means that the file root is consumed as an implicit L3 body.
+    `.lm4` means that the file root is consumed as an implicit L4 registry/model body.
+    `.lm5` means that the file root is consumed as an implicit L5 service/message body.
+
+The explicit wrapper form remains valid for compatibility and for mixed `.lmx`
+examples:
+
+    L2:
+        ...
+    end: L2
+
+But a `.lm2` file does not need that outer wrapper. The same rule applies to
+`.lm3`, `.lm4` and `.lm5`.
+
+The dependency is deliberately attached to the source profile, not to a receiver
+name. For example, a root-level `table:` in a `.lm4` registry file is consumed
+as L4 registry input because the file is `.lm4`. A root-level `table:` in a
+plain `.lmx` file is only ordinary Structure data unless it appears inside an
+explicit `L4:`/`registry:` context or another profile admits it. This prevents
+ordinary data from becoming registry input merely because it uses a receiver
+spelled `table`.
+
 Long version of the "hello.lmx" file:
 
 The `relation:`, `fact:` and `behavior:` receivers in this example are
@@ -980,9 +1010,9 @@ The backslash-newline in that example is C line splicing and does not contribute
 
 The string spelling, escape rules and backslash-newline line splicing follow the ANSI C / C99 string-literal model. Lingvamyxa does not use C99 adjacent string-literal concatenation as a source-level list shorthand. Adjacent string literals are separate values unless an explicit receiver later consumes and concatenates them.
 
-After the closing double quote of a text/string literal, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item. Any other following character is a missing-separator syntax error rather than implicit string concatenation.
+After the closing double quote of a text/string literal, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma/semicolon, `(`, `)`, or the end of the source item. Any other following character is a missing-separator syntax error rather than implicit string concatenation.
 
-In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace. Comma does not add another field to an open short tail; it terminates the open short form. When no short form is open at the current scan depth, comma may act as optional conventional notation for data or as a trailing marker. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
+In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace. Comma/semicolon does not add another field to an open short tail; it terminates the open short form. When no short form is open at the current scan depth, comma/semicolon may act as optional conventional notation for data or as a trailing marker. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
 
 Examples:
 
@@ -1051,7 +1081,7 @@ Examples:
     four quotes produce three: ''''
     still text'''
 
-The opening and closing triple delimiters are part of the preserved source spelling at P0. Value decoding belongs to the literal/value layer above P0 and uses the quote-run rule above. After the closing triple delimiter, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, `[`, `]`, or the end of the source item.
+The opening and closing triple delimiters are part of the preserved source spelling at P0. Value decoding belongs to the literal/value layer above P0 and uses the quote-run rule above. After the closing triple delimiter, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma/semicolon, `(`, `)`, `[`, `]`, or the end of the source item.
 
 This form is different from the column-0 block string fence below. It does not create or close a source-level block by itself. For example, as a child of a frame it still needs an ordinary child level:
 
@@ -1072,7 +1102,7 @@ Examples:
     '\x41'
     L'A'
 
-The spelling and escape rules follow the ANSI C / C99 character-constant model, including the backslash-newline line-splicing rule before tokenization. The resulting value is numeric. Multi-character constants, wide character constants and implementation-defined details follow the selected ANSI C / C99 L1 profile. After the closing single quote of a character constant, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma, `(`, `)`, or the end of the source item.
+The spelling and escape rules follow the ANSI C / C99 character-constant model, including the backslash-newline line-splicing rule before tokenization. The resulting value is numeric. Multi-character constants, wide character constants and implementation-defined details follow the selected ANSI C / C99 L1 profile. After the closing single quote of a character constant, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma/semicolon, `(`, `)`, or the end of the source item.
 
 A source line whose entire column-0 content is a run of three through 80 `=` characters is a block string fence.
 
@@ -1281,6 +1311,15 @@ Compact call form:
     f(a, b, c)
 
 It creates a Frame named `f` with one logical argument Structure containing three positional fields.
+The comma is the ordinary explicit field separator in compact and short forms.
+The semicolon `;` is a full synonym of comma at P0 level. It exists only as a
+more readable separator/trailer in places where comma would be visually
+unintuitive, for example before a following block string:
+
+    include: "<direct.h>";
+===
+...
+===
 
 Normal form:
 
@@ -1392,7 +1431,7 @@ Parser event view for a short colon-form opened at source level N:
     following source item at N + 1         N -> N + 1                   continues the same short form as a new field
     following source item at N             visible item/trailer at N    completes the short form; the item is a sibling
     following admitted tail-cutter         tail-cutter-specific         may close the admitted target
-    comma                                 scan-depth trailer           completes the current open short form immediately
+    comma or semicolon                    scan-depth trailer           completes the current open short form immediately
     matching ) or ]                       bounded-context trailer      closes the bounded form and any open short form inside it
 
 The important point is that the parser watches source-level changes, not
@@ -1406,8 +1445,8 @@ vertical item flatly with the previous inline field sequence.
 This rule is intentionally asymmetric. Any atomic source-level increase opens a
 Structure, because a deeper source level is already a visible request for a
 nested object. Closing is not triggered by a bare separator in the same way:
-the close needs a following source item, a visible source-level marker, comma,
-`)` or an admitted tail-cutter. This preserves one shared mechanism for
+the close needs a following source item, a visible source-level marker,
+comma/semicolon, `)` or an admitted tail-cutter. This preserves one shared mechanism for
 anonymous block separation with the minimum number of logical markers while
 still allowing many surface forms. In particular, after a short form has
 accepted a vertical block as one of its arguments, there are few remaining
@@ -3494,8 +3533,8 @@ value/member path belongs to the explicit C surface and must be spelled through
 
 For convenience, the L2 parser treats a compact token that starts with `c.` as
 one C-surface token up to the next Lingvamyxa field boundary, such as horizontal
-whitespace, a physical line break, comma, `(`, `)`, `:`, a line comment start,
-or the end of the current source item. The L2 lowering then drops the `c.`
+whitespace, a physical line break, comma/semicolon, `(`, `)`, `:`, a line
+comment start, or the end of the current source item. The L2 lowering then drops the `c.`
 prefix and copies the remaining ANSI C spelling directly into the generated C
 code. For example:
 
@@ -5597,8 +5636,9 @@ Events:
     NEWLINE
         physical newline separator.
 
-    COMMA
-        comma separator/trailer at the current scan depth.
+    FIELD_SEPARATOR
+        comma or semicolon separator/trailer at the current scan depth. The two
+        spellings are P0 synonyms.
 
     OPEN_PAREN / CLOSE_PAREN
         `(` and matching `)` bounded Structure delimiters.
@@ -5620,9 +5660,9 @@ Events:
 Lexical shielding:
 
     If S.lexical_mode is not SOURCE, braces, parentheses, brackets, commas,
-    colons, dots, indentation and tail-cutter words are payload characters for
-    that lexical mode. They do not produce structural events until that lexical
-    mode closes.
+    semicolons, colons, dots, indentation and tail-cutter words are payload
+    characters for that lexical mode. They do not produce structural events
+    until that lexical mode closes.
 
     C_STRING closes by its C string delimiter rules.
     EXACT_IDENTIFIER closes by its exact identifier delimiter rules.
@@ -5927,7 +5967,7 @@ This grammar is intentionally incomplete around full update semantics, full inde
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
-Comma is a trailer at the current scan depth. For a short form, comma terminates that short form; it never adds another field to the open short tail. When no short form is open at the current scan depth, comma may be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma inside a deeper bounded Structure or compact Frame belongs to that deeper form.
+Comma and semicolon are the same P0 field separator/trailer at the current scan depth. For a short form, either spelling terminates that short form; it never adds another field to the open short tail. When no short form is open at the current scan depth, either spelling may be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma or semicolon with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma or semicolon inside a deeper bounded Structure or compact Frame belongs to that deeper form.
 
 Structural grammar has no separate anonymous-function syntax. A bounded
 Structure, compact Frame or vertical anonymous Structure remains Structure data.
@@ -7327,7 +7367,7 @@ The same short-tail whitespace rule applies to address-depth declarations:
 
 @@@: int ppp
 
-This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. It is parsed as the next source item at the current level.
+This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. A semicolon at that scan depth has the same effect. The following `ppp` is parsed as the next source item at the current level.
 
 20.2.1. Named Structures and ANSI C `typedef struct` Projection
 
