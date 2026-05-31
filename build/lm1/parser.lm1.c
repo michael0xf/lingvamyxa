@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
 #define LM_P0_ENABLE_REGISTRY_COMPARE 1
 #endif
@@ -5520,6 +5519,38 @@ static int lm_p0_registry_parse_unsigned_payload(const char *payload, unsigned *
     return 0;
 }
 
+static const char *lm_p0_registry_lookup_key_by_unsigned_payload(
+    const char *table,
+    unsigned value
+) {
+    size_t i;
+    LmP0RegistryRow *row;
+    unsigned actual;
+
+    if (table == 0 || !lm_p0_registry.loaded) {
+        return 0;
+    }
+
+    i = lm_p0_registry.rows.count;
+    while (i > 0U) {
+        --i;
+        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        if (
+            row != 0 &&
+            row->table != 0 &&
+            row->key != 0 &&
+            row->payload != 0 &&
+            strcmp(row->table, table) == 0 &&
+            lm_p0_registry_parse_unsigned_payload(row->payload, &actual) == 0 &&
+            actual == value
+        ) {
+            return row->key;
+        }
+    }
+
+    return 0;
+}
+
 static int lm_p0_registry_validate_abi_constant(
     const char *table,
     const char *key,
@@ -5578,6 +5609,32 @@ static int lm_p0_registry_validate_abi_constants(void) {
         lm_p0_registry_validate_abi_constant("node.flag", "inactive", LM_P0_NODE_INACTIVE) ||
         lm_p0_registry_validate_abi_constant("node.flag", "mix", LM_P0_NODE_MIX) ||
         lm_p0_registry_validate_abi_constant("trailer.flag", "tail-cutter", LM_P0_TRAILER_TAIL_CUTTER);
+}
+
+const char *lm_p0_node_kind_class_name(LmP0NodeKind kind) {
+    const char *registry_name;
+
+    registry_name = 0;
+    if (kind >= 0 && lm_p0_registry_load_default() == 0) {
+        registry_name = lm_p0_registry_lookup_key_by_unsigned_payload("node.kind", (unsigned)kind);
+    }
+    if (registry_name != 0) {
+        return registry_name;
+    }
+
+    if (kind == LM_P0_NODE_STRUCTURE) {
+        return "structure";
+    }
+    if (kind == LM_P0_NODE_FRAME) {
+        return "frame";
+    }
+    if (kind == LM_P0_NODE_ATOM) {
+        return "atom";
+    }
+    if (kind == LM_P0_NODE_DISABLED) {
+        return "disabled";
+    }
+    return "unknown";
 }
 
 static int lm_p0_registry_load_default(void) {
@@ -5794,10 +5851,13 @@ static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_
 }
 
 static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent) {
+    const char *structure_name;
+
     if (node == 0) {
         return;
     }
 
+    structure_name = lm_p0_node_kind_class_name(LM_P0_NODE_STRUCTURE);
     lm_p0_dump_indent(dump, indent);
     if ((node->flags & LM_P0_NODE_INACTIVE) != 0U) {
         lm_p0_dump_append_cstr(dump, "Inactive ");
@@ -5806,23 +5866,35 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
         lm_p0_dump_append_cstr(dump, "MIX ");
     }
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        lm_p0_dump_appendf(dump, "Structure fields=%lu\n", (unsigned long)node->as.structure.field_count);
+        lm_p0_dump_appendf(
+            dump,
+            "%s fields=%lu\n",
+            lm_p0_node_kind_class_name(node->kind),
+            (unsigned long)node->as.structure.field_count
+        );
         lm_p0_dump_structure(dump, &node->as.structure, indent + 1U);
         lm_p0_dump_trailer(dump, node->as.structure.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_FRAME) {
-        lm_p0_dump_append_cstr(dump, "Frame head=");
+        lm_p0_dump_appendf(dump, "%s head=", lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_text(dump, node->as.frame.head);
-        lm_p0_dump_appendf(dump, " body=Structure fields=%lu\n", (unsigned long)node->as.frame.body.field_count);
+        lm_p0_dump_appendf(
+            dump,
+            " body=%s fields=%lu\n",
+            structure_name,
+            (unsigned long)node->as.frame.body.field_count
+        );
         lm_p0_dump_structure(dump, &node->as.frame.body, indent + 1U);
         lm_p0_dump_trailer(dump, node->as.frame.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_ATOM) {
-        lm_p0_dump_append_cstr(dump, "Atom ");
+        lm_p0_dump_appendf(dump, "%s ", lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_text(dump, node->as.atom);
         lm_p0_dump_append_cstr(dump, "\n");
     } else if (node->kind == LM_P0_NODE_DISABLED) {
-        lm_p0_dump_append_cstr(dump, "Block ");
+        lm_p0_dump_appendf(dump, "%s ", lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_text(dump, node->as.atom);
         lm_p0_dump_append_cstr(dump, "\n");
+    } else {
+        lm_p0_dump_appendf(dump, "%s kind=%d\n", lm_p0_node_kind_class_name(node->kind), node->kind);
     }
 }
 

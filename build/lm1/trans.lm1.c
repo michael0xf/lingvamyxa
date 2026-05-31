@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include "own.lm1.h"
 #include "parser.lm1.h"
-
 #ifndef LM_TRANS_ENABLE_LEGACY_COMPARE
 #define LM_TRANS_ENABLE_LEGACY_COMPARE 1
 #endif
@@ -6133,6 +6131,155 @@ static int lm_trans_emit_l1_structure(FILE *output, const LmP0Structure *structu
     return 0;
 }
 
+static const char *lm_trans_os_condition(LmP0Text name) {
+    if (lm_trans_text_equals(name, "win")) {
+        return "defined(_WIN32)";
+    }
+    if (lm_trans_text_equals(name, "mac")) {
+        return "defined(__APPLE__)";
+    }
+    if (lm_trans_text_equals(name, "unix")) {
+        return "defined(__unix__)";
+    }
+    return 0;
+}
+
+static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Frame *branch;
+    const char *condition;
+    int opened;
+    int emitted_default;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    opened = 0;
+    emitted_default = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans L1 error: os receiver expects win/mac/unix/default frames\n");
+                return 1;
+            }
+
+            branch = &node->as.frame;
+            if (lm_trans_text_equals(branch->head, "default")) {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L1 error: os receiver has duplicate default branch\n");
+                    return 1;
+                }
+                emitted_default = 1;
+                if (opened) {
+                    if (lm_trans_put(output, "#else\n") != 0) {
+                        return 1;
+                    }
+                }
+            } else {
+                condition = lm_trans_os_condition(branch->head);
+                if (condition == 0) {
+                    fprintf(stderr, "trans L1 error: unknown os branch\n");
+                    return 1;
+                }
+                if (emitted_default) {
+                    fprintf(stderr, "trans L1 error: os default branch must be last\n");
+                    return 1;
+                }
+                if (lm_trans_put(output, opened ? "#elif " : "#if ") != 0) {
+                    return 1;
+                }
+                if (lm_trans_put(output, condition) != 0 || lm_trans_put(output, "\n") != 0) {
+                    return 1;
+                }
+                opened = 1;
+            }
+
+            if (lm_trans_emit_l1_structure(output, &branch->body) != 0) {
+                return 1;
+            }
+            if (lm_trans_validate_end_trailer(branch) != 0) {
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    if (opened && lm_trans_put(output, "#endif\n") != 0) {
+        return 1;
+    }
+
+    return lm_trans_validate_end_trailer(frame);
+}
+
+static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    LmP0Text payload;
+    size_t delimiter_run;
+    int is_direct_target;
+    int emitted;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    emitted = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (
+                node->kind != LM_P0_NODE_ATOM ||
+                !lm_trans_inline_string_payload(node->as.atom, &payload, &delimiter_run) ||
+                payload.length == 0U
+            ) {
+                fprintf(stderr, "trans L1 error: include receiver expects string header atoms\n");
+                return 1;
+            }
+            (void)delimiter_run;
+            is_direct_target =
+                payload.length >= 2U &&
+                (
+                    (payload.data[0] == '<' && payload.data[payload.length - 1U] == '>') ||
+                    (payload.data[0] == '"' && payload.data[payload.length - 1U] == '"')
+                );
+
+            if (lm_trans_put(output, "#include ") != 0) {
+                return 1;
+            }
+            if (is_direct_target) {
+                if (lm_trans_write_all(output, payload.data, payload.length) != 0) {
+                    return 1;
+                }
+            } else {
+                if (
+                    lm_trans_put(output, "\"") != 0 ||
+                    lm_trans_write_all(output, payload.data, payload.length) != 0 ||
+                    lm_trans_put(output, "\"") != 0
+                ) {
+                    return 1;
+                }
+            }
+            if (lm_trans_put(output, "\n") != 0) {
+                return 1;
+            }
+            emitted = 1;
+        }
+        field = field->next;
+    }
+
+    if (!emitted) {
+        fprintf(stderr, "trans L1 error: include receiver expects at least one header\n");
+        return 1;
+    }
+
+    return lm_trans_validate_end_trailer(frame);
+}
+
 static int lm_trans_emit_l1_node(FILE *output, const LmP0Node *node) {
     if (lm_trans_node_is_ignored(node)) {
         return 0;
@@ -6155,6 +6302,12 @@ static int lm_trans_emit_l1_node(FILE *output, const LmP0Node *node) {
         }
         if (lm_trans_text_equals(node->as.frame.head, "L2")) {
             return lm_trans_emit_l2_frame(output, &node->as.frame);
+        }
+        if (lm_trans_text_equals(node->as.frame.head, "os")) {
+            return lm_trans_emit_l1_os_frame(output, &node->as.frame);
+        }
+        if (lm_trans_text_equals(node->as.frame.head, "include")) {
+            return lm_trans_emit_l1_include_frame(output, &node->as.frame);
         }
         if (lm_trans_is_end_target(&node->as.frame, "L1")) {
             return 0;
@@ -6231,10 +6384,20 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int *
                     return 1;
                 }
                 *emitted = 1;
+            } else if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "os")) {
+                if (lm_trans_emit_l1_os_frame(output, &node->as.frame) != 0) {
+                    return 1;
+                }
+                *emitted = 1;
+            } else if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "include")) {
+                if (lm_trans_emit_l1_include_frame(output, &node->as.frame) != 0) {
+                    return 1;
+                }
+                *emitted = 1;
             } else if (node->kind == LM_P0_NODE_FRAME && lm_trans_is_end_target(&node->as.frame, "L1")) {
                 *emitted = 1;
             } else {
-                fprintf(stderr, "trans error: root field must be L1, L2, raw L1 text, or end: L1\n");
+                fprintf(stderr, "trans error: root field must be L1, L2, os, include, raw L1 text, or end: L1\n");
                 return 1;
             }
         }

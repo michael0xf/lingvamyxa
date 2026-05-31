@@ -1,31 +1,82 @@
-#ifndef _WIN32
+#if defined(_WIN32)
+/* no POSIX feature macro on Windows */
+#else
 #define _POSIX_C_SOURCE 199309L
-#endif
 
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef _WIN32
+#if defined(_WIN32)
 #include <direct.h>
 #include <windows.h>
-#define LM_FINALIZE_GETCWD _getcwd
-#define LM_FINALIZE_CHDIR _chdir
-#define LM_FINALIZE_EXE_SUFFIX ".exe"
-#define LM_FINALIZE_PATH_SEP "\\"
-#define LM_FINALIZE_IS_DRIVE_ABSOLUTE(path) ((path)[0] != '\0' && (path)[1] == ':')
-#define LM_FINALIZE_SLEEP_RETRY() Sleep(250U)
-#define LM_FINALIZE_DEFER_COMMAND_FORMAT "cd /d \"%s\" && start \"\" /B \"%s\" --copy"
 #else
 #include <time.h>
 #include <unistd.h>
-#define LM_FINALIZE_GETCWD getcwd
-#define LM_FINALIZE_CHDIR chdir
-#define LM_FINALIZE_EXE_SUFFIX ""
-#define LM_FINALIZE_PATH_SEP "/"
-#define LM_FINALIZE_IS_DRIVE_ABSOLUTE(path) 0
-#define LM_FINALIZE_SLEEP_RETRY() do { struct timespec request; request.tv_sec = 0; request.tv_nsec = 250000000L; nanosleep(&request, 0); } while (0)
-#define LM_FINALIZE_DEFER_COMMAND_FORMAT "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &"
+#endif
+#if defined(_WIN32)
+static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
+    return _getcwd(buffer, (int)size);
+}
+
+static int lm_finalize_platform_chdir(const char *path) {
+    return _chdir(path);
+}
+
+static const char *lm_finalize_platform_exe_suffix(void) {
+    return ".exe";
+}
+
+static const char *lm_finalize_platform_path_sep(void) {
+    return "\\";
+}
+
+static int lm_finalize_platform_is_drive_absolute(const char *path) {
+    return path[0] != '\0' && path[1] == ':';
+}
+
+static void lm_finalize_platform_sleep_retry(void) {
+    Sleep(250U);
+}
+
+static const char *lm_finalize_platform_defer_command_format(void) {
+    return "cd /d \"%s\" && start \"\" /B \"%s\" --copy";
+}
+
+#else
+static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
+    return getcwd(buffer, size);
+}
+
+static int lm_finalize_platform_chdir(const char *path) {
+    return chdir(path);
+}
+
+static const char *lm_finalize_platform_exe_suffix(void) {
+    return "";
+}
+
+static const char *lm_finalize_platform_path_sep(void) {
+    return "/";
+}
+
+static int lm_finalize_platform_is_drive_absolute(const char *path) {
+    (void)path;
+    return 0;
+}
+
+static void lm_finalize_platform_sleep_retry(void) {
+    struct timespec request;
+
+    request.tv_sec = 0;
+    request.tv_nsec = 250000000L;
+    nanosleep(&request, 0);
+}
+
+static const char *lm_finalize_platform_defer_command_format(void) {
+    return "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &";
+}
+
 #endif
 static int lm_finalize_is_path_separator(char value) {
     return value == '/' || value == '\\';
@@ -38,7 +89,7 @@ static int lm_finalize_is_absolute_path(char *path) {
     if (lm_finalize_is_path_separator(path[0])) {
         return 1;
     }
-    if (LM_FINALIZE_IS_DRIVE_ABSOLUTE(path)) {
+    if (lm_finalize_platform_is_drive_absolute(path)) {
         return 1;
     }
     return 0;
@@ -78,7 +129,7 @@ static int lm_finalize_enter_project_root(char *program_path) {
     if (root_path[0] == '\0') {
         return 0;
     }
-    if (LM_FINALIZE_CHDIR(root_path) != 0) {
+    if (lm_finalize_platform_chdir(root_path) != 0) {
         fprintf(stderr, "finalize.lm0: cannot enter project root %s\n", root_path);
         return 1;
     }
@@ -96,11 +147,11 @@ static void lm_finalize_log(char *message) {
 }
 
 static void lm_finalize_sleep_retry(void) {
-    LM_FINALIZE_SLEEP_RETRY();
+    lm_finalize_platform_sleep_retry();
 }
 
 static void lm_finalize_tool_path(char *path, size_t size, char *tool_name, char *variant) {
-    snprintf(path, size, "build%slm0%s%s%s.lm0%s", LM_FINALIZE_PATH_SEP, LM_FINALIZE_PATH_SEP, tool_name, variant, LM_FINALIZE_EXE_SUFFIX);
+    snprintf(path, size, "build%slm0%s%s%s.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), tool_name, variant, lm_finalize_platform_exe_suffix());
 }
 
 static int lm_finalize_copy_once(char *source_path, char *output_path, int quiet) {
@@ -188,12 +239,12 @@ static int lm_finalize_defer(void) {
     char finalize_path[1400];
     char command[4096];
     int status;
-    if (LM_FINALIZE_GETCWD(root_path, sizeof(root_path)) == 0) {
+    if (lm_finalize_platform_getcwd(root_path, sizeof(root_path)) == 0) {
         fprintf(stderr, "finalize.lm0: cannot get current directory\n");
         return 1;
     }
-    snprintf(finalize_path, sizeof(finalize_path), "%s%sbuild%slm0%sfinalize.lm0%s", root_path, LM_FINALIZE_PATH_SEP, LM_FINALIZE_PATH_SEP, LM_FINALIZE_PATH_SEP, LM_FINALIZE_EXE_SUFFIX);
-    snprintf(command, sizeof(command), LM_FINALIZE_DEFER_COMMAND_FORMAT, root_path, finalize_path);
+    snprintf(finalize_path, sizeof(finalize_path), "%s%sbuild%slm0%sfinalize.lm0%s", root_path, lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_exe_suffix());
+    snprintf(command, sizeof(command), lm_finalize_platform_defer_command_format(), root_path, finalize_path);
     status = system(command);
     if (status != 0) {
         fprintf(stderr, "finalize.lm0: cannot schedule deferred finalize step\n");

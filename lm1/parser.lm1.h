@@ -99,6 +99,8 @@ void lm_p0_document_destroy(LmP0Document *document);
 const LmP0Node *lm_p0_document_root(const LmP0Document *document);
 const LmP0Diagnostic *lm_p0_document_diagnostic(const LmP0Document *document);
 
+const char *lm_p0_node_kind_class_name(LmP0NodeKind kind);
+
 char *lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
 

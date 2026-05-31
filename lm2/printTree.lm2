@@ -1,8 +1,7 @@
+include: "<stdio.h>" "parser.lm1.h"
+
 L1:
 ===
-#include <stdio.h>
-#include "parser.lm1.h"
-
 static void lm_print_tree_prepare_stdio(void) {
     setvbuf(stdout, 0, _IONBF, 0);
     setvbuf(stderr, 0, _IONBF, 0);

@@ -7380,6 +7380,42 @@ or Frame, `L1` dispatches it back to the translator. Thus an `L2` frame can be
 nested inside `L1`, and an `L1` implementation fragment can be nested inside
 `L2`.
 
+A hosted ANSI C bootstrap profile may provide small L1-output receivers at the
+root level and inside `L1`. These receivers are translator conveniences, not
+high-level language classes.
+
+Example:
+
+include: "<stdio.h>" "<windows.h>" "parser.lm1.h"
+
+This writes:
+
+---ANSI C---
+#include <stdio.h>
+#include <windows.h>
+#include "parser.lm1.h"
+---ANSI C---
+
+An include string whose payload is already enclosed in `<...>` or `"..."` is
+copied as the C include target. Otherwise the payload is treated as a local
+quoted include target.
+
+An `os` receiver may select L1 output branches by target platform:
+
+os:
+    win:
+        include: "<direct.h>" "<windows.h>"
+    unix:
+        include: "<unistd.h>"
+    default:
+        "/* fallback L1 text */"
+end: os
+
+The bootstrap profile may lower these branch heads to target preprocessor
+conditions such as `_WIN32`, `__APPLE__` or `__unix__`. The branch
+body is still ordinary L1-output content: string payload, `include`, nested `os`
+or another translator receiver admitted by the profile.
+
 The `L2` receiver also consumes one body Structure, but it does not print
 standalone strings as ANSI C. The rule is relative to the Structure being
 translated to ANSI C: if a string field appears at level 0 of the body that `L2`

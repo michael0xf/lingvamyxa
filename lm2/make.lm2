@@ -1,9 +1,4 @@
-L1:
-===
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-===
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
 
 L2:
     fn: lm_make_env_or_default (@: char name,, @: char fallback) @: char
