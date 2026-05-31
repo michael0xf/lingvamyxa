@@ -7,27 +7,27 @@
 extern "C" {
 #endif
 
-typedef enum LmP0NodeKind {
-    LM_P0_NODE_STRUCTURE = 1,
-    LM_P0_NODE_FRAME = 2,
-    LM_P0_NODE_ATOM = 3,
-    LM_P0_NODE_DISABLED = 4
-} LmP0NodeKind;
+typedef int LmP0NodeKind;
 
-typedef enum LmP0FrameFlags {
-    LM_P0_FRAME_COLON = 1,
-    LM_P0_FRAME_COMPACT = 2,
-    LM_P0_FRAME_INLINE_BODY = 4
-} LmP0FrameFlags;
+#define LM_P0_NODE_STRUCTURE 1
+#define LM_P0_NODE_FRAME 2
+#define LM_P0_NODE_ATOM 3
+#define LM_P0_NODE_DISABLED 4
 
-typedef enum LmP0NodeFlags {
-    LM_P0_NODE_INACTIVE = 1,
-    LM_P0_NODE_MIX = 2
-} LmP0NodeFlags;
+typedef unsigned LmP0FrameFlags;
 
-typedef enum LmP0TrailerFlags {
-    LM_P0_TRAILER_TAIL_CUTTER = 1
-} LmP0TrailerFlags;
+#define LM_P0_FRAME_COLON 1U
+#define LM_P0_FRAME_COMPACT 2U
+#define LM_P0_FRAME_INLINE_BODY 4U
+
+typedef unsigned LmP0NodeFlags;
+
+#define LM_P0_NODE_INACTIVE 1U
+#define LM_P0_NODE_MIX 2U
+
+typedef unsigned LmP0TrailerFlags;
+
+#define LM_P0_TRAILER_TAIL_CUTTER 1U
 
 typedef struct LmP0Text {
     const char *data;

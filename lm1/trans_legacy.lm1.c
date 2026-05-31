@@ -1,6 +1,6 @@
 /*
  * Legacy hardcoded decisions used only as a compare-mode oracle while the
- * translator moves ANSI C surface rules into lm2/trans_registry.lmx tables.
+ * translator moves ANSI C surface rules into lm2/trans_registry.lm4 tables.
  */
 
 static const char *lm_trans_legacy_c_spelling(LmP0Text name) {

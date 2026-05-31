@@ -6611,10 +6611,13 @@ static int lm_trans_registry_load_root(const LmP0Node *root) {
         node = field->value;
         if (!lm_trans_node_is_ignored(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "trans registry error: root fields must be registry, table or row frames\n");
+                fprintf(stderr, "trans registry error: root fields must be L4, registry, table or row frames\n");
                 return 1;
             }
-            if (lm_trans_text_equals(node->as.frame.head, "registry")) {
+            if (
+                lm_trans_text_equals(node->as.frame.head, "L4") ||
+                lm_trans_text_equals(node->as.frame.head, "registry")
+            ) {
                 if (lm_trans_registry_load_rows(&node->as.frame.body) != 0) {
                     return 1;
                 }
@@ -6633,7 +6636,7 @@ static int lm_trans_registry_load_root(const LmP0Node *root) {
                 }
                 loaded = 1;
             } else {
-                fprintf(stderr, "trans registry error: root fields must be registry, table or row frames\n");
+                fprintf(stderr, "trans registry error: root fields must be L4, registry, table or row frames\n");
                 return 1;
             }
         }
@@ -6650,6 +6653,7 @@ static int lm_trans_registry_load_root(const LmP0Node *root) {
 
 static int lm_trans_registry_path_for_source(
     const char *source_path,
+    const char *file_name,
     char *buffer,
     size_t size
 ) {
@@ -6657,9 +6661,8 @@ static int lm_trans_registry_path_for_source(
     size_t length;
     size_t i;
     size_t slash;
-    const char *file_name;
 
-    if (buffer == 0 || size == 0U) {
+    if (buffer == 0 || file_name == 0 || size == 0U) {
         return 1;
     }
 
@@ -6673,7 +6676,6 @@ static int lm_trans_registry_path_for_source(
         return 0;
     }
 
-    file_name = "trans_registry.lmx";
     if (source_path == 0 || source_path[0] == '\0') {
         if (strlen(file_name) >= size) {
             return 1;
@@ -6709,36 +6711,71 @@ static int lm_trans_registry_path_for_source(
 
 static int lm_trans_registry_load_for_source(const char *source_path) {
     char registry_path[4096];
+    const char *candidate_names[5];
     LmP0Document *document;
     const LmP0Diagnostic *diagnostic;
     const char *override_path;
     int override_enabled;
     int status;
+    size_t candidate_index;
 
     lm_trans_registry_destroy();
     lm_own_ptr_stack_init(&lm_trans_registry.rows, lm_trans_registry_row_destroy_any);
     lm_trans_registry.loaded = 1;
 
-    if (lm_trans_registry_path_for_source(source_path, registry_path, sizeof(registry_path)) != 0) {
-        lm_trans_registry_destroy();
-        return 1;
-    }
-
     document = 0;
     override_path = getenv("LM_TRANS_REGISTRY");
     override_enabled = override_path != 0 && override_path[0] != '\0';
-    status = lm_p0_parse_file(registry_path, &document);
-    diagnostic = status != 0 ? lm_p0_document_diagnostic(document) : 0;
-    if (
-        status != 0 &&
-        diagnostic == 0 &&
-        !override_enabled &&
-        strcmp(registry_path, "lm2/trans_registry.lmx") != 0
-    ) {
+    candidate_names[0] = override_enabled ? "" : "trans_registry.lm4";
+    candidate_names[1] = "trans_registry.lmx";
+    candidate_names[2] = "lm2/trans_registry.lm4";
+    candidate_names[3] = "lm2/trans_registry.lmx";
+    candidate_names[4] = 0;
+
+    status = 1;
+    candidate_index = 0U;
+    while (override_enabled || candidate_names[candidate_index] != 0) {
+        if (override_enabled) {
+            if (strlen(override_path) >= sizeof(registry_path)) {
+                fprintf(stderr, "trans error: LM_TRANS_REGISTRY path is too long\n");
+                lm_trans_registry_destroy();
+                return 1;
+            }
+            strcpy(registry_path, override_path);
+        } else if (strncmp(candidate_names[candidate_index], "lm2/", 4U) == 0) {
+            if (strlen(candidate_names[candidate_index]) >= sizeof(registry_path)) {
+                lm_trans_registry_destroy();
+                return 1;
+            }
+            strcpy(registry_path, candidate_names[candidate_index]);
+        } else if (
+            lm_trans_registry_path_for_source(
+                source_path,
+                candidate_names[candidate_index],
+                registry_path,
+                sizeof(registry_path)
+            ) != 0
+        ) {
+            lm_trans_registry_destroy();
+            return 1;
+        }
+
+        status = lm_p0_parse_file(registry_path, &document);
+        if (status == 0) {
+            break;
+        }
+
+        diagnostic = lm_p0_document_diagnostic(document);
+        if (diagnostic != 0) {
+            break;
+        }
+
         lm_p0_document_destroy(document);
         document = 0;
-        strcpy(registry_path, "lm2/trans_registry.lmx");
-        status = lm_p0_parse_file(registry_path, &document);
+        if (override_enabled) {
+            break;
+        }
+        ++candidate_index;
     }
 
     if (status != 0) {

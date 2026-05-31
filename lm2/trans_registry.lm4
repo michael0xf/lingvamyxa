@@ -1,4 +1,4 @@
-registry:
+L4:
     table:
         name: `type.spelling`
         columns: char@(class)  char@(spelling)
@@ -261,4 +261,4 @@ registry:
             `.`              lm_trans_expr_emit_c_dot
     end: `expr.atom.emitter`
 
-end: registry
+end: L4

@@ -1,0 +1,67 @@
+L4:
+    table:
+        name: `node.kind`
+        columns: char@(class)  int@(value)
+        rows:
+            structure        1
+            frame            2
+            atom             3
+            disabled         4
+    end: `node.kind`
+
+    table:
+        name: `frame.flag`
+        columns: char@(class)  int@(value)
+        rows:
+            colon            1
+            compact          2
+            `inline-body`    4
+    end: `frame.flag`
+
+    table:
+        name: `node.flag`
+        columns: char@(class)  int@(value)
+        rows:
+            inactive         1
+            mix              2
+    end: `node.flag`
+
+    table:
+        name: `trailer.flag`
+        columns: char@(class)  int@(value)
+        rows:
+            `tail-cutter`    1
+    end: `trailer.flag`
+
+    table:
+        name: namespace
+        columns: char@(class)  class@(parser_class)
+        rows:
+            `end`            `trailer.end`
+            `return`         `trailer.return`
+            `until`          `trailer.until`
+    end: namespace
+
+    table:
+        name: `trailer.role`
+        columns: class@(class)  binding@(role)
+        rows:
+            `trailer.end`    LM_P0_TRAILER_ROLE_END
+            `trailer.return` LM_P0_TRAILER_ROLE_RETURN
+            `trailer.until`  LM_P0_TRAILER_ROLE_UNTIL
+    end: `trailer.role`
+
+    table:
+        name: `trailer.allow-bare`
+        columns: class@(class)  int@(allow)
+        rows:
+            `trailer.return` 1
+    end: `trailer.allow-bare`
+
+    table:
+        name: `trailer.target`
+        columns: class@(class)  char@(target)
+        rows:
+            `trailer.return` fn
+    end: `trailer.target`
+end: L4
