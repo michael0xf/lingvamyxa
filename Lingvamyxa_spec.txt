@@ -352,11 +352,23 @@ In the default profile:
     `.lm5` means that the file root is consumed as an implicit L5 service/message body.
 
 The explicit wrapper form remains valid for compatibility and for mixed `.lmx`
-examples:
+files. A plain `.lmx` file may place explicit sibling level blocks next to each
+other, for example an `L4:` registry/model block followed by an `L2:` build or
+lowering block:
+
+    L4:
+        table:
+            ...
+    end: L4
 
     L2:
         ...
     end: L2
+
+A consumer that understands more than one explicit root level may consume the
+earlier model/registry blocks before lowering or executing the later procedural
+blocks. For example, an L2 translator may load sibling `L4:` tables from the
+same `.lmx` root before it lowers the sibling `L2:` block.
 
 But a `.lm2` file does not need that outer wrapper. The same rule applies to
 `.lm3`, `.lm4` and `.lm5`.
@@ -1726,12 +1738,25 @@ Do not confuse the logical argument Structure of a Frame with semantic arguments
 Parentheses create a bounded Structure:
 
     (a b c)
+    ()
 
 Inside parentheses, bounded elements may be separated by whitespace, by physical newline/source-level composition, by comma, by semicolon, or by the matching closing parenthesis. Comma is not required for ordinary bounded fields and does not close an open short form. When no short form is open at the current scan depth, comma is optional conventional notation for simple data fields and may leave the same field sequence as whitespace separation:
 
     (a b c)
     (a, b, c)
     (a b c,)
+
+The spelling `()` is a present empty bounded Structure. It is not a positional
+skip. For example, in `fn: main () int`, the `()` field is the explicit empty
+formal-parameter Structure. In `f()`, `f` is a compact Frame whose body
+Structure has zero fields. Positional skips are expressed by repeated explicit
+separators such as `a,,c` or `a;;c`, not by `()`.
+
+The spelling `():` is a different form: it is a reserved receiver-head spelling
+named `()`, analogous to `[]:`. It may be consumed by a semantic profile as a
+named Structure-like variable/aggregate declaration. Therefore `()` and `():`
+are not the same parse item: `()` is an empty bounded Structure field, while
+`(): value` is a colon Frame whose head spelling is `()`.
 
 For short colon-forms, semicolon carries structural load because it terminates the current open short form. This rule is universal; it is not specific to parenthesized Structures.
 
@@ -5981,13 +6006,30 @@ For a source item at level N, vertical child arguments are written at level N + 
 
 A canonical dotted delimiter line or relaxed dash-fence line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at level K - 1 closes that anonymous Structure by the ordinary one-step cut. A larger cut is not ordinary P0 syntax and requires an admitted tail-cutter layer.
 
-A `colon_frame_body` whose tail is empty must be followed by vertical child fields at the next source level, a canonical dotted delimiter or relaxed dash-fence anonymous Structure delimiter when that is valid in the current parent, or an admitted tail-cutter such as `end: <target>` when the receiver/profile allows an empty frame. Otherwise it is a syntax error.
+An empty colon Frame is not rejected by P0 merely because its body has zero
+fields. It is still a structural item. The active receiver, validator,
+translator or profile decides whether a nullary colon Frame is meaningful in
+that position. For example, a profile may reject `level0:` followed by sibling
+`level1:` when `level0` requires a body, or reject `level0(level1:)` when the
+inner empty Frame is not an admitted argument. Those are receiver/profile
+diagnostics, not a separate P0 grammar category.
 
 This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone dash-fence line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
 Comma and semicolon have different P0 roles at the current scan depth. Comma is an ordinary explicit field separator, like whitespace without indentation/source-level effects; it may add another field to an open short tail. Semicolon is the explicit separator/trailer: for a short form, it terminates that short form and never adds another field to the open short tail. When no short form is open at the current scan depth, comma is optional conventional separator notation and semicolon may act as an explicit source-item separator or trailing marker. A trailing comma or semicolon with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma or semicolon inside a deeper bounded Structure or compact Frame belongs to that deeper form.
+
+Repeated explicit separators at the same scan depth may materialize an empty
+positional field. This is not specific to semicolon: `a,,c`, `a;;c`, `a,;c`
+and `a;,c` all contain an explicit positional skip between `a` and `c` when the
+current bounded/profile context admits empty positional fields. A leading
+separator may similarly skip the first positional field. A single trailing
+separator remains a cosmetic trailing marker. The parser records such a skip as
+a positional-skip field; a receiver, validator or translator may consume it
+only if the corresponding positional argument has an admitted default form.
+Otherwise it must report an error rather than silently compacting the argument
+list.
 
 Structural grammar has no separate anonymous-function syntax. A bounded
 Structure, compact Frame or vertical anonymous Structure remains Structure data.
@@ -6233,8 +6275,9 @@ Semantic outline:
     f: / indented child lines / end: f
                                 relaxed indentation vertical Frame named f
     (a b), (a, b)              bounded Structure; comma is optional conventional notation
+    ()                         present empty bounded Structure; not a positional skip
     name: value                ordinary nested Structure, often consumed as a setting/semantic field by receiver
-    name:                      colon frame with required vertical child continuation or profile-defined empty form
+    name:                      empty colon Frame; P0 keeps it, receiver/profile decides whether it is valid
     leading dots               canonical visible source level units in the leading indentation zone
     indentation                relaxed source level units before ordinary source items
     dotted delimiter line      canonical anonymous Structure delimiter; may open, separate or close at its source level
@@ -6257,6 +6300,7 @@ Semantic outline:
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
+    ()                         head receiver spelling for Structure-like variable/aggregate forms
     []                         head receiver spelling for array/storage forms; postfix `target[...]` is index/access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
@@ -7343,6 +7387,8 @@ Minimal L2 storage/allocation and address-slot forms:
     static: Layout name
     Primitive: name [initialValue]
     []: ElementType name size [initialValue...]
+    []...[]: ElementType name size1 ... sizeN [initialValue...]
+    [size1]...[sizeN]: ElementType: name [initialValue...]
     @ⁿ: BaseType name
 
 Examples:
@@ -7371,18 +7417,32 @@ The first ANSI C bootstrap projection accepts an explicit element type:
 
     []: int values 3 1 2 3
     []: @ int pointers 2 @ a @ b
+    [][][]: char cube x y z
+    [x][y][z]: char: cube2
 
 which may lower to:
 
 ---ANSI C---
 int values[3] = {1, 2, 3};
 int *pointers[2] = {&a, &b};
+char cube[x][y][z];
+char cube2[x][y][z];
 ---ANSI C---
 
 The leading `@` fields before the element type are address-depth fields for the
 array element type, not separate values. Higher profiles may define richer
 container descriptors, ownership policies and allocation receivers over the same
 surface form.
+
+The `[]` receiver is a repeatable head-family, like `@ⁿ`. A head made from N
+bracket groups declares rank-N indexed storage in the C99 bootstrap projection.
+Empty groups take their dimension expressions positionally from the receiver
+body, so `[][][]: char cube x y z` lowers to `char cube[x][y][z];`. Non-empty
+groups carry their own LMX expression payload, so `[x][y][z]: char: cube`
+lowers to the same C shape while keeping the type/name declaration as a nested
+typed receiver. Mixed forms are also possible: `[x][]: char cube y` uses `x`
+from the head and `y` from the body. Missing dimensions in empty groups are a
+translator/profile error.
 
 Names that contain spaces use exact quoted identifiers as ordinary fields:
 

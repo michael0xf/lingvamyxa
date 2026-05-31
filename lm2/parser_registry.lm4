@@ -24,6 +24,7 @@ table:
     rows:
         inactive         1
         mix              2
+        `positional-skip` 4
 end: `node.flag`
 
 table:

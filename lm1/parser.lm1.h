@@ -25,6 +25,7 @@ typedef unsigned LmP0NodeFlags;
 
 #define LM_P0_NODE_INACTIVE 1U
 #define LM_P0_NODE_MIX 2U
+#define LM_P0_NODE_POSITIONAL_SKIP 4U
 
 typedef unsigned LmP0TrailerFlags;
 

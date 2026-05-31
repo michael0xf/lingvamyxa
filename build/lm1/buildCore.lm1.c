@@ -173,10 +173,13 @@ static int lm_build_trim_last_path_part(char *path) {
 
 static int lm_build_has_project_marker(char *path) {
     char marker_path[2048];
-    if (lm_build_join_path(marker_path, sizeof(marker_path), path, "lm2/buildCore.lm2") != 0) {
+    if (lm_build_join_path(marker_path, sizeof(marker_path), path, "lm2/buildCore.lmx") != 0) {
         return 0;
     }
-    return lm_build_file_exists(marker_path);
+    if (lm_build_file_exists(marker_path)) {
+        return 1;
+    }
+    return 0;
 }
 
 static int lm_build_enter_project_root(char *program_path) {
@@ -407,7 +410,7 @@ static int lm_build_generate_all(char *trans_tool) {
     if (lm_build_trans(trans_tool, "lm2/vcpkgFetch.lm2", "build/lm1/vcpkgFetch.lm1.c") != 0) {
         return 1;
     }
-    if (lm_build_trans(trans_tool, "lm2/buildCore.lm2", "build/lm1/buildCore.lm1.c") != 0) {
+    if (lm_build_trans(trans_tool, "lm2/buildCore.lmx", "build/lm1/buildCore.lm1.c") != 0) {
         return 1;
     }
     return 0;

@@ -16,7 +16,7 @@ end: os
 
 os:
     win:
-        fn: lm_finalize_platform_getcwd (@: char buffer;; size_t: size) @: char
+        fn: lm_finalize_platform_getcwd (@: char buffer; size_t: size) @: char
             return: c._getcwd(buffer, size)
         end: lm_finalize_platform_getcwd
 
@@ -44,7 +44,7 @@ os:
             return: "cd /d \"%s\" && start \"\" /B \"%s\" --copy"
         end: lm_finalize_platform_defer_command_format
     default:
-        fn: lm_finalize_platform_getcwd (@: char buffer;; size_t: size) @: char
+        fn: lm_finalize_platform_getcwd (@: char buffer; size_t: size) @: char
             return: c.getcwd(buffer, size)
         end: lm_finalize_platform_getcwd
 
@@ -148,14 +148,14 @@ sub: lm_finalize_sleep_retry ()
     c.lm_finalize_platform_sleep_retry()
 end: lm_finalize_sleep_retry
 
-sub: lm_finalize_tool_path (@: char path;; size_t: size;; @: char tool_name;; @: char variant)
+sub: lm_finalize_tool_path (@: char path; size_t: size; @: char tool_name; @: char variant)
     c.snprintf:
         path size "build%slm0%s%s%s.lm0%s"
         c.lm_finalize_platform_path_sep() c.lm_finalize_platform_path_sep()
         tool_name variant c.lm_finalize_platform_exe_suffix()
 end: lm_finalize_tool_path
 
-fn: lm_finalize_copy_once (@: char source_path;; @: char output_path;; int: quiet) int
+fn: lm_finalize_copy_once (@: char source_path; @: char output_path; int: quiet) int
     []: char buffer 32768
     @: FILE source
     @: FILE output
@@ -197,7 +197,7 @@ fn: lm_finalize_copy_once (@: char source_path;; @: char output_path;; int: quie
     return: 0
 end: lm_finalize_copy_once
 
-fn: lm_finalize_copy_with_retry (@: char source_path;; @: char output_path) int
+fn: lm_finalize_copy_with_retry (@: char source_path; @: char output_path) int
     int: attempt 0
 
     while: attempt < 40
@@ -265,7 +265,7 @@ fn: lm_finalize_defer () int
 end: lm_finalize_defer
 
 external:
-    fn: main (int: argc;; @@: char argv) int
+    fn: main (int: argc; @@: char argv) int
         if: lm_finalize_enter_project_root(argv[0]) != 0
             return: 1
 

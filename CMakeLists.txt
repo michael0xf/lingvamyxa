@@ -254,14 +254,14 @@ if (BUILD_TRANS_LM0)
         OUTPUT "${LM1_GENERATED_BUILD_CORE_C}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
         COMMAND $<TARGET_FILE:trans.lm0>
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lmx"
             "${LM1_GENERATED_BUILD_CORE_C}"
         DEPENDS
             trans.lm0
-            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lmx"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Generating build/lm1/buildCore.lm1.c from lm2/buildCore.lm2"
+        COMMENT "Generating build/lm1/buildCore.lm1.c from lm2/buildCore.lmx"
         VERBATIM
     )
 

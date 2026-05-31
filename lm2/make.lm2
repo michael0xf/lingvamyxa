@@ -1,6 +1,6 @@
 include: "<stdio.h>" "<stdlib.h>" "<string.h>"
 
-fn: lm_make_env_or_default (@: char name;; @: char fallback) @: char
+fn: lm_make_env_or_default (@: char name; @: char fallback) @: char
     @: char value
     value: c.getenv(name)
     if: value = 0 || value[0] = '\0'
@@ -8,7 +8,7 @@ fn: lm_make_env_or_default (@: char name;; @: char fallback) @: char
     return: value
 end: lm_make_env_or_default
 
-fn: lm_make_append (@: char buffer;; size_t: size;; size_t: used;; @: char text) size_t
+fn: lm_make_append (@: char buffer; size_t: size; size_t: used; @: char text) size_t
     size_t: length
     length: c.strlen(text)
     if: used + length >= size
@@ -18,7 +18,7 @@ fn: lm_make_append (@: char buffer;; size_t: size;; size_t: used;; @: char text)
     return: used + length
 end: lm_make_append
 
-fn: lm_make_append_arg (@: char buffer;; size_t: size;; size_t: used;; @: char arg) size_t
+fn: lm_make_append_arg (@: char buffer; size_t: size; size_t: used; @: char arg) size_t
     used: lm_make_append(buffer, size, used, " \"")
     if: used = size
         return: size
@@ -38,7 +38,7 @@ fn: lm_make_run_command (@: char command) int
     return: 0
 end: lm_make_run_command
 
-fn: lm_make_run_tool (@: char tool;; int: argc;; @@: char argv;; int: start) int
+fn: lm_make_run_tool (@: char tool; int: argc; @@: char argv; int: start) int
     []: char command 8192
     size_t: used 0U
     int: index
@@ -59,7 +59,7 @@ fn: lm_make_run_tool (@: char tool;; int: argc;; @@: char argv;; int: start) int
     return: lm_make_run_command(command)
 end: lm_make_run_tool
 
-fn: lm_make_copy_file (@: char source_path;; @: char output_path) int
+fn: lm_make_copy_file (@: char source_path; @: char output_path) int
     []: char buffer 32768
     @: FILE source
     @: FILE output
@@ -109,7 +109,7 @@ sub: lm_make_print_usage ()
 end: lm_make_print_usage
 
 external:
-    fn: main (int: argc;; @@: char argv) int
+    fn: main (int: argc; @@: char argv) int
         @: char cmake
         @: char cc
         @: char ar
