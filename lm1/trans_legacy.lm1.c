@@ -76,26 +76,6 @@ static int lm_trans_legacy_text_is_operator_atom(LmP0Text text) {
         lm_trans_text_equals(text, "]");
 }
 
-static int lm_trans_legacy_is_reserved_head_name(LmP0Text name) {
-    return
-        lm_trans_text_equals(name, "L1") ||
-        lm_trans_text_equals(name, "L2") ||
-        lm_trans_text_equals(name, "fn") ||
-        lm_trans_text_equals(name, "fm") ||
-        lm_trans_text_equals(name, "sub") ||
-        lm_trans_text_equals(name, "if") ||
-        lm_trans_text_equals(name, "else") ||
-        lm_trans_text_equals(name, "while") ||
-        lm_trans_text_equals(name, "return") ||
-        lm_trans_text_equals(name, "break") ||
-        lm_trans_text_equals(name, "continue") ||
-        lm_trans_text_equals(name, "end") ||
-        lm_trans_text_equals(name, "until") ||
-        lm_trans_text_equals(name, "synchronized") ||
-        lm_trans_text_equals(name, "const") ||
-        lm_trans_text_equals(name, "external");
-}
-
 static int lm_trans_legacy_atom_is_prefix_expr_operator(LmP0Text text) {
     return
         lm_trans_text_equals(text, "++") ||
@@ -118,108 +98,17 @@ static int lm_trans_legacy_atom_is_index_operator(LmP0Text text) {
     return lm_trans_text_equals(text, "[") || lm_trans_text_equals(text, "]");
 }
 
-static const char *lm_trans_legacy_expr_atom_payload(LmP0Text text) {
-    if (lm_trans_text_equals(text, ".")) {
-        return "emit.c-dot";
-    }
-    if (lm_trans_text_equals(text, "=")) {
-        return "emit.==";
-    }
-    if (lm_trans_text_equals(text, "@")) {
-        return "emit.&";
-    }
-    if (lm_trans_text_equals(text, "\\")) {
-        return "emit.*-or-->";
-    }
-    return 0;
-}
-
-static const char *lm_trans_legacy_statement_payload(LmP0Text head) {
-    if (lm_trans_text_equals(head, "return")) {
-        return "return";
-    }
-    if (lm_trans_text_equals(head, "if")) {
-        return "if";
-    }
-    if (lm_trans_text_equals(head, "while")) {
-        return "while";
-    }
-    if (lm_trans_text_equals(head, "else")) {
-        return "else";
-    }
-    if (lm_trans_text_equals(head, "synchronized")) {
-        return "synchronized";
-    }
-    if (lm_trans_text_equals(head, "break")) {
-        return "break";
-    }
-    if (lm_trans_text_equals(head, "continue")) {
-        return "continue";
-    }
-    if (lm_trans_text_equals(head, "const")) {
-        return "const";
-    }
-    if (lm_trans_text_equals(head, "[]")) {
-        return "array-declaration";
-    }
-    return 0;
-}
-
-static const char *lm_trans_legacy_atom_statement_payload(LmP0Text atom) {
-    if (lm_trans_text_equals(atom, "break")) {
-        return "break";
-    }
-    if (lm_trans_text_equals(atom, "continue")) {
-        return "continue";
-    }
-    if (lm_trans_text_equals(atom, "return")) {
-        return "return";
-    }
-    return 0;
-}
-
 static const char *lm_trans_legacy_function_receiver_payload(LmP0Text head) {
     if (lm_trans_text_equals(head, "fn")) {
-        return "function.primitive";
+        return "lm_trans_receiver_fn";
     }
     if (lm_trans_text_equals(head, "fm")) {
-        return "function.struct";
+        return "lm_trans_receiver_fm";
     }
     if (lm_trans_text_equals(head, "sub")) {
-        return "procedure";
+        return "lm_trans_receiver_sub";
     }
     return 0;
-}
-
-static const char *lm_trans_legacy_top_level_payload(LmP0Text head) {
-    if (lm_trans_text_equals(head, "L1")) {
-        return "lower.l1";
-    }
-    if (
-        lm_trans_text_equals(head, "fn") ||
-        lm_trans_text_equals(head, "fm") ||
-        lm_trans_text_equals(head, "sub")
-    ) {
-        return "function";
-    }
-    if (lm_trans_text_equals(head, "external")) {
-        return "external-function";
-    }
-    return 0;
-}
-
-static int lm_trans_legacy_frame_has_positional_name_argument(const LmP0Frame *frame) {
-    if (frame == 0) {
-        return 0;
-    }
-
-    return
-        lm_trans_text_equals(frame->head, "fn") ||
-        lm_trans_text_equals(frame->head, "fm") ||
-        lm_trans_text_equals(frame->head, "sub") ||
-        lm_trans_text_equals(frame->head, "synchronized") ||
-        lm_trans_text_equals(frame->head, "[]") ||
-        lm_trans_text_equals(frame->head, "entry");
 }
 
 static int lm_trans_legacy_atom_is_infix_expr_operator(

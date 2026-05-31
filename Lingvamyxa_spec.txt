@@ -7430,7 +7430,7 @@ exact quoted identifier:
     `+`
     `!=`
     `c.*`
-    `receiver.statement`
+    `operator.infix`
     `translator type-->spelling`
 
 The backticks are not part of the class/key. They are only the exact identifier

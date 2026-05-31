@@ -1,235 +1,170 @@
 registry:
     table:
-        name: `surface.prefix`
-        columns: char@(class) char@(target)
-        rows:
-            `c.` `ansi-c`
-    end: `surface.prefix`
-
-    table:
         name: `type.spelling`
-        columns: char@(class) char@(spelling)
+        columns: char@(class)  char@(spelling)
         rows:
-            u8 uint8_t
-            u16 uint16_t
-            u32 uint32_t
-            u64 uint64_t
-            i8 int8_t
-            i16 int16_t
-            i32 int32_t
-            i64 int64_t
+            u8               uint8_t
+            u16              uint16_t
+            u32              uint32_t
+            u64              uint64_t
+            i8               int8_t
+            i16              int16_t
+            i32              int32_t
+            i64              int64_t
     end: `type.spelling`
 
     table:
         name: `type.cTail`
-        columns: char@(class) char@(spelling)
+        columns: char@(class)  char@(spelling)
         rows:
-            void void
-            char char
-            short short
-            int int
-            long long
-            float float
-            double double
-            signed signed
-            unsigned unsigned
-            size_t size_t
-            FILE FILE
+            void             void
+            char             char
+            short            short
+            int              int
+            long             long
+            float            float
+            double           double
+            signed           signed
+            unsigned         unsigned
+            size_t           size_t
+            FILE             FILE
     end: `type.cTail`
 
     table:
-        name: `receiver.reserved`
-        columns: char@(class) char@(receiver)
-        rows:
-            # old payload: L1 `lower.l1`
-            L1 reserved
-            # old payload: L2 `lower.l2`
-            L2 reserved
-            # old payload: fn `function.primitive`
-            fn reserved
-            # old payload: fm `function.struct`
-            fm reserved
-            # old payload: sub procedure
-            sub reserved
-            # old payload: if `statement.if`
-            if reserved
-            # old payload: else `statement.else`
-            else reserved
-            # old payload: while `statement.while`
-            while reserved
-            # old payload: return `statement.return`
-            return reserved
-            # old payload: break `statement.break`
-            break reserved
-            # old payload: continue `statement.continue`
-            continue reserved
-            # old payload: end `trailer.end`
-            end reserved
-            # old payload: until `trailer.until`
-            until reserved
-            # old payload: synchronized `statement.synchronized`
-            synchronized reserved
-            # old payload: const `declaration.const`
-            const reserved
-            # old payload: external `linkage.external`
-            external reserved
-    end: `receiver.reserved`
-
-    table:
         name: `receiver.function`
-        columns: char@(class) char@(function)
+        columns: char@(class)  binding@(receiver)
         rows:
-            fn `function.primitive`
-            fm `function.struct`
-            sub procedure
+            fn               lm_trans_receiver_fn
+            fm               lm_trans_receiver_fm
+            sub              lm_trans_receiver_sub
     end: `receiver.function`
 
     table:
-        name: `receiver.statement`
-        columns: char@(class) char@(statement)
+        name: `call.lowering`
+        columns: char@(class)  binding@(handler)
         rows:
-            return return
-            if if
-            while while
-            else else
-            synchronized synchronized
-            break break
-            continue continue
-            const const
-            `[]` `array-declaration`
-    end: `receiver.statement`
-
-    table:
-        name: `receiver.atomStatement`
-        columns: char@(class) char@(statement)
-        rows:
-            break break
-            continue continue
-            return return
-    end: `receiver.atomStatement`
-
-    table:
-        name: `receiver.topLevel`
-        columns: char@(class) char@(lowering)
-        rows:
-            L1 `lower.l1`
-            fn function
-            fm function
-            sub function
-            external `external-function`
-    end: `receiver.topLevel`
-
-    table:
-        name: `receiver.positionalName`
-        columns: char@(class) char@(name)
-        rows:
-            fn name
-            fm name
-            sub name
-            synchronized name
-            `[]` name
-            entry name
-    end: `receiver.positionalName`
-
-    %table:
-        name: `lowering.target`
-        columns: char@(class) char@(lowering)
-        rows:
-            L1 `ansi-c.raw`
-            L2 `lmx-to-ansi-c`
-            `c.*` `ansi-c.surface`
-    end: `lowering.target`
-
-    table:
-        name: `operator.any`
-        columns: char@(class) char@(role)
-        rows:
-            `++` operator
-            `--` operator
-            `+` operator
-            `-` operator
-            `*` operator
-            `/` operator
-            `%` operator
-            `=` `operator.equal`
-            `!=` operator
-            `<` operator
-            `<=` operator
-            `>` operator
-            `>=` operator
-            `&&` operator
-            `||` operator
-            `&` operator
-            `|` operator
-            `^` operator
-            `!` operator
-            `~` operator
-            `@` `operator.address`
-            `\` `operator.field-follow`
-            `[` `operator.index-open`
-            `]` `operator.index-close`
-    end: `operator.any`
+            function         lm_trans_call_lower_value
+            callable         lm_trans_call_lower_statement
+    end: `call.lowering`
 
     table:
         name: `operator.prefix`
-        columns: char@(class) char@(role)
+        columns: char@(class)  char@(ansi_c)
         rows:
-            `++` prefix
-            `--` prefix
-            `+` prefix
-            `-` prefix
-            `@` address
-            `\` deref
-            `!` prefix
-            `~` prefix
+            `++`             `++`
+            `--`             `--`
+            `+`              `+`
+            `-`              `-`
+            `@`              `&`
+            `\`              `*`
+            `!`              `!`
+            `~`              `~`
     end: `operator.prefix`
 
     table:
-        name: `operator.postfix`
-        columns: char@(class) char@(role)
+        name: `operator.prefix.emitter`
+        columns: char@(class)  binding@(emitter)
         rows:
-            `++` postfix
-            `--` postfix
+            `++`             lm_trans_expr_emit_operator
+            `--`             lm_trans_expr_emit_operator
+            `+`              lm_trans_expr_emit_operator
+            `-`              lm_trans_expr_emit_operator
+            `@`              lm_trans_expr_emit_operator
+            `\`              lm_trans_expr_emit_deref
+            `!`              lm_trans_expr_emit_operator
+            `~`              lm_trans_expr_emit_operator
+    end: `operator.prefix.emitter`
+
+    table:
+        name: `operator.postfix`
+        columns: char@(class)  char@(ansi_c)
+        rows:
+            `++`             `++`
+            `--`             `--`
     end: `operator.postfix`
 
     table:
-        name: `operator.infix`
-        columns: char@(class) char@(role)
+        name: `operator.postfix.emitter`
+        columns: char@(class)  binding@(emitter)
         rows:
-            `+` infix
-            `-` infix
-            `*` infix
-            `/` infix
-            `%` infix
-            `=` equal
-            `!=` infix
-            `<` infix
-            `<=` infix
-            `>` infix
-            `>=` infix
-            `&&` infix
-            `||` infix
-            `&` infix
-            `|` infix
-            `^` infix
-            `\` `pointer-follow`
+            `++`             lm_trans_expr_emit_operator
+            `--`             lm_trans_expr_emit_operator
+    end: `operator.postfix.emitter`
+
+    table:
+        name: `operator.infix`
+        columns: char@(class)  char@(ansi_c)
+        rows:
+            `+`              `+`
+            `-`              `-`
+            `*`              `*`
+            `/`              `/`
+            `%`              `%`
+            `=`              `==`
+            `!=`             `!=`
+            `<`              `<`
+            `<=`             `<=`
+            `>`              `>`
+            `>=`             `>=`
+            `&&`             `&&`
+            `||`             `||`
+            `&`              `&`
+            `|`              `|`
+            `^`              `^`
+            `\`              `->`
     end: `operator.infix`
 
     table:
-        name: `operator.index`
-        columns: char@(class) char@(role)
+        name: `operator.infix.emitter`
+        columns: char@(class)  binding@(emitter)
         rows:
-            `[` `index-open`
-            `]` `index-close`
+            `+`              lm_trans_expr_emit_operator
+            `-`              lm_trans_expr_emit_operator
+            `*`              lm_trans_expr_emit_operator
+            `/`              lm_trans_expr_emit_operator
+            `%`              lm_trans_expr_emit_operator
+            `=`              lm_trans_expr_emit_operator
+            `!=`             lm_trans_expr_emit_operator
+            `<`              lm_trans_expr_emit_operator
+            `<=`             lm_trans_expr_emit_operator
+            `>`              lm_trans_expr_emit_operator
+            `>=`             lm_trans_expr_emit_operator
+            `&&`             lm_trans_expr_emit_operator
+            `||`             lm_trans_expr_emit_operator
+            `&`              lm_trans_expr_emit_operator
+            `|`              lm_trans_expr_emit_operator
+            `^`              lm_trans_expr_emit_operator
+            `\`              lm_trans_expr_emit_pointer_follow
+    end: `operator.infix.emitter`
+
+    table:
+        name: `operator.index`
+        columns: char@(class)  char@(ansi_c)
+        rows:
+            `[`              `[`
+            `]`              `]`
     end: `operator.index`
 
     table:
-        name: `expr.atom`
-        columns: char@(class) char@(lowering)
+        name: `operator.index.emitter`
+        columns: char@(class)  binding@(emitter)
         rows:
-            `=` `emit.==`
-            `@` `emit.&`
-            `\` `emit.*-or-->`
-            `.` `emit.c-dot`
+            `[`              lm_trans_expr_emit_operator
+            `]`              lm_trans_expr_emit_operator
+    end: `operator.index.emitter`
+
+    table:
+        name: `expr.atom`
+        columns: char@(class)  char@(ansi_c)
+        rows:
+            `.`              `.`
     end: `expr.atom`
+
+    table:
+        name: `expr.atom.emitter`
+        columns: char@(class)  binding@(emitter)
+        rows:
+            `.`              lm_trans_expr_emit_c_dot
+    end: `expr.atom.emitter`
+
 end: registry
