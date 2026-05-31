@@ -511,8 +511,9 @@ This example should be read with five simple structural rules in mind:
 
    The parser tracks source-level changes, not physical source lines as
    containers. Dots in canonical notation, indentation in relaxed notation,
-   colon short-form, comma, bounded parentheses/brackets, source-level markers and
-   physical newline separators may all affect the current level model. Child
+   colon short-form, semicolon, bounded parentheses/brackets, source-level markers and
+   physical newline separators may all affect the current level model. Comma is
+   an explicit field separator without source-level effect. Child
    items are written at the next deeper source level. An atomic increase of the
    current source level opens a Structure. Returning by one source level
    completes the currently open Structure before the next source item is parsed.
@@ -832,7 +833,7 @@ A callable reference is also data until explicitly called or consumed by a recei
 
 3.4. Identifiers, Exact Quoted Identifiers, Numeric Literals and Strings
 
-Lingvamyxa distinguishes convenient bare identifiers, exact quoted identifiers and text/string literals. This distinction is required because whitespace may separate fields or format source, commas may terminate open short forms or act as ordinary separators/trailing markers, dots define vertical structure, and external systems such as SQLite may contain identifiers that would collide with Lingvamyxa syntax.
+Lingvamyxa distinguishes convenient bare identifiers, exact quoted identifiers and text/string literals. This distinction is required because whitespace and comma may separate fields or format source, semicolon may terminate open short forms or act as an explicit separator/trailing marker, dots define vertical structure, and external systems such as SQLite may contain identifiers that would collide with Lingvamyxa syntax.
 
 3.4.1. Numeric Literals
 
@@ -869,7 +870,7 @@ normalizes as:
 
     print(1, 2, 3)
 
-Comma is not a way to add another numeric field to an open short tail. If a short form is open, comma terminates that short form. If no short form is open at the current scan depth, comma may act as optional conventional notation for data or as a trailing marker.
+Comma is an ordinary explicit field separator, like whitespace without indentation effects. It may separate fields inside an open short tail and may act as optional conventional notation for data or as a trailing marker. Semicolon is the explicit scan-depth separator that can terminate an open short form.
 
 3.4.2. Bare Identifiers
 
@@ -1012,7 +1013,7 @@ The string spelling, escape rules and backslash-newline line splicing follow the
 
 After the closing double quote of a text/string literal, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma/semicolon, `(`, `)`, or the end of the source item. Any other following character is a missing-separator syntax error rather than implicit string concatenation.
 
-In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace. Comma/semicolon does not add another field to an open short tail; it terminates the open short form. When no short form is open at the current scan depth, comma/semicolon may act as optional conventional notation for data or as a trailing marker. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
+In ordinary physical short-line tail form, adjacent string literals are separate fields separated by whitespace or comma. Comma adds another field to the open short tail. Semicolon terminates the open short form. When no short form is open at the current scan depth, comma may act as optional conventional notation for data, and semicolon may act as an explicit source-item separator or trailing marker. This makes manual table and list declarations compact without using C99 adjacent string-literal concatenation.
 
 Examples:
 
@@ -1311,10 +1312,11 @@ Compact call form:
     f(a, b, c)
 
 It creates a Frame named `f` with one logical argument Structure containing three positional fields.
-The comma is the ordinary explicit field separator in compact and short forms.
-The semicolon `;` is a full synonym of comma at P0 level. It exists only as a
-more readable separator/trailer in places where comma would be visually
-unintuitive, for example before a following block string:
+The comma is an ordinary explicit field separator in compact and short forms.
+It behaves like whitespace as a token separator, but it does not carry
+indentation/source-level meaning. The semicolon `;` is the explicit scan-depth
+separator/trailer: inside an open short form it terminates that short form.
+This is useful before a following block string:
 
     include: "<direct.h>";
 ===
@@ -1431,7 +1433,8 @@ Parser event view for a short colon-form opened at source level N:
     following source item at N + 1         N -> N + 1                   continues the same short form as a new field
     following source item at N             visible item/trailer at N    completes the short form; the item is a sibling
     following admitted tail-cutter         tail-cutter-specific         may close the admitted target
-    comma or semicolon                    scan-depth trailer           completes the current open short form immediately
+    comma                                 no level change              separates neighboring fields
+    semicolon                             scan-depth trailer           completes the current open short form immediately
     matching ) or ]                       bounded-context trailer      closes the bounded form and any open short form inside it
 
 The important point is that the parser watches source-level changes, not
@@ -1446,7 +1449,7 @@ This rule is intentionally asymmetric. Any atomic source-level increase opens a
 Structure, because a deeper source level is already a visible request for a
 nested object. Closing is not triggered by a bare separator in the same way:
 the close needs a following source item, a visible source-level marker,
-comma/semicolon, `)` or an admitted tail-cutter. This preserves one shared mechanism for
+semicolon, `)` or an admitted tail-cutter. This preserves one shared mechanism for
 anonymous block separation with the minimum number of logical markers while
 still allowing many surface forms. In particular, after a short form has
 accepted a vertical block as one of its arguments, there are few remaining
@@ -1509,13 +1512,19 @@ normalizes like the explicit vertical spelling:
 
 In both cases the block string is a field of `utf8`, not a sibling of `L1`.
 
-Comma is different from physical newline. Comma always terminates the current open short form at the current scan depth:
+Comma is different from physical newline because it is only an explicit field separator. It does not terminate the current open short form:
 
     head: arg0, arg1
 
-does not normalize as `head(arg0, arg1)`. The comma terminates `head(arg0)`. The following `arg1` is parsed as the next item at the current scan depth. A later receiver/profile may reject that neighboring item if a value item is not meaningful there, but it is not a short-tail field of `head`.
+normalizes as `head(arg0, arg1)` in ordinary short-tail form. The following `arg1` remains a field of the same short-tail Structure.
 
 When no short form is open at the current scan depth, comma may be ordinary conventional separator notation or a trailing marker. Therefore `(a b c)`, `(a, b, c)` and `(a b c,)` may produce the same three data fields.
+
+Semicolon is the explicit short-form separator/trailer:
+
+    head: arg0; arg1
+
+does not normalize as `head(arg0, arg1)`. The semicolon terminates `head(arg0)`. The following `arg1` is parsed as the next item at the current scan depth. A later receiver/profile may reject that neighboring item if a value item is not meaningful there, but it is not a short-tail field of `head`.
 
 A receiver may later interpret an identifier field as a name, signature, selector, atom, message name or another semantic object. The parser only builds the field.
 
@@ -1523,11 +1532,11 @@ A receiver may later interpret an identifier field as a name, signature, selecto
 
 A short colon-form is a physical source-item form.
 
-A physical source line may contain several source items when an earlier short form is closed by comma. A short colon-form may appear anywhere a Structure field/source item may appear, including inside another short form, inside a bounded Structure and inside an anonymous/block Structure.
+A physical source line may contain several source items when an earlier short form is closed by semicolon. A short colon-form may appear anywhere a Structure field/source item may appear, including inside another short form, inside a bounded Structure and inside an anonymous/block Structure.
 
 Examples:
 
-    call(int: a b, ret: int)
+    call(int: a b; ret: int)
 
 normalizes as a compact `call` Frame whose bounded argument Structure contains two neighboring short-form Frames:
 
@@ -1535,17 +1544,17 @@ normalizes as a compact `call` Frame whose bounded argument Structure contains t
 
 And:
 
-    call(int: a, b)
+    call(int: a; b)
 
 normalizes as:
 
     call(int(a), b)
 
-The comma after `a` terminates `int: a`; it does not add `b` to the `int` tail.
+The semicolon after `a` terminates `int: a`; it does not add `b` to the `int` tail.
 
 The same rule applies outside parentheses:
 
-    print: a b, c
+    print: a b; c
 
 normalizes as two neighboring items at the current scan depth:
 
@@ -1559,11 +1568,11 @@ newline separator changes the current short-form level from N + 1 back to N,
 but the visible completion is caused by the following source item/trailer at N
 or below, not by the newline character itself. If the following source item is
 again at N + 1, the short form continues and the atomic N -> N + 1 step opens
-a new Structure field in the same argument sequence. Comma closes the current
-open short form immediately. A matching `)` or `]` closes the current
+a new Structure field in the same argument sequence. Semicolon closes the
+current open short form immediately. A matching `)` or `]` closes the current
 bounded/compact form; if a short form is still open inside that bounded form,
-the short form is completed as part of closing the bounded context. None of
-those boundary tokens is a whitespace field separator inside the short form.
+the short form is completed as part of closing the bounded context. Comma
+remains an ordinary field separator inside the short form.
 
 Example of continuation by implicit argument level:
 
@@ -1718,19 +1727,19 @@ Parentheses create a bounded Structure:
 
     (a b c)
 
-Inside parentheses, bounded elements may be separated by whitespace, by physical newline/source-level composition, by comma, or by the matching closing parenthesis. Comma is not required for ordinary bounded fields. When no short form is open at the current scan depth, comma is optional conventional notation for simple data fields and may leave the same field sequence as whitespace separation:
+Inside parentheses, bounded elements may be separated by whitespace, by physical newline/source-level composition, by comma, by semicolon, or by the matching closing parenthesis. Comma is not required for ordinary bounded fields and does not close an open short form. When no short form is open at the current scan depth, comma is optional conventional notation for simple data fields and may leave the same field sequence as whitespace separation:
 
     (a b c)
     (a, b, c)
     (a b c,)
 
-For short colon-forms, comma carries structural load because it always terminates the current open short form. This rule is universal; it is not specific to parenthesized Structures.
+For short colon-forms, semicolon carries structural load because it terminates the current open short form. This rule is universal; it is not specific to parenthesized Structures.
 
 Parentheses do not disable the source-level system. Vertical child items inside parentheses are still written with dots. Inline short colon-forms are also allowed inside parentheses:
 
-    call(int: a b, ret: int)
+    call(int: a b; ret: int)
 
-The comma terminates `int: a b`, then `ret: int` starts the next source item inside the same bounded Structure. The vertical spelling remains valid:
+The semicolon terminates `int: a b`, then `ret: int` starts the next source item inside the same bounded Structure. The vertical spelling remains valid:
 
     call(
     . int: a b
@@ -1765,7 +1774,7 @@ level before the matching `)`:
     +
     1)
 
-Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric literal, character constant and string literal fields in ordinary short-tail form are separated by whitespace. Bounded Structures also use whitespace/newline composition for ordinary fields; comma terminates an open short form, and otherwise may be optional conventional notation or a trailing marker.
+Bare identifiers are single tokens. Exact quoted identifiers are atomic name tokens and may contain spaces, commas, punctuation and other external spelling. Numeric literal, character constant and string literal fields in ordinary short-tail form are separated by whitespace or comma. Bounded Structures also use whitespace/newline composition for ordinary fields; comma is ordinary conventional separator notation or a trailing marker, while semicolon terminates an open short form at the current scan depth.
 
 Example:
 
@@ -1817,8 +1826,9 @@ Shared source-level rule after either surface notation has been mapped to source
     continues, bounds, separates or closes a Structure participates in the
     level model. A colon short-form opens an implicit argument level N + 1.
     Inside that short-form scan, physical newline performs the separator step
-    N + 1 -> N. Parentheses bound a compact Structure. Comma is a trailer at
-    the current scan depth. `---` and canonical dotted delimiter lines
+    N + 1 -> N. Parentheses bound a compact Structure. Comma is an explicit
+    field separator at the current scan depth. Semicolon is a trailer at the
+    current scan depth. `---` and canonical dotted delimiter lines
     materialize source-level points.
 
     Internal spaces remain ordinary source characters and may still participate
@@ -4172,10 +4182,10 @@ In declaration context, this means an `int` binding named `v` whose default/init
 
 The same declaration may also be written with short forms inside bounded Structures:
 
-    fn: i(args: int(v, j), ret: int, body: (j: v / 2, return: v))
-    fn: i(args: (int: v j), ret: int, body: (j: v / 2, return: v))
+    fn: i(args: int(v, j); ret: int; body: (j: v / 2; return: v))
+    fn: i(args: (int: v j); ret: int; body: (j: v / 2; return: v))
 
-In the first spelling, `args: int(v, j)` uses a compact declaration Frame as the `args` tail. In the second spelling, `args: (int: v j)` gives `args` a bounded Structure containing the short-form Frame `int(v, j)`. Inside `body: (j: v / 2, return: v)`, the comma terminates `j: v / 2`; `return: v` is the next short-form item in the same bounded Structure.
+In the first spelling, `args: int(v, j)` uses a compact declaration Frame as the `args` tail. In the second spelling, `args: (int: v j)` gives `args` a bounded Structure containing the short-form Frame `int(v, j)`. Inside `body: (j: v / 2; return: v)`, the semicolon terminates `j: v / 2`; `return: v` is the next short-form item in the same bounded Structure.
 
 The form:
 
@@ -5196,7 +5206,7 @@ Whitespace separates the base type and the binding name under the ordinary short
 
 has two fields, `int` and `ppp`, while:
 
-    @@@: int, ppp
+    @@@: int; ppp
 
 terminates the `@@@:` short form after `int`. The following `ppp` is not the binding-name field of that declaration; it is the next source item at the current level.
 
@@ -5636,9 +5646,13 @@ Events:
     NEWLINE
         physical newline separator.
 
-    FIELD_SEPARATOR
-        comma or semicolon separator/trailer at the current scan depth. The two
-        spellings are P0 synonyms.
+    COMMA_SEPARATOR
+        comma separator at the current scan depth. It separates fields like
+        whitespace, but it has no indentation/source-level effect.
+
+    SEMICOLON_SEPARATOR
+        semicolon separator/trailer at the current scan depth. It may terminate
+        the current open short form.
 
     OPEN_PAREN / CLOSE_PAREN
         `(` and matching `)` bounded Structure delimiters.
@@ -5719,10 +5733,14 @@ Short-form transitions:
         is complete and the next item is handled by ordinary sibling, cut or
         receiver-trailer rules.
 
-    COMMA at the current scan depth terminates the current open short form. It
-    does not append an empty field. If no short form is open at that scan
-    depth, it is an ordinary bounded/sequence separator or a cosmetic trailing
-    marker according to the surrounding context.
+    COMMA at the current scan depth separates fields and does not append an
+    empty field. It is an ordinary bounded/sequence separator or a cosmetic
+    trailing marker according to the surrounding context.
+
+    SEMICOLON at the current scan depth terminates the current open short form.
+    It does not append an empty field. If no short form is open at that scan
+    depth, it is an explicit source-item separator or a cosmetic trailing marker
+    according to the surrounding context.
 
 Bounded-form transitions:
 
@@ -5858,7 +5876,7 @@ Output invariants:
 
     line_frame          ::= source_level line_item_sequence newline
 
-    line_item_sequence  ::= source_item { "," source_item } [ "," ]
+    line_item_sequence  ::= source_item { ";" source_item } [ ";" ]
 
     source_item         ::= colon_frame_body
                           | nullary_line_body
@@ -5866,8 +5884,8 @@ Output invariants:
 
     colon_frame_body    ::= head ":" [ line_arguments ]
 
-    // Comma terminates the current source_item at the current scan depth.
-    // It does not add another field to an open short tail.
+    // Semicolon terminates the current source_item at the current scan depth.
+    // Comma is an ordinary field separator.
 
     head                ::= bare_identifier
                           | exact_identifier
@@ -5880,13 +5898,13 @@ Output invariants:
 
     line_arguments      ::= short_tail
 
-    short_tail          ::= short_field { horizontal_space+ short_field }
+    short_tail          ::= short_field { (horizontal_space+ | ",") short_field } [ "," ]
 
     short_field         ::= colon_frame_body
                           | structural_value
 
-    // In ordinary physical short-line form, comma terminates the current
-    // short form. It does not add another field to that short form.
+    // In ordinary physical short-line form, comma separates fields in the
+    // current short form. Semicolon terminates the current short form.
     // Physical newline is not a short-form trailer; after newline, the next
     // source-level event decides whether the open frame receives more fields
     // or is completed by level rules.
@@ -5901,6 +5919,7 @@ Output invariants:
     bounded_item_separator
                          ::= horizontal_space+
                           | ","
+                          | ";"
                           | newline/source-level composition
 
     bounded_item        ::= colon_frame_body
@@ -5910,8 +5929,9 @@ Output invariants:
     // Inside bounded Structures, short colon-forms may appear inline.
     // Horizontal whitespace separates simple bounded fields only when no
     // short colon-form is open. Inside an open short colon-form it remains
-    // the short-tail field separator. Comma terminates an open short form at
-    // any scan depth. Newline/source-level composition is not a short-form
+    // the short-tail field separator. Comma is also a short-tail field
+    // separator. Semicolon terminates an open short form at any scan depth.
+    // Newline/source-level composition is not a short-form
     // trailer by itself; the following source level determines continuation
     // or closure. Inside a bounded form that continues across a physical
     // newline, the next physical line must remain inside that bounded form:
@@ -5967,7 +5987,7 @@ This grammar is intentionally incomplete around full update semantics, full inde
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
-Comma and semicolon are the same P0 field separator/trailer at the current scan depth. For a short form, either spelling terminates that short form; it never adds another field to the open short tail. When no short form is open at the current scan depth, either spelling may be optional conventional notation and may not change the produced field sequence compared with whitespace/newline separation. A trailing comma or semicolon with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma or semicolon inside a deeper bounded Structure or compact Frame belongs to that deeper form.
+Comma and semicolon have different P0 roles at the current scan depth. Comma is an ordinary explicit field separator, like whitespace without indentation/source-level effects; it may add another field to an open short tail. Semicolon is the explicit separator/trailer: for a short form, it terminates that short form and never adds another field to the open short tail. When no short form is open at the current scan depth, comma is optional conventional separator notation and semicolon may act as an explicit source-item separator or trailing marker. A trailing comma or semicolon with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma or semicolon inside a deeper bounded Structure or compact Frame belongs to that deeper form.
 
 Structural grammar has no separate anonymous-function syntax. A bounded
 Structure, compact Frame or vertical anonymous Structure remains Structure data.
@@ -6052,7 +6072,8 @@ The notation uses `Structure(...)` and `Frame(...)` as semantic constructors:
 This semantic EBNF is read with these structural rules:
 
     ShortTail
-        ::= Field { HorizontalSpace+ Field }
+        ::= Field { (HorizontalSpace+ | COMMA_SEPARATOR) Field }
+            [ COMMA_SEPARATOR ]
 
     BoundedBody
         ::= [ BoundedElement { BoundedSeparator BoundedElement }
@@ -6061,10 +6082,11 @@ This semantic EBNF is read with these structural rules:
     BoundedSeparator
         ::= HorizontalSpace+
          |  COMMA_SEPARATOR
+         |  SEMICOLON_SEPARATOR
          |  NewlineSourceComposition
 
     FrameTrailer
-        ::= COMMA_SHORT
+        ::= SEMICOLON_SHORT
          |  RPAREN_BOUNDED
          |  RBRACKET_BOUNDED
          |  LEVEL_DROP
@@ -6078,13 +6100,17 @@ This semantic EBNF is read with these structural rules:
          |  TERMINAL_RETURN
          |  ProfileTrailer
 
-Comma semantics:
+Comma and semicolon semantics:
 
-    COMMA_SHORT never appends a field to the open ShortTail.
-    It terminates the current open short form at any scan depth.
+    COMMA_SEPARATOR appends/separates fields in the open ShortTail. It never
+    terminates the current open short form.
+
+    SEMICOLON_SHORT never appends a field to the open ShortTail. It terminates
+    the current open short form at any scan depth.
+
     When no short form is open at the current scan depth, comma may act as
-    COMMA_SEPARATOR between ordinary data fields or as a cosmetic trailing
-    marker.
+    ordinary separator notation and semicolon may act as an explicit source-item
+    separator or cosmetic trailing marker.
 
 Physical newline semantics:
 
@@ -6199,7 +6225,8 @@ Semantic outline:
 
     f(a, b)                    compact Frame named f
     f: a b                     line command Frame named f with whitespace-separated short-tail fields
-    f: a, b                    f receives only a; comma terminates the short form, so b is the next source item at the current level
+    f: a, b                    f receives a and b; comma is an ordinary explicit field separator
+    f: a; b                    f receives only a; semicolon terminates the short form, so b is the next source item at the current level
     f: 1 2                     ordinary short-tail fields, equivalent to f(1, 2)
     f: / child lines at . / end: f
                                 canonical dotted vertical Frame named f; vertical fields are at source level N + 1
@@ -7367,7 +7394,7 @@ The same short-tail whitespace rule applies to address-depth declarations:
 
 @@@: int ppp
 
-This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is not the same declaration in ordinary physical short-line form: the comma terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. A semicolon at that scan depth has the same effect. The following `ppp` is parsed as the next source item at the current level.
+This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is the same declaration with an explicit comma field separator. The spelling `@@@: int; ppp` is different: the semicolon terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. The following `ppp` is parsed as the next source item at the current level.
 
 20.2.1. Named Structures and ANSI C `typedef struct` Projection
 

@@ -3923,6 +3923,65 @@ static int lm_trans_emit_array_declaration(
     return lm_trans_emit_array_declaration_with_qualifier(file, frame, indent, namespace_, "");
 }
 
+static int lm_trans_emit_c_tagged_declaration(
+    FILE *file,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    const LmP0Field *type_field;
+    const LmP0Field *name_field;
+    const LmP0Node *type_node;
+    const LmP0Node *name_node;
+
+    type_field = lm_trans_nth_field(&frame->body, 0U);
+    name_field = lm_trans_nth_field(&frame->body, 1U);
+    if (
+        type_field == 0 ||
+        name_field == 0 ||
+        type_field->value == 0 ||
+        name_field->value == 0 ||
+        type_field->value->kind != LM_P0_NODE_ATOM ||
+        name_field->value->kind != LM_P0_NODE_ATOM
+    ) {
+        fprintf(stderr, "trans L2 error: C tagged declaration expects C tag name and variable name\n");
+        return 1;
+    }
+
+    type_node = type_field->value;
+    name_node = name_field->value;
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_name(file, frame->head) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " ") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_name(file, type_node->as.atom) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " ") != 0) {
+        return 1;
+    }
+    if (lm_trans_write_text(file, name_node->as.atom) != 0) {
+        return 1;
+    }
+    if (name_field->next != 0) {
+        if (lm_trans_put(file, " = ") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_expr_fields(file, name_field->next, namespace_) != 0) {
+            return 1;
+        }
+    }
+    if (lm_trans_put(file, ";\n") != 0) {
+        return 1;
+    }
+    return lm_trans_namespace_declare(namespace_, name_node->as.atom, "variable");
+}
+
 static int lm_trans_emit_const_statement(
     FILE *file,
     const LmP0Frame *frame,
@@ -4734,6 +4793,17 @@ static int lm_trans_statement_emit_array_declaration(
 ) {
     (void)stack;
     return lm_trans_emit_array_declaration(file, frame, indent, namespace_);
+}
+
+static int lm_trans_statement_emit_c_tagged_declaration(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)stack;
+    return lm_trans_emit_c_tagged_declaration(file, frame, indent, namespace_);
 }
 
 static int lm_trans_statement_emit_storage_declaration(
@@ -5598,6 +5668,10 @@ static int lm_trans_binding_resolve(const char *binding, LmTransBinding *out) {
         out->statement_frame = lm_trans_statement_emit_array_declaration;
         return 1;
     }
+    if (strcmp(binding, "lm_trans_statement_emit_c_tagged_declaration") == 0) {
+        out->statement_frame = lm_trans_statement_emit_c_tagged_declaration;
+        return 1;
+    }
     if (strcmp(binding, "lm_trans_receiver_fn") == 0) {
         out->function_receiver = lm_trans_receiver_fn;
         return 1;
@@ -5709,6 +5783,7 @@ static int lm_trans_top_level_function_header(
 
 static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
 static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame);
+static int lm_trans_emit_l2_os_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_function(
     FILE *file,
@@ -5748,7 +5823,7 @@ static int lm_trans_top_level_emit_os(
     const LmTransTopLevelItem *item
 ) {
     (void)namespace_;
-    return lm_trans_emit_l1_os_frame(file, item->frame);
+    return lm_trans_emit_l2_os_frame(file, item->frame);
 }
 
 static int lm_trans_top_level_emit_include(
@@ -6181,6 +6256,115 @@ static const char *lm_trans_os_condition(LmP0Text name) {
         return "defined(__unix__)";
     }
     return 0;
+}
+
+static int lm_trans_os_branch_looks_l2(const LmP0Structure *body) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+
+    if (body == 0) {
+        return 0;
+    }
+
+    field = body->first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind == LM_P0_NODE_FRAME) {
+                if (
+                    !lm_trans_text_equals(node->as.frame.head, "L1") &&
+                    !lm_trans_text_equals(node->as.frame.head, "include") &&
+                    !lm_trans_text_equals(node->as.frame.head, "os") &&
+                    !lm_trans_is_end_target(&node->as.frame, "L1")
+                ) {
+                    return 1;
+                }
+            } else if (node->kind == LM_P0_NODE_STRUCTURE) {
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_l2_os_branch(FILE *output, const LmP0Frame *branch) {
+    if (lm_trans_os_branch_looks_l2(&branch->body)) {
+        return lm_trans_emit_l2_structure(output, &branch->body, 0);
+    }
+    return lm_trans_emit_l1_structure(output, &branch->body);
+}
+
+static int lm_trans_emit_l2_os_frame(FILE *output, const LmP0Frame *frame) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Frame *branch;
+    const char *condition;
+    int opened;
+    int emitted_default;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    opened = 0;
+    emitted_default = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans L2 error: os receiver expects win/mac/unix/default frames\n");
+                return 1;
+            }
+
+            branch = &node->as.frame;
+            if (lm_trans_text_equals(branch->head, "default")) {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L2 error: os receiver has duplicate default branch\n");
+                    return 1;
+                }
+                emitted_default = 1;
+                if (opened) {
+                    if (lm_trans_put(output, "#else\n") != 0) {
+                        return 1;
+                    }
+                }
+            } else {
+                condition = lm_trans_os_condition(branch->head);
+                if (condition == 0) {
+                    fprintf(stderr, "trans L2 error: unknown os branch\n");
+                    return 1;
+                }
+                if (emitted_default) {
+                    fprintf(stderr, "trans L2 error: os default branch must be last\n");
+                    return 1;
+                }
+                if (lm_trans_put(output, opened ? "#elif " : "#if ") != 0) {
+                    return 1;
+                }
+                if (lm_trans_put(output, condition) != 0 || lm_trans_put(output, "\n") != 0) {
+                    return 1;
+                }
+                opened = 1;
+            }
+
+            if (lm_trans_emit_l2_os_branch(output, branch) != 0) {
+                return 1;
+            }
+            if (lm_trans_validate_end_trailer(branch) != 0) {
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    if (opened && lm_trans_put(output, "#endif\n") != 0) {
+        return 1;
+    }
+
+    return lm_trans_validate_end_trailer(frame);
 }
 
 static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame) {

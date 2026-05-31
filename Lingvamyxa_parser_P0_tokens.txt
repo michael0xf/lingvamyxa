@@ -362,9 +362,17 @@ Whitespace behavior:
             `2 dim`
 
     comma after an ordinary short-tail field
-        does not add another field to the current head:
+        adds another field to the current head:
 
             stack: PlantBed, `2 dim`
+
+        means that `stack` receives both `PlantBed` and the exact identifier
+        `2 dim`.
+
+    semicolon after an ordinary short-tail field
+        closes the current short form:
+
+            stack: PlantBed; `2 dim`
 
         means that `stack` receives only `PlantBed`. The exact identifier
         `2 dim` is parsed as the next item at the current scan depth.
@@ -378,16 +386,16 @@ ordinary short tail or bounded body. Receiver signatures operate after the
 parser tree exists.
 
 A short colon-form is a source-item form. Several short forms may appear on one
-physical line when COMMA closes the earlier source item. Short forms may also
+physical line when SEMICOLON closes the earlier source item. Short forms may also
 appear inline inside another short form or inside a bounded Structure:
 
-    call(int: a b, ret: int)
+    call(int: a b; ret: int)
         means call(int(a, b), ret(int))
 
-    call(int: a, b)
+    call(int: a; b)
         means call(int(a), b)
 
-The comma after `a` terminates `int: a`; it does not add `b` to the `int`
+The semicolon after `a` terminates `int: a`; it does not add `b` to the `int`
 tail.
 
 

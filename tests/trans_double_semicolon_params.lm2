@@ -1,12 +1,12 @@
 include: "parser.lm1.h"
 
 L2:
-. fn: doubleComma (const: @: LmP0Text text,, const: @: char value) int
+. fn: doubleSemicolon (const: @: LmP0Text text;; const: @: char value) int
 . . return: text != 0 && value != 0
-. end: doubleComma
+. end: doubleSemicolon
 . external:
 . . fn: main () int
-. . . return: doubleComma(0, 0)
+. . . return: doubleSemicolon(0, 0)
 . . end: main
 . end: external
 end: L2

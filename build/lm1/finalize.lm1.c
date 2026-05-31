@@ -17,19 +17,19 @@
 #endif
 
 #if defined(_WIN32)
-static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
-    return _getcwd(buffer, (int)size);
+static char * lm_finalize_platform_getcwd(char *buffer, size_t size) {
+    return _getcwd(buffer, size);
 }
 
 static int lm_finalize_platform_chdir(const char *path) {
     return _chdir(path);
 }
 
-static const char *lm_finalize_platform_exe_suffix(void) {
+static const char * lm_finalize_platform_exe_suffix(void) {
     return ".exe";
 }
 
-static const char *lm_finalize_platform_path_sep(void) {
+static const char * lm_finalize_platform_path_sep(void) {
     return "\\";
 }
 
@@ -41,11 +41,11 @@ static void lm_finalize_platform_sleep_retry(void) {
     Sleep(250U);
 }
 
-static const char *lm_finalize_platform_defer_command_format(void) {
+static const char * lm_finalize_platform_defer_command_format(void) {
     return "cd /d \"%s\" && start \"\" /B \"%s\" --copy";
 }
 #else
-static char *lm_finalize_platform_getcwd(char *buffer, size_t size) {
+static char * lm_finalize_platform_getcwd(char *buffer, size_t size) {
     return getcwd(buffer, size);
 }
 
@@ -53,28 +53,26 @@ static int lm_finalize_platform_chdir(const char *path) {
     return chdir(path);
 }
 
-static const char *lm_finalize_platform_exe_suffix(void) {
+static const char * lm_finalize_platform_exe_suffix(void) {
     return "";
 }
 
-static const char *lm_finalize_platform_path_sep(void) {
+static const char * lm_finalize_platform_path_sep(void) {
     return "/";
 }
 
 static int lm_finalize_platform_is_drive_absolute(const char *path) {
-    (void)path;
-    return 0;
+    return path != 0 && 0;
 }
 
 static void lm_finalize_platform_sleep_retry(void) {
     struct timespec request;
-
     request.tv_sec = 0;
     request.tv_nsec = 250000000L;
-    nanosleep(&request, 0);
+    nanosleep(& request, 0);
 }
 
-static const char *lm_finalize_platform_defer_command_format(void) {
+static const char * lm_finalize_platform_defer_command_format(void) {
     return "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &";
 }
 #endif

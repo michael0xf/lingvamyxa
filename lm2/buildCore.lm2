@@ -57,7 +57,7 @@ fn: lm_build_is_absolute_path (@: char path) int
     return: 0
 end: lm_build_is_absolute_path
 
-fn: lm_build_join_path (@: char buffer,, size_t: size,, @: char base,, @: char tail) int
+fn: lm_build_join_path (@: char buffer;; size_t: size;; @: char base;; @: char tail) int
     size_t: base_length
     size_t: tail_length
     size_t: used
@@ -159,7 +159,7 @@ fn: lm_build_enter_project_root (@: char program_path) int
     return: 1
 end: lm_build_enter_project_root
 
-fn: lm_build_env_or_default (@: char name,, @: char fallback) @: char
+fn: lm_build_env_or_default (@: char name;; @: char fallback) @: char
     @: char value
 
     value: c.getenv(name)
@@ -204,7 +204,7 @@ sub: lm_build_print_usage ()
     c.printf: "  --full  refresh L0 tools, then build the bundled third_party profile\n"
 end: lm_build_print_usage
 
-fn: lm_build_parse_options (int: argc,, @@: char argv,, @: LmBuildOptions options) int
+fn: lm_build_parse_options (int: argc;; @@: char argv;; @: LmBuildOptions options) int
     int: index
 
     options\full_build: 0
@@ -225,7 +225,7 @@ fn: lm_build_parse_options (int: argc,, @@: char argv,, @: LmBuildOptions option
     return: 0
 end: lm_build_parse_options
 
-fn: lm_build_append (@: char buffer,, size_t: size,, size_t: used,, @: char text) size_t
+fn: lm_build_append (@: char buffer;; size_t: size;; size_t: used;; @: char text) size_t
     size_t: length
 
     length: c.strlen(text)
@@ -237,7 +237,7 @@ fn: lm_build_append (@: char buffer,, size_t: size,, size_t: used,, @: char text
     return: used + length
 end: lm_build_append
 
-fn: lm_build_append_arg (@: char buffer,, size_t: size,, size_t: used,, @: char arg) size_t
+fn: lm_build_append_arg (@: char buffer;; size_t: size;; size_t: used;; @: char arg) size_t
     used: lm_build_append(buffer, size, used, " \"")
     if: used = size
         return: size
@@ -247,7 +247,7 @@ fn: lm_build_append_arg (@: char buffer,, size_t: size,, size_t: used,, @: char 
     return: lm_build_append(buffer, size, used, "\"")
 end: lm_build_append_arg
 
-fn: lm_build_append_prefixed_arg (@: char buffer,, size_t: size,, size_t: used,, @: char prefix,, @: char value) size_t
+fn: lm_build_append_prefixed_arg (@: char buffer;; size_t: size;; size_t: used;; @: char prefix;; @: char value) size_t
     []: char arg 2048
 
     if: c.strlen(prefix) + c.strlen(value) >= c.sizeof(arg)
@@ -272,7 +272,7 @@ fn: lm_build_run (@: char command) int
     return: 0
 end: lm_build_run
 
-fn: lm_build_make (@: char make_tool,, @: char operation,, @: char args) int
+fn: lm_build_make (@: char make_tool;; @: char operation;; @: char args) int
     []: char command 8192
     size_t: used
 
@@ -298,7 +298,7 @@ fn: lm_build_make (@: char make_tool,, @: char operation,, @: char args) int
     return: lm_build_run(command)
 end: lm_build_make
 
-fn: lm_build_trans (@: char trans_tool,, @: char source_path,, @: char output_path) int
+fn: lm_build_trans (@: char trans_tool;; @: char source_path;; @: char output_path) int
     []: char command 4096
     size_t: used
 
@@ -356,7 +356,7 @@ fn: lm_build_own_library (@: char make_tool) int
     return: lm_build_make(make_tool, "ranlib", "\"build/lm0/libown.lm0.a\"")
 end: lm_build_own_library
 
-fn: lm_build_compile_trans (@: char make_tool,, @: char parser_library,, @: char own_library) int
+fn: lm_build_compile_trans (@: char make_tool;; @: char parser_library;; @: char own_library) int
     []: char command 4096
     @: char legacy_compare
     @: char legacy_flag
@@ -454,7 +454,7 @@ fn: lm_build_extract_third_party_zips () int
     return: lm_build_run(command)
 end: lm_build_extract_third_party_zips
 
-fn: lm_build_clear_full_cmake_cache (@: char cmake_tool,, @: char build_dir) int
+fn: lm_build_clear_full_cmake_cache (@: char cmake_tool;; @: char build_dir) int
     []: char command 4096
     []: char cache_path 2048
     []: char files_path 2048
@@ -641,7 +641,7 @@ fn: lm_build_full_project () int
     return: lm_build_full_build()
 end: lm_build_full_project
 
-fn: lm_build_run_bootstrap (@: LmBuildOptions options,, @: char trusted_make,, @: char built_trans) int
+fn: lm_build_run_bootstrap (@: LmBuildOptions options;; @: char trusted_make;; @: char built_trans) int
     if: lm_build_make(trusted_make, "mkdir", "\"build/lm1\" \"build/obj\" \"build/lm0\"") != 0
         return: 1
 
@@ -675,7 +675,7 @@ fn: lm_build_run_bootstrap (@: LmBuildOptions options,, @: char trusted_make,, @
 end: lm_build_run_bootstrap
 
 external:
-    fn: main (int: argc,, @@: char argv) int
+    fn: main (int: argc;; @@: char argv) int
         @: char trusted_make
         []: char trusted_make_buffer 128
         []: char built_trans_buffer 128

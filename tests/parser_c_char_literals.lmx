@@ -1,0 +1,9 @@
+check: ':' '\n' '\'' '\\'
+wide: L"Текст: # ] )" L'Т' L':' L'\n' L'\'' L'\\'
+path:
+    return: path[0] != '\0' && path[1] = ':'
+call(':' '\n' '\'' '\\')
+wideCall(L"Текст: # ] )" L':')
+array[':']
+wideArray[L':']
+mix: hello {text: L"}" char: L'{'} world

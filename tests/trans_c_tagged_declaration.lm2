@@ -1,0 +1,26 @@
+L1:
+===
+struct LmTagProbeStruct {
+    int value;
+};
+
+union LmTagProbeUnion {
+    int value;
+};
+
+enum LmTagProbeEnum {
+    LM_TAG_PROBE_OK = 7
+};
+===
+
+external:
+    fn: main () int
+        c.struct: c.LmTagProbeStruct item
+        c.union: c.LmTagProbeUnion choice
+        c.enum: c.LmTagProbeEnum kind
+        c.item.value: 3
+        c.choice.value: 4
+        kind: c.LM_TAG_PROBE_OK
+        return: c.item.value != 3 || c.choice.value != 4 || kind != c.LM_TAG_PROBE_OK
+    end: main
+end: external

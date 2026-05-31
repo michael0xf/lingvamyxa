@@ -177,7 +177,7 @@ fn: lm_vcpkg_is_absolute_path (@: char path) int
     return: 0
 end: lm_vcpkg_is_absolute_path
 
-fn: lm_vcpkg_join_path (@: char buffer,, size_t: size,, @: char base,, @: char tail) int
+fn: lm_vcpkg_join_path (@: char buffer;; size_t: size;; @: char base;; @: char tail) int
     size_t: base_length
     size_t: tail_length
     size_t: used
@@ -282,7 +282,7 @@ fn: lm_vcpkg_enter_project_root (@: char program_path) int
     return: 1
 end: lm_vcpkg_enter_project_root
 
-fn: lm_vcpkg_env_or_default (@: char name,, @: char fallback) @: char
+fn: lm_vcpkg_env_or_default (@: char name;; @: char fallback) @: char
     @: char value
 
     value: c.getenv(name)
@@ -292,7 +292,7 @@ fn: lm_vcpkg_env_or_default (@: char name,, @: char fallback) @: char
     return: value
 end: lm_vcpkg_env_or_default
 
-fn: lm_vcpkg_append (@: char buffer,, size_t: size,, size_t: used,, @: char text) size_t
+fn: lm_vcpkg_append (@: char buffer;; size_t: size;; size_t: used;; @: char text) size_t
     size_t: length
 
     length: c.strlen(text)
@@ -304,7 +304,7 @@ fn: lm_vcpkg_append (@: char buffer,, size_t: size,, size_t: used,, @: char text
     return: used + length
 end: lm_vcpkg_append
 
-fn: lm_vcpkg_append_quoted (@: char buffer,, size_t: size,, size_t: used,, @: char arg,, int: leading_space) size_t
+fn: lm_vcpkg_append_quoted (@: char buffer;; size_t: size;; size_t: used;; @: char arg;; int: leading_space) size_t
     if: leading_space != 0
         used: lm_vcpkg_append(buffer, size, used, " ")
         if: used = size
@@ -322,7 +322,7 @@ fn: lm_vcpkg_append_quoted (@: char buffer,, size_t: size,, size_t: used,, @: ch
     return: lm_vcpkg_append(buffer, size, used, "\"")
 end: lm_vcpkg_append_quoted
 
-fn: lm_vcpkg_append_prefixed_arg (@: char buffer,, size_t: size,, size_t: used,, @: char prefix,, @: char value) size_t
+fn: lm_vcpkg_append_prefixed_arg (@: char buffer;; size_t: size;; size_t: used;; @: char prefix;; @: char value) size_t
     []: char arg 2048
 
     if: c.strlen(prefix) + c.strlen(value) >= c.sizeof(arg)
@@ -334,7 +334,7 @@ fn: lm_vcpkg_append_prefixed_arg (@: char buffer,, size_t: size,, size_t: used,,
     return: lm_vcpkg_append_quoted(buffer, size, used, arg, 1)
 end: lm_vcpkg_append_prefixed_arg
 
-fn: lm_vcpkg_discover_tool (@: char buffer,, size_t: size,, @@: char root_out) int
+fn: lm_vcpkg_discover_tool (@: char buffer;; size_t: size;; @@: char root_out) int
     @: char tool_env
     @: char root_env
     []: char candidate 1024
@@ -392,7 +392,7 @@ sub: lm_vcpkg_print_usage ()
     c.printf: "  --dry-run               print vcpkg plan without downloading\n"
 end: lm_vcpkg_print_usage
 
-fn: lm_vcpkg_parse_options (int: argc,, @@: char argv,, @: LmVcpkgOptions options) int
+fn: lm_vcpkg_parse_options (int: argc;; @@: char argv;; @: LmVcpkgOptions options) int
     int: index
 
     options\output_dir: lm_vcpkg_env_or_default("LM_VCPKG_DOWNLOADS", "build/vcpkg-downloads")
@@ -478,7 +478,7 @@ fn: lm_vcpkg_parse_options (int: argc,, @@: char argv,, @: LmVcpkgOptions option
     return: 0
 end: lm_vcpkg_parse_options
 
-fn: lm_vcpkg_build_command (@: LmVcpkgOptions options,, @: char command,, size_t: size) int
+fn: lm_vcpkg_build_command (@: LmVcpkgOptions options;; @: char command;; size_t: size) int
     @: char discovered_root 0
     []: char discovered_tool 1024
     size_t: used
@@ -563,7 +563,7 @@ fn: lm_vcpkg_build_command (@: LmVcpkgOptions options,, @: char command,, size_t
 end: lm_vcpkg_build_command
 
 external:
-    fn: main (int: argc,, @@: char argv) int
+    fn: main (int: argc;; @@: char argv) int
         @: LmVcpkgOptions options
         []: char command 8192
         int: status

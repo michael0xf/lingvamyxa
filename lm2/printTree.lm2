@@ -1,7 +1,7 @@
 include: "<stdio.h>" "parser.lm1.h"
 
 external:
-    fn: main (int: argc, @@: char argv) int
+    fn: main (int: argc; @@: char argv) int
         c.setvbuf: c.stdout 0 c._IONBF 0
         c.setvbuf: c.stderr 0 c._IONBF 0
         if: argc = 2

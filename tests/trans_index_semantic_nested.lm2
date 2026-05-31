@@ -3,7 +3,7 @@ L2:
         return: value
     end: pick
 
-    fn: offset (int: value,, int: delta) int
+    fn: offset (int: value;; int: delta) int
         return: value + delta
     end: offset
 

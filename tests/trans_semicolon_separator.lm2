@@ -1,6 +1,6 @@
 os:
     win:
-        include: "<direct.h>"; # semicolon is the same field separator as comma
+        include: "<direct.h>"; # semicolon closes the short include tail before the block string
 ===
 static int platform_value(void) {
     return 1;

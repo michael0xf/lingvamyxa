@@ -1,9 +1,9 @@
 L2:
-    fn: nested (int: value,, int: mix) int
+    fn: nested (int: value;; int: mix) int
         return: value + mix
     end: nested
 
-    fn: sum4 (int: a,, int: b,, int: c,, int: d) int
+    fn: sum4 (int: a;; int: b;; int: c;; int: d) int
         return: a + b + c + d
     end: sum4
 

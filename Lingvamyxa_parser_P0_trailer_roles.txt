@@ -94,15 +94,27 @@ A trailer role has:
 
 4. P0 Trailer Role Table
 
-    COMMA_SHORT
+    SEMICOLON_SHORT
+        Spelling:
+            ;
+
+        Meaning:
+            closes the current open short form at any scan depth. If no short
+            form is open at that scan depth, semicolon is an explicit
+            source-item separator or cosmetic trailing marker. It never adds a
+            field to an open short tail.
+
+        Argument Structure:
+            none.
+
+    COMMA_SEPARATOR
         Spelling:
             ,
 
         Meaning:
-            closes the current open short form at any scan depth. If no short
-            form is open at that scan depth, comma is an ordinary separator or
-            cosmetic trailing marker. It never adds a field to an open short
-            tail.
+            ordinary explicit field separator at the current scan depth. It may
+            add another field to an open short tail and has no indentation or
+            source-level effect.
 
         Argument Structure:
             none.
@@ -246,7 +258,7 @@ A trailer role has:
 
 5. Role Recognition Algorithm
 
-Punctuation trailers such as COMMA_SHORT and RPAREN_BOUNDED are recognized by
+Punctuation trailers such as SEMICOLON_SHORT and RPAREN_BOUNDED are recognized by
 the structural scanner before receiver-head role recognition. Physical newline
 is not a trailer role; it only ends a physical line, and the following
 source-level event determines continuation or closure by ordinary level rules.
