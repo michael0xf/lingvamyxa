@@ -98,6 +98,16 @@ static int lm_trans_legacy_atom_is_index_operator(LmP0Text text) {
     return lm_trans_text_equals(text, "[") || lm_trans_text_equals(text, "]");
 }
 
+static int lm_trans_legacy_frame_has_positional_name_argument(LmP0Text head) {
+    return
+        lm_trans_text_equals(head, "fn") ||
+        lm_trans_text_equals(head, "fm") ||
+        lm_trans_text_equals(head, "sub") ||
+        lm_trans_text_equals(head, "synchronized") ||
+        lm_trans_text_equals(head, "[]") ||
+        lm_trans_text_equals(head, "entry");
+}
+
 static const char *lm_trans_legacy_function_receiver_payload(LmP0Text head) {
     if (lm_trans_text_equals(head, "fn")) {
         return "lm_trans_receiver_fn";

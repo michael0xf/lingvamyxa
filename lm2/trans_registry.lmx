@@ -40,6 +40,90 @@ registry:
     end: `receiver.function`
 
     table:
+        name: namespace
+        columns: char@(class)  class@(`receiver.type`)
+        rows:
+            L1               `receiver.level`
+            L2               `receiver.level`
+            fn               `receiver.function`
+            fm               `receiver.function`
+            sub              `receiver.function`
+            if               `receiver.statement`
+            else             `receiver.statement`
+            while            `receiver.statement`
+            return           `receiver.statement`
+            break            `receiver.statement`
+            continue         `receiver.statement`
+            synchronized     `receiver.statement`
+            const            `receiver.statement`
+            `[]`             `receiver.statement`
+            external         `receiver.modifier`
+            end              `receiver.trailer`
+            until            `receiver.trailer`
+    end: namespace
+
+    table:
+        name: `receiver.type`
+        columns: char@(class)  binding@(dispatcher)
+        rows:
+            `receiver.level`       lm_trans_dispatch_level_receiver
+            `receiver.function`    lm_trans_dispatch_function_receiver
+            `receiver.statement`   lm_trans_dispatch_statement_receiver
+            `receiver.modifier`    lm_trans_dispatch_modifier_receiver
+            `receiver.trailer`     lm_trans_dispatch_trailer_receiver
+    end: `receiver.type`
+
+    table:
+        name: `receiver.level`
+        columns: char@(class)  binding@(receiver)
+        rows:
+            L1               lm_trans_emit_l1_frame
+            L2               lm_trans_emit_l2_frame
+    end: `receiver.level`
+
+    table:
+        name: `receiver.statement`
+        columns: char@(class)  binding@(receiver)
+        rows:
+            if               lm_trans_statement_emit_if
+            else             lm_trans_statement_emit_else
+            while            lm_trans_statement_emit_while
+            return           lm_trans_statement_emit_return
+            break            lm_trans_statement_emit_loop_jump
+            continue         lm_trans_statement_emit_loop_jump
+            synchronized     lm_trans_statement_emit_synchronized
+            const            lm_trans_statement_emit_const_declaration
+            `[]`             lm_trans_statement_emit_array_declaration
+    end: `receiver.statement`
+
+    table:
+        name: `receiver.positional-name`
+        columns: char@(class)  class@(argument)
+        rows:
+            fn               name
+            fm               name
+            sub              name
+            synchronized     name
+            `[]`             name
+            entry            name
+    end: `receiver.positional-name`
+
+    table:
+        name: `receiver.modifier`
+        columns: char@(class)  binding@(receiver)
+        rows:
+            external         lm_trans_top_level_function_header
+    end: `receiver.modifier`
+
+    table:
+        name: `receiver.trailer`
+        columns: char@(class)  binding@(receiver)
+        rows:
+            end              lm_trans_validate_end_trailer
+            until            lm_trans_validate_end_trailer
+    end: `receiver.trailer`
+
+    table:
         name: `call.lowering`
         columns: char@(class)  binding@(handler)
         rows:
@@ -60,6 +144,16 @@ registry:
             `!`              `!`
             `~`              `~`
     end: `operator.prefix`
+
+    table:
+        name: expr_emitter_binding
+        columns: char@(class)  class@(binding_table)
+        rows:
+            `operator.prefix`       `operator.prefix.emitter`
+            `operator.postfix`      `operator.postfix.emitter`
+            `operator.infix`        `operator.infix.emitter`
+            `operator.index`        `operator.index.emitter`
+    end: expr_emitter_binding
 
     table:
         name: `operator.prefix.emitter`
