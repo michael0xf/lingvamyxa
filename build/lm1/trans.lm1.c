@@ -153,11 +153,15 @@ typedef struct LmTransStatementListJob {
     const LmP0Field *field;
     unsigned indent;
     int unwrap_single_structure;
+    int has_repeat_head;
+    LmP0Text repeat_head;
 } LmTransStatementListJob;
 
 typedef struct LmTransStatementNodeJob {
     const LmP0Node *node;
     unsigned indent;
+    int has_repeat_head;
+    LmP0Text repeat_head;
 } LmTransStatementNodeJob;
 
 typedef struct LmTransStatementFrameJob {
@@ -4696,7 +4700,9 @@ static int lm_trans_statement_stack_push_list(
     LmTransStatementStack *stack,
     const LmP0Field *field,
     unsigned indent,
-    int unwrap_single_structure
+    int unwrap_single_structure,
+    int has_repeat_head,
+    LmP0Text repeat_head
 ) {
     LmTransStatementJob job;
 
@@ -4704,19 +4710,25 @@ static int lm_trans_statement_stack_push_list(
     job.as.list.field = field;
     job.as.list.indent = indent;
     job.as.list.unwrap_single_structure = unwrap_single_structure;
+    job.as.list.has_repeat_head = has_repeat_head;
+    job.as.list.repeat_head = repeat_head;
     return lm_trans_statement_stack_push(stack, job);
 }
 
 static int lm_trans_statement_stack_push_node(
     LmTransStatementStack *stack,
     const LmP0Node *node,
-    unsigned indent
+    unsigned indent,
+    int has_repeat_head,
+    LmP0Text repeat_head
 ) {
     LmTransStatementJob job;
 
     job.run = lm_trans_statement_job_emit_node;
     job.as.node.node = node;
     job.as.node.indent = indent;
+    job.as.node.has_repeat_head = has_repeat_head;
+    job.as.node.repeat_head = repeat_head;
     return lm_trans_statement_stack_push(stack, job);
 }
 
@@ -4787,6 +4799,13 @@ static const LmP0Field *lm_trans_statement_list_first_field(
     return first;
 }
 
+static int lm_trans_statement_head_is_repeatable(
+    LmP0Text head,
+    const LmTransNamespace *namespace_
+) {
+    return lm_trans_head_can_declare_storage(head, namespace_);
+}
+
 static int lm_trans_statement_stack_schedule_control(
     FILE *file,
     LmTransStatementStack *stack,
@@ -4824,7 +4843,7 @@ static int lm_trans_statement_stack_schedule_control(
         lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_leave_scope) ||
         (is_loop && lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_loop_pop)) ||
-        lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1);
+        lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0, lm_trans_text_from_cstr(""));
     if (status != 0) {
         if (is_loop) {
             lm_trans_loop_pop(namespace_);
@@ -4902,7 +4921,7 @@ static int lm_trans_statement_stack_schedule_synchronized(
         lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_leave_scope) ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_cleanup_pop) ||
-        lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1);
+        lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0, lm_trans_text_from_cstr(""));
     if (status != 0) {
         lm_trans_cleanup_pop(namespace_);
         lm_trans_namespace_leave_scope(namespace_);
@@ -4932,7 +4951,7 @@ static int lm_trans_statement_stack_schedule_else(
     status =
         lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_leave_scope) ||
-        lm_trans_statement_stack_push_list(stack, frame->body.first_field, indent + 1U, 1);
+        lm_trans_statement_stack_push_list(stack, frame->body.first_field, indent + 1U, 1, 0, lm_trans_text_from_cstr(""));
     if (status != 0) {
         lm_trans_namespace_leave_scope(namespace_);
         return 1;
@@ -4973,7 +4992,7 @@ static int lm_trans_statement_stack_schedule_label(
     status =
         lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_leave_scope) ||
-        lm_trans_statement_stack_push_list(stack, frame->body.first_field, indent + 1U, 1);
+        lm_trans_statement_stack_push_list(stack, frame->body.first_field, indent + 1U, 1, 0, lm_trans_text_from_cstr(""));
     if (status != 0) {
         lm_trans_namespace_leave_scope(namespace_);
         return 1;
@@ -5395,9 +5414,12 @@ static int lm_trans_statement_stack_emit_node(
     LmTransStatementStack *stack,
     const LmP0Node *node,
     unsigned indent,
+    int has_repeat_head,
+    LmP0Text repeat_head,
     LmTransNamespace *namespace_
 ) {
     LmTransAtomStatementHandler handler;
+    LmP0Frame repeated_frame;
 
     if (lm_trans_node_is_ignored(node)) {
         return 0;
@@ -5418,6 +5440,14 @@ static int lm_trans_statement_stack_emit_node(
 
     if (node->kind == LM_P0_NODE_FRAME) {
         return lm_trans_statement_stack_emit_frame(file, stack, &node->as.frame, indent, namespace_);
+    }
+
+    if (node->kind == LM_P0_NODE_STRUCTURE && has_repeat_head) {
+        memset(&repeated_frame, 0, sizeof(repeated_frame));
+        repeated_frame.head = repeat_head;
+        repeated_frame.flags = LM_P0_FRAME_COMPACT;
+        repeated_frame.body = node->as.structure;
+        return lm_trans_statement_stack_emit_frame(file, stack, &repeated_frame, indent, namespace_);
     }
 
     return 0;
@@ -5447,10 +5477,14 @@ static int lm_trans_statement_job_emit_list(
     LmTransNamespace *namespace_
 ) {
     const LmP0Field *field;
+    const LmP0Node *node;
+    int current_has_repeat_head;
+    int next_has_repeat_head;
+    LmP0Text current_repeat_head;
+    LmP0Text next_repeat_head;
     int status;
 
     (void)file;
-    (void)namespace_;
     field = lm_trans_statement_list_first_field(
         job->as.list.field,
         job->as.list.unwrap_single_structure
@@ -5459,12 +5493,46 @@ static int lm_trans_statement_job_emit_list(
         return 0;
     }
 
+    node = field->value;
+    current_has_repeat_head =
+        job->as.list.has_repeat_head &&
+        node != 0 &&
+        node->kind == LM_P0_NODE_STRUCTURE;
+    current_repeat_head = job->as.list.repeat_head;
+
+    next_has_repeat_head = 0;
+    next_repeat_head = lm_trans_text_from_cstr("");
+    if (
+        node != 0 &&
+        node->kind == LM_P0_NODE_FRAME &&
+        lm_trans_statement_head_is_repeatable(node->as.frame.head, namespace_)
+    ) {
+        next_has_repeat_head = 1;
+        next_repeat_head = node->as.frame.head;
+    } else if (current_has_repeat_head) {
+        next_has_repeat_head = 1;
+        next_repeat_head = current_repeat_head;
+    }
+
     status = 0;
     if (field->next != 0) {
-        status = lm_trans_statement_stack_push_list(stack, field->next, job->as.list.indent, 0);
+        status = lm_trans_statement_stack_push_list(
+            stack,
+            field->next,
+            job->as.list.indent,
+            0,
+            next_has_repeat_head,
+            next_repeat_head
+        );
     }
     if (status == 0) {
-        status = lm_trans_statement_stack_push_node(stack, field->value, job->as.list.indent);
+        status = lm_trans_statement_stack_push_node(
+            stack,
+            field->value,
+            job->as.list.indent,
+            current_has_repeat_head,
+            current_repeat_head
+        );
     }
     return status;
 }
@@ -5480,6 +5548,8 @@ static int lm_trans_statement_job_emit_node(
         stack,
         job->as.node.node,
         job->as.node.indent,
+        job->as.node.has_repeat_head,
+        job->as.node.repeat_head,
         namespace_
     );
 }
@@ -5590,7 +5660,7 @@ static int lm_trans_emit_statement_list(
     int status;
 
     lm_own_value_stack_init(&stack.jobs, sizeof(LmTransStatementJob));
-    status = lm_trans_statement_stack_push_list(&stack, first, indent, 1);
+    status = lm_trans_statement_stack_push_list(&stack, first, indent, 1, 0, lm_trans_text_from_cstr(""));
 
     while (status == 0 && stack.jobs.count > 0U) {
         if (lm_own_value_stack_pop(&stack.jobs, &job) != 0) {

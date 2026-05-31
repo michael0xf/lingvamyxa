@@ -2859,6 +2859,74 @@ static int lm_p0_find_colon(
     return 0;
 }
 
+static int lm_p0_field_start_looks_explicit_frame(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t index,
+    size_t line,
+    size_t column
+) {
+    size_t i;
+    size_t head_end;
+    size_t close_index;
+
+    if (index >= length) {
+        return 0;
+    }
+
+    i = index;
+    if (text[i] == '(') {
+        if (!lm_p0_find_matching_paren(document, text, length, i, line, column, &close_index)) {
+            return 0;
+        }
+        return close_index + 1U < length && text[close_index + 1U] == ':';
+    }
+
+    if (lm_p0_starts_c_prefixed_quote(text, length, i)) {
+        if (!lm_p0_scan_c_prefixed_quote(document, text, length, &i, line, column)) {
+            return 0;
+        }
+        head_end = i;
+    } else if (lm_p0_starts_python_string(text, length, i) || text[i] == '"' || text[i] == '`') {
+        if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, column)) {
+            return 0;
+        }
+        head_end = i;
+    } else if (text[i] == '\'') {
+        if (!lm_p0_scan_c_char(document, text, length, &i, line, column)) {
+            return 0;
+        }
+        head_end = i;
+    } else {
+        while (i < length &&
+               !lm_p0_is_field_space(text[i]) &&
+               !lm_p0_is_field_separator(text[i]) &&
+               text[i] != '(' &&
+               text[i] != ')' &&
+               text[i] != '#' &&
+               text[i] != '{' &&
+               text[i] != ':') {
+            if (text[i] == '[') {
+                size_t bracket_close_index;
+
+                if (!lm_p0_find_matching_bracket(document, text, length, i, line, column, &bracket_close_index)) {
+                    return 0;
+                }
+                i = bracket_close_index + 1U;
+                continue;
+            }
+            if (text[i] == ']') {
+                break;
+            }
+            ++i;
+        }
+        head_end = i;
+    }
+
+    return head_end > index && i < length && (text[i] == ':' || text[i] == '(');
+}
+
 static int lm_p0_parse_fields_into(
     LmP0Document *document,
     LmP0Structure *structure,
@@ -2902,11 +2970,13 @@ static int lm_p0_parse_fields_until_with_layout(
     size_t current_source_level;
     int allow_empty_fields;
     int expect_field;
+    int headless_group_after_separator;
 
     i = *index;
     current_source_level = initial_source_level;
     allow_empty_fields = (flags & LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS) != 0U;
     expect_field = allow_empty_fields;
+    headless_group_after_separator = 0;
     while (i < length) {
         size_t start;
         size_t head_end;
@@ -2936,6 +3006,64 @@ static int lm_p0_parse_fields_until_with_layout(
         }
         if (i >= length) {
             break;
+        }
+        if (
+            headless_group_after_separator &&
+            text[i] != '(' &&
+            text[i] != ')' &&
+            text[i] != '#' &&
+            !lm_p0_is_field_separator(text[i]) &&
+            !lm_p0_field_start_looks_explicit_frame(document, text, length, i, line, column)
+        ) {
+            size_t group_index;
+            LmP0Node *group_node;
+
+            group_index = i;
+            group_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
+            if (group_node == 0) {
+                return 0;
+            }
+            if (!lm_p0_parse_fields_until_with_layout(
+                    document,
+                    indent_stack,
+                    &group_node->as.structure,
+                    text,
+                    length,
+                    line,
+                    column,
+                    offset,
+                    LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON |
+                    LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL |
+                    LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS,
+                    current_source_level,
+                    current_source_level + 1U,
+                    layout_base_level,
+                    &group_index
+                )) {
+                lm_p0_free_node(group_node);
+                return 0;
+            }
+            if (group_index <= i) {
+                lm_p0_free_node(group_node);
+                headless_group_after_separator = 0;
+            } else {
+                group_node->span.line = line;
+                lm_p0_position_in_slice(text, length, i, line, column, &group_node->span.line, &group_node->span.column);
+                group_node->span.offset = offset + i;
+                group_node->span.length = group_index - i;
+                if (!lm_p0_append_field(document, structure, group_node)) {
+                    lm_p0_free_node(group_node);
+                    return 0;
+                }
+                expect_field = 0;
+                headless_group_after_separator =
+                    group_index > 0U &&
+                    lm_p0_is_short_form_separator(text[group_index - 1U]);
+                i = group_index;
+                continue;
+            }
+        } else if (headless_group_after_separator && !lm_p0_is_field_separator(text[i])) {
+            headless_group_after_separator = 0;
         }
         if (lm_p0_index_is_line_start(text, i)) {
             size_t field_line;
@@ -3305,6 +3433,12 @@ static int lm_p0_parse_fields_until_with_layout(
             (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
         ) {
             expect_field = 1;
+        }
+        if (
+            node->kind == LM_P0_NODE_FRAME &&
+            (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
+        ) {
+            headless_group_after_separator = 1;
         }
     }
 

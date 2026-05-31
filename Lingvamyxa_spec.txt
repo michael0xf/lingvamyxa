@@ -1538,6 +1538,27 @@ Semicolon is the explicit short-form separator/trailer:
 
 does not normalize as `head(arg0, arg1)`. The semicolon terminates `head(arg0)`. The following `arg1` is parsed as the next item at the current scan depth. A later receiver/profile may reject that neighboring item if a value item is not meaningful there, but it is not a short-tail field of `head`.
 
+A later receiver/profile may also intentionally consume a following headless
+neighbor as a repeat of an immediately preceding repeatable head. This is not a
+P0 rewrite of `head(arg0)`; P0 still keeps the following item as a separate
+Structure at the same scan depth. For example an L2 declaration profile may
+read:
+
+    int: x, 5; y, 10; z, 15
+
+as three neighboring declarations with the repeated declaration head `int`:
+
+    int: x, 5
+    int: y, 10
+    int: z, 15
+
+The same repeat profile may consume bounded neighboring Structures:
+
+    int(x, 5) (y, 10) (z, 15)
+
+as the same three declarations. The repeat rule belongs to the consuming
+receiver/profile. It must not make ordinary expression neighbors disappear.
+
 A receiver may later interpret an identifier field as a name, signature, selector, atom, message name or another semantic object. The parser only builds the field.
 
 4.2.1.1. Short-Form Trailer Rule
@@ -1560,9 +1581,9 @@ And:
 
 normalizes as:
 
-    call(int(a), b)
+    call(int(a), (b))
 
-The semicolon after `a` terminates `int: a`; it does not add `b` to the `int` tail.
+The semicolon after `a` terminates `int: a`; it does not add `b` to the `int` tail. The following headless item may be materialized as a separate Structure so a later profile can either reject it, treat it as an ordinary neighboring value, or consume it through a repeat-head rule.
 
 The same rule applies outside parentheses:
 
@@ -1571,7 +1592,7 @@ The same rule applies outside parentheses:
 normalizes as two neighboring items at the current scan depth:
 
     print(a, b)
-    c
+    (c)
 
 Here `c` is not an argument of `print`. Its later validity depends on the surrounding receiver/profile and statement/value position.
 
@@ -6019,6 +6040,14 @@ This grammar is intentionally incomplete around full update semantics, full inde
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
 Comma and semicolon have different P0 roles at the current scan depth. Comma is an ordinary explicit field separator, like whitespace without indentation/source-level effects; it may add another field to an open short tail. Semicolon is the explicit separator/trailer: for a short form, it terminates that short form and never adds another field to the open short tail. When no short form is open at the current scan depth, comma is optional conventional separator notation and semicolon may act as an explicit source-item separator or trailing marker. A trailing comma or semicolon with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma or semicolon inside a deeper bounded Structure or compact Frame belongs to that deeper form.
+
+When a semicolon terminates a short form and the next same-depth item has no
+explicit head of its own, P0 may materialize that neighboring item as a separate
+headless Structure. This preserves the source-item boundary for higher profiles.
+A declaration/profile layer may then consume the headless Structure as a repeat
+of a preceding repeatable head, while an expression layer may reject it or treat
+it as an ordinary neighboring Structure. P0 does not silently append the
+headless item to the terminated short tail.
 
 Repeated explicit separators at the same scan depth may materialize an empty
 positional field. This is not specific to semicolon: `a,,c`, `a;;c`, `a,;c`

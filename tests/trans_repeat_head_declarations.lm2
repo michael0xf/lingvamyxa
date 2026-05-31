@@ -1,0 +1,9 @@
+L2:
+    external:
+        fn: main () int
+            int: x, 5; y, 10; z, 15
+            int(a, 1) (b, 2) (c, 3)
+            return: x != 5 || y != 10 || z != 15 || a != 1 || b != 2 || c != 3
+        end: main
+    end: external
+end: L2
