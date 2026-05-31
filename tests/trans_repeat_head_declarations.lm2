@@ -3,7 +3,22 @@ L2:
         fn: main () int
             int: x, 5; y, 10; z, 15
             int(a, 1) (b, 2) (c, 3)
-            return: x != 5 || y != 10 || z != 15 || a != 1 || b != 2 || c != 3
+            @: int px 0; py 0; char pc 0
+            @@: char ppa 0; ppb 0
+            []: int arr 3 1 2 3; other 3 4 5 6
+            [3]: int row; char chars
+            int: n, 2; m, 3
+            [n][m]: int matrix; matrix2; char matrix3
+            [2][2]: (int grouped); (grouped2); (char grouped3)
+            row[0]: 0
+            matrix[0][0]: 0
+            matrix2[1][2]: 7
+            matrix3[1][2]: 1
+            grouped[0][1]: 8
+            grouped2[1][0]: 9
+            grouped3[1][1]: 10
+            chars[2]: 65
+            return: x != 5 || y != 10 || z != 15 || a != 1 || b != 2 || c != 3 || px != 0 || py != 0 || pc != 0 || ppa != 0 || ppb != 0 || arr[0] != 1 || other[2] != 6 || row[0] != 0 || matrix[0][0] != 0 || matrix2[1][2] != 7 || matrix3[1][2] != 1 || grouped[0][1] != 8 || grouped2[1][0] != 9 || grouped3[1][1] != 10 || chars[2] != 65
         end: main
     end: external
 end: L2

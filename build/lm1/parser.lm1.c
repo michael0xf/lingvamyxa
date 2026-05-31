@@ -263,6 +263,47 @@ static int lm_p0_registry_push_row_atoms(
     return 0;
 }
 
+static int lm_p0_registry_push_table_cell(
+    LmP0Text table_name,
+    LmP0Text column_name,
+    int split_by_column,
+    LmP0Text key_atom,
+    LmP0Text payload_atom
+) {
+    LmP0Text table_payload;
+    LmP0Text column_payload;
+    LmP0Text relation_table;
+    char *relation_name;
+    size_t relation_length;
+    int status;
+
+    if (!split_by_column) {
+        return lm_p0_registry_push_row_atoms(table_name, key_atom, payload_atom);
+    }
+
+    if (
+        !lm_p0_registry_atom_payload(table_name, &table_payload) ||
+        !lm_p0_registry_atom_payload(column_name, &column_payload)
+    ) {
+        return -1;
+    }
+
+    relation_length = table_payload.length + 1U + column_payload.length;
+    relation_name = (char *)malloc(relation_length + 1U);
+    if (relation_name == 0) {
+        return -1;
+    }
+    memcpy(relation_name, table_payload.data, table_payload.length);
+    relation_name[table_payload.length] = '.';
+    memcpy(relation_name + table_payload.length + 1U, column_payload.data, column_payload.length);
+    relation_name[relation_length] = '\0';
+
+    relation_table = lm_p0_text_from_cstr(relation_name);
+    status = lm_p0_registry_push_row_atoms(relation_table, key_atom, payload_atom);
+    free(relation_name);
+    return status;
+}
+
 static const char *lm_p0_registry_lookup(LmP0Text key, const char *table) {
     size_t i;
     LmP0RegistryRow *row;
@@ -5668,6 +5709,8 @@ static int lm_p0_registry_column_name(
 
 static int lm_p0_registry_columns_from_frame(
     const LmP0Frame *frame,
+    LmP0Text *columns,
+    size_t columns_capacity,
     size_t *out_count
 ) {
     const LmP0Field *field;
@@ -5676,7 +5719,13 @@ static int lm_p0_registry_columns_from_frame(
     size_t count;
     int status;
 
-    if (frame == 0 || out_count == 0 || !lm_p0_text_equals(frame->head, "columns")) {
+    if (
+        frame == 0 ||
+        columns == 0 ||
+        out_count == 0 ||
+        columns_capacity == 0U ||
+        !lm_p0_text_equals(frame->head, "columns")
+    ) {
         return 0;
     }
 
@@ -5692,13 +5741,18 @@ static int lm_p0_registry_columns_from_frame(
             if (count == 0U) {
                 first_name = column_name;
             }
+            if (count >= columns_capacity) {
+                fprintf(stderr, "parser registry error: table has too many columns\n");
+                return -1;
+            }
+            columns[count] = column_name;
             ++count;
         }
         field = field->next;
     }
 
-    if (count != 2U) {
-        fprintf(stderr, "parser registry error: bootstrap table expects exactly two columns\n");
+    if (count < 2U) {
+        fprintf(stderr, "parser registry error: table expects at least two columns\n");
         return -1;
     }
     if (!lm_p0_text_equals(first_name, "class")) {
@@ -5713,44 +5767,48 @@ static int lm_p0_registry_columns_from_frame(
 static int lm_p0_registry_rows_from_frame(
     const LmP0Frame *frame,
     LmP0Text table_name,
+    const LmP0Text *columns,
     size_t column_count
 ) {
     const LmP0Field *field;
     const LmP0Node *key_node;
-    const LmP0Node *payload_node;
+    const LmP0Node *cell_node;
     size_t field_index;
+    size_t column_index;
+    int split_by_column;
 
     if (frame == 0 || !lm_p0_text_equals(frame->head, "rows")) {
         return 0;
     }
-    if (column_count != 2U) {
-        fprintf(stderr, "parser registry error: bootstrap rows require two columns\n");
+    if (columns == 0 || column_count < 2U) {
+        fprintf(stderr, "parser registry error: rows require at least two columns\n");
         return -1;
     }
 
     field_index = 0U;
+    key_node = 0;
+    split_by_column = column_count != 2U;
     field = frame->body.first_field;
     while (field != 0) {
         if (field->value != 0 && !lm_p0_node_is_ignored_for_registry(field->value)) {
-            if ((field_index % column_count) == 0U) {
+            column_index = field_index % column_count;
+            if (column_index == 0U) {
                 key_node = field->value;
-                if (field->next == 0 || field->next->value == 0) {
-                    fprintf(stderr, "parser registry error: rows field count is not divisible by column count\n");
-                    return -1;
-                }
-                payload_node = field->next->value;
-                if (
-                    key_node->kind != LM_P0_NODE_ATOM ||
-                    payload_node->kind != LM_P0_NODE_ATOM
-                ) {
+                if (key_node->kind != LM_P0_NODE_ATOM) {
                     fprintf(stderr, "parser registry error: table rows currently expect atom cells\n");
                     return -1;
                 }
+            } else {
+                cell_node = field->value;
                 if (
-                    lm_p0_registry_push_row_atoms(
+                    key_node == 0 ||
+                    cell_node->kind != LM_P0_NODE_ATOM ||
+                    lm_p0_registry_push_table_cell(
                         table_name,
+                        columns[column_index],
+                        split_by_column,
                         key_node->as.atom,
-                        payload_node->as.atom
+                        cell_node->as.atom
                     ) != 0
                 ) {
                     return -1;
@@ -5806,6 +5864,7 @@ static int lm_p0_registry_validate_table_trailer(
 static int lm_p0_registry_table_from_frame(const LmP0Frame *frame) {
     const LmP0Field *field;
     const LmP0Node *node;
+    LmP0Text columns[128];
     LmP0Text table_name;
     size_t column_count;
     int have_name;
@@ -5837,7 +5896,12 @@ static int lm_p0_registry_table_from_frame(const LmP0Frame *frame) {
             if (status > 0) {
                 have_name = 1;
             } else if (lm_p0_text_equals(node->as.frame.head, "columns")) {
-                status = lm_p0_registry_columns_from_frame(&node->as.frame, &column_count);
+                status = lm_p0_registry_columns_from_frame(
+                    &node->as.frame,
+                    columns,
+                    sizeof(columns) / sizeof(columns[0]),
+                    &column_count
+                );
                 if (status <= 0) {
                     return -1;
                 }
@@ -5847,7 +5911,12 @@ static int lm_p0_registry_table_from_frame(const LmP0Frame *frame) {
                     fprintf(stderr, "parser registry error: table rows must appear after name and columns\n");
                     return -1;
                 }
-                status = lm_p0_registry_rows_from_frame(&node->as.frame, table_name, column_count);
+                status = lm_p0_registry_rows_from_frame(
+                    &node->as.frame,
+                    table_name,
+                    columns,
+                    column_count
+                );
                 if (status <= 0) {
                     return -1;
                 }

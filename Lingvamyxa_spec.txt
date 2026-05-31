@@ -103,13 +103,18 @@ The `columns:` line is a compact schema row. Each schema field is an explicit
 compact Frame such as `int(id)`, `Text(region)`, `real(tons)` or
 `decimal(moisture)`. Horizontal whitespace separates those schema fields.
 
-The `rows:` section is true table-like data. Each physical row is one row
-Structure. Horizontal whitespace separates row fields. Extra horizontal spacing
-is only visual alignment and does not create additional fields.
+The `rows:` section is true table-like data. A table-consuming profile reads the
+row body as an ordinary flat stream of fields and groups it by the number of
+schema fields declared by `columns:`. Horizontal whitespace separates row
+fields. Extra horizontal spacing is only visual alignment and does not create
+additional fields.
 
 The row values are visually aligned under the corresponding schema fields from
 `columns:`. This alignment is presentation only; the structural meaning still
-comes from ordinary whitespace-separated row fields.
+comes from ordinary whitespace-separated row fields and the column count. A
+profile must not infer missing cells from the physical source line. If a table
+needs an empty or absent cell in a dense row, write an explicit value such as
+`NULL`.
 
 Exact quoted identifiers such as `north field` and `river lowland` keep
 multi-word field values atomic.
@@ -157,9 +162,19 @@ The resulting MIX bounded form payload Structure is stored immediately as a
 parser node with the source position/span of the mark and a MIX flag. Physical
 line breaks inside the mark do not create source-level/layout events for the
 surrounding Structure. The opener column of `{` does not become the local
-indentation base for the MIX payload. Ordinary structural consumers and
-translators may ignore MIX-flagged nodes, while document/MIX consumers project
-them into the active mark/overlay view. A mark frame such as:
+indentation base for the MIX payload.
+
+The MIX bounded form itself is still a source item in the surrounding document.
+Therefore a standalone `{...}` line must obey the ordinary surrounding
+source-level/indentation rules, just like a standalone ordinary field or frame.
+MIX does not teleport across the surrounding layout stack. To place a mark event
+inside a nested Structure, write it at that Structure's source level. To close a
+mark after that Structure has been left, write the closing mark at the later
+surrounding source level.
+
+Ordinary structural consumers and translators may ignore MIX-flagged nodes,
+while document/MIX consumers project them into the active mark/overlay view. A
+mark frame such as:
 
     {color: red}
 
@@ -214,20 +229,20 @@ Example of the same tree and table-like data with explicit MIX overlay marks:
 {style: system}
 dataset: harvest
     meta:
-{style: title}
-{color: blue}
+        {style: title}
+        {color: blue}
         title: "Regional harvest report"
-{style: date}
+        {style: date}
         season: 2026
-{end: title}
+        {end: title}
         month: April
-{end: date}
+        {end: date}
         source:
             organization: `Field Bureau`
             system: `manual survey`
         ---
         location:
-{color: green}
+            {color: green}
             country: Uruguay
             region: `north field group`
         ---
@@ -235,7 +250,7 @@ dataset: harvest
             "This part is {color: red} marked {end} document data over ordinary Structures."
 
     ---
-{end: blue}
+    {end: blue}
 
     table:
         columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
@@ -244,7 +259,7 @@ dataset: harvest
                  2        `south field`       corn         8.75       0.19
                  3        `east ridge`        barley      10.00       0.16
                  4        `river lowland`     rice        21.30       0.22
-{end: green}
+    {end: green}
 end: harvest
 {end: system}
 
@@ -1317,6 +1332,47 @@ parameter name, a generated temporary name, a generated indexed field name or an
 implementation-only argument descriptor; this is a lowering choice, not a
 different source syntax.
 
+4.0.1. Anonymous Argument Container Transparency
+
+A receiver call has one logical argument Structure. When the sole positional
+argument-container field supplied to a receiver is an anonymous Structure, that
+Structure is transparent for receiver consumption: the receiver consumes the
+fields inside it as the argument sequence. This is not optional profile magic;
+it follows from the fact that an argument list is itself a Structure.
+
+Therefore these forms present the same argument sequence to `f`:
+
+    f: a b c
+    f: (a b c)
+    f:
+        a
+        b
+        c
+
+The same rule applies when a semicolon materializes neighboring headless
+Structures:
+
+    int: x, 5; y, 10
+
+may be consumed by an L2 declaration receiver as:
+
+    int: (x, 5); (y, 10)
+
+This transparency applies only to the anonymous Structure that occupies the
+sole positional argument-container position. An anonymous Structure that appears
+as one field among other fields remains one field of the surrounding sequence:
+
+    f: a (1 2 3) b
+
+Here `(1 2 3)` is the middle field of the argument sequence. If the source wants
+to pass one Structure as a single named value, it uses the ordinary named
+argument/receiver form:
+
+    f( arg: 1 2 3 )
+
+Here `arg` names the Structure value and prevents it from being an accidental
+anonymous wrapper of the whole argument list.
+
 4.1. Compact Call Form
 
 Compact call form:
@@ -1538,11 +1594,13 @@ Semicolon is the explicit short-form separator/trailer:
 
 does not normalize as `head(arg0, arg1)`. The semicolon terminates `head(arg0)`. The following `arg1` is parsed as the next item at the current scan depth. A later receiver/profile may reject that neighboring item if a value item is not meaningful there, but it is not a short-tail field of `head`.
 
-A later receiver/profile may also intentionally consume a following headless
-neighbor as a repeat of an immediately preceding repeatable head. This is not a
-P0 rewrite of `head(arg0)`; P0 still keeps the following item as a separate
-Structure at the same scan depth. For example an L2 declaration profile may
-read:
+A later receiver/profile may also intentionally consume neighboring headless
+Structures as repeats of an immediately preceding repeatable head. The
+semicolon does not look into the namespace and does not decide whether a token
+is a call or a declaration name. It only terminates/materializes the current
+headless argument segment; the consuming profile then decides whether the
+resulting anonymous Structure is a repeat item. For example an L2 declaration
+profile may read:
 
     int: x, 5; y, 10; z, 15
 
@@ -1558,6 +1616,38 @@ The same repeat profile may consume bounded neighboring Structures:
 
 as the same three declarations. The repeat rule belongs to the consuming
 receiver/profile. It must not make ordinary expression neighbors disappear.
+
+For declaration heads whose visible head is not the whole type, the repeated
+unit is a declaration template, not just the head spelling. In an L2 C-lowering
+profile:
+
+    @: int px 0; py 0
+    @@: char ppa 0; ppb 0
+
+repeat the pointer-depth head and the base type field, producing `int *px`,
+`int *py`, `char **ppa` and `char **ppb`. Array receiver heads behave the same
+way: the array head and type-prefix are the template, while each headless
+neighbor supplies its own name, dimensions that are not already in the head,
+and initializer fields:
+
+    []: int arr 3 1 2 3; other 3 4 5 6
+    [n][m]: int matrix; matrix2
+
+as if the declaration template and repeated item had been written explicitly:
+
+    [n][m]: (int matrix); (matrix2)
+
+This is not a special array exception. It follows the general anonymous
+argument-container transparency rule in section 4.0.1.
+
+A headless neighbor may explicitly replace the inherited type-prefix by
+starting with a valid storage type:
+
+    @: int px; char pc
+    [n][m]: int matrix; char matrix2
+
+These forms keep the repeated pointer/array shape, but use the new type for the
+second declaration.
 
 A receiver may later interpret an identifier field as a name, signature, selector, atom, message name or another semantic object. The parser only builds the field.
 
@@ -1696,9 +1786,9 @@ It does not normalize as:
 
     print(getTypedValue(values[i]))
 
-Explicit nesting must be written with parentheses, compact Frame form or vertical anonymous Structure form.
+Explicit nesting must be written with parentheses, compact Frame form or vertical anonymous Structure form. The anonymous argument-container rule in section 4.0.1 still applies: a sole anonymous wrapper around the whole argument list is transparent to receiver consumption, while an anonymous Structure written as one field among other fields remains one field.
 
-If a receiver argument must itself be one Structure, the source must make that nesting explicit with a bounded Structure, compact Frame or anonymous vertical Structure.
+If a receiver argument must itself be one Structure value, the source must make that Structure a field in the surrounding sequence or bind it through a named argument.
 
 Examples:
 
@@ -2501,7 +2591,14 @@ A one-line form is also possible when the receiver defines it:
 
 This builds a Frame whose final meaning is assigned by the active `if` receiver.
 
-A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one Structure argument are not separate syntactic categories. The argument list itself is a Structure. Therefore a function that receives one Structure and a function that receives several positional fields may have the same source call shape. The receiver signature decides whether the fields of the argument Structure are consumed as one structural value, as several positional parameters, or through an explicitly defined equivalence rule.
+A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one anonymous Structure wrapper around those arguments are not separate semantic categories. The argument list itself is a Structure. Therefore a sole anonymous Structure in the positional argument-container position is consumed as the argument sequence itself, as described in section 4.0.1.
+
+This does not remove Structure values from the language. A Structure may still be passed as one field when it appears among other fields, and a named argument may bind a Structure value directly:
+
+    f: a (1 2 3) b
+    f( arg: 1 2 3 )
+
+In the first form, `(1 2 3)` is one field in the row. In the second form, `arg` is a named field whose body is the supplied Structure. A receiver with one structural parameter and a receiver with several positional parameters may still have similar source shapes, but the ordinary anonymous wrapper is not allowed to create a hidden arity difference by itself.
 
 This does not mean that Structure arguments are evaluated automatically. If a
 direct argument field resolves as a function, subroutine or registered receiver
@@ -2510,7 +2607,7 @@ or expression. A Structure field remains a Structure unless the receiver
 signature consumes it as a statement tail, expression, tuple/data, model fragment
 or another explicit role.
 
-This is an intentional property of the language, not an accidental ambiguity. In ordinary colon line forms, whitespace creates short-tail fields and expression operators may bind neighboring fields into expression Structures. In vertical form, child items at the next source level create fields. A receiver with one structural parameter may consume the whole argument Structure. A receiver with several parameters may consume the same Structure by positional fields.
+This is an intentional property of the language, not an accidental ambiguity. In ordinary colon line forms, whitespace creates short-tail fields and expression operators may bind neighboring fields into expression Structures. In vertical form, child items at the next source level create fields. A receiver that wants a structural value consumes a named Structure field or a Structure field that appears in the surrounding sequence. A receiver with several parameters consumes the same outer argument Structure by positional and named fields.
 
 4.7. No Native `=` Assignment or Named-Field Operator
 
@@ -2672,6 +2769,12 @@ Semantic formula:
     surface syntax -> generic Structure -> receiver/subroutine -> typed semantic structure
 
 A receiver has a signature. The signature defines how positional fields, semantic field names, anonymous positional Structures, expression fields and body fields are interpreted.
+
+Receiver signatures operate after the anonymous argument-container
+transparency rule in section 4.0.1. A sole anonymous wrapper around the whole
+argument list is not a distinct semantic argument. A Structure becomes a
+Structure-valued field when it is one field among other fields, when it is bound
+by a named argument, or when a receiver explicitly creates such a role.
 
 5.2. Receiver Consumption Modes
 
@@ -4089,6 +4192,14 @@ field is encountered, all following actual fields in that call must be named
 fields; the receiver/translating profile maps them by formal parameter name and
 reports unknown, duplicate, missing or out-of-order arguments.
 
+A named actual argument may carry a Structure body as its value:
+
+    f( arg: 1 2 3 )
+
+Here `arg` is a named actual field. The body `1 2 3` is not an anonymous wrapper
+around the whole call argument list; it is the Structure value supplied to the
+formal parameter named `arg`.
+
 P0 does not know that a nested compact Frame is a function call. For example:
 
     print(1, 2, get(1,2))
@@ -4168,7 +4279,8 @@ Receiver-level interpretation:
 
 The physical newline after `iterator(Text)` does not close the `fn` frame. The following `yield:` lines are at the implicit argument level of the `fn` frame, so they become following fields in the same field sequence. They are body fields only because the `fn` receiver consumes fields 3..end as executable body.
 
-If an explicit anonymous Structure is wanted as one field, write a delimiter:
+If an explicit anonymous Structure is wanted as one body field after the name,
+formal-argument Structure and return descriptor fields, write a delimiter:
 
 fn: words () iterator(Text)
     ---
@@ -6041,13 +6153,15 @@ Ordinary line arguments are whitespace-separated short-tail fields. A parser mus
 
 Comma and semicolon have different P0 roles at the current scan depth. Comma is an ordinary explicit field separator, like whitespace without indentation/source-level effects; it may add another field to an open short tail. Semicolon is the explicit separator/trailer: for a short form, it terminates that short form and never adds another field to the open short tail. When no short form is open at the current scan depth, comma is optional conventional separator notation and semicolon may act as an explicit source-item separator or trailing marker. A trailing comma or semicolon with no following item is accepted as a cosmetic trailing marker at any block level, including file/root level 0. A comma or semicolon inside a deeper bounded Structure or compact Frame belongs to that deeper form.
 
-When a semicolon terminates a short form and the next same-depth item has no
-explicit head of its own, P0 may materialize that neighboring item as a separate
-headless Structure. This preserves the source-item boundary for higher profiles.
-A declaration/profile layer may then consume the headless Structure as a repeat
-of a preceding repeatable head, while an expression layer may reject it or treat
-it as an ordinary neighboring Structure. P0 does not silently append the
-headless item to the terminated short tail.
+When a semicolon terminates a short form, it terminates/materializes the current
+headless argument segment at that scan depth. If the neighboring segment has no
+explicit head of its own, P0 may expose it as a separate headless Structure.
+This preserves the source-item boundary for higher profiles. A
+declaration/profile layer may then consume those headless Structures as repeats
+of a preceding repeatable head, while an expression layer may reject them or
+treat them as ordinary neighboring Structures. P0 does not silently append the
+headless item to the terminated short tail and does not use namespace lookup to
+decide whether the item is a call or a repeated declaration.
 
 Repeated explicit separators at the same scan depth may materialize an empty
 positional field. This is not specific to semicolon: `a,,c`, `a;;c`, `a,;c`
@@ -7635,7 +7749,7 @@ ordinary ANSI C names and are referenced explicitly through the permanent C
 surface escape, for example `c.LM_TRANS_SYMBOL_VARIABLE`.
 
 When a bootstrap translator reads external registry data, such as
-`lm2/trans_registry.lmx`, class/key spelling follows the same identifier rule as
+`lm2/trans_registry.lm4`, class/key spelling follows the same identifier rule as
 ordinary source names. If the class/key is a valid ordinary Lingvamyxa
 identifier, it is written bare:
 
@@ -7655,10 +7769,34 @@ exact quoted identifier:
     `translator type-->spelling`
 
 The backticks are not part of the class/key. They are only the exact identifier
-delimiter. The current bootstrap translator may still use a flat
-`row: table key payload` registry serialization internally; this is a temporary
-storage shape over the same class/key spelling rule, not a different semantic
-model.
+delimiter.
+
+The default bootstrap registry table notation is a dense table Structure:
+
+L4:
+    table:
+        name: BUILD
+        columns: char@(class)       binding@(l2)                char@(win)  char@(unix)
+        rows:
+                 exe_suffix         lm_build_exe_suffix         ".exe"     ""
+                 platform_absolute  lm_build_platform_absolute  NULL       NULL
+    end: BUILD
+end: L4
+
+The first column is the row key and is normally named `class`. Each later column
+names a relation column. A two-column table materializes the relation directly
+under `name`; an N-column table with N > 2 materializes each non-key column as
+`name.column`, for example `BUILD.l2`, `BUILD.win` and `BUILD.unix`.
+
+Rows are dense. The number of row cells must be divisible by the number of
+columns. The loader does not use physical source lines to infer missing cells.
+Use an explicit service atom such as `NULL` when a relation cell is intentionally
+empty or absent. A table pretty-printer may align columns for readability, but
+that alignment is not semantic.
+
+A bootstrap implementation may still lower these table Structures to a flat
+`row: table key payload` internal representation. That is a temporary storage
+shape over the same class/key spelling rule, not a different semantic model.
 
 L2 `fn` and `sub` definitions lower to `static` ANSI C functions by default.
 This keeps ordinary L2 helper procedures local to the generated translation

@@ -2,20 +2,20 @@
 {style: system}
 dataset: harvest
     meta:
-{style: title}
-{color: blue}
+        {style: title}
+        {color: blue}
         title: "Regional harvest report"
-{style: date}
+        {style: date}
         season: 2026
-{end: title}
+        {end: title}
         month: April
-{end: date}
+        {end: date}
         source:
             organization: `Field Bureau`
             system: `manual survey`
         ---
         location:
-{color: green}
+            {color: green}
             country: Uruguay
             region: `north field group`
         ---
@@ -23,7 +23,7 @@ dataset: harvest
             "This part is {color: red} marked {end} document data over ordinary Structures."
 
     ---
-{end: blue}
+    {end: blue}
 
     table:
         columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
@@ -32,6 +32,6 @@ dataset: harvest
                  2        `south field`       corn         8.75       0.19
                  3        `east ridge`        barley      10.00       0.16
                  4        `river lowland`     rice        21.30       0.22
-{end: green}
+    {end: green}
 end: harvest
 {end: system}
