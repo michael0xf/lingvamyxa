@@ -259,6 +259,7 @@ dataset: harvest
                  2        `south field`       corn         8.75       0.19
                  3        `east ridge`        barley      10.00       0.16
                  4        `river lowland`     rice        21.30       0.22
+        ---
     {end: green}
 end: harvest
 {end: system}
