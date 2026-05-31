@@ -1,0 +1,15 @@
+L2:
+    fn: outer (int: base) int
+        int: extra 5
+        fn: addBoth (int: value) int
+            return: base + extra + value
+        ---
+        return: addBoth(3)
+    end: outer
+
+    external:
+        fn: main () int
+            return: outer(4) != 12
+        end: main
+    end: external
+end: L2
