@@ -1,0 +1,5 @@
+root:
+    child:
+{style: x}
+        item
+end: root

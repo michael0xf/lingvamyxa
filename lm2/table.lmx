@@ -1,7 +1,7 @@
 L4:
     table:
         name: BUILD
-        columns: class              (l2 binding)                (win char)                                       (unix char)
+        columns: "class"              ("l2" "binding")                ("win" "char")                                       ("unix" "char")
         rows:
                  exe_suffix         lm_build_exe_suffix         ".exe"                                           ""
                  path_sep           lm_build_path_sep           '\\'                                             '/'

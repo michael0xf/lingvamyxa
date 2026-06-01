@@ -14,6 +14,7 @@ typedef int LmP0StreamEventKind;
 #define LM_P0_STREAM_EVENT_DELIM 2
 #define LM_P0_STREAM_EVENT_BLOCK_STRING 3
 #define LM_P0_STREAM_EVENT_DISABLED_BLOCK 4
+#define LM_P0_STREAM_EVENT_MIX 5
 
 typedef struct LmP0StreamEvent {
     LmP0StreamEventKind kind;
@@ -43,6 +44,12 @@ typedef struct LmP0PendingDelimiter {
     int active;
     LmP0StreamEvent *event;
 } LmP0PendingDelimiter;
+
+typedef struct LmP0PendingMix {
+    LmP0StreamEvent *events;
+    size_t count;
+    size_t capacity;
+} LmP0PendingMix;
 
 typedef struct LmP0IndentStack {
     size_t *columns;
@@ -777,6 +784,30 @@ static void lm_p0_scan_indent_column(
     *out_column = column;
 }
 
+static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end) {
+    size_t p;
+    size_t column;
+
+    p = start;
+    column = 0U;
+    while (p < end) {
+        if (source[p] == '\r') {
+            column = 0U;
+            if (p + 1U < end && source[p + 1U] == '\n') {
+                ++p;
+            }
+        } else if (source[p] == '\n') {
+            column = 0U;
+        } else if (source[p] == '\t') {
+            column = lm_p0_indent_tab_column(column);
+        } else {
+            ++column;
+        }
+        ++p;
+    }
+    return column;
+}
+
 static void lm_p0_scan_layout_prefix(
     const char *source,
     size_t length,
@@ -1310,6 +1341,97 @@ static int lm_p0_skip_leading_brace_marks(
     return lm_p0_skip_leading_brace_marks_ex(document, text, length, line, column, index, 0);
 }
 
+static int lm_p0_line_is_standalone_mix_run(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    int *out_is_mix
+) {
+    size_t i;
+    int saw_mix;
+
+    i = 0U;
+    saw_mix = 0;
+    *out_is_mix = 0;
+
+    while (i < length) {
+        while (i < length && lm_p0_is_horizontal_space(text[i])) {
+            ++i;
+        }
+        if (i >= length) {
+            break;
+        }
+        if (text[i] == '#') {
+            break;
+        }
+        if (text[i] != '{') {
+            return 1;
+        }
+        if (!lm_p0_skip_brace_mark(document, text, length, &i, line, column)) {
+            return 0;
+        }
+        saw_mix = 1;
+    }
+
+    *out_is_mix = saw_mix;
+    return 1;
+}
+
+static int lm_p0_scan_leading_mix_prefix(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t *out_prefix_start,
+    size_t *out_prefix_end,
+    size_t *out_anchor
+) {
+    size_t i;
+    size_t prefix_start;
+    size_t prefix_end;
+    int saw_mix;
+
+    i = 0U;
+    while (i < length && lm_p0_is_horizontal_space(text[i])) {
+        ++i;
+    }
+    if (i >= length || text[i] != '{') {
+        return 1;
+    }
+
+    prefix_start = i;
+    prefix_end = i;
+    saw_mix = 0;
+    while (i < length) {
+        while (i < length && lm_p0_is_horizontal_space(text[i])) {
+            ++i;
+        }
+        if (i >= length || text[i] != '{') {
+            break;
+        }
+        if (!lm_p0_skip_brace_mark(document, text, length, &i, line, column)) {
+            return 0;
+        }
+        prefix_end = i;
+        saw_mix = 1;
+    }
+
+    while (i < length && lm_p0_is_horizontal_space(text[i])) {
+        ++i;
+    }
+    if (!saw_mix || i >= length || text[i] == '#') {
+        return 1;
+    }
+
+    *out_prefix_start = prefix_start;
+    *out_prefix_end = prefix_end;
+    *out_anchor = i;
+    return 1;
+}
+
 static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end) {
     size_t i;
 
@@ -1347,10 +1469,24 @@ static LmP0DashFenceStatus lm_p0_dash_fence_status(
 
     i = dash_count;
     while (i < length) {
-        if (!lm_p0_is_horizontal_space(text[i])) {
-            return LM_P0_DASH_FENCE_TRAILING_TEXT;
+        if (lm_p0_is_horizontal_space(text[i])) {
+            ++i;
+            continue;
         }
-        ++i;
+        if (text[i] == '#') {
+            return LM_P0_DASH_FENCE_VALID;
+        }
+        if (text[i] == '{') {
+            int closed;
+            size_t brace_end;
+
+            brace_end = lm_p0_scan_brace_mark_unchecked(text, length, i, &closed);
+            if (closed) {
+                i = brace_end;
+                continue;
+            }
+        }
+        return LM_P0_DASH_FENCE_TRAILING_TEXT;
     }
     return LM_P0_DASH_FENCE_VALID;
 }
@@ -4088,6 +4224,52 @@ static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter *pending) {
     }
 }
 
+static LmP0PendingMix *lm_p0_pending_mix_new(void) {
+    return (LmP0PendingMix *)calloc(1U, sizeof(LmP0PendingMix));
+}
+
+static void lm_p0_pending_mix_free(LmP0PendingMix *pending) {
+    if (pending != 0) {
+        free(pending->events);
+        pending->events = 0;
+        pending->count = 0U;
+        pending->capacity = 0U;
+    }
+}
+
+static void lm_p0_pending_mix_free_any(void *object) {
+    lm_p0_pending_mix_free((LmP0PendingMix *)object);
+}
+
+static void lm_p0_pending_mix_delete(LmP0PendingMix *pending) {
+    lm_own_delete(pending, lm_p0_pending_mix_free_any);
+}
+
+static int lm_p0_pending_mix_push(
+    LmP0Document *document,
+    LmP0PendingMix *pending,
+    const LmP0StreamEvent *event
+) {
+    size_t new_capacity;
+    LmP0StreamEvent *events;
+
+    if (pending == 0 || event == 0) {
+        return 0;
+    }
+    if (pending->count == pending->capacity) {
+        new_capacity = pending->capacity == 0U ? 4U : pending->capacity * 2U;
+        events = (LmP0StreamEvent *)realloc(pending->events, new_capacity * sizeof(*events));
+        if (events == 0) {
+            lm_p0_set_diagnostic(document, 1, event->line, event->column, "out of memory while storing pending MIX marks");
+            return 0;
+        }
+        pending->events = events;
+        pending->capacity = new_capacity;
+    }
+    pending->events[pending->count++] = *event;
+    return 1;
+}
+
 static LmP0DisabledState *lm_p0_disabled_state_new(size_t base_level) {
     LmP0DisabledState *state;
 
@@ -4664,6 +4846,81 @@ static int lm_p0_stream_apply_item_event(
     return 1;
 }
 
+static int lm_p0_stream_apply_mix_event(
+    LmP0Document *document,
+    LmP0Stack *stack,
+    const LmP0StreamEvent *event
+) {
+    size_t top_level;
+    LmP0Structure *parent;
+    LmP0Field *previous_last;
+    LmP0Field *field;
+
+    if (!lm_p0_stack_ensure(document, stack, event->level + 1U)) {
+        return 0;
+    }
+
+    top_level = lm_p0_stack_collapse_soft_to_event(stack, event->level);
+    if (event->level == top_level && stack->hard[top_level] == 0U) {
+        stack->hard[top_level] = 1U;
+    }
+
+    if (event->level < top_level) {
+        lm_p0_stack_truncate_deeper(stack, event->level);
+        top_level = lm_p0_stack_top_level(stack);
+    }
+
+    if (stack->parents[event->level] == 0 && event->level > top_level) {
+        if (event->level != top_level + 1U) {
+            lm_p0_set_diagnostic(document, 13, event->line, event->column, "source level jumps too deep");
+            return 0;
+        }
+        if (!lm_p0_stack_open_implicit_anonymous(
+                document,
+                stack,
+                top_level,
+                event->line,
+                event->column,
+                event->offset
+            )) {
+            return 0;
+        }
+    }
+
+    if (!lm_p0_stack_ensure_root_level_alias(document, stack, event->level)) {
+        return 0;
+    }
+
+    parent = stack->parents[event->level];
+    if (parent == 0) {
+        lm_p0_set_diagnostic(document, 8, event->line, event->column, "source level has no open parent structure");
+        return 0;
+    }
+
+    previous_last = parent->last_field;
+    if (!lm_p0_parse_fields_into(
+            document,
+            parent,
+            event->text,
+            event->text_length,
+            event->line,
+            event->column,
+            event->offset
+        )) {
+        return 0;
+    }
+
+    field = previous_last != 0 ? previous_last->next : parent->first_field;
+    while (field != 0) {
+        if (field->value != 0) {
+            field->value->flags |= event->node_flags;
+        }
+        field = field->next;
+    }
+
+    return 1;
+}
+
 static int lm_p0_stream_apply_event(
     LmP0Document *document,
     LmP0Stack *stack,
@@ -4680,6 +4937,9 @@ static int lm_p0_stream_apply_event(
     if (!lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event->level)) {
         return 0;
     }
+    if (event->kind == LM_P0_STREAM_EVENT_MIX) {
+        return lm_p0_stream_apply_mix_event(document, stack, event);
+    }
     if (event->kind == LM_P0_STREAM_EVENT_ITEM &&
         lm_p0_dash_fence_status_after_comment_trim(event->text, event->text_length, 0) == LM_P0_DASH_FENCE_VALID) {
         if (!lm_p0_pending_delimiter_set(document, pending, event)) {
@@ -4689,6 +4949,35 @@ static int lm_p0_stream_apply_event(
         return 1;
     }
     return lm_p0_stream_apply_item_event(document, stack, event);
+}
+
+static int lm_p0_pending_mix_flush(
+    LmP0Document *document,
+    LmP0Stack *stack,
+    LmP0PendingDelimiter *pending_delimiter,
+    LmP0PendingMix *pending_mix,
+    size_t level
+) {
+    size_t i;
+
+    if (pending_mix == 0 || pending_mix->count == 0U) {
+        return 1;
+    }
+
+    i = 0U;
+    while (i < pending_mix->count) {
+        LmP0StreamEvent event;
+
+        event = pending_mix->events[i];
+        event.level = level;
+        if (!lm_p0_stream_apply_event(document, stack, pending_delimiter, &event)) {
+            return 0;
+        }
+        ++i;
+    }
+
+    pending_mix->count = 0U;
+    return 1;
 }
 
 static size_t lm_p0_stream_block_string_level(
@@ -5167,6 +5456,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     LmP0IndentStack *indent_stack;
     LmP0Stack *stack;
     LmP0PendingDelimiter *pending;
+    LmP0PendingMix *pending_mix;
     int status;
     int has_last_physical_level;
     size_t last_physical_level;
@@ -5181,6 +5471,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     indent_stack = 0;
     stack = 0;
     pending = 0;
+    pending_mix = 0;
 
     document->root = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
     if (document->root == 0) {
@@ -5192,16 +5483,19 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     indent_stack = lm_p0_indent_stack_new(document);
     stack = lm_p0_stack_new();
     pending = lm_p0_pending_delimiter_new();
+    pending_mix = lm_p0_pending_mix_new();
     if (indent_stack == 0 ||
         stack == 0 ||
         pending == 0 ||
+        pending_mix == 0 ||
         !lm_p0_stack_ensure(document, stack, 0U)) {
-        if (pending == 0) {
-            lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating pending delimiter");
+        if (pending == 0 || pending_mix == 0) {
+            lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating pending stream state");
         }
         lm_p0_indent_stack_delete(indent_stack);
         lm_p0_stack_delete(stack);
         lm_p0_pending_delimiter_delete(pending);
+        lm_p0_pending_mix_delete(pending_mix);
         return 0;
     }
     stack->parents[0] = &document->root->as.structure;
@@ -5218,6 +5512,9 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         size_t text_length;
         unsigned node_flags;
         LmP0StreamEvent event;
+        int has_leading_mix_prefix;
+        size_t mix_prefix_start;
+        size_t mix_prefix_end;
 
         line_start = offset;
         if (lm_p0_scan_raw_comment_block(
@@ -5247,6 +5544,10 @@ static int lm_p0_parse_stream(LmP0Document *document) {
                 &line
             )) {
             event.level = lm_p0_stream_block_string_level(stack, pending);
+            if (!lm_p0_pending_mix_flush(document, stack, pending, pending_mix, event.level)) {
+                status = 0;
+                break;
+            }
             if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
                 status = 0;
                 break;
@@ -5275,11 +5576,78 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         p = line_start;
         level = 0U;
         dotted_level = 0;
+        has_leading_mix_prefix = 0;
+        mix_prefix_start = 0U;
+        mix_prefix_end = 0U;
         if (line == 1U && raw_length >= 3U &&
             (unsigned char)source[p] == 0xEFU &&
             (unsigned char)source[p + 1U] == 0xBBU &&
             (unsigned char)source[p + 2U] == 0xBFU) {
             p += 3U;
+        }
+
+        if (p == line_start && raw_length > 0U && source[p] == '{') {
+            int standalone_mix;
+
+            standalone_mix = 0;
+            if (!lm_p0_line_is_standalone_mix_run(
+                    document,
+                    source + p,
+                    (line_start + raw_length) - p,
+                    line,
+                    (size_t)(p - line_start) + 1U,
+                    &standalone_mix
+                )) {
+                status = 0;
+                break;
+            }
+            if (standalone_mix) {
+                memset(&event, 0, sizeof(event));
+                event.kind = LM_P0_STREAM_EVENT_MIX;
+                event.text = source + p;
+                event.text_length = (line_start + raw_length) - p;
+                event.line = line;
+                event.column = (size_t)(p - line_start) + 1U;
+                event.offset = p;
+                if (!lm_p0_pending_mix_push(document, pending_mix, &event)) {
+                    status = 0;
+                    break;
+                }
+                if (line_end == length) {
+                    break;
+                }
+                lm_p0_advance_layout_line(source, length, line_start, line_end, &offset, &line);
+                continue;
+            }
+        }
+
+        {
+            size_t prefix_start;
+            size_t prefix_end;
+            size_t prefix_anchor;
+
+            prefix_start = 0U;
+            prefix_end = 0U;
+            prefix_anchor = 0U;
+            if (!lm_p0_scan_leading_mix_prefix(
+                    document,
+                    source + p,
+                    (line_start + raw_length) - p,
+                    line,
+                    (size_t)(p - line_start) + 1U,
+                    &prefix_start,
+                    &prefix_end,
+                    &prefix_anchor
+                )) {
+                status = 0;
+                break;
+            }
+            if (prefix_end > prefix_start) {
+                has_leading_mix_prefix = 1;
+                mix_prefix_start = p + prefix_start;
+                mix_prefix_end = p + prefix_end;
+                p += prefix_anchor;
+            }
         }
 
         if (p < line_start + raw_length && source[p] == '.') {
@@ -5294,7 +5662,11 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         } else {
             size_t indent_column;
 
-            lm_p0_scan_indent_column(source, p, line_start + raw_length, &p, &indent_column);
+            if (has_leading_mix_prefix) {
+                indent_column = lm_p0_visual_column_between(source, line_start, p);
+            } else {
+                lm_p0_scan_indent_column(source, p, line_start + raw_length, &p, &indent_column);
+            }
             text = source + p;
             text_length = (line_start + raw_length) - p;
             lm_p0_trim_right(&text, &text_length);
@@ -5439,6 +5811,27 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             }
         }
 
+        if (!lm_p0_pending_mix_flush(document, stack, pending, pending_mix, level)) {
+            status = 0;
+            break;
+        }
+        if (has_leading_mix_prefix) {
+            LmP0StreamEvent mix_event;
+
+            memset(&mix_event, 0, sizeof(mix_event));
+            mix_event.kind = LM_P0_STREAM_EVENT_MIX;
+            mix_event.level = level;
+            mix_event.text = source + mix_prefix_start;
+            mix_event.text_length = mix_prefix_end - mix_prefix_start;
+            mix_event.line = line;
+            mix_event.column = (size_t)(mix_prefix_start - line_start) + 1U;
+            mix_event.offset = mix_prefix_start;
+            if (!lm_p0_stream_apply_event(document, stack, pending, &mix_event)) {
+                status = 0;
+                break;
+            }
+        }
+
         if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
             status = 0;
             break;
@@ -5452,6 +5845,15 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         lm_p0_advance_layout_line(source, length, line_start, line_end, &offset, &line);
     }
 
+    if (status && !lm_p0_pending_mix_flush(
+            document,
+            stack,
+            pending,
+            pending_mix,
+            lm_p0_stream_block_string_level(stack, pending)
+        )) {
+        status = 0;
+    }
     if (status && !lm_p0_stream_resolve_pending_delimiter(document, stack, pending, (size_t)-1)) {
         status = 0;
     }
@@ -5459,6 +5861,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     lm_p0_indent_stack_delete(indent_stack);
     lm_p0_stack_delete(stack);
     lm_p0_pending_delimiter_delete(pending);
+    lm_p0_pending_mix_delete(pending_mix);
     return status && document->diagnostic.code == 0;
 }
 
@@ -5995,7 +6398,7 @@ static int lm_p0_registry_columns_from_frame(
         fprintf(stderr, "parser registry error: table expects at least two columns\n");
         return -1;
     }
-    if (!lm_p0_text_equals(first_name, "class")) {
+    if (!lm_p0_registry_atom_payload(first_name, &first_name) || !lm_p0_text_equals(first_name, "class")) {
         fprintf(stderr, "parser registry error: first table column must be class\n");
         return -1;
     }

@@ -1,0 +1,5 @@
+root:
+{style: x}
+{color: y}
+    item
+end: root

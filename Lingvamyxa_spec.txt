@@ -164,13 +164,34 @@ line breaks inside the mark do not create source-level/layout events for the
 surrounding Structure. The opener column of `{` does not become the local
 indentation base for the MIX payload.
 
-The MIX bounded form itself is still a source item in the surrounding document.
-Therefore a standalone `{...}` line must obey the ordinary surrounding
-source-level/indentation rules, just like a standalone ordinary field or frame.
-MIX does not teleport across the surrounding layout stack. To place a mark event
-inside a nested Structure, write it at that Structure's source level. To close a
-mark after that Structure has been left, write the closing mark at the later
-surrounding source level.
+The MIX bounded form is anchored to a surrounding source item or source level.
+This anchoring is layout syntax, not mark semantics:
+
+    item: {color: red} value
+    item: value {color: red}
+
+Inline and tail MIX forms belong to the current field sequence of the current
+source item.
+
+    {color: red}    item: value
+
+A leading MIX prefix before the first ordinary item on a physical line is
+stored before that item and uses the item's source level. In relaxed notation
+the physical width of the MIX prefix may occupy part of the indentation space;
+in canonical dotted notation the following dots still compute the source level
+normally.
+
+    {color: red}
+        item: value
+
+A column-0 physical line whose content is only one or more MIX bounded forms
+is a margin MIX run. It is queued and anchored to the next ordinary LMX source
+item after the run. A sequence of such margin MIX lines keeps its order and
+uses that next item's source level. If EOF is reached first, the run is attached
+to the current/document-end context.
+
+A standalone MIX line that is not a column-0 margin run follows the ordinary
+source-level/indentation rules of the line on which it is written.
 
 Ordinary structural consumers and translators may ignore MIX-flagged nodes,
 while document/MIX consumers project them into the active mark/overlay view. A
@@ -229,38 +250,35 @@ Example of the same tree and table-like data with explicit MIX overlay marks:
 {style: system}
 dataset: harvest
     meta:
-        {style: title}
-        {color: blue}
+{style: title} {blue}
         title: "Regional harvest report"
-        {style: date}
+{style: date}
         season: 2026
-        {end: title}
+{end: title}
         month: April
-        {end: date}
+{end: date}
         source:
             organization: `Field Bureau`
             system: `manual survey`
         ---
         location:
-            {color: green}
-            country: Uruguay
+{green}     country: Uruguay
             region: `north field group`
         ---
-        note:{color: blue}
-            "This part is {color: red} marked {end} document data over ordinary Structures."
+        note:
+            "This part is {red} marked {end} document data over ordinary Structures."
 
-    ---
-    {end: blue}
+    --- {end: blue}
 
     table:
-        columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
+        columns: (serial "id") region           crop    (real "tons") (decimal "moisture")
+{end: green}
         rows:
-                 1        `north field`       wheat       12.50       0.14
-                 2        `south field`       corn         8.75       0.19
-                 3        `east ridge`        barley      10.00       0.16
-                 4        `river lowland`     rice        21.30       0.22
+{gray}           1             "north field"    wheat   12.50         0.14
+{cyan}           2             "south field"    corn    8.75          0.19
+{gray}           3             "east ridge"     barley  10.00         0.16
+{cyan}           4             "river lowland"  rice    21.30         0.22
         ---
-    {end: green}
 end: harvest
 {end: system}
 
@@ -399,27 +417,46 @@ spelled `table`.
 
 Long version of the "hello.lmx" file:
 
-The `relation:`, `fact:` and `behavior:` receivers in this example are
-illustrative table-row or message-row receivers. Part II defines the general
-table model; this Part I example uses them only to show that the same
-structural syntax can be consumed as registry input.
+The `table:` receiver in the L4 part is illustrative registry input. The
+`fact:` and `behavior:` receivers in the L5 part are illustrative message-row
+receivers. Part II defines the general table/message model; this Part I example
+uses them only to show that the same structural syntax can be consumed as
+registry and message input.
 
 L4:
-    model: HelloConfig
-        vars:
-            Text: greeting owned
-            int: maxI
-            int: maxJ
-        ---
-        condition:
-            maxI > 0 && maxJ > 0
-        ---
-    ---
+    table:
+        name: HelloConfig
+        columns: class     (field_type class)  (owner class)  (default char)
+        rows:
+                 greeting  Text                owned          "Hello World"
+                 maxI      int                 value          3
+                 maxJ      int                 value          3
+    end: HelloConfig
 
-    relation: entryPoint
-        Symbol: targetName
-        Symbol: implementationName
-    ---
+    table:
+        name: HelloConfig_rules
+        columns: class           (condition char)
+        rows:
+                 positiveBounds  "maxI > 0 && maxJ > 0"
+    end: HelloConfig_rules
+
+    table:
+        name: entryPoint
+        columns: class  (implementation Symbol)
+        rows:
+                 app    helloMain
+    end: entryPoint
+
+    table:
+        name: BUILD
+        columns: class          (l2 binding)                 (win char)    (unix char)
+        rows:
+                 exe_suffix     lm_build_exe_suffix          ".exe"        ""
+                 path_sep       lm_build_path_sep            '\\'          '/'
+                 getcwd         lm_build_platform_getcwd     _getcwd       getcwd
+                 chdir          lm_build_platform_chdir      _chdir        chdir
+                 include        NULL                         "<direct.h>"  "<unistd.h>"
+    end: BUILD
 end: L4
 
 L5:
@@ -5922,6 +5959,14 @@ Bounded-form transitions:
     MIX-flagged nodes; document/MIX consumers project them into active overlay
     intervals and marks.
 
+    MIX bounded forms are then anchored to the surrounding source stream.
+    Inline/tail MIX is recorded in the current field sequence. A leading MIX
+    prefix before an ordinary item is recorded at that following item's source
+    level before the item itself. A column-0 MIX-only physical line is queued
+    as a margin MIX event and attached to the next ordinary LMX source item;
+    several such lines keep their order. A non-margin standalone MIX line uses
+    the ordinary source level of that line.
+
     A matching closing delimiter line may return to the opener level. The
     closer token itself is the bounded-form close event, not an ordinary
     sibling source item.
@@ -6432,6 +6477,8 @@ Semantic outline:
     empty line                 level-0 structural boundary; closes an open level-1 vertical tail
     #                          line comment marker; ignores text to the end of the physical line
     %                          disabled item/block marker; syntax is still parsed and checked
+    {...}                      MIX bounded form; inline/tail belongs to the current item, leading prefix belongs to the following item,
+                               column-0 MIX-only lines anchor to the next ordinary LMX source item
     ***...                     column-0 raw file comment fence, 3..80 `*` characters; closing fence must have the same length; syntax inside is ignored
     ===...                     column-0 block string fence, 3..80 `=` characters; closing fence must have the same length
     end: name                  explicit named tail-cutter for a visible frame/entity/label block; not the only close mechanism

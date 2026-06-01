@@ -11851,7 +11851,7 @@ static int lm_trans_registry_columns_from_frame(
         fprintf(stderr, "trans registry error: table expects at least two columns\n");
         return -1;
     }
-    if (!lm_trans_text_equals(first_name, "class")) {
+    if (!lm_trans_registry_atom_payload(first_name, &first_name) || !lm_trans_text_equals(first_name, "class")) {
         fprintf(stderr, "trans registry error: first table column must be class\n");
         return -1;
     }
