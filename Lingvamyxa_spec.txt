@@ -89,12 +89,13 @@ dataset: harvest
     ---
 
     table:
-        columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
+        columns: (serial "id") region           crop    (real "tons") (decimal "moisture")
         rows:
-                 1        `north field`       wheat       12.50       0.14
-                 2        `south field`       corn         8.75       0.19
-                 3        `east ridge`        barley      10.00       0.16
-                 4        `river lowland`     rice        21.30       0.22
+                 1             "north field"    wheat   12.50         0.14
+                 2             "south field"    corn    8.75          0.19
+                 3             "east ridge"     barley  10.00         0.16
+                 4             "river lowland"  rice    21.30         0.22
+        ---
 end: harvest
 
 The `meta` section is tree-shaped data, similar in role to an XML/YAML document.
