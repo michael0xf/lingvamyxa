@@ -94,6 +94,7 @@ set(LM1_GENERATED_PRINT_TREE_C "${LM1_GENERATED_DIR}/printTree.lm1.c")
 set(LM1_GENERATED_MAKE_C "${LM1_GENERATED_DIR}/make.lm1.c")
 set(LM1_GENERATED_VCPKG_FETCH_C "${LM1_GENERATED_DIR}/vcpkgFetch.lm1.c")
 set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
+set(LM2_CORE_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/core.lm4")
 set(LM2_TRANS_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans_registry.lm4")
 set(LM2_PARSER_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser_registry.lm4")
 
@@ -171,6 +172,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/own.lm2"
+            "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
         COMMENT "Refreshing build/lm1/own.lm1.c from lm2/own.lm2"
@@ -185,6 +187,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans.lm2"
+            "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
         COMMENT "Refreshing build/lm1/trans.lm1.c from lm2/trans.lm2"
@@ -199,6 +202,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser.lm2"
+            "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
         COMMENT "Refreshing build/lm1/parser.lm1.c from lm2/parser.lm2"
@@ -214,6 +218,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree.lm2"
+            "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
         COMMENT "Generating build/lm1/printTree.lm1.c from lm2/printTree.lm2"
@@ -229,6 +234,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make.lm2"
+            "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
         COMMENT "Generating build/lm1/make.lm1.c from lm2/make.lm2"
@@ -244,6 +250,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/vcpkgFetch.lm2"
+            "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
         COMMENT "Generating build/lm1/vcpkgFetch.lm1.c from lm2/vcpkgFetch.lm2"
@@ -259,6 +266,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lmx"
+            "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
         COMMENT "Generating build/lm1/buildCore.lm1.c from lm2/buildCore.lmx"

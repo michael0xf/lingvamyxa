@@ -1,0 +1,81 @@
+table:
+    name: class
+    columns: class        (kind class)
+    rows:
+             class        core
+             core         class
+             primitive    class
+             descriptor   class
+             spelling     class
+             binding      class
+             serial       class
+             name         class
+             namespace    class
+             NULL         class
+             forbidden    class
+
+             void         primitive
+             char         primitive
+             short        primitive
+             int          primitive
+             long         primitive
+             float        primitive
+             double       primitive
+             signed       primitive
+             unsigned     primitive
+             size_t       primitive
+             u8           primitive
+             u16          primitive
+             u32          primitive
+             u64          primitive
+             i8           primitive
+             i16          primitive
+             i32          primitive
+             i64          primitive
+
+             callableDescriptor  descriptor
+             fn                  descriptor
+             fm                  descriptor
+             sub                 descriptor
+             L1                  descriptor
+             L2                  descriptor
+
+             if            descriptor
+             else          descriptor
+             while         descriptor
+             `return`      descriptor
+             break         descriptor
+             continue      descriptor
+             synchronized  descriptor
+             const         descriptor
+             external      descriptor
+             `end`         descriptor
+             `until`       descriptor
+
+             `()`          descriptor
+             `[]`          descriptor
+             `@`           descriptor
+             `\`           descriptor
+             `+`           descriptor
+             `-`           descriptor
+             `*`           descriptor
+             `/`           descriptor
+             `%`           descriptor
+             `=`           descriptor
+             `!=`          descriptor
+             `<`           descriptor
+             `<=`          descriptor
+             `>`           descriptor
+             `>=`          descriptor
+             `&&`          descriptor
+             `||`          descriptor
+             `!`           descriptor
+             `~`           descriptor
+             `&`           descriptor
+             `|`           descriptor
+             `^`           descriptor
+             `++`          descriptor
+             `--`          descriptor
+             `[`           descriptor
+             `]`           descriptor
+end: class

@@ -969,6 +969,20 @@ Use an exact quoted identifier for a name that contains spaces:
 
 Inside exact quoted identifiers, the spelling is preserved exactly except for the defined quote-escaping rule.
 
+If the content of an exact quoted identifier is also a valid bare identifier,
+both source spellings denote the same identifier value. For example:
+
+    variable
+    `variable`
+
+refer to the same name. The backticks are only the exact-spelling delimiter;
+they are not part of the identifier value.
+
+If the content is not representable as a bare identifier, such as a spelling
+with spaces, dots, operator characters or preserved leading/trailing whitespace,
+the exact quoted form is simply the only source spelling of that identifier.
+Such a name is still a full identifier/name/class key in the namespace model.
+
 By contrast, numeric-looking text outside backticks is tokenized as numeric literals and split by the ordinary short-tail whitespace rule:
 
     1 2 3
@@ -1005,6 +1019,11 @@ backtick-pair unescaping. No whitespace normalization is applied inside
 backticks. Commas, dots, spaces, physical line breaks, indentation after those
 line breaks, numeric-looking text, reserved words and operator characters inside
 the backticks are part of the identifier.
+
+The canonical identifier value is the content after delimiter removal and
+backtick-pair unescaping. Therefore an implementation compares `name` and name
+as the same identifier, but a name such as `north field` has no portable bare
+source spelling and remains addressable only through exact quoted syntax.
 
 The NUL character U+0000 is not valid inside an exact quoted identifier. This
 follows the SQLite tokenizer model for grave-accent quoted identifiers. A source
@@ -7851,22 +7870,38 @@ ordinary source names. If the class/key is a valid ordinary Lingvamyxa
 identifier, it is written bare:
 
     u32
-    return
     prefix
     sqrt_ansi_c
 
 If the class/key contains operator characters, dots, arrows, whitespace,
-punctuation or any spelling that must round-trip exactly, it is written as an
-exact quoted identifier:
+punctuation, active structural words in that table position, or any spelling
+that must round-trip exactly, it is written as an exact identifier:
 
+    `return`
     `+`
     `!=`
     `c.*`
     `operator.infix`
     `translator class-->spelling`
 
-The backticks are not part of the class/key. They are only the exact identifier
-delimiter.
+The backticks are not part of the class/key. They are the exact-identifier
+delimiter, and the resulting atom is still an identifier/class key, not a
+string literal.
+
+The same canonicalization rule applies here as in ordinary source: if the
+exact identifier content is a valid bare identifier, the bare and exact forms
+name the same class/key. Thus `u32` and u32 are the same registry key. Exact
+forms are used when the key has no bare spelling or when the source must make
+the exactness visually explicit.
+
+Registry input is layered. A bootstrap translator may first load a core
+registry file, for example `lm2/core.lm4`, and then load a profile-specific
+registry file, for example `lm2/trans_registry.lm4`. Lookup checks the visible
+registry rows from the most local/latest layer back toward the imported base
+layers. Therefore a local registry view may extend or explicitly override a
+core class relation without changing the core file. This is the same overlay
+principle used later by L4/L5 registry views: classes are not one global
+immutable table, but visible rows in the active registry view.
 
 The default bootstrap registry table notation is a dense table Structure:
 
