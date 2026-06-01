@@ -46,6 +46,27 @@ Short formula:
     Validator/Merge turns candidates into concrete plans.
     Executor runs only concrete plans.
 
+Registry query principle:
+
+    Strict classification happens in L4 registry tables. Type checking, class
+    resolution, overload resolution and provider selection are logical
+    resolution/checking processes over those tables. A SQL-like query is the
+    reference mental model, but an implementation may use any equivalent
+    algorithm that reads the same L4 facts and produces the same selected cells,
+    diagnostics and evidence.
+
+    The source of truth is the registry schema: table existence, table rows,
+    table imports/overlays and cell payloads. In-memory rows, hash tables,
+    SQLite indexes, binary indexes and per-thread RegistryCaches are caches or
+    materialized views of that registry schema. They may optimize lookup, but
+    they do not define a second type system.
+
+    A table named `X`, when present in an L4 schema, is the descriptor table for
+    class/key `X`. The table named `class` is an index/classification table over
+    class keys; it is not the only source of class existence. If a class has no
+    dedicated descriptor table yet, it may still be referenced through `class`
+    or through other relation tables.
+
 Mechanism filter:
 
     A profile term is not a new language mechanism merely because it has a
@@ -81,6 +102,20 @@ The old section number is shown in parentheses after each new heading.
 In Part II, `class` is the general word for a named registry form/table/key.
 When this wider meaning must be distinguished from an object-oriented class,
 this document may use the phrase `registry class`.
+
+The strongest source form for a class is a table with the same name:
+
+    table:
+        name: Circle
+        ...
+    end: Circle
+
+This table is the descriptor table for class/key `Circle`. The `class` table is
+an index and classification table that may reference `Circle`, group it, attach
+kind information or make it discoverable. It is not a mandatory central list
+that alone creates the class. Conversely, a class/key may be referenced in the
+`class` table or in other relation tables before a dedicated descriptor table is
+introduced.
 
 This is wider than an object-oriented class and wider than a value/storage
 type. The following names may all be classes in this general sense:
@@ -150,6 +185,11 @@ keyed by the payload class/key or by an implementation-generated cell id.
 The canonical source form for a relation table is a table Structure with an
 explicit name, column list and dense rows. `columns` is not a registry namespace
 item by itself. It is a field consumed by `table`.
+
+Within one L4 schema/root, two `table` declarations with the same normalized
+name are an error. Later registry merge may combine different schemas through
+explicit import/overlay/conflict rules, but a single schema must not contain two
+independent descriptor tables with the same name.
 
 Column syntax is generic:
 
@@ -310,6 +350,15 @@ In a live L5 profile, the same table source may be loaded at runtime.
 
 An L3+ expression is first a Structure. Class resolution does not change the
 source tree. It selects table cells.
+
+Algorithmically, this is a logical query against the active RegistryView. The
+resolver asks relation tables for coordinates such as operation, receiver,
+argument classes, result class, validators, effects, authority and executable
+binding. A SQL-like query is the simplest way to describe the required result,
+but the implementation may use linear arrays, hash tables, SQLite, generated C
+arrays or another equivalent resolver. Those structures are
+cache/materialized-view forms of the L4 registry tables, not the semantic
+authority.
 
 For:
 
@@ -1392,7 +1441,8 @@ Lookup, validation and execution-plan construction are performed against the
 current RegistryView. The view may cache selected cells, resolved names,
 validator evidence, authority evidence, lowered bindings and ExecutionPlans.
 The cache is an implementation optimization and does not define a separate
-namespace.
+namespace, class universe or type system. It is a materialized view of registry
+tables selected by import/overlay/profile policy.
 
 Persistent registry sources may live in LMX files, ROM/MO records, generated
 database rows, server-side registry storage or cached binary indexes. A small
@@ -1902,9 +1952,14 @@ role hierarchy.
 Part II reduces to these rules:
 
     class = named registry form/table/key;
+    table named X = descriptor/source table for class/key X when present;
+    table class = index/classification relation, not the only class source;
     class/table import = explicit table import/overlay with priority/conflict policy;
     table row/column/cell = relation;
     missing row/column/cell = no relation;
+    strict classification = L4 registry data;
+    type/class resolution = logical query over the active registry view;
+    in-memory registry rows/indexes/caches = materialized views, not semantics;
     expression = Structure requiring table cells;
     message = proposed possibly effectful/action-capable LMX expression candidate;
     message expression = ordinary LMX admitted by receiver policy;

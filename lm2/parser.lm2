@@ -465,10 +465,11 @@ static int lm_p0_registry_push_table_cell(
         return -1;
     }
 
-    if (
-        !lm_p0_registry_identifier_value(table_name, &table_payload) ||
-        !lm_p0_registry_identifier_value(key_atom, &key_payload)
-    ) {
+    if (!lm_p0_registry_identifier_value(table_name, &table_payload)) {
+        return -1;
+    }
+
+    if (!lm_p0_registry_identifier_value(key_atom, &key_payload)) {
         return -1;
     }
 
@@ -531,6 +532,26 @@ static int lm_p0_registry_table_has_rows(const char *table) {
     LmP0RegistryRow *row;
 
     if (table == 0 || !lm_p0_registry.loaded) {
+        return 0;
+    }
+
+    i = 0U;
+    while (i < lm_p0_registry.rows.count) {
+        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        if (row != 0 && row->table != 0 && strcmp(row->table, table) == 0) {
+            return 1;
+        }
+        ++i;
+    }
+
+    return 0;
+}
+
+static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table) {
+    size_t i;
+    LmP0RegistryRow *row;
+
+    if (table == 0) {
         return 0;
     }
 
@@ -2380,6 +2401,77 @@ static int lm_p0_scan_c_prefixed_quote(
     return 1;
 }
 
+static size_t lm_p0_scan_builtin_compact_atom_piece(
+    const char *text,
+    size_t end,
+    size_t start
+) {
+    if (start + 1U < end) {
+        char first;
+        char second;
+
+        first = text[start];
+        second = text[start + 1U];
+        if (
+            (first == '!' && second == '=') ||
+            (first == '<' && second == '=') ||
+            (first == '>' && second == '=') ||
+            (first == '&' && second == '&') ||
+            (first == '|' && second == '|') ||
+            (first == '+' && second == '+') ||
+            (first == '-' && second == '-') ||
+            (first == '[' && second == ']')
+        ) {
+            return start + 2U;
+        }
+    }
+
+    return start + 1U;
+}
+
+static size_t lm_p0_scan_registry_compact_atom_piece(
+    const char *text,
+    size_t end,
+    size_t start
+) {
+    size_t i;
+    size_t best_length;
+    size_t token_length;
+    LmP0RegistryRow *row;
+
+    if (!lm_p0_registry_table_has_rows_loaded_or_loading("p0.compact-token")) {
+        return lm_p0_scan_builtin_compact_atom_piece(text, end, start);
+    }
+
+    best_length = 0U;
+    i = 0U;
+    while (i < lm_p0_registry.rows.count) {
+        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        if (
+            row != 0 &&
+            row->table != 0 &&
+            row->key != 0 &&
+            strcmp(row->table, "p0.compact-token") == 0
+        ) {
+            token_length = strlen(row->key);
+            if (
+                token_length > best_length &&
+                start + token_length <= end &&
+                memcmp(text + start, row->key, token_length) == 0
+            ) {
+                best_length = token_length;
+            }
+        }
+        ++i;
+    }
+
+    if (best_length > 0U) {
+        return start + best_length;
+    }
+
+    return start + 1U;
+}
+
 static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end, size_t start) {
     size_t i;
 
@@ -2433,22 +2525,6 @@ static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end, size_t
 
         first = text[start];
         second = text[start + 1U];
-        if (
-            (first == '=' && second == '=') ||
-            (first == '!' && second == '=') ||
-            (first == '<' && second == '=') ||
-            (first == '>' && second == '=') ||
-            (first == '&' && second == '&') ||
-            (first == '|' && second == '|') ||
-            (first == '+' && second == '+') ||
-            (first == '-' && second == '-') ||
-            (first == '-' && second == '>') ||
-            (first == '<' && second == '<') ||
-            (first == '>' && second == '>') ||
-            (first == '[' && second == ']')
-        ) {
-            return start + 2U;
-        }
         if (first == '@' && second == '@') {
             size_t at_end;
 
@@ -2460,7 +2536,7 @@ static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end, size_t
         }
     }
 
-    return start + 1U;
+    return lm_p0_scan_registry_compact_atom_piece(text, end, start);
 }
 
 static int lm_p0_append_atom_slice(
@@ -6454,8 +6530,8 @@ static int lm_p0_registry_columns_from_frame(
     size_t *out_count
 ) {
     const LmP0Field *field;
-    LmP0Text first_name;
     LmP0RegistryColumn column;
+    LmP0Text first_column;
     size_t count;
     int status;
 
@@ -6478,9 +6554,6 @@ static int lm_p0_registry_columns_from_frame(
                 fprintf(stderr, "parser registry error: columns expects atoms or anonymous descriptor structures\n");
                 return -1;
             }
-            if (count == 0U) {
-                first_name = column.name;
-            }
             if (count >= columns_capacity) {
                 fprintf(stderr, "parser registry error: table has too many columns\n");
                 return -1;
@@ -6495,7 +6568,10 @@ static int lm_p0_registry_columns_from_frame(
         fprintf(stderr, "parser registry error: table expects at least two columns\n");
         return -1;
     }
-    if (!lm_p0_registry_identifier_value(first_name, &first_name) || !lm_p0_text_equals(first_name, "class")) {
+    if (
+        !lm_p0_registry_identifier_value(columns[0].name, &first_column) ||
+        !lm_p0_text_equals(first_column, "class")
+    ) {
         fprintf(stderr, "parser registry error: first table column must be class\n");
         return -1;
     }
@@ -6831,6 +6907,159 @@ static int lm_p0_registry_load_rows(const LmP0Structure *structure) {
     return 0;
 }
 
+static int lm_p0_registry_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
+    LmP0Text payload;
+    char *name;
+    size_t i;
+    char *existing;
+
+    if (seen == 0) {
+        return -1;
+    }
+    if (!lm_p0_registry_identifier_value(table_name, &payload)) {
+        return -1;
+    }
+
+    i = 0U;
+    while (i < seen->count) {
+        existing = (char *)lm_own_ptr_stack_at(seen, i);
+        if (existing != 0 && lm_p0_text_equals(payload, existing)) {
+            return 1;
+        }
+        ++i;
+    }
+
+    name = lm_p0_text_copy_cstr(payload);
+    if (name == 0) {
+        return -1;
+    }
+    if (lm_own_ptr_stack_push(seen, name) != 0) {
+        free(name);
+        return -1;
+    }
+    return 0;
+}
+
+static int lm_p0_registry_check_table_frame_unique(
+    const LmP0Frame *frame,
+    LmOwnPtrStack *seen
+) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    LmP0Text table_name;
+    LmP0Text payload;
+    int status;
+
+    if (frame == 0 || !lm_p0_text_equals(frame->head, "table")) {
+        return 0;
+    }
+
+    status = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (
+            node != 0 &&
+            !lm_p0_node_is_ignored_for_registry(node) &&
+            node->kind == LM_P0_NODE_FRAME
+        ) {
+            status = lm_p0_registry_frame_single_atom(&node->as.frame, "name", &table_name);
+            if (status < 0) {
+                fprintf(stderr, "parser registry error: table name expects exactly one atom\n");
+                return -1;
+            }
+            if (status > 0) {
+                break;
+            }
+        }
+        field = field->next;
+    }
+    if (status == 0) {
+        return 0;
+    }
+
+    status = lm_p0_registry_seen_table_add(seen, table_name);
+    if (status < 0) {
+        fprintf(stderr, "parser registry error: cannot record table name\n");
+        return -1;
+    }
+    if (status > 0) {
+        if (lm_p0_registry_identifier_value(table_name, &payload)) {
+            fprintf(
+                stderr,
+                "parser registry error: duplicate table in one L4 schema: %.*s\n",
+                (int)payload.length,
+                payload.data
+            );
+        } else {
+            fprintf(stderr, "parser registry error: duplicate table in one L4 schema\n");
+        }
+        return -1;
+    }
+
+    return 0;
+}
+
+static int lm_p0_registry_check_duplicate_tables_in_rows(
+    const LmP0Structure *structure,
+    LmOwnPtrStack *seen
+) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+
+    if (structure == 0) {
+        return 0;
+    }
+
+    field = structure->first_field;
+    while (field != 0) {
+        node = field->value;
+        if (
+            !lm_p0_node_is_ignored_for_registry(node) &&
+            node->kind == LM_P0_NODE_FRAME &&
+            lm_p0_text_equals(node->as.frame.head, "table") &&
+            lm_p0_registry_check_table_frame_unique(&node->as.frame, seen) != 0
+        ) {
+            return -1;
+        }
+        field = field->next;
+    }
+
+    return 0;
+}
+
+static int lm_p0_registry_check_duplicate_tables_in_root(
+    const LmP0Node *root,
+    int implicit_l4
+) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    LmOwnPtrStack seen;
+    int status;
+
+    lm_own_ptr_stack_init(&seen, free);
+    status = 0;
+
+    field = root->as.structure.first_field;
+    while (field != 0 && status == 0) {
+        node = field->value;
+        if (!lm_p0_node_is_ignored_for_registry(node) && node->kind == LM_P0_NODE_FRAME) {
+            if (
+                lm_p0_text_equals(node->as.frame.head, "L4") ||
+                lm_p0_text_equals(node->as.frame.head, "registry")
+            ) {
+                status = lm_p0_registry_check_duplicate_tables_in_rows(&node->as.frame.body, &seen);
+            } else if (implicit_l4 && lm_p0_text_equals(node->as.frame.head, "table")) {
+                status = lm_p0_registry_check_table_frame_unique(&node->as.frame, &seen);
+            }
+        }
+        field = field->next;
+    }
+
+    lm_own_ptr_stack_destroy(&seen);
+    return status;
+}
+
 static int lm_p0_path_has_extension(const char *path, const char *extension) {
     size_t path_length;
     size_t extension_length;
@@ -6874,6 +7103,9 @@ static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
 
     if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
         fprintf(stderr, "parser registry error: root must be a Structure\n");
+        return 1;
+    }
+    if (lm_p0_registry_check_duplicate_tables_in_root(root, implicit_l4) != 0) {
         return 1;
     }
 

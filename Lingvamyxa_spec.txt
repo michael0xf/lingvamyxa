@@ -64,6 +64,17 @@ descriptors, validators, messages and implementation bindings may all be
 classes. The word `type` remains available only in narrower storage/lowering
 contexts such as L2 and ANSI C.
 
+In the high-level model, strict classification happens in L4 registry tables.
+Type checking and class resolution are logical resolution/checking processes
+over those tables. A SQL-like query is the reference mental model, but an
+implementation may use any equivalent algorithm that reads the same L4 facts and
+produces the same selected cells, diagnostics and evidence. A table named `X`,
+when present, is the descriptor table for class/key `X`. The table named
+`class` is an index/classification table, not the sole source of class
+existence. Current in-memory registry rows, hash tables, binary indexes or
+future SQLite views are caches/materialized views of those tables, not a second
+semantic type system.
+
 0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
 It can be used for human-readable records, trees, nested configurations,
@@ -7721,6 +7732,13 @@ a field `kind` whose class is `LmP0StreamEventKind`, and another field `text`
 whose class is `char` with one address level and const payload semantics. These
 are LMX facts.
 
+Type checking over these facts is a logical registry query. The resolver asks
+tables for the class descriptor, fields, operation cells, result class,
+validator rows, effects, lifetimes and lowering bindings. An implementation may
+answer those queries from in-memory rows, hash tables, generated arrays, SQLite
+or another equivalent algorithm/index, but such structures are
+caches/materialized views of the L4 tables.
+
 `class` is the only source-semantic notion that answers "what kind of thing is
 this?" It includes primitive classes such as `int` or `u32`, structural layout
 classes such as `LmP0Document`, operation classes such as `+` or `equals`,
@@ -7751,6 +7769,11 @@ not an ANSI C table. It is LMX class data. A table or function that lowers that
 class data to `struct LmP0Document { ... }` is an ANSI C projection. The two
 layers may be implemented in one bootstrap executable, but the language model
 keeps them separate.
+
+Within one L4 schema/root, two tables with the same normalized name are an
+error. Merging tables from different schema sources is a later explicit
+import/overlay operation; it is not the same as writing the same table twice in
+one source schema.
 
 20.2.2. L1 and L2 Translator Receivers
 

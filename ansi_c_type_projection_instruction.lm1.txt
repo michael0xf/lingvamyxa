@@ -14,6 +14,18 @@ This file assumes:
     receiver/type normalization turns generic Structures into typed descriptors;
     typed descriptors lower to ordinary ANSI C declarations and functions.
 
+Registry-query rule:
+
+    Type checking is not a separate hardcoded C subsystem. Strict
+    classification lives in Lingvamyxa L4 registry tables: class descriptor
+    tables, field relation tables, operation tables, validator/evidence tables
+    and lowering binding tables. Type checking is the logical resolution process
+    over those tables. A SQL-like query is the reference model, but the first
+    implementation may answer it from in-memory arrays or simple row lists, and
+    a later implementation may use SQLite, generated indexes or another
+    equivalent algorithm. In all cases these are caches/materialized views of L4
+    registry data, not a second source of semantic truth.
+
 
 1. Main Rule
 
@@ -432,7 +444,9 @@ Minimal registry queries:
     adapter(expectedType, actualType) -> AdapterSpec
 
 The first implementation can use linear scans over arrays/lists. Indexed lookup
-can come later without changing the API.
+can come later without changing the API. These APIs should be shaped like
+queries over registry relations, not like C-only type predicates. That keeps the
+ANSI C projection replaceable by another backend over the same L4 tables.
 
 
 14. Initial P0/L1 Subset

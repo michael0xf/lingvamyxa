@@ -97,6 +97,16 @@ L3 expression resolution should:
 
 This is the first major proof that the table-driven semantic core is real.
 
+Implementation rule:
+
+    Strict classification happens in L4 registry tables. Type checking and
+    expression/class resolution must be designed as logical queries over the
+    active registry view. SQL-like queries are the reference model; C arrays,
+    row logs, hash tables, future SQLite indexes or other algorithms are only
+    caches/materialized views or execution strategies over L4 tables. Do not
+    move semantic decisions into a second hardcoded type system merely because
+    the first cache is in memory.
+
 
 7. Implement Validator/Merge at the L4/L5 Boundary
 --------------------------------------------------
@@ -170,4 +180,3 @@ chosen runtime primitive at the L1/L2 boundary where required, but the L5
 semantic model remains:
 
     credential/verifier -> evidence rows -> authority tables -> message validation
-

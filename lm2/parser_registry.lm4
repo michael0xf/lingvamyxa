@@ -1,4 +1,49 @@
 table:
+    name: class
+    columns: class               (kind class)
+    rows:
+             node                relation
+             frame               descriptor
+             trailer             relation
+             structure           descriptor
+             atom                descriptor
+             disabled            descriptor
+             inactive            descriptor
+             mix                 descriptor
+             `positional-skip`   descriptor
+             colon               descriptor
+             compact             descriptor
+             `inline-body`       descriptor
+             `separator-closed`  descriptor
+             `tail-cutter`       descriptor
+             `trailer.end`       descriptor
+             `trailer.return`    descriptor
+             `trailer.until`     descriptor
+             parser_class        relation
+             flag                relation
+             role                relation
+             `allow-bare`        relation
+             target              relation
+             `p0.compact-token`  relation
+end: class
+
+table:
+    name: `p0.compact-token`
+    columns: class  (value serial)
+    rows:
+             `!=`   1
+             `<=`   1
+             `>=`   1
+             `&&`   1
+             `||`   1
+             `++`   1
+             `--`   1
+             `[]`   1
+             `<<`   1
+             `>>`   1
+end: `p0.compact-token`
+
+table:
     name: node
     columns: class              (kind serial)  (flag serial)
     rows:
