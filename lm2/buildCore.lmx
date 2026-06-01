@@ -1,45 +1,20 @@
 L4:
     table:
         name: BUILD
-        columns: char@(class)  binding@(l2)
+        columns: char@(class)       binding@(l2)                char@(win)                                       char@(unix)
         rows:
-            exe_suffix              lm_build_exe_suffix
-            path_sep                lm_build_path_sep
-            platform_chdir          lm_build_platform_chdir
-            platform_getcwd         lm_build_platform_getcwd
-            platform_absolute       lm_build_platform_absolute
-            file_exists             lm_build_file_exists
-            has_qt_cmake            lm_build_has_qt_cmake
-            has_qt_mingw_make       lm_build_has_qt_mingw_make
-            has_qt_gcc              lm_build_has_qt_gcc
-            has_qt_gxx              lm_build_has_qt_gxx
+                 exe_suffix         lm_build_exe_suffix         ".exe"                                           ""
+                 path_sep           lm_build_path_sep           '\\'                                             '/'
+                 platform_chdir     lm_build_platform_chdir     _chdir                                           chdir
+                 platform_getcwd    lm_build_platform_getcwd    _getcwd                                          getcwd
+                 platform_absolute  lm_build_platform_absolute  NULL                                             NULL
+                 file_exists        lm_build_file_exists        NULL                                             NULL
+                 has_qt_cmake       lm_build_has_qt_cmake       "C:/Qt/Tools/CMake_64/bin/cmake.exe"             NULL
+                 has_qt_mingw_make  lm_build_has_qt_mingw_make  "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"  NULL
+                 has_qt_gcc         lm_build_has_qt_gcc         "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"           NULL
+                 has_qt_gxx         lm_build_has_qt_gxx         "C:/Qt/Tools/mingw1310_64/bin/g++.exe"           NULL
+                 include            NULL                        "<direct.h>"                                     "<unistd.h>"
     end: BUILD
-
-    table:
-        name: `BUILD.win`
-        columns: char@(class)  char@(value)
-        rows:
-            exe_suffix              ".exe"
-            path_sep                `\`
-            chdir                   _chdir
-            getcwd                  _getcwd
-            include_direct          "<direct.h>"
-            qt_cmake                "C:/Qt/Tools/CMake_64/bin/cmake.exe"
-            qt_mingw_make           "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"
-            qt_gcc                  "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"
-            qt_gxx                  "C:/Qt/Tools/mingw1310_64/bin/g++.exe"
-    end: `BUILD.win`
-
-    table:
-        name: `BUILD.unix`
-        columns: char@(class)  char@(value)
-        rows:
-            exe_suffix              ""
-            path_sep                /
-            chdir                   chdir
-            getcwd                  getcwd
-            include_unistd          "<unistd.h>"
-    end: `BUILD.unix`
 end: L4
 
 L2:
