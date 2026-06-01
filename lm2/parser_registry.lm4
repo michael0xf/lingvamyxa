@@ -1,67 +1,41 @@
 table:
-    name: `node.kind`
-    columns: char@(class)  int@(value)
+    name: node
+    columns: char@(class)       int@(kind)  int@(flag)
     rows:
-        structure        1
-        frame            2
-        atom             3
-        disabled         4
-end: `node.kind`
+             structure          1           NULL
+             frame              2           NULL
+             atom               3           NULL
+             disabled           4           NULL
+             inactive           NULL        1
+             mix                NULL        2
+             `positional-skip`  NULL        4
+end: node
 
 table:
-    name: `frame.flag`
-    columns: char@(class)  int@(value)
+    name: frame
+    columns: char@(class)        int@(flag)
     rows:
-        colon            1
-        compact          2
-        `inline-body`    4
-        `separator-closed` 8
-end: `frame.flag`
-
-table:
-    name: `node.flag`
-    columns: char@(class)  int@(value)
-    rows:
-        inactive         1
-        mix              2
-        `positional-skip` 4
-end: `node.flag`
-
-table:
-    name: `trailer.flag`
-    columns: char@(class)  int@(value)
-    rows:
-        `tail-cutter`    1
-end: `trailer.flag`
+             colon               1
+             compact             2
+             `inline-body`       4
+             `separator-closed`  8
+end: frame
 
 table:
     name: namespace
     columns: char@(class)  class@(parser_class)
     rows:
-        `end`            `trailer.end`
-        `return`         `trailer.return`
-        `until`          `trailer.until`
+             `end`         `trailer.end`
+             `return`      `trailer.return`
+             `until`       `trailer.until`
 end: namespace
 
 table:
-    name: `trailer.role`
-    columns: class@(class)  binding@(role)
+    name: trailer
+    columns: char@(class)      int@(flag)  binding@(role)             int@(`allow-bare`)  char@(target)
     rows:
-        `trailer.end`    LM_P0_TRAILER_ROLE_END
-        `trailer.return` LM_P0_TRAILER_ROLE_RETURN
-        `trailer.until`  LM_P0_TRAILER_ROLE_UNTIL
-end: `trailer.role`
-
-table:
-    name: `trailer.allow-bare`
-    columns: class@(class)  int@(allow)
-    rows:
-        `trailer.return` 1
-end: `trailer.allow-bare`
-
-table:
-    name: `trailer.target`
-    columns: class@(class)  char@(target)
-    rows:
-        `trailer.return` fn
-end: `trailer.target`
+             `tail-cutter`     1           NULL                       NULL                NULL
+             `trailer.end`     NULL        LM_P0_TRAILER_ROLE_END     0                   NULL
+             `trailer.return`  NULL        LM_P0_TRAILER_ROLE_RETURN  1                   fn
+             `trailer.until`   NULL        LM_P0_TRAILER_ROLE_UNTIL   0                   NULL
+end: trailer

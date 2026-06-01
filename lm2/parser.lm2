@@ -281,6 +281,15 @@ static char *lm_p0_registry_atom_copy_cstr(LmP0Text atom) {
     return lm_p0_text_copy_cstr(payload);
 }
 
+static int lm_p0_registry_payload_is_null(LmP0Text atom) {
+    LmP0Text payload;
+
+    if (!lm_p0_registry_atom_payload(atom, &payload)) {
+        return 0;
+    }
+    return payload.length == 4U && memcmp(payload.data, "NULL", 4U) == 0;
+}
+
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row) {
     if (row != 0) {
         free(row->table);
@@ -314,6 +323,10 @@ static int lm_p0_registry_push_row_atoms(
     LmP0Text payload_atom
 ) {
     LmP0RegistryRow *row;
+
+    if (lm_p0_registry_payload_is_null(payload_atom)) {
+        return 0;
+    }
 
     row = (LmP0RegistryRow *)lm_own_new_zero(sizeof(*row));
     if (row == 0) {
