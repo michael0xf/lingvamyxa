@@ -251,7 +251,7 @@ Example of the same tree and table-like data with explicit MIX overlay marks:
 {style: system}
 dataset: harvest
     meta:
-{style: title} {blue}
+{style: title} {color: blue}
         title: "Regional harvest report"
 {style: date}
         season: 2026
@@ -262,8 +262,8 @@ dataset: harvest
             organization: `Field Bureau`
             system: `manual survey`
         ---
-        location:
-{green}     country: Uruguay
+        location: {color: green}
+            country: Uruguay
             region: `north field group`
         ---
         note:
