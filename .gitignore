@@ -66,16 +66,14 @@ CMakeCache.txt
 .DS_Store
 
 # Lingvamyxa tracked generated source snapshot.
-!build/
-build/*
-!build/lm1/
-build/lm1/*
-!build/lm1/buildCore.lm1.c
-!build/lm1/finalize.lm1.c
-!build/lm1/make.lm1.c
-!build/lm1/own.lm1.c
-!build/lm1/parser.lm1.c
-!build/lm1/trans.lm1.c
+!lm1/build/
+lm1/build/*
+!lm1/build/buildCore.lm1.c
+!lm1/build/finalize.lm1.c
+!lm1/build/make.lm1.c
+!lm1/build/own.lm1.c
+!lm1/build/parser.lm1.c
+!lm1/build/trans.lm1.c
 
 # vcpkg source-catalog local state.
 cmake/vcpkg-sources/vcpkg_installed/

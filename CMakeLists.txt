@@ -86,7 +86,7 @@ if (LM_THIRD_PARTY_TARGETS)
     )
 endif()
 
-set(LM1_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/lm1")
+set(LM1_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lm1/build")
 set(LM1_GENERATED_OWN_C "${LM1_GENERATED_DIR}/own.lm1.c")
 set(LM1_GENERATED_TRANS_C "${LM1_GENERATED_DIR}/trans.lm1.c")
 set(LM1_GENERATED_PARSER_C "${LM1_GENERATED_DIR}/parser.lm1.c")
@@ -175,7 +175,7 @@ if (BUILD_TRANS_LM0)
             "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Refreshing build/lm1/own.lm1.c from lm2/own.lm2"
+        COMMENT "Refreshing lm1/build/own.lm1.c from lm2/own.lm2"
         VERBATIM
     )
 
@@ -190,7 +190,7 @@ if (BUILD_TRANS_LM0)
             "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Refreshing build/lm1/trans.lm1.c from lm2/trans.lm2"
+        COMMENT "Refreshing lm1/build/trans.lm1.c from lm2/trans.lm2"
         VERBATIM
     )
 
@@ -205,7 +205,7 @@ if (BUILD_TRANS_LM0)
             "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Refreshing build/lm1/parser.lm1.c from lm2/parser.lm2"
+        COMMENT "Refreshing lm1/build/parser.lm1.c from lm2/parser.lm2"
         VERBATIM
     )
 
@@ -221,7 +221,7 @@ if (BUILD_TRANS_LM0)
             "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Generating build/lm1/printTree.lm1.c from lm2/printTree.lm2"
+        COMMENT "Generating lm1/build/printTree.lm1.c from lm2/printTree.lm2"
         VERBATIM
     )
 
@@ -237,7 +237,7 @@ if (BUILD_TRANS_LM0)
             "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Generating build/lm1/make.lm1.c from lm2/make.lm2"
+        COMMENT "Generating lm1/build/make.lm1.c from lm2/make.lm2"
         VERBATIM
     )
 
@@ -253,7 +253,7 @@ if (BUILD_TRANS_LM0)
             "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Generating build/lm1/vcpkgFetch.lm1.c from lm2/vcpkgFetch.lm2"
+        COMMENT "Generating lm1/build/vcpkgFetch.lm1.c from lm2/vcpkgFetch.lm2"
         VERBATIM
     )
 
@@ -269,7 +269,7 @@ if (BUILD_TRANS_LM0)
             "${LM2_CORE_REGISTRY}"
             "${LM2_TRANS_REGISTRY}"
             "${LM2_PARSER_REGISTRY}"
-        COMMENT "Generating build/lm1/buildCore.lm1.c from lm2/buildCore.lmx"
+        COMMENT "Generating lm1/build/buildCore.lm1.c from lm2/buildCore.lmx"
         VERBATIM
     )
 

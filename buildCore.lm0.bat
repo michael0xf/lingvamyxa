@@ -9,12 +9,12 @@ if not defined LM_CC set "LM_CC=C:\Qt\Tools\mingw1310_64\bin\gcc.exe"
 if not defined LM_AR set "LM_AR=C:\Qt\Tools\mingw1310_64\bin\ar.exe"
 if not defined LM_RANLIB set "LM_RANLIB=C:\Qt\Tools\mingw1310_64\bin\ranlib.exe"
 
-set "PARSER_SOURCE=build\lm1\parser.lm1.c"
-set "OWN_SOURCE=build\lm1\own.lm1.c"
-set "TRANS_SOURCE=build\lm1\trans.lm1.c"
-set "MAKE_SOURCE=build\lm1\make.lm1.c"
-set "FINALIZE_SOURCE=build\lm1\finalize.lm1.c"
-set "BUILD_CORE_SOURCE=build\lm1\buildCore.lm1.c"
+set "PARSER_SOURCE=lm1\build\parser.lm1.c"
+set "OWN_SOURCE=lm1\build\own.lm1.c"
+set "TRANS_SOURCE=lm1\build\trans.lm1.c"
+set "MAKE_SOURCE=lm1\build\make.lm1.c"
+set "FINALIZE_SOURCE=lm1\build\finalize.lm1.c"
+set "BUILD_CORE_SOURCE=lm1\build\buildCore.lm1.c"
 
 if not exist "%PARSER_SOURCE%" (
     echo buildCore.lm0.bat: source file not found: %PARSER_SOURCE% 1>&2

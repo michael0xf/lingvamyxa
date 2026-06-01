@@ -9,12 +9,12 @@ cd "$project_root"
 : "${LM_AR:=ar}"
 : "${LM_RANLIB:=ranlib}"
 
-parser_source="build/lm1/parser.lm1.c"
-own_source="build/lm1/own.lm1.c"
-trans_source="build/lm1/trans.lm1.c"
-make_source="build/lm1/make.lm1.c"
-finalize_source="build/lm1/finalize.lm1.c"
-build_core_source="build/lm1/buildCore.lm1.c"
+parser_source="lm1/build/parser.lm1.c"
+own_source="lm1/build/own.lm1.c"
+trans_source="lm1/build/trans.lm1.c"
+make_source="lm1/build/make.lm1.c"
+finalize_source="lm1/build/finalize.lm1.c"
+build_core_source="lm1/build/buildCore.lm1.c"
 
 for source_file in "$parser_source" "$own_source" "$trans_source" "$make_source" "$finalize_source" "$build_core_source"; do
     if [ ! -f "$source_file" ]; then

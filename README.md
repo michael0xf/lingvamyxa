@@ -47,10 +47,10 @@ lingvamyxa/
 - `trans.lm0` is the first L2-to-L1 translator executable.
 - `make.lm0` is the first native build driver generated from `lm2/make.lm2`.
 - `finalize.lm0` is the post-build installer that replaces `.next` tools in `build/lm0`.
-- `buildCore.lm0` is the project build driver compiled from `build/lm1/buildCore.lm1.c`; after bootstrap, that snapshot is regenerated from `lm2/buildCore.lmx`.
+- `buildCore.lm0` is the project build driver compiled from `lm1/build/buildCore.lm1.c`; after bootstrap, that snapshot is regenerated from `lm2/buildCore.lmx`.
 - `build/lm0/...` is the trusted current L0 tool layer and the local L0 output directory; it is not a portable source snapshot.
 - `build/libs/...` is the local native C library output/profile directory.
-- `build/lm1/...` is the generated L1 mirror produced from `lm2/...`; this is the portable build snapshot kept in Git.
+- `lm1/build/...` is the generated L1 mirror produced from `lm2/...`; this is the portable build snapshot kept in Git.
 - `lingvamyxa_qt` is an optional Qt Widgets GUI wrapper.
 
 ## Import into Qt Creator
