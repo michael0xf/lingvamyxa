@@ -1,0 +1,19 @@
+L2:
+    fm: pair () (int: left; int: right)
+        return: (1 2)
+    end: pair
+
+    fm: namedPair () (int: left; int: right)
+        return: (right: 5; left: 4)
+    end: namedPair
+
+    external:
+        fn: main () int
+            pairReturn: first
+            namedPairReturn: second
+            first: pair()
+            second: namedPair()
+            return: c.first.left != 1 || c.first.right != 2 || c.second.left != 4 || c.second.right != 5
+        end: main
+    end: external
+end: L2

@@ -1,0 +1,31 @@
+include: "own.lm1.h"
+
+L2:
+    fn: IntSource () int
+
+    fn: source () int
+        return: 5
+    end: source
+
+    fn: makeSource () IntSource
+        fn: nested () int
+            return: 7
+        ---
+        return: nested
+    end: makeSource
+
+    fn: take (int: value) int
+        return: value
+    end: take
+
+    fn: takeSource (IntSource: sourceRef) int
+        return: sourceRef()
+    end: takeSource
+
+    external:
+        fn: main () int
+            IntSource: fromClosure makeSource()
+            return: take(source) != 5 || take(fromClosure) != 7 || takeSource(fromClosure) != 7
+        end: main
+    end: external
+end: L2

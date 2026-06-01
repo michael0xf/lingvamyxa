@@ -30,6 +30,13 @@ table:
 end: `type.cTail`
 
 table:
+    name: `type.receiver`
+    columns: char@(class)  binding@(emit)                    binding@(structure_value_alloc)                    binding@(structure_value_fill)
+    rows:
+        `[]`             lm_trans_type_receiver_array_emit   lm_trans_type_receiver_array_structure_value_alloc   lm_trans_type_receiver_array_structure_value_fill
+end: `type.receiver`
+
+table:
     name: `receiver.function`
     columns: char@(class)  binding@(receiver)
     rows:
@@ -151,6 +158,13 @@ table:
         function         lm_trans_call_lower_value
         callable         lm_trans_call_lower_statement
 end: `call.lowering`
+
+table:
+    name: `materialize.argument`
+    columns: char@(class)              binding@(materializer)
+    rows:
+        `callable.zero-arg.value`      lm_trans_materialize_zero_arg_callable
+end: `materialize.argument`
 
 table:
     name: `operator.prefix`

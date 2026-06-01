@@ -20,6 +20,16 @@ typedef struct LmOwnValueStack {
     size_t item_size;
 } LmOwnValueStack;
 
+typedef struct LmOwnAllocationDescriptor {
+    void *address;
+    struct LmOwnArena *owner;
+    size_t bytes;
+    size_t element_size;
+    size_t count;
+    size_t rank;
+    size_t level;
+} LmOwnAllocationDescriptor;
+
 typedef int LmOwnEdgeKind;
 
 #define LM_OWN_EDGE_BORROWED 1
@@ -40,11 +50,14 @@ typedef struct LmOwnLazyEdge {
 
 struct LmOwnArena {
     LmOwnPtrStack allocations;
+    LmOwnValueStack allocation_descriptors;
     LmOwnValueStack lazy_edges;
     int frozen;
 };
 
 void *lm_own_new_zero(size_t size);
+void *lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor *lm_own_allocation_descriptor(const void *address);
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
 void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item);
 void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item);
@@ -65,6 +78,8 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
 void lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
 void *lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
+void *lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor *lm_own_arena_allocation_descriptor(const LmOwnArena *arena, const void *address);
 char *lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t length);
 int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
 int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);

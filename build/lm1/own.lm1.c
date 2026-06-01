@@ -230,9 +230,131 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
     }
 }
 
+static LmOwnValueStack lm_own_global_allocation_descriptors;
+static int lm_own_global_allocation_descriptors_ready;
+
+static int lm_own_size_multiply(size_t left, size_t right, size_t *out) {
+    if (out == 0) {
+        return 1;
+    }
+    if (left != 0U && right > ((size_t)-1) / left) {
+        return 1;
+    }
+    *out = left * right;
+    return 0;
+}
+
+static int lm_own_global_allocation_descriptors_init(void) {
+    if (!lm_own_global_allocation_descriptors_ready) {
+        lm_own_value_stack_init(
+            &lm_own_global_allocation_descriptors,
+            sizeof(LmOwnAllocationDescriptor)
+        );
+        lm_own_global_allocation_descriptors_ready = 1;
+    }
+    return 0;
+}
+
+static int lm_own_allocation_descriptor_push(
+    LmOwnValueStack *descriptors,
+    void *address,
+    LmOwnArena *owner,
+    size_t bytes,
+    size_t element_size,
+    size_t count,
+    size_t rank,
+    size_t level
+) {
+    LmOwnAllocationDescriptor descriptor;
+
+    if (descriptors == 0 || address == 0) {
+        return 1;
+    }
+
+    descriptor.address = address;
+    descriptor.owner = owner;
+    descriptor.bytes = bytes;
+    descriptor.element_size = element_size;
+    descriptor.count = count;
+    descriptor.rank = rank;
+    descriptor.level = level;
+    return lm_own_value_stack_push(descriptors, &descriptor);
+}
+
+static const LmOwnAllocationDescriptor *lm_own_allocation_descriptor_find(
+    const LmOwnValueStack *descriptors,
+    const void *address
+) {
+    const LmOwnAllocationDescriptor *descriptor;
+    size_t index;
+
+    if (descriptors == 0 || address == 0) {
+        return 0;
+    }
+
+    index = descriptors->count;
+    while (index > 0U) {
+        --index;
+        descriptor = (const LmOwnAllocationDescriptor *)lm_own_value_stack_at(descriptors, index);
+        if (descriptor != 0 && descriptor->address == address) {
+            return descriptor;
+        }
+    }
+
+    return 0;
+}
+
+void *lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level) {
+    void *object;
+    size_t bytes;
+
+    if (lm_own_size_multiply(element_size, count, &bytes) != 0) {
+        return 0;
+    }
+    if (bytes == 0U) {
+        return 0;
+    }
+    if (lm_own_global_allocation_descriptors_init() != 0) {
+        return 0;
+    }
+
+    object = calloc(1U, bytes);
+    if (object == 0) {
+        return 0;
+    }
+    if (
+        lm_own_allocation_descriptor_push(
+            &lm_own_global_allocation_descriptors,
+            object,
+            0,
+            bytes,
+            element_size,
+            count,
+            rank,
+            level
+        ) != 0
+    ) {
+        free(object);
+        return 0;
+    }
+
+    return object;
+}
+
+const LmOwnAllocationDescriptor *lm_own_allocation_descriptor(const void *address) {
+    if (!lm_own_global_allocation_descriptors_ready) {
+        return 0;
+    }
+    return lm_own_allocation_descriptor_find(&lm_own_global_allocation_descriptors, address);
+}
+
 void lm_own_arena_init(LmOwnArena *arena) {
     if (arena != 0) {
         lm_own_ptr_stack_init(&arena->allocations, free);
+        lm_own_value_stack_init(
+            &arena->allocation_descriptors,
+            sizeof(LmOwnAllocationDescriptor)
+        );
         lm_own_value_stack_init(&arena->lazy_edges, sizeof(LmOwnLazyEdge));
         arena->frozen = 0;
     }
@@ -241,6 +363,7 @@ void lm_own_arena_init(LmOwnArena *arena) {
 void lm_own_arena_destroy(LmOwnArena *arena) {
     if (arena != 0) {
         lm_own_value_stack_destroy(&arena->lazy_edges);
+        lm_own_value_stack_destroy(&arena->allocation_descriptors);
         lm_own_ptr_stack_destroy(&arena->allocations);
         arena->frozen = 0;
     }
@@ -261,7 +384,81 @@ void *lm_own_arena_new_zero(LmOwnArena *arena, size_t size) {
         free(object);
         return 0;
     }
+    if (
+        lm_own_allocation_descriptor_push(
+            &arena->allocation_descriptors,
+            object,
+            arena,
+            size,
+            size,
+            1U,
+            0U,
+            0U
+        ) != 0
+    ) {
+        lm_own_ptr_stack_pop(&arena->allocations);
+        free(object);
+        return 0;
+    }
     return object;
+}
+
+void *lm_own_arena_array_new_zero(
+    LmOwnArena *arena,
+    size_t element_size,
+    size_t count,
+    size_t rank,
+    size_t level
+) {
+    void *object;
+    size_t bytes;
+
+    if (arena == 0 || arena->frozen) {
+        return 0;
+    }
+    if (lm_own_size_multiply(element_size, count, &bytes) != 0) {
+        return 0;
+    }
+    if (bytes == 0U) {
+        return 0;
+    }
+
+    object = calloc(1U, bytes);
+    if (object == 0) {
+        return 0;
+    }
+    if (lm_own_ptr_stack_push(&arena->allocations, object) != 0) {
+        free(object);
+        return 0;
+    }
+    if (
+        lm_own_allocation_descriptor_push(
+            &arena->allocation_descriptors,
+            object,
+            arena,
+            bytes,
+            element_size,
+            count,
+            rank,
+            level
+        ) != 0
+    ) {
+        lm_own_ptr_stack_pop(&arena->allocations);
+        free(object);
+        return 0;
+    }
+
+    return object;
+}
+
+const LmOwnAllocationDescriptor *lm_own_arena_allocation_descriptor(
+    const LmOwnArena *arena,
+    const void *address
+) {
+    if (arena == 0) {
+        return 0;
+    }
+    return lm_own_allocation_descriptor_find(&arena->allocation_descriptors, address);
 }
 
 char *lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t length) {
@@ -341,6 +538,10 @@ int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {
 
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
     void **items;
+    LmOwnAllocationDescriptor *source_descriptors;
+    LmOwnAllocationDescriptor *target_descriptors;
+    size_t descriptor_base;
+    size_t descriptor_new_count;
     size_t new_count;
     size_t capacity;
     size_t lazy_base;
@@ -385,6 +586,33 @@ int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
         source->allocations.items = 0;
         source->allocations.count = 0U;
         source->allocations.capacity = 0U;
+    }
+
+    descriptor_base = target->allocation_descriptors.count;
+    descriptor_new_count = descriptor_base + source->allocation_descriptors.count;
+    if (source->allocation_descriptors.count > 0U) {
+        if (
+            lm_own_value_stack_resize_zero(
+                &target->allocation_descriptors,
+                descriptor_new_count
+            ) != 0
+        ) {
+            return 1;
+        }
+        target_descriptors = (LmOwnAllocationDescriptor *)target->allocation_descriptors.items;
+        source_descriptors = (LmOwnAllocationDescriptor *)source->allocation_descriptors.items;
+        memcpy(
+            target_descriptors + descriptor_base,
+            source_descriptors,
+            source->allocation_descriptors.count * sizeof(*target_descriptors)
+        );
+        target->allocation_descriptors.count = descriptor_new_count;
+        for (i = descriptor_base; i < target->allocation_descriptors.count; ++i) {
+            if (target_descriptors[i].owner == source) {
+                target_descriptors[i].owner = target;
+            }
+        }
+        source->allocation_descriptors.count = 0U;
     }
 
     if (source->lazy_edges.count > 0U) {
