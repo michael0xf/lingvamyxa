@@ -970,6 +970,21 @@ static const char *lm_trans_expr_emitter_binding_table(const char *class_name) {
     return table;
 }
 
+static const char *lm_trans_expr_spelling_binding_table(const char *class_name) {
+    LmP0Text class_text;
+    const char *table;
+
+    class_text = lm_trans_text_from_cstr(class_name);
+    table = lm_trans_registry_lookup(class_text, "expr_spelling_binding");
+    if (
+        table != 0 &&
+        lm_trans_registry_assert_payload_table_exists("expr_spelling_binding", class_text, table) != 0
+    ) {
+        exit(2);
+    }
+    return table != 0 ? table : class_name;
+}
+
 static int lm_trans_registry_has_expr_emitter_class(LmP0Text key, const char *class_name) {
     const char *table;
 
@@ -3434,8 +3449,10 @@ static int lm_trans_expr_atom_lowering_set_from_class(
     LmP0Text key,
     const char *class_name
 ) {
+    const char *spelling_table;
     const char *emitter_table;
 
+    spelling_table = lm_trans_expr_spelling_binding_table(class_name);
     emitter_table = lm_trans_expr_emitter_binding_table(class_name);
     if (emitter_table == 0) {
         fprintf(
@@ -3448,7 +3465,7 @@ static int lm_trans_expr_atom_lowering_set_from_class(
     return lm_trans_expr_atom_lowering_set_from_tables(
         lowering,
         key,
-        class_name,
+        spelling_table,
         emitter_table
     );
 }
@@ -3491,7 +3508,7 @@ static int lm_trans_lower_expr_atom(
         return lm_trans_expr_atom_lowering_set_from_tables(
             out,
             node->as.atom,
-            "expr.atom",
+            "expr.atom.ansi_c",
             "expr.atom.emitter"
         );
     } else if (lm_trans_atom_is_index_operator(node->as.atom)) {
@@ -4948,12 +4965,12 @@ static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *
         return 1;
     }
 
-    index_payload = lm_trans_registry_lookup(frame->head, "receiver.positional-name-index");
+    index_payload = lm_trans_registry_lookup(frame->head, "receiver.positional-name.index");
     if (index_payload != 0) {
         if (!lm_trans_parse_size_payload(index_payload, out_index)) {
             fprintf(
                 stderr,
-                "trans registry error: receiver.positional-name-index for \"%.*s\" must be a non-negative integer\n",
+                "trans registry error: receiver.positional-name.index for \"%.*s\" must be a non-negative integer\n",
                 (int)frame->head.length,
                 frame->head.data
             );
@@ -4962,7 +4979,7 @@ static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *
         return 1;
     }
 
-    if (lm_trans_registry_has(frame->head, "receiver.positional-name")) {
+    if (lm_trans_registry_has(frame->head, "receiver.positional-name.argument")) {
         *out_index = 0U;
         return 1;
     }
