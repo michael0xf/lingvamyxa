@@ -1,0 +1,7 @@
+L2:
+. external:
+. . fn: main () const(@: c.char)
+. . . return: "symbol"
+. . end: main
+. end: external
+end: L2

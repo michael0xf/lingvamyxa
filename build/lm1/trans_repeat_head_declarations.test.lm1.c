@@ -1,0 +1,34 @@
+int main(void) {
+    int x = 5;
+    int y = 10;
+    int z = 15;
+    int a = 1;
+    int b = 2;
+    int c = 3;
+    int *px = 0;
+    int *py = 0;
+    char *pc = 0;
+    char **ppa = 0;
+    char **ppb = 0;
+    int arr[3] = {1, 2, 3};
+    int other[3] = {4, 5, 6};
+    int row[3];
+    char chars[3];
+    int n = 2;
+    int m = 3;
+    int matrix[n][m];
+    int matrix2[n][m];
+    char matrix3[n][m];
+    int grouped[2][2];
+    int grouped2[2][2];
+    char grouped3[2][2];
+    row[0] = 0;
+    matrix[0][0] = 0;
+    matrix2[1][2] = 7;
+    matrix3[1][2] = 1;
+    grouped[0][1] = 8;
+    grouped2[1][0] = 9;
+    grouped3[1][1] = 10;
+    chars[2] = 65;
+    return x != 5 || y != 10 || z != 15 || a != 1 || b != 2 || c != 3 || px != 0 || py != 0 || pc != 0 || ppa != 0 || ppb != 0 || arr[0] != 1 || other[2] != 6 || row[0] != 0 || matrix[0][0] != 0 || matrix2[1][2] != 7 || matrix3[1][2] != 1 || grouped[0][1] != 8 || grouped2[1][0] != 9 || grouped3[1][1] != 10 || chars[2] != 65;
+}
