@@ -7777,7 +7777,7 @@ The default bootstrap registry table notation is a dense table Structure:
 L4:
     table:
         name: BUILD
-        columns: char@(class)       binding@(l2)                char@(win)  char@(unix)
+        columns: class              (l2 binding)                (win char)  (unix char)
         rows:
                  exe_suffix         lm_build_exe_suffix         ".exe"     ""
                  platform_absolute  lm_build_platform_absolute  NULL       NULL
@@ -7788,6 +7788,11 @@ The first column is the row key and is normally named `class`. Each later column
 names a relation column. A two-column table materializes the relation directly
 under `name`; an N-column table with N > 2 materializes each non-key column as
 `name.column`, for example `BUILD.l2`, `BUILD.win` and `BUILD.unix`.
+
+Inside `columns:`, a bare atom is a column name. An anonymous Structure uses
+its first atom as the column name and the remaining atoms as descriptors, for
+example `(l2 binding)` names column `l2` and records descriptor `binding`.
+`columns` itself is not a registry namespace entry; it is consumed by `table`.
 
 Rows are dense. The number of row cells must be divisible by the number of
 columns. The loader does not use physical source lines to infer missing cells.

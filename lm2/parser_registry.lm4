@@ -1,19 +1,19 @@
 table:
     name: node
-    columns: char@(class)       int@(kind)  int@(flag)
+    columns: class              (kind serial)  (flag serial)
     rows:
-             structure          1           NULL
-             frame              2           NULL
-             atom               3           NULL
-             disabled           4           NULL
-             inactive           NULL        1
-             mix                NULL        2
-             `positional-skip`  NULL        4
+             structure          1              NULL
+             frame              2              NULL
+             atom               3              NULL
+             disabled           4              NULL
+             inactive           NULL           1
+             mix                NULL           2
+             `positional-skip`  NULL           4
 end: node
 
 table:
     name: frame
-    columns: char@(class)        int@(flag)
+    columns: class               (flag serial)
     rows:
              colon               1
              compact             2
@@ -23,19 +23,19 @@ end: frame
 
 table:
     name: namespace
-    columns: char@(class)  class@(parser_class)
+    columns: class     (parser_class class)
     rows:
-             `end`         `trailer.end`
-             `return`      `trailer.return`
-             `until`       `trailer.until`
+             `end`     `trailer.end`
+             `return`  `trailer.return`
+             `until`   `trailer.until`
 end: namespace
 
 table:
     name: trailer
-    columns: char@(class)      int@(flag)  binding@(role)             int@(`allow-bare`)  char@(target)
+    columns: class             (flag serial)  (role binding)             (`allow-bare` serial)  (target char)
     rows:
-             `tail-cutter`     1           NULL                       NULL                NULL
-             `trailer.end`     NULL        LM_P0_TRAILER_ROLE_END     0                   NULL
-             `trailer.return`  NULL        LM_P0_TRAILER_ROLE_RETURN  1                   fn
-             `trailer.until`   NULL        LM_P0_TRAILER_ROLE_UNTIL   0                   NULL
+             `tail-cutter`     1              NULL                       NULL                   NULL
+             `trailer.end`     NULL           LM_P0_TRAILER_ROLE_END     0                      NULL
+             `trailer.return`  NULL           LM_P0_TRAILER_ROLE_RETURN  1                      fn
+             `trailer.until`   NULL           LM_P0_TRAILER_ROLE_UNTIL   0                      NULL
 end: trailer

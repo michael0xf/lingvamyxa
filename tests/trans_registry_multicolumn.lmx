@@ -1,7 +1,7 @@
 L4:
     table:
         name: `registry.multicolumn.smoke`
-        columns: char@(class)  char@(left)  char@(right)
+        columns: class  (left char)  (right char)
         rows:
                  sample        one          NULL
     end: `registry.multicolumn.smoke`

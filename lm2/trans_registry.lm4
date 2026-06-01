@@ -1,53 +1,53 @@
 table:
     name: `type.spelling`
-    columns: char@(class)  char@(spelling)
+    columns: class  (spelling char)
     rows:
-             u8            uint8_t
-             u16           uint16_t
-             u32           uint32_t
-             u64           uint64_t
-             i8            int8_t
-             i16           int16_t
-             i32           int32_t
-             i64           int64_t
+             u8     uint8_t
+             u16    uint16_t
+             u32    uint32_t
+             u64    uint64_t
+             i8     int8_t
+             i16    int16_t
+             i32    int32_t
+             i64    int64_t
 end: `type.spelling`
 
 table:
     name: `type.cTail`
-    columns: char@(class)  char@(spelling)
+    columns: class     (spelling char)
     rows:
-             void          void
-             char          char
-             short         short
-             int           int
-             long          long
-             float         float
-             double        double
-             signed        signed
-             unsigned      unsigned
-             size_t        size_t
-             FILE          FILE
+             void      void
+             char      char
+             short     short
+             int       int
+             long      long
+             float     float
+             double    double
+             signed    signed
+             unsigned  unsigned
+             size_t    size_t
+             FILE      FILE
 end: `type.cTail`
 
 table:
     name: `type.receiver`
-    columns: char@(class)  binding@(emit)                     binding@(structure_value_alloc)                     binding@(structure_value_fill)
+    columns: class  (emit binding)                     (structure_value_alloc binding)                     (structure_value_fill binding)
     rows:
-             `[]`          lm_trans_type_receiver_array_emit  lm_trans_type_receiver_array_structure_value_alloc  lm_trans_type_receiver_array_structure_value_fill
+             `[]`   lm_trans_type_receiver_array_emit  lm_trans_type_receiver_array_structure_value_alloc  lm_trans_type_receiver_array_structure_value_fill
 end: `type.receiver`
 
 table:
     name: `receiver.function`
-    columns: char@(class)  binding@(receiver)
+    columns: class  (receiver binding)
     rows:
-             fn            lm_trans_receiver_fn
-             fm            lm_trans_receiver_fm
-             sub           lm_trans_receiver_sub
+             fn     lm_trans_receiver_fn
+             fm     lm_trans_receiver_fm
+             sub    lm_trans_receiver_sub
 end: `receiver.function`
 
 table:
     name: namespace
-    columns: char@(class)  class@(`receiver.type`)
+    columns: class         (`receiver.type` class)
     rows:
              L1            `receiver.level`
              L2            `receiver.level`
@@ -74,7 +74,7 @@ end: namespace
 
 table:
     name: `receiver.type`
-    columns: char@(class)          binding@(dispatcher)
+    columns: class                 (dispatcher binding)
     rows:
              `receiver.level`      lm_trans_dispatch_level_receiver
              `receiver.function`   lm_trans_dispatch_function_receiver
@@ -85,15 +85,15 @@ end: `receiver.type`
 
 table:
     name: `receiver.level`
-    columns: char@(class)  binding@(receiver)
+    columns: class  (receiver binding)
     rows:
-             L1            lm_trans_emit_l1_frame
-             L2            lm_trans_emit_l2_frame
+             L1     lm_trans_emit_l1_frame
+             L2     lm_trans_emit_l2_frame
 end: `receiver.level`
 
 table:
     name: `receiver.statement`
-    columns: char@(class)  binding@(receiver)
+    columns: class         (receiver binding)
     rows:
              if            lm_trans_statement_emit_if
              else          lm_trans_statement_emit_else
@@ -112,7 +112,7 @@ end: `receiver.statement`
 
 table:
     name: `receiver.positional-name`
-    columns: char@(class)  class@(argument)  int@(index)
+    columns: class         (argument class)  (index serial)
     rows:
              fn            name              0
              fm            name              0
@@ -125,7 +125,7 @@ end: `receiver.positional-name`
 
 table:
     name: `expr_spelling_binding`
-    columns: char@(class)        class@(binding_table)
+    columns: class               (binding_table class)
     rows:
              `operator.prefix`   `operator.prefix.ansi_c`
              `operator.postfix`  `operator.postfix.ansi_c`
@@ -136,51 +136,51 @@ end: `expr_spelling_binding`
 
 table:
     name: `receiver.modifier`
-    columns: char@(class)  binding@(receiver)
+    columns: class     (receiver binding)
     rows:
-             external      lm_trans_top_level_function_header
+             external  lm_trans_top_level_function_header
 end: `receiver.modifier`
 
 table:
     name: `receiver.trailer`
-    columns: char@(class)  binding@(receiver)
+    columns: class  (receiver binding)
     rows:
-             end           lm_trans_validate_end_trailer
-             until         lm_trans_validate_end_trailer
+             end    lm_trans_validate_end_trailer
+             until  lm_trans_validate_end_trailer
 end: `receiver.trailer`
 
 table:
     name: `call.lowering`
-    columns: char@(class)  binding@(handler)
+    columns: class     (handler binding)
     rows:
-             function      lm_trans_call_lower_value
-             callable      lm_trans_call_lower_statement
+             function  lm_trans_call_lower_value
+             callable  lm_trans_call_lower_statement
 end: `call.lowering`
 
 table:
     name: `materialize.argument`
-    columns: char@(class)               binding@(materializer)
+    columns: class                      (materializer binding)
     rows:
              `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
 end: `materialize.argument`
 
 table:
     name: `operator.prefix`
-    columns: char@(class)  char@(ansi_c)  binding@(emitter)
+    columns: class  (ansi_c char)  (emitter binding)
     rows:
-             `++`          `++`           lm_trans_expr_emit_operator
-             `--`          `--`           lm_trans_expr_emit_operator
-             `+`           `+`            lm_trans_expr_emit_operator
-             `-`           `-`            lm_trans_expr_emit_operator
-             `@`           `&`            lm_trans_expr_emit_operator
-             `\`           `*`            lm_trans_expr_emit_deref
-             `!`           `!`            lm_trans_expr_emit_operator
-             `~`           `~`            lm_trans_expr_emit_operator
+             `++`   `++`           lm_trans_expr_emit_operator
+             `--`   `--`           lm_trans_expr_emit_operator
+             `+`    `+`            lm_trans_expr_emit_operator
+             `-`    `-`            lm_trans_expr_emit_operator
+             `@`    `&`            lm_trans_expr_emit_operator
+             `\`    `*`            lm_trans_expr_emit_deref
+             `!`    `!`            lm_trans_expr_emit_operator
+             `~`    `~`            lm_trans_expr_emit_operator
 end: `operator.prefix`
 
 table:
     name: expr_emitter_binding
-    columns: char@(class)        class@(binding_table)
+    columns: class               (binding_table class)
     rows:
              `operator.prefix`   `operator.prefix.emitter`
              `operator.postfix`  `operator.postfix.emitter`
@@ -190,46 +190,46 @@ end: expr_emitter_binding
 
 table:
     name: `operator.postfix`
-    columns: char@(class)  char@(ansi_c)  binding@(emitter)
+    columns: class  (ansi_c char)  (emitter binding)
     rows:
-             `++`          `++`           lm_trans_expr_emit_operator
-             `--`          `--`           lm_trans_expr_emit_operator
+             `++`   `++`           lm_trans_expr_emit_operator
+             `--`   `--`           lm_trans_expr_emit_operator
 end: `operator.postfix`
 
 table:
     name: `operator.infix`
-    columns: char@(class)  char@(ansi_c)  binding@(emitter)
+    columns: class  (ansi_c char)  (emitter binding)
     rows:
-             `+`           `+`            lm_trans_expr_emit_operator
-             `-`           `-`            lm_trans_expr_emit_operator
-             `*`           `*`            lm_trans_expr_emit_operator
-             `/`           `/`            lm_trans_expr_emit_operator
-             `%`           `%`            lm_trans_expr_emit_operator
-             `=`           `==`           lm_trans_expr_emit_operator
-             `!=`          `!=`           lm_trans_expr_emit_operator
-             `<`           `<`            lm_trans_expr_emit_operator
-             `<=`          `<=`           lm_trans_expr_emit_operator
-             `>`           `>`            lm_trans_expr_emit_operator
-             `>=`          `>=`           lm_trans_expr_emit_operator
-             `&&`          `&&`           lm_trans_expr_emit_operator
-             `||`          `||`           lm_trans_expr_emit_operator
-             `&`           `&`            lm_trans_expr_emit_operator
-             `|`           `|`            lm_trans_expr_emit_operator
-             `^`           `^`            lm_trans_expr_emit_operator
-             `\`           `->`           lm_trans_expr_emit_pointer_follow
+             `+`    `+`            lm_trans_expr_emit_operator
+             `-`    `-`            lm_trans_expr_emit_operator
+             `*`    `*`            lm_trans_expr_emit_operator
+             `/`    `/`            lm_trans_expr_emit_operator
+             `%`    `%`            lm_trans_expr_emit_operator
+             `=`    `==`           lm_trans_expr_emit_operator
+             `!=`   `!=`           lm_trans_expr_emit_operator
+             `<`    `<`            lm_trans_expr_emit_operator
+             `<=`   `<=`           lm_trans_expr_emit_operator
+             `>`    `>`            lm_trans_expr_emit_operator
+             `>=`   `>=`           lm_trans_expr_emit_operator
+             `&&`   `&&`           lm_trans_expr_emit_operator
+             `||`   `||`           lm_trans_expr_emit_operator
+             `&`    `&`            lm_trans_expr_emit_operator
+             `|`    `|`            lm_trans_expr_emit_operator
+             `^`    `^`            lm_trans_expr_emit_operator
+             `\`    `->`           lm_trans_expr_emit_pointer_follow
 end: `operator.infix`
 
 table:
     name: `operator.index`
-    columns: char@(class)  char@(ansi_c)  binding@(emitter)
+    columns: class  (ansi_c char)  (emitter binding)
     rows:
-             `[`           `[`            lm_trans_expr_emit_operator
-             `]`           `]`            lm_trans_expr_emit_operator
+             `[`    `[`            lm_trans_expr_emit_operator
+             `]`    `]`            lm_trans_expr_emit_operator
 end: `operator.index`
 
 table:
     name: `expr.atom`
-    columns: char@(class)  char@(ansi_c)  binding@(emitter)
+    columns: class  (ansi_c char)  (emitter binding)
     rows:
-             `.`           `.`            lm_trans_expr_emit_c_dot
+             `.`    `.`            lm_trans_expr_emit_c_dot
 end: `expr.atom`

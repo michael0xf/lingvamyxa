@@ -147,9 +147,28 @@ to a terminal cell payload kind and payload. Optional result, effect, lifetime,
 authority, priority, cost and provenance metadata may be stored in side tables
 keyed by the payload class/key or by an implementation-generated cell id.
 
-The canonical source form for a relation table is a typed table with an explicit
-name, column descriptors and rows. Class/key spelling follows the ordinary
-identifier rule:
+The canonical source form for a relation table is a table Structure with an
+explicit name, column list and dense rows. `columns` is not a registry namespace
+item by itself. It is a field consumed by `table`.
+
+Column syntax is generic:
+
+    atom
+        The atom is the column name.
+
+    anonymous Structure
+        The first atom is the column name. The remaining atoms are column
+        descriptors. Descriptors are ordinary class/key names and may be stored
+        as relation rows by the loader.
+
+For example:
+
+    columns: class (spelling char) (cost serial)
+
+means a row-key column named `class`, a column named `spelling` with descriptor
+`char`, and a column named `cost` with descriptor `serial`.
+
+Class/key spelling follows the ordinary identifier rule:
 
     if the class/key name is a valid ordinary Lingvamyxa identifier, write it
         bare;
@@ -170,13 +189,13 @@ For example:
 The semantic class/key value of an exact quoted identifier is its payload after
 backtick unescaping; the backticks are not part of the class/key.
 
-By convention the first column is `char@(class)`; it carries the row class/key.
-Later column names are also classes. The cell under such a column is the value
-of that relation coordinate:
+By convention the first column is `class`; it carries the row class/key. Later
+column names are also classes. The cell under such a column is the value of
+that relation coordinate:
 
     table:
         name: `translator type-->spelling`
-        columns: char@(class) char@(spelling)
+        columns: class (spelling char)
         rows:
             u8  "uint8_t"
             u16 "uint16_t"
@@ -276,7 +295,7 @@ Example sparse registry source:
 
     table:
         name: equals
-        columns: char@(class) char@(decimal) char@(int)
+        columns: class (decimal char) (int char)
         rows:
             decimal decimal_eq decimal_int_eq
             int     int_decimal_eq int_eq
@@ -410,7 +429,7 @@ A short source spelling may normalize directly to a payload. Examples:
 
     table:
         name: plus
-        columns: char@(class) char@(int) char@(u32)
+        columns: class (int char) (u32 char)
         rows:
             decimal decimal_int_add NULL
             u32     NULL            plus_u32_u32_l2
@@ -427,7 +446,7 @@ used as a key into additional descriptor tables:
 
     table:
         name: `plus cell-->result`
-        columns: char@(class) char@(result)
+        columns: class (result char)
         rows:
             decimal_int_add decimal
             plus_u32_u32_l2 u32
@@ -435,7 +454,7 @@ used as a key into additional descriptor tables:
 
     table:
         name: effects
-        columns: char@(class) char@(effect)
+        columns: class (effect char)
         rows:
             decimal_int_add pure
             plus_u32_u32_l2 pure
@@ -443,7 +462,7 @@ used as a key into additional descriptor tables:
 
     table:
         name: level
-        columns: char@(class) char@(level)
+        columns: class (level char)
         rows:
             decimal_int_add L2
             plus_u32_u32_l2 L2
@@ -451,14 +470,14 @@ used as a key into additional descriptor tables:
 
     table:
         name: `implementation-->L2 lowering`
-        columns: char@(class) char@(symbol)
+        columns: class (symbol char)
         rows:
             plus_u32_u32_l2 "+"
     end: `implementation-->L2 lowering`
 
     table:
         name: cost
-        columns: char@(class) int@(cost)
+        columns: class (cost serial)
         rows:
             decimal_int_add 10
             plus_u32_u32_l2 1
@@ -1208,7 +1227,7 @@ RegistryViews. For example:
 
     table:
         name: sqrt
-        columns: char@(class) char@(result) char@(implementation)
+        columns: class (result char) (implementation char)
         rows:
             BigFloat BigFloat sqrt_mpfr
             fixedQ16 fixedQ16 sqrt_ana
@@ -1217,7 +1236,7 @@ RegistryViews. For example:
 
     table:
         name: `implementation-->L2 lowering`
-        columns: char@(class) char@(symbol)
+        columns: class (symbol char)
         rows:
             sqrt_mpfr   "mpfr_sqrt"
             sqrt_ana    "ana_sqrt"
@@ -1226,7 +1245,7 @@ RegistryViews. For example:
 
     table:
         name: providerOf
-        columns: char@(class) char@(provider)
+        columns: class (provider char)
         rows:
             sqrt_mpfr MPFR
             sqrt_ana ANA_SQRT
@@ -1288,7 +1307,7 @@ Example operator cell:
 
     table:
         name: equals
-        columns: char@(class) char@(u32) char@(decimal)
+        columns: class (u32 char) (decimal char)
         rows:
             u32     u32_eq NULL
             decimal NULL decimal_eq

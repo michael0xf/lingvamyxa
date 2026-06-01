@@ -211,30 +211,70 @@ static int lm_table_name_from_frame(const LmP0Frame *table_frame, LmP0Text *out_
     return 1;
 }
 
-static char *lm_table_column_spelling_alloc(const LmP0Node *node, LmTableError *error) {
-    const LmP0Frame *frame;
+static int lm_table_column_spelling_append_node(LmTableBuffer *buffer, const LmP0Node *node);
+
+static int lm_table_column_spelling_append_structure(LmTableBuffer *buffer, const LmP0Structure *structure) {
+    const LmP0Field *field;
+    int first;
+
+    lm_table_buffer_append_cstr(buffer, "(");
+    first = 1;
+    for (field = structure->first_field; field != 0; field = field->next) {
+        if (lm_table_node_ignored(field->value)) {
+            continue;
+        }
+        if (!first) {
+            lm_table_buffer_append_cstr(buffer, " ");
+        }
+        if (!lm_table_column_spelling_append_node(buffer, field->value)) {
+            return 0;
+        }
+        first = 0;
+    }
+    lm_table_buffer_append_cstr(buffer, ")");
+    return !first && !buffer->failed;
+}
+
+static int lm_table_column_spelling_append_node(LmTableBuffer *buffer, const LmP0Node *node) {
     const LmP0Node *argument;
+
+    if (node == 0) {
+        return 0;
+    }
+    if (node->kind == LM_P0_NODE_ATOM) {
+        lm_table_buffer_append_text(buffer, node->as.atom);
+        return !buffer->failed;
+    }
+    if (node->kind == LM_P0_NODE_STRUCTURE) {
+        return lm_table_column_spelling_append_structure(buffer, &node->as.structure);
+    }
+    if (node->kind == LM_P0_NODE_FRAME) {
+        argument = lm_table_single_body_node(&node->as.frame);
+        if (argument == 0) {
+            return 0;
+        }
+        lm_table_buffer_append_text(buffer, node->as.frame.head);
+        lm_table_buffer_append_cstr(buffer, "(");
+        if (!lm_table_column_spelling_append_node(buffer, argument)) {
+            return 0;
+        }
+        lm_table_buffer_append_cstr(buffer, ")");
+        return !buffer->failed;
+    }
+    return 0;
+}
+
+static char *lm_table_column_spelling_alloc(const LmP0Node *node, LmTableError *error) {
     LmTableBuffer buffer;
     char *result;
 
     memset(&buffer, 0, sizeof(buffer));
 
-    if (node == 0 || node->kind != LM_P0_NODE_FRAME) {
-        lm_table_error_set(error, "columns: fields must be typed column frames");
+    if (!lm_table_column_spelling_append_node(&buffer, node)) {
+        lm_table_error_set(error, "columns: fields must be atoms or descriptor structures");
+        lm_table_buffer_destroy(&buffer);
         return 0;
     }
-
-    frame = &node->as.frame;
-    argument = lm_table_single_body_node(frame);
-    if (argument == 0 || argument->kind != LM_P0_NODE_ATOM) {
-        lm_table_error_set(error, "columns: column frame must contain one atom");
-        return 0;
-    }
-
-    lm_table_buffer_append_text(&buffer, frame->head);
-    lm_table_buffer_append_cstr(&buffer, "(");
-    lm_table_buffer_append_text(&buffer, argument->as.atom);
-    lm_table_buffer_append_cstr(&buffer, ")");
 
     result = lm_table_buffer_take(&buffer);
     lm_table_buffer_destroy(&buffer);

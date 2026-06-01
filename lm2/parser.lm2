@@ -84,6 +84,12 @@ typedef struct LmP0Registry {
     int loading;
 } LmP0Registry;
 
+typedef struct LmP0RegistryColumn {
+    LmP0Text name;
+    LmP0Text descriptors[16];
+    size_t descriptor_count;
+} LmP0RegistryColumn;
+
 static LmP0Registry lm_p0_registry;
 
 static int lm_p0_registry_load_default(void);
@@ -5855,10 +5861,10 @@ static int lm_p0_registry_frame_single_atom(
 ) {
     const LmP0Field *field;
 
-    if (frame == 0 || head == 0 || out_atom == 0) {
+    if (frame == 0 || out_atom == 0) {
         return 0;
     }
-    if (!lm_p0_text_equals(frame->head, head)) {
+    if (head != 0 && !lm_p0_text_equals(frame->head, head)) {
         return 0;
     }
 
@@ -5878,44 +5884,78 @@ static int lm_p0_registry_frame_single_atom(
 
 static int lm_p0_registry_column_name(
     const LmP0Field *field,
-    LmP0Text *out_name
+    LmP0RegistryColumn *out_column
 ) {
     const LmP0Node *node;
+    const LmP0Field *body_field;
+    size_t descriptor_count;
 
-    if (field == 0 || out_name == 0) {
+    if (field == 0 || out_column == 0) {
         return 0;
     }
 
+    memset(out_column, 0, sizeof(*out_column));
     node = field->value;
-    if (node == 0 || node->kind != LM_P0_NODE_FRAME) {
+    if (node == 0) {
         return -1;
     }
 
-    if (lm_p0_registry_frame_single_atom(&node->as.frame, "char@", out_name) > 0) {
-        return 1;
-    }
-    if (lm_p0_registry_frame_single_atom(&node->as.frame, "int@", out_name) > 0) {
-        return 1;
-    }
-    if (lm_p0_registry_frame_single_atom(&node->as.frame, "binding@", out_name) > 0) {
-        return 1;
-    }
-    if (lm_p0_registry_frame_single_atom(&node->as.frame, "class@", out_name) > 0) {
+    if (node->kind == LM_P0_NODE_ATOM) {
+        out_column->name = node->as.atom;
         return 1;
     }
 
-    return -1;
+    if (node->kind == LM_P0_NODE_FRAME) {
+        if (lm_p0_registry_frame_single_atom(&node->as.frame, 0, &out_column->name) <= 0) {
+            return -1;
+        }
+        out_column->descriptors[0] = node->as.frame.head;
+        out_column->descriptor_count = 1U;
+        return 1;
+    }
+
+    if (node->kind != LM_P0_NODE_STRUCTURE) {
+        return -1;
+    }
+
+    body_field = node->as.structure.first_field;
+    while (body_field != 0 && lm_p0_node_is_ignored_for_registry(body_field->value)) {
+        body_field = body_field->next;
+    }
+    if (body_field == 0 || body_field->value == 0 || body_field->value->kind != LM_P0_NODE_ATOM) {
+        return -1;
+    }
+    out_column->name = body_field->value->as.atom;
+
+    descriptor_count = 0U;
+    body_field = body_field->next;
+    while (body_field != 0) {
+        if (body_field->value != 0 && !lm_p0_node_is_ignored_for_registry(body_field->value)) {
+            if (body_field->value->kind != LM_P0_NODE_ATOM) {
+                return -1;
+            }
+            if (descriptor_count >= sizeof(out_column->descriptors) / sizeof(out_column->descriptors[0])) {
+                return -1;
+            }
+            out_column->descriptors[descriptor_count] = body_field->value->as.atom;
+            ++descriptor_count;
+        }
+        body_field = body_field->next;
+    }
+    out_column->descriptor_count = descriptor_count;
+
+    return 1;
 }
 
 static int lm_p0_registry_columns_from_frame(
     const LmP0Frame *frame,
-    LmP0Text *columns,
+    LmP0RegistryColumn *columns,
     size_t columns_capacity,
     size_t *out_count
 ) {
     const LmP0Field *field;
     LmP0Text first_name;
-    LmP0Text column_name;
+    LmP0RegistryColumn column;
     size_t count;
     int status;
 
@@ -5933,19 +5973,19 @@ static int lm_p0_registry_columns_from_frame(
     field = frame->body.first_field;
     while (field != 0) {
         if (field->value != 0 && !lm_p0_node_is_ignored_for_registry(field->value)) {
-            status = lm_p0_registry_column_name(field, &column_name);
+            status = lm_p0_registry_column_name(field, &column);
             if (status <= 0) {
-                fprintf(stderr, "parser registry error: columns expects typed column descriptors\n");
+                fprintf(stderr, "parser registry error: columns expects atoms or anonymous descriptor structures\n");
                 return -1;
             }
             if (count == 0U) {
-                first_name = column_name;
+                first_name = column.name;
             }
             if (count >= columns_capacity) {
                 fprintf(stderr, "parser registry error: table has too many columns\n");
                 return -1;
             }
-            columns[count] = column_name;
+            columns[count] = column;
             ++count;
         }
         field = field->next;
@@ -5964,10 +6004,116 @@ static int lm_p0_registry_columns_from_frame(
     return 1;
 }
 
+static char *lm_p0_registry_join_text3(LmP0Text first, const char *separator, LmP0Text second) {
+    size_t separator_length;
+    size_t length;
+    char *result;
+
+    separator_length = strlen(separator);
+    length = first.length + separator_length + second.length;
+    result = (char *)malloc(length + 1U);
+    if (result == 0) {
+        return 0;
+    }
+    memcpy(result, first.data, first.length);
+    memcpy(result + first.length, separator, separator_length);
+    memcpy(result + first.length + separator_length, second.data, second.length);
+    result[length] = '\0';
+    return result;
+}
+
+static int lm_p0_registry_push_generated_row_cstr(
+    const char *table,
+    const char *key,
+    const char *payload
+) {
+    return lm_p0_registry_push_row_atoms(
+        lm_p0_text_from_cstr(table),
+        lm_p0_text_from_cstr(key),
+        lm_p0_text_from_cstr(payload)
+    );
+}
+
+static int lm_p0_registry_push_generated_row_text(
+    const char *table,
+    const char *key,
+    LmP0Text payload
+) {
+    return lm_p0_registry_push_row_atoms(
+        lm_p0_text_from_cstr(table),
+        lm_p0_text_from_cstr(key),
+        payload
+    );
+}
+
+static int lm_p0_registry_push_column_metadata(
+    LmP0Text table_name,
+    const LmP0RegistryColumn *columns,
+    size_t column_count
+) {
+    LmP0Text table_payload;
+    LmP0Text column_payload;
+    size_t index;
+    size_t descriptor_index;
+    char *column_key;
+    char *descriptor_key;
+    char index_buffer[32];
+    char count_buffer[32];
+
+    if (columns == 0) {
+        return -1;
+    }
+    if (!lm_p0_registry_atom_payload(table_name, &table_payload)) {
+        return -1;
+    }
+
+    for (index = 0U; index < column_count; ++index) {
+        if (!lm_p0_registry_atom_payload(columns[index].name, &column_payload)) {
+            return -1;
+        }
+        column_key = lm_p0_registry_join_text3(table_payload, ".", column_payload);
+        if (column_key == 0) {
+            return -1;
+        }
+
+        snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)index);
+        snprintf(count_buffer, sizeof(count_buffer), "%lu", (unsigned long)columns[index].descriptor_count);
+
+        if (
+            lm_p0_registry_push_generated_row_text("column.table", column_key, table_payload) != 0 ||
+            lm_p0_registry_push_generated_row_text("column.name", column_key, column_payload) != 0 ||
+            lm_p0_registry_push_generated_row_cstr("column.index", column_key, index_buffer) != 0 ||
+            lm_p0_registry_push_generated_row_cstr("column.descriptor.count", column_key, count_buffer) != 0
+        ) {
+            free(column_key);
+            return -1;
+        }
+
+        for (descriptor_index = 0U; descriptor_index < columns[index].descriptor_count; ++descriptor_index) {
+            snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)descriptor_index);
+            descriptor_key = lm_p0_registry_join_text3(lm_p0_text_from_cstr(column_key), ".", lm_p0_text_from_cstr(index_buffer));
+            if (descriptor_key == 0) {
+                free(column_key);
+                return -1;
+            }
+            if (lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index].descriptors[descriptor_index]) != 0) {
+                free(descriptor_key);
+                free(column_key);
+                return -1;
+            }
+            free(descriptor_key);
+        }
+
+        free(column_key);
+    }
+
+    return 0;
+}
+
 static int lm_p0_registry_rows_from_frame(
     const LmP0Frame *frame,
     LmP0Text table_name,
-    const LmP0Text *columns,
+    const LmP0RegistryColumn *columns,
     size_t column_count
 ) {
     const LmP0Field *field;
@@ -6005,7 +6151,7 @@ static int lm_p0_registry_rows_from_frame(
                     cell_node->kind != LM_P0_NODE_ATOM ||
                     lm_p0_registry_push_table_cell(
                         table_name,
-                        columns[column_index],
+                        columns[column_index].name,
                         split_by_column,
                         key_node->as.atom,
                         cell_node->as.atom
@@ -6064,7 +6210,7 @@ static int lm_p0_registry_validate_table_trailer(
 static int lm_p0_registry_table_from_frame(const LmP0Frame *frame) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmP0Text columns[128];
+    LmP0RegistryColumn columns[128];
     LmP0Text table_name;
     size_t column_count;
     int have_name;
@@ -6096,6 +6242,10 @@ static int lm_p0_registry_table_from_frame(const LmP0Frame *frame) {
             if (status > 0) {
                 have_name = 1;
             } else if (lm_p0_text_equals(node->as.frame.head, "columns")) {
+                if (!have_name) {
+                    fprintf(stderr, "parser registry error: table columns must appear after name\n");
+                    return -1;
+                }
                 status = lm_p0_registry_columns_from_frame(
                     &node->as.frame,
                     columns,
@@ -6103,6 +6253,10 @@ static int lm_p0_registry_table_from_frame(const LmP0Frame *frame) {
                     &column_count
                 );
                 if (status <= 0) {
+                    return -1;
+                }
+                if (lm_p0_registry_push_column_metadata(table_name, columns, column_count) != 0) {
+                    fprintf(stderr, "parser registry error: cannot store table column metadata\n");
                     return -1;
                 }
                 have_columns = 1;
