@@ -7685,6 +7685,35 @@ mentioning that descriptor does not call it. The general rule remains the same:
 a Structure is not executed because it exists; it is consumed by the active
 translator/profile mode.
 
+20.2.1.1. Class/Layout Data and Target Projection Are Separate
+
+Defining a Lingvamyxa class/layout and projecting that layout to ANSI C are two
+different tasks.
+
+The first task is source-semantic. L4 tables introduce classes, fields,
+relations, callable descriptors, constants, variants and other model facts as
+ordinary Lingvamyxa registry data. This layer should stay maximally laconic and
+must not encode target-language syntax merely because the first backend is
+ANSI C. For example, a class/layout table may state that `LmP0StreamEvent` has
+a field `kind` whose class is `LmP0StreamEventKind`, and another field `text`
+whose class is `char` with one address level and const payload semantics. These
+are LMX facts.
+
+The second task is backend-specific. A translator projection for a selected
+target decides how those facts are printed, stored or indexed. In the hosted
+bootstrap profile that projection may temporarily be hardcoded, and later may
+be described by separate universal translator tables. Those projection tables
+may say how a class becomes `typedef struct`, how a constant becomes `#define`
+or `enum`, how address depth maps to `*`, and how declaration order and forward
+declarations are emitted. These are target decisions, not the source identity
+of the class.
+
+Therefore a table that describes the existence and fields of `LmP0Document` is
+not an ANSI C table. It is LMX class data. A table or function that lowers that
+class data to `struct LmP0Document { ... }` is an ANSI C projection. The two
+layers may be implemented in one bootstrap executable, but the language model
+keeps them separate.
+
 20.2.2. L1 and L2 Translator Receivers
 
 `L1` and `L2` are ordinary translator receivers that consume one body Structure.
