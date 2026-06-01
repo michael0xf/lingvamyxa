@@ -58,8 +58,11 @@ table rows, messages, service routes, build instructions or transport payloads.
 Part II defines the high-level registry model as tables. In that model, a
 `class` is a named registry form/table/entity, expressions ask for table cells,
 and validation/resolution turns generic Structures into concrete expressions or
-terminal lowering decisions. The word `type` remains available in narrower
-storage/lowering contexts such as L2 and ANSI C.
+terminal lowering decisions. `class` is broader than an object class or record
+layout type: primitive values, storage layouts, operators, receivers, callable
+descriptors, validators, messages and implementation bindings may all be
+classes. The word `type` remains available only in narrower storage/lowering
+contexts such as L2 and ANSI C.
 
 0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
@@ -4545,9 +4548,9 @@ registries and services. Executable definitions, blocks, receivers, modules,
 registry imports and service/runtime profiles may create local namespace views
 or overlays over enclosing views.
 
-A new binding may be introduced only if the same name is not already visible in the active lexical scope chain. This includes names introduced by declarations, nested `fn` definitions, nested `sub` definitions, imports and model/type constructors.
+A new binding may be introduced only if the same name is not already visible in the active lexical scope chain. This includes names introduced by declarations, nested `fn` definitions, nested `sub` definitions, imports and class/model constructors.
 
-A local variable cannot reuse the name of a visible type. A local `fn` or `sub` cannot reuse the name of a visible variable, type, receiver, model or executable definition. Imports must not silently shadow visible names. Conflict resolution must be explicit through a future import/qualification rule.
+A local variable cannot reuse the name of a visible class. A local `fn` or `sub` cannot reuse the name of a visible variable, class, receiver, model or executable definition. Imports must not silently shadow visible names. Conflict resolution must be explicit through a future import/qualification rule.
 
 L5 message selectors are looked up through the receiver's message/operation
 tables. A selector is not automatically a lexical binding unless it is also
@@ -4605,7 +4608,7 @@ an operator method or receiver may lower a read of `i` to a zero-argument call
 `i(newValue)`, depending on the resolved binding and active profile.
 
 The exact mutability, compatibility and signature rules are part of the
-execution-model and type/model specifications. The structural core only requires
+execution-model and class/model specifications. The structural core only requires
 that function/subroutine names live in the ordinary namespace and that the same
 head/update surface form is used after resolution.
 
@@ -5247,7 +5250,7 @@ or:
 
     PlantBed: bed
 
-is meaningful only if `int` or `PlantBed` is a registered primitive/type/model constructor receiver in the active level.
+is meaningful only if `int` or `PlantBed` is a registered class/model constructor receiver in the active level.
 
 A receiver such as `fn`, `sub`, `autoModel` or `args` may consume these Structures as typed declarations.
 
@@ -7290,7 +7293,7 @@ The standard iterator-like profile is expressed by ordinary namespace names:
 
 Here `iterator` and `T` are not parser keywords. They are ordinary identifier
 values resolved in the active lexical namespace view by the active L3/profile
-receiver set. For example, `Text` or `Point` must be visible type/model names if
+receiver set. For example, `Text` or `Point` must be visible class/model names if
 they are used in `iterator(Text)` or `iterator(Point)`.
 
 Calling a function with an iterator-compatible return descriptor does not execute its body to completion. It creates an iterator state Structure.
@@ -7699,6 +7702,22 @@ a field `kind` whose class is `LmP0StreamEventKind`, and another field `text`
 whose class is `char` with one address level and const payload semantics. These
 are LMX facts.
 
+`class` is the only source-semantic notion that answers "what kind of thing is
+this?" It includes primitive classes such as `int` or `u32`, structural layout
+classes such as `LmP0Document`, operation classes such as `+` or `equals`,
+receiver classes such as `fn`, and descriptor classes such as
+`callableDescriptor`. There are no source-level `struct`, `enum` or `union`
+facts separate from class tables. If a backend prints a class table as a C
+`struct`, a set of class rows as a C `enum`, or a variant relation as a C
+`union`, that is a projection. The LMX data remains tables of classes and
+relations.
+
+Likewise, `const` is not a global variable/class-table category. In the L2
+bootstrap profile it is a local declaration/type-position modifier consumed by
+procedural lowering. Persistent model facts that happen not to change are still
+ordinary table rows; their immutability, authority or lifetime is described by
+relation tables, not by C-style global `const` syntax.
+
 The second task is backend-specific. A translator projection for a selected
 target decides how those facts are printed, stored or indexed. In the hosted
 bootstrap profile that projection may temporarily be hardcoded, and later may
@@ -7844,7 +7863,7 @@ exact quoted identifier:
     `!=`
     `c.*`
     `operator.infix`
-    `translator type-->spelling`
+    `translator class-->spelling`
 
 The backticks are not part of the class/key. They are only the exact identifier
 delimiter.
@@ -8195,7 +8214,7 @@ A lexical namespace view is a Structure.
 Before translation or receiver consumption, an active namespace view may be
 represented as a typed dictionary-like Structure whose entries bind names, exact
 quoted signatures, receiver names, function/subroutine descriptors, callable
-descriptor bindings, label bindings, type/model descriptors, message/table
+descriptor bindings, label bindings, class/model descriptors, message/table
 descriptors and ordinary values.
 
 Conceptual example:

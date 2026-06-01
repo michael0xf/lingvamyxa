@@ -1,5 +1,5 @@
 table:
-    name: `type.spelling`
+    name: `class.spelling`
     columns: "class"  ("spelling" "char")
     rows:
              u8     uint8_t
@@ -10,10 +10,10 @@ table:
              i16    int16_t
              i32    int32_t
              i64    int64_t
-end: `type.spelling`
+end: `class.spelling`
 
 table:
-    name: `type.cTail`
+    name: `class.cTail`
     columns: "class"     ("spelling" "char")
     rows:
              void      void
@@ -27,14 +27,14 @@ table:
              unsigned  unsigned
              size_t    size_t
              FILE      FILE
-end: `type.cTail`
+end: `class.cTail`
 
 table:
-    name: `type.receiver`
+    name: `class.receiver`
     columns: "class"  ("emit" "binding")                     ("structure_value_alloc" "binding")                     ("structure_value_fill" "binding")
     rows:
              `[]`   lm_trans_type_receiver_array_emit  lm_trans_type_receiver_array_structure_value_alloc  lm_trans_type_receiver_array_structure_value_fill
-end: `type.receiver`
+end: `class.receiver`
 
 table:
     name: `receiver.function`

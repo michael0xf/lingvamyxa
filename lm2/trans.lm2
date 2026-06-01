@@ -552,6 +552,18 @@ static int lm_trans_registry_push_table_cell(
     return status;
 }
 
+static int lm_trans_registry_note_class_kind(LmP0Text name, const char *kind) {
+    if (kind == 0) {
+        return 0;
+    }
+
+    return lm_trans_registry_push_row_atoms(
+        lm_trans_text_from_cstr("class.kind"),
+        name,
+        lm_trans_text_from_cstr(kind)
+    ) != 0;
+}
+
 static const char *lm_trans_registry_lookup(LmP0Text key, const char *table) {
     size_t i;
     LmTransRegistryRow *row;
@@ -1849,18 +1861,18 @@ static int lm_trans_namespace_declare_compatible(
     return lm_trans_namespace_declare(namespace_, name, kind);
 }
 
-static const char *lm_trans_c_spelling(LmP0Text name) {
-    return lm_trans_registry_lookup_compare(name, "type.spelling", lm_trans_legacy_c_spelling(name));
+static const char *lm_trans_class_c_spelling(LmP0Text name) {
+    return lm_trans_registry_lookup_compare(name, "class.spelling", lm_trans_legacy_c_spelling(name));
 }
 
 static int lm_trans_builtin_c_type_tail(LmP0Text name) {
     int registry_result;
 
     registry_result =
-        lm_trans_c_spelling(name) != 0 ||
-        lm_trans_registry_has(name, "type.cTail");
+        lm_trans_class_c_spelling(name) != 0 ||
+        lm_trans_registry_has(name, "class.cTail");
     return lm_trans_bool_compare(
-        "type.cTail/type.spelling",
+        "class.cTail/class.spelling",
         name,
         registry_result,
         lm_trans_legacy_builtin_c_type_tail(name)
@@ -1886,7 +1898,7 @@ static int lm_trans_emit_name(FILE *file, LmP0Text name) {
     if (lm_trans_text_starts_with(name, "c.")) {
         tail.data = name.data + 2U;
         tail.length = name.length - 2U;
-        spelling = lm_trans_c_spelling(tail);
+        spelling = lm_trans_class_c_spelling(tail);
         if (spelling != 0) {
             return lm_trans_put(file, spelling);
         }
@@ -1903,14 +1915,14 @@ static int lm_trans_emit_type_name(FILE *file, LmP0Text name) {
     if (lm_trans_text_starts_with(name, "c.") && name.length > 2U) {
         tail.data = name.data + 2U;
         tail.length = name.length - 2U;
-        spelling = lm_trans_c_spelling(tail);
+        spelling = lm_trans_class_c_spelling(tail);
         if (spelling != 0) {
             return lm_trans_put(file, spelling);
         }
         return lm_trans_write_text(file, tail);
     }
 
-    spelling = lm_trans_c_spelling(name);
+    spelling = lm_trans_class_c_spelling(name);
     if (spelling != 0) {
         return lm_trans_put(file, spelling);
     }
@@ -2022,7 +2034,7 @@ static int lm_trans_validate_expr_atom(
         lm_trans_symbol_is(symbol, "procedure") ||
         lm_trans_symbol_is(symbol, "function") ||
         lm_trans_symbol_is(symbol, "label") ||
-        lm_trans_symbol_is(symbol, "structure") ||
+        lm_trans_symbol_is(symbol, "class") ||
         lm_trans_symbol_is(symbol, "callableDescriptor")
     ) {
         fprintf(
@@ -4199,12 +4211,12 @@ static int lm_trans_lookup_type_receiver_binding(
 
     found = 0;
 
-    binding = lm_trans_registry_lookup(key, "type.receiver.emit");
+    binding = lm_trans_registry_lookup(key, "class.receiver.emit");
     if (binding != 0) {
         if (!lm_trans_binding_resolve(binding, &resolved) || resolved.type_emit == 0) {
             fprintf(
                 stderr,
-                "trans registry inconsistency: type.receiver.emit[\"%.*s\"] has unknown type emit binding %s\n",
+                "trans registry inconsistency: class.receiver.emit[\"%.*s\"] has unknown class emit binding %s\n",
                 (int)key.length,
                 key.data,
                 binding
@@ -4215,12 +4227,12 @@ static int lm_trans_lookup_type_receiver_binding(
         found = 1;
     }
 
-    binding = lm_trans_registry_lookup(key, "type.receiver.structure_value_alloc");
+    binding = lm_trans_registry_lookup(key, "class.receiver.structure_value_alloc");
     if (binding != 0) {
         if (!lm_trans_binding_resolve(binding, &resolved) || resolved.type_structure_value_alloc == 0) {
             fprintf(
                 stderr,
-                "trans registry inconsistency: type.receiver.structure_value_alloc[\"%.*s\"] has unknown type Structure-value alloc binding %s\n",
+                "trans registry inconsistency: class.receiver.structure_value_alloc[\"%.*s\"] has unknown class Structure-value alloc binding %s\n",
                 (int)key.length,
                 key.data,
                 binding
@@ -4231,12 +4243,12 @@ static int lm_trans_lookup_type_receiver_binding(
         found = 1;
     }
 
-    binding = lm_trans_registry_lookup(key, "type.receiver.structure_value_fill");
+    binding = lm_trans_registry_lookup(key, "class.receiver.structure_value_fill");
     if (binding != 0) {
         if (!lm_trans_binding_resolve(binding, &resolved) || resolved.type_structure_value_fill == 0) {
             fprintf(
                 stderr,
-                "trans registry inconsistency: type.receiver.structure_value_fill[\"%.*s\"] has unknown type Structure-value fill binding %s\n",
+                "trans registry inconsistency: class.receiver.structure_value_fill[\"%.*s\"] has unknown class Structure-value fill binding %s\n",
                 (int)key.length,
                 key.data,
                 binding
@@ -6401,7 +6413,7 @@ static int lm_trans_head_can_declare_storage(
 
     symbol = lm_trans_namespace_find(namespace_, head);
     return
-        lm_trans_symbol_is(symbol, "structure") ||
+        lm_trans_symbol_is(symbol, "class") ||
         lm_trans_symbol_is(symbol, "callableDescriptor");
 }
 
@@ -10333,6 +10345,28 @@ static int lm_trans_emit_function(
     LmTransNamespace *namespace_
 );
 
+static int lm_trans_registry_note_callable_descriptor(
+    const LmTransFunctionHeader *function
+) {
+    if (function == 0 || !function->is_descriptor_only) {
+        return 0;
+    }
+
+    if (
+        function->return_node != 0 &&
+        function->return_node->kind == LM_P0_NODE_ATOM &&
+        lm_trans_registry_push_row_atoms(
+            lm_trans_text_from_cstr("callable.result"),
+            function->name,
+            function->return_node->as.atom
+        ) != 0
+    ) {
+        return 1;
+    }
+
+    return 0;
+}
+
 static int lm_trans_top_level_declare_function(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
@@ -10340,6 +10374,12 @@ static int lm_trans_top_level_declare_function(
     char *return_type_name_storage;
     LmP0Text return_type_name;
 
+    if (lm_trans_registry_note_class_kind(item->function.name, item->function.symbol_class) != 0) {
+        return 1;
+    }
+    if (lm_trans_registry_note_callable_descriptor(&item->function) != 0) {
+        return 1;
+    }
     if (lm_trans_namespace_declare(namespace_, item->function.name, item->function.symbol_class) != 0) {
         return 1;
     }
@@ -10352,7 +10392,7 @@ static int lm_trans_top_level_declare_function(
             return 1;
         }
         return_type_name = lm_trans_text_from_cstr(return_type_name_storage);
-        if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "structure") != 0) {
+        if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "class") != 0) {
             free(return_type_name_storage);
             return 1;
         }
@@ -10365,7 +10405,10 @@ static int lm_trans_top_level_declare_named_structure(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
 ) {
-    return lm_trans_namespace_declare(namespace_, item->frame->head, "structure");
+    if (lm_trans_registry_note_class_kind(item->frame->head, "class") != 0) {
+        return 1;
+    }
+    return lm_trans_namespace_declare(namespace_, item->frame->head, "class");
 }
 
 static int lm_trans_top_level_declare_function_compatible(
@@ -10375,6 +10418,12 @@ static int lm_trans_top_level_declare_function_compatible(
     char *return_type_name_storage;
     LmP0Text return_type_name;
 
+    if (lm_trans_registry_note_class_kind(item->function.name, item->function.symbol_class) != 0) {
+        return 1;
+    }
+    if (lm_trans_registry_note_callable_descriptor(&item->function) != 0) {
+        return 1;
+    }
     if (lm_trans_namespace_declare_compatible(namespace_, item->function.name, item->function.symbol_class) != 0) {
         return 1;
     }
@@ -10387,7 +10436,7 @@ static int lm_trans_top_level_declare_function_compatible(
             return 1;
         }
         return_type_name = lm_trans_text_from_cstr(return_type_name_storage);
-        if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "structure") != 0) {
+        if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "class") != 0) {
             free(return_type_name_storage);
             return 1;
         }
@@ -10400,7 +10449,10 @@ static int lm_trans_top_level_declare_named_structure_compatible(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
 ) {
-    return lm_trans_namespace_declare_compatible(namespace_, item->frame->head, "structure");
+    if (lm_trans_registry_note_class_kind(item->frame->head, "class") != 0) {
+        return 1;
+    }
+    return lm_trans_namespace_declare_compatible(namespace_, item->frame->head, "class");
 }
 
 static int lm_trans_top_level_emit_l1(
