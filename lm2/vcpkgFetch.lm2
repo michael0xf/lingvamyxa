@@ -9,136 +9,125 @@ end: os
 
 os:
     win:
-===
-static char *lm_vcpkg_platform_getcwd(char *buffer, size_t size) {
-    return _getcwd(buffer, (int)size);
-}
+        fn: lm_vcpkg_platform_getcwd (@: char buffer; size_t: size) @: char
+            return: c._getcwd(buffer, size)
+        end: lm_vcpkg_platform_getcwd
 
-static int lm_vcpkg_platform_chdir(const char *path) {
-    return _chdir(path);
-}
+        fn: lm_vcpkg_platform_chdir (@: char path) int
+            return: c._chdir(path)
+        end: lm_vcpkg_platform_chdir
 
-static char *lm_vcpkg_platform_path_sep(void) {
-    return "\\";
-}
+        fn: lm_vcpkg_platform_path_sep () @: char
+            return: "\\"
+        end: lm_vcpkg_platform_path_sep
 
-static char *lm_vcpkg_platform_tool_file(void) {
-    return "vcpkg.exe";
-}
+        fn: lm_vcpkg_platform_tool_file () @: char
+            return: "vcpkg.exe"
+        end: lm_vcpkg_platform_tool_file
 
-static char *lm_vcpkg_platform_default_triplet(void) {
-    return "x64-mingw-dynamic";
-}
+        fn: lm_vcpkg_platform_default_triplet () @: char
+            return: "x64-mingw-dynamic"
+        end: lm_vcpkg_platform_default_triplet
 
-static int lm_vcpkg_platform_is_drive_absolute(const char *path) {
-    return
-        path[0] != '\0' &&
-        path[1] == ':' &&
-        (path[2] == '/' || path[2] == '\\');
-}
+        fn: lm_vcpkg_platform_is_drive_absolute (@: char path) int
+            return: path[0] != '\0' && path[1] = ':' && (path[2] = '/' || path[2] = '\\')
+        end: lm_vcpkg_platform_is_drive_absolute
 
-static int lm_vcpkg_platform_has_default_tool(void) {
-    return 1;
-}
+        fn: lm_vcpkg_platform_has_default_tool () int
+            return: 1
+        end: lm_vcpkg_platform_has_default_tool
 
-static char *lm_vcpkg_platform_default_tool(void) {
-    return "C:/vcpkg/vcpkg.exe";
-}
+        fn: lm_vcpkg_platform_default_tool () @: char
+            return: "C:/vcpkg/vcpkg.exe"
+        end: lm_vcpkg_platform_default_tool
 
-static char *lm_vcpkg_platform_default_root(void) {
-    return "C:/vcpkg";
-}
+        fn: lm_vcpkg_platform_default_root () @: char
+            return: "C:/vcpkg"
+        end: lm_vcpkg_platform_default_root
 
-static int lm_vcpkg_platform_wrap_command(void) {
-    return 1;
-}
-===
+        fn: lm_vcpkg_platform_wrap_command () int
+            return: 1
+        end: lm_vcpkg_platform_wrap_command
     mac:
-===
-static char *lm_vcpkg_platform_getcwd(char *buffer, size_t size) {
-    return getcwd(buffer, size);
-}
+        fn: lm_vcpkg_platform_getcwd (@: char buffer; size_t: size) @: char
+            return: c.getcwd(buffer, size)
+        end: lm_vcpkg_platform_getcwd
 
-static int lm_vcpkg_platform_chdir(const char *path) {
-    return chdir(path);
-}
+        fn: lm_vcpkg_platform_chdir (@: char path) int
+            return: c.chdir(path)
+        end: lm_vcpkg_platform_chdir
 
-static char *lm_vcpkg_platform_path_sep(void) {
-    return "/";
-}
+        fn: lm_vcpkg_platform_path_sep () @: char
+            return: "/"
+        end: lm_vcpkg_platform_path_sep
 
-static char *lm_vcpkg_platform_tool_file(void) {
-    return "vcpkg";
-}
+        fn: lm_vcpkg_platform_tool_file () @: char
+            return: "vcpkg"
+        end: lm_vcpkg_platform_tool_file
 
-static char *lm_vcpkg_platform_default_triplet(void) {
-    return "x64-osx";
-}
+        fn: lm_vcpkg_platform_default_triplet () @: char
+            return: "x64-osx"
+        end: lm_vcpkg_platform_default_triplet
 
-static int lm_vcpkg_platform_is_drive_absolute(const char *path) {
-    (void)path;
-    return 0;
-}
+        fn: lm_vcpkg_platform_is_drive_absolute (@: char path) int
+            return: path != 0 && 0
+        end: lm_vcpkg_platform_is_drive_absolute
 
-static int lm_vcpkg_platform_has_default_tool(void) {
-    return 0;
-}
+        fn: lm_vcpkg_platform_has_default_tool () int
+            return: 0
+        end: lm_vcpkg_platform_has_default_tool
 
-static char *lm_vcpkg_platform_default_tool(void) {
-    return "";
-}
+        fn: lm_vcpkg_platform_default_tool () @: char
+            return: ""
+        end: lm_vcpkg_platform_default_tool
 
-static char *lm_vcpkg_platform_default_root(void) {
-    return "";
-}
+        fn: lm_vcpkg_platform_default_root () @: char
+            return: ""
+        end: lm_vcpkg_platform_default_root
 
-static int lm_vcpkg_platform_wrap_command(void) {
-    return 0;
-}
-===
+        fn: lm_vcpkg_platform_wrap_command () int
+            return: 0
+        end: lm_vcpkg_platform_wrap_command
     default:
-===
-static char *lm_vcpkg_platform_getcwd(char *buffer, size_t size) {
-    return getcwd(buffer, size);
-}
+        fn: lm_vcpkg_platform_getcwd (@: char buffer; size_t: size) @: char
+            return: c.getcwd(buffer, size)
+        end: lm_vcpkg_platform_getcwd
 
-static int lm_vcpkg_platform_chdir(const char *path) {
-    return chdir(path);
-}
+        fn: lm_vcpkg_platform_chdir (@: char path) int
+            return: c.chdir(path)
+        end: lm_vcpkg_platform_chdir
 
-static char *lm_vcpkg_platform_path_sep(void) {
-    return "/";
-}
+        fn: lm_vcpkg_platform_path_sep () @: char
+            return: "/"
+        end: lm_vcpkg_platform_path_sep
 
-static char *lm_vcpkg_platform_tool_file(void) {
-    return "vcpkg";
-}
+        fn: lm_vcpkg_platform_tool_file () @: char
+            return: "vcpkg"
+        end: lm_vcpkg_platform_tool_file
 
-static char *lm_vcpkg_platform_default_triplet(void) {
-    return "x64-linux";
-}
+        fn: lm_vcpkg_platform_default_triplet () @: char
+            return: "x64-linux"
+        end: lm_vcpkg_platform_default_triplet
 
-static int lm_vcpkg_platform_is_drive_absolute(const char *path) {
-    (void)path;
-    return 0;
-}
+        fn: lm_vcpkg_platform_is_drive_absolute (@: char path) int
+            return: path != 0 && 0
+        end: lm_vcpkg_platform_is_drive_absolute
 
-static int lm_vcpkg_platform_has_default_tool(void) {
-    return 0;
-}
+        fn: lm_vcpkg_platform_has_default_tool () int
+            return: 0
+        end: lm_vcpkg_platform_has_default_tool
 
-static char *lm_vcpkg_platform_default_tool(void) {
-    return "";
-}
+        fn: lm_vcpkg_platform_default_tool () @: char
+            return: ""
+        end: lm_vcpkg_platform_default_tool
 
-static char *lm_vcpkg_platform_default_root(void) {
-    return "";
-}
+        fn: lm_vcpkg_platform_default_root () @: char
+            return: ""
+        end: lm_vcpkg_platform_default_root
 
-static int lm_vcpkg_platform_wrap_command(void) {
-    return 0;
-}
-===
+        fn: lm_vcpkg_platform_wrap_command () int
+            return: 0
+        end: lm_vcpkg_platform_wrap_command
 end: os
 
 LmVcpkgOptions:
@@ -172,7 +161,7 @@ fn: lm_vcpkg_is_absolute_path (@: char path) int
         return: 0
     if: lm_vcpkg_is_path_separator(path[0]) && lm_vcpkg_is_path_separator(path[1])
         return: 1
-    if: c.lm_vcpkg_platform_is_drive_absolute(path)
+    if: lm_vcpkg_platform_is_drive_absolute(path)
         return: 1
     return: 0
 end: lm_vcpkg_is_absolute_path
@@ -186,7 +175,7 @@ fn: lm_vcpkg_join_path (@: char buffer; size_t: size; @: char base; @: char tail
     base_length: c.strlen(base)
     tail_length: c.strlen(tail)
     used: base_length
-    separator_length: c.strlen(c.lm_vcpkg_platform_path_sep())
+    separator_length: c.strlen(lm_vcpkg_platform_path_sep())
 
     if: base_length + tail_length + separator_length + 1U >= size
         c.fprintf: c.stderr "vcpkgFetch.lm0: path is too long\n"
@@ -194,7 +183,7 @@ fn: lm_vcpkg_join_path (@: char buffer; size_t: size; @: char base; @: char tail
 
     c.memcpy(buffer, base, base_length)
     if: base_length > 0U && tail_length > 0U && lm_vcpkg_is_path_separator(base[base_length-1U]) = 0 && lm_vcpkg_is_path_separator(tail[0]) = 0
-        c.memcpy(buffer + used, c.lm_vcpkg_platform_path_sep(), separator_length)
+        c.memcpy(buffer + used, lm_vcpkg_platform_path_sep(), separator_length)
         used: used + separator_length
 
     c.memcpy(buffer + used, tail, tail_length + 1U)
@@ -246,7 +235,7 @@ fn: lm_vcpkg_enter_project_root (@: char program_path) int
     []: char cwd 1024
     int: depth
 
-    if: c.lm_vcpkg_platform_getcwd(cwd, c.sizeof(cwd)) = 0
+    if: lm_vcpkg_platform_getcwd(cwd, c.sizeof(cwd)) = 0
         c.fprintf: c.stderr "vcpkgFetch.lm0: cannot read current directory\n"
         return: 1
 
@@ -271,7 +260,7 @@ fn: lm_vcpkg_enter_project_root (@: char program_path) int
     depth: 0
     while: depth < 12 && search_path[0] != '\0'
         if: lm_vcpkg_has_project_marker(search_path)
-            if: c.lm_vcpkg_platform_chdir(search_path) != 0
+            if: lm_vcpkg_platform_chdir(search_path) != 0
                 c.fprintf: c.stderr "vcpkgFetch.lm0: cannot enter project root %s\n" search_path
                 return: 1
             return: 0
@@ -352,7 +341,7 @@ fn: lm_vcpkg_discover_tool (@: char buffer; size_t: size; @@: char root_out) int
 
     root_env: c.getenv("VCPKG_ROOT")
     if: root_env != 0 && root_env[0] != '\0'
-        if: lm_vcpkg_join_path(candidate, c.sizeof(candidate), root_env, c.lm_vcpkg_platform_tool_file()) != 0
+        if: lm_vcpkg_join_path(candidate, c.sizeof(candidate), root_env, lm_vcpkg_platform_tool_file()) != 0
             return: 1
         if: lm_vcpkg_file_exists(candidate)
             if: c.strlen(candidate) >= size
@@ -363,12 +352,12 @@ fn: lm_vcpkg_discover_tool (@: char buffer; size_t: size; @@: char root_out) int
             return: 0
     ---
 
-    if: c.lm_vcpkg_platform_has_default_tool() != 0 && lm_vcpkg_file_exists(c.lm_vcpkg_platform_default_tool())
-        if: c.strlen(c.lm_vcpkg_platform_default_tool()) >= size
+    if: lm_vcpkg_platform_has_default_tool() != 0 && lm_vcpkg_file_exists(lm_vcpkg_platform_default_tool())
+        if: c.strlen(lm_vcpkg_platform_default_tool()) >= size
             c.fprintf: c.stderr "vcpkgFetch.lm0: default vcpkg path is too long\n"
             return: 1
-        c.strcpy(buffer, c.lm_vcpkg_platform_default_tool())
-        root_out[0]: c.lm_vcpkg_platform_default_root()
+        c.strcpy(buffer, lm_vcpkg_platform_default_tool())
+        root_out[0]: lm_vcpkg_platform_default_root()
         return: 0
     ---
 
@@ -397,7 +386,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
 
     options\output_dir: lm_vcpkg_env_or_default("LM_VCPKG_DOWNLOADS", "build/vcpkg-downloads")
     options\manifest_root: lm_vcpkg_env_or_default("LM_VCPKG_MANIFEST_ROOT", "cmake/vcpkg-sources")
-    options\triplet: lm_vcpkg_env_or_default("LM_VCPKG_TRIPLET", c.lm_vcpkg_platform_default_triplet())
+    options\triplet: lm_vcpkg_env_or_default("LM_VCPKG_TRIPLET", lm_vcpkg_platform_default_triplet())
     options\host_triplet: lm_vcpkg_env_or_default("LM_VCPKG_HOST_TRIPLET", "")
     options\vcpkg_tool: lm_vcpkg_env_or_default("LM_VCPKG", "")
     options\vcpkg_root: lm_vcpkg_env_or_default("VCPKG_ROOT", "")
@@ -497,7 +486,7 @@ fn: lm_vcpkg_build_command (@: LmVcpkgOptions options; @: char command; size_t: 
     used: 0U
     command[0]: '\0'
 
-    if: c.lm_vcpkg_platform_wrap_command() != 0
+    if: lm_vcpkg_platform_wrap_command() != 0
         used: lm_vcpkg_append(command, size, used, "\"")
         if: used = size
             return: 1
@@ -553,7 +542,7 @@ fn: lm_vcpkg_build_command (@: LmVcpkgOptions options; @: char command; size_t: 
     if: used = size
         return: 1
 
-    if: c.lm_vcpkg_platform_wrap_command() != 0
+    if: lm_vcpkg_platform_wrap_command() != 0
         used: lm_vcpkg_append(command, size, used, "\"")
         if: used = size
             return: 1
