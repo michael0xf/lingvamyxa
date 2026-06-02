@@ -1,12 +1,31 @@
-L2:
-. Leaf:
-. . int: value
+L4:
+. table:
+. . name: Leaf
+. . columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+. . rows:
+. . . value  int  0  0
 . end: Leaf
 .
-. Branch:
-. . @: Leaf leaf
+. table:
+. . name: Branch
+. . columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+. . rows:
+. . . leaf  Leaf  0  1
 . end: Branch
-.
+end: L4
+
+L1:
+===
+typedef struct Leaf {
+    int value;
+} Leaf;
+
+typedef struct Branch {
+    Leaf *leaf;
+} Branch;
+===
+
+L2:
 . fn: read (const: @: Branch branch) int
 . . return: branch\leaf\value
 . end: read

@@ -1,4 +1,31 @@
-include: "<stdio.h>" "<stdlib.h>" "<string.h>" "parser.lm1.h"
+L4:
+    table:
+        name: LmTableBuffer
+        columns: class     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 data      char                   0                       1
+                 length    size_t                 1                       0
+                 capacity  size_t                 2                       0
+                 failed    int                    3                       0
+    end: LmTableBuffer
+
+    table:
+        name: LmTableColumn
+        columns: class     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 spelling  char                   0                       1
+                 width     size_t                 1                       0
+    end: LmTableColumn
+
+    table:
+        name: LmTableError
+        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 message  char                   0                       1
+    end: LmTableError
+end: L4
+
+include: "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "parser.lm1.h"
 
 L1:
 ===
@@ -15,621 +42,573 @@ typedef struct LmTableColumn {
 } LmTableColumn;
 
 typedef struct LmTableError {
-    char message[256];
+    const char *message;
 } LmTableError;
-
-static int lm_table_text_equals(LmP0Text text, const char *value) {
-    size_t length;
-
-    length = strlen(value);
-    return text.length == length && memcmp(text.data, value, length) == 0;
-}
-
-static void lm_table_error_set(LmTableError *error, const char *message) {
-    if (error == 0 || error->message[0] != '\0') {
-        return;
-    }
-
-    strncpy(error->message, message, sizeof(error->message) - 1U);
-    error->message[sizeof(error->message) - 1U] = '\0';
-}
-
-static int lm_table_buffer_reserve(LmTableBuffer *buffer, size_t extra) {
-    char *new_data;
-    size_t new_capacity;
-    size_t required;
-
-    if (buffer == 0 || buffer->failed) {
-        return 0;
-    }
-
-    required = buffer->length + extra + 1U;
-    if (required <= buffer->capacity) {
-        return 1;
-    }
-
-    new_capacity = buffer->capacity == 0U ? 256U : buffer->capacity;
-    while (new_capacity < required) {
-        if (new_capacity > ((size_t)-1) / 2U) {
-            buffer->failed = 1;
-            return 0;
-        }
-        new_capacity *= 2U;
-    }
-
-    new_data = (char *)realloc(buffer->data, new_capacity);
-    if (new_data == 0) {
-        buffer->failed = 1;
-        return 0;
-    }
-
-    buffer->data = new_data;
-    buffer->capacity = new_capacity;
-    return 1;
-}
-
-static void lm_table_buffer_append(LmTableBuffer *buffer, const char *data, size_t length) {
-    if (!lm_table_buffer_reserve(buffer, length)) {
-        return;
-    }
-
-    if (length != 0U) {
-        memcpy(buffer->data + buffer->length, data, length);
-    }
-    buffer->length += length;
-    buffer->data[buffer->length] = '\0';
-}
-
-static void lm_table_buffer_append_cstr(LmTableBuffer *buffer, const char *text) {
-    lm_table_buffer_append(buffer, text, strlen(text));
-}
-
-static void lm_table_buffer_append_text(LmTableBuffer *buffer, LmP0Text text) {
-    lm_table_buffer_append(buffer, text.data, text.length);
-}
-
-static void lm_table_buffer_append_spaces(LmTableBuffer *buffer, size_t count) {
-    while (count != 0U) {
-        lm_table_buffer_append_cstr(buffer, " ");
-        --count;
-    }
-}
-
-static char *lm_table_buffer_take(LmTableBuffer *buffer) {
-    char *result;
-
-    if (buffer == 0 || buffer->failed) {
-        return 0;
-    }
-
-    if (!lm_table_buffer_reserve(buffer, 0U)) {
-        return 0;
-    }
-
-    result = buffer->data;
-    buffer->data = 0;
-    buffer->length = 0U;
-    buffer->capacity = 0U;
-    return result;
-}
-
-static void lm_table_buffer_destroy(LmTableBuffer *buffer) {
-    if (buffer != 0) {
-        free(buffer->data);
-        buffer->data = 0;
-        buffer->length = 0U;
-        buffer->capacity = 0U;
-        buffer->failed = 0;
-    }
-}
-
-static int lm_table_node_ignored(const LmP0Node *node) {
-    return node == 0 || (node->flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U;
-}
-
-static size_t lm_table_visible_field_count(const LmP0Structure *structure) {
-    const LmP0Field *field;
-    size_t count;
-
-    count = 0U;
-    if (structure == 0) {
-        return 0U;
-    }
-
-    for (field = structure->first_field; field != 0; field = field->next) {
-        if (!lm_table_node_ignored(field->value)) {
-            ++count;
-        }
-    }
-
-    return count;
-}
-
-static const LmP0Node *lm_table_nth_visible_field(const LmP0Structure *structure, size_t index) {
-    const LmP0Field *field;
-    size_t visible_index;
-
-    visible_index = 0U;
-    if (structure == 0) {
-        return 0;
-    }
-
-    for (field = structure->first_field; field != 0; field = field->next) {
-        if (lm_table_node_ignored(field->value)) {
-            continue;
-        }
-        if (visible_index == index) {
-            return field->value;
-        }
-        ++visible_index;
-    }
-
-    return 0;
-}
-
-static const LmP0Frame *lm_table_find_child_frame(const LmP0Frame *frame, const char *head) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-
-    if (frame == 0) {
-        return 0;
-    }
-
-    for (field = frame->body.first_field; field != 0; field = field->next) {
-        node = field->value;
-        if (
-            !lm_table_node_ignored(node) &&
-            node->kind == LM_P0_NODE_FRAME &&
-            lm_table_text_equals(node->as.frame.head, head)
-        ) {
-            return &node->as.frame;
-        }
-    }
-
-    return 0;
-}
-
-static const LmP0Node *lm_table_single_body_node(const LmP0Frame *frame) {
-    if (frame == 0 || lm_table_visible_field_count(&frame->body) != 1U) {
-        return 0;
-    }
-    return lm_table_nth_visible_field(&frame->body, 0U);
-}
-
-static int lm_table_name_from_frame(const LmP0Frame *table_frame, LmP0Text *out_name, LmTableError *error) {
-    const LmP0Frame *name_frame;
-    const LmP0Node *name_node;
-
-    name_frame = lm_table_find_child_frame(table_frame, "name");
-    name_node = lm_table_single_body_node(name_frame);
-    if (name_node == 0 || name_node->kind != LM_P0_NODE_ATOM) {
-        lm_table_error_set(error, "table must contain name: <atom>");
-        return 0;
-    }
-
-    *out_name = name_node->as.atom;
-    return 1;
-}
-
-static int lm_table_column_spelling_append_node(LmTableBuffer *buffer, const LmP0Node *node);
-
-static int lm_table_column_spelling_append_structure(LmTableBuffer *buffer, const LmP0Structure *structure) {
-    const LmP0Field *field;
-    int first;
-
-    lm_table_buffer_append_cstr(buffer, "(");
-    first = 1;
-    for (field = structure->first_field; field != 0; field = field->next) {
-        if (lm_table_node_ignored(field->value)) {
-            continue;
-        }
-        if (!first) {
-            lm_table_buffer_append_cstr(buffer, " ");
-        }
-        if (!lm_table_column_spelling_append_node(buffer, field->value)) {
-            return 0;
-        }
-        first = 0;
-    }
-    lm_table_buffer_append_cstr(buffer, ")");
-    return !first && !buffer->failed;
-}
-
-static int lm_table_column_spelling_append_node(LmTableBuffer *buffer, const LmP0Node *node) {
-    const LmP0Node *argument;
-
-    if (node == 0) {
-        return 0;
-    }
-    if (node->kind == LM_P0_NODE_ATOM) {
-        lm_table_buffer_append_text(buffer, node->as.atom);
-        return !buffer->failed;
-    }
-    if (node->kind == LM_P0_NODE_STRUCTURE) {
-        return lm_table_column_spelling_append_structure(buffer, &node->as.structure);
-    }
-    if (node->kind == LM_P0_NODE_FRAME) {
-        argument = lm_table_single_body_node(&node->as.frame);
-        if (argument == 0) {
-            return 0;
-        }
-        lm_table_buffer_append_text(buffer, node->as.frame.head);
-        lm_table_buffer_append_cstr(buffer, "(");
-        if (!lm_table_column_spelling_append_node(buffer, argument)) {
-            return 0;
-        }
-        lm_table_buffer_append_cstr(buffer, ")");
-        return !buffer->failed;
-    }
-    return 0;
-}
-
-static char *lm_table_column_spelling_alloc(const LmP0Node *node, LmTableError *error) {
-    LmTableBuffer buffer;
-    char *result;
-
-    memset(&buffer, 0, sizeof(buffer));
-
-    if (!lm_table_column_spelling_append_node(&buffer, node)) {
-        lm_table_error_set(error, "columns: fields must be atoms or descriptor structures");
-        lm_table_buffer_destroy(&buffer);
-        return 0;
-    }
-
-    result = lm_table_buffer_take(&buffer);
-    lm_table_buffer_destroy(&buffer);
-    if (result == 0) {
-        lm_table_error_set(error, "out of memory while formatting column");
-    }
-    return result;
-}
-
-static void lm_table_columns_destroy(LmTableColumn *columns, size_t count) {
-    size_t index;
-
-    if (columns == 0) {
-        return;
-    }
-
-    for (index = 0U; index < count; ++index) {
-        free(columns[index].spelling);
-    }
-    free(columns);
-}
-
-static int lm_table_columns_from_frame(
-    const LmP0Frame *table_frame,
-    LmTableColumn **out_columns,
-    size_t *out_count,
-    LmTableError *error
-) {
-    const LmP0Frame *columns_frame;
-    const LmP0Node *node;
-    LmTableColumn *columns;
-    size_t count;
-    size_t index;
-
-    columns_frame = lm_table_find_child_frame(table_frame, "columns");
-    if (columns_frame == 0) {
-        lm_table_error_set(error, "table must contain columns:");
-        return 0;
-    }
-
-    count = lm_table_visible_field_count(&columns_frame->body);
-    if (count == 0U) {
-        lm_table_error_set(error, "columns: must not be empty");
-        return 0;
-    }
-
-    columns = (LmTableColumn *)calloc(count, sizeof(*columns));
-    if (columns == 0) {
-        lm_table_error_set(error, "out of memory while reading columns");
-        return 0;
-    }
-
-    for (index = 0U; index < count; ++index) {
-        node = lm_table_nth_visible_field(&columns_frame->body, index);
-        columns[index].spelling = lm_table_column_spelling_alloc(node, error);
-        if (columns[index].spelling == 0) {
-            lm_table_columns_destroy(columns, count);
-            return 0;
-        }
-        columns[index].width = strlen(columns[index].spelling);
-    }
-
-    *out_columns = columns;
-    *out_count = count;
-    return 1;
-}
-
-static const LmP0Frame *lm_table_rows_frame_from_table(const LmP0Frame *table_frame, LmTableError *error) {
-    const LmP0Frame *rows_frame;
-
-    rows_frame = lm_table_find_child_frame(table_frame, "rows");
-    if (rows_frame == 0) {
-        lm_table_error_set(error, "table must contain rows:");
-        return 0;
-    }
-
-    return rows_frame;
-}
-
-static int lm_table_measure_rows(
-    const LmP0Frame *rows_frame,
-    LmTableColumn *columns,
-    size_t column_count,
-    size_t *out_row_count,
-    LmTableError *error
-) {
-    const LmP0Node *node;
-    size_t cell_count;
-    size_t index;
-    size_t column_index;
-
-    cell_count = lm_table_visible_field_count(&rows_frame->body);
-    if (cell_count == 0U) {
-        *out_row_count = 0U;
-        return 1;
-    }
-
-    if (column_count == 0U || (cell_count % column_count) != 0U) {
-        lm_table_error_set(error, "rows: cell count must be divisible by column count; use explicit NULL for empty cells");
-        return 0;
-    }
-
-    for (index = 0U; index < cell_count; ++index) {
-        node = lm_table_nth_visible_field(&rows_frame->body, index);
-        if (node == 0 || node->kind != LM_P0_NODE_ATOM) {
-            lm_table_error_set(error, "rows: cells must be atoms");
-            return 0;
-        }
-
-        column_index = index % column_count;
-        if (columns[column_index].width < node->as.atom.length) {
-            columns[column_index].width = node->as.atom.length;
-        }
-    }
-
-    *out_row_count = cell_count / column_count;
-    return 1;
-}
-
-static int lm_table_emit_columns(LmTableBuffer *buffer, const LmTableColumn *columns, size_t column_count) {
-    size_t index;
-    size_t length;
-
-    lm_table_buffer_append_cstr(buffer, "    columns: ");
-    for (index = 0U; index < column_count; ++index) {
-        length = strlen(columns[index].spelling);
-        lm_table_buffer_append_cstr(buffer, columns[index].spelling);
-        if ((index + 1U) < column_count) {
-            lm_table_buffer_append_spaces(buffer, columns[index].width - length + 2U);
-        }
-    }
-    lm_table_buffer_append_cstr(buffer, "\n");
-    return !buffer->failed;
-}
-
-static int lm_table_emit_rows(
-    LmTableBuffer *buffer,
-    const LmP0Frame *rows_frame,
-    const LmTableColumn *columns,
-    size_t column_count,
-    size_t row_count
-) {
-    const LmP0Node *node;
-    size_t row_index;
-    size_t column_index;
-    size_t cell_index;
-
-    lm_table_buffer_append_cstr(buffer, "    rows:\n");
-    for (row_index = 0U; row_index < row_count; ++row_index) {
-        lm_table_buffer_append_cstr(buffer, "             ");
-        for (column_index = 0U; column_index < column_count; ++column_index) {
-            cell_index = row_index * column_count + column_index;
-            node = lm_table_nth_visible_field(&rows_frame->body, cell_index);
-            lm_table_buffer_append_text(buffer, node->as.atom);
-            if ((column_index + 1U) < column_count) {
-                lm_table_buffer_append_spaces(
-                    buffer,
-                    columns[column_index].width - node->as.atom.length + 2U
-                );
-            }
-        }
-        lm_table_buffer_append_cstr(buffer, "\n");
-    }
-
-    return !buffer->failed;
-}
-
-static LmP0Text lm_table_end_name(const LmP0Frame *table_frame, LmP0Text table_name) {
-    const LmP0Node *node;
-
-    if (
-        table_frame != 0 &&
-        table_frame->trailer != 0 &&
-        lm_table_text_equals(table_frame->trailer->spelling, "end") &&
-        lm_table_visible_field_count(&table_frame->trailer->body) == 1U
-    ) {
-        node = lm_table_nth_visible_field(&table_frame->trailer->body, 0U);
-        if (node != 0 && node->kind == LM_P0_NODE_ATOM) {
-            return node->as.atom;
-        }
-    }
-
-    return table_name;
-}
-
-static char *lm_table_to_lmx_alloc(const LmP0Frame *table_frame, LmTableError *error) {
-    const LmP0Frame *rows_frame;
-    LmP0Text table_name;
-    LmP0Text end_name;
-    LmTableColumn *columns;
-    LmTableBuffer buffer;
-    size_t column_count;
-    size_t row_count;
-    char *result;
-
-    memset(&buffer, 0, sizeof(buffer));
-    columns = 0;
-    column_count = 0U;
-    row_count = 0U;
-
-    if (!lm_table_name_from_frame(table_frame, &table_name, error)) {
-        return 0;
-    }
-    if (!lm_table_columns_from_frame(table_frame, &columns, &column_count, error)) {
-        return 0;
-    }
-
-    rows_frame = lm_table_rows_frame_from_table(table_frame, error);
-    if (rows_frame == 0) {
-        lm_table_columns_destroy(columns, column_count);
-        return 0;
-    }
-
-    if (!lm_table_measure_rows(rows_frame, columns, column_count, &row_count, error)) {
-        lm_table_columns_destroy(columns, column_count);
-        return 0;
-    }
-
-    end_name = lm_table_end_name(table_frame, table_name);
-
-    lm_table_buffer_append_cstr(&buffer, "table:\n");
-    lm_table_buffer_append_cstr(&buffer, "    name: ");
-    lm_table_buffer_append_text(&buffer, table_name);
-    lm_table_buffer_append_cstr(&buffer, "\n");
-    lm_table_emit_columns(&buffer, columns, column_count);
-    lm_table_emit_rows(&buffer, rows_frame, columns, column_count, row_count);
-    lm_table_buffer_append_cstr(&buffer, "end: ");
-    lm_table_buffer_append_text(&buffer, end_name);
-    lm_table_buffer_append_cstr(&buffer, "\n");
-
-    lm_table_columns_destroy(columns, column_count);
-    result = lm_table_buffer_take(&buffer);
-    lm_table_buffer_destroy(&buffer);
-    if (result == 0) {
-        lm_table_error_set(error, "out of memory while formatting table");
-    }
-    return result;
-}
-
-static int lm_table_emit_tables_from_node(
-    LmTableBuffer *output,
-    const LmP0Node *node,
-    int *emitted,
-    LmTableError *error
-) {
-    const LmP0Field *field;
-    char *table_text;
-
-    if (lm_table_node_ignored(node)) {
-        return 1;
-    }
-
-    if (node->kind == LM_P0_NODE_FRAME) {
-        if (lm_table_text_equals(node->as.frame.head, "table")) {
-            table_text = lm_table_to_lmx_alloc(&node->as.frame, error);
-            if (table_text == 0) {
-                return 0;
-            }
-            if (*emitted) {
-                lm_table_buffer_append_cstr(output, "\n");
-            }
-            lm_table_buffer_append_cstr(output, table_text);
-            free(table_text);
-            *emitted = 1;
-            return !output->failed;
-        }
-
-        for (field = node->as.frame.body.first_field; field != 0; field = field->next) {
-            if (!lm_table_emit_tables_from_node(output, field->value, emitted, error)) {
-                return 0;
-            }
-        }
-        return 1;
-    }
-
-    if (node->kind == LM_P0_NODE_STRUCTURE) {
-        for (field = node->as.structure.first_field; field != 0; field = field->next) {
-            if (!lm_table_emit_tables_from_node(output, field->value, emitted, error)) {
-                return 0;
-            }
-        }
-    }
-
-    return 1;
-}
-
-static char *lm_table_document_tables_to_lmx_alloc(const LmP0Document *document, LmTableError *error) {
-    const LmP0Node *root;
-    LmTableBuffer output;
-    int emitted;
-    char *result;
-
-    memset(&output, 0, sizeof(output));
-    emitted = 0;
-    root = lm_p0_document_root(document);
-
-    if (!lm_table_emit_tables_from_node(&output, root, &emitted, error)) {
-        lm_table_buffer_destroy(&output);
-        return 0;
-    }
-
-    result = lm_table_buffer_take(&output);
-    lm_table_buffer_destroy(&output);
-    if (result == 0) {
-        lm_table_error_set(error, "out of memory while formatting document tables");
-    }
-    return result;
-}
-
-int main(int argc, char **argv) {
-    LmP0Document *document;
-    const LmP0Diagnostic *diagnostic;
-    LmTableError error;
-    char *text;
-    int status;
-
-    setvbuf(stdout, 0, _IONBF, 0);
-    setvbuf(stderr, 0, _IONBF, 0);
-
-    if (argc != 2) {
-        printf("usage: table.lm0[.exe] <source.lmx>\n");
-        return 0;
-    }
-
-    document = 0;
-    memset(&error, 0, sizeof(error));
-    status = lm_p0_parse_file(argv[1], &document);
-    if (status != 0) {
-        diagnostic = lm_p0_document_diagnostic(document);
-        if (diagnostic != 0) {
-            fprintf(
-                stderr,
-                "P0 parse error %d at %zu:%zu: %s\n",
-                diagnostic->code,
-                diagnostic->line,
-                diagnostic->column,
-                diagnostic->message
-            );
-        } else {
-            fprintf(stderr, "P0 parse error while reading %s\n", argv[1]);
-        }
-        lm_p0_document_destroy(document);
-        return 1;
-    }
-
-    text = lm_table_document_tables_to_lmx_alloc(document, &error);
-    if (text == 0) {
-        fprintf(stderr, "table toLmx error: %s\n", error.message[0] != '\0' ? error.message : "unknown error");
-        lm_p0_document_destroy(document);
-        return 1;
-    }
-
-    fputs(text, stdout);
-    free(text);
-    lm_p0_document_destroy(document);
-    return 0;
-}
 ===
+
+fn: lm_table_text_equals (const: @(char data); size_t: text_length; const: @: char value) int
+    size_t: length
+
+    length: c.strlen(value)
+    return: text_length = length && c.memcmp(data, value, length) = 0
+end: lm_table_text_equals
+
+sub: lm_table_error_set (@: LmTableError error; const: @: char message)
+    if: error = 0 || error\message != 0
+        return
+
+    error\message: message
+end: lm_table_error_set
+
+fn: lm_table_buffer_reserve (@: LmTableBuffer buffer; size_t: extra) int
+    @: char new_data
+    size_t: new_capacity
+    size_t: required
+
+    if: buffer = 0 || buffer\failed != 0
+        return: 0
+
+    required: buffer\length + extra + 1U
+    if: required <= buffer\capacity
+        return: 1
+
+    if: buffer\capacity = 0U
+        new_capacity: 256U
+    if: buffer\capacity != 0U
+        new_capacity: buffer\capacity
+    ---
+
+    while: new_capacity < required
+        if: new_capacity > c.SIZE_MAX / 2U
+            buffer\failed: 1
+            return: 0
+        new_capacity: new_capacity * 2U
+
+    new_data: c.realloc(buffer\data, new_capacity)
+    if: new_data = 0
+        buffer\failed: 1
+        return: 0
+
+    buffer\data: new_data
+    buffer\capacity: new_capacity
+    return: 1
+end: lm_table_buffer_reserve
+
+sub: lm_table_buffer_append (@: LmTableBuffer buffer; const: @(char data); size_t: length)
+    if: lm_table_buffer_reserve(buffer, length) = 0
+        return
+
+    if: length != 0U
+        c.memcpy(buffer\data + buffer\length, data, length)
+    buffer\length: buffer\length + length
+    buffer\data[buffer\length]: '\0'
+end: lm_table_buffer_append
+
+sub: lm_table_buffer_append_cstr (@: LmTableBuffer buffer; const: @: char text)
+    lm_table_buffer_append(buffer, text, c.strlen(text))
+end: lm_table_buffer_append_cstr
+
+sub: lm_table_buffer_append_text (@: LmTableBuffer buffer; const: @(char data); size_t: length)
+    lm_table_buffer_append(buffer, data, length)
+end: lm_table_buffer_append_text
+
+sub: lm_table_buffer_append_spaces (@: LmTableBuffer buffer; size_t: count)
+    while: count != 0U
+        lm_table_buffer_append_cstr(buffer, " ")
+        count: count - 1U
+end: lm_table_buffer_append_spaces
+
+fn: lm_table_buffer_take (@: LmTableBuffer buffer) @: char
+    @: char result
+
+    if: buffer = 0 || buffer\failed != 0
+        return: 0
+
+    if: lm_table_buffer_reserve(buffer, 0U) = 0
+        return: 0
+
+    result: buffer\data
+    buffer\data: 0
+    buffer\length: 0U
+    buffer\capacity: 0U
+    return: result
+end: lm_table_buffer_take
+
+sub: lm_table_buffer_destroy (@: LmTableBuffer buffer)
+    if: buffer != 0
+        c.free(buffer\data)
+        buffer\data: 0
+        buffer\length: 0U
+        buffer\capacity: 0U
+        buffer\failed: 0
+end: lm_table_buffer_destroy
+
+fn: lm_table_node_ignored (const: @: LmP0Node node) int
+    return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
+end: lm_table_node_ignored
+
+fn: lm_table_visible_field_count (const: @: LmP0Structure structure) size_t
+    const: @: LmP0Field field
+    size_t: count
+
+    count: 0U
+    if: structure = 0
+        return: 0U
+
+    field: structure\first_field
+    while: field != 0
+        if: lm_table_node_ignored(field\value) = 0
+            count: count + 1U
+        field: field\next
+
+    return: count
+end: lm_table_visible_field_count
+
+fn: lm_table_nth_visible_field (const: @(LmP0Structure structure); size_t: index) const: @: LmP0Node
+    const: @: LmP0Field field
+    size_t: visible_index
+
+    visible_index: 0U
+    if: structure = 0
+        return: 0
+
+    field: structure\first_field
+    while: field != 0
+        if: lm_table_node_ignored(field\value) != 0
+            field: field\next
+            continue
+        if: visible_index = index
+            return: field\value
+        visible_index: visible_index + 1U
+        field: field\next
+
+    return: 0
+end: lm_table_nth_visible_field
+
+fn: lm_table_find_child_frame (const: @(LmP0Frame frame); const: @: char head) const: @: LmP0Frame
+    const: @: LmP0Field field
+    const: @: LmP0Node node
+
+    if: frame = 0
+        return: 0
+
+    field: c.frame->body.first_field
+    while: field != 0
+        node: field\value
+        if: lm_table_node_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME && lm_table_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, head)
+            return: c.&node->as.frame
+        field: field\next
+
+    return: 0
+end: lm_table_find_child_frame
+
+fn: lm_table_single_body_node (const: @: LmP0Frame frame) const: @: LmP0Node
+    if: frame = 0 || lm_table_visible_field_count(c.&frame->body) != 1U
+        return: 0
+    return: lm_table_nth_visible_field(c.&frame->body, 0U)
+end: lm_table_single_body_node
+
+fn: lm_table_name_from_frame (const: @(LmP0Frame table_frame); const: @@(char out_name_data); @: size_t out_name_length; @: LmTableError error) int
+    const: @: LmP0Frame name_frame
+    const: @: LmP0Node name_node
+
+    name_frame: lm_table_find_child_frame(table_frame, "name")
+    name_node: lm_table_single_body_node(name_frame)
+    if: name_node = 0 || name_node\kind != c.LM_P0_NODE_ATOM
+        lm_table_error_set(error, "table must contain name: <atom>")
+        return: 0
+
+    out_name_data[0]: c.name_node->as.atom.data
+    out_name_length[0]: c.name_node->as.atom.length
+    return: 1
+end: lm_table_name_from_frame
+
+fn: lm_table_column_spelling_append_node (@: LmTableBuffer buffer; const: @: LmP0Node node) int
+    const: @: LmP0Field field
+    const: @: LmP0Node argument
+    int: first
+
+    if: node = 0
+        return: 0
+
+    if: node\kind = c.LM_P0_NODE_ATOM
+        lm_table_buffer_append_text(buffer, c.node->as.atom.data, c.node->as.atom.length)
+        return: buffer\failed = 0
+
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        lm_table_buffer_append_cstr(buffer, "(")
+        first: 1
+        field: c.node->as.structure.first_field
+        while: field != 0
+            if: lm_table_node_ignored(field\value) = 0
+                if: first = 0
+                    lm_table_buffer_append_cstr(buffer, " ")
+                if: lm_table_column_spelling_append_node(buffer, field\value) = 0
+                    return: 0
+                first: 0
+            field: field\next
+        lm_table_buffer_append_cstr(buffer, ")")
+        return: first = 0 && buffer\failed = 0
+
+    if: node\kind = c.LM_P0_NODE_FRAME
+        argument: lm_table_single_body_node(c.&node->as.frame)
+        if: argument = 0
+            return: 0
+        lm_table_buffer_append_text(buffer, c.node->as.frame.head.data, c.node->as.frame.head.length)
+        lm_table_buffer_append_cstr(buffer, "(")
+        if: lm_table_column_spelling_append_node(buffer, argument) = 0
+            return: 0
+        lm_table_buffer_append_cstr(buffer, ")")
+        return: buffer\failed = 0
+
+    return: 0
+end: lm_table_column_spelling_append_node
+
+fn: lm_table_column_spelling_alloc (const: @(LmP0Node node); @: LmTableError error) @: char
+    LmTableBuffer: buffer
+    @: char result
+
+    c.memset(@ buffer, 0, c.sizeof(buffer))
+
+    if: lm_table_column_spelling_append_node(@ buffer, node) = 0
+        lm_table_error_set(error, "columns: fields must be atoms or descriptor structures")
+        lm_table_buffer_destroy(@ buffer)
+        return: 0
+
+    result: lm_table_buffer_take(@ buffer)
+    lm_table_buffer_destroy(@ buffer)
+    if: result = 0
+        lm_table_error_set(error, "out of memory while formatting column")
+    return: result
+end: lm_table_column_spelling_alloc
+
+sub: lm_table_columns_destroy (@: LmTableColumn columns; size_t: count)
+    size_t: index
+
+    if: columns = 0
+        return
+
+    index: 0U
+    while: index < count
+        c.free(c.columns[index].spelling)
+        index: index + 1U
+    c.free(columns)
+end: lm_table_columns_destroy
+
+fn: lm_table_columns_from_frame (
+    const: @: LmP0Frame table_frame
+    @@: LmTableColumn out_columns
+    @: size_t out_count
+    @: LmTableError error
+) int
+    const: @: LmP0Frame columns_frame
+    const: @: LmP0Node node
+    @: LmTableColumn columns
+    size_t: count
+    size_t: index
+
+    columns_frame: lm_table_find_child_frame(table_frame, "columns")
+    if: columns_frame = 0
+        lm_table_error_set(error, "table must contain columns:")
+        return: 0
+
+    count: lm_table_visible_field_count(c.&columns_frame->body)
+    if: count = 0U
+        lm_table_error_set(error, "columns: must not be empty")
+        return: 0
+
+    columns: c.calloc(count, c.sizeof(c.LmTableColumn))
+    if: columns = 0
+        lm_table_error_set(error, "out of memory while reading columns")
+        return: 0
+
+    index: 0U
+    while: index < count
+        node: lm_table_nth_visible_field(c.&columns_frame->body, index)
+        c.columns[index].spelling: lm_table_column_spelling_alloc(node, error)
+        if: c.columns[index].spelling = 0
+            lm_table_columns_destroy(columns, count)
+            return: 0
+        c.columns[index].width: c.strlen(c.columns[index].spelling)
+        index: index + 1U
+
+    out_columns[0]: columns
+    out_count[0]: count
+    return: 1
+end: lm_table_columns_from_frame
+
+fn: lm_table_rows_frame_from_table (const: @(LmP0Frame table_frame); @: LmTableError error) const: @: LmP0Frame
+    const: @: LmP0Frame rows_frame
+
+    rows_frame: lm_table_find_child_frame(table_frame, "rows")
+    if: rows_frame = 0
+        lm_table_error_set(error, "table must contain rows:")
+        return: 0
+
+    return: rows_frame
+end: lm_table_rows_frame_from_table
+
+fn: lm_table_measure_rows (
+    const: @: LmP0Frame rows_frame
+    @: LmTableColumn columns
+    size_t: column_count
+    @: size_t out_row_count
+    @: LmTableError error
+) int
+    const: @: LmP0Node node
+    size_t: cell_count
+    size_t: index
+    size_t: column_index
+
+    cell_count: lm_table_visible_field_count(c.&rows_frame->body)
+    if: cell_count = 0U
+        out_row_count[0]: 0U
+        return: 1
+
+    if: column_count = 0U || (cell_count % column_count) != 0U
+        lm_table_error_set(error, "rows: cell count must be divisible by column count; use explicit NULL for empty cells")
+        return: 0
+
+    index: 0U
+    while: index < cell_count
+        node: lm_table_nth_visible_field(c.&rows_frame->body, index)
+        if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+            lm_table_error_set(error, "rows: cells must be atoms")
+            return: 0
+
+        column_index: index % column_count
+        if: c.columns[column_index].width < c.node->as.atom.length
+            c.columns[column_index].width: c.node->as.atom.length
+        index: index + 1U
+
+    out_row_count[0]: cell_count / column_count
+    return: 1
+end: lm_table_measure_rows
+
+fn: lm_table_emit_columns (@: LmTableBuffer buffer; const: @(LmTableColumn columns); size_t: column_count) int
+    size_t: index
+    size_t: length
+
+    lm_table_buffer_append_cstr(buffer, "    columns: ")
+    index: 0U
+    while: index < column_count
+        length: c.strlen(c.columns[index].spelling)
+        lm_table_buffer_append_cstr(buffer, c.columns[index].spelling)
+        if: index + 1U < column_count
+            lm_table_buffer_append_spaces(buffer, c.columns[index].width - length + 2U)
+        index: index + 1U
+
+    lm_table_buffer_append_cstr(buffer, "\n")
+    return: buffer\failed = 0
+end: lm_table_emit_columns
+
+fn: lm_table_emit_rows (
+    @: LmTableBuffer buffer
+    const: @: LmP0Frame rows_frame
+    const: @: LmTableColumn columns
+    size_t: column_count
+    size_t: row_count
+) int
+    const: @: LmP0Node node
+    size_t: row_index
+    size_t: column_index
+    size_t: cell_index
+
+    lm_table_buffer_append_cstr(buffer, "    rows:\n")
+    row_index: 0U
+    while: row_index < row_count
+        lm_table_buffer_append_cstr(buffer, "             ")
+        column_index: 0U
+        while: column_index < column_count
+            cell_index: row_index * column_count + column_index
+            node: lm_table_nth_visible_field(c.&rows_frame->body, cell_index)
+            lm_table_buffer_append_text(buffer, c.node->as.atom.data, c.node->as.atom.length)
+            if: column_index + 1U < column_count
+                lm_table_buffer_append_spaces(buffer, c.columns[column_index].width - c.node->as.atom.length + 2U)
+            column_index: column_index + 1U
+        lm_table_buffer_append_cstr(buffer, "\n")
+        row_index: row_index + 1U
+
+    return: buffer\failed = 0
+end: lm_table_emit_rows
+
+sub: lm_table_end_name (
+    const: @: LmP0Frame table_frame
+    const: @: char table_name_data
+    size_t: table_name_length
+    const: @@: char out_name_data
+    @: size_t out_name_length
+)
+    const: @: LmP0Node node
+
+    if: table_frame != 0 && table_frame\trailer != 0 && lm_table_text_equals(c.table_frame->trailer->spelling.data, c.table_frame->trailer->spelling.length, "end") && lm_table_visible_field_count(c.&table_frame->trailer->body) = 1U
+        node: lm_table_nth_visible_field(c.&table_frame->trailer->body, 0U)
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM
+            out_name_data[0]: c.node->as.atom.data
+            out_name_length[0]: c.node->as.atom.length
+            return
+    ---
+
+    out_name_data[0]: table_name_data
+    out_name_length[0]: table_name_length
+end: lm_table_end_name
+
+fn: lm_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: LmTableError error) @: char
+    const: @: LmP0Frame rows_frame
+    const: @: char table_name_data
+    size_t: table_name_length
+    const: @: char end_name_data
+    size_t: end_name_length
+    @: LmTableColumn columns
+    LmTableBuffer: buffer
+    size_t: column_count
+    size_t: row_count
+    @: char result
+
+    c.memset(@ buffer, 0, c.sizeof(buffer))
+    columns: 0
+    column_count: 0U
+    row_count: 0U
+
+    if: lm_table_name_from_frame(table_frame, @ table_name_data, @ table_name_length, error) = 0
+        return: 0
+    if: lm_table_columns_from_frame(table_frame, @ columns, @ column_count, error) = 0
+        return: 0
+
+    rows_frame: lm_table_rows_frame_from_table(table_frame, error)
+    if: rows_frame = 0
+        lm_table_columns_destroy(columns, column_count)
+        return: 0
+
+    if: lm_table_measure_rows(rows_frame, columns, column_count, @ row_count, error) = 0
+        lm_table_columns_destroy(columns, column_count)
+        return: 0
+
+    lm_table_end_name(table_frame, table_name_data, table_name_length, @ end_name_data, @ end_name_length)
+
+    lm_table_buffer_append_cstr(@ buffer, "table:\n")
+    lm_table_buffer_append_cstr(@ buffer, "    name: ")
+    lm_table_buffer_append_text(@ buffer, table_name_data, table_name_length)
+    lm_table_buffer_append_cstr(@ buffer, "\n")
+    lm_table_emit_columns(@ buffer, columns, column_count)
+    lm_table_emit_rows(@ buffer, rows_frame, columns, column_count, row_count)
+    lm_table_buffer_append_cstr(@ buffer, "end: ")
+    lm_table_buffer_append_text(@ buffer, end_name_data, end_name_length)
+    lm_table_buffer_append_cstr(@ buffer, "\n")
+
+    lm_table_columns_destroy(columns, column_count)
+    result: lm_table_buffer_take(@ buffer)
+    lm_table_buffer_destroy(@ buffer)
+    if: result = 0
+        lm_table_error_set(error, "out of memory while formatting table")
+    return: result
+end: lm_table_to_lmx_alloc
+
+fn: lm_table_emit_tables_from_node (
+    @: LmTableBuffer output
+    const: @: LmP0Node node
+    @: int emitted
+    @: LmTableError error
+) int
+    const: @: LmP0Field field
+    @: char table_text
+
+    if: lm_table_node_ignored(node) != 0
+        return: 1
+
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_table_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, "table")
+            table_text: lm_table_to_lmx_alloc(c.&node->as.frame, error)
+            if: table_text = 0
+                return: 0
+            if: emitted[0] != 0
+                lm_table_buffer_append_cstr(output, "\n")
+            lm_table_buffer_append_cstr(output, table_text)
+            c.free(table_text)
+            emitted[0]: 1
+            return: output\failed = 0
+
+        field: c.node->as.frame.body.first_field
+        while: field != 0
+            if: lm_table_emit_tables_from_node(output, field\value, emitted, error) = 0
+                return: 0
+            field: field\next
+        return: 1
+
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        field: c.node->as.structure.first_field
+        while: field != 0
+            if: lm_table_emit_tables_from_node(output, field\value, emitted, error) = 0
+                return: 0
+            field: field\next
+    end: if
+return: 1
+
+fn: lm_table_document_tables_to_lmx_alloc (const: @(LmP0Document document); @: LmTableError error) @: char
+    const: @: LmP0Node root
+    LmTableBuffer: output
+    int: emitted
+    @: char result
+
+    c.memset(@ output, 0, c.sizeof(output))
+    emitted: 0
+    root: c.lm_p0_document_root(document)
+
+    if: lm_table_emit_tables_from_node(@ output, root, @ emitted, error) = 0
+        lm_table_buffer_destroy(@ output)
+        return: 0
+
+    result: lm_table_buffer_take(@ output)
+    lm_table_buffer_destroy(@ output)
+    if: result = 0
+        lm_table_error_set(error, "out of memory while formatting document tables")
+    return: result
+end: lm_table_document_tables_to_lmx_alloc
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        @: LmP0Document document 0
+        const: @: LmP0Diagnostic diagnostic
+        LmTableError: error
+        @: char text
+        int: status
+
+        c.setvbuf: c.stdout 0 c._IONBF 0
+        c.setvbuf: c.stderr 0 c._IONBF 0
+
+        if: argc != 2
+            c.printf: "usage: table.lm0[.exe] <source.lmx>\n"
+            return: 0
+
+        c.memset(@ error, 0, c.sizeof(error))
+        status: c.lm_p0_parse_file(argv[1], @ document)
+        if: status != 0
+            diagnostic: c.lm_p0_document_diagnostic(document)
+            if: diagnostic != 0
+                c.fprintf:
+                    c.stderr
+                    "P0 parse error %d at %zu:%zu: %s\n"
+                    diagnostic\code diagnostic\line diagnostic\column diagnostic\message
+            ---
+            if: diagnostic = 0
+                c.fprintf: c.stderr "P0 parse error while reading %s\n" argv[1]
+            ---
+            c.lm_p0_document_destroy(document)
+            return: 1
+
+        text: lm_table_document_tables_to_lmx_alloc(document, @ error)
+        if: text = 0
+            if: c.error.message != 0
+                c.fprintf: c.stderr "table toLmx error: %s\n" c.error.message
+            if: c.error.message = 0
+                c.fprintf: c.stderr "table toLmx error: %s\n" "unknown error"
+            ---
+            c.lm_p0_document_destroy(document)
+            return: 1
+
+        c.fputs: text c.stdout
+        c.free(text)
+        c.lm_p0_document_destroy(document)
+        return: 0
+    end: main
+end: external

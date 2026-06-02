@@ -1,3 +1,6 @@
+typedef struct LmBuildOptions {
+    int full_build;
+} LmBuildOptions;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,12 +103,6 @@ static int lm_build_has_qt_gxx(void) {
     return 0;
 }
 #endif
-
-typedef struct LmBuildOptions LmBuildOptions;
-
-struct LmBuildOptions {
-    int full_build;
-};
 
 static LmBuildOptions * lm_build_options_new(void) {
     return lm_own_new_zero(sizeof(LmBuildOptions));

@@ -7,6 +7,8 @@ table:
              primitive                  class
              descriptor                 class
              relation                   class
+             layout                     class
+             field                      class
              table                      class
              column                     class
              literal                    class
@@ -22,6 +24,9 @@ table:
              value                      class
              NULL                       class
              forbidden                  class
+             `field.class`              relation
+             `field.index`              relation
+             `field.address-depth`      relation
 
              void                       primitive
              char                       primitive

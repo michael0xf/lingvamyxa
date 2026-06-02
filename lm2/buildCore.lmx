@@ -1,5 +1,12 @@
 L4:
     table:
+        name: LmBuildOptions
+        columns: class       (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 full_build  int                    0                       0
+    end: LmBuildOptions
+
+    table:
         name: BUILD
         columns: class              (l2 binding)                (win char)                                       (unix char)
         rows:
@@ -16,6 +23,13 @@ L4:
                  include            NULL                        "<direct.h>"                                     "<unistd.h>"
     end: BUILD
 end: L4
+
+L1:
+===
+typedef struct LmBuildOptions {
+    int full_build;
+} LmBuildOptions;
+===
 
 L2:
     include: "<stdio.h>" "<stdlib.h>" "<string.h>" "own.lm1.h"
@@ -134,10 +148,6 @@ L2:
                 return: 0
             end: lm_build_has_qt_gxx
     end: os
-    
-    LmBuildOptions:
-        int: full_build
-    end: LmBuildOptions
     
     fn: lm_build_options_new () @: LmBuildOptions
         return: c.lm_own_new_zero(c.sizeof(c.LmBuildOptions))

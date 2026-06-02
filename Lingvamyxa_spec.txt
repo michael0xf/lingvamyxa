@@ -7681,25 +7681,45 @@ The same short-tail whitespace rule applies to address-depth declarations:
 
 This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is the same declaration with an explicit comma field separator. The spelling `@@@: int; ppp` is different: the semicolon terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. The following `ppp` is parsed as the next source item at the current level.
 
-20.2.1. Named Structures and ANSI C `typedef struct` Projection
+20.2.1. L4 Layout Classes and ANSI C `typedef struct` Projection
 
-At L2, an ordinary named vertical Structure at top level declares one ordinary
-Lingvamyxa namespace entry. It is not a second type namespace and it is not C
-syntax in the source. It is just a named Structure. Because that Structure has
-the same shape as an ANSI C record layout, an ANSI C projection may lower it to
-`typedef struct`.
+L2 does not define types by writing an ordinary named Structure. A source form
+such as `Name:` is a Structure/frame for the active receiver/profile; it is not
+automatically a storage layout and must not be projected to `typedef struct`
+merely because its fields visually resemble C fields.
 
-Example:
+Types/layouts are L4 registry data. A layout class is described by tables, and
+a backend-specific projection may later print those facts as ANSI C declarations.
+The source-semantic layer and the target projection are separate.
 
-L2:
-    LmTransSymbol:
-        LmP0Text: name
-        LmTransSymbolKind: kind
-        unsigned: depth
+Example L4 layout data:
+
+L4:
+    table:
+        name: LmTransSymbol
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 name   LmP0Text               0                       0
+                 kind   LmTransSymbolKind      1                       0
+                 depth  unsigned               2                       0
     end: LmTransSymbol
-end: L2
+end: L4
 
-One possible ANSI C projection:
+The table declaration `name: LmTransSymbol` is already enough to introduce the
+registry class/key `LmTransSymbol`. More generally, normalized class/key
+mentions inside L4 registry data are material for the L4 validator/resolver:
+table names, row keys, column names, column descriptors and cells admitted by
+class-typed columns may all participate in the active registry universe. This
+does not mean that the low-level L2 bootstrap translator must eagerly collect
+and validate the complete class graph. It may keep only a small materialized
+visibility cache, while the full logical collection of class facts belongs to
+the LM4/L4 validator/resolver.
+
+A separate row in the table named `class` may classify a class as `layout`,
+attach imports or group it with other classes, but that index row is not
+required for class existence.
+
+One possible ANSI C projection of these L4 facts:
 
 ---ANSI C---
 typedef struct LmTransSymbol LmTransSymbol;
@@ -7711,12 +7731,13 @@ struct LmTransSymbol {
 };
 ---ANSI C---
 
-The field head is consumed by the L2 projection as the field descriptor. It may
-name another ordinary Lingvamyxa Structure, an explicit `c.name`, or a future
-callable/method descriptor if the profile defines such a descriptor form. Merely
-mentioning that descriptor does not call it. The general rule remains the same:
-a Structure is not executed because it exists; it is consumed by the active
-translator/profile mode.
+The field rows are not executed. They are facts in the active L4 registry view:
+field `name` has class `LmP0Text`, field `kind` has class
+`LmTransSymbolKind`, field `depth` has class `unsigned`, and each field has a
+stable source order. A validator/resolver may use these facts for type checking,
+field-follow validation, storage planning or backend projection. The ANSI C
+`typedef struct` text is a projection result, not the source identity of the
+class.
 
 20.2.1.1. Class/Layout Data and Target Projection Are Separate
 

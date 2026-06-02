@@ -1,3 +1,18 @@
+L4:
+    table:
+        name: LmVcpkgOptions
+        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 output_dir     char                   0                       1
+                 manifest_root  char                   1                       1
+                 triplet        char                   2                       1
+                 host_triplet   char                   3                       1
+                 vcpkg_tool     char                   4                       1
+                 vcpkg_root     char                   5                       1
+                 dry_run        int                    6                       0
+    end: LmVcpkgOptions
+end: L4
+
 include: "<stdio.h>" "<stdlib.h>" "<string.h>" "own.lm1.h"
 
 os:
@@ -130,15 +145,18 @@ os:
         end: lm_vcpkg_platform_wrap_command
 end: os
 
-LmVcpkgOptions:
-    @: char output_dir
-    @: char manifest_root
-    @: char triplet
-    @: char host_triplet
-    @: char vcpkg_tool
-    @: char vcpkg_root
-    int: dry_run
-end: LmVcpkgOptions
+L1:
+===
+typedef struct LmVcpkgOptions {
+    char *output_dir;
+    char *manifest_root;
+    char *triplet;
+    char *host_triplet;
+    char *vcpkg_tool;
+    char *vcpkg_root;
+    int dry_run;
+} LmVcpkgOptions;
+===
 
 fn: lm_vcpkg_options_new () @: LmVcpkgOptions
     return: c.lm_own_new_zero(c.sizeof(c.LmVcpkgOptions))

@@ -1,13 +1,22 @@
-L2:
-. LmTestText:
-. . unsigned: length
+L4:
+. table:
+. . name: LmTestText
+. . columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+. . rows:
+. . . length  unsigned  0  0
 . end: LmTestText
-.
-. L1:
+end: L4
+
+L1:
 ===
+typedef struct LmTestText {
+    unsigned length;
+} LmTestText;
+
 static LmTestText c_value;
 ===
-.
+
+L2:
 . fn: direct (const: @: LmTestText text) unsigned
 . . return: text\length
 . end: direct
