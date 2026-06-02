@@ -24,6 +24,7 @@ typedef struct LmTransRegistryColumn {
 } LmTransRegistryColumn;
 
 static LmTransRegistry lm_trans_registry;
+static FILE *lm_trans_prelude_output;
 
 typedef struct LmTransSymbol {
     LmP0Text *name;
@@ -1200,6 +1201,49 @@ static int lm_trans_write_all(FILE *file, const char *data, size_t length) {
 
 static int lm_trans_put(FILE *file, const char *text) {
     return fputs(text, file) < 0 ? 1 : 0;
+}
+
+static FILE *lm_trans_prelude_file(FILE *fallback) {
+    return lm_trans_prelude_output != 0 ? lm_trans_prelude_output : fallback;
+}
+
+static int lm_trans_copy_stream(FILE *target, FILE *source) {
+    char buffer[4096];
+    size_t count;
+
+    if (target == 0 || source == 0) {
+        return 1;
+    }
+    if (fflush(source) != 0 || fseek(source, 0L, SEEK_SET) != 0) {
+        return 1;
+    }
+    while ((count = fread(buffer, 1U, sizeof(buffer), source)) != 0U) {
+        if (fwrite(buffer, 1U, count, target) != count) {
+            return 1;
+        }
+    }
+
+    return ferror(source) ? 1 : 0;
+}
+
+static char *lm_trans_temp_output_path_new(const char *output_path, const char *suffix) {
+    size_t output_length;
+    size_t suffix_length;
+    char *result;
+
+    if (output_path == 0 || suffix == 0) {
+        return 0;
+    }
+
+    output_length = strlen(output_path);
+    suffix_length = strlen(suffix);
+    result = (char *)malloc(output_length + suffix_length + 1U);
+    if (result == 0) {
+        return 0;
+    }
+    memcpy(result, output_path, output_length);
+    memcpy(result + output_length, suffix, suffix_length + 1U);
+    return result;
 }
 
 static int lm_trans_write_text(FILE *file, LmP0Text text) {
@@ -7978,6 +8022,12 @@ static int lm_trans_emit_loop_jump_statement(
     unsigned indent,
     LmTransNamespace *namespace_
 );
+static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame);
+static int lm_trans_emit_l2_os_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+);
 
 static int lm_trans_statement_emit_return(
     FILE *file,
@@ -8039,6 +8089,31 @@ static int lm_trans_statement_emit_loop_jump(
 ) {
     (void)stack;
     return lm_trans_emit_loop_jump_statement(file, frame->head, indent, namespace_);
+}
+
+static int lm_trans_statement_emit_include_prelude(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)stack;
+    (void)indent;
+    (void)namespace_;
+    return lm_trans_emit_l1_include_frame(lm_trans_prelude_file(file), frame);
+}
+
+static int lm_trans_statement_emit_os_prelude(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)stack;
+    (void)indent;
+    return lm_trans_emit_l2_os_frame(lm_trans_prelude_file(file), frame, namespace_);
 }
 
 static int lm_trans_statement_emit_const_declaration(
@@ -9444,6 +9519,14 @@ static int lm_trans_binding_resolve(const char *binding, LmTransBinding *out) {
     }
     if (strcmp(binding, "lm_trans_statement_emit_loop_jump") == 0) {
         out->statement_frame = lm_trans_statement_emit_loop_jump;
+        return 1;
+    }
+    if (strcmp(binding, "lm_trans_statement_emit_include_prelude") == 0) {
+        out->statement_frame = lm_trans_statement_emit_include_prelude;
+        return 1;
+    }
+    if (strcmp(binding, "lm_trans_statement_emit_os_prelude") == 0) {
+        out->statement_frame = lm_trans_statement_emit_os_prelude;
         return 1;
     }
     if (strcmp(binding, "lm_trans_statement_emit_const_declaration") == 0) {
@@ -11089,14 +11172,18 @@ static int lm_trans_emit_l2_structure_with_namespace(
     const LmP0Field *field;
     const LmP0Node *node;
     LmTransTopLevelItem item;
+    FILE *prelude_file;
     int status;
-    int emitted_top_level;
+    int emitted_prelude;
+    int emitted_function;
 
     if (namespace_ == 0) {
         return 1;
     }
 
-    emitted_top_level = 0;
+    emitted_prelude = 0;
+    emitted_function = 0;
+    prelude_file = lm_trans_prelude_file(file);
     if (declare_items && lm_trans_namespace_declare_registry_table_classes(namespace_) != 0) {
         return 1;
     }
@@ -11126,10 +11213,10 @@ static int lm_trans_emit_l2_structure_with_namespace(
         }
 
         if (item.emit_before_functions != 0) {
-            if (emitted_top_level && lm_trans_put(file, "\n") != 0) {
+            if (emitted_prelude && lm_trans_put(prelude_file, "\n") != 0) {
                 return 1;
             }
-            status = item.emit_before_functions(file, namespace_, &item);
+            status = item.emit_before_functions(prelude_file, namespace_, &item);
         } else {
             status = 0;
         }
@@ -11138,7 +11225,7 @@ static int lm_trans_emit_l2_structure_with_namespace(
             return 1;
         }
         if (item.emits_top_level) {
-            emitted_top_level = 1;
+            emitted_prelude = 1;
         }
         field = field->next;
     }
@@ -11151,14 +11238,14 @@ static int lm_trans_emit_l2_structure_with_namespace(
         }
 
         if (item.emit_function != 0) {
-            if (emitted_top_level && lm_trans_put(file, "\n") != 0) {
+            if (emitted_function && lm_trans_put(file, "\n") != 0) {
                 return 1;
             }
             status = item.emit_function(file, namespace_, &item);
             if (status != 0) {
                 return 1;
             }
-            emitted_top_level = 1;
+            emitted_function = 1;
         }
         field = field->next;
     }
@@ -11757,10 +11844,12 @@ static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root) {
 static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int implicit_l2, int *emitted) {
     const LmP0Field *field;
     const LmP0Node *node;
+    FILE *prelude_file;
 
     if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
         return 1;
     }
+    prelude_file = lm_trans_prelude_file(output);
 
     if (implicit_l2 && !lm_trans_root_has_explicit_l2_frame(&root->as.structure)) {
         if (lm_trans_emit_l2_structure(output, &root->as.structure, 0) != 0) {
@@ -11780,7 +11869,7 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int i
                 fprintf(stderr, "trans error: root raw text must be inside L1\n");
                 return 1;
             } else if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "L1")) {
-                if (lm_trans_emit_l1_body(output, &node->as.frame, emitted) != 0) {
+                if (lm_trans_emit_l1_body(prelude_file, &node->as.frame, emitted) != 0) {
                     return 1;
                 }
                 *emitted = 1;
@@ -11800,12 +11889,12 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int i
                     return 1;
                 }
             } else if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "os")) {
-                if (lm_trans_emit_l1_os_frame(output, &node->as.frame) != 0) {
+                if (lm_trans_emit_l1_os_frame(prelude_file, &node->as.frame) != 0) {
                     return 1;
                 }
                 *emitted = 1;
             } else if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "include")) {
-                if (lm_trans_emit_l1_include_frame(output, &node->as.frame) != 0) {
+                if (lm_trans_emit_l1_include_frame(prelude_file, &node->as.frame) != 0) {
                     return 1;
                 }
                 *emitted = 1;
@@ -12860,11 +12949,22 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     const LmP0Diagnostic *diagnostic;
     const LmP0Node *root;
     FILE *output;
+    FILE *prelude_output;
+    FILE *body_output;
+    FILE *previous_prelude_output;
+    char *prelude_path;
+    char *body_path;
     int status;
     int close_status;
     int emitted;
 
     document = 0;
+    output = 0;
+    prelude_output = 0;
+    body_output = 0;
+    previous_prelude_output = lm_trans_prelude_output;
+    prelude_path = 0;
+    body_path = 0;
     if (lm_trans_registry_load_for_source(source_path) != 0) {
         return 1;
     }
@@ -12896,27 +12996,75 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
         return 1;
     }
 
-    output = fopen(output_path, "wb");
-    if (output == 0) {
-        fprintf(stderr, "trans error: cannot open output file %s\n", output_path);
+    prelude_path = lm_trans_temp_output_path_new(output_path, ".prelude.tmp");
+    body_path = lm_trans_temp_output_path_new(output_path, ".body.tmp");
+    if (prelude_path == 0 || body_path == 0) {
+        fprintf(stderr, "trans error: cannot allocate temporary output paths\n");
+        free(prelude_path);
+        free(body_path);
         lm_p0_document_destroy(document);
         lm_trans_registry_destroy();
         return 1;
     }
 
+    prelude_output = fopen(prelude_path, "w+b");
+    body_output = fopen(body_path, "w+b");
+    if (prelude_output == 0 || body_output == 0) {
+        fprintf(stderr, "trans error: cannot create temporary output streams\n");
+        if (prelude_output != 0) {
+            fclose(prelude_output);
+        }
+        if (body_output != 0) {
+            fclose(body_output);
+        }
+        remove(prelude_path);
+        remove(body_path);
+        free(prelude_path);
+        free(body_path);
+        lm_p0_document_destroy(document);
+        lm_trans_registry_destroy();
+        return 1;
+    }
+
+    lm_trans_prelude_output = prelude_output;
     emitted = 0;
     status = lm_trans_emit_root_sequence(
-        output,
+        body_output,
         root,
         lm_trans_path_has_extension(source_path, ".lm2"),
         &emitted
     );
+    lm_trans_prelude_output = previous_prelude_output;
     if (status == 0 && !emitted) {
         fprintf(stderr, "trans error: root L1 or L2 frame was not found\n");
         status = 1;
     }
 
-    close_status = fclose(output);
+    if (status == 0) {
+        output = fopen(output_path, "wb");
+        if (output == 0) {
+            fprintf(stderr, "trans error: cannot open output file %s\n", output_path);
+            status = 1;
+        }
+    }
+    if (
+        status == 0 &&
+        (
+            lm_trans_copy_stream(output, prelude_output) != 0 ||
+            lm_trans_copy_stream(output, body_output) != 0
+        )
+    ) {
+        fprintf(stderr, "trans error: cannot write output file %s\n", output_path);
+        status = 1;
+    }
+
+    close_status = output != 0 ? fclose(output) : 0;
+    fclose(prelude_output);
+    fclose(body_output);
+    remove(prelude_path);
+    remove(body_path);
+    free(prelude_path);
+    free(body_path);
     if (status != 0) {
         lm_p0_document_destroy(document);
         lm_trans_registry_destroy();

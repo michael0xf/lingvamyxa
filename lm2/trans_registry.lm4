@@ -123,6 +123,8 @@ table:
              break         `receiver.statement`
              continue      `receiver.statement`
              synchronized  `receiver.statement`
+             include       `receiver.statement`
+             os            `receiver.statement`
              const         `receiver.statement`
              `()`          `receiver.statement`
              `[]`          `receiver.statement`
@@ -164,6 +166,8 @@ table:
              break         lm_trans_statement_emit_loop_jump
              continue      lm_trans_statement_emit_loop_jump
              synchronized  lm_trans_statement_emit_synchronized
+             include       lm_trans_statement_emit_include_prelude
+             os            lm_trans_statement_emit_os_prelude
              const         lm_trans_statement_emit_const_declaration
              `()`          lm_trans_statement_emit_structure_declaration
              `[]`          lm_trans_statement_emit_array_declaration

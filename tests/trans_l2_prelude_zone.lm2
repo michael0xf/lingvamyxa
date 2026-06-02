@@ -1,0 +1,13 @@
+external:
+    fn: main () int
+        include: "<stdio.h>"
+        os:
+            win:
+                include: "<stdlib.h>"
+            default:
+                include: "<stdlib.h>"
+        end: os
+        c.printf: "prelude-zone-ok\n"
+        return: 0
+    end: main
+end: external
