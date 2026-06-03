@@ -284,9 +284,15 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
 char * lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
 
+static LmOwnPtrStack *lm_l4_seen_tables;
+static LmOwnPtrStack *lm_l4_seen_tables_get(void) {
+    return lm_l4_seen_tables;
+}
+static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables) {
+    lm_l4_seen_tables = seen_tables;
+}
 static int lm_l4_text_equals(LmP0Text text, const char *value) {
     size_t length;
-
     if (value == 0) {
         return 0;
     }
@@ -305,61 +311,45 @@ static int lm_l4_text_same(LmP0Text left, LmP0Text right) {
 }
 
 static int lm_l4_node_is_ignored(const LmP0Node *node) {
-    return node == 0 || (node->flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U;
+    return node == 0 || (node -> flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U;
 }
 
-static const char *lm_l4_error_prefix(const LmL4Loader *loader) {
-    return loader != 0 && loader->error_prefix != 0 ? loader->error_prefix : "L4";
+static const char * lm_l4_error_prefix(const LmL4Loader *loader) {
+    if (loader != 0 && loader -> error_prefix != 0) {
+        return loader -> error_prefix;
+    }
+    return "L4";
 }
 
 static void lm_l4_error(const LmL4Loader *loader, const char *message) {
     fprintf(stderr, "%s registry error: %s\n", lm_l4_error_prefix(loader), message);
 }
 
-static LmOwnPtrStack *lm_l4_seen_tables;
-
-static const LmP0Field *lm_l4_nth_field(
-    const LmP0Structure *structure,
-    size_t index
-) {
+static const LmP0Field * lm_l4_nth_field(const LmP0Structure *structure, size_t index) {
     const LmP0Field *field;
     size_t i;
-
     if (structure == 0) {
         return 0;
     }
-
-    field = structure->first_field;
+    field = structure -> first_field;
     i = 0U;
     while (field != 0 && i < index) {
-        field = field->next;
-        ++i;
+        field = field -> next;
+        i = i + 1U;
     }
-
     return field;
 }
 
-static int lm_l4_trailer_single_atom(
-    const LmP0Trailer *trailer,
-    LmP0Text *out_text
-) {
+static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text) {
     const LmP0Field *field;
-
     if (trailer == 0 || out_text == 0) {
         return 0;
     }
-
     field = trailer->body.first_field;
-    if (
-        field == 0 ||
-        field->next != 0 ||
-        field->value == 0 ||
-        field->value->kind != LM_P0_NODE_ATOM
-    ) {
+    if (field == 0 || field -> next != 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
         return 0;
     }
-
-    *out_text = field->value->as.atom;
+    out_text[0] = field->value->as.atom;
     return 1;
 }
 
@@ -367,332 +357,227 @@ static int lm_l4_identifier_value(LmP0Text atom, LmP0Text *out_payload) {
     if (out_payload == 0 || atom.data == 0) {
         return 0;
     }
-
     if (atom.length >= 2U && atom.data[0] == '`' && atom.data[atom.length - 1U] == '`') {
+        out_payload[0] = atom;
         out_payload->data = atom.data + 1U;
         out_payload->length = atom.length - 2U;
         return 1;
     }
-
-    *out_payload = atom;
+    out_payload[0] = atom;
     return 1;
 }
 
-static int lm_l4_frame_single_atom(
-    const LmP0Frame *frame,
-    const char *head,
-    LmP0Text *out_atom
-) {
+static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, LmP0Text *out_atom) {
     const LmP0Field *field;
-
     if (frame == 0 || out_atom == 0) {
         return 0;
     }
-    if (head != 0 && !lm_l4_text_equals(frame->head, head)) {
+    if (head != 0 && lm_l4_text_equals(frame -> head, head) == 0) {
         return 0;
     }
-
     field = lm_l4_nth_field(&frame->body, 0U);
-    if (
-        field == 0 ||
-        field->next != 0 ||
-        field->value == 0 ||
-        field->value->kind != LM_P0_NODE_ATOM
-    ) {
-        return -1;
+    if (field == 0 || field -> next != 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
+        return - 1;
     }
-
-    *out_atom = field->value->as.atom;
+    out_atom[0] = field->value->as.atom;
     return 1;
 }
 
-static int lm_l4_column_name(
-    const LmP0Field *field,
-    LmL4Column *out_column
-) {
+static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column) {
     const LmP0Node *node;
     const LmP0Field *body_field;
     size_t descriptor_count;
-
     if (field == 0 || out_column == 0) {
         return 0;
     }
-
-    memset(out_column, 0, sizeof(*out_column));
-    node = field->value;
+    memset(out_column, 0, sizeof(out_column[0]));
+    node = field -> value;
     if (node == 0) {
-        return -1;
+        return - 1;
     }
-
-    if (node->kind == LM_P0_NODE_ATOM) {
+    if (node -> kind == LM_P0_NODE_ATOM) {
         out_column->name = node->as.atom;
         return 1;
     }
-
-    if (node->kind == LM_P0_NODE_FRAME) {
+    if (node -> kind == LM_P0_NODE_FRAME) {
         if (lm_l4_frame_single_atom(&node->as.frame, 0, &out_column->name) <= 0) {
-            return -1;
+            return - 1;
         }
         out_column->descriptors[0] = node->as.frame.head;
         out_column->descriptor_count = 1U;
         return 1;
     }
-
-    if (node->kind != LM_P0_NODE_STRUCTURE) {
-        return -1;
+    if (node -> kind != LM_P0_NODE_STRUCTURE) {
+        return - 1;
     }
-
     body_field = node->as.structure.first_field;
-    while (body_field != 0 && lm_l4_node_is_ignored(body_field->value)) {
-        body_field = body_field->next;
+    while (body_field != 0 && lm_l4_node_is_ignored(body_field -> value) != 0) {
+        body_field = body_field -> next;
     }
-    if (body_field == 0 || body_field->value == 0 || body_field->value->kind != LM_P0_NODE_ATOM) {
-        return -1;
+    if (body_field == 0 || body_field -> value == 0 || body_field -> value -> kind != LM_P0_NODE_ATOM) {
+        return - 1;
     }
     out_column->name = body_field->value->as.atom;
-
     descriptor_count = 0U;
-    body_field = body_field->next;
+    body_field = body_field -> next;
     while (body_field != 0) {
-        if (body_field->value != 0 && !lm_l4_node_is_ignored(body_field->value)) {
-            if (body_field->value->kind != LM_P0_NODE_ATOM) {
-                return -1;
+        if (body_field -> value != 0 && lm_l4_node_is_ignored(body_field -> value) == 0) {
+            if (body_field -> value -> kind != LM_P0_NODE_ATOM) {
+                return - 1;
             }
-            if (descriptor_count >= sizeof(out_column->descriptors) / sizeof(out_column->descriptors[0])) {
-                return -1;
+            if (descriptor_count >= sizeof(out_column -> descriptors) / sizeof(out_column -> descriptors[0])) {
+                return - 1;
             }
             out_column->descriptors[descriptor_count] = body_field->value->as.atom;
-            ++descriptor_count;
+            descriptor_count = descriptor_count + 1U;
         }
-        body_field = body_field->next;
+        body_field = body_field -> next;
     }
     out_column->descriptor_count = descriptor_count;
-
     return 1;
 }
 
-static int lm_l4_columns_from_frame(
-    const LmL4Loader *loader,
-    const LmP0Frame *frame,
-    LmL4Column *columns,
-    size_t columns_capacity,
-    size_t *out_count
-) {
+static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column *columns, size_t columns_capacity, size_t *out_count) {
     const LmP0Field *field;
     LmL4Column column;
     LmP0Text first_column;
     size_t count;
     int status;
-
-    if (
-        frame == 0 ||
-        columns == 0 ||
-        out_count == 0 ||
-        columns_capacity == 0U ||
-        !lm_l4_text_equals(frame->head, "columns")
-    ) {
+    if (frame == 0 || columns == 0 || out_count == 0 || columns_capacity == 0U || lm_l4_text_equals(frame -> head, "columns") == 0) {
         return 0;
     }
-
     count = 0U;
     field = frame->body.first_field;
     while (field != 0) {
-        if (field->value != 0 && !lm_l4_node_is_ignored(field->value)) {
-            status = lm_l4_column_name(field, &column);
+        if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
+            status = lm_l4_column_name(field, & column);
             if (status <= 0) {
                 lm_l4_error(loader, "columns expects atoms or anonymous descriptor structures");
-                return -1;
+                return - 1;
             }
             if (count >= columns_capacity) {
                 lm_l4_error(loader, "table has too many columns");
-                return -1;
+                return - 1;
             }
             columns[count] = column;
-            ++count;
+            count = count + 1U;
         }
-        field = field->next;
+        field = field -> next;
     }
-
     if (count < 2U) {
         lm_l4_error(loader, "table expects at least two columns");
-        return -1;
+        return - 1;
     }
-    if (
-        !lm_l4_identifier_value(columns[0].name, &first_column) ||
-        !lm_l4_text_equals(first_column, "class")
-    ) {
+    if (lm_l4_identifier_value(columns[0].name, & first_column) == 0 || lm_l4_text_equals(first_column, "class") == 0) {
         lm_l4_error(loader, "first table column must be class");
-        return -1;
+        return - 1;
     }
-
-    *out_count = count;
+    out_count[0] = count;
     return 1;
 }
 
-static int lm_l4_validate_named_trailer(
-    const LmL4Loader *loader,
-    const LmP0Frame *frame,
-    LmP0Text expected_name
-) {
+static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, LmP0Text expected_name) {
     LmP0Text actual;
     LmP0Text actual_payload;
     LmP0Text expected_payload;
-
-    if (frame == 0 || frame->trailer == 0) {
+    if (frame == 0 || frame -> trailer == 0) {
         return 0;
     }
-    if (!lm_l4_text_equals(frame->trailer->spelling, "end")) {
+    if (lm_l4_text_equals(frame->trailer->spelling, "end") == 0) {
         return 0;
     }
-    if (!lm_l4_trailer_single_atom(frame->trailer, &actual)) {
+    if (lm_l4_trailer_single_atom(frame -> trailer, & actual) == 0) {
         lm_l4_error(loader, "end trailer expects exactly one target name");
         return 1;
     }
-    if (
-        !lm_l4_identifier_value(actual, &actual_payload) ||
-        !lm_l4_identifier_value(expected_name, &expected_payload) ||
-        !lm_l4_text_same(actual_payload, expected_payload)
-    ) {
+    if (lm_l4_identifier_value(actual, & actual_payload) == 0 || lm_l4_identifier_value(expected_name, & expected_payload) == 0 || lm_l4_text_same(actual_payload, expected_payload) == 0) {
         lm_l4_error(loader, "end trailer target does not match head/name");
         return 1;
     }
-
     return 0;
 }
 
-static int lm_l4_row_from_frame(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Frame *frame
-) {
+static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     const LmP0Field *table_field;
     const LmP0Field *key_field;
     const LmP0Field *payload_field;
-
-    if (frame == 0 || !lm_l4_text_equals(frame->head, "row")) {
+    if (frame == 0 || lm_l4_text_equals(frame -> head, "row") == 0) {
         return 0;
     }
-
     table_field = lm_l4_nth_field(&frame->body, 0U);
     key_field = lm_l4_nth_field(&frame->body, 1U);
     payload_field = lm_l4_nth_field(&frame->body, 2U);
-    if (
-        table_field == 0 ||
-        key_field == 0 ||
-        payload_field == 0 ||
-        payload_field->next != 0 ||
-        table_field->value == 0 ||
-        key_field->value == 0 ||
-        payload_field->value == 0 ||
-        table_field->value->kind != LM_P0_NODE_ATOM ||
-        key_field->value->kind != LM_P0_NODE_ATOM
-    ) {
+    if (table_field == 0 || key_field == 0 || payload_field == 0 || payload_field -> next != 0 || table_field -> value == 0 || key_field -> value == 0 || payload_field -> value == 0 || table_field -> value -> kind != LM_P0_NODE_ATOM || key_field -> value -> kind != LM_P0_NODE_ATOM) {
         lm_l4_error(loader, "row expects table and key atoms plus one payload field");
-        return -1;
+        return - 1;
     }
-
-    if (loader == 0 || loader->push_row == 0) {
+    if (loader == 0 || loader -> push_row == 0) {
         lm_l4_error(loader, "row consumer is not configured");
-        return -1;
+        return - 1;
     }
-    if (
-        loader->push_row(
-            context,
-            table_field->value->as.atom,
-            key_field->value->as.atom,
-            payload_field->value
-        ) != 0
-    ) {
-        return -1;
+    if (loader->push_row(context, table_field->value->as.atom, key_field->value->as.atom, payload_field -> value) != 0) {
+        return - 1;
     }
-
     return 1;
 }
 
-static int lm_l4_rows_from_frame(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Frame *frame,
-    LmP0Text table_name,
-    const LmL4Column *columns,
-    size_t column_count
-) {
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, LmP0Text table_name, const LmL4Column *columns, size_t column_count) {
     const LmP0Field *field;
     const LmP0Node *key_node;
     const LmP0Node *cell_node;
     size_t field_index;
     size_t column_index;
     int split_by_column;
-
-    if (frame == 0 || !lm_l4_text_equals(frame->head, "rows")) {
+    if (frame == 0 || lm_l4_text_equals(frame -> head, "rows") == 0) {
         return 0;
     }
-    if (loader == 0 || loader->push_cell == 0) {
+    if (loader == 0 || loader -> push_cell == 0) {
         lm_l4_error(loader, "cell consumer is not configured");
-        return -1;
+        return - 1;
     }
     if (columns == 0 || column_count < 2U) {
         lm_l4_error(loader, "rows require at least two columns");
-        return -1;
+        return - 1;
     }
-
     field_index = 0U;
     key_node = 0;
     split_by_column = column_count != 2U;
     field = frame->body.first_field;
     while (field != 0) {
-        if (field->value != 0 && !lm_l4_node_is_ignored(field->value)) {
+        if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
             column_index = field_index % column_count;
             if (column_index == 0U) {
-                key_node = field->value;
-                if (key_node->kind != LM_P0_NODE_ATOM) {
+                key_node = field -> value;
+                if (key_node -> kind != LM_P0_NODE_ATOM) {
                     lm_l4_error(loader, "table rows currently expect atom cells in the key column");
-                    return -1;
+                    return - 1;
                 }
-                if (
-                    loader->note_key != 0 &&
-                    loader->note_key(context, table_name, &columns[0], key_node->as.atom) != 0
-                ) {
-                    return -1;
-                }
-            } else {
-                cell_node = field->value;
-                if (
-                    key_node == 0 ||
-                    loader->push_cell(
-                        context,
-                        table_name,
-                        &columns[column_index],
-                        split_by_column,
-                        key_node->as.atom,
-                        cell_node
-                    ) != 0
-                ) {
-                    return -1;
+                if (loader -> note_key != 0 && loader->note_key(context, table_name, &columns[0], key_node->as.atom) != 0) {
+                    return - 1;
                 }
             }
-            ++field_index;
+            if (column_index != 0U) {
+                cell_node = field -> value;
+                if (key_node == 0 || loader->push_cell(context, table_name, &columns[column_index], split_by_column, key_node->as.atom, cell_node) != 0) {
+                    return - 1;
+                }
+            }
+            field_index = field_index + 1U;
         }
-        field = field->next;
+        field = field -> next;
     }
-
     if ((field_index % column_count) != 0U) {
         lm_l4_error(loader, "rows field count is not divisible by column count; use explicit NULL for empty cells");
-        return -1;
+        return - 1;
     }
     if (field_index == 0U) {
         lm_l4_error(loader, "table rows must not be empty");
-        return -1;
+        return - 1;
     }
-
     return 1;
 }
 
-static int lm_l4_table_from_frame(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Frame *frame
-) {
+static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     const LmP0Field *field;
     const LmP0Node *node;
     LmL4Column columns[128];
@@ -702,107 +587,158 @@ static int lm_l4_table_from_frame(
     int have_columns;
     int have_rows;
     int status;
-
-    if (frame == 0 || !lm_l4_text_equals(frame->head, "table")) {
+    if (frame == 0 || lm_l4_text_equals(frame -> head, "table") == 0) {
         return 0;
     }
-
     have_name = 0;
     have_columns = 0;
     have_rows = 0;
     column_count = 0U;
     field = frame->body.first_field;
     while (field != 0) {
-        node = field->value;
-        if (node != 0 && !lm_l4_node_is_ignored(node)) {
-            if (node->kind != LM_P0_NODE_FRAME) {
+        node = field -> value;
+        if (node != 0 && lm_l4_node_is_ignored(node) == 0) {
+            if (node -> kind != LM_P0_NODE_FRAME) {
                 lm_l4_error(loader, "table body expects name/columns/rows frames");
-                return -1;
+                return - 1;
             }
-            status = lm_l4_frame_single_atom(&node->as.frame, "name", &table_name);
+            status = lm_l4_frame_single_atom(&node->as.frame, "name", & table_name);
             if (status < 0) {
                 lm_l4_error(loader, "table name expects exactly one atom");
-                return -1;
+                return - 1;
             }
             if (status > 0) {
                 have_name = 1;
-            } else if (lm_l4_text_equals(node->as.frame.head, "columns")) {
-                if (!have_name) {
+                field = field -> next;
+                continue;
+            }
+            if (lm_l4_text_equals(node->as.frame.head, "columns") != 0) {
+                if (have_name == 0) {
                     lm_l4_error(loader, "table columns must appear after name");
-                    return -1;
+                    return - 1;
                 }
-                status = lm_l4_columns_from_frame(
-                    loader,
-                    &node->as.frame,
-                    columns,
-                    sizeof(columns) / sizeof(columns[0]),
-                    &column_count
-                );
+                status = lm_l4_columns_from_frame(loader, &node->as.frame, columns, sizeof(columns) / sizeof(columns[0]), & column_count);
                 if (status <= 0) {
-                    return -1;
+                    return - 1;
                 }
-                if (
-                    loader != 0 &&
-                    loader->push_column_metadata != 0 &&
-                    loader->push_column_metadata(context, table_name, columns, column_count) != 0
-                ) {
+                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(context, table_name, columns, column_count) != 0) {
                     lm_l4_error(loader, "cannot store table column metadata");
-                    return -1;
+                    return - 1;
                 }
                 have_columns = 1;
-            } else if (lm_l4_text_equals(node->as.frame.head, "rows")) {
-                if (!have_name || !have_columns) {
+                field = field -> next;
+                continue;
+            }
+            if (lm_l4_text_equals(node->as.frame.head, "rows") != 0) {
+                if (have_name == 0 || have_columns == 0) {
                     lm_l4_error(loader, "table rows must appear after name and columns");
-                    return -1;
+                    return - 1;
                 }
-                status = lm_l4_rows_from_frame(
-                    loader,
-                    context,
-                    &node->as.frame,
-                    table_name,
-                    columns,
-                    column_count
-                );
+                status = lm_l4_rows_from_frame(loader, context, &node->as.frame, table_name, columns, column_count);
                 if (status <= 0) {
-                    return -1;
+                    return - 1;
                 }
                 have_rows = 1;
-            } else {
-                lm_l4_error(loader, "table body expects name/columns/rows frames");
-                return -1;
+                field = field -> next;
+                continue;
             }
+            lm_l4_error(loader, "table body expects name/columns/rows frames");
+            return - 1;
         }
-        field = field->next;
+        field = field -> next;
     }
-
-    if (!have_name || !have_columns || !have_rows) {
+    if (have_name == 0 || have_columns == 0 || have_rows == 0) {
         lm_l4_error(loader, "table requires name, columns and rows");
-        return -1;
+        return - 1;
     }
     if (lm_l4_validate_named_trailer(loader, frame, table_name) != 0) {
-        return -1;
+        return - 1;
     }
-
     return 1;
 }
 
-static int lm_l4_check_table_frame_unique(
-    const LmL4Loader *loader,
-    const LmP0Frame *frame,
-    LmOwnPtrStack *seen
-);
+static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
+    LmP0Text payload;
+    char *name;
+    size_t i;
+    size_t payload_length;
+    char *existing;
+    if (seen == 0) {
+        return - 1;
+    }
+    if (lm_l4_identifier_value(table_name, & payload) == 0) {
+        return - 1;
+    }
+    payload_length = payload.length;
+    i = 0U;
+    while (i < seen -> count) {
+        existing = lm_own_ptr_stack_at(seen, i);
+        if (existing != 0 && lm_l4_text_equals(payload, existing) != 0) {
+            return 1;
+        }
+        i = i + 1U;
+    }
+    name = malloc(payload_length + 1U);
+    if (name == 0) {
+        return - 1;
+    }
+    if (payload_length > 0U) {
+        memcpy(name, payload.data, payload_length);
+    }
+    name[payload_length] = '\0';
+    if (lm_own_ptr_stack_push(seen, name) != 0) {
+        free(name);
+        return - 1;
+    }
+    return 0;
+}
 
-static int lm_l4_receiver_table(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Frame *frame
-) {
+static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    LmP0Text table_name;
     int status;
+    if (frame == 0 || lm_l4_text_equals(frame -> head, "table") == 0) {
+        return 0;
+    }
+    status = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field -> value;
+        if (node == 0 || lm_l4_node_is_ignored(node) != 0 || node -> kind != LM_P0_NODE_FRAME) {
+            field = field -> next;
+            continue;
+        }
+        status = lm_l4_frame_single_atom(&node->as.frame, "name", & table_name);
+        if (status < 0) {
+            lm_l4_error(loader, "table name expects exactly one atom");
+            return - 1;
+        }
+        if (status > 0) {
+            break;
+        }
+        field = field -> next;
+    }
+    if (status == 0) {
+        return 0;
+    }
+    status = lm_l4_seen_table_add(seen, table_name);
+    if (status < 0) {
+        lm_l4_error(loader, "cannot record table name");
+        return - 1;
+    }
+    if (status > 0) {
+        lm_l4_error(loader, "duplicate table in one L4 schema");
+        return - 1;
+    }
+    return 0;
+}
 
-    if (lm_l4_seen_tables != 0 && lm_l4_check_table_frame_unique(loader, frame, lm_l4_seen_tables) != 0) {
+static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
+    int status;
+    if (lm_l4_seen_tables_get() != 0 && lm_l4_check_table_frame_unique(loader, frame, lm_l4_seen_tables_get()) != 0) {
         return 1;
     }
-
     status = lm_l4_table_from_frame(loader, context, frame);
     if (status <= 0) {
         if (status == 0) {
@@ -813,13 +749,8 @@ static int lm_l4_receiver_table(
     return 0;
 }
 
-static int lm_l4_receiver_row(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Frame *frame
-) {
+static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     int status;
-
     status = lm_l4_row_from_frame(loader, context, frame);
     if (status <= 0) {
         if (status == 0) {
@@ -830,6 +761,157 @@ static int lm_l4_receiver_row(
     return 0;
 }
 
+static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, LmP0Text head) {
+    size_t i;
+    if (loader == 0 || loader -> receivers == 0) {
+        return 0;
+    }
+    i = 0U;
+    while (i < loader -> receiver_count) {
+        if (loader->receivers[i].name != 0 && lm_l4_text_equals(head, loader->receivers[i].name) != 0) {
+            return &loader->receivers[i];
+        }
+        i = i + 1U;
+    }
+    return 0;
+}
+
+static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
+    const LmL4Receiver *receiver;
+    if (frame == 0) {
+        return 1;
+    }
+    receiver = lm_l4_find_receiver(loader, frame -> head);
+    if (receiver == 0 || receiver -> frame == 0) {
+        lm_l4_error(loader, "registry body expects registered L4 receiver frames");
+        return 1;
+    }
+    return receiver->frame(loader, context, frame);
+}
+
+static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    LmOwnPtrStack *seen;
+    LmOwnPtrStack *previous_seen;
+    int owns_seen;
+    int status;
+    if (structure == 0) {
+        return 0;
+    }
+    owns_seen = lm_l4_seen_tables_get() == 0;
+    seen = 0;
+    previous_seen = 0;
+    if (owns_seen != 0) {
+        seen = malloc(sizeof(seen[0]));
+        if (seen == 0) {
+            lm_l4_error(loader, "cannot allocate table duplicate tracker");
+            return 1;
+        }
+        lm_own_ptr_stack_init(seen, free);
+        previous_seen = lm_l4_seen_tables_get();
+        lm_l4_seen_tables_set(seen);
+    }
+    status = 0;
+    field = structure -> first_field;
+    while (field != 0 && status == 0) {
+        node = field -> value;
+        if (lm_l4_node_is_ignored(node) != 0) {
+            field = field -> next;
+            continue;
+        }
+        if (node -> kind != LM_P0_NODE_FRAME) {
+            lm_l4_error(loader, "registry body expects registered L4 receiver frames");
+            status = 1;
+            field = field -> next;
+            continue;
+        }
+        if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
+            status = 1;
+        }
+        field = field -> next;
+    }
+    if (owns_seen != 0) {
+        lm_l4_seen_tables_set(previous_seen);
+        lm_own_ptr_stack_destroy(seen);
+        free(seen);
+    }
+    return status;
+}
+
+static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4, size_t *out_row_count) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    LmOwnPtrStack *seen;
+    LmOwnPtrStack *previous_seen;
+    int loaded;
+    int status;
+    if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE) {
+        lm_l4_error(loader, "root must be a Structure");
+        return 1;
+    }
+    if (out_row_count != 0) {
+        out_row_count[0] = 0U;
+    }
+    seen = malloc(sizeof(seen[0]));
+    if (seen == 0) {
+        lm_l4_error(loader, "cannot allocate table duplicate tracker");
+        return 1;
+    }
+    lm_own_ptr_stack_init(seen, free);
+    previous_seen = lm_l4_seen_tables_get();
+    lm_l4_seen_tables_set(seen);
+    loaded = 0;
+    status = 0;
+    field = root->as.structure.first_field;
+    while (field != 0 && status == 0) {
+        node = field -> value;
+        if (lm_l4_node_is_ignored(node) != 0) {
+            field = field -> next;
+            continue;
+        }
+        if (node -> kind != LM_P0_NODE_FRAME) {
+            lm_l4_error(loader, "root fields must be L4/registry frames, or registered L4 receiver frames in .lm4 files");
+            status = 1;
+            field = field -> next;
+            continue;
+        }
+        if (lm_l4_text_equals(node->as.frame.head, "L4") != 0 || lm_l4_text_equals(node->as.frame.head, "registry") != 0) {
+            if (lm_l4_load_rows(loader, context, &node->as.frame.body) != 0) {
+                status = 1;
+            }
+            if (status == 0 && lm_l4_validate_named_trailer(loader, &node->as.frame, node->as.frame.head) != 0) {
+                status = 1;
+            }
+            if (status == 0) {
+                loaded = 1;
+            }
+            field = field -> next;
+            continue;
+        }
+        if (implicit_l4 != 0) {
+            if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
+                status = 1;
+            }
+            if (status == 0) {
+                loaded = 1;
+            }
+            field = field -> next;
+            continue;
+        }
+        lm_l4_error(loader, "root fields must be L4/registry frames");
+        status = 1;
+        field = field -> next;
+    }
+    if (status == 0 && loaded == 0) {
+        lm_l4_error(loader, "no rows loaded");
+        status = 1;
+    }
+    lm_l4_seen_tables_set(previous_seen);
+    lm_own_ptr_stack_destroy(seen);
+    free(seen);
+    return status;
+}
 static int lm_l4_receiver_ignore(
     const LmL4Loader *loader,
     void *context,
@@ -846,278 +928,6 @@ static const LmL4Receiver lm_l4_default_receivers[] = {
     { "row", lm_l4_receiver_row },
     { "fn", lm_l4_receiver_ignore }
 };
-
-static const LmL4Receiver *lm_l4_find_receiver(
-    const LmL4Loader *loader,
-    LmP0Text head
-) {
-    size_t i;
-
-    if (loader == 0 || loader->receivers == 0) {
-        return 0;
-    }
-
-    i = 0U;
-    while (i < loader->receiver_count) {
-        if (
-            loader->receivers[i].name != 0 &&
-            lm_l4_text_equals(head, loader->receivers[i].name)
-        ) {
-            return &loader->receivers[i];
-        }
-        ++i;
-    }
-    return 0;
-}
-
-static int lm_l4_dispatch_frame(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Frame *frame
-) {
-    const LmL4Receiver *receiver;
-
-    if (frame == 0) {
-        return 1;
-    }
-    receiver = lm_l4_find_receiver(loader, frame->head);
-    if (receiver == 0 || receiver->frame == 0) {
-        lm_l4_error(loader, "registry body expects registered L4 receiver frames");
-        return 1;
-    }
-    return receiver->frame(loader, context, frame);
-}
-
-static int lm_l4_load_rows(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Structure *structure
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    LmOwnPtrStack *seen;
-    LmOwnPtrStack *previous_seen;
-    int owns_seen;
-    int status;
-
-    if (structure == 0) {
-        return 0;
-    }
-
-    owns_seen = lm_l4_seen_tables == 0;
-    seen = 0;
-    previous_seen = 0;
-    if (owns_seen) {
-        seen = (LmOwnPtrStack *)malloc(sizeof(*seen));
-        if (seen == 0) {
-            lm_l4_error(loader, "cannot allocate table duplicate tracker");
-            return 1;
-        }
-        lm_own_ptr_stack_init(seen, free);
-        previous_seen = lm_l4_seen_tables;
-        lm_l4_seen_tables = seen;
-    }
-    status = 0;
-
-    field = structure->first_field;
-    while (field != 0 && status == 0) {
-        node = field->value;
-        if (!lm_l4_node_is_ignored(node)) {
-            if (node->kind != LM_P0_NODE_FRAME) {
-                lm_l4_error(loader, "registry body expects registered L4 receiver frames");
-                status = 1;
-            } else if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
-                status = 1;
-            }
-        }
-        field = field->next;
-    }
-
-    if (owns_seen) {
-        lm_l4_seen_tables = previous_seen;
-        lm_own_ptr_stack_destroy(seen);
-        free(seen);
-    }
-    return status;
-}
-
-static int lm_l4_seen_table_add(
-    const LmL4Loader *loader,
-    LmOwnPtrStack *seen,
-    LmP0Text table_name
-) {
-    LmP0Text payload;
-    char *name;
-    size_t i;
-    char *existing;
-
-    if (seen == 0) {
-        return -1;
-    }
-    if (!lm_l4_identifier_value(table_name, &payload)) {
-        return -1;
-    }
-
-    i = 0U;
-    while (i < seen->count) {
-        existing = (char *)lm_own_ptr_stack_at(seen, i);
-        if (existing != 0 && lm_l4_text_equals(payload, existing)) {
-            return 1;
-        }
-        ++i;
-    }
-
-    name = (char *)malloc(payload.length + 1U);
-    if (name == 0) {
-        return -1;
-    }
-    if (payload.length > 0U) {
-        memcpy(name, payload.data, payload.length);
-    }
-    name[payload.length] = '\0';
-    if (lm_own_ptr_stack_push(seen, name) != 0) {
-        free(name);
-        return -1;
-    }
-    (void)loader;
-    return 0;
-}
-
-static int lm_l4_check_table_frame_unique(
-    const LmL4Loader *loader,
-    const LmP0Frame *frame,
-    LmOwnPtrStack *seen
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    LmP0Text table_name;
-    LmP0Text payload;
-    int status;
-
-    if (frame == 0 || !lm_l4_text_equals(frame->head, "table")) {
-        return 0;
-    }
-
-    status = 0;
-    field = frame->body.first_field;
-    while (field != 0) {
-        node = field->value;
-        if (
-            node != 0 &&
-            !lm_l4_node_is_ignored(node) &&
-            node->kind == LM_P0_NODE_FRAME
-        ) {
-            status = lm_l4_frame_single_atom(&node->as.frame, "name", &table_name);
-            if (status < 0) {
-                lm_l4_error(loader, "table name expects exactly one atom");
-                return -1;
-            }
-            if (status > 0) {
-                break;
-            }
-        }
-        field = field->next;
-    }
-    if (status == 0) {
-        return 0;
-    }
-
-    status = lm_l4_seen_table_add(loader, seen, table_name);
-    if (status < 0) {
-        lm_l4_error(loader, "cannot record table name");
-        return -1;
-    }
-    if (status > 0) {
-        if (lm_l4_identifier_value(table_name, &payload)) {
-            fprintf(
-                stderr,
-                "%s registry error: duplicate table in one L4 schema: %.*s\n",
-                lm_l4_error_prefix(loader),
-                (int)payload.length,
-                payload.data
-            );
-        } else {
-            lm_l4_error(loader, "duplicate table in one L4 schema");
-        }
-        return -1;
-    }
-
-    return 0;
-}
-
-static int lm_l4_load_root(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Node *root,
-    int implicit_l4,
-    size_t *out_row_count
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    LmOwnPtrStack *seen;
-    LmOwnPtrStack *previous_seen;
-    int loaded;
-    int status;
-
-    if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
-        lm_l4_error(loader, "root must be a Structure");
-        return 1;
-    }
-    (void)out_row_count;
-
-    seen = (LmOwnPtrStack *)malloc(sizeof(*seen));
-    if (seen == 0) {
-        lm_l4_error(loader, "cannot allocate table duplicate tracker");
-        return 1;
-    }
-    lm_own_ptr_stack_init(seen, free);
-    previous_seen = lm_l4_seen_tables;
-    lm_l4_seen_tables = seen;
-    loaded = 0;
-    status = 0;
-
-    field = root->as.structure.first_field;
-    while (field != 0 && status == 0) {
-        node = field->value;
-        if (!lm_l4_node_is_ignored(node)) {
-            if (node->kind != LM_P0_NODE_FRAME) {
-                lm_l4_error(loader, "root fields must be L4/registry frames, or registered L4 receiver frames in .lm4 files");
-                status = 1;
-            } else if (
-                lm_l4_text_equals(node->as.frame.head, "L4") ||
-                lm_l4_text_equals(node->as.frame.head, "registry")
-            ) {
-                if (lm_l4_load_rows(loader, context, &node->as.frame.body) != 0) {
-                    status = 1;
-                } else if (lm_l4_validate_named_trailer(loader, &node->as.frame, node->as.frame.head) != 0) {
-                    status = 1;
-                } else {
-                    loaded = 1;
-                }
-            } else if (implicit_l4) {
-                if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
-                    status = 1;
-                } else {
-                    loaded = 1;
-                }
-            } else {
-                lm_l4_error(loader, "root fields must be L4/registry frames");
-                status = 1;
-            }
-        }
-        field = field->next;
-    }
-
-    if (status == 0 && !loaded) {
-        lm_l4_error(loader, "no rows loaded");
-        status = 1;
-    }
-
-    lm_l4_seen_tables = previous_seen;
-    lm_own_ptr_stack_destroy(seen);
-    free(seen);
-    return status;
-}
 
 
 
@@ -1147,35 +957,148 @@ static void lm_p0_set_diagnostic(
     const char *format,
     ...
 );
-
-static void lm_p0_document_init_owners(LmP0Document *document) {
-    if (document != 0 && !document->owners_initialized) {
-        lm_own_arena_init(&document->source_owner);
-        lm_own_arena_init(&document->token_arena);
-        lm_own_arena_init(&document->tree_arena);
-        lm_own_arena_init(&document->diagnostic_arena);
-        document->owners_initialized = 1;
-    }
-}
-
-static void lm_p0_document_destroy_owners(LmP0Document *document) {
-    if (document != 0 && document->owners_initialized) {
-        lm_own_arena_destroy(&document->diagnostic_arena);
-        lm_own_arena_destroy(&document->tree_arena);
-        lm_own_arena_destroy(&document->token_arena);
-        lm_own_arena_destroy(&document->source_owner);
-        document->owners_initialized = 0;
-        document->frozen = 0;
-    }
-}
-
-static void lm_p0_document_freeze_tree(LmP0Document *document) {
-    if (document != 0 && document->owners_initialized) {
-        lm_own_arena_freeze(&document->tree_arena);
-        lm_own_arena_freeze(&document->source_owner);
-        document->frozen = 1;
-    }
-}
+static void lm_p0_document_init_owners(LmP0Document *document);
+static void lm_p0_document_destroy_owners(LmP0Document *document);
+static void lm_p0_document_freeze_tree(LmP0Document *document);
+static int lm_p0_text_equals(LmP0Text text, const char *value);
+static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload);
+static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload);
+static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload);
+static int lm_p0_registry_payload_is_null(LmP0Text atom);
+static int lm_p0_is_horizontal_space(char value);
+static int lm_p0_is_line_break(char value);
+static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index);
+static int lm_p0_is_field_space(char value);
+static int lm_p0_is_field_separator(char value);
+static int lm_p0_is_short_form_separator(char value);
+static int lm_p0_is_quoted_token_boundary(char value);
+static int lm_p0_starts_python_string(const char *text, size_t length, size_t index);
+static int lm_p0_is_decimal_digit(char value);
+static char *lm_p0_copy_bytes(const char *source, size_t length);
+static LmP0Text lm_p0_text_from_cstr(const char *text);
+static char *lm_p0_text_copy_cstr(LmP0Text text);
+static char *lm_p0_registry_value_copy_cstr(LmP0Text value);
+static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
+static void lm_p0_registry_row_destroy_any(void *object);
+static void lm_p0_registry_destroy(void);
+static void lm_p0_indent_stack_free(LmP0IndentStack *stack);
+static void lm_p0_indent_stack_free_any(void *object);
+static int lm_p0_indent_stack_push(
+    LmP0Document *document,
+    LmP0IndentStack *stack,
+    size_t column,
+    size_t line,
+    size_t source_column
+);
+static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack);
+static LmP0IndentStack *lm_p0_indent_stack_new_empty(void);
+static LmP0IndentStack *lm_p0_indent_stack_new(LmP0Document *document);
+static void lm_p0_indent_stack_delete(LmP0IndentStack *stack);
+static int lm_p0_indent_stack_copy(
+    LmP0Document *document,
+    LmP0IndentStack *target,
+    const LmP0IndentStack *source,
+    size_t line,
+    size_t column
+);
+static LmP0IndentStack *lm_p0_indent_stack_clone(
+    LmP0Document *document,
+    const LmP0IndentStack *source,
+    size_t line,
+    size_t column
+);
+static size_t lm_p0_indent_tab_column(size_t column);
+static void lm_p0_scan_indent_column(
+    const char *source,
+    size_t start,
+    size_t end,
+    size_t *out_offset,
+    size_t *out_column
+);
+static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end);
+static const char *lm_p0_registry_lookup(LmP0Text key, const char *table);
+static int lm_p0_registry_table_has_rows(const char *table);
+static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table);
+static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end);
+static void lm_p0_position_in_slice(
+    const char *text,
+    size_t length,
+    size_t index,
+    size_t base_line,
+    size_t base_column,
+    size_t *out_line,
+    size_t *out_column
+);
+static void lm_p0_advance_layout_line(
+    const char *source,
+    size_t length,
+    size_t line_start,
+    size_t line_end,
+    size_t *offset,
+    size_t *line
+);
+static int lm_p0_index_is_line_start(const char *text, size_t index);
+static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end);
+static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start);
+static int lm_p0_text_has_prefix_name(
+    const char *text,
+    size_t length,
+    const char *name,
+    int allow_bare
+);
+static LmP0TrailerRole lm_p0_legacy_trailer_role(const char *text, size_t length);
+static LmP0TrailerRole lm_p0_trailer_role_from_payload(const char *payload);
+static const char *lm_p0_trailer_role_payload(LmP0TrailerRole role);
+static int lm_p0_registry_trailer_allows_bare(const char *class_name);
+static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role);
+static int lm_p0_node_head_is(const LmP0Node *node, const char *name);
+static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target);
+static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event);
+static int lm_p0_find_python_string_end(
+    const char *text,
+    size_t length,
+    size_t start,
+    size_t *out_end
+);
+static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start);
+static void lm_p0_scan_layout_prefix(
+    const char *source,
+    size_t length,
+    size_t start,
+    size_t *out_offset,
+    size_t *out_indent_column,
+    size_t *out_dot_level
+);
+static int lm_p0_layout_prefix_is_deeper(
+    size_t indent_column,
+    size_t dot_level,
+    size_t base_indent_column,
+    size_t base_dot_level
+);
+static LmP0DashFenceStatus lm_p0_dash_fence_status(
+    const char *text,
+    size_t length,
+    size_t *out_dash_count
+);
+static int lm_p0_validate_dash_fence_line(
+    LmP0Document *document,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column
+);
+static int lm_p0_match_block_string_fence_line(
+    const char *source,
+    size_t line_start,
+    size_t line_end,
+    size_t eq_count
+);
+static int lm_p0_match_raw_comment_fence_line(
+    const char *source,
+    size_t line_start,
+    size_t line_end,
+    size_t star_count
+);
 
 static int lm_p0_document_register_lazy_text(
     LmP0Document *document,
@@ -1232,136 +1155,6 @@ static void lm_p0_set_diagnostic(
     va_start(args, format);
     vsnprintf(document->diagnostic.message, sizeof(document->diagnostic.message), format, args);
     va_end(args);
-}
-
-static char *lm_p0_copy_bytes(const char *source, size_t length) {
-    char *copy;
-
-    copy = (char *)malloc(length + 1U);
-    if (copy == 0) {
-        return 0;
-    }
-
-    if (length > 0U) {
-        memcpy(copy, source, length);
-    }
-    copy[length] = '\0';
-    return copy;
-}
-
-static LmP0Text lm_p0_text_from_cstr(const char *text) {
-    LmP0Text result;
-
-    result.data = text != 0 ? text : "";
-    result.length = strlen(result.data);
-    return result;
-}
-
-static int lm_p0_text_equals(LmP0Text text, const char *value) {
-    size_t value_length;
-
-    if (value == 0) {
-        return 0;
-    }
-    value_length = strlen(value);
-    return text.length == value_length && memcmp(text.data, value, value_length) == 0;
-}
-
-static char *lm_p0_text_copy_cstr(LmP0Text text) {
-    return lm_p0_copy_bytes(text.data, text.length);
-}
-
-static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload) {
-    if (out_payload == 0) {
-        return 0;
-    }
-
-    *out_payload = atom;
-    if (
-        atom.length >= 2U &&
-        atom.data[0] == '`' &&
-        atom.data[atom.length - 1U] == '`'
-    ) {
-        out_payload->data = atom.data + 1U;
-        out_payload->length = atom.length - 2U;
-    }
-
-    return 1;
-}
-
-static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload) {
-    if (out_payload == 0) {
-        return 0;
-    }
-    if (atom.length > 0U && (atom.data[0] == '"' || atom.data[0] == '\'')) {
-        return 0;
-    }
-    return lm_p0_identifier_payload(atom, out_payload);
-}
-
-static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload) {
-    char quote;
-
-    if (out_payload == 0) {
-        return 0;
-    }
-
-    *out_payload = atom;
-    if (atom.length < 2U) {
-        return 1;
-    }
-
-    quote = atom.data[0];
-    if (
-        (quote == '"' || quote == '\'') &&
-        atom.data[atom.length - 1U] == quote
-    ) {
-        out_payload->data = atom.data + 1U;
-        out_payload->length = atom.length - 2U;
-        return 1;
-    }
-
-    return lm_p0_identifier_payload(atom, out_payload);
-}
-
-static int lm_p0_registry_payload_is_null(LmP0Text atom) {
-    LmP0Text payload;
-
-    if (!lm_p0_registry_identifier_value(atom, &payload)) {
-        return 0;
-    }
-    return payload.length == 4U && memcmp(payload.data, "NULL", 4U) == 0;
-}
-
-static char *lm_p0_registry_value_copy_cstr(LmP0Text value) {
-    return lm_p0_text_copy_cstr(value);
-}
-
-static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row) {
-    if (row != 0) {
-        free(row->table);
-        free(row->key);
-        free(row->payload);
-        row->table = 0;
-        row->key = 0;
-        row->payload = 0;
-    }
-}
-
-static void lm_p0_registry_row_destroy_any(void *object) {
-    LmP0RegistryRow *row;
-
-    row = (LmP0RegistryRow *)object;
-    lm_p0_registry_row_destroy_fields(row);
-    lm_own_delete(row, 0);
-}
-
-static void lm_p0_registry_destroy(void) {
-    if (lm_p0_registry.loaded || lm_p0_registry.loading) {
-        lm_own_ptr_stack_destroy(&lm_p0_registry.rows);
-    }
-    lm_p0_registry.loaded = 0;
-    lm_p0_registry.loading = 0;
 }
 
 static int lm_p0_registry_push_row_values(
@@ -1507,76 +1300,6 @@ static int lm_p0_registry_push_table_cell(
     return status;
 }
 
-static const char *lm_p0_registry_lookup(LmP0Text key, const char *table) {
-    size_t i;
-    LmP0RegistryRow *row;
-    LmP0Text key_payload;
-
-    if (table == 0 || !lm_p0_registry.loaded) {
-        return 0;
-    }
-    if (!lm_p0_identifier_payload(key, &key_payload)) {
-        return 0;
-    }
-
-    i = lm_p0_registry.rows.count;
-    while (i > 0U) {
-        --i;
-        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
-        if (
-            row != 0 &&
-            row->table != 0 &&
-            row->key != 0 &&
-            strcmp(row->table, table) == 0 &&
-            lm_p0_text_equals(key_payload, row->key)
-        ) {
-            return row->payload;
-        }
-    }
-
-    return 0;
-}
-
-static int lm_p0_registry_table_has_rows(const char *table) {
-    size_t i;
-    LmP0RegistryRow *row;
-
-    if (table == 0 || !lm_p0_registry.loaded) {
-        return 0;
-    }
-
-    i = 0U;
-    while (i < lm_p0_registry.rows.count) {
-        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
-        if (row != 0 && row->table != 0 && strcmp(row->table, table) == 0) {
-            return 1;
-        }
-        ++i;
-    }
-
-    return 0;
-}
-
-static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table) {
-    size_t i;
-    LmP0RegistryRow *row;
-
-    if (table == 0) {
-        return 0;
-    }
-
-    i = 0U;
-    while (i < lm_p0_registry.rows.count) {
-        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
-        if (row != 0 && row->table != 0 && strcmp(row->table, table) == 0) {
-            return 1;
-        }
-        ++i;
-    }
-
-    return 0;
-}
-
 static int lm_p0_registry_compare_enabled(void) {
 #if !LM_P0_ENABLE_REGISTRY_COMPARE
     return 0;
@@ -1612,102 +1335,8 @@ static void lm_p0_registry_compare_fail(
     exit(2);
 }
 
-static int lm_p0_is_horizontal_space(char c) {
-    return c == ' ' || c == '\t';
-}
-
-static int lm_p0_is_line_break(char c) {
-    return c == '\n' || c == '\r';
-}
-
-static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index) {
-    if (index >= length) {
-        return 0U;
-    }
-    if (source[index] == '\r') {
-        return index + 1U < length && source[index + 1U] == '\n' ? 2U : 1U;
-    }
-    return source[index] == '\n' ? 1U : 0U;
-}
-
-static int lm_p0_is_field_space(char c) {
-    return lm_p0_is_horizontal_space(c) || lm_p0_is_line_break(c);
-}
-
-static int lm_p0_is_field_separator(char c) {
-    return c == ',' || c == ';';
-}
-
-static int lm_p0_is_short_form_separator(char c) {
-    return c == ';';
-}
-
-static int lm_p0_is_quoted_token_boundary(char c) {
-    return lm_p0_is_field_space(c) || lm_p0_is_field_separator(c) || c == '(' || c == ')' || c == '#';
-}
-
-static int lm_p0_starts_python_string(const char *text, size_t length, size_t index) {
-    char quote;
-
-    if (index + 2U >= length) {
-        return 0;
-    }
-    quote = text[index];
-    if (quote != '"' && quote != '\'') {
-        return 0;
-    }
-    return text[index + 1U] == quote && text[index + 2U] == quote;
-}
-
 static size_t lm_p0_scan_c_char_token(const char *text, size_t end, size_t start);
 static size_t lm_p0_scan_c_prefixed_quote_token(const char *text, size_t end, size_t start);
-
-static int lm_p0_find_python_string_end(
-    const char *text,
-    size_t length,
-    size_t start,
-    size_t *out_end
-) {
-    char quote;
-    size_t i;
-
-    if (!lm_p0_starts_python_string(text, length, start)) {
-        *out_end = start;
-        return 0;
-    }
-
-    quote = text[start];
-    i = start + 3U;
-    while (i < length) {
-        if (text[i] == quote) {
-            size_t run_length;
-
-            run_length = 1U;
-            while (i + run_length < length && text[i + run_length] == quote) {
-                ++run_length;
-            }
-            if (run_length == 3U) {
-                *out_end = i + 3U;
-                return 1;
-            }
-            i += run_length;
-            continue;
-        }
-        ++i;
-    }
-
-    *out_end = length;
-    return 0;
-}
-
-static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start) {
-    size_t end;
-
-    if (!lm_p0_find_python_string_end(text, length, start, &end)) {
-        return length;
-    }
-    return end;
-}
 
 static void lm_p0_trim_right(const char **text, size_t *length) {
     (void)text;
@@ -1773,208 +1402,6 @@ static void lm_p0_trim_trailing_line_comment(const char **text, size_t *length) 
     }
 }
 
-static void lm_p0_indent_stack_free(LmP0IndentStack *stack) {
-    free(stack->columns);
-    stack->columns = 0;
-    stack->count = 0U;
-    stack->capacity = 0U;
-}
-
-static void lm_p0_indent_stack_free_any(void *object) {
-    lm_p0_indent_stack_free((LmP0IndentStack *)object);
-}
-
-static int lm_p0_indent_stack_push(
-    LmP0Document *document,
-    LmP0IndentStack *stack,
-    size_t column,
-    size_t line,
-    size_t source_column
-) {
-    size_t new_capacity;
-    size_t *columns;
-
-    if (stack->count == stack->capacity) {
-        new_capacity = stack->capacity == 0U ? 8U : stack->capacity * 2U;
-        columns = (size_t *)realloc(stack->columns, new_capacity * sizeof(*columns));
-        if (columns == 0) {
-            lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels");
-            return 0;
-        }
-        stack->columns = columns;
-        stack->capacity = new_capacity;
-    }
-
-    stack->columns[stack->count++] = column;
-    return 1;
-}
-
-static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack) {
-    memset(stack, 0, sizeof(*stack));
-    return lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U);
-}
-
-static LmP0IndentStack *lm_p0_indent_stack_new_empty(void) {
-    return (LmP0IndentStack *)calloc(1U, sizeof(LmP0IndentStack));
-}
-
-static LmP0IndentStack *lm_p0_indent_stack_new(LmP0Document *document) {
-    LmP0IndentStack *stack;
-
-    stack = lm_p0_indent_stack_new_empty();
-    if (stack == 0) {
-        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating indentation stack");
-        return 0;
-    }
-    if (!lm_p0_indent_stack_init(document, stack)) {
-        lm_own_delete(stack, lm_p0_indent_stack_free_any);
-        return 0;
-    }
-    return stack;
-}
-
-static void lm_p0_indent_stack_delete(LmP0IndentStack *stack) {
-    lm_own_delete(stack, lm_p0_indent_stack_free_any);
-}
-
-static int lm_p0_indent_stack_copy(
-    LmP0Document *document,
-    LmP0IndentStack *target,
-    const LmP0IndentStack *source,
-    size_t line,
-    size_t column
-) {
-    size_t capacity;
-
-    memset(target, 0, sizeof(*target));
-    capacity = source->capacity > source->count ? source->capacity : source->count;
-    if (capacity == 0U) {
-        return 1;
-    }
-
-    target->columns = (size_t *)malloc(capacity * sizeof(*target->columns));
-    if (target->columns == 0) {
-        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
-        return 0;
-    }
-    memcpy(target->columns, source->columns, source->count * sizeof(*target->columns));
-    target->count = source->count;
-    target->capacity = capacity;
-    return 1;
-}
-
-static LmP0IndentStack *lm_p0_indent_stack_clone(
-    LmP0Document *document,
-    const LmP0IndentStack *source,
-    size_t line,
-    size_t column
-) {
-    LmP0IndentStack *target;
-
-    target = lm_p0_indent_stack_new_empty();
-    if (target == 0) {
-        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
-        return 0;
-    }
-    if (!lm_p0_indent_stack_copy(document, target, source, line, column)) {
-        lm_p0_indent_stack_delete(target);
-        return 0;
-    }
-    return target;
-}
-
-static size_t lm_p0_indent_tab_column(size_t column) {
-    return ((column / 8U) + 1U) * 8U;
-}
-
-static void lm_p0_scan_indent_column(
-    const char *source,
-    size_t start,
-    size_t end,
-    size_t *out_offset,
-    size_t *out_column
-) {
-    size_t p;
-    size_t column;
-
-    p = start;
-    column = 0U;
-    while (p < end && lm_p0_is_horizontal_space(source[p])) {
-        if (source[p] == '\t') {
-            column = lm_p0_indent_tab_column(column);
-        } else {
-            ++column;
-        }
-        ++p;
-    }
-
-    *out_offset = p;
-    *out_column = column;
-}
-
-static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end) {
-    size_t p;
-    size_t column;
-
-    p = start;
-    column = 0U;
-    while (p < end) {
-        if (source[p] == '\r') {
-            column = 0U;
-            if (p + 1U < end && source[p + 1U] == '\n') {
-                ++p;
-            }
-        } else if (source[p] == '\n') {
-            column = 0U;
-        } else if (source[p] == '\t') {
-            column = lm_p0_indent_tab_column(column);
-        } else {
-            ++column;
-        }
-        ++p;
-    }
-    return column;
-}
-
-static void lm_p0_scan_layout_prefix(
-    const char *source,
-    size_t length,
-    size_t start,
-    size_t *out_offset,
-    size_t *out_indent_column,
-    size_t *out_dot_level
-) {
-    size_t p;
-    size_t indent_column;
-    size_t dot_level;
-
-    lm_p0_scan_indent_column(source, start, length, &p, &indent_column);
-    dot_level = 0U;
-    while (p < length && source[p] == '.') {
-        ++dot_level;
-        ++p;
-        while (p < length && lm_p0_is_horizontal_space(source[p])) {
-            ++p;
-        }
-    }
-
-    *out_offset = p;
-    *out_indent_column = indent_column;
-    *out_dot_level = dot_level;
-}
-
-static int lm_p0_layout_prefix_is_deeper(
-    size_t indent_column,
-    size_t dot_level,
-    size_t base_indent_column,
-    size_t base_dot_level
-) {
-    if (dot_level > 0U || base_dot_level > 0U) {
-        return dot_level > base_dot_level;
-    }
-    return indent_column > base_indent_column;
-}
-
 static int lm_p0_indent_level_from_column(
     LmP0Document *document,
     LmP0IndentStack *stack,
@@ -2033,13 +1460,6 @@ static int lm_p0_match_raw_comment_fence_line(
     size_t line_end,
     size_t star_count
 );
-
-static int lm_p0_index_is_line_start(const char *text, size_t index) {
-    if (index == 0U) {
-        return 1;
-    }
-    return text[index - 1U] == '\n' || text[index - 1U] == '\r';
-}
 
 static size_t lm_p0_skip_fence_block_unchecked(
     const char *text,
@@ -2560,65 +1980,6 @@ static int lm_p0_scan_leading_mix_prefix(
     return 1;
 }
 
-static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end) {
-    size_t i;
-
-    i = start;
-    while (i < end) {
-        if (!lm_p0_is_horizontal_space(source[i])) {
-            return 0;
-        }
-        ++i;
-    }
-    return 1;
-}
-
-static LmP0DashFenceStatus lm_p0_dash_fence_status(
-    const char *text,
-    size_t length,
-    size_t *out_dash_count
-) {
-    size_t dash_count;
-    size_t i;
-
-    dash_count = 0U;
-    while (dash_count < length && text[dash_count] == '-') {
-        ++dash_count;
-    }
-    if (out_dash_count != 0) {
-        *out_dash_count = dash_count;
-    }
-    if (dash_count < 3U) {
-        return LM_P0_DASH_FENCE_NONE;
-    }
-    if (dash_count > LM_P0_MAX_FENCE_LENGTH) {
-        return LM_P0_DASH_FENCE_TOO_LONG;
-    }
-
-    i = dash_count;
-    while (i < length) {
-        if (lm_p0_is_horizontal_space(text[i])) {
-            ++i;
-            continue;
-        }
-        if (text[i] == '#') {
-            return LM_P0_DASH_FENCE_VALID;
-        }
-        if (text[i] == '{') {
-            int closed;
-            size_t brace_end;
-
-            brace_end = lm_p0_scan_brace_mark_unchecked(text, length, i, &closed);
-            if (closed) {
-                i = brace_end;
-                continue;
-            }
-        }
-        return LM_P0_DASH_FENCE_TRAILING_TEXT;
-    }
-    return LM_P0_DASH_FENCE_VALID;
-}
-
 static LmP0DashFenceStatus lm_p0_dash_fence_status_after_comment_trim(
     const char *text,
     size_t length,
@@ -2631,88 +1992,6 @@ static LmP0DashFenceStatus lm_p0_dash_fence_status_after_comment_trim(
     trimmed_length = length;
     lm_p0_trim_trailing_line_comment(&trimmed_text, &trimmed_length);
     return lm_p0_dash_fence_status(trimmed_text, trimmed_length, out_dash_count);
-}
-
-static int lm_p0_validate_dash_fence_line(
-    LmP0Document *document,
-    const char *text,
-    size_t length,
-    size_t line,
-    size_t column
-) {
-    LmP0DashFenceStatus status;
-
-    status = lm_p0_dash_fence_status_after_comment_trim(text, length, 0);
-    if (status == LM_P0_DASH_FENCE_TOO_LONG) {
-        lm_p0_set_diagnostic(document, 25, line, column, "dash delimiter fence length exceeds 80 characters");
-        return 0;
-    }
-    if (status == LM_P0_DASH_FENCE_TRAILING_TEXT) {
-        lm_p0_set_diagnostic(document, 26, line, column, "dash delimiter line must contain only the dash fence, whitespace, or a line comment");
-        return 0;
-    }
-    return 1;
-}
-
-static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start) {
-    size_t i;
-
-    i = start;
-    while (i < length && !lm_p0_is_line_break(source[i])) {
-        ++i;
-    }
-    return i;
-}
-
-static int lm_p0_match_block_string_fence_line(
-    const char *source,
-    size_t line_start,
-    size_t line_end,
-    size_t eq_count
-) {
-    size_t i;
-
-    if (eq_count < 3U || eq_count > LM_P0_MAX_FENCE_LENGTH || line_start + eq_count > line_end) {
-        return 0;
-    }
-    for (i = 0U; i < eq_count; ++i) {
-        if (source[line_start + i] != '=') {
-            return 0;
-        }
-    }
-    if (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
-        return 0;
-    }
-    i = line_start + eq_count;
-    while (i < line_end) {
-        if (!lm_p0_is_horizontal_space(source[i])) {
-            return 0;
-        }
-        ++i;
-    }
-    return 1;
-}
-
-static int lm_p0_match_raw_comment_fence_line(
-    const char *source,
-    size_t line_start,
-    size_t line_end,
-    size_t star_count
-) {
-    size_t i;
-
-    if (star_count < 3U || star_count > LM_P0_MAX_FENCE_LENGTH || line_start + star_count > line_end) {
-        return 0;
-    }
-    for (i = 0U; i < star_count; ++i) {
-        if (source[line_start + i] != '*') {
-            return 0;
-        }
-    }
-    if (line_start + star_count < line_end && source[line_start + star_count] == '*') {
-        return 0;
-    }
-    return lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end);
 }
 
 static int lm_p0_scan_raw_comment_block(
@@ -2860,89 +2139,6 @@ static int lm_p0_scan_block_string_event(
 
     lm_p0_set_diagnostic(document, 20, line, 1U, "unterminated block string literal");
     return 0;
-}
-
-static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end) {
-    size_t count;
-    size_t i;
-
-    count = 0U;
-    i = start;
-    while (i < end) {
-        if (source[i] == '\r') {
-            ++count;
-            if (i + 1U < end && source[i + 1U] == '\n') {
-                ++i;
-            }
-        } else if (source[i] == '\n') {
-            ++count;
-        }
-        ++i;
-    }
-    return count;
-}
-
-static void lm_p0_position_in_slice(
-    const char *text,
-    size_t length,
-    size_t index,
-    size_t base_line,
-    size_t base_column,
-    size_t *out_line,
-    size_t *out_column
-) {
-    size_t i;
-    size_t line;
-    size_t column;
-
-    line = base_line;
-    column = base_column;
-    if (index > length) {
-        index = length;
-    }
-    for (i = 0U; i < index; ++i) {
-        if (text[i] == '\r') {
-            ++line;
-            column = 1U;
-            if (i + 1U < index && text[i + 1U] == '\n') {
-                ++i;
-            }
-        } else if (text[i] == '\n') {
-            ++line;
-            column = 1U;
-        } else {
-            ++column;
-        }
-    }
-
-    *out_line = line;
-    *out_column = column;
-}
-
-static void lm_p0_advance_layout_line(
-    const char *source,
-    size_t length,
-    size_t line_start,
-    size_t line_end,
-    size_t *offset,
-    size_t *line
-) {
-    size_t next_offset;
-    size_t line_breaks;
-
-    next_offset = line_end;
-    line_breaks = lm_p0_count_line_breaks(source, line_start, line_end);
-    if (next_offset < length && lm_p0_is_line_break(source[next_offset])) {
-        ++line_breaks;
-        if (source[next_offset] == '\r' && next_offset + 1U < length && source[next_offset + 1U] == '\n') {
-            next_offset += 2U;
-        } else {
-            ++next_offset;
-        }
-    }
-
-    *offset = next_offset;
-    *line += line_breaks;
 }
 
 static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
@@ -3221,10 +2417,6 @@ static int lm_p0_is_hex_digit(char c) {
     return isxdigit(value) != 0;
 }
 
-static int lm_p0_is_decimal_digit(char c) {
-    return c >= '0' && c <= '9';
-}
-
 static int lm_p0_scan_number_token(const char *text, size_t end, size_t start, size_t *out_end) {
     size_t i;
     int saw_digit;
@@ -3363,6 +2555,123 @@ static size_t lm_p0_scan_c_prefixed_quote_token(const char *text, size_t end, si
     return quoted_end > start + 2U ? quoted_end : start + 1U;
 }
 
+static int lm_p0_starts_c_surface_atom(const char *text, size_t end, size_t start) {
+    return start + 1U < end && text[start] == 'c' && text[start + 1U] == '.';
+}
+
+static int lm_p0_is_c_surface_top_boundary(char value) {
+    return
+        lm_p0_is_field_space(value) ||
+        lm_p0_is_field_separator(value) ||
+        value == '(' ||
+        value == ')' ||
+        value == ':' ||
+        value == '#' ||
+        value == '{';
+}
+
+static size_t lm_p0_scan_c_sizeof_surface_atom(const char *text, size_t end, size_t start) {
+    size_t i;
+    size_t close_index;
+    size_t depth;
+    int raw_safe;
+
+    if (
+        start + 8U >= end ||
+        memcmp(text + start, "c.sizeof", 8U) != 0 ||
+        text[start + 8U] != '('
+    ) {
+        return start;
+    }
+
+    i = start + 9U;
+    depth = 1U;
+    while (i < end) {
+        if (lm_p0_is_line_break(text[i])) {
+            return start;
+        }
+        if (lm_p0_starts_c_prefixed_quote(text, end, i)) {
+            size_t quoted_end;
+
+            quoted_end = lm_p0_scan_c_prefixed_quote_token(text, end, i);
+            if (quoted_end > i + 1U) {
+                i = quoted_end;
+                continue;
+            }
+        }
+        if (text[i] == '\'' || text[i] == '"') {
+            size_t quoted_end;
+
+            quoted_end = lm_p0_scan_c_quoted_token(text, end, i);
+            if (quoted_end > i + 1U) {
+                i = quoted_end;
+                continue;
+            }
+        }
+        if (text[i] == '(') {
+            ++depth;
+        } else if (text[i] == ')') {
+            --depth;
+            if (depth == 0U) {
+                break;
+            }
+        }
+        ++i;
+    }
+    if (i >= end || text[i] != ')') {
+        return start;
+    }
+    close_index = i;
+
+    raw_safe = 1;
+    i = start + 9U;
+    while (i < close_index) {
+        if (
+            text[i] == '\\' ||
+            text[i] == '@' ||
+            (i + 1U < close_index && text[i] == 'c' && text[i + 1U] == '.')
+        ) {
+            raw_safe = 0;
+            break;
+        }
+        ++i;
+    }
+    return raw_safe ? close_index + 1U : start;
+}
+
+static size_t lm_p0_scan_c_surface_atom(const char *text, size_t end, size_t start) {
+    size_t i;
+    size_t sizeof_end;
+    size_t bracket_depth;
+
+    if (!lm_p0_starts_c_surface_atom(text, end, start)) {
+        return start;
+    }
+
+    sizeof_end = lm_p0_scan_c_sizeof_surface_atom(text, end, start);
+    if (sizeof_end > start) {
+        return sizeof_end;
+    }
+
+    i = start + 2U;
+    bracket_depth = 0U;
+    while (i < end) {
+        if (lm_p0_is_line_break(text[i])) {
+            break;
+        }
+        if (bracket_depth == 0U && lm_p0_is_c_surface_top_boundary(text[i])) {
+            break;
+        }
+        if (text[i] == '[') {
+            ++bracket_depth;
+        } else if (text[i] == ']' && bracket_depth > 0U) {
+            --bracket_depth;
+        }
+        ++i;
+    }
+    return i;
+}
+
 static int lm_p0_scan_c_char(
     LmP0Document *document,
     const char *text,
@@ -3493,8 +2802,8 @@ static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end, size_t
         return lm_p0_scan_c_prefixed_quote_token(text, end, start);
     }
 
-    if (start + 2U < end && text[start] == 'c' && text[start + 1U] == '.') {
-        return end;
+    if (lm_p0_starts_c_surface_atom(text, end, start)) {
+        return lm_p0_scan_c_surface_atom(text, end, start);
     }
 
     if (lm_p0_is_bare_identifier_start(text[start])) {
@@ -4229,6 +3538,10 @@ static int lm_p0_find_colon(
             }
             continue;
         }
+        if (lm_p0_starts_c_surface_atom(text, length, i)) {
+            i = lm_p0_scan_c_surface_atom(text, length, i);
+            continue;
+        }
         if (lm_p0_starts_python_string(text, length, i)) {
             i = lm_p0_skip_python_string_unchecked(text, length, i);
             continue;
@@ -4316,7 +3629,10 @@ static int lm_p0_field_start_looks_explicit_frame(
         return close_index + 1U < length && text[close_index + 1U] == ':';
     }
 
-    if (lm_p0_starts_c_prefixed_quote(text, length, i)) {
+    if (lm_p0_starts_c_surface_atom(text, length, i)) {
+        i = lm_p0_scan_c_surface_atom(text, length, i);
+        head_end = i;
+    } else if (lm_p0_starts_c_prefixed_quote(text, length, i)) {
         if (!lm_p0_scan_c_prefixed_quote(document, text, length, &i, line, column)) {
             return 0;
         }
@@ -4718,7 +4034,10 @@ static int lm_p0_parse_fields_until_with_layout(
             int quoted_head;
 
             quoted_head = 0;
-            if (lm_p0_starts_c_prefixed_quote(text, length, i)) {
+            if (lm_p0_starts_c_surface_atom(text, length, i)) {
+                i = lm_p0_scan_c_surface_atom(text, length, i);
+                head_end = i;
+            } else if (lm_p0_starts_c_prefixed_quote(text, length, i)) {
                 if (!lm_p0_scan_c_prefixed_quote(document, text, length, &i, line, column)) {
                     return 0;
                 }
@@ -5145,85 +4464,6 @@ static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack *stack, size_t event_
     return top_level;
 }
 
-static int lm_p0_text_has_prefix_name(
-    const char *text,
-    size_t length,
-    const char *name,
-    int allow_bare
-) {
-    size_t name_length;
-
-    name_length = strlen(name);
-    if (length < name_length) {
-        return 0;
-    }
-    if (memcmp(text, name, name_length) != 0) {
-        return 0;
-    }
-    if (length == name_length) {
-        return allow_bare;
-    }
-    if (allow_bare && (lm_p0_is_horizontal_space(text[name_length]) || text[name_length] == '#')) {
-        return 1;
-    }
-    return text[name_length] == ':';
-}
-
-static LmP0TrailerRole lm_p0_legacy_trailer_role(const char *text, size_t length) {
-    if (lm_p0_text_has_prefix_name(text, length, "end", 0)) {
-        return LM_P0_TRAILER_ROLE_END;
-    }
-    if (lm_p0_text_has_prefix_name(text, length, "return", 1)) {
-        return LM_P0_TRAILER_ROLE_RETURN;
-    }
-    if (lm_p0_text_has_prefix_name(text, length, "until", 0)) {
-        return LM_P0_TRAILER_ROLE_UNTIL;
-    }
-    return LM_P0_TRAILER_ROLE_NONE;
-}
-
-static LmP0TrailerRole lm_p0_trailer_role_from_payload(const char *payload) {
-    if (payload == 0) {
-        return LM_P0_TRAILER_ROLE_NONE;
-    }
-    if (strcmp(payload, "LM_P0_TRAILER_ROLE_END") == 0 || strcmp(payload, "trailer.end") == 0) {
-        return LM_P0_TRAILER_ROLE_END;
-    }
-    if (strcmp(payload, "LM_P0_TRAILER_ROLE_RETURN") == 0 || strcmp(payload, "trailer.return") == 0) {
-        return LM_P0_TRAILER_ROLE_RETURN;
-    }
-    if (strcmp(payload, "LM_P0_TRAILER_ROLE_UNTIL") == 0 || strcmp(payload, "trailer.until") == 0) {
-        return LM_P0_TRAILER_ROLE_UNTIL;
-    }
-    if (strcmp(payload, "LM_P0_TRAILER_ROLE_DASH_CUTTER") == 0 || strcmp(payload, "trailer.dash-cutter") == 0) {
-        return LM_P0_TRAILER_ROLE_DASH_CUTTER;
-    }
-    return LM_P0_TRAILER_ROLE_NONE;
-}
-
-static const char *lm_p0_trailer_role_payload(LmP0TrailerRole role) {
-    if (role == LM_P0_TRAILER_ROLE_END) {
-        return "trailer.end";
-    }
-    if (role == LM_P0_TRAILER_ROLE_RETURN) {
-        return "trailer.return";
-    }
-    if (role == LM_P0_TRAILER_ROLE_UNTIL) {
-        return "trailer.until";
-    }
-    if (role == LM_P0_TRAILER_ROLE_DASH_CUTTER) {
-        return "trailer.dash-cutter";
-    }
-    return 0;
-}
-
-static int lm_p0_registry_trailer_allows_bare(const char *class_name) {
-    const char *payload;
-
-    payload = lm_p0_registry_lookup(lm_p0_text_from_cstr(class_name), "trailer.allow-bare");
-    return payload != 0 && (strcmp(payload, "1") == 0 || strcmp(payload, "true") == 0);
-}
-
 static LmP0TrailerRole lm_p0_registry_trailer_role(const char *text, size_t length) {
     size_t i;
     LmP0RegistryRow *row;
@@ -5288,46 +4528,6 @@ static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
         );
     }
     return registry_role;
-}
-
-static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role) {
-    return role != LM_P0_TRAILER_ROLE_NONE;
-}
-
-static int lm_p0_node_head_is(const LmP0Node *node, const char *name) {
-    size_t name_length;
-
-    if (node == 0 || node->kind != LM_P0_NODE_FRAME) {
-        return 0;
-    }
-
-    name_length = strlen(name);
-    return node->as.frame.head.length == name_length &&
-        memcmp(node->as.frame.head.data, name, name_length) == 0;
-}
-
-static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target) {
-    const char *role_payload;
-    const char *target_head;
-
-    role_payload = lm_p0_trailer_role_payload(role);
-    target_head = role_payload != 0
-        ? lm_p0_registry_lookup(lm_p0_text_from_cstr(role_payload), "trailer.target")
-        : 0;
-
-    if (target_head != 0) {
-        return lm_p0_node_head_is(target, target_head);
-    }
-
-    if (!lm_p0_registry_table_has_rows("trailer.target") && role == LM_P0_TRAILER_ROLE_RETURN) {
-        return lm_p0_node_head_is(target, "fn");
-    }
-    return lm_p0_trailer_role_is_tail_cutter(role);
-}
-
-static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event) {
-    return event->kind == LM_P0_STREAM_EVENT_ITEM &&
-        lm_p0_trailer_role_is_tail_cutter(lm_p0_trailer_role(event->text, event->text_length));
 }
 
 static void lm_p0_stack_free(LmP0Stack *stack) {
@@ -8030,3 +7230,761 @@ char *lm_p0_dump_alloc(const LmP0Document *document) {
     return data;
 }
 
+static void lm_p0_document_init_owners(LmP0Document *document) {
+    if (document != 0 && document -> owners_initialized == 0) {
+        lm_own_arena_init(&document->source_owner);
+        lm_own_arena_init(&document->token_arena);
+        lm_own_arena_init(&document->tree_arena);
+        lm_own_arena_init(&document->diagnostic_arena);
+        document->owners_initialized = 1;
+    }
+}
+
+static void lm_p0_document_destroy_owners(LmP0Document *document) {
+    if (document != 0 && document -> owners_initialized != 0) {
+        lm_own_arena_destroy(&document->diagnostic_arena);
+        lm_own_arena_destroy(&document->tree_arena);
+        lm_own_arena_destroy(&document->token_arena);
+        lm_own_arena_destroy(&document->source_owner);
+        document->owners_initialized = 0;
+        document->frozen = 0;
+    }
+}
+
+static void lm_p0_document_freeze_tree(LmP0Document *document) {
+    if (document != 0 && document -> owners_initialized != 0) {
+        lm_own_arena_freeze(&document->tree_arena);
+        lm_own_arena_freeze(&document->source_owner);
+        document->frozen = 1;
+    }
+}
+
+static int lm_p0_text_equals(LmP0Text text, const char *value) {
+    size_t value_length;
+    if (value == 0) {
+        return 0;
+    }
+    value_length = strlen(value);
+    return text.length == value_length && memcmp(text.data, value, value_length) == 0;
+}
+
+static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload) {
+    if (out_payload == 0) {
+        return 0;
+    }
+    out_payload[0] = atom;
+    if (atom.length >= 2U && atom.data[0] == '`' && atom.data[atom.length - 1U] == '`') {
+        out_payload->data = atom.data + 1U;
+        out_payload->length = atom.length - 2U;
+    }
+    return 1;
+}
+
+static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload) {
+    if (out_payload == 0) {
+        return 0;
+    }
+    if (atom.length > 0U && (atom.data[0] == '"' || atom.data[0] == '\'')) {
+        return 0;
+    }
+    return lm_p0_identifier_payload(atom, out_payload);
+}
+
+static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload) {
+    char quote;
+    if (out_payload == 0) {
+        return 0;
+    }
+    out_payload[0] = atom;
+    if (atom.length < 2U) {
+        return 1;
+    }
+    quote = atom.data[0];
+    if ((quote == '"' || quote == '\'') && atom.data[atom.length - 1U] == quote) {
+        out_payload->data = atom.data + 1U;
+        out_payload->length = atom.length - 2U;
+        return 1;
+    }
+    return lm_p0_identifier_payload(atom, out_payload);
+}
+
+static int lm_p0_registry_payload_is_null(LmP0Text atom) {
+    LmP0Text payload;
+    if (lm_p0_registry_identifier_value(atom, & payload) == 0) {
+        return 0;
+    }
+    return payload.length == 4U && memcmp(payload.data, "NULL", 4U) == 0;
+}
+
+static int lm_p0_is_horizontal_space(char value) {
+    return value == ' ' || value == '\t';
+}
+
+static int lm_p0_is_line_break(char value) {
+    return value == '\n' || value == '\r';
+}
+
+static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index) {
+    if (index >= length) {
+        return 0U;
+    }
+    if (source[index] == '\r') {
+        if (index + 1U < length && source[index + 1U] == '\n') {
+            return 2U;
+        }
+        return 1U;
+    }
+    if (source[index] == '\n') {
+        return 1U;
+    }
+    return 0U;
+}
+
+static int lm_p0_is_field_space(char value) {
+    return lm_p0_is_horizontal_space(value) || lm_p0_is_line_break(value);
+}
+
+static int lm_p0_is_field_separator(char value) {
+    return value == ',' || value == ';';
+}
+
+static int lm_p0_is_short_form_separator(char value) {
+    return value == ';';
+}
+
+static int lm_p0_is_quoted_token_boundary(char value) {
+    return lm_p0_is_field_space(value) || lm_p0_is_field_separator(value) || value == '(' || value == ')' || value == '#';
+}
+
+static int lm_p0_starts_python_string(const char *text, size_t length, size_t index) {
+    char quote;
+    if (index + 2U >= length) {
+        return 0;
+    }
+    quote = text[index];
+    if (quote != '"' && quote != '\'') {
+        return 0;
+    }
+    return text[index + 1U] == quote && text[index + 2U] == quote;
+}
+
+static int lm_p0_is_decimal_digit(char value) {
+    return value >= '0' && value <= '9';
+}
+
+static char * lm_p0_copy_bytes(const char *source, size_t length) {
+    char *copy;
+    copy = malloc(length + 1U);
+    if (copy == 0) {
+        return 0;
+    }
+    if (length > 0U) {
+        memcpy(copy, source, length);
+    }
+    copy[length] = '\0';
+    return copy;
+}
+
+static LmP0Text lm_p0_text_from_cstr(const char *text) {
+    LmP0Text result;
+    if (text != 0) {
+        result.data = text;
+    }
+    if (text == 0) {
+        result.data = "";
+    }
+    result.length = strlen(result.data);
+    return result;
+}
+
+static char * lm_p0_text_copy_cstr(LmP0Text text) {
+    return lm_p0_copy_bytes(text.data, text.length);
+}
+
+static char * lm_p0_registry_value_copy_cstr(LmP0Text value) {
+    return lm_p0_text_copy_cstr(value);
+}
+
+static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row) {
+    if (row != 0) {
+        free(row -> table);
+        free(row -> key);
+        free(row -> payload);
+        row->table = 0;
+        row->key = 0;
+        row->payload = 0;
+    }
+}
+
+static void lm_p0_registry_row_destroy_any(void *object) {
+    LmP0RegistryRow *row;
+    row = object;
+    lm_p0_registry_row_destroy_fields(row);
+    lm_own_delete(row, 0);
+}
+
+static void lm_p0_registry_destroy(void) {
+    if (lm_p0_registry.loaded != 0 || lm_p0_registry.loading != 0) {
+        lm_own_ptr_stack_destroy(&lm_p0_registry.rows);
+    }
+    lm_p0_registry.loaded = 0;
+    lm_p0_registry.loading = 0;
+}
+
+static void lm_p0_indent_stack_free(LmP0IndentStack *stack) {
+    free(stack -> columns);
+    stack->columns = 0;
+    stack->count = 0U;
+    stack->capacity = 0U;
+}
+
+static void lm_p0_indent_stack_free_any(void *object) {
+    LmP0IndentStack *stack;
+    stack = object;
+    lm_p0_indent_stack_free(stack);
+}
+
+static int lm_p0_indent_stack_push(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column) {
+    size_t new_capacity;
+    size_t *columns;
+    if (stack -> count == stack -> capacity) {
+        if (stack -> capacity == 0U) {
+            new_capacity = 8U;
+        }
+        if (stack -> capacity != 0U) {
+            new_capacity = stack -> capacity * 2U;
+        }
+        columns = realloc(stack -> columns, new_capacity * sizeof(columns[0]));
+        if (columns == 0) {
+            lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels");
+            return 0;
+        }
+        stack->columns = columns;
+        stack->capacity = new_capacity;
+    }
+    stack->columns[stack->count] = column;
+    stack->count = stack -> count + 1U;
+    return 1;
+}
+
+static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack) {
+    memset(stack, 0, sizeof(stack[0]));
+    return lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U);
+}
+
+static LmP0IndentStack * lm_p0_indent_stack_new_empty(void) {
+    return calloc(1U, sizeof(LmP0IndentStack));
+}
+
+static LmP0IndentStack * lm_p0_indent_stack_new(LmP0Document *document) {
+    LmP0IndentStack *stack;
+    stack = lm_p0_indent_stack_new_empty();
+    if (stack == 0) {
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating indentation stack");
+        return 0;
+    }
+    if (lm_p0_indent_stack_init(document, stack) == 0) {
+        lm_own_delete(stack, lm_p0_indent_stack_free_any);
+        return 0;
+    }
+    return stack;
+}
+
+static void lm_p0_indent_stack_delete(LmP0IndentStack *stack) {
+    lm_own_delete(stack, lm_p0_indent_stack_free_any);
+}
+
+static int lm_p0_indent_stack_copy(LmP0Document *document, LmP0IndentStack *target, const LmP0IndentStack *source, size_t line, size_t column) {
+    size_t capacity;
+    memset(target, 0, sizeof(target[0]));
+    if (source -> capacity > source -> count) {
+        capacity = source -> capacity;
+    }
+    if (source -> capacity <= source -> count) {
+        capacity = source -> count;
+    }
+    if (capacity == 0U) {
+        return 1;
+    }
+    target->columns = malloc(capacity * sizeof(target->columns[0]));
+    if (target -> columns == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
+        return 0;
+    }
+    memcpy(target -> columns, source -> columns, source -> count * sizeof(target->columns[0]));
+    target->count = source -> count;
+    target->capacity = capacity;
+    return 1;
+}
+
+static LmP0IndentStack * lm_p0_indent_stack_clone(LmP0Document *document, const LmP0IndentStack *source, size_t line, size_t column) {
+    LmP0IndentStack *target;
+    target = lm_p0_indent_stack_new_empty();
+    if (target == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels");
+        return 0;
+    }
+    if (lm_p0_indent_stack_copy(document, target, source, line, column) == 0) {
+        lm_p0_indent_stack_delete(target);
+        return 0;
+    }
+    return target;
+}
+
+static size_t lm_p0_indent_tab_column(size_t column) {
+    return ((column / 8U) + 1U) * 8U;
+}
+
+static void lm_p0_scan_indent_column(const char *source, size_t start, size_t end, size_t *out_offset, size_t *out_column) {
+    size_t p;
+    size_t column;
+    p = start;
+    column = 0U;
+    while (p < end && lm_p0_is_horizontal_space(source[p])) {
+        if (source[p] == '\t') {
+            column = lm_p0_indent_tab_column(column);
+        }
+        if (source[p] != '\t') {
+            column = column + 1U;
+        }
+        p = p + 1U;
+    }
+    out_offset[0] = p;
+    out_column[0] = column;
+}
+
+static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end) {
+    size_t p;
+    size_t column;
+    p = start;
+    column = 0U;
+    while (p < end) {
+        if (source[p] == '\r' && p + 1U < end && source[p + 1U] == '\n') {
+            p = p + 1U;
+        }
+        if (source[p] == '\r') {
+            column = 0U;
+            p = p + 1U;
+            continue;
+        }
+        if (source[p] == '\n') {
+            column = 0U;
+            p = p + 1U;
+            continue;
+        }
+        if (source[p] == '\t') {
+            column = lm_p0_indent_tab_column(column);
+            p = p + 1U;
+            continue;
+        }
+        column = column + 1U;
+        p = p + 1U;
+    }
+    return column;
+}
+
+static const char * lm_p0_registry_lookup(LmP0Text key, const char *table) {
+    size_t i;
+    LmP0RegistryRow *row;
+    LmP0Text key_payload;
+    if (table == 0 || lm_p0_registry.loaded == 0) {
+        return 0;
+    }
+    if (lm_p0_identifier_payload(key, & key_payload) == 0) {
+        return 0;
+    }
+    i = lm_p0_registry.rows.count;
+    while (i > 0U) {
+        i = i - 1U;
+        row = lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        if (row != 0 && row -> table != 0 && row -> key != 0 && strcmp(row -> table, table) == 0 && lm_p0_text_equals(key_payload, row -> key)) {
+            return row -> payload;
+        }
+    }
+    return 0;
+}
+
+static int lm_p0_registry_table_has_rows(const char *table) {
+    size_t i;
+    LmP0RegistryRow *row;
+    if (table == 0 || lm_p0_registry.loaded == 0) {
+        return 0;
+    }
+    i = 0U;
+    while (i < lm_p0_registry.rows.count) {
+        row = lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        if (row != 0 && row -> table != 0 && strcmp(row -> table, table) == 0) {
+            return 1;
+        }
+        i = i + 1U;
+    }
+    return 0;
+}
+
+static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table) {
+    size_t i;
+    LmP0RegistryRow *row;
+    if (table == 0) {
+        return 0;
+    }
+    i = 0U;
+    while (i < lm_p0_registry.rows.count) {
+        row = lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        if (row != 0 && row -> table != 0 && strcmp(row -> table, table) == 0) {
+            return 1;
+        }
+        i = i + 1U;
+    }
+    return 0;
+}
+
+static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end) {
+    size_t count;
+    size_t i;
+    size_t width;
+    count = 0U;
+    i = start;
+    while (i < end) {
+        width = lm_p0_line_break_width_at(source, end, i);
+        if (width != 0U) {
+            count = count + 1U;
+            i = i + width;
+            continue;
+        }
+        i = i + 1U;
+    }
+    return count;
+}
+
+static void lm_p0_position_in_slice(const char *text, size_t length, size_t index, size_t base_line, size_t base_column, size_t *out_line, size_t *out_column) {
+    size_t i;
+    size_t line;
+    size_t column;
+    size_t width;
+    line = base_line;
+    column = base_column;
+    if (index > length) {
+        index = length;
+    }
+    i = 0U;
+    while (i < index) {
+        width = lm_p0_line_break_width_at(text, index, i);
+        if (width != 0U) {
+            line = line + 1U;
+            column = 1U;
+            i = i + width;
+            continue;
+        }
+        column = column + 1U;
+        i = i + 1U;
+    }
+    out_line[0] = line;
+    out_column[0] = column;
+}
+
+static void lm_p0_advance_layout_line(const char *source, size_t length, size_t line_start, size_t line_end, size_t *offset, size_t *line) {
+    size_t next_offset;
+    size_t line_breaks;
+    size_t width;
+    next_offset = line_end;
+    line_breaks = lm_p0_count_line_breaks(source, line_start, line_end);
+    width = lm_p0_line_break_width_at(source, length, next_offset);
+    if (width != 0U) {
+        line_breaks = line_breaks + 1U;
+        next_offset = next_offset + width;
+    }
+    offset[0] = next_offset;
+    line[0] = line[0] + line_breaks;
+}
+
+static int lm_p0_index_is_line_start(const char *text, size_t index) {
+    if (index == 0U) {
+        return 1;
+    }
+    return text[index - 1U] == '\n' || text[index - 1U] == '\r';
+}
+
+static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end) {
+    size_t i;
+    i = start;
+    while (i < end) {
+        if (lm_p0_is_horizontal_space(source[i]) == 0) {
+            return 0;
+        }
+        i = i + 1U;
+    }
+    return 1;
+}
+
+static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start) {
+    size_t i;
+    i = start;
+    while (i < length && lm_p0_is_line_break(source[i]) == 0) {
+        i = i + 1U;
+    }
+    return i;
+}
+
+static int lm_p0_text_has_prefix_name(const char *text, size_t length, const char *name, int allow_bare) {
+    size_t name_length;
+    name_length = strlen(name);
+    if (length < name_length) {
+        return 0;
+    }
+    if (memcmp(text, name, name_length) != 0) {
+        return 0;
+    }
+    if (length == name_length) {
+        return allow_bare;
+    }
+    if (allow_bare != 0 && (lm_p0_is_horizontal_space(text[name_length]) != 0 || text[name_length] == '#')) {
+        return 1;
+    }
+    return text[name_length] == ':';
+}
+
+static LmP0TrailerRole lm_p0_legacy_trailer_role(const char *text, size_t length) {
+    if (lm_p0_text_has_prefix_name(text, length, "end", 0) != 0) {
+        return LM_P0_TRAILER_ROLE_END;
+    }
+    if (lm_p0_text_has_prefix_name(text, length, "return", 1) != 0) {
+        return LM_P0_TRAILER_ROLE_RETURN;
+    }
+    if (lm_p0_text_has_prefix_name(text, length, "until", 0) != 0) {
+        return LM_P0_TRAILER_ROLE_UNTIL;
+    }
+    return LM_P0_TRAILER_ROLE_NONE;
+}
+
+static LmP0TrailerRole lm_p0_trailer_role_from_payload(const char *payload) {
+    if (payload == 0) {
+        return LM_P0_TRAILER_ROLE_NONE;
+    }
+    if (strcmp(payload, "LM_P0_TRAILER_ROLE_END") == 0 || strcmp(payload, "trailer.end") == 0) {
+        return LM_P0_TRAILER_ROLE_END;
+    }
+    if (strcmp(payload, "LM_P0_TRAILER_ROLE_RETURN") == 0 || strcmp(payload, "trailer.return") == 0) {
+        return LM_P0_TRAILER_ROLE_RETURN;
+    }
+    if (strcmp(payload, "LM_P0_TRAILER_ROLE_UNTIL") == 0 || strcmp(payload, "trailer.until") == 0) {
+        return LM_P0_TRAILER_ROLE_UNTIL;
+    }
+    if (strcmp(payload, "LM_P0_TRAILER_ROLE_DASH_CUTTER") == 0 || strcmp(payload, "trailer.dash-cutter") == 0) {
+        return LM_P0_TRAILER_ROLE_DASH_CUTTER;
+    }
+    return LM_P0_TRAILER_ROLE_NONE;
+}
+
+static const char * lm_p0_trailer_role_payload(LmP0TrailerRole role) {
+    if (role == LM_P0_TRAILER_ROLE_END) {
+        return "trailer.end";
+    }
+    if (role == LM_P0_TRAILER_ROLE_RETURN) {
+        return "trailer.return";
+    }
+    if (role == LM_P0_TRAILER_ROLE_UNTIL) {
+        return "trailer.until";
+    }
+    if (role == LM_P0_TRAILER_ROLE_DASH_CUTTER) {
+        return "trailer.dash-cutter";
+    }
+    return 0;
+}
+
+static int lm_p0_registry_trailer_allows_bare(const char *class_name) {
+    const char *payload;
+    payload = lm_p0_registry_lookup(lm_p0_text_from_cstr(class_name), "trailer.allow-bare");
+    return payload != 0 && (strcmp(payload, "1") == 0 || strcmp(payload, "true") == 0);
+}
+
+static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role) {
+    return role != LM_P0_TRAILER_ROLE_NONE;
+}
+
+static int lm_p0_node_head_is(const LmP0Node *node, const char *name) {
+    size_t name_length;
+    if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
+        return 0;
+    }
+    name_length = strlen(name);
+    return node->as.frame.head.length == name_length && memcmp(node->as.frame.head.data, name, name_length) == 0;
+}
+
+static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target) {
+    const char *role_payload;
+    const char *target_head;
+    role_payload = lm_p0_trailer_role_payload(role);
+    target_head = 0;
+    if (role_payload != 0) {
+        target_head = lm_p0_registry_lookup(lm_p0_text_from_cstr(role_payload), "trailer.target");
+    }
+    if (target_head != 0) {
+        return lm_p0_node_head_is(target, target_head);
+    }
+    if (lm_p0_registry_table_has_rows("trailer.target") == 0 && role == LM_P0_TRAILER_ROLE_RETURN) {
+        return lm_p0_node_head_is(target, "fn");
+    }
+    return lm_p0_trailer_role_is_tail_cutter(role);
+}
+
+static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event) {
+    return event -> kind == LM_P0_STREAM_EVENT_ITEM && lm_p0_trailer_role_is_tail_cutter(lm_p0_trailer_role(event -> text, event -> text_length)) != 0;
+}
+
+static int lm_p0_find_python_string_end(const char *text, size_t length, size_t start, size_t *out_end) {
+    char quote;
+    size_t i;
+    size_t run_length;
+    if (lm_p0_starts_python_string(text, length, start) == 0) {
+        out_end[0] = start;
+        return 0;
+    }
+    quote = text[start];
+    i = start + 3U;
+    while (i < length) {
+        if (text[i] == quote) {
+            run_length = 1U;
+            while (i + run_length < length && text[i + run_length] == quote) {
+                run_length = run_length + 1U;
+            }
+            if (run_length == 3U) {
+                out_end[0] = i + 3U;
+                return 1;
+            }
+            i = i + run_length;
+            continue;
+        }
+        i = i + 1U;
+    }
+    out_end[0] = length;
+    return 0;
+}
+
+static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start) {
+    size_t end;
+    if (lm_p0_find_python_string_end(text, length, start, & end) == 0) {
+        return length;
+    }
+    return end;
+}
+
+static void lm_p0_scan_layout_prefix(const char *source, size_t length, size_t start, size_t *out_offset, size_t *out_indent_column, size_t *out_dot_level) {
+    size_t p;
+    size_t indent_column;
+    size_t dot_level;
+    lm_p0_scan_indent_column(source, start, length, & p, & indent_column);
+    dot_level = 0U;
+    while (p < length && source[p] == '.') {
+        dot_level = dot_level + 1U;
+        p = p + 1U;
+        while (p < length && lm_p0_is_horizontal_space(source[p]) != 0) {
+            p = p + 1U;
+        }
+    }
+    out_offset[0] = p;
+    out_indent_column[0] = indent_column;
+    out_dot_level[0] = dot_level;
+}
+
+static int lm_p0_layout_prefix_is_deeper(size_t indent_column, size_t dot_level, size_t base_indent_column, size_t base_dot_level) {
+    if (dot_level > 0U || base_dot_level > 0U) {
+        return dot_level > base_dot_level;
+    }
+    return indent_column > base_indent_column;
+}
+
+static LmP0DashFenceStatus lm_p0_dash_fence_status(const char *text, size_t length, size_t *out_dash_count) {
+    size_t dash_count;
+    size_t i;
+    int closed;
+    size_t brace_end;
+    dash_count = 0U;
+    while (dash_count < length && text[dash_count] == '-') {
+        dash_count = dash_count + 1U;
+    }
+    if (out_dash_count != 0) {
+        out_dash_count[0] = dash_count;
+    }
+    if (dash_count < 3U) {
+        return LM_P0_DASH_FENCE_NONE;
+    }
+    if (dash_count > LM_P0_MAX_FENCE_LENGTH) {
+        return LM_P0_DASH_FENCE_TOO_LONG;
+    }
+    i = dash_count;
+    while (i < length) {
+        if (lm_p0_is_horizontal_space(text[i]) != 0) {
+            i = i + 1U;
+            continue;
+        }
+        if (text[i] == '#') {
+            return LM_P0_DASH_FENCE_VALID;
+        }
+        if (text[i] == '{') {
+            brace_end = lm_p0_scan_brace_mark_unchecked(text, length, i, & closed);
+            if (closed != 0) {
+                i = brace_end;
+                continue;
+            }
+        }
+        return LM_P0_DASH_FENCE_TRAILING_TEXT;
+    }
+    return LM_P0_DASH_FENCE_VALID;
+}
+
+static int lm_p0_validate_dash_fence_line(LmP0Document *document, const char *text, size_t length, size_t line, size_t column) {
+    LmP0DashFenceStatus status;
+    status = lm_p0_dash_fence_status_after_comment_trim(text, length, 0);
+    if (status == LM_P0_DASH_FENCE_TOO_LONG) {
+        lm_p0_set_diagnostic(document, 25, line, column, "dash delimiter fence length exceeds 80 characters");
+        return 0;
+    }
+    if (status == LM_P0_DASH_FENCE_TRAILING_TEXT) {
+        lm_p0_set_diagnostic(document, 26, line, column, "dash delimiter line must contain only the dash fence, whitespace, or a line comment");
+        return 0;
+    }
+    return 1;
+}
+
+static int lm_p0_match_block_string_fence_line(const char *source, size_t line_start, size_t line_end, size_t eq_count) {
+    size_t i;
+    if (eq_count < 3U || eq_count > LM_P0_MAX_FENCE_LENGTH || line_start + eq_count > line_end) {
+        return 0;
+    }
+    i = 0U;
+    while (i < eq_count) {
+        if (source[line_start + i] != '=') {
+            return 0;
+        }
+        i = i + 1U;
+    }
+    if (line_start + eq_count < line_end && source[line_start + eq_count] == '=') {
+        return 0;
+    }
+    i = line_start + eq_count;
+    while (i < line_end) {
+        if (lm_p0_is_horizontal_space(source[i]) == 0) {
+            return 0;
+        }
+        i = i + 1U;
+    }
+    return 1;
+}
+
+static int lm_p0_match_raw_comment_fence_line(const char *source, size_t line_start, size_t line_end, size_t star_count) {
+    size_t i;
+    if (star_count < 3U || star_count > LM_P0_MAX_FENCE_LENGTH || line_start + star_count > line_end) {
+        return 0;
+    }
+    i = 0U;
+    while (i < star_count) {
+        if (source[line_start + i] != '*') {
+            return 0;
+        }
+        i = i + 1U;
+    }
+    if (line_start + star_count < line_end && source[line_start + star_count] == '*') {
+        return 0;
+    }
+    return lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end);
+}
