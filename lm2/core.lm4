@@ -22,6 +22,8 @@ table:
              kind                       class
              member                     class
              value                      class
+             body                       class
+             node                       class
              NULL                       class
              forbidden                  class
              `field.class`              relation

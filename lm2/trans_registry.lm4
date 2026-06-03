@@ -29,6 +29,7 @@ table:
              `receiver.level`           relation
              `receiver.function`        relation
              `receiver.statement`       relation
+             `receiver.atom.statement`  relation
              `receiver.modifier`        relation
              `receiver.trailer`         relation
              `receiver.positional-name` relation
@@ -175,6 +176,14 @@ table:
              c.union       lm_trans_statement_emit_c_tagged_declaration
              c.enum        lm_trans_statement_emit_c_tagged_declaration
 end: `receiver.statement`
+
+table:
+    name: `receiver.atom.statement`
+    columns: class    (receiver binding)
+    rows:
+             include  lm_trans_atom_statement_emit_include_prelude
+             os       lm_trans_atom_statement_emit_os_prelude
+end: `receiver.atom.statement`
 
 table:
     name: `receiver.positional-name`

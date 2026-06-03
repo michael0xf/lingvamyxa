@@ -1,0 +1,35 @@
+L4:
+    table:
+        name: include
+        columns: class  (target char)
+        rows:
+                 stdio  "<stdio.h>"
+    end: include
+
+    table:
+        name: os
+        columns: class    (body node)
+        rows:
+                 win
+                 L2:
+                     fn: lm_test_registry_platform_value () int
+                         return: 7
+                     end: lm_test_registry_platform_value
+                 end: L2
+                 default
+                 L2:
+                     fn: lm_test_registry_platform_value () int
+                         return: 3
+                     end: lm_test_registry_platform_value
+                 end: L2
+    end: os
+end: L4
+
+include
+os
+
+external:
+    fn: main () int
+        return: lm_test_registry_platform_value() != 7
+    end: main
+end: external
