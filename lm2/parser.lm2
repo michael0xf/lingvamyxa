@@ -6715,7 +6715,7 @@ const char *lm_p0_node_kind_class_name(LmP0NodeKind kind) {
 
 static int lm_p0_registry_load_default(void) {
     const char *override_path;
-    const char *candidates[7];
+    const char *candidates[10];
     const char *registry_path;
     LmP0Document *document;
     const LmP0Diagnostic *diagnostic;
@@ -6732,13 +6732,16 @@ static int lm_p0_registry_load_default(void) {
 
     override_path = getenv("LM_P0_REGISTRY");
     override_enabled = override_path != 0 && override_path[0] != '\0';
-    candidates[0] = override_enabled ? override_path : "lm2/parser_registry.lm4";
-    candidates[1] = "../lm2/parser_registry.lm4";
-    candidates[2] = "../../lm2/parser_registry.lm4";
-    candidates[3] = "lm2/parser_registry.lmx";
-    candidates[4] = "../lm2/parser_registry.lmx";
-    candidates[5] = "../../lm2/parser_registry.lmx";
-    candidates[6] = 0;
+    candidates[0] = override_enabled ? override_path : "lm4/parser_registry.lm4";
+    candidates[1] = "../lm4/parser_registry.lm4";
+    candidates[2] = "../../lm4/parser_registry.lm4";
+    candidates[3] = "lm2/parser_registry.lm4";
+    candidates[4] = "../lm2/parser_registry.lm4";
+    candidates[5] = "../../lm2/parser_registry.lm4";
+    candidates[6] = "lm2/parser_registry.lmx";
+    candidates[7] = "../lm2/parser_registry.lmx";
+    candidates[8] = "../../lm2/parser_registry.lmx";
+    candidates[9] = 0;
 
     document = 0;
     registry_path = 0;

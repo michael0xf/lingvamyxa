@@ -1,0 +1,316 @@
+table:
+    name: include
+    columns: class          (target char)
+    rows:
+             parser_stddef  "<stddef.h>"
+end: include
+
+table:
+    name: `alias.backend`
+    columns: class              (backend class)
+    rows:
+             LmP0NodeKind       c.typedef
+             LmP0FrameFlags     c.typedef
+             LmP0NodeFlags      c.typedef
+             LmP0TrailerFlags   c.typedef
+end: `alias.backend`
+
+table:
+    name: `alias.target`
+    columns: class              (target class)
+    rows:
+             LmP0NodeKind       int
+             LmP0FrameFlags     unsigned
+             LmP0NodeFlags      unsigned
+             LmP0TrailerFlags   unsigned
+end: `alias.target`
+
+table:
+    name: `constant.backend`
+    columns: class                         (backend class)
+    rows:
+             LM_P0_NODE_STRUCTURE          c.define
+             LM_P0_NODE_FRAME              c.define
+             LM_P0_NODE_ATOM               c.define
+             LM_P0_NODE_DISABLED           c.define
+             LM_P0_FRAME_COLON             c.define
+             LM_P0_FRAME_COMPACT           c.define
+             LM_P0_FRAME_INLINE_BODY       c.define
+             LM_P0_FRAME_SEPARATOR_CLOSED  c.define
+             LM_P0_NODE_INACTIVE           c.define
+             LM_P0_NODE_MIX                c.define
+             LM_P0_NODE_POSITIONAL_SKIP    c.define
+             LM_P0_TRAILER_TAIL_CUTTER     c.define
+end: `constant.backend`
+
+table:
+    name: `constant.value`
+    columns: class                         (value char)
+    rows:
+             LM_P0_NODE_STRUCTURE          1
+             LM_P0_NODE_FRAME              2
+             LM_P0_NODE_ATOM               3
+             LM_P0_NODE_DISABLED           4
+             LM_P0_FRAME_COLON             1U
+             LM_P0_FRAME_COMPACT           2U
+             LM_P0_FRAME_INLINE_BODY       4U
+             LM_P0_FRAME_SEPARATOR_CLOSED  8U
+             LM_P0_NODE_INACTIVE           1U
+             LM_P0_NODE_MIX                2U
+             LM_P0_NODE_POSITIONAL_SKIP    4U
+             LM_P0_TRAILER_TAIL_CUTTER     1U
+end: `constant.value`
+
+table:
+    name: `forward.backend`
+    columns: class         (backend class)
+    rows:
+             LmP0Node      c.struct
+             LmP0Field     c.struct
+             LmP0Trailer   c.struct
+             LmP0Document  c.struct
+end: `forward.backend`
+
+table:
+    name: `layout.backend`
+    columns: class           (backend class)
+    rows:
+             LmP0Text        c.struct
+             LmP0Span        c.struct
+             LmP0Diagnostic  c.struct
+             LmP0Structure   c.struct
+             LmP0Trailer     c.named-struct
+             LmP0Frame       c.struct
+             LmP0Node        c.named-struct
+             LmP0Field       c.named-struct
+end: `layout.backend`
+
+table:
+    name: `LmP0Text.field.class`
+    columns: class   (field class)
+    rows:
+             data    char
+             length  size_t
+end: `LmP0Text.field.class`
+
+table:
+    name: `LmP0Text.field.index`
+    columns: class   (index serial)
+    rows:
+             data    0
+             length  1
+end: `LmP0Text.field.index`
+
+table:
+    name: `LmP0Text.field.address-depth`
+    columns: class  (depth serial)
+    rows:
+             data   1
+end: `LmP0Text.field.address-depth`
+
+table:
+    name: `LmP0Text.field.const`
+    columns: class  (value serial)
+    rows:
+             data   1
+end: `LmP0Text.field.const`
+
+table:
+    name: `LmP0Span.field.class`
+    columns: class   (field class)
+    rows:
+             line    size_t
+             column  size_t
+             offset  size_t
+             length  size_t
+end: `LmP0Span.field.class`
+
+table:
+    name: `LmP0Span.field.index`
+    columns: class   (index serial)
+    rows:
+             line    0
+             column  1
+             offset  2
+             length  3
+end: `LmP0Span.field.index`
+
+table:
+    name: `LmP0Diagnostic.field.class`
+    columns: class    (field class)
+    rows:
+             code     int
+             line     size_t
+             column   size_t
+             message  char
+end: `LmP0Diagnostic.field.class`
+
+table:
+    name: `LmP0Diagnostic.field.index`
+    columns: class    (index serial)
+    rows:
+             code     0
+             line     1
+             column   2
+             message  3
+end: `LmP0Diagnostic.field.index`
+
+table:
+    name: `LmP0Diagnostic.field.array-count`
+    columns: class    (count serial)
+    rows:
+             message  256
+end: `LmP0Diagnostic.field.array-count`
+
+table:
+    name: `LmP0Structure.field.class`
+    columns: class        (field class)
+    rows:
+             first_field  LmP0Field
+             last_field   LmP0Field
+             field_count  size_t
+             trailer      LmP0Trailer
+end: `LmP0Structure.field.class`
+
+table:
+    name: `LmP0Structure.field.index`
+    columns: class        (index serial)
+    rows:
+             first_field  0
+             last_field   1
+             field_count  2
+             trailer      3
+end: `LmP0Structure.field.index`
+
+table:
+    name: `LmP0Structure.field.address-depth`
+    columns: class        (depth serial)
+    rows:
+             first_field  1
+             last_field   1
+             trailer      1
+end: `LmP0Structure.field.address-depth`
+
+table:
+    name: `LmP0Trailer.field.class`
+    columns: class     (field class)
+    rows:
+             spelling  LmP0Text
+             flags     unsigned
+             body      LmP0Structure
+end: `LmP0Trailer.field.class`
+
+table:
+    name: `LmP0Trailer.field.index`
+    columns: class     (index serial)
+    rows:
+             spelling  0
+             flags     1
+             body      2
+end: `LmP0Trailer.field.index`
+
+table:
+    name: `LmP0Frame.field.class`
+    columns: class    (field class)
+    rows:
+             head     LmP0Text
+             flags    unsigned
+             body     LmP0Structure
+             trailer  LmP0Trailer
+end: `LmP0Frame.field.class`
+
+table:
+    name: `LmP0Frame.field.index`
+    columns: class    (index serial)
+    rows:
+             head     0
+             flags    1
+             body     2
+             trailer  3
+end: `LmP0Frame.field.index`
+
+table:
+    name: `LmP0Frame.field.address-depth`
+    columns: class    (depth serial)
+    rows:
+             trailer  1
+end: `LmP0Frame.field.address-depth`
+
+table:
+    name: `LmP0Node.field.class`
+    columns: class  (field class)
+    rows:
+             kind   LmP0NodeKind
+             flags  unsigned
+             span   LmP0Span
+end: `LmP0Node.field.class`
+
+table:
+    name: `LmP0Node.field.union`
+    columns: class  (union class)
+    rows:
+             as     LmP0NodeAs
+end: `LmP0Node.field.union`
+
+table:
+    name: `LmP0Node.field.index`
+    columns: class  (index serial)
+    rows:
+             kind   0
+             flags  1
+             span   2
+             as     3
+end: `LmP0Node.field.index`
+
+table:
+    name: `LmP0NodeAs.field.class`
+    columns: class      (field class)
+    rows:
+             structure  LmP0Structure
+             frame      LmP0Frame
+             atom       LmP0Text
+end: `LmP0NodeAs.field.class`
+
+table:
+    name: `LmP0NodeAs.field.index`
+    columns: class      (index serial)
+    rows:
+             structure  0
+             frame      1
+             atom       2
+end: `LmP0NodeAs.field.index`
+
+table:
+    name: `LmP0Field.field.class`
+    columns: class  (field class)
+    rows:
+             value  LmP0Node
+             next   LmP0Field
+end: `LmP0Field.field.class`
+
+table:
+    name: `LmP0Field.field.index`
+    columns: class  (index serial)
+    rows:
+             value  0
+             next   1
+end: `LmP0Field.field.index`
+
+table:
+    name: `LmP0Field.field.address-depth`
+    columns: class  (depth serial)
+    rows:
+             value  1
+             next   1
+end: `LmP0Field.field.address-depth`
+
+fn: lm_p0_parse_string (const: @(char source); @@: LmP0Document out_document) int
+fn: lm_p0_parse_bytes (const: @(char source); size_t: source_length; @@: LmP0Document out_document) int
+fn: lm_p0_parse_file (const: @(char path); @@: LmP0Document out_document) int
+fn: lm_p0_document_destroy (@: LmP0Document document) void
+fn: lm_p0_document_root (const: @(LmP0Document document)) const: @: LmP0Node
+fn: lm_p0_document_diagnostic (const: @(LmP0Document document)) const: @: LmP0Diagnostic
+fn: lm_p0_node_kind_class_name (LmP0NodeKind: kind) const: @: char
+fn: lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
+fn: lm_p0_free (@: void ptr) void
+

@@ -570,8 +570,12 @@ static int lm_l4_load_rows(
         node = field->value;
         if (!lm_l4_node_is_ignored(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                lm_l4_error(loader, "registry body expects table or row frames");
+                lm_l4_error(loader, "registry body expects table, row, or fn frames");
                 return 1;
+            }
+            if (lm_l4_text_equals(node->as.frame.head, "fn")) {
+                field = field->next;
+                continue;
             }
             status = lm_l4_row_from_frame(loader, context, &node->as.frame);
             if (status <= 0) {
@@ -581,7 +585,7 @@ static int lm_l4_load_rows(
                 status = lm_l4_table_from_frame(loader, context, &node->as.frame);
                 if (status <= 0) {
                     if (status == 0) {
-                        lm_l4_error(loader, "registry body expects table or row frames");
+                        lm_l4_error(loader, "registry body expects table, row, or fn frames");
                     }
                     return 1;
                 }
@@ -780,6 +784,7 @@ static int lm_l4_load_root(
         lm_l4_error(loader, "root must be a Structure");
         return 1;
     }
+    (void)out_row_count;
     if (lm_l4_check_duplicate_tables_in_root(loader, root, implicit_l4) != 0) {
         return 1;
     }
@@ -814,6 +819,8 @@ static int lm_l4_load_root(
                     return 1;
                 }
                 loaded = 1;
+            } else if (implicit_l4 && lm_l4_text_equals(node->as.frame.head, "fn")) {
+                loaded = 1;
             } else {
                 lm_l4_error(loader, "root fields must be L4/registry frames, or table/row frames in .lm4 files");
                 return 1;
@@ -822,7 +829,7 @@ static int lm_l4_load_root(
         field = field->next;
     }
 
-    if (!loaded || (out_row_count != 0 && *out_row_count == 0U)) {
+    if (!loaded) {
         lm_l4_error(loader, "no rows loaded");
         return 1;
     }

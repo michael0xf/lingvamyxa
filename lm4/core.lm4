@@ -16,6 +16,7 @@ table:
              platform                   class
              spelling                   class
              binding                    class
+             functionPointerType        class
              serial                     class
              name                       class
              namespace                  class
@@ -30,10 +31,13 @@ table:
              `field.index`              relation
              `field.address-depth`      relation
              `field.const`              relation
+             `field.array-count`        relation
+             `field.union`              relation
              `layout.backend`           relation
              `constant.backend`         relation
              `constant.value`           relation
              `class.present`            relation
+             `fn.descriptor`            relation
 
              void                       primitive
              char                       primitive

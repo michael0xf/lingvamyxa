@@ -187,12 +187,11 @@ table:
     rows:
              include          lm_trans_atom_statement_emit_include_prelude
              os               lm_trans_atom_statement_emit_os_prelude
+             fn               lm_trans_atom_statement_emit_fn_prelude
              layout           lm_trans_atom_statement_emit_layout_prelude
              constant         lm_trans_atom_statement_emit_constant_prelude
              alias            lm_trans_atom_statement_emit_alias_prelude
              forward          lm_trans_atom_statement_emit_forward_prelude
-             prototype        lm_trans_atom_statement_emit_prototype_prelude
-             callable_alias   lm_trans_atom_statement_emit_callable_alias_prelude
              guard            lm_trans_atom_statement_emit_guard_prelude
              extern_c         lm_trans_atom_statement_emit_extern_c_prelude
              unit             lm_trans_atom_statement_emit_unit_prelude

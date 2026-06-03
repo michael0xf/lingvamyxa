@@ -1,0 +1,258 @@
+table:
+    name: include
+    columns: class         (target char)
+    rows:
+             own_stddef    "<stddef.h>"
+end: include
+
+table:
+    name: functionPointerType
+    columns: class               (value serial)
+    rows:
+             LmOwnDestroyFields  1
+             LmOwnDelete         1
+end: functionPointerType
+
+fn: LmOwnDestroyFields (@: void object) void
+fn: LmOwnDelete (@: void object) void
+
+table:
+    name: `alias.backend`
+    columns: class          (backend class)
+    rows:
+             LmOwnEdgeKind  c.typedef
+end: `alias.backend`
+
+table:
+    name: `alias.target`
+    columns: class          (target class)
+    rows:
+             LmOwnEdgeKind  int
+end: `alias.target`
+
+table:
+    name: `forward.backend`
+    columns: class                      (backend class)
+    rows:
+             LmOwnPtrStack              c.struct
+             LmOwnValueStack            c.struct
+             LmOwnAllocationDescriptor  c.struct
+             LmOwnLazyEdge              c.struct
+             LmOwnArena                 c.struct
+end: `forward.backend`
+
+table:
+    name: `constant.backend`
+    columns: class                   (backend class)
+    rows:
+             LM_OWN_EDGE_BORROWED    c.define
+             LM_OWN_EDGE_OWNED       c.define
+             LM_OWN_EDGE_LAZY_OWNED  c.define
+             LM_OWN_EDGE_EXTERNAL    c.define
+end: `constant.backend`
+
+table:
+    name: `constant.value`
+    columns: class                   (value char)
+    rows:
+             LM_OWN_EDGE_BORROWED    1
+             LM_OWN_EDGE_OWNED       2
+             LM_OWN_EDGE_LAZY_OWNED  3
+             LM_OWN_EDGE_EXTERNAL    4
+end: `constant.value`
+
+table:
+    name: `layout.backend`
+    columns: class                      (backend class)
+    rows:
+             LmOwnPtrStack              c.struct
+             LmOwnValueStack            c.struct
+             LmOwnAllocationDescriptor  c.struct
+             LmOwnLazyEdge              c.struct
+             LmOwnArena                 c.named-struct
+end: `layout.backend`
+
+table:
+    name: `LmOwnPtrStack.field.class`
+    columns: class        (field class)
+    rows:
+             items        void
+             count        size_t
+             capacity     size_t
+             delete_item  LmOwnDelete
+end: `LmOwnPtrStack.field.class`
+
+table:
+    name: `LmOwnPtrStack.field.index`
+    columns: class        (index serial)
+    rows:
+             items        0
+             count        1
+             capacity     2
+             delete_item  3
+end: `LmOwnPtrStack.field.index`
+
+table:
+    name: `LmOwnPtrStack.field.address-depth`
+    columns: class  (depth serial)
+    rows:
+             items  2
+end: `LmOwnPtrStack.field.address-depth`
+
+table:
+    name: `LmOwnValueStack.field.class`
+    columns: class      (field class)
+    rows:
+             items      void
+             count      size_t
+             capacity   size_t
+             item_size  size_t
+end: `LmOwnValueStack.field.class`
+
+table:
+    name: `LmOwnValueStack.field.index`
+    columns: class      (index serial)
+    rows:
+             items      0
+             count      1
+             capacity   2
+             item_size  3
+end: `LmOwnValueStack.field.index`
+
+table:
+    name: `LmOwnValueStack.field.address-depth`
+    columns: class  (depth serial)
+    rows:
+             items  1
+end: `LmOwnValueStack.field.address-depth`
+
+table:
+    name: `LmOwnAllocationDescriptor.field.class`
+    columns: class         (field class)
+    rows:
+             address       void
+             owner         LmOwnArena
+             bytes         size_t
+             element_size  size_t
+             count         size_t
+             rank          size_t
+             level         size_t
+end: `LmOwnAllocationDescriptor.field.class`
+
+table:
+    name: `LmOwnAllocationDescriptor.field.index`
+    columns: class         (index serial)
+    rows:
+             address       0
+             owner         1
+             bytes         2
+             element_size  3
+             count         4
+             rank          5
+             level         6
+end: `LmOwnAllocationDescriptor.field.index`
+
+table:
+    name: `LmOwnAllocationDescriptor.field.address-depth`
+    columns: class    (depth serial)
+    rows:
+             address  1
+             owner    1
+end: `LmOwnAllocationDescriptor.field.address-depth`
+
+table:
+    name: `LmOwnLazyEdge.field.class`
+    columns: class         (field class)
+    rows:
+             kind          LmOwnEdgeKind
+             source_owner  LmOwnArena
+             target_owner  LmOwnArena
+             source        void
+             size          size_t
+             patch_slot    void
+end: `LmOwnLazyEdge.field.class`
+
+table:
+    name: `LmOwnLazyEdge.field.index`
+    columns: class         (index serial)
+    rows:
+             kind          0
+             source_owner  1
+             target_owner  2
+             source        3
+             size          4
+             patch_slot    5
+end: `LmOwnLazyEdge.field.index`
+
+table:
+    name: `LmOwnLazyEdge.field.address-depth`
+    columns: class         (depth serial)
+    rows:
+             source_owner  1
+             target_owner  1
+             source        1
+             patch_slot    2
+end: `LmOwnLazyEdge.field.address-depth`
+
+table:
+    name: `LmOwnLazyEdge.field.const`
+    columns: class       (value serial)
+    rows:
+             source      1
+             patch_slot  1
+end: `LmOwnLazyEdge.field.const`
+
+table:
+    name: `LmOwnArena.field.class`
+    columns: class                   (field class)
+    rows:
+             allocations             LmOwnPtrStack
+             allocation_descriptors  LmOwnValueStack
+             lazy_edges              LmOwnValueStack
+             frozen                  int
+end: `LmOwnArena.field.class`
+
+table:
+    name: `LmOwnArena.field.index`
+    columns: class                   (index serial)
+    rows:
+             allocations             0
+             allocation_descriptors  1
+             lazy_edges              2
+             frozen                  3
+end: `LmOwnArena.field.index`
+
+fn: lm_own_new_zero (size_t: size) @: void
+fn: lm_own_array_new_zero (size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
+fn: lm_own_allocation_descriptor (const: @(void address)) const: @: LmOwnAllocationDescriptor
+fn: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields) void
+fn: lm_own_pointer_array_delete (@@: void items; size_t: count; LmOwnDelete: delete_item) void
+fn: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item) void
+fn: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack) void
+fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
+fn: lm_own_ptr_stack_at (const: @(LmOwnPtrStack stack); size_t: index) @: void
+fn: lm_own_ptr_stack_top (const: @(LmOwnPtrStack stack)) @: void
+fn: lm_own_ptr_stack_truncate (@: LmOwnPtrStack stack; size_t: count) void
+fn: lm_own_value_stack_init (@: LmOwnValueStack stack; size_t: item_size) void
+fn: lm_own_value_stack_destroy (@: LmOwnValueStack stack) void
+fn: lm_own_value_stack_push (@: LmOwnValueStack stack; const: @(void item)) int
+fn: lm_own_value_stack_resize_zero (@: LmOwnValueStack stack; size_t: count) int
+fn: lm_own_value_stack_pop (@: LmOwnValueStack stack; @: void out_item) int
+fn: lm_own_value_stack_at (const: @(LmOwnValueStack stack); size_t: index) @: void
+fn: lm_own_value_stack_top (const: @(LmOwnValueStack stack)) @: void
+fn: lm_own_value_stack_truncate (@: LmOwnValueStack stack; size_t: count) void
+fn: lm_own_arena_init (@: LmOwnArena arena) void
+fn: lm_own_arena_destroy (@: LmOwnArena arena) void
+fn: lm_own_arena_new_zero (@: LmOwnArena arena; size_t: size) @: void
+fn: lm_own_arena_array_new_zero (@: LmOwnArena arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
+fn: lm_own_arena_allocation_descriptor (const: @(LmOwnArena arena); const: @(void address)) const: @: LmOwnAllocationDescriptor
+fn: lm_own_arena_copy_bytes (@: LmOwnArena arena; const: @(char source); size_t: length) @: char
+fn: lm_own_arena_add_lazy_edge (@: LmOwnArena target; @: LmOwnArena source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
+fn: lm_own_arena_promote_lazy_edges (@: LmOwnArena arena) int
+fn: lm_own_arena_absorb (@: LmOwnArena target; @: LmOwnArena source) int
+fn: lm_own_arena_freeze (@: LmOwnArena arena) void
+fn: lm_own_arena_is_frozen (const: @(LmOwnArena arena)) int
+fn: lm_own_tree_cut (@: LmOwnArena arena) int
+fn: lm_own_tree_cut_promote_lazy_edges (@: LmOwnArena arena) int
+

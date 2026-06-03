@@ -142,61 +142,15 @@ L4:
                  LmTestForward  c.struct
     end: `forward.backend`
 
-    table:
-        name: `prototype.backend`
-        columns: class        (backend class)
-        rows:
-                 lm_test_api  c.prototype
-    end: `prototype.backend`
+    fn: lm_test_api (int: value) int
+    fn: LmTestCall (int: value) int
 
     table:
-        name: `lm_test_api.return.class`
-        columns: class   (return class)
+        name: functionPointerType
+        columns: class       (value serial)
         rows:
-                 return  int
-    end: `lm_test_api.return.class`
-
-    table:
-        name: `lm_test_api.param.class`
-        columns: class  (param class)
-        rows:
-                 value  int
-    end: `lm_test_api.param.class`
-
-    table:
-        name: `lm_test_api.param.index`
-        columns: class  (index serial)
-        rows:
-                 value  0
-    end: `lm_test_api.param.index`
-
-    table:
-        name: `callable_alias.backend`
-        columns: class       (backend class)
-        rows:
-                 LmTestCall  c.function-pointer
-    end: `callable_alias.backend`
-
-    table:
-        name: `LmTestCall.return.class`
-        columns: class   (return class)
-        rows:
-                 return  int
-    end: `LmTestCall.return.class`
-
-    table:
-        name: `LmTestCall.param.class`
-        columns: class  (param class)
-        rows:
-                 value  int
-    end: `LmTestCall.param.class`
-
-    table:
-        name: `LmTestCall.param.index`
-        columns: class  (index serial)
-        rows:
-                 value  0
-    end: `LmTestCall.param.index`
+                 LmTestCall  1
+    end: functionPointerType
 
     table:
         name: `unit.backend`
@@ -223,8 +177,7 @@ end: L4
 alias
 forward
 layout
-prototype
-callable_alias
+fn
 unit
 
 guard: LM_TEST_GUARD

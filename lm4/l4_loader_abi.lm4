@@ -1,0 +1,101 @@
+table:
+    name: include
+    columns: class             (target char)
+    rows:
+             l4_loader_own     "own.lm1.h"
+             l4_loader_parser  "parser.lm1.h"
+             l4_loader_stdio   "<stdio.h>"
+             l4_loader_stdlib  "<stdlib.h>"
+             l4_loader_string  "<string.h>"
+end: include
+
+table:
+    name: functionPointerType
+    columns: class                   (value serial)
+    rows:
+             LmL4PushRow             1
+             LmL4PushCell            1
+             LmL4NoteKey             1
+             LmL4PushColumnMetadata  1
+end: functionPointerType
+
+fn: LmL4PushRow (@: void context; LmP0Text: table_atom; LmP0Text: key_atom; const: @(LmP0Node payload_node)) int
+fn: LmL4PushCell (@: void context; LmP0Text: table_name; const: @(LmL4Column column); int: split_by_column; LmP0Text: key_atom; const: @(LmP0Node payload_node)) int
+fn: LmL4NoteKey (@: void context; LmP0Text: table_name; const: @(LmL4Column column); LmP0Text: key_atom) int
+fn: LmL4PushColumnMetadata (@: void context; LmP0Text: table_name; const: @(LmL4Column columns); size_t: column_count) int
+
+table:
+    name: `forward.backend`
+    columns: class       (backend class)
+    rows:
+             LmL4Column  c.struct
+end: `forward.backend`
+
+table:
+    name: `layout.backend`
+    columns: class       (backend class)
+    rows:
+             LmL4Column  c.struct
+             LmL4Loader  c.struct
+end: `layout.backend`
+
+table:
+    name: `LmL4Column.field.class`
+    columns: class             (field class)
+    rows:
+             name              LmP0Text
+             descriptors       LmP0Text
+             descriptor_count  size_t
+end: `LmL4Column.field.class`
+
+table:
+    name: `LmL4Column.field.index`
+    columns: class             (index serial)
+    rows:
+             name              0
+             descriptors       1
+             descriptor_count  2
+end: `LmL4Column.field.index`
+
+table:
+    name: `LmL4Column.field.array-count`
+    columns: class        (count serial)
+    rows:
+             descriptors  16
+end: `LmL4Column.field.array-count`
+
+table:
+    name: `LmL4Loader.field.class`
+    columns: class                 (field class)
+    rows:
+             error_prefix          char
+             push_row              LmL4PushRow
+             push_cell             LmL4PushCell
+             note_key              LmL4NoteKey
+             push_column_metadata  LmL4PushColumnMetadata
+end: `LmL4Loader.field.class`
+
+table:
+    name: `LmL4Loader.field.index`
+    columns: class                 (index serial)
+    rows:
+             error_prefix          0
+             push_row              1
+             push_cell             2
+             note_key              3
+             push_column_metadata  4
+end: `LmL4Loader.field.index`
+
+table:
+    name: `LmL4Loader.field.address-depth`
+    columns: class         (depth serial)
+    rows:
+             error_prefix  1
+end: `LmL4Loader.field.address-depth`
+
+table:
+    name: `LmL4Loader.field.const`
+    columns: class         (value serial)
+    rows:
+             error_prefix  1
+end: `LmL4Loader.field.const`
