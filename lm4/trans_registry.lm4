@@ -30,8 +30,17 @@ table:
              `receiver.function`        relation
              `receiver.statement`       relation
              `receiver.atom.statement`  relation
+             `receiver.l4`              relation
+             `receiver.l4.root`         relation
+             `receiver.l4.atom`         relation
+             `receiver.l4.payload`      relation
              `receiver.modifier`        relation
              `receiver.trailer`         relation
+             `namespace.l4`             relation
+             `namespace.l4.root`        relation
+             `namespace.l4.atom`        relation
+             `namespace.l4.payload`     relation
+             `prelude.sequence`         relation
              `receiver.positional-name` relation
              expr_spelling_binding      relation
              expr_emitter_binding       relation
@@ -149,6 +158,10 @@ table:
              `receiver.level`      lm_trans_dispatch_level_receiver
              `receiver.function`   lm_trans_dispatch_function_receiver
              `receiver.statement`  lm_trans_dispatch_statement_receiver
+             `receiver.l4`         lm_trans_dispatch_l4_receiver
+             `receiver.l4.root`    lm_trans_dispatch_l4_root_receiver
+             `receiver.l4.atom`    lm_trans_dispatch_l4_atom_receiver
+             `receiver.l4.payload` lm_trans_dispatch_l4_payload_receiver
              `receiver.modifier`   lm_trans_dispatch_modifier_receiver
              `receiver.trailer`    lm_trans_dispatch_trailer_receiver
 end: `receiver.type`
@@ -186,6 +199,70 @@ table:
 end: `receiver.statement`
 
 table:
+    name: `namespace.l4`
+    columns: class  (`receiver.type` class)
+    rows:
+             table  `receiver.l4`
+             row    `receiver.l4`
+             fn     `receiver.l4`
+end: `namespace.l4`
+
+table:
+    name: `receiver.l4`
+    columns: class  (receiver binding)
+    rows:
+             table  lm_trans_l4_receiver_table
+             row    lm_trans_l4_receiver_row
+             fn     lm_trans_l4_receiver_fn_descriptor
+end: `receiver.l4`
+
+table:
+    name: `namespace.l4.root`
+    columns: class     (`receiver.type` class)
+    rows:
+             L4        `receiver.l4.root`
+             registry  `receiver.l4.root`
+end: `namespace.l4.root`
+
+table:
+    name: `receiver.l4.root`
+    columns: class     (receiver binding)
+    rows:
+             L4        lm_trans_l4_root_receiver_registry
+             registry  lm_trans_l4_root_receiver_registry
+end: `receiver.l4.root`
+
+table:
+    name: `namespace.l4.atom`
+    columns: class        (`receiver.type` class)
+    rows:
+             loadHeaders  `receiver.l4.atom`
+end: `namespace.l4.atom`
+
+table:
+    name: `receiver.l4.atom`
+    columns: class        (receiver binding)
+    rows:
+             loadHeaders  lm_trans_l4_atom_receiver_prelude_sequence
+end: `receiver.l4.atom`
+
+table:
+    name: `namespace.l4.payload`
+    columns: class   (`receiver.type` class)
+    rows:
+             import  `receiver.l4.payload`
+             L2      `receiver.l4.payload`
+end: `namespace.l4.payload`
+
+table:
+    name: `receiver.l4.payload`
+    columns: class   (receiver binding)
+    rows:
+             import  lm_trans_l4_payload_receiver_import
+             L2      lm_trans_l4_payload_receiver_l2
+end: `receiver.l4.payload`
+
+table:
     name: `receiver.atom.statement`
     columns: class           (receiver binding)
     rows:
@@ -201,6 +278,20 @@ table:
              extern_c         lm_trans_atom_statement_emit_extern_c_prelude
              unit             lm_trans_atom_statement_emit_unit_prelude
 end: `receiver.atom.statement`
+
+table:
+    name: `loadHeaders.item`
+    columns: class      (index serial)
+    rows:
+             include    0
+             forward    1
+             alias      2
+             constant   3
+             layout     4
+             fn         5
+             prototype  6
+             unit       7
+end: `loadHeaders.item`
 
 table:
     name: `receiver.positional-name`

@@ -1,24 +1,16 @@
 #include <stddef.h>
-
-typedef int LmOwnEdgeKind;
-
-
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
 
+typedef int LmOwnEdgeKind;
 
 #define LM_OWN_EDGE_BORROWED 1
 #define LM_OWN_EDGE_OWNED 2
 #define LM_OWN_EDGE_LAZY_OWNED 3
 #define LM_OWN_EDGE_EXTERNAL 4
-
-
-typedef void (*LmOwnDestroyFields)(void *object);
-typedef void (*LmOwnDelete)(void *object);
-
 
 #include <stddef.h>
 
@@ -26,7 +18,7 @@ struct LmOwnPtrStack {
     void **items;
     size_t count;
     size_t capacity;
-    LmOwnDelete delete_item;
+    void (*delete_item)(void *object);
 };
 struct LmOwnValueStack {
     void *items;
@@ -58,6 +50,8 @@ struct LmOwnArena {
     int frozen;
 };
 
+typedef void (*LmOwnDestroyFields)(void *object);
+typedef void (*LmOwnDelete)(void *object);
 
 void * lm_own_new_zero(size_t size);
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);

@@ -4,14 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <ctype.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
-
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
@@ -22,7 +14,8 @@ typedef struct LmP0Field LmP0Field;
 typedef struct LmP0Trailer LmP0Trailer;
 typedef struct LmP0Document LmP0Document;
 typedef struct LmL4Column LmL4Column;
-
+typedef struct LmL4Receiver LmL4Receiver;
+typedef struct LmL4Loader LmL4Loader;
 
 typedef int LmOwnEdgeKind;
 typedef int LmP0NodeKind;
@@ -34,8 +27,6 @@ typedef int LmP0TrailerRole;
 typedef int LmP0DashFenceStatus;
 typedef unsigned LmP0FieldParseFlags;
 typedef LmL4Column LmP0RegistryColumn;
-
-
 
 #define LM_OWN_EDGE_BORROWED 1
 #define LM_OWN_EDGE_OWNED 2
@@ -73,7 +64,6 @@ typedef LmL4Column LmP0RegistryColumn;
 #define LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS 8U
 #define LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR 16U
 #define LM_P0_MAX_FENCE_LENGTH 80U
-
 
 #include <stddef.h>
 
@@ -164,13 +154,19 @@ struct LmL4Column {
     LmP0Text descriptors[16U];
     size_t descriptor_count;
 };
-typedef struct LmL4Loader {
+struct LmL4Receiver {
+    const char *name;
+    int (*frame)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+};
+struct LmL4Loader {
     const char *error_prefix;
     int (*push_row)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
     int (*push_cell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
     int (*note_key)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
     int (*push_column_metadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
-} LmL4Loader;
+    const LmL4Receiver *receivers;
+    size_t receiver_count;
+};
 typedef struct LmP0StreamEvent {
     LmP0StreamEventKind kind;
     unsigned node_flags;
@@ -237,14 +233,13 @@ typedef struct LmP0Registry {
     int loading;
 } LmP0Registry;
 
-
 typedef void (*LmOwnDestroyFields)(void *object);
 typedef void (*LmOwnDelete)(void *object);
 typedef int (*LmL4PushRow)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
 typedef int (*LmL4PushCell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
 typedef int (*LmL4NoteKey)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
 typedef int (*LmL4PushColumnMetadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
-
+typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 
 void * lm_own_new_zero(size_t size);
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
@@ -289,7 +284,6 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
 char * lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
 
-
 static int lm_l4_text_equals(LmP0Text text, const char *value) {
     size_t length;
 
@@ -321,6 +315,8 @@ static const char *lm_l4_error_prefix(const LmL4Loader *loader) {
 static void lm_l4_error(const LmL4Loader *loader, const char *message) {
     fprintf(stderr, "%s registry error: %s\n", lm_l4_error_prefix(loader), message);
 }
+
+static LmOwnPtrStack *lm_l4_seen_tables;
 
 static const LmP0Field *lm_l4_nth_field(
     const LmP0Structure *structure,
@@ -790,6 +786,108 @@ static int lm_l4_table_from_frame(
     return 1;
 }
 
+static int lm_l4_check_table_frame_unique(
+    const LmL4Loader *loader,
+    const LmP0Frame *frame,
+    LmOwnPtrStack *seen
+);
+
+static int lm_l4_receiver_table(
+    const LmL4Loader *loader,
+    void *context,
+    const LmP0Frame *frame
+) {
+    int status;
+
+    if (lm_l4_seen_tables != 0 && lm_l4_check_table_frame_unique(loader, frame, lm_l4_seen_tables) != 0) {
+        return 1;
+    }
+
+    status = lm_l4_table_from_frame(loader, context, frame);
+    if (status <= 0) {
+        if (status == 0) {
+            lm_l4_error(loader, "table receiver expects table frame");
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_l4_receiver_row(
+    const LmL4Loader *loader,
+    void *context,
+    const LmP0Frame *frame
+) {
+    int status;
+
+    status = lm_l4_row_from_frame(loader, context, frame);
+    if (status <= 0) {
+        if (status == 0) {
+            lm_l4_error(loader, "row receiver expects row frame");
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_l4_receiver_ignore(
+    const LmL4Loader *loader,
+    void *context,
+    const LmP0Frame *frame
+) {
+    (void)loader;
+    (void)context;
+    (void)frame;
+    return 0;
+}
+
+static const LmL4Receiver lm_l4_default_receivers[] = {
+    { "table", lm_l4_receiver_table },
+    { "row", lm_l4_receiver_row },
+    { "fn", lm_l4_receiver_ignore }
+};
+
+static const LmL4Receiver *lm_l4_find_receiver(
+    const LmL4Loader *loader,
+    LmP0Text head
+) {
+    size_t i;
+
+    if (loader == 0 || loader->receivers == 0) {
+        return 0;
+    }
+
+    i = 0U;
+    while (i < loader->receiver_count) {
+        if (
+            loader->receivers[i].name != 0 &&
+            lm_l4_text_equals(head, loader->receivers[i].name)
+        ) {
+            return &loader->receivers[i];
+        }
+        ++i;
+    }
+    return 0;
+}
+
+static int lm_l4_dispatch_frame(
+    const LmL4Loader *loader,
+    void *context,
+    const LmP0Frame *frame
+) {
+    const LmL4Receiver *receiver;
+
+    if (frame == 0) {
+        return 1;
+    }
+    receiver = lm_l4_find_receiver(loader, frame->head);
+    if (receiver == 0 || receiver->frame == 0) {
+        lm_l4_error(loader, "registry body expects registered L4 receiver frames");
+        return 1;
+    }
+    return receiver->frame(loader, context, frame);
+}
+
 static int lm_l4_load_rows(
     const LmL4Loader *loader,
     void *context,
@@ -797,42 +895,50 @@ static int lm_l4_load_rows(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
+    LmOwnPtrStack *seen;
+    LmOwnPtrStack *previous_seen;
+    int owns_seen;
     int status;
 
     if (structure == 0) {
         return 0;
     }
 
+    owns_seen = lm_l4_seen_tables == 0;
+    seen = 0;
+    previous_seen = 0;
+    if (owns_seen) {
+        seen = (LmOwnPtrStack *)malloc(sizeof(*seen));
+        if (seen == 0) {
+            lm_l4_error(loader, "cannot allocate table duplicate tracker");
+            return 1;
+        }
+        lm_own_ptr_stack_init(seen, free);
+        previous_seen = lm_l4_seen_tables;
+        lm_l4_seen_tables = seen;
+    }
+    status = 0;
+
     field = structure->first_field;
-    while (field != 0) {
+    while (field != 0 && status == 0) {
         node = field->value;
         if (!lm_l4_node_is_ignored(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                lm_l4_error(loader, "registry body expects table, row, or fn frames");
-                return 1;
-            }
-            if (lm_l4_text_equals(node->as.frame.head, "fn")) {
-                field = field->next;
-                continue;
-            }
-            status = lm_l4_row_from_frame(loader, context, &node->as.frame);
-            if (status <= 0) {
-                if (status < 0) {
-                    return 1;
-                }
-                status = lm_l4_table_from_frame(loader, context, &node->as.frame);
-                if (status <= 0) {
-                    if (status == 0) {
-                        lm_l4_error(loader, "registry body expects table, row, or fn frames");
-                    }
-                    return 1;
-                }
+                lm_l4_error(loader, "registry body expects registered L4 receiver frames");
+                status = 1;
+            } else if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
+                status = 1;
             }
         }
         field = field->next;
     }
 
-    return 0;
+    if (owns_seen) {
+        lm_l4_seen_tables = previous_seen;
+        lm_own_ptr_stack_destroy(seen);
+        free(seen);
+    }
+    return status;
 }
 
 static int lm_l4_seen_table_add(
@@ -939,74 +1045,6 @@ static int lm_l4_check_table_frame_unique(
     return 0;
 }
 
-static int lm_l4_check_duplicate_tables_in_rows(
-    const LmL4Loader *loader,
-    const LmP0Structure *structure,
-    LmOwnPtrStack *seen
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-
-    if (structure == 0) {
-        return 0;
-    }
-
-    field = structure->first_field;
-    while (field != 0) {
-        node = field->value;
-        if (
-            !lm_l4_node_is_ignored(node) &&
-            node->kind == LM_P0_NODE_FRAME &&
-            lm_l4_text_equals(node->as.frame.head, "table") &&
-            lm_l4_check_table_frame_unique(loader, &node->as.frame, seen) != 0
-        ) {
-            return -1;
-        }
-        field = field->next;
-    }
-
-    return 0;
-}
-
-static int lm_l4_check_duplicate_tables_in_root(
-    const LmL4Loader *loader,
-    const LmP0Node *root,
-    int implicit_l4
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    LmOwnPtrStack seen;
-    int status;
-
-    lm_own_ptr_stack_init(&seen, free);
-    status = 0;
-
-    field = root != 0 && root->kind == LM_P0_NODE_STRUCTURE
-        ? root->as.structure.first_field
-        : 0;
-    while (field != 0 && status == 0) {
-        node = field->value;
-        if (!lm_l4_node_is_ignored(node) && node->kind == LM_P0_NODE_FRAME) {
-            if (
-                lm_l4_text_equals(node->as.frame.head, "L4") ||
-                lm_l4_text_equals(node->as.frame.head, "registry")
-            ) {
-                status = lm_l4_check_duplicate_tables_in_rows(
-                    loader,
-                    &node->as.frame.body,
-                    &seen
-                );
-            } else if (implicit_l4 && lm_l4_text_equals(node->as.frame.head, "table")) {
-                status = lm_l4_check_table_frame_unique(loader, &node->as.frame, &seen);
-            }
-        }
-        field = field->next;
-    }
-
-    lm_own_ptr_stack_destroy(&seen);
-    return status;
-}
-
 static int lm_l4_load_root(
     const LmL4Loader *loader,
     void *context,
@@ -1016,66 +1054,80 @@ static int lm_l4_load_root(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
+    LmOwnPtrStack *seen;
+    LmOwnPtrStack *previous_seen;
     int loaded;
+    int status;
 
     if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
         lm_l4_error(loader, "root must be a Structure");
         return 1;
     }
     (void)out_row_count;
-    if (lm_l4_check_duplicate_tables_in_root(loader, root, implicit_l4) != 0) {
+
+    seen = (LmOwnPtrStack *)malloc(sizeof(*seen));
+    if (seen == 0) {
+        lm_l4_error(loader, "cannot allocate table duplicate tracker");
         return 1;
     }
-
+    lm_own_ptr_stack_init(seen, free);
+    previous_seen = lm_l4_seen_tables;
+    lm_l4_seen_tables = seen;
     loaded = 0;
+    status = 0;
+
     field = root->as.structure.first_field;
-    while (field != 0) {
+    while (field != 0 && status == 0) {
         node = field->value;
         if (!lm_l4_node_is_ignored(node)) {
             if (node->kind != LM_P0_NODE_FRAME) {
-                lm_l4_error(loader, "root fields must be L4/registry frames, or table/row frames in .lm4 files");
-                return 1;
-            }
-            if (
+                lm_l4_error(loader, "root fields must be L4/registry frames, or registered L4 receiver frames in .lm4 files");
+                status = 1;
+            } else if (
                 lm_l4_text_equals(node->as.frame.head, "L4") ||
                 lm_l4_text_equals(node->as.frame.head, "registry")
             ) {
                 if (lm_l4_load_rows(loader, context, &node->as.frame.body) != 0) {
-                    return 1;
+                    status = 1;
+                } else if (lm_l4_validate_named_trailer(loader, &node->as.frame, node->as.frame.head) != 0) {
+                    status = 1;
+                } else {
+                    loaded = 1;
                 }
-                if (lm_l4_validate_named_trailer(loader, &node->as.frame, node->as.frame.head) != 0) {
-                    return 1;
+            } else if (implicit_l4) {
+                if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
+                    status = 1;
+                } else {
+                    loaded = 1;
                 }
-                loaded = 1;
-            } else if (implicit_l4 && lm_l4_text_equals(node->as.frame.head, "row")) {
-                if (lm_l4_row_from_frame(loader, context, &node->as.frame) <= 0) {
-                    return 1;
-                }
-                loaded = 1;
-            } else if (implicit_l4 && lm_l4_text_equals(node->as.frame.head, "table")) {
-                if (lm_l4_table_from_frame(loader, context, &node->as.frame) <= 0) {
-                    return 1;
-                }
-                loaded = 1;
-            } else if (implicit_l4 && lm_l4_text_equals(node->as.frame.head, "fn")) {
-                loaded = 1;
             } else {
-                lm_l4_error(loader, "root fields must be L4/registry frames, or table/row frames in .lm4 files");
-                return 1;
+                lm_l4_error(loader, "root fields must be L4/registry frames");
+                status = 1;
             }
         }
         field = field->next;
     }
 
-    if (!loaded) {
+    if (status == 0 && !loaded) {
         lm_l4_error(loader, "no rows loaded");
-        return 1;
+        status = 1;
     }
 
-    return 0;
+    lm_l4_seen_tables = previous_seen;
+    lm_own_ptr_stack_destroy(seen);
+    free(seen);
+    return status;
 }
 
 
+
+
+#include <ctype.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
 
 
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
@@ -7461,7 +7513,9 @@ static const LmL4Loader lm_p0_registry_l4_loader = {
     lm_p0_registry_l4_push_row,
     lm_p0_registry_l4_push_cell,
     0,
-    lm_p0_registry_l4_push_column_metadata
+    lm_p0_registry_l4_push_column_metadata,
+    lm_l4_default_receivers,
+    sizeof(lm_l4_default_receivers) / sizeof(lm_l4_default_receivers[0])
 };
 
 static int lm_p0_path_has_extension(const char *path, const char *extension) {

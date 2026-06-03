@@ -1,3 +1,5 @@
+L4: loadHeaders
+
 L4:
     table:
         name: LmVcpkgOptions
@@ -21,13 +23,6 @@ L4:
 end: L4
 
 import: "lm4/own_abi.lm4"
-include
-alias
-forward
-constant
-fn
-layout
-prototype
 
 include: "<stdio.h>" "<stdlib.h>" "<string.h>"
 

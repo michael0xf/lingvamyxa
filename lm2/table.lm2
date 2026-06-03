@@ -1,3 +1,5 @@
+L4: loadHeaders
+
 L4:
     table:
         name: LmTableBuffer
@@ -35,13 +37,6 @@ L4:
 end: L4
 
 import: "lm4/parser_abi.lm4"
-include
-alias
-forward
-constant
-fn
-layout
-prototype
 
 include: "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
 

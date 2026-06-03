@@ -1,3 +1,5 @@
+L4: loadHeaders
+
 L4:
     table:
         name: LmBuildOptions
@@ -33,13 +35,6 @@ end: L4
 
 L2:
     import: "lm4/own_abi.lm4"
-    include
-    alias
-    forward
-    constant
-    fn
-    layout
-    prototype
     
     include: "<stdio.h>" "<stdlib.h>" "<string.h>"
     

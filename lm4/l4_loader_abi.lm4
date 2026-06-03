@@ -16,7 +16,14 @@ table:
              LmL4PushCell           1
              LmL4NoteKey            1
              LmL4PushColumnMetadata 1
+             LmL4FrameReceiver      1
 end: functionPointerType
+
+fn: LmL4FrameReceiver (
+    const: @: LmL4Loader loader
+    @: void context
+    const: @: LmP0Frame frame
+) int
 
 fn: LmL4PushRow (
     @: void context
@@ -53,6 +60,8 @@ table:
     columns: class       (backend class)
     rows:
              LmL4Column  c.struct
+             LmL4Receiver c.struct
+             LmL4Loader  c.struct
 end: `forward.backend`
 
 table:
@@ -60,6 +69,7 @@ table:
     columns: class       (backend class)
     rows:
              LmL4Column  c.struct
+             LmL4Receiver c.struct
              LmL4Loader  c.struct
 end: `layout.backend`
 
@@ -89,6 +99,36 @@ table:
 end: `LmL4Column.field.array-count`
 
 table:
+    name: `LmL4Receiver.field.class`
+    columns: class     (field class)
+    rows:
+             name      char
+             frame     LmL4FrameReceiver
+end: `LmL4Receiver.field.class`
+
+table:
+    name: `LmL4Receiver.field.index`
+    columns: class     (index serial)
+    rows:
+             name      0
+             frame     1
+end: `LmL4Receiver.field.index`
+
+table:
+    name: `LmL4Receiver.field.address-depth`
+    columns: class     (depth serial)
+    rows:
+             name      1
+end: `LmL4Receiver.field.address-depth`
+
+table:
+    name: `LmL4Receiver.field.const`
+    columns: class     (value serial)
+    rows:
+             name      1
+end: `LmL4Receiver.field.const`
+
+table:
     name: `LmL4Loader.field.class`
     columns: class                 (field class)
     rows:
@@ -97,6 +137,8 @@ table:
              push_cell             LmL4PushCell
              note_key              LmL4NoteKey
              push_column_metadata  LmL4PushColumnMetadata
+             receivers             LmL4Receiver
+             receiver_count        size_t
 end: `LmL4Loader.field.class`
 
 table:
@@ -108,6 +150,8 @@ table:
              push_cell             2
              note_key              3
              push_column_metadata  4
+             receivers             5
+             receiver_count        6
 end: `LmL4Loader.field.index`
 
 table:
@@ -115,6 +159,7 @@ table:
     columns: class         (depth serial)
     rows:
              error_prefix  1
+             receivers     1
 end: `LmL4Loader.field.address-depth`
 
 table:
@@ -122,6 +167,7 @@ table:
     columns: class         (value serial)
     rows:
              error_prefix  1
+             receivers     1
 end: `LmL4Loader.field.const`
 
 table:

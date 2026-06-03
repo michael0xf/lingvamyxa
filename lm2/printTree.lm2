@@ -1,11 +1,6 @@
 import: "lm4/parser_abi.lm4"
-include
-alias
-forward
-constant
-fn
-layout
-prototype
+
+L4: loadHeaders
 
 include: "<stdio.h>"
 
