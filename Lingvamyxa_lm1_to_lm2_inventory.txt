@@ -1,0 +1,435 @@
+Lingvamyxa lm1 direct ABI inventory
+====================================
+
+Purpose
+-------
+
+This file lists the remaining direct lm1/*.lm1.* source entities and the
+receiver/table families needed to move them into lm2/lm4 without preserving the
+old headers as a special language layer.
+
+The target rule is:
+
+    L4 tables hold ABI/data facts.
+    L2 receivers consume their own namespace/card facts and print ANSI C.
+    Static helper implementations become generated C units after L4 node-cells
+    can store non-atom payloads safely.
+
+
+Current direct lm1 files
+------------------------
+
+lm1/own.lm1.h
+    C public ABI for the ownership/memory library.
+
+lm1/parser.lm1.h
+    C public ABI for P0 parser structures and parser functions.
+
+lm1/l4_loader.lm1.h
+    Shared L4 loader data declarations plus header-only static helper
+    implementation.
+
+lm1/trans_legacy.lm1.c
+    Temporary compare-mode oracle for translator registry migration.
+
+
+Entity families
+---------------
+
+1. Include/prelude requirements
+
+    Examples:
+
+        #include <stddef.h>
+        #include "own.lm1.h"
+        #include "parser.lm1.h"
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <string.h>
+
+    Current receiver coverage:
+
+        include
+
+    Needed work:
+
+        Keep using include as the receiver. The data should come from the
+        receiver card/include table instead of hardcoded C headers.
+
+
+2. Header guard / public header wrapper
+
+    Examples:
+
+        #ifndef LM_OWN_LM1_H
+        #define LM_OWN_LM1_H
+        #ifndef LM_P0_H
+        #define LM_P0_H
+        #ifndef LM_L4_LOADER_H
+        #define LM_L4_LOADER_H
+
+    Current receiver coverage:
+
+        none
+
+    Possible receiver:
+
+        guard
+
+    Notes:
+
+        If we stop generating standalone .h files, header guards become mostly
+        unnecessary. If we still want generated public headers, guard can be a
+        small receiver that wraps an emitted unit.
+
+
+3. C++ extern wrapper
+
+    Examples:
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        #ifdef __cplusplus
+        }
+        #endif
+
+    Current receiver coverage:
+
+        none
+
+    Possible receiver:
+
+        extern_c
+
+    Notes:
+
+        This is only needed for generated public headers intended for C++ users.
+        It is not needed for private generated .c translation units.
+
+
+4. Primitive typedef aliases
+
+    Examples:
+
+        typedef int LmP0NodeKind;
+        typedef unsigned LmP0FrameFlags;
+        typedef unsigned LmP0NodeFlags;
+        typedef unsigned LmP0TrailerFlags;
+        typedef int LmOwnEdgeKind;
+
+    Current receiver coverage:
+
+        partial: constant can print numeric names, layout can print structs.
+
+    Needed receiver:
+
+        alias
+
+    Table facts should say:
+
+        alias name
+        target class / target C spelling
+
+
+5. Function pointer typedef aliases
+
+    Examples:
+
+        typedef void (*LmOwnDestroyFields)(void *object);
+        typedef void (*LmOwnDelete)(void *object);
+        typedef int (*LmL4PushRow)(...);
+        typedef int (*LmL4PushCell)(...);
+        typedef int (*LmL4NoteKey)(...);
+        typedef int (*LmL4PushColumnMetadata)(...);
+
+    Current receiver coverage:
+
+        none
+
+    Needed receiver:
+
+        callable_alias
+
+    Notes:
+
+        This should share descriptor data with descriptor-only fn forms. The
+        emitted ANSI C surface is only one backend projection.
+
+
+6. Forward / opaque typedefs
+
+    Examples:
+
+        typedef struct LmP0Node LmP0Node;
+        typedef struct LmP0Field LmP0Field;
+        typedef struct LmP0Trailer LmP0Trailer;
+        typedef struct LmP0Document LmP0Document;
+        typedef struct LmOwnArena LmOwnArena;
+
+    Current receiver coverage:
+
+        none
+
+    Needed receiver:
+
+        forward
+
+    Notes:
+
+        This is separate from layout because a class can be named and used
+        before its fields are emitted.
+
+
+7. Struct layouts
+
+    Examples:
+
+        LmOwnPtrStack
+        LmOwnValueStack
+        LmOwnAllocationDescriptor
+        LmOwnLazyEdge
+        LmOwnArena
+        LmP0Text
+        LmP0Span
+        LmP0Diagnostic
+        LmP0Structure
+        LmP0Trailer
+        LmP0Frame
+        LmP0Node
+        LmP0Field
+        LmL4Column
+        LmL4Loader
+
+    Current receiver coverage:
+
+        layout
+
+    Needed additions:
+
+        Recursive/forward references.
+        Named struct body without typedef form.
+        Array fields, for example char message[256].
+        Function-pointer fields.
+        Embedded union fields.
+        Possibly bit/flag metadata, though C output can stay ordinary fields.
+
+
+8. Union layouts
+
+    Example:
+
+        union {
+            LmP0Structure structure;
+            LmP0Frame frame;
+            LmP0Text atom;
+        } as;
+
+    Current receiver coverage:
+
+        none
+
+    Needed receiver:
+
+        union_layout
+
+    Notes:
+
+        This can be a layout sub-profile. It should still be described as table
+        data, not as a new source-level struct/union syntax.
+
+
+9. Numeric constants / flags
+
+    Examples:
+
+        LM_P0_NODE_STRUCTURE 1
+        LM_P0_NODE_FRAME 2
+        LM_P0_NODE_ATOM 3
+        LM_P0_NODE_DISABLED 4
+
+        LM_P0_FRAME_COLON 1U
+        LM_P0_FRAME_COMPACT 2U
+        LM_P0_FRAME_INLINE_BODY 4U
+        LM_P0_FRAME_SEPARATOR_CLOSED 8U
+
+        LM_P0_NODE_INACTIVE 1U
+        LM_P0_NODE_MIX 2U
+        LM_P0_NODE_POSITIONAL_SKIP 4U
+
+        LM_P0_TRAILER_TAIL_CUTTER 1U
+
+        LM_OWN_EDGE_BORROWED 1
+        LM_OWN_EDGE_OWNED 2
+        LM_OWN_EDGE_LAZY_OWNED 3
+        LM_OWN_EDGE_EXTERNAL 4
+
+    Current receiver coverage:
+
+        constant
+
+    Needed work:
+
+        Move these rows into L4 tables. The receiver already exists in shape.
+
+
+10. Public function prototypes
+
+    Examples from own:
+
+        lm_own_new_zero
+        lm_own_array_new_zero
+        lm_own_allocation_descriptor
+        lm_own_delete
+        lm_own_pointer_array_delete
+        lm_own_ptr_stack_init
+        lm_own_ptr_stack_destroy
+        lm_own_ptr_stack_push
+        lm_own_ptr_stack_pop
+        lm_own_ptr_stack_at
+        lm_own_ptr_stack_top
+        lm_own_ptr_stack_truncate
+        lm_own_value_stack_init
+        lm_own_value_stack_destroy
+        lm_own_value_stack_push
+        lm_own_value_stack_resize_zero
+        lm_own_value_stack_pop
+        lm_own_value_stack_at
+        lm_own_value_stack_top
+        lm_own_value_stack_truncate
+        lm_own_arena_init
+        lm_own_arena_destroy
+        lm_own_arena_new_zero
+        lm_own_arena_array_new_zero
+        lm_own_arena_allocation_descriptor
+        lm_own_arena_copy_bytes
+        lm_own_arena_add_lazy_edge
+        lm_own_arena_promote_lazy_edges
+        lm_own_arena_absorb
+        lm_own_arena_freeze
+        lm_own_arena_is_frozen
+        lm_own_tree_cut
+        lm_own_tree_cut_promote_lazy_edges
+
+    Examples from parser:
+
+        lm_p0_parse_string
+        lm_p0_parse_bytes
+        lm_p0_parse_file
+        lm_p0_document_destroy
+        lm_p0_document_root
+        lm_p0_document_diagnostic
+        lm_p0_node_kind_class_name
+        lm_p0_dump_alloc
+        lm_p0_free
+
+    Current receiver coverage:
+
+        descriptor-only fn exists conceptually, but no ABI prototype emitter
+        receiver is complete yet.
+
+    Needed receiver:
+
+        prototype
+
+    Notes:
+
+        This should consume callable descriptor facts. Later the same facts feed
+        L3 callable resolution.
+
+
+11. Header-only static L4 loader functions
+
+    Examples:
+
+        lm_l4_text_equals
+        lm_l4_text_same
+        lm_l4_node_is_ignored
+        lm_l4_error_prefix
+        lm_l4_error
+        lm_l4_nth_field
+        lm_l4_trailer_single_atom
+        lm_l4_identifier_value
+        lm_l4_frame_single_atom
+        lm_l4_column_name
+        lm_l4_columns_from_frame
+        lm_l4_validate_named_trailer
+        lm_l4_row_from_frame
+        lm_l4_rows_from_frame
+        lm_l4_table_from_frame
+        lm_l4_load_rows
+        lm_l4_seen_table_add
+        lm_l4_check_table_frame_unique
+        lm_l4_check_duplicate_tables_in_rows
+        lm_l4_check_duplicate_tables_in_root
+        lm_l4_load_root
+
+    Current receiver coverage:
+
+        none
+
+    Future receiver:
+
+        unit
+
+    Notes:
+
+        These should become an ordinary generated C unit. After L4 files can
+        carry non-atom node-cells safely, they can be stored in an lm4 file as
+        implementation payload for testing.
+
+
+12. Translator legacy compare-mode functions
+
+    Examples:
+
+        lm_trans_legacy_c_spelling
+        lm_trans_legacy_builtin_c_type_tail
+        lm_trans_legacy_text_is_operator_atom
+        lm_trans_legacy_atom_is_prefix_expr_operator
+        lm_trans_legacy_atom_is_postfix_expr_operator
+        lm_trans_legacy_atom_is_index_operator
+        lm_trans_legacy_frame_has_positional_name_argument
+        lm_trans_legacy_function_receiver_payload
+        lm_trans_legacy_atom_is_infix_expr_operator
+
+    Current receiver coverage:
+
+        none
+
+    Preferred direction:
+
+        Remove when compare-mode is no longer needed. Until then, this can stay
+        as a temporary implementation unit or become the first test payload for
+        non-atom L4 node-cells.
+
+
+Receiver checklist
+------------------
+
+Already present in useful form:
+
+    include
+    os
+    layout
+    constant
+    alias
+    forward
+    prototype
+    callable_alias
+    guard
+    extern_c
+    unit
+
+Next layout/prototype extensions:
+
+    array field
+    function-pointer field
+    union field / union_layout
+
+Later wrapper/unit pipeline work:
+
+    generated public header file mode
+    generated implementation unit mode
+    non-atom L4 node-cells for implementation payloads

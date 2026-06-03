@@ -126,6 +126,8 @@ table:
              synchronized  `receiver.statement`
              include       `receiver.statement`
              os            `receiver.statement`
+             guard         `receiver.statement`
+             extern_c      `receiver.statement`
              const         `receiver.statement`
              `()`          `receiver.statement`
              `[]`          `receiver.statement`
@@ -169,6 +171,8 @@ table:
              synchronized  lm_trans_statement_emit_synchronized
              include       lm_trans_statement_emit_include_prelude
              os            lm_trans_statement_emit_os_prelude
+             guard         lm_trans_statement_emit_guard_prelude
+             extern_c      lm_trans_statement_emit_extern_c_prelude
              const         lm_trans_statement_emit_const_declaration
              `()`          lm_trans_statement_emit_structure_declaration
              `[]`          lm_trans_statement_emit_array_declaration
@@ -179,12 +183,19 @@ end: `receiver.statement`
 
 table:
     name: `receiver.atom.statement`
-    columns: class     (receiver binding)
+    columns: class           (receiver binding)
     rows:
-             include   lm_trans_atom_statement_emit_include_prelude
-             os        lm_trans_atom_statement_emit_os_prelude
-             layout    lm_trans_atom_statement_emit_layout_prelude
-             constant  lm_trans_atom_statement_emit_constant_prelude
+             include          lm_trans_atom_statement_emit_include_prelude
+             os               lm_trans_atom_statement_emit_os_prelude
+             layout           lm_trans_atom_statement_emit_layout_prelude
+             constant         lm_trans_atom_statement_emit_constant_prelude
+             alias            lm_trans_atom_statement_emit_alias_prelude
+             forward          lm_trans_atom_statement_emit_forward_prelude
+             prototype        lm_trans_atom_statement_emit_prototype_prelude
+             callable_alias   lm_trans_atom_statement_emit_callable_alias_prelude
+             guard            lm_trans_atom_statement_emit_guard_prelude
+             extern_c         lm_trans_atom_statement_emit_extern_c_prelude
+             unit             lm_trans_atom_statement_emit_unit_prelude
 end: `receiver.atom.statement`
 
 table:
