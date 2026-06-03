@@ -1,0 +1,14 @@
+import: "lm2/own.lm2"
+
+fn: delete_factory () LmOwnDelete
+    return: c.free
+end: delete_factory
+
+external:
+    fn: main () int
+        LmOwnPtrStack: stack
+        lm_own_ptr_stack_init(@ stack; delete_factory)
+        lm_own_ptr_stack_destroy(@ stack)
+        return: 0
+    end: main
+end: external

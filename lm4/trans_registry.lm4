@@ -8,6 +8,7 @@ table:
              function                   descriptor
              callable                   descriptor
              `callable.zero-arg.value`  descriptor
+             `callable.descriptor.value` descriptor
 
              emit                       relation
              structure_value_alloc      relation
@@ -345,6 +346,7 @@ table:
     columns: class                      (materializer binding)
     rows:
              `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
+             `callable.descriptor.value` lm_trans_materialize_callable_descriptor_value
 end: `materialize.argument`
 
 table:

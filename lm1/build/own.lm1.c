@@ -412,13 +412,13 @@ static int lm_own_allocation_descriptor_push(LmOwnValueStack *descriptors, void 
     descriptor.count = count;
     descriptor.rank = rank;
     descriptor.level = level;
-    return lm_own_value_stack_push(descriptors, & descriptor);
+    return lm_own_value_stack_push(descriptors, &descriptor);
 }
 
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level) {
     void *object;
     size_t bytes;
-    if (lm_own_size_multiply(element_size, count, & bytes) != 0) {
+    if (lm_own_size_multiply(element_size, count, &bytes) != 0) {
         return 0;
     }
     if (bytes == 0U) {
@@ -472,7 +472,7 @@ void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_
     if (arena == 0 || arena -> frozen) {
         return 0;
     }
-    if (lm_own_size_multiply(element_size, count, & bytes) != 0) {
+    if (lm_own_size_multiply(element_size, count, &bytes) != 0) {
         return 0;
     }
     if (bytes == 0U) {
@@ -531,7 +531,7 @@ int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const voi
     edge.source = source_ptr;
     edge.size = size;
     edge.patch_slot = patch_slot;
-    return lm_own_value_stack_push(&target->lazy_edges, & edge);
+    return lm_own_value_stack_push(&target->lazy_edges, &edge);
 }
 
 int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {

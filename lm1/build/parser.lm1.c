@@ -450,7 +450,7 @@ static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *f
     field = frame->body.first_field;
     while (field != 0) {
         if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
-            status = lm_l4_column_name(field, & column);
+            status = lm_l4_column_name(field, &column);
             if (status <= 0) {
                 lm_l4_error(loader, "columns expects atoms or anonymous descriptor structures");
                 return - 1;
@@ -468,7 +468,7 @@ static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *f
         lm_l4_error(loader, "table expects at least two columns");
         return - 1;
     }
-    if (lm_l4_identifier_value(columns[0].name, & first_column) == 0 || lm_l4_text_equals(first_column, "class") == 0) {
+    if (lm_l4_identifier_value(columns[0].name, &first_column) == 0 || lm_l4_text_equals(first_column, "class") == 0) {
         lm_l4_error(loader, "first table column must be class");
         return - 1;
     }
@@ -486,11 +486,11 @@ static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Fram
     if (lm_l4_text_equals(frame->trailer->spelling, "end") == 0) {
         return 0;
     }
-    if (lm_l4_trailer_single_atom(frame -> trailer, & actual) == 0) {
+    if (lm_l4_trailer_single_atom(frame -> trailer, &actual) == 0) {
         lm_l4_error(loader, "end trailer expects exactly one target name");
         return 1;
     }
-    if (lm_l4_identifier_value(actual, & actual_payload) == 0 || lm_l4_identifier_value(expected_name, & expected_payload) == 0 || lm_l4_text_same(actual_payload, expected_payload) == 0) {
+    if (lm_l4_identifier_value(actual, &actual_payload) == 0 || lm_l4_identifier_value(expected_name, &expected_payload) == 0 || lm_l4_text_same(actual_payload, expected_payload) == 0) {
         lm_l4_error(loader, "end trailer target does not match head/name");
         return 1;
     }
@@ -602,7 +602,7 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
                 lm_l4_error(loader, "table body expects name/columns/rows frames");
                 return - 1;
             }
-            status = lm_l4_frame_single_atom(&node->as.frame, "name", & table_name);
+            status = lm_l4_frame_single_atom(&node->as.frame, "name", &table_name);
             if (status < 0) {
                 lm_l4_error(loader, "table name expects exactly one atom");
                 return - 1;
@@ -617,7 +617,7 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
                     lm_l4_error(loader, "table columns must appear after name");
                     return - 1;
                 }
-                status = lm_l4_columns_from_frame(loader, &node->as.frame, columns, sizeof(columns) / sizeof(columns[0]), & column_count);
+                status = lm_l4_columns_from_frame(loader, &node->as.frame, columns, sizeof(columns) / sizeof(columns[0]), &column_count);
                 if (status <= 0) {
                     return - 1;
                 }
@@ -666,7 +666,7 @@ static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
     if (seen == 0) {
         return - 1;
     }
-    if (lm_l4_identifier_value(table_name, & payload) == 0) {
+    if (lm_l4_identifier_value(table_name, &payload) == 0) {
         return - 1;
     }
     payload_length = payload.length;
@@ -709,7 +709,7 @@ static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Fr
             field = field -> next;
             continue;
         }
-        status = lm_l4_frame_single_atom(&node->as.frame, "name", & table_name);
+        status = lm_l4_frame_single_atom(&node->as.frame, "name", &table_name);
         if (status < 0) {
             lm_l4_error(loader, "table name expects exactly one atom");
             return - 1;
@@ -7310,7 +7310,7 @@ static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload) {
 
 static int lm_p0_registry_payload_is_null(LmP0Text atom) {
     LmP0Text payload;
-    if (lm_p0_registry_identifier_value(atom, & payload) == 0) {
+    if (lm_p0_registry_identifier_value(atom, &payload) == 0) {
         return 0;
     }
     return payload.length == 4U && memcmp(payload.data, "NULL", 4U) == 0;
@@ -7590,7 +7590,7 @@ static const char * lm_p0_registry_lookup(LmP0Text key, const char *table) {
     if (table == 0 || lm_p0_registry.loaded == 0) {
         return 0;
     }
-    if (lm_p0_identifier_payload(key, & key_payload) == 0) {
+    if (lm_p0_identifier_payload(key, &key_payload) == 0) {
         return 0;
     }
     i = lm_p0_registry.rows.count;
@@ -7862,7 +7862,7 @@ static int lm_p0_find_python_string_end(const char *text, size_t length, size_t 
 
 static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start) {
     size_t end;
-    if (lm_p0_find_python_string_end(text, length, start, & end) == 0) {
+    if (lm_p0_find_python_string_end(text, length, start, &end) == 0) {
         return length;
     }
     return end;
@@ -7872,7 +7872,7 @@ static void lm_p0_scan_layout_prefix(const char *source, size_t length, size_t s
     size_t p;
     size_t indent_column;
     size_t dot_level;
-    lm_p0_scan_indent_column(source, start, length, & p, & indent_column);
+    lm_p0_scan_indent_column(source, start, length, &p, &indent_column);
     dot_level = 0U;
     while (p < length && source[p] == '.') {
         dot_level = dot_level + 1U;
@@ -7921,7 +7921,7 @@ static LmP0DashFenceStatus lm_p0_dash_fence_status(const char *text, size_t leng
             return LM_P0_DASH_FENCE_VALID;
         }
         if (text[i] == '{') {
-            brace_end = lm_p0_scan_brace_mark_unchecked(text, length, i, & closed);
+            brace_end = lm_p0_scan_brace_mark_unchecked(text, length, i, &closed);
             if (closed != 0) {
                 i = brace_end;
                 continue;
