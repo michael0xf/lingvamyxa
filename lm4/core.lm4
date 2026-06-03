@@ -17,6 +17,7 @@ table:
              spelling                   class
              binding                    class
              functionPointerType        class
+             closureType                class
              serial                     class
              name                       class
              namespace                  class

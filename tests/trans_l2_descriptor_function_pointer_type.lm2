@@ -1,0 +1,19 @@
+L4:
+    table:
+        name: functionPointerType
+        columns: class          (value serial)
+        rows:
+                 LmL2DirectCall 1
+    end: functionPointerType
+end: L4
+
+L2:
+    fn: LmL2DirectCall (int: value) int
+
+    external:
+        fn: main () int
+            LmL2DirectCall: call 0
+            return: call != 0
+        end: main
+    end: external
+end: L2
