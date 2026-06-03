@@ -342,6 +342,117 @@ fn: lm_table_rows_frame_from_table (const: @(LmP0Frame table_frame); @: LmTableE
     return: rows_frame
 end: lm_table_rows_frame_from_table
 
+L1:
+===
+static int lm_table_node_lmx_append_inline(LmTableBuffer *buffer, const LmP0Node *node);
+static int lm_table_structure_lmx_append_inline(LmTableBuffer *buffer, const LmP0Structure *structure);
+static int lm_table_frame_lmx_append_inline(LmTableBuffer *buffer, const LmP0Frame *frame);
+static int lm_table_trailer_lmx_append_inline(LmTableBuffer *buffer, const LmP0Trailer *trailer);
+===
+
+fn: lm_table_atom_lmx_append_inline (@: LmTableBuffer buffer; LmP0Text: atom) int
+    lm_table_buffer_append_text(buffer, c.atom.data, c.atom.length)
+    return: buffer\failed = 0
+end: lm_table_atom_lmx_append_inline
+
+fn: lm_table_structure_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Structure structure) int
+    const: @: LmP0Field field
+    int: first
+
+    if: structure = 0
+        return: 0
+
+    lm_table_buffer_append_cstr(buffer, "(")
+    first: 1
+    field: structure\first_field
+    while: field != 0
+        if: lm_table_node_ignored(field\value) = 0
+            if: first = 0
+                lm_table_buffer_append_cstr(buffer, " ")
+            if: lm_table_node_lmx_append_inline(buffer, field\value) = 0
+                return: 0
+            first: 0
+        field: field\next
+    lm_table_buffer_append_cstr(buffer, ")")
+    return: buffer\failed = 0
+end: lm_table_structure_lmx_append_inline
+
+fn: lm_table_trailer_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Trailer trailer) int
+    const: @: LmP0Field field
+
+    if: trailer = 0
+        return: 1
+
+    lm_table_buffer_append_cstr(buffer, " ")
+    lm_table_buffer_append_text(buffer, c.trailer->spelling.data, c.trailer->spelling.length)
+    lm_table_buffer_append_cstr(buffer, ":")
+    field: c.trailer->body.first_field
+    while: field != 0
+        if: lm_table_node_ignored(field\value) = 0
+            lm_table_buffer_append_cstr(buffer, " ")
+            if: lm_table_node_lmx_append_inline(buffer, field\value) = 0
+                return: 0
+            ---
+        field: field\next
+    return: buffer\failed = 0
+end: lm_table_trailer_lmx_append_inline
+
+fn: lm_table_frame_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Frame frame) int
+    const: @: LmP0Field field
+
+    if: frame = 0
+        return: 0
+
+    lm_table_buffer_append_text(buffer, c.frame->head.data, c.frame->head.length)
+    lm_table_buffer_append_cstr(buffer, ":")
+    field: c.frame->body.first_field
+    while: field != 0
+        if: lm_table_node_ignored(field\value) = 0
+            lm_table_buffer_append_cstr(buffer, " ")
+            if: lm_table_node_lmx_append_inline(buffer, field\value) = 0
+                return: 0
+            ---
+        field: field\next
+
+    if: lm_table_trailer_lmx_append_inline(buffer, c.frame->trailer) = 0
+        return: 0
+    return: buffer\failed = 0
+end: lm_table_frame_lmx_append_inline
+
+fn: lm_table_node_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Node node) int
+    if: node = 0
+        return: 0
+
+    if: node\kind = c.LM_P0_NODE_ATOM || node\kind = c.LM_P0_NODE_DISABLED
+        return: lm_table_atom_lmx_append_inline(buffer, c.node->as.atom)
+
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        return: lm_table_structure_lmx_append_inline(buffer, c.&node->as.structure)
+
+    if: node\kind = c.LM_P0_NODE_FRAME
+        return: lm_table_frame_lmx_append_inline(buffer, c.&node->as.frame)
+
+    return: 0
+end: lm_table_node_lmx_append_inline
+
+fn: lm_table_node_lmx_alloc (const: @(LmP0Node node); @: LmTableError error) @: char
+    LmTableBuffer: buffer
+    @: char result
+
+    c.memset(@ buffer, 0, c.sizeof(buffer))
+
+    if: lm_table_node_lmx_append_inline(@ buffer, node) = 0
+        lm_table_error_set(error, "rows: cannot format cell node")
+        lm_table_buffer_destroy(@ buffer)
+        return: 0
+
+    result: lm_table_buffer_take(@ buffer)
+    lm_table_buffer_destroy(@ buffer)
+    if: result = 0
+        lm_table_error_set(error, "out of memory while formatting cell")
+    return: result
+end: lm_table_node_lmx_alloc
+
 fn: lm_table_measure_rows (
     const: @: LmP0Frame rows_frame
     @: LmTableColumn columns
@@ -350,9 +461,11 @@ fn: lm_table_measure_rows (
     @: LmTableError error
 ) int
     const: @: LmP0Node node
+    @: char spelling
     size_t: cell_count
     size_t: index
     size_t: column_index
+    size_t: spelling_length
 
     cell_count: lm_table_visible_field_count(c.&rows_frame->body)
     if: cell_count = 0U
@@ -366,13 +479,18 @@ fn: lm_table_measure_rows (
     index: 0U
     while: index < cell_count
         node: lm_table_nth_visible_field(c.&rows_frame->body, index)
-        if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
-            lm_table_error_set(error, "rows: cells must be atoms")
+        if: node = 0
+            lm_table_error_set(error, "rows: cell is empty")
             return: 0
 
+        spelling: lm_table_node_lmx_alloc(node, error)
+        if: spelling = 0
+            return: 0
+        spelling_length: c.strlen(spelling)
         column_index: index % column_count
-        if: c.columns[column_index].width < c.node->as.atom.length
-            c.columns[column_index].width: c.node->as.atom.length
+        if: c.columns[column_index].width < spelling_length
+            c.columns[column_index].width: spelling_length
+        c.free(spelling)
         index: index + 1U
 
     out_row_count[0]: cell_count / column_count
@@ -402,11 +520,14 @@ fn: lm_table_emit_rows (
     const: @: LmTableColumn columns
     size_t: column_count
     size_t: row_count
+    @: LmTableError error
 ) int
     const: @: LmP0Node node
+    @: char spelling
     size_t: row_index
     size_t: column_index
     size_t: cell_index
+    size_t: spelling_length
 
     lm_table_buffer_append_cstr(buffer, "    rows:\n")
     row_index: 0U
@@ -416,9 +537,14 @@ fn: lm_table_emit_rows (
         while: column_index < column_count
             cell_index: row_index * column_count + column_index
             node: lm_table_nth_visible_field(c.&rows_frame->body, cell_index)
-            lm_table_buffer_append_text(buffer, c.node->as.atom.data, c.node->as.atom.length)
+            spelling: lm_table_node_lmx_alloc(node, error)
+            if: spelling = 0
+                return: 0
+            spelling_length: c.strlen(spelling)
+            lm_table_buffer_append_cstr(buffer, spelling)
             if: column_index + 1U < column_count
-                lm_table_buffer_append_spaces(buffer, c.columns[column_index].width - c.node->as.atom.length + 2U)
+                lm_table_buffer_append_spaces(buffer, c.columns[column_index].width - spelling_length + 2U)
+            c.free(spelling)
             column_index: column_index + 1U
         lm_table_buffer_append_cstr(buffer, "\n")
         row_index: row_index + 1U
@@ -485,7 +611,7 @@ fn: lm_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: LmTableError erro
     lm_table_buffer_append_text(@ buffer, table_name_data, table_name_length)
     lm_table_buffer_append_cstr(@ buffer, "\n")
     lm_table_emit_columns(@ buffer, columns, column_count)
-    lm_table_emit_rows(@ buffer, rows_frame, columns, column_count, row_count)
+    lm_table_emit_rows(@ buffer, rows_frame, columns, column_count, row_count, error)
     lm_table_buffer_append_cstr(@ buffer, "end: ")
     lm_table_buffer_append_text(@ buffer, end_name_data, end_name_length)
     lm_table_buffer_append_cstr(@ buffer, "\n")

@@ -796,10 +796,15 @@ L1:
 static FILE *lm_trans_prelude_output;
 static const char *lm_trans_current_source_path;
 static LmOwnPtrStack lm_trans_declared_import_paths;
+static LmOwnPtrStack lm_trans_declared_import_documents;
 static LmOwnPtrStack lm_trans_emitted_import_prelude_paths;
 static LmOwnPtrStack lm_trans_emitted_import_function_paths;
 
 static LmTransRegistry lm_trans_registry;
+
+static void lm_trans_import_document_delete(void *document) {
+    lm_p0_document_destroy((LmP0Document *)document);
+}
 
 static int lm_trans_text_equals(LmP0Text text, const char *value) {
     size_t length;
@@ -13567,8 +13572,15 @@ static int lm_trans_declare_l2_import_path(
         lm_trans_path_has_extension(path, ".lm2")
     );
     lm_trans_current_source_path = previous_source_path;
-    lm_p0_document_destroy(document);
-    return status;
+    if (status != 0) {
+        lm_p0_document_destroy(document);
+        return status;
+    }
+    if (lm_own_ptr_stack_push(&lm_trans_declared_import_documents, document) != 0) {
+        lm_p0_document_destroy(document);
+        return 1;
+    }
+    return 0;
 }
 
 static int lm_trans_emit_l2_import_path_prelude(
@@ -17966,6 +17978,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     lm_trans_prelude_output = prelude_output;
     lm_trans_current_source_path = source_path;
     lm_own_ptr_stack_init(&lm_trans_declared_import_paths, free);
+    lm_own_ptr_stack_init(&lm_trans_declared_import_documents, lm_trans_import_document_delete);
     lm_own_ptr_stack_init(&lm_trans_emitted_import_prelude_paths, free);
     lm_own_ptr_stack_init(&lm_trans_emitted_import_function_paths, free);
     emitted = 0;
@@ -17980,6 +17993,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     }
     lm_own_ptr_stack_destroy(&lm_trans_emitted_import_function_paths);
     lm_own_ptr_stack_destroy(&lm_trans_emitted_import_prelude_paths);
+    lm_own_ptr_stack_destroy(&lm_trans_declared_import_documents);
     lm_own_ptr_stack_destroy(&lm_trans_declared_import_paths);
     lm_trans_current_source_path = 0;
     lm_trans_prelude_output = previous_prelude_output;
