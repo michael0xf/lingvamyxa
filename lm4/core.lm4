@@ -50,6 +50,8 @@ table:
              double                     primitive
              signed                     primitive
              unsigned                   primitive
+             uchar                      primitive
+             ulong                      primitive
              size_t                     primitive
              FILE                       primitive
              u8                         primitive

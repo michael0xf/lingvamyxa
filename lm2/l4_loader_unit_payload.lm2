@@ -1,43 +1,5 @@
 L1:
 ===
-typedef int (*LmL4PushRow)(
-    void *context,
-    LmP0Text table_atom,
-    LmP0Text key_atom,
-    const LmP0Node *payload_node
-);
-
-typedef int (*LmL4PushCell)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *column,
-    int split_by_column,
-    LmP0Text key_atom,
-    const LmP0Node *payload_node
-);
-
-typedef int (*LmL4NoteKey)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *column,
-    LmP0Text key_atom
-);
-
-typedef int (*LmL4PushColumnMetadata)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *columns,
-    size_t column_count
-);
-
-typedef struct LmL4Loader {
-    const char *error_prefix;
-    LmL4PushRow push_row;
-    LmL4PushCell push_cell;
-    LmL4NoteKey note_key;
-    LmL4PushColumnMetadata push_column_metadata;
-} LmL4Loader;
-
 static int lm_l4_text_equals(LmP0Text text, const char *value) {
     size_t length;
 

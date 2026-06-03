@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stddef.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,13 +12,6 @@
 #include <string.h>
 #include <limits.h>
 
-typedef int LmOwnEdgeKind;
-typedef int LmP0NodeKind;
-typedef unsigned LmP0FrameFlags;
-typedef unsigned LmP0NodeFlags;
-typedef unsigned LmP0TrailerFlags;
-
-
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
@@ -28,6 +22,18 @@ typedef struct LmP0Field LmP0Field;
 typedef struct LmP0Trailer LmP0Trailer;
 typedef struct LmP0Document LmP0Document;
 typedef struct LmL4Column LmL4Column;
+
+
+typedef int LmOwnEdgeKind;
+typedef int LmP0NodeKind;
+typedef unsigned LmP0FrameFlags;
+typedef unsigned LmP0NodeFlags;
+typedef unsigned LmP0TrailerFlags;
+typedef int LmP0StreamEventKind;
+typedef int LmP0TrailerRole;
+typedef int LmP0DashFenceStatus;
+typedef unsigned LmP0FieldParseFlags;
+typedef LmL4Column LmP0RegistryColumn;
 
 
 
@@ -69,17 +75,13 @@ typedef struct LmL4Column LmL4Column;
 #define LM_P0_MAX_FENCE_LENGTH 80U
 
 
-typedef void (*LmOwnDestroyFields)(void *object);
-typedef void (*LmOwnDelete)(void *object);
-
-
 #include <stddef.h>
 
 struct LmOwnPtrStack {
     void **items;
     size_t count;
     size_t capacity;
-    LmOwnDelete delete_item;
+    void (*delete_item)(void *object);
 };
 struct LmOwnValueStack {
     void *items;
@@ -162,6 +164,86 @@ struct LmL4Column {
     LmP0Text descriptors[16U];
     size_t descriptor_count;
 };
+typedef struct LmL4Loader {
+    const char *error_prefix;
+    int (*push_row)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
+    int (*push_cell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
+    int (*note_key)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
+    int (*push_column_metadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
+} LmL4Loader;
+typedef struct LmP0StreamEvent {
+    LmP0StreamEventKind kind;
+    unsigned node_flags;
+    size_t level;
+    const char *text;
+    size_t text_length;
+    size_t line;
+    size_t column;
+    size_t offset;
+} LmP0StreamEvent;
+struct LmP0Document {
+    char *source;
+    size_t source_length;
+    LmP0Node *root;
+    LmP0Diagnostic diagnostic;
+    LmOwnArena source_owner;
+    LmOwnArena token_arena;
+    LmOwnArena tree_arena;
+    LmOwnArena diagnostic_arena;
+    int owners_initialized;
+    int frozen;
+};
+typedef struct LmP0PendingDelimiter {
+    int active;
+    LmP0StreamEvent *event;
+} LmP0PendingDelimiter;
+typedef struct LmP0PendingMix {
+    LmP0StreamEvent *events;
+    size_t count;
+    size_t capacity;
+} LmP0PendingMix;
+typedef struct LmP0IndentStack {
+    size_t *columns;
+    size_t count;
+    size_t capacity;
+} LmP0IndentStack;
+typedef struct LmP0DisabledState {
+    int body_started;
+    int pending_item;
+    size_t base_level;
+    size_t top_level;
+    size_t pending_level;
+} LmP0DisabledState;
+typedef struct LmP0Stack {
+    LmP0Structure **parents;
+    LmP0Node **owners;
+    unsigned char *hard;
+    size_t capacity;
+} LmP0Stack;
+typedef struct LmP0Dump {
+    char *data;
+    size_t length;
+    size_t capacity;
+    int failed;
+} LmP0Dump;
+typedef struct LmP0RegistryRow {
+    char *table;
+    char *key;
+    char *payload;
+} LmP0RegistryRow;
+typedef struct LmP0Registry {
+    LmOwnPtrStack rows;
+    int loaded;
+    int loading;
+} LmP0Registry;
+
+
+typedef void (*LmOwnDestroyFields)(void *object);
+typedef void (*LmOwnDelete)(void *object);
+typedef int (*LmL4PushRow)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4PushCell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4NoteKey)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
+typedef int (*LmL4PushColumnMetadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
 
 
 void * lm_own_new_zero(size_t size);
@@ -207,44 +289,6 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
 char * lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
 
-
-typedef int (*LmL4PushRow)(
-    void *context,
-    LmP0Text table_atom,
-    LmP0Text key_atom,
-    const LmP0Node *payload_node
-);
-
-typedef int (*LmL4PushCell)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *column,
-    int split_by_column,
-    LmP0Text key_atom,
-    const LmP0Node *payload_node
-);
-
-typedef int (*LmL4NoteKey)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *column,
-    LmP0Text key_atom
-);
-
-typedef int (*LmL4PushColumnMetadata)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *columns,
-    size_t column_count
-);
-
-typedef struct LmL4Loader {
-    const char *error_prefix;
-    LmL4PushRow push_row;
-    LmL4PushCell push_cell;
-    LmL4NoteKey note_key;
-    LmL4PushColumnMetadata push_column_metadata;
-} LmL4Loader;
 
 static int lm_l4_text_equals(LmP0Text text, const char *value) {
     size_t length;
@@ -1040,85 +1084,6 @@ static int lm_l4_load_root(
 
 
 
-typedef int LmP0StreamEventKind;
-
-typedef struct LmP0StreamEvent {
-    LmP0StreamEventKind kind;
-    unsigned node_flags;
-    size_t level;
-    const char *text;
-    size_t text_length;
-    size_t line;
-    size_t column;
-    size_t offset;
-} LmP0StreamEvent;
-
-struct LmP0Document {
-    char *source;
-    size_t source_length;
-    LmP0Node *root;
-    LmP0Diagnostic diagnostic;
-    LmOwnArena source_owner;
-    LmOwnArena token_arena;
-    LmOwnArena tree_arena;
-    LmOwnArena diagnostic_arena;
-    int owners_initialized;
-    int frozen;
-};
-
-typedef struct LmP0PendingDelimiter {
-    int active;
-    LmP0StreamEvent *event;
-} LmP0PendingDelimiter;
-
-typedef struct LmP0PendingMix {
-    LmP0StreamEvent *events;
-    size_t count;
-    size_t capacity;
-} LmP0PendingMix;
-
-typedef struct LmP0IndentStack {
-    size_t *columns;
-    size_t count;
-    size_t capacity;
-} LmP0IndentStack;
-
-typedef struct LmP0DisabledState {
-    int body_started;
-    int pending_item;
-    size_t base_level;
-    size_t top_level;
-    size_t pending_level;
-} LmP0DisabledState;
-
-typedef struct LmP0Stack {
-    LmP0Structure **parents;
-    LmP0Node **owners;
-    unsigned char *hard;
-    size_t capacity;
-} LmP0Stack;
-
-typedef struct LmP0Dump {
-    char *data;
-    size_t length;
-    size_t capacity;
-    int failed;
-} LmP0Dump;
-
-typedef struct LmP0RegistryRow {
-    char *table;
-    char *key;
-    char *payload;
-} LmP0RegistryRow;
-
-typedef struct LmP0Registry {
-    LmOwnPtrStack rows;
-    int loaded;
-    int loading;
-} LmP0Registry;
-
-typedef LmL4Column LmP0RegistryColumn;
-
 static LmP0Registry lm_p0_registry;
 
 static int lm_p0_registry_load_default(void);
@@ -1193,12 +1158,6 @@ static int lm_p0_document_register_lazy_text(
     }
     return 1;
 }
-
-typedef int LmP0TrailerRole;
-
-typedef int LmP0DashFenceStatus;
-
-typedef unsigned LmP0FieldParseFlags;
 
 static void lm_p0_set_diagnostic(
     LmP0Document *document,

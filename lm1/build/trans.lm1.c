@@ -1,15 +1,9 @@
 #include <stddef.h>
 #include <stddef.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-typedef int LmOwnEdgeKind;
-typedef int LmP0NodeKind;
-typedef unsigned LmP0FrameFlags;
-typedef unsigned LmP0NodeFlags;
-typedef unsigned LmP0TrailerFlags;
-
 
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
@@ -21,6 +15,28 @@ typedef struct LmP0Field LmP0Field;
 typedef struct LmP0Trailer LmP0Trailer;
 typedef struct LmP0Document LmP0Document;
 typedef struct LmL4Column LmL4Column;
+typedef struct LmTransIdentifierRelation LmTransIdentifierRelation;
+typedef struct LmTransIdentifierCard LmTransIdentifierCard;
+typedef struct LmTransNamespace LmTransNamespace;
+typedef struct LmTransExprSegment LmTransExprSegment;
+typedef struct LmTransCallLowering LmTransCallLowering;
+typedef struct LmTransExprAtomLowering LmTransExprAtomLowering;
+typedef struct LmTransExprLoweredRange LmTransExprLoweredRange;
+typedef struct LmTransExprPiece LmTransExprPiece;
+typedef struct LmTransExprJob LmTransExprJob;
+typedef struct LmTransExprStack LmTransExprStack;
+typedef struct LmTransStatementStack LmTransStatementStack;
+typedef struct LmTransStatementJob LmTransStatementJob;
+typedef struct LmTransFunctionHeader LmTransFunctionHeader;
+typedef struct LmTransTopLevelItem LmTransTopLevelItem;
+
+
+typedef int LmOwnEdgeKind;
+typedef int LmP0NodeKind;
+typedef unsigned LmP0FrameFlags;
+typedef unsigned LmP0NodeFlags;
+typedef unsigned LmP0TrailerFlags;
+typedef LmL4Column LmTransRegistryColumn;
 
 
 #define LM_OWN_EDGE_BORROWED 1
@@ -41,17 +57,13 @@ typedef struct LmL4Column LmL4Column;
 #define LM_P0_TRAILER_TAIL_CUTTER 1U
 
 
-typedef void (*LmOwnDestroyFields)(void *object);
-typedef void (*LmOwnDelete)(void *object);
-
-
 #include <stddef.h>
 
 struct LmOwnPtrStack {
     void **items;
     size_t count;
     size_t capacity;
-    LmOwnDelete delete_item;
+    void (*delete_item)(void *object);
 };
 struct LmOwnValueStack {
     void *items;
@@ -134,6 +146,323 @@ struct LmL4Column {
     LmP0Text descriptors[16U];
     size_t descriptor_count;
 };
+typedef struct LmL4Loader {
+    const char *error_prefix;
+    int (*push_row)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
+    int (*push_cell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
+    int (*note_key)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
+    int (*push_column_metadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
+} LmL4Loader;
+struct LmTransIdentifierRelation {
+    const char *name;
+    LmOwnPtrStack symbols;
+    LmTransIdentifierRelation *next;
+};
+struct LmTransIdentifierCard {
+    LmP0Text *name;
+    char *name_storage;
+    unsigned long hash;
+    LmOwnPtrStack symbols;
+    LmTransIdentifierRelation **relation_buckets;
+    size_t relation_bucket_count;
+    LmTransIdentifierCard *next;
+};
+typedef struct LmTransIdentifierTable {
+    LmTransIdentifierCard **buckets;
+    size_t bucket_count;
+    size_t count;
+} LmTransIdentifierTable;
+typedef struct LmTransRegistry {
+    LmTransIdentifierTable identifiers;
+    LmOwnArena value_arena;
+    LmOwnPtrStack loaded_paths;
+    char *source_path;
+    size_t loaded_fact_count;
+    int loaded;
+} LmTransRegistry;
+typedef struct LmTransRegistryFact {
+    char *table;
+    char *key;
+    char *payload;
+    const LmP0Node *payload_node;
+} LmTransRegistryFact;
+typedef struct LmTransLayoutField {
+    const char *name;
+    const char *class_name;
+    const char *union_layout_name;
+    size_t index;
+    size_t address_depth;
+    size_t array_count;
+    int is_const;
+    int has_array_count;
+    int is_union;
+} LmTransLayoutField;
+typedef struct LmTransCDeclarator {
+    const LmP0Node *type_node;
+    const LmP0Field *expression_dimensions;
+    LmP0Text type_head;
+    LmP0Text name;
+    LmP0Text array_head;
+    size_t pointer_depth;
+    size_t literal_dimensions[8U];
+    size_t literal_dimension_count;
+    int type_is_head;
+} LmTransCDeclarator;
+typedef struct LmTransAbiParam {
+    const char *name;
+    const char *class_name;
+    size_t index;
+    size_t address_depth;
+    int is_const;
+} LmTransAbiParam;
+typedef struct LmTransL4CallableType {
+    LmP0Text class_name;
+    size_t address_depth;
+    int is_const;
+} LmTransL4CallableType;
+typedef struct LmTransSymbol {
+    LmP0Text *name;
+    char *name_storage;
+    const char *class_name;
+    LmP0Text c_name;
+    char *c_name_storage;
+    int has_c_name;
+    LmP0Text env_arg;
+    char *env_arg_storage;
+    int has_env_arg;
+    LmP0Text closure_call_name;
+    char *closure_call_name_storage;
+    int has_closure_call_name;
+    unsigned depth;
+    LmOwnPtrStack param_names;
+    int has_signature;
+    const LmP0Node *callable_params_node;
+    const LmP0Node *callable_return_node;
+    int has_callable_shape;
+    int callable_returns_value;
+    int callable_is_struct_return;
+} LmTransSymbol;
+typedef struct LmTransCleanup {
+    unsigned id;
+} LmTransCleanup;
+typedef struct LmTransLoop {
+    size_t cleanup_base;
+} LmTransLoop;
+struct LmTransExprSegment {
+    const LmP0Field *first;
+    const LmP0Field *stop;
+    const LmP0Node *expected_param;
+    int present;
+};
+typedef struct LmTransStructReturnFieldValue {
+    const LmP0Field *first;
+    const LmP0Field *stop;
+    int present;
+} LmTransStructReturnFieldValue;
+struct LmTransCallLowering {
+    LmP0Text name;
+    const LmTransSymbol *signature;
+    int is_closure;
+};
+struct LmTransExprLoweredRange {
+    LmOwnValueStack pieces;
+    size_t index;
+};
+struct LmTransExprStack {
+    LmOwnValueStack jobs;
+};
+typedef struct LmTransExprRangeJob {
+    const LmP0Field *field;
+    const LmP0Field *stop;
+    int wrote;
+    const LmP0Node *previous_operand;
+    int expect_field_name;
+    int expect_c_field_name;
+    int c_dot_path;
+} LmTransExprRangeJob;
+typedef struct LmTransExprCallArgsJob {
+    const LmP0Structure *body;
+    const LmTransSymbol *callee;
+} LmTransExprCallArgsJob;
+struct LmTransExprAtomLowering {
+    int (*emit)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
+    int (*update)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
+    LmP0Text text;
+};
+struct LmTransExprPiece {
+    int (*emit)(FILE *file, LmTransExprStack *stack, LmTransExprLoweredRange *lowered, const LmTransExprPiece *piece, const LmTransNamespace *namespace_, int *out_suspend);
+    int leading_space;
+    const LmP0Node *node;
+    LmTransExprAtomLowering atom;
+    const LmP0Field *first;
+    const LmP0Field *stop;
+};
+struct LmTransExprJob {
+    int (*run)(FILE *file, LmTransExprStack *stack, LmTransExprJob *job, const LmTransNamespace *namespace_);
+    void (*destroy)(LmTransExprJob *job);
+    union {
+        const char *text;
+        LmP0Text name_text;
+        const LmP0Node *node;
+        const LmP0Frame *frame;
+        LmTransExprRangeJob range;
+        LmTransExprCallArgsJob call_args;
+        LmTransExprLoweredRange *lowered_range;
+    } as;
+};
+typedef struct LmTransStatementListJob {
+    const LmP0Field *field;
+    unsigned indent;
+    int unwrap_single_structure;
+    const LmP0Frame *repeat_frame;
+} LmTransStatementListJob;
+typedef struct LmTransStatementNodeJob {
+    const LmP0Node *node;
+    unsigned indent;
+    const LmP0Frame *repeat_frame;
+} LmTransStatementNodeJob;
+typedef struct LmTransStatementFrameJob {
+    const LmP0Frame *frame;
+    unsigned indent;
+} LmTransStatementFrameJob;
+typedef struct LmTransStatementTextJob {
+    unsigned indent;
+    const char *text;
+} LmTransStatementTextJob;
+typedef struct LmTransStatementSyncLeaveJob {
+    unsigned indent;
+    unsigned cleanup_id;
+} LmTransStatementSyncLeaveJob;
+struct LmTransStatementStack {
+    LmOwnValueStack jobs;
+};
+struct LmTransStatementJob {
+    int (*run)(FILE *file, LmTransStatementStack *stack, LmTransStatementJob *job, LmTransNamespace *namespace_);
+    union {
+        LmTransStatementListJob list;
+        LmTransStatementNodeJob node;
+        LmTransStatementFrameJob frame;
+        LmTransStatementTextJob text;
+        LmTransStatementSyncLeaveJob sync_leave;
+    } as;
+};
+typedef struct LmTransStatementLowering {
+    int (*emit)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+} LmTransStatementLowering;
+typedef struct LmTransFunctionState {
+    const LmP0Node *previous_return_type_node;
+    int previous_return_type_is_struct;
+    LmP0Text *previous_return_type_name;
+    LmP0Text *current_return_type_name;
+    unsigned previous_next_return_id;
+    const LmOwnPtrStack *previous_hoisted_functions;
+    LmOwnPtrStack previous_cleanups;
+    LmOwnPtrStack previous_loops;
+    int has_previous_control_stacks;
+} LmTransFunctionState;
+struct LmTransFunctionHeader {
+    const LmP0Frame *frame;
+    LmP0Text name;
+    LmP0Text c_name;
+    LmP0Text env_type_name;
+    const LmP0Node *params_node;
+    const LmP0Node *return_node;
+    const LmP0Field *body_start;
+    const LmOwnPtrStack *captures;
+    const char *symbol_class;
+    int is_sub;
+    int is_struct_return;
+    int is_external;
+    int is_descriptor_only;
+    int declare_self_alias;
+    int has_env;
+};
+typedef struct LmTransCapture {
+    LmP0Text name;
+    LmP0Text type_head;
+    const LmP0Node *type_node;
+    size_t pointer_depth;
+    int type_is_head;
+} LmTransCapture;
+typedef struct LmTransHoistedFunction {
+    LmTransFunctionHeader function;
+    LmOwnPtrStack captures;
+    char *c_name_storage;
+    char *env_type_storage;
+    char *env_var_storage;
+    char *closure_call_storage;
+    LmP0Text env_var_name;
+    LmP0Text closure_call_name;
+} LmTransHoistedFunction;
+typedef struct LmTransBinding {
+    int (*call_lowering)(LmP0Text head, const LmTransSymbol *symbol, LmTransCallLowering *out);
+    int (*expr_emit)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
+    int (*expr_state)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
+    int (*statement_frame)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+    int (*function_receiver)(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
+    int (*type_emit)(FILE *file, const LmP0Node *type_node);
+    int (*type_structure_value_alloc)(FILE *file, unsigned indent, const LmP0Node *type_node, LmP0Text target_name, const LmP0Structure *value, int *out_consumed, int *out_needs_null_check);
+    int (*type_structure_value_fill)(FILE *file, unsigned indent, const LmP0Node *type_node, LmP0Text target_name, const LmP0Structure *value, const LmTransNamespace *namespace_, int *out_consumed);
+    int (*expr_segment_materializer)(LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
+} LmTransBinding;
+typedef struct LmTransHeadBinding {
+    const LmTransSymbol *symbol;
+    const char *receiver_type;
+    const char *function_receiver_binding;
+    const char *statement_receiver_binding;
+    int (*function_receiver)(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
+    int (*statement_frame)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+} LmTransHeadBinding;
+struct LmTransTopLevelItem {
+    int (*declare)(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+    int (*emit_before_functions)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+    int (*emit_function)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+    int emits_top_level;
+    const LmP0Node *node;
+    const LmP0Frame *frame;
+    LmTransFunctionHeader function;
+};
+struct LmTransNamespace {
+    LmOwnPtrStack items;
+    LmTransIdentifierTable identifiers;
+    const LmTransIdentifierTable *registry_identifiers;
+    unsigned depth;
+    LmOwnPtrStack cleanups;
+    LmOwnPtrStack loops;
+    unsigned next_cleanup_id;
+    const LmP0Node *return_type_node;
+    int return_type_is_struct;
+    LmP0Text *return_type_name;
+    unsigned next_return_id;
+    const LmOwnPtrStack *hoisted_functions;
+};
+typedef struct LmTransL4LoadContext {
+    int allow_node_cells;
+} LmTransL4LoadContext;
+
+
+typedef void (*LmOwnDestroyFields)(void *object);
+typedef void (*LmOwnDelete)(void *object);
+typedef int (*LmL4PushRow)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4PushCell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4NoteKey)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
+typedef int (*LmL4PushColumnMetadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
+typedef int (*LmTransExprSegmentMaterializer)(LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
+typedef int (*LmTransCallLoweringHandler)(LmP0Text head, const LmTransSymbol *symbol, LmTransCallLowering *out);
+typedef int (*LmTransExprAtomEmitHandler)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
+typedef int (*LmTransExprAtomStateHandler)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
+typedef int (*LmTransExprPieceEmitHandler)(FILE *file, LmTransExprStack *stack, LmTransExprLoweredRange *lowered, const LmTransExprPiece *piece, const LmTransNamespace *namespace_, int *out_suspend);
+typedef int (*LmTransExprJobHandler)(FILE *file, LmTransExprStack *stack, LmTransExprJob *job, const LmTransNamespace *namespace_);
+typedef void (*LmTransExprJobDestroyHandler)(LmTransExprJob *job);
+typedef int (*LmTransStatementJobHandler)(FILE *file, LmTransStatementStack *stack, LmTransStatementJob *job, LmTransNamespace *namespace_);
+typedef int (*LmTransStatementFrameHandler)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+typedef int (*LmTransAtomStatementHandler)(FILE *file, const LmP0Node *node, unsigned indent, LmTransNamespace *namespace_);
+typedef int (*LmTransFunctionHeaderReceiver)(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
+typedef int (*LmTransTypeEmitReceiver)(FILE *file, const LmP0Node *type_node);
+typedef int (*LmTransTypeStructureValueAllocReceiver)(FILE *file, unsigned indent, const LmP0Node *type_node, LmP0Text target_name, const LmP0Structure *value, int *out_consumed, int *out_needs_null_check);
+typedef int (*LmTransTypeStructureValueFillReceiver)(FILE *file, unsigned indent, const LmP0Node *type_node, LmP0Text target_name, const LmP0Structure *value, const LmTransNamespace *namespace_, int *out_consumed);
+typedef int (*LmTransTopLevelDeclareHandler)(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+typedef int (*LmTransTopLevelEmitHandler)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 
 
 void * lm_own_new_zero(size_t size);
@@ -179,44 +508,6 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
 char * lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
 
-
-typedef int (*LmL4PushRow)(
-    void *context,
-    LmP0Text table_atom,
-    LmP0Text key_atom,
-    const LmP0Node *payload_node
-);
-
-typedef int (*LmL4PushCell)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *column,
-    int split_by_column,
-    LmP0Text key_atom,
-    const LmP0Node *payload_node
-);
-
-typedef int (*LmL4NoteKey)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *column,
-    LmP0Text key_atom
-);
-
-typedef int (*LmL4PushColumnMetadata)(
-    void *context,
-    LmP0Text table_name,
-    const LmL4Column *columns,
-    size_t column_count
-);
-
-typedef struct LmL4Loader {
-    const char *error_prefix;
-    LmL4PushRow push_row;
-    LmL4PushCell push_cell;
-    LmL4NoteKey note_key;
-    LmL4PushColumnMetadata push_column_metadata;
-} LmL4Loader;
 
 static int lm_l4_text_equals(LmP0Text text, const char *value) {
     size_t length;
@@ -1010,452 +1301,10 @@ static int lm_l4_load_root(
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct LmTransRegistryFact {
-    char *table;
-    char *key;
-    char *payload;
-    const LmP0Node *payload_node;
-} LmTransRegistryFact;
-
-typedef LmL4Column LmTransRegistryColumn;
-
-typedef struct LmTransLayoutField {
-    const char *name;
-    const char *class_name;
-    const char *union_layout_name;
-    size_t index;
-    size_t address_depth;
-    size_t array_count;
-    int is_const;
-    int has_array_count;
-    int is_union;
-} LmTransLayoutField;
-
-typedef struct LmTransCDeclarator {
-    const LmP0Node *type_node;
-    const LmP0Field *expression_dimensions;
-    LmP0Text type_head;
-    LmP0Text name;
-    LmP0Text array_head;
-    size_t pointer_depth;
-    size_t literal_dimensions[8];
-    size_t literal_dimension_count;
-    int type_is_head;
-} LmTransCDeclarator;
-
-typedef struct LmTransAbiParam {
-    const char *name;
-    const char *class_name;
-    size_t index;
-    size_t address_depth;
-    int is_const;
-} LmTransAbiParam;
-
-typedef struct LmTransL4CallableType {
-    LmP0Text class_name;
-    size_t address_depth;
-    int is_const;
-} LmTransL4CallableType;
 
 static FILE *lm_trans_prelude_output;
 
-typedef struct LmTransSymbol {
-    LmP0Text *name;
-    char *name_storage;
-    const char *class_name;
-    LmP0Text c_name;
-    char *c_name_storage;
-    int has_c_name;
-    LmP0Text env_arg;
-    char *env_arg_storage;
-    int has_env_arg;
-    LmP0Text closure_call_name;
-    char *closure_call_name_storage;
-    int has_closure_call_name;
-    unsigned depth;
-    LmOwnPtrStack param_names;
-    int has_signature;
-    const LmP0Node *callable_params_node;
-    const LmP0Node *callable_return_node;
-    int has_callable_shape;
-    int callable_returns_value;
-    int callable_is_struct_return;
-} LmTransSymbol;
-
-typedef struct LmTransIdentifierRelation {
-    const char *name;
-    LmOwnPtrStack symbols;
-    struct LmTransIdentifierRelation *next;
-} LmTransIdentifierRelation;
-
-typedef struct LmTransIdentifierCard {
-    LmP0Text *name;
-    char *name_storage;
-    unsigned long hash;
-    LmOwnPtrStack symbols;
-    LmTransIdentifierRelation **relation_buckets;
-    size_t relation_bucket_count;
-    struct LmTransIdentifierCard *next;
-} LmTransIdentifierCard;
-
-typedef struct LmTransIdentifierTable {
-    LmTransIdentifierCard **buckets;
-    size_t bucket_count;
-    size_t count;
-} LmTransIdentifierTable;
-
-typedef struct LmTransRegistry {
-    LmTransIdentifierTable identifiers;
-    LmOwnArena value_arena;
-    LmOwnPtrStack loaded_paths;
-    char *source_path;
-    size_t loaded_fact_count;
-    int loaded;
-} LmTransRegistry;
-
 static LmTransRegistry lm_trans_registry;
-
-typedef struct LmTransCleanup {
-    unsigned id;
-} LmTransCleanup;
-
-typedef struct LmTransLoop {
-    size_t cleanup_base;
-} LmTransLoop;
-
-typedef struct LmTransNamespace LmTransNamespace;
-typedef struct LmTransExprAtomLowering LmTransExprAtomLowering;
-typedef struct LmTransExprLoweredRange LmTransExprLoweredRange;
-typedef struct LmTransExprPiece LmTransExprPiece;
-typedef struct LmTransExprJob LmTransExprJob;
-typedef struct LmTransExprStack LmTransExprStack;
-typedef struct LmTransStatementStack LmTransStatementStack;
-typedef struct LmTransStatementJob LmTransStatementJob;
-typedef struct LmTransTopLevelItem LmTransTopLevelItem;
-
-typedef struct LmTransExprSegment {
-    const LmP0Field *first;
-    const LmP0Field *stop;
-    const LmP0Node *expected_param;
-    int present;
-} LmTransExprSegment;
-
-typedef int (*LmTransExprSegmentMaterializer)(
-    LmTransExprStack *stack,
-    const LmTransExprSegment *segment,
-    const LmTransNamespace *namespace_,
-    int *out_consumed
-);
-
-typedef struct LmTransStructReturnFieldValue {
-    const LmP0Field *first;
-    const LmP0Field *stop;
-    int present;
-} LmTransStructReturnFieldValue;
-
-typedef struct LmTransCallLowering {
-    LmP0Text name;
-    const LmTransSymbol *signature;
-    int is_closure;
-} LmTransCallLowering;
-
-typedef int (*LmTransCallLoweringHandler)(
-    LmP0Text head,
-    const LmTransSymbol *symbol,
-    LmTransCallLowering *out
-);
-
-typedef int (*LmTransExprAtomEmitHandler)(
-    FILE *file,
-    const LmTransExprAtomLowering *lowering,
-    const LmTransNamespace *namespace_
-);
-
-typedef int (*LmTransExprAtomStateHandler)(
-    const LmTransExprAtomLowering *lowering,
-    const LmP0Node *node,
-    const LmP0Node **previous_operand,
-    int *expect_field_name,
-    int *expect_c_field_name,
-    int *c_dot_path
-);
-
-struct LmTransExprAtomLowering {
-    LmTransExprAtomEmitHandler emit;
-    LmTransExprAtomStateHandler update;
-    LmP0Text text;
-};
-
-typedef int (*LmTransExprPieceEmitHandler)(
-    FILE *file,
-    LmTransExprStack *stack,
-    LmTransExprLoweredRange *lowered,
-    const LmTransExprPiece *piece,
-    const LmTransNamespace *namespace_,
-    int *out_suspend
-);
-
-struct LmTransExprPiece {
-    LmTransExprPieceEmitHandler emit;
-    int leading_space;
-    const LmP0Node *node;
-    LmTransExprAtomLowering atom;
-    const LmP0Field *first;
-    const LmP0Field *stop;
-};
-
-struct LmTransExprLoweredRange {
-    LmOwnValueStack pieces;
-    size_t index;
-};
-
-typedef struct LmTransExprRangeJob {
-    const LmP0Field *field;
-    const LmP0Field *stop;
-    int wrote;
-    const LmP0Node *previous_operand;
-    int expect_field_name;
-    int expect_c_field_name;
-    int c_dot_path;
-} LmTransExprRangeJob;
-
-typedef struct LmTransExprCallArgsJob {
-    const LmP0Structure *body;
-    const LmTransSymbol *callee;
-} LmTransExprCallArgsJob;
-
-typedef int (*LmTransExprJobHandler)(
-    FILE *file,
-    LmTransExprStack *stack,
-    LmTransExprJob *job,
-    const LmTransNamespace *namespace_
-);
-
-typedef void (*LmTransExprJobDestroyHandler)(LmTransExprJob *job);
-
-struct LmTransExprJob {
-    LmTransExprJobHandler run;
-    LmTransExprJobDestroyHandler destroy;
-    union {
-        const char *text;
-        LmP0Text name_text;
-        const LmP0Node *node;
-        const LmP0Frame *frame;
-        LmTransExprRangeJob range;
-        LmTransExprCallArgsJob call_args;
-        LmTransExprLoweredRange *lowered_range;
-    } as;
-};
-
-struct LmTransExprStack {
-    LmOwnValueStack jobs;
-};
-
-typedef struct LmTransStatementListJob {
-    const LmP0Field *field;
-    unsigned indent;
-    int unwrap_single_structure;
-    const LmP0Frame *repeat_frame;
-} LmTransStatementListJob;
-
-typedef struct LmTransStatementNodeJob {
-    const LmP0Node *node;
-    unsigned indent;
-    const LmP0Frame *repeat_frame;
-} LmTransStatementNodeJob;
-
-typedef struct LmTransStatementFrameJob {
-    const LmP0Frame *frame;
-    unsigned indent;
-} LmTransStatementFrameJob;
-
-typedef struct LmTransStatementTextJob {
-    unsigned indent;
-    const char *text;
-} LmTransStatementTextJob;
-
-typedef struct LmTransStatementSyncLeaveJob {
-    unsigned indent;
-    unsigned cleanup_id;
-} LmTransStatementSyncLeaveJob;
-
-typedef int (*LmTransStatementJobHandler)(
-    FILE *file,
-    LmTransStatementStack *stack,
-    LmTransStatementJob *job,
-    LmTransNamespace *namespace_
-);
-
-struct LmTransStatementJob {
-    LmTransStatementJobHandler run;
-    union {
-        LmTransStatementListJob list;
-        LmTransStatementNodeJob node;
-        LmTransStatementFrameJob frame;
-        LmTransStatementTextJob text;
-        LmTransStatementSyncLeaveJob sync_leave;
-    } as;
-};
-
-struct LmTransStatementStack {
-    LmOwnValueStack jobs;
-};
-
-typedef int (*LmTransStatementFrameHandler)(
-    FILE *file,
-    LmTransStatementStack *stack,
-    const LmP0Frame *frame,
-    unsigned indent,
-    LmTransNamespace *namespace_
-);
-
-typedef int (*LmTransAtomStatementHandler)(
-    FILE *file,
-    const LmP0Node *node,
-    unsigned indent,
-    LmTransNamespace *namespace_
-);
-
-typedef struct LmTransStatementLowering {
-    LmTransStatementFrameHandler emit;
-} LmTransStatementLowering;
-
-typedef struct LmTransFunctionState {
-    const LmP0Node *previous_return_type_node;
-    int previous_return_type_is_struct;
-    LmP0Text *previous_return_type_name;
-    LmP0Text *current_return_type_name;
-    unsigned previous_next_return_id;
-    const LmOwnPtrStack *previous_hoisted_functions;
-    LmOwnPtrStack previous_cleanups;
-    LmOwnPtrStack previous_loops;
-    int has_previous_control_stacks;
-} LmTransFunctionState;
-
-typedef struct LmTransFunctionHeader {
-    const LmP0Frame *frame;
-    LmP0Text name;
-    LmP0Text c_name;
-    LmP0Text env_type_name;
-    const LmP0Node *params_node;
-    const LmP0Node *return_node;
-    const LmP0Field *body_start;
-    const LmOwnPtrStack *captures;
-    const char *symbol_class;
-    int is_sub;
-    int is_struct_return;
-    int is_external;
-    int is_descriptor_only;
-    int declare_self_alias;
-    int has_env;
-} LmTransFunctionHeader;
-
-typedef struct LmTransCapture {
-    LmP0Text name;
-    LmP0Text type_head;
-    const LmP0Node *type_node;
-    size_t pointer_depth;
-    int type_is_head;
-} LmTransCapture;
-
-typedef struct LmTransHoistedFunction {
-    LmTransFunctionHeader function;
-    LmOwnPtrStack captures;
-    char *c_name_storage;
-    char *env_type_storage;
-    char *env_var_storage;
-    char *closure_call_storage;
-    LmP0Text env_var_name;
-    LmP0Text closure_call_name;
-} LmTransHoistedFunction;
-
-typedef int (*LmTransFunctionHeaderReceiver)(
-    const LmP0Frame *frame,
-    int is_external,
-    LmTransFunctionHeader *out
-);
-
-typedef int (*LmTransTypeEmitReceiver)(
-    FILE *file,
-    const LmP0Node *type_node
-);
-
-typedef int (*LmTransTypeStructureValueAllocReceiver)(
-    FILE *file,
-    unsigned indent,
-    const LmP0Node *type_node,
-    LmP0Text target_name,
-    const LmP0Structure *value,
-    int *out_consumed,
-    int *out_needs_null_check
-);
-
-typedef int (*LmTransTypeStructureValueFillReceiver)(
-    FILE *file,
-    unsigned indent,
-    const LmP0Node *type_node,
-    LmP0Text target_name,
-    const LmP0Structure *value,
-    const LmTransNamespace *namespace_,
-    int *out_consumed
-);
-
-typedef struct LmTransBinding {
-    LmTransCallLoweringHandler call_lowering;
-    LmTransExprAtomEmitHandler expr_emit;
-    LmTransExprAtomStateHandler expr_state;
-    LmTransStatementFrameHandler statement_frame;
-    LmTransFunctionHeaderReceiver function_receiver;
-    LmTransTypeEmitReceiver type_emit;
-    LmTransTypeStructureValueAllocReceiver type_structure_value_alloc;
-    LmTransTypeStructureValueFillReceiver type_structure_value_fill;
-    LmTransExprSegmentMaterializer expr_segment_materializer;
-} LmTransBinding;
-
-typedef struct LmTransHeadBinding {
-    const LmTransSymbol *symbol;
-    const char *receiver_type;
-    const char *function_receiver_binding;
-    const char *statement_receiver_binding;
-    LmTransFunctionHeaderReceiver function_receiver;
-    LmTransStatementFrameHandler statement_frame;
-} LmTransHeadBinding;
-
-typedef int (*LmTransTopLevelDeclareHandler)(
-    LmTransNamespace *namespace_,
-    const LmTransTopLevelItem *item
-);
-
-typedef int (*LmTransTopLevelEmitHandler)(
-    FILE *file,
-    LmTransNamespace *namespace_,
-    const LmTransTopLevelItem *item
-);
-
-struct LmTransTopLevelItem {
-    LmTransTopLevelDeclareHandler declare;
-    LmTransTopLevelEmitHandler emit_before_functions;
-    LmTransTopLevelEmitHandler emit_function;
-    int emits_top_level;
-    const LmP0Node *node;
-    const LmP0Frame *frame;
-    LmTransFunctionHeader function;
-};
-
-struct LmTransNamespace {
-    LmOwnPtrStack items;
-    LmTransIdentifierTable identifiers;
-    const LmTransIdentifierTable *registry_identifiers;
-    unsigned depth;
-    LmOwnPtrStack cleanups;
-    LmOwnPtrStack loops;
-    unsigned next_cleanup_id;
-    const LmP0Node *return_type_node;
-    int return_type_is_struct;
-    LmP0Text *return_type_name;
-    unsigned next_return_id;
-    const LmOwnPtrStack *hoisted_functions;
-};
 
 static int lm_trans_text_equals(LmP0Text text, const char *value) {
     size_t length;
@@ -14917,6 +14766,17 @@ static int lm_trans_emit_layout_fields(
     const LmTransNamespace *namespace_,
     unsigned indent
 );
+static int lm_trans_l4_is_function_pointer_type(
+    const LmTransNamespace *namespace_,
+    const char *name
+);
+static int lm_trans_emit_l4_function_pointer_type_field(
+    FILE *file,
+    const LmTransNamespace *namespace_,
+    const char *type_name,
+    const char *field_name,
+    const char *error_name
+);
 
 static int lm_trans_emit_layout_field(
     FILE *file,
@@ -14939,6 +14799,17 @@ static int lm_trans_emit_layout_field(
             lm_trans_emit_indent(file, indent) != 0 ||
             lm_trans_put(file, "} ") != 0 ||
             lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field->name)) != 0
+        ) {
+            return 1;
+        }
+    } else if (lm_trans_l4_is_function_pointer_type(namespace_, field->class_name)) {
+        if (field->is_const || field->address_depth != 0U || field->has_array_count) {
+            fprintf(stderr, "trans L4 layout error: function pointer field %s cannot use const, pointer-depth, or array-count\n", field->name);
+            return 1;
+        }
+        if (
+            lm_trans_emit_indent(file, indent) != 0 ||
+            lm_trans_emit_l4_function_pointer_type_field(file, namespace_, field->class_name, field->name, "layout") != 0
         ) {
             return 1;
         }
@@ -15824,6 +15695,30 @@ static int lm_trans_emit_l4_function_pointer_type_name(
         lm_trans_put(file, ");\n") != 0;
 }
 
+static int lm_trans_emit_l4_function_pointer_type_field(
+    FILE *file,
+    const LmTransNamespace *namespace_,
+    const char *type_name,
+    const char *field_name,
+    const char *error_name
+) {
+    LmTransAbiParam params[256];
+    size_t param_count;
+
+    if (type_name == 0 || field_name == 0 || error_name == 0) {
+        return 1;
+    }
+
+    return
+        lm_trans_collect_abi_params(params, sizeof(params) / sizeof(params[0]), &param_count, namespace_, type_name, error_name) != 0 ||
+        lm_trans_emit_abi_return_type(file, namespace_, type_name, error_name) != 0 ||
+        lm_trans_put(file, " (*") != 0 ||
+        lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field_name)) != 0 ||
+        lm_trans_put(file, ")(") != 0 ||
+        lm_trans_emit_abi_params(file, params, param_count) != 0 ||
+        lm_trans_put(file, ")") != 0;
+}
+
 static int lm_trans_emit_l4_function_pointer_type_typedefs(
     FILE *file,
     const LmTransNamespace *namespace_
@@ -16408,10 +16303,6 @@ static int lm_trans_registry_materialize_l4_fn_root(const LmP0Node *root, int im
 
     return 0;
 }
-
-typedef struct LmTransL4LoadContext {
-    int allow_node_cells;
-} LmTransL4LoadContext;
 
 static int lm_trans_registry_l4_push_row(
     void *context,

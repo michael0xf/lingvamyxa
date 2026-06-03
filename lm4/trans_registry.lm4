@@ -73,6 +73,8 @@ table:
              i16    int16_t
              i32    int32_t
              i64    int64_t
+             uchar  "unsigned char"
+             ulong  "unsigned long"
 end: `class.spelling`
 
 table:

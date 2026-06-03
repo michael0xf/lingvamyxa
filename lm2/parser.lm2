@@ -3,8 +3,8 @@ import: "lm4/parser_abi.lm4"
 import: "lm4/l4_loader_abi.lm4"
 include
 include: "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
-alias
 forward
+alias
 
 L4:
     table:
@@ -58,11 +58,327 @@ L4:
                  LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR  16U
                  LM_P0_MAX_FENCE_LENGTH                            80U
     end: `constant.value`
+
+    table:
+        name: `alias.backend`
+        columns: class                 (backend class)
+        rows:
+                 LmP0StreamEventKind   c.typedef
+                 LmP0TrailerRole       c.typedef
+                 LmP0DashFenceStatus   c.typedef
+                 LmP0FieldParseFlags   c.typedef
+                 LmP0RegistryColumn    c.typedef
+    end: `alias.backend`
+
+    table:
+        name: `alias.target`
+        columns: class                 (target class)
+        rows:
+                 LmP0StreamEventKind   int
+                 LmP0TrailerRole       int
+                 LmP0DashFenceStatus   int
+                 LmP0FieldParseFlags   unsigned
+                 LmP0RegistryColumn    LmL4Column
+    end: `alias.target`
+
+    table:
+        name: `layout.backend`
+        columns: class                  (backend class)
+        rows:
+                 LmP0StreamEvent        c.struct
+                 LmP0Document           c.named-struct
+                 LmP0PendingDelimiter   c.struct
+                 LmP0PendingMix         c.struct
+                 LmP0IndentStack        c.struct
+                 LmP0DisabledState      c.struct
+                 LmP0Stack              c.struct
+                 LmP0Dump               c.struct
+                 LmP0RegistryRow        c.struct
+                 LmP0Registry           c.struct
+    end: `layout.backend`
+
+    table:
+        name: `LmP0StreamEvent.field.class`
+        columns: class        (field class)
+        rows:
+                 kind         LmP0StreamEventKind
+                 node_flags   unsigned
+                 level        size_t
+                 text         char
+                 text_length  size_t
+                 line         size_t
+                 column       size_t
+                 offset       size_t
+    end: `LmP0StreamEvent.field.class`
+
+    table:
+        name: `LmP0StreamEvent.field.index`
+        columns: class        (index serial)
+        rows:
+                 kind         0
+                 node_flags   1
+                 level        2
+                 text         3
+                 text_length  4
+                 line         5
+                 column       6
+                 offset       7
+    end: `LmP0StreamEvent.field.index`
+
+    table:
+        name: `LmP0StreamEvent.field.address-depth`
+        columns: class  (depth serial)
+        rows:
+                 text   1
+    end: `LmP0StreamEvent.field.address-depth`
+
+    table:
+        name: `LmP0StreamEvent.field.const`
+        columns: class  (value serial)
+        rows:
+                 text   1
+    end: `LmP0StreamEvent.field.const`
+
+    table:
+        name: `LmP0Document.field.class`
+        columns: class             (field class)
+        rows:
+                 source            char
+                 source_length     size_t
+                 root              LmP0Node
+                 diagnostic        LmP0Diagnostic
+                 source_owner      LmOwnArena
+                 token_arena       LmOwnArena
+                 tree_arena        LmOwnArena
+                 diagnostic_arena  LmOwnArena
+                 owners_initialized int
+                 frozen            int
+    end: `LmP0Document.field.class`
+
+    table:
+        name: `LmP0Document.field.index`
+        columns: class             (index serial)
+        rows:
+                 source            0
+                 source_length     1
+                 root              2
+                 diagnostic        3
+                 source_owner      4
+                 token_arena       5
+                 tree_arena        6
+                 diagnostic_arena  7
+                 owners_initialized 8
+                 frozen            9
+    end: `LmP0Document.field.index`
+
+    table:
+        name: `LmP0Document.field.address-depth`
+        columns: class  (depth serial)
+        rows:
+                 source 1
+                 root   1
+    end: `LmP0Document.field.address-depth`
+
+    table:
+        name: `LmP0PendingDelimiter.field.class`
+        columns: class  (field class)
+        rows:
+                 active int
+                 event  LmP0StreamEvent
+    end: `LmP0PendingDelimiter.field.class`
+
+    table:
+        name: `LmP0PendingDelimiter.field.index`
+        columns: class  (index serial)
+        rows:
+                 active 0
+                 event  1
+    end: `LmP0PendingDelimiter.field.index`
+
+    table:
+        name: `LmP0PendingDelimiter.field.address-depth`
+        columns: class  (depth serial)
+        rows:
+                 event  1
+    end: `LmP0PendingDelimiter.field.address-depth`
+
+    table:
+        name: `LmP0PendingMix.field.class`
+        columns: class     (field class)
+        rows:
+                 events    LmP0StreamEvent
+                 count     size_t
+                 capacity  size_t
+    end: `LmP0PendingMix.field.class`
+
+    table:
+        name: `LmP0PendingMix.field.index`
+        columns: class     (index serial)
+        rows:
+                 events    0
+                 count     1
+                 capacity  2
+    end: `LmP0PendingMix.field.index`
+
+    table:
+        name: `LmP0PendingMix.field.address-depth`
+        columns: class  (depth serial)
+        rows:
+                 events 1
+    end: `LmP0PendingMix.field.address-depth`
+
+    table:
+        name: `LmP0IndentStack.field.class`
+        columns: class     (field class)
+        rows:
+                 columns   size_t
+                 count     size_t
+                 capacity  size_t
+    end: `LmP0IndentStack.field.class`
+
+    table:
+        name: `LmP0IndentStack.field.index`
+        columns: class     (index serial)
+        rows:
+                 columns   0
+                 count     1
+                 capacity  2
+    end: `LmP0IndentStack.field.index`
+
+    table:
+        name: `LmP0IndentStack.field.address-depth`
+        columns: class    (depth serial)
+        rows:
+                 columns  1
+    end: `LmP0IndentStack.field.address-depth`
+
+    table:
+        name: `LmP0DisabledState.field.class`
+        columns: class          (field class)
+        rows:
+                 body_started   int
+                 pending_item   int
+                 base_level     size_t
+                 top_level      size_t
+                 pending_level  size_t
+    end: `LmP0DisabledState.field.class`
+
+    table:
+        name: `LmP0DisabledState.field.index`
+        columns: class          (index serial)
+        rows:
+                 body_started   0
+                 pending_item   1
+                 base_level     2
+                 top_level      3
+                 pending_level  4
+    end: `LmP0DisabledState.field.index`
+
+    table:
+        name: `LmP0Stack.field.class`
+        columns: class     (field class)
+        rows:
+                 parents   LmP0Structure
+                 owners    LmP0Node
+                 hard      uchar
+                 capacity  size_t
+    end: `LmP0Stack.field.class`
+
+    table:
+        name: `LmP0Stack.field.index`
+        columns: class     (index serial)
+        rows:
+                 parents   0
+                 owners    1
+                 hard      2
+                 capacity  3
+    end: `LmP0Stack.field.index`
+
+    table:
+        name: `LmP0Stack.field.address-depth`
+        columns: class    (depth serial)
+        rows:
+                 parents  2
+                 owners   2
+                 hard     1
+    end: `LmP0Stack.field.address-depth`
+
+    table:
+        name: `LmP0Dump.field.class`
+        columns: class     (field class)
+        rows:
+                 data      char
+                 length    size_t
+                 capacity  size_t
+                 failed    int
+    end: `LmP0Dump.field.class`
+
+    table:
+        name: `LmP0Dump.field.index`
+        columns: class     (index serial)
+        rows:
+                 data      0
+                 length    1
+                 capacity  2
+                 failed    3
+    end: `LmP0Dump.field.index`
+
+    table:
+        name: `LmP0Dump.field.address-depth`
+        columns: class  (depth serial)
+        rows:
+                 data   1
+    end: `LmP0Dump.field.address-depth`
+
+    table:
+        name: `LmP0RegistryRow.field.class`
+        columns: class    (field class)
+        rows:
+                 table    char
+                 key      char
+                 payload  char
+    end: `LmP0RegistryRow.field.class`
+
+    table:
+        name: `LmP0RegistryRow.field.index`
+        columns: class    (index serial)
+        rows:
+                 table    0
+                 key      1
+                 payload  2
+    end: `LmP0RegistryRow.field.index`
+
+    table:
+        name: `LmP0RegistryRow.field.address-depth`
+        columns: class    (depth serial)
+        rows:
+                 table    1
+                 key      1
+                 payload  1
+    end: `LmP0RegistryRow.field.address-depth`
+
+    table:
+        name: `LmP0Registry.field.class`
+        columns: class    (field class)
+        rows:
+                 rows     LmOwnPtrStack
+                 loaded   int
+                 loading  int
+    end: `LmP0Registry.field.class`
+
+    table:
+        name: `LmP0Registry.field.index`
+        columns: class    (index serial)
+        rows:
+                 rows     0
+                 loaded   1
+                 loading  2
+    end: `LmP0Registry.field.index`
 end: L4
 
 constant
-fn
 layout
+fn
 prototype
 unit
 
@@ -73,85 +389,6 @@ L1:
 #endif
 
 
-
-typedef int LmP0StreamEventKind;
-
-typedef struct LmP0StreamEvent {
-    LmP0StreamEventKind kind;
-    unsigned node_flags;
-    size_t level;
-    const char *text;
-    size_t text_length;
-    size_t line;
-    size_t column;
-    size_t offset;
-} LmP0StreamEvent;
-
-struct LmP0Document {
-    char *source;
-    size_t source_length;
-    LmP0Node *root;
-    LmP0Diagnostic diagnostic;
-    LmOwnArena source_owner;
-    LmOwnArena token_arena;
-    LmOwnArena tree_arena;
-    LmOwnArena diagnostic_arena;
-    int owners_initialized;
-    int frozen;
-};
-
-typedef struct LmP0PendingDelimiter {
-    int active;
-    LmP0StreamEvent *event;
-} LmP0PendingDelimiter;
-
-typedef struct LmP0PendingMix {
-    LmP0StreamEvent *events;
-    size_t count;
-    size_t capacity;
-} LmP0PendingMix;
-
-typedef struct LmP0IndentStack {
-    size_t *columns;
-    size_t count;
-    size_t capacity;
-} LmP0IndentStack;
-
-typedef struct LmP0DisabledState {
-    int body_started;
-    int pending_item;
-    size_t base_level;
-    size_t top_level;
-    size_t pending_level;
-} LmP0DisabledState;
-
-typedef struct LmP0Stack {
-    LmP0Structure **parents;
-    LmP0Node **owners;
-    unsigned char *hard;
-    size_t capacity;
-} LmP0Stack;
-
-typedef struct LmP0Dump {
-    char *data;
-    size_t length;
-    size_t capacity;
-    int failed;
-} LmP0Dump;
-
-typedef struct LmP0RegistryRow {
-    char *table;
-    char *key;
-    char *payload;
-} LmP0RegistryRow;
-
-typedef struct LmP0Registry {
-    LmOwnPtrStack rows;
-    int loaded;
-    int loading;
-} LmP0Registry;
-
-typedef LmL4Column LmP0RegistryColumn;
 
 static LmP0Registry lm_p0_registry;
 
@@ -227,12 +464,6 @@ static int lm_p0_document_register_lazy_text(
     }
     return 1;
 }
-
-typedef int LmP0TrailerRole;
-
-typedef int LmP0DashFenceStatus;
-
-typedef unsigned LmP0FieldParseFlags;
 
 static void lm_p0_set_diagnostic(
     LmP0Document *document,
