@@ -27,6 +27,18 @@ typedef struct LmTransLayoutField {
     int is_union;
 } LmTransLayoutField;
 
+typedef struct LmTransCDeclarator {
+    const LmP0Node *type_node;
+    const LmP0Field *expression_dimensions;
+    LmP0Text type_head;
+    LmP0Text name;
+    LmP0Text array_head;
+    size_t pointer_depth;
+    size_t literal_dimensions[8];
+    size_t literal_dimension_count;
+    int type_is_head;
+} LmTransCDeclarator;
+
 typedef struct LmTransAbiParam {
     const char *name;
     const char *class_name;
@@ -5330,6 +5342,7 @@ static int lm_trans_array_type_node_info(
     size_t *out_rank
 );
 static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node);
+static int lm_trans_emit_size_literal(FILE *file, size_t value);
 
 static int lm_trans_type_receiver_key(
     const LmP0Node *type_node,
@@ -5741,24 +5754,142 @@ static int lm_trans_emit_type_and_name(
     return lm_trans_emit_identifier(file, name);
 }
 
-static int lm_trans_emit_type_head_and_name(
+static int lm_trans_emit_type_head_only(
     FILE *file,
-    LmP0Text type_head,
-    LmP0Text name
+    LmP0Text type_head
 ) {
     if (lm_trans_builtin_c_type_name(type_head)) {
-        if (lm_trans_emit_type_name(file, type_head) != 0) {
+        return lm_trans_emit_type_name(file, type_head);
+    }
+    return lm_trans_emit_name(file, type_head);
+}
+
+static int lm_trans_emit_c_dimension_text(
+    FILE *file,
+    LmP0Text dimension,
+    const LmTransNamespace *namespace_,
+    const char *error_name
+) {
+    LmP0Document *dimension_document;
+    const LmP0Diagnostic *diagnostic;
+    const LmP0Node *dimension_root;
+    int parse_status;
+
+    if (dimension.length == 0U) {
+        return 0;
+    }
+
+    dimension_document = 0;
+    parse_status = lm_p0_parse_bytes(dimension.data, dimension.length, &dimension_document);
+    if (parse_status != 0) {
+        diagnostic = dimension_document != 0 ? lm_p0_document_diagnostic(dimension_document) : 0;
+        if (diagnostic != 0) {
+            fprintf(
+                stderr,
+                "trans L2 error: %s parse error %d at %zu:%zu: %s\n",
+                error_name != 0 ? error_name : "array dimension",
+                diagnostic->code,
+                diagnostic->line,
+                diagnostic->column,
+                diagnostic->message
+            );
+        } else {
+            fprintf(stderr, "trans L2 error: %s parse failed\n", error_name != 0 ? error_name : "array dimension");
+        }
+        if (dimension_document != 0) {
+            lm_p0_document_destroy(dimension_document);
+        }
+        return 1;
+    }
+    dimension_root = lm_p0_document_root(dimension_document);
+    if (
+        dimension_root == 0 ||
+        dimension_root->kind != LM_P0_NODE_STRUCTURE ||
+        dimension_root->as.structure.first_field == 0
+    ) {
+        fprintf(stderr, "trans L2 error: %s must not be empty\n", error_name != 0 ? error_name : "array dimension");
+        lm_p0_document_destroy(dimension_document);
+        return 1;
+    }
+    if (lm_trans_emit_expr_fields(file, dimension_root->as.structure.first_field, namespace_) != 0) {
+        lm_p0_document_destroy(dimension_document);
+        return 1;
+    }
+    lm_p0_document_destroy(dimension_document);
+    return 0;
+}
+
+static int lm_trans_emit_c_declarator(
+    FILE *file,
+    LmTransCDeclarator *declarator,
+    const LmTransNamespace *namespace_,
+    const char *dimension_error_name
+) {
+    size_t i;
+    size_t head_index;
+    LmP0Text head_dimension;
+
+    if (file == 0 || declarator == 0) {
+        return 1;
+    }
+
+    if (declarator->type_is_head) {
+        if (lm_trans_emit_type_head_only(file, declarator->type_head) != 0) {
             return 1;
         }
     } else {
-        if (lm_trans_emit_name(file, type_head) != 0) {
+        if (declarator->type_node == 0 || lm_trans_emit_type_node(file, declarator->type_node) != 0) {
             return 1;
         }
     }
+
     if (lm_trans_put(file, " ") != 0) {
         return 1;
     }
-    return lm_trans_emit_identifier(file, name);
+    for (i = 0U; i < declarator->pointer_depth; ++i) {
+        if (lm_trans_put(file, "*") != 0) {
+            return 1;
+        }
+    }
+    if (lm_trans_emit_identifier(file, declarator->name) != 0) {
+        return 1;
+    }
+
+    head_index = 0U;
+    while (lm_trans_array_head_next_dimension(declarator->array_head, &head_index, &head_dimension)) {
+        if (lm_trans_put(file, "[") != 0) {
+            return 1;
+        }
+        if (head_dimension.length != 0U) {
+            if (lm_trans_emit_c_dimension_text(file, head_dimension, namespace_, dimension_error_name) != 0) {
+                return 1;
+            }
+        } else {
+            if (declarator->expression_dimensions == 0 || declarator->expression_dimensions->value == 0) {
+                fprintf(stderr, "trans L2 error: %s expects a size expression\n", dimension_error_name != 0 ? dimension_error_name : "array dimension");
+                return 1;
+            }
+            if (lm_trans_emit_expr_node(file, declarator->expression_dimensions->value, namespace_) != 0) {
+                return 1;
+            }
+            declarator->expression_dimensions = declarator->expression_dimensions->next;
+        }
+        if (lm_trans_put(file, "]") != 0) {
+            return 1;
+        }
+    }
+
+    for (i = 0U; i < declarator->literal_dimension_count; ++i) {
+        if (
+            lm_trans_put(file, "[") != 0 ||
+            lm_trans_emit_size_literal(file, declarator->literal_dimensions[i]) != 0 ||
+            lm_trans_put(file, "]") != 0
+        ) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 static int lm_trans_head_can_declare_storage(
@@ -7703,9 +7834,8 @@ static int lm_trans_emit_array_declaration_with_qualifier(
     const LmP0Node *name_node;
     const LmP0Node *type_node;
     const LmP0Frame *inner;
+    LmTransCDeclarator declarator;
     LmP0Text type_head;
-    LmP0Text head_dimension;
-    size_t head_index;
     size_t pointer_depth;
     int type_is_head;
 
@@ -7786,87 +7916,19 @@ static int lm_trans_emit_array_declaration_with_qualifier(
     if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
         return 1;
     }
-    if (type_is_head) {
-        if (lm_trans_emit_type_head_and_name(file, type_head, name_node->as.atom) != 0) {
-            return 1;
-        }
-    } else {
-        if (
-            lm_trans_emit_type_and_name(
-                file,
-                type_node,
-                name_node->as.atom,
-                pointer_depth,
-                namespace_
-            ) != 0
-        ) {
-            return 1;
-        }
+    memset(&declarator, 0, sizeof(declarator));
+    declarator.type_node = type_node;
+    declarator.type_head = type_head;
+    declarator.name = name_node->as.atom;
+    declarator.pointer_depth = pointer_depth;
+    declarator.type_is_head = type_is_head;
+    declarator.array_head = frame->head;
+    declarator.expression_dimensions = dimension_field;
+    if (lm_trans_emit_c_declarator(file, &declarator, namespace_, "[] array dimension") != 0) {
+        return 1;
     }
 
-    head_index = 0U;
-    while (lm_trans_array_head_next_dimension(frame->head, &head_index, &head_dimension)) {
-        if (lm_trans_put(file, "[") != 0) {
-            return 1;
-        }
-        if (head_dimension.length != 0U) {
-            LmP0Document *dimension_document;
-            const LmP0Diagnostic *diagnostic;
-            const LmP0Node *dimension_root;
-            int parse_status;
-
-            dimension_document = 0;
-            parse_status = lm_p0_parse_bytes(head_dimension.data, head_dimension.length, &dimension_document);
-            if (parse_status != 0) {
-                diagnostic = dimension_document != 0 ? lm_p0_document_diagnostic(dimension_document) : 0;
-                if (diagnostic != 0) {
-                    fprintf(
-                        stderr,
-                        "trans L2 error: array dimension parse error %d at %zu:%zu: %s\n",
-                        diagnostic->code,
-                        diagnostic->line,
-                        diagnostic->column,
-                        diagnostic->message
-                    );
-                } else {
-                    fprintf(stderr, "trans L2 error: array dimension parse failed\n");
-                }
-                if (dimension_document != 0) {
-                    lm_p0_document_destroy(dimension_document);
-                }
-                return 1;
-            }
-            dimension_root = lm_p0_document_root(dimension_document);
-            if (
-                dimension_root == 0 ||
-                dimension_root->kind != LM_P0_NODE_STRUCTURE ||
-                dimension_root->as.structure.first_field == 0
-            ) {
-                fprintf(stderr, "trans L2 error: array dimension must not be empty\n");
-                lm_p0_document_destroy(dimension_document);
-                return 1;
-            }
-            if (lm_trans_emit_expr_fields(file, dimension_root->as.structure.first_field, namespace_) != 0) {
-                lm_p0_document_destroy(dimension_document);
-                return 1;
-            }
-            lm_p0_document_destroy(dimension_document);
-        } else {
-            if (dimension_field == 0 || dimension_field->value == 0) {
-                fprintf(stderr, "trans L2 error: [] array dimension expects a size expression\n");
-                return 1;
-            }
-            if (lm_trans_emit_expr_node(file, dimension_field->value, namespace_) != 0) {
-                return 1;
-            }
-            dimension_field = dimension_field->next;
-        }
-        if (lm_trans_put(file, "]") != 0) {
-            return 1;
-        }
-    }
-
-    initializer_field = dimension_field;
+    initializer_field = declarator.expression_dimensions;
     if (initializer_field != 0) {
         if (lm_trans_put(file, " = {") != 0) {
             return 1;
@@ -7989,10 +8051,9 @@ static int lm_trans_emit_array_declaration_repeat_with_qualifier(
     const LmP0Node *type_node;
     const LmP0Node *template_type_node;
     const LmP0Frame *inner;
+    LmTransCDeclarator declarator;
     LmP0Text type_head;
     LmP0Text template_type_head;
-    LmP0Text head_dimension;
-    size_t head_index;
     size_t pointer_depth;
     int type_is_head;
     int template_type_is_head;
@@ -8083,88 +8144,21 @@ static int lm_trans_emit_array_declaration_repeat_with_qualifier(
     if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
         return 1;
     }
-    if (type_is_head) {
-        if (lm_trans_emit_type_head_and_name(file, type_head, name_node->as.atom) != 0) {
-            return 1;
-        }
-    } else {
-        if (
-            lm_trans_emit_type_and_name(
-                file,
-                type_node,
-                name_node->as.atom,
-                pointer_depth,
-                namespace_
-            ) != 0
-        ) {
-            return 1;
-        }
-    }
 
     dimension_field = name_field->next;
-    head_index = 0U;
-    while (lm_trans_array_head_next_dimension(template_frame->head, &head_index, &head_dimension)) {
-        if (lm_trans_put(file, "[") != 0) {
-            return 1;
-        }
-        if (head_dimension.length != 0U) {
-            LmP0Document *dimension_document;
-            const LmP0Diagnostic *diagnostic;
-            const LmP0Node *dimension_root;
-            int parse_status;
-
-            dimension_document = 0;
-            parse_status = lm_p0_parse_bytes(head_dimension.data, head_dimension.length, &dimension_document);
-            if (parse_status != 0) {
-                diagnostic = dimension_document != 0 ? lm_p0_document_diagnostic(dimension_document) : 0;
-                if (diagnostic != 0) {
-                    fprintf(
-                        stderr,
-                        "trans L2 error: array dimension parse error %d at %zu:%zu: %s\n",
-                        diagnostic->code,
-                        diagnostic->line,
-                        diagnostic->column,
-                        diagnostic->message
-                    );
-                } else {
-                    fprintf(stderr, "trans L2 error: array dimension parse failed\n");
-                }
-                if (dimension_document != 0) {
-                    lm_p0_document_destroy(dimension_document);
-                }
-                return 1;
-            }
-            dimension_root = lm_p0_document_root(dimension_document);
-            if (
-                dimension_root == 0 ||
-                dimension_root->kind != LM_P0_NODE_STRUCTURE ||
-                dimension_root->as.structure.first_field == 0
-            ) {
-                fprintf(stderr, "trans L2 error: array dimension must not be empty\n");
-                lm_p0_document_destroy(dimension_document);
-                return 1;
-            }
-            if (lm_trans_emit_expr_fields(file, dimension_root->as.structure.first_field, namespace_) != 0) {
-                lm_p0_document_destroy(dimension_document);
-                return 1;
-            }
-            lm_p0_document_destroy(dimension_document);
-        } else {
-            if (dimension_field == 0 || dimension_field->value == 0) {
-                fprintf(stderr, "trans L2 error: repeated [] array dimension expects a size expression\n");
-                return 1;
-            }
-            if (lm_trans_emit_expr_node(file, dimension_field->value, namespace_) != 0) {
-                return 1;
-            }
-            dimension_field = dimension_field->next;
-        }
-        if (lm_trans_put(file, "]") != 0) {
-            return 1;
-        }
+    memset(&declarator, 0, sizeof(declarator));
+    declarator.type_node = type_node;
+    declarator.type_head = type_head;
+    declarator.name = name_node->as.atom;
+    declarator.pointer_depth = pointer_depth;
+    declarator.type_is_head = type_is_head;
+    declarator.array_head = template_frame->head;
+    declarator.expression_dimensions = dimension_field;
+    if (lm_trans_emit_c_declarator(file, &declarator, namespace_, "repeated [] array dimension") != 0) {
+        return 1;
     }
 
-    initializer_field = dimension_field;
+    initializer_field = declarator.expression_dimensions;
     if (initializer_field != 0) {
         if (lm_trans_put(file, " = {") != 0) {
             return 1;
@@ -14023,36 +14017,6 @@ static void lm_trans_sort_layout_fields(
     }
 }
 
-static int lm_trans_emit_layout_field_type(
-    FILE *file,
-    const LmTransLayoutField *field
-) {
-    size_t i;
-
-    if (file == 0 || field == 0 || field->class_name == 0) {
-        return 1;
-    }
-
-    if (field->is_const && lm_trans_put(file, "const ") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_type_name(file, lm_trans_text_from_cstr(field->class_name)) != 0) {
-        return 1;
-    }
-    if (field->address_depth != 0U && lm_trans_put(file, " ") != 0) {
-        return 1;
-    }
-    for (i = 0U; i < field->address_depth; ++i) {
-        if (lm_trans_put(file, "*") != 0) {
-            return 1;
-        }
-    }
-    if (field->address_depth == 0U && lm_trans_put(file, " ") != 0) {
-        return 1;
-    }
-    return 0;
-}
-
 static int lm_trans_emit_layout_fields(
     FILE *file,
     const char *layout_name,
@@ -14066,6 +14030,8 @@ static int lm_trans_emit_layout_field(
     const LmTransNamespace *namespace_,
     unsigned indent
 ) {
+    LmTransCDeclarator declarator;
+
     if (file == 0 || field == 0) {
         return 1;
     }
@@ -14083,16 +14049,25 @@ static int lm_trans_emit_layout_field(
             return 1;
         }
     } else {
+        memset(&declarator, 0, sizeof(declarator));
+        declarator.type_head = lm_trans_text_from_cstr(field->class_name);
+        declarator.name = lm_trans_text_from_cstr(field->name);
+        declarator.pointer_depth = field->address_depth;
+        declarator.type_is_head = 1;
+        if (field->has_array_count) {
+            declarator.literal_dimensions[0] = field->array_count;
+            declarator.literal_dimension_count = 1U;
+        }
         if (
             lm_trans_emit_indent(file, indent) != 0 ||
-            lm_trans_emit_layout_field_type(file, field) != 0 ||
-            lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field->name)) != 0
+            (field->is_const && lm_trans_put(file, "const ") != 0) ||
+            lm_trans_emit_c_declarator(file, &declarator, namespace_, "layout array dimension") != 0
         ) {
             return 1;
         }
     }
 
-    if (field->has_array_count) {
+    if (field->is_union && field->has_array_count) {
         if (
             lm_trans_put(file, "[") != 0 ||
             lm_trans_emit_size_literal(file, field->array_count) != 0 ||
