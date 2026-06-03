@@ -4532,6 +4532,69 @@ Keep this distinct from the two other deferred/result mechanisms:
         reply ProposedMessage only when the message boundary supplies a reply
         target, future, continuation or correlation id.
 
+7.2.3. Callable Descriptor Argument Consumption and Lazy Binding
+
+When a receiver/function parameter is declared with a callable descriptor, the
+argument position expects a callable value compatible with that descriptor. A
+visible executable binding in that position is consumed as a callable value; it
+is not invoked merely because the function receiver consumes arguments.
+
+Example:
+
+    fn: IntSource () int
+
+    fn: five () int
+        return: 5
+    end: five
+
+    fn: callSource (IntSource: source) int
+        return: source()
+    end: callSource
+
+    callSource(five)
+
+The argument `five` is compatible with `IntSource`, so the consumer receives a
+callable value for `five`. The call to `five` happens only inside
+`callSource`, where `source()` is explicitly called.
+
+If a compact call appears in a callable-descriptor argument position, the active
+L2 profile may consume it as a lazy binding/residual callable when the remaining
+unbound parameters match the expected descriptor:
+
+    fn: AddX (int: value) int
+
+    fn: addBase (int: base; int: value) int
+        return: base + value
+    end: addBase
+
+    fn: callAdd (AddX: add) int
+        return: add(3)
+    end: callAdd
+
+    callAdd(addBase(4))
+
+Here `addBase(4)` is not executed at the argument site. The argument site binds
+`base = 4` and produces a residual callable compatible with `AddX`; later
+`callAdd` calls that residual callable with `value = 3`.
+
+The same rule may use declared default argument values while forming the
+residual callable:
+
+    fn: addBase (int: base 4; int: value) int
+
+    callAdd(addBase())
+
+The call-shaped argument leaves the descriptor-compatible `value` parameter
+unbound and fills `base` from its default. Default values are still ordinary
+typed argument values; if a default itself names a callable or array literal, it
+is materialized by the same argument-consumption rules as an explicit argument.
+
+Type resolution, not spelling alone, decides whether an argument is executed,
+passed as a callable value, followed through a no-argument return chain, or
+lowered into a residual callable. If no compatible callable value can be formed,
+the translator must reject the argument instead of silently invoking an
+incompatible function.
+
 7.3. Subroutine Definition Form
 
 Example source:
@@ -5487,11 +5550,31 @@ C-profile mnemonic table:
     c.parent.child   # C expression role: parent.child
     \parent\child    # parsed as \(parent\child); C expression role: *(parent->child)
     (\parent)\child  # explicit grouping: raw-load parent first, then follow child
+    \slot: value     # C update role: *(slot) = value
+    \\slot: value    # C update role: **(slot) = value
 
 In expression position, field-follow and index chains are assembled before
 prefix `@` and prefix `\`; parentheses override this order.
 
 The last spelling is not the default parse. It is the explicit grouped form for a profile that needs the meaning "first raw-load `parent`, then field-follow `child` from the loaded typed address/reference".
+
+In update/statement head position, the same leading prefix `\` may be used on
+the left-hand target before `:`. The leading backslash run applies to the whole
+following field-follow/index target and writes through the addressed cell:
+
+    \slot: value
+        Store `value` into the cell addressed by `slot`; C-profile role `*(slot) = value`.
+
+    \\slot: value
+        Store `value` through two address levels; C-profile role `**(slot) = value`.
+
+    \tree\branch: value
+        Follow `tree\branch` first, then store through the resulting address;
+        C-profile role `*(tree->branch) = value`.
+
+This is still receiver/update semantics, not C assignment syntax. The colon
+continues to introduce the Structure consumed by the update target. The active
+L2 profile is responsible for type/address-depth validation.
 
 Examples:
 
@@ -5543,6 +5626,12 @@ Meanings under the declarations in section 11.2:
     print: \root\branch\branch
         Follow `root\branch\branch`, then raw-load the primitive cell/element at the resulting address.
         This is parsed as `print: \(root\branch\branch)` and bypasses typed object rendering.
+
+    \leafs: 9
+        Store `9` into the primitive cell/element addressed by `leafs`.
+
+    \\pp: 10
+        Store `10` into the primitive cell reached by two address levels from `pp`.
 
 Field-follow and index chains bind tighter than prefix `@` and prefix `\`.
 

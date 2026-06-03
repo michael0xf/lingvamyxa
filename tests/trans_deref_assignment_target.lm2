@@ -1,0 +1,30 @@
+L2:
+    fn: setOne (@: int slot) int
+        \slot: 1
+        return: 0
+    end: setOne
+
+    fn: setTwo (@@: int slot) int
+        \\slot: 2
+        return: 0
+    end: setTwo
+
+    external:
+        fn: main () int
+            int: value 0
+            @: int p 0
+            @@: int pp 0
+
+            if: setOne(@ value) != 0 || value != 1
+                return: 1
+
+            p: @ value
+            if: setTwo(@ p) != 0 || value != 2
+                return: 2
+
+            pp: @ p
+            \\pp: 3
+            return: value != 3
+        end: main
+    end: external
+end: L2
