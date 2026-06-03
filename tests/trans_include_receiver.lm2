@@ -1,10 +1,8 @@
-include: "<stdio.h>" "parser.lm1.h"
+include: "<stdio.h>"
 
-L2:
-    external:
-        fn: main () int
-            c.printf: "include-ok\n"
-            return: 0
-        end: main
-    end: external
-end: L2
+external:
+    fn: main () int
+        c.printf: "include-ok\n"
+        return: 0
+    end: main
+end: external

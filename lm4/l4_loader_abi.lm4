@@ -59,7 +59,7 @@ table:
     rows:
              lm_l4_loader_static
              L1:
-                 """
+===
 typedef int (*LmL4PushRow)(
     void *context,
     LmP0Text table_atom,
@@ -883,5 +883,5 @@ static int lm_l4_load_root(
     return 0;
 }
 
-"""
+===
 end: `unit.payload`

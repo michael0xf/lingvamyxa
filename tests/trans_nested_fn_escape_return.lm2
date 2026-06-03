@@ -1,20 +1,25 @@
-include: "own.lm1.h"
+import: "lm4/own_abi.lm4"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
 
-L2:
-    fn: AddX (int: value) int
+fn: AddX (int: value) int
 
-    fn: makeAdder (int: base) AddX
-        int: extra 5
-        fn: addX (int: value) int
-            return: base + extra + value
-        ---
-        return: addX
-    end: makeAdder
+fn: makeAdder (int: base) AddX
+    int: extra 5
+    fn: addX (int: value) int
+        return: base + extra + value
+    ---
+    return: addX
+end: makeAdder
 
-    external:
-        fn: main () int
-            AddX: add makeAdder(4)
-            return: add = 0 || add(3) != 12
-        end: main
-    end: external
-end: L2
+external:
+    fn: main () int
+        AddX: add makeAdder(4)
+        return: add = 0 || add(3) != 12
+    end: main
+end: external

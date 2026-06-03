@@ -7816,14 +7816,13 @@ high-level language classes.
 
 Example:
 
-include: "<stdio.h>" "<windows.h>" "parser.lm1.h"
+include: "<stdio.h>" "<windows.h>"
 
 This writes:
 
 ---ANSI C---
 #include <stdio.h>
 #include <windows.h>
-#include "parser.lm1.h"
 ---ANSI C---
 
 An include string whose payload is already enclosed in `<...>` or `"..."` is

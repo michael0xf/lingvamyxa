@@ -11,7 +11,13 @@ This is a small importable CMake project.
 lingvamyxa/
   CMakeLists.txt
   lm1/
-    parser.lm1.h
+    build/
+      buildCore.lm1.c
+      parser.lm1.c
+      printTree.lm1.c
+      make.lm1.c
+      trans.lm1.c
+      finalize.lm1.c
   lm2/
     trans.lm2
     parser.lm2
@@ -19,6 +25,10 @@ lingvamyxa/
     make.lm2
     finalize.lm2
     buildCore.lmx
+  lm4/
+    own_abi.lm4
+    parser_abi.lm4
+    l4_loader_abi.lm4
   qt_app/
     main.cpp
     MainWindow.cpp
@@ -31,13 +41,6 @@ lingvamyxa/
       make.lm0.exe
       finalize.lm0.exe
       buildCore.lm0.exe
-    lm1/
-      buildCore.lm1.c
-      parser.lm1.c
-      printTree.lm1.c
-      make.lm1.c
-      trans.lm1.c
-      finalize.lm1.c
 ```
 
 ## Idea
