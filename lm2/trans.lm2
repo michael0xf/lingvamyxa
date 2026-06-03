@@ -112,6 +112,7 @@ typedef struct LmTransRegistry {
     LmTransIdentifierTable identifiers;
     LmOwnArena value_arena;
     LmOwnPtrStack loaded_paths;
+    char *source_path;
     size_t loaded_fact_count;
     int loaded;
 } LmTransRegistry;
@@ -13094,9 +13095,113 @@ static int lm_trans_emit_l4_payload_node(
     FILE *output,
     const LmP0Node *node,
     LmTransNamespace *namespace_
+);
+static int lm_trans_registry_candidate_path(
+    const char *source_path,
+    const char *candidate_name,
+    char *registry_path,
+    size_t registry_path_size
+);
+
+static int lm_trans_emit_l4_payload_import_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Diagnostic *diagnostic;
+    LmP0Document *document;
+    LmP0Text path_value;
+    char *candidate_name;
+    char payload_path[4096];
+    int emitted;
+    int status;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    field = frame->body.first_field;
+    emitted = 0;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (
+                node == 0 ||
+                node->kind != LM_P0_NODE_ATOM ||
+                !lm_trans_registry_literal_value(node->as.atom, &path_value)
+            ) {
+                fprintf(stderr, "trans L4 unit error: unit.payload import path must be an atom/string\n");
+                return 1;
+            }
+
+            candidate_name = lm_trans_text_copy_cstr(path_value);
+            if (candidate_name == 0) {
+                return 1;
+            }
+            if (
+                lm_trans_registry_candidate_path(
+                    lm_trans_registry.source_path,
+                    candidate_name,
+                    payload_path,
+                    sizeof(payload_path)
+                ) != 0
+            ) {
+                free(candidate_name);
+                fprintf(stderr, "trans L4 unit error: unit.payload import path is too long\n");
+                return 1;
+            }
+            free(candidate_name);
+
+            document = 0;
+            status = lm_p0_parse_file(payload_path, &document);
+            if (status != 0) {
+                diagnostic = lm_p0_document_diagnostic(document);
+                if (diagnostic != 0) {
+                    fprintf(
+                        stderr,
+                        "trans L4 unit import parse error %d at %lu:%lu in %s: %s\n",
+                        diagnostic->code,
+                        (unsigned long)diagnostic->line,
+                        (unsigned long)diagnostic->column,
+                        payload_path,
+                        diagnostic->message
+                    );
+                } else {
+                    fprintf(stderr, "trans L4 unit error: cannot read unit.payload import %s\n", payload_path);
+                }
+                lm_p0_document_destroy(document);
+                return 1;
+            }
+
+            if (lm_trans_emit_l4_payload_node(output, lm_p0_document_root(document), namespace_) != 0) {
+                lm_p0_document_destroy(document);
+                return 1;
+            }
+            lm_p0_document_destroy(document);
+            emitted = 1;
+        }
+        field = field->next;
+    }
+
+    if (!emitted) {
+        fprintf(stderr, "trans L4 unit error: unit.payload import receiver expects at least one path\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_emit_l4_payload_node(
+    FILE *output,
+    const LmP0Node *node,
+    LmTransNamespace *namespace_
 ) {
     if (node == 0) {
         return 0;
+    }
+    if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "import")) {
+        return lm_trans_emit_l4_payload_import_frame(output, &node->as.frame, namespace_);
     }
     if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "L2")) {
         return lm_trans_emit_l2_structure_with_namespace(output, &node->as.frame.body, &node->as.frame, namespace_, 0);
@@ -14883,6 +14988,8 @@ static void lm_trans_registry_destroy(void) {
         lm_trans_identifier_table_destroy(&lm_trans_registry.identifiers);
         lm_own_arena_destroy(&lm_trans_registry.value_arena);
         lm_own_ptr_stack_destroy(&lm_trans_registry.loaded_paths);
+        free(lm_trans_registry.source_path);
+        lm_trans_registry.source_path = 0;
         lm_trans_registry.loaded_fact_count = 0U;
         lm_trans_registry.loaded = 0;
     }
@@ -15661,6 +15768,101 @@ static int lm_trans_registry_load_inline_root(const LmP0Node *root, const char *
     return 0;
 }
 
+static int lm_trans_path_separator(char ch) {
+    return ch == '/' || ch == '\\';
+}
+
+static int lm_trans_path_is_absolute(const char *path) {
+    if (path == 0 || path[0] == '\0') {
+        return 0;
+    }
+    if (lm_trans_path_separator(path[0])) {
+        return 1;
+    }
+    return (
+        ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) &&
+        path[1] == ':' &&
+        lm_trans_path_separator(path[2])
+    );
+}
+
+static int lm_trans_path_segment_equals(
+    const char *path,
+    size_t offset,
+    const char *segment
+) {
+    size_t i;
+
+    if (path == 0 || segment == 0) {
+        return 0;
+    }
+    i = 0U;
+    while (segment[i] != '\0') {
+        if (path[offset + i] != segment[i]) {
+            return 0;
+        }
+        ++i;
+    }
+    return path[offset + i] == '\0' || lm_trans_path_separator(path[offset + i]);
+}
+
+static size_t lm_trans_project_root_length_from_source(const char *source_path) {
+    size_t length;
+    size_t i;
+
+    if (source_path == 0 || !lm_trans_path_is_absolute(source_path)) {
+        return 0U;
+    }
+
+    length = strlen(source_path);
+    for (i = 0U; i < length; ++i) {
+        if (
+            (i == 0U || lm_trans_path_separator(source_path[i - 1U])) &&
+            (
+                lm_trans_path_segment_equals(source_path, i, "lm2") ||
+                lm_trans_path_segment_equals(source_path, i, "lm4") ||
+                lm_trans_path_segment_equals(source_path, i, "tests")
+            )
+        ) {
+            return i;
+        }
+    }
+
+    return 0U;
+}
+
+static int lm_trans_registry_project_path_for_source(
+    const char *source_path,
+    const char *file_name,
+    char *buffer,
+    size_t size
+) {
+    size_t root_length;
+    size_t file_length;
+
+    if (buffer == 0 || file_name == 0 || size == 0U) {
+        return 1;
+    }
+
+    root_length = lm_trans_project_root_length_from_source(source_path);
+    file_length = strlen(file_name);
+    if (root_length == 0U) {
+        if (file_length >= size) {
+            return 1;
+        }
+        strcpy(buffer, file_name);
+        return 0;
+    }
+
+    if (root_length + file_length >= size) {
+        fprintf(stderr, "trans error: registry path is too long\n");
+        return 1;
+    }
+    memcpy(buffer, source_path, root_length);
+    strcpy(buffer + root_length, file_name);
+    return 0;
+}
+
 static int lm_trans_registry_path_for_source(
     const char *source_path,
     const char *file_name,
@@ -15686,7 +15888,7 @@ static int lm_trans_registry_path_for_source(
     length = strlen(source_path);
     slash = 0U;
     for (i = 0U; i < length; ++i) {
-        if (source_path[i] == '/' || source_path[i] == '\\') {
+        if (lm_trans_path_separator(source_path[i])) {
             slash = i + 1U;
         }
     }
@@ -15791,11 +15993,12 @@ static int lm_trans_registry_candidate_path(
         return 1;
     }
     if (strncmp(candidate_name, "lm2/", 4U) == 0 || strncmp(candidate_name, "lm4/", 4U) == 0) {
-        if (strlen(candidate_name) >= registry_path_size) {
-            return 1;
-        }
-        strcpy(registry_path, candidate_name);
-        return 0;
+        return lm_trans_registry_project_path_for_source(
+            source_path,
+            candidate_name,
+            registry_path,
+            registry_path_size
+        );
     }
     return lm_trans_registry_path_for_source(
         source_path,
@@ -15819,6 +16022,12 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
     lm_trans_identifier_table_init(&lm_trans_registry.identifiers);
     lm_own_arena_init(&lm_trans_registry.value_arena);
     lm_own_ptr_stack_init(&lm_trans_registry.loaded_paths, free);
+    lm_trans_registry.source_path = lm_trans_text_copy_cstr(lm_trans_text_from_cstr(source_path));
+    if (lm_trans_registry.source_path == 0) {
+        lm_trans_registry.loaded = 1;
+        lm_trans_registry_destroy();
+        return 1;
+    }
     lm_trans_registry.loaded_fact_count = 0U;
     lm_trans_registry.loaded = 1;
 

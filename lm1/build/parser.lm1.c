@@ -208,7 +208,6 @@ char * lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
 
 
-
 typedef int (*LmL4PushRow)(
     void *context,
     LmP0Text table_atom,
@@ -1031,7 +1030,6 @@ static int lm_l4_load_root(
 
     return 0;
 }
-
 
 
 

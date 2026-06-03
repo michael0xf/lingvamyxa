@@ -97,6 +97,19 @@ set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
 set(LM4_CORE_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm4/core.lm4")
 set(LM4_TRANS_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm4/trans_registry.lm4")
 set(LM4_PARSER_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm4/parser_registry.lm4")
+set(LM4_OWN_ABI "${CMAKE_CURRENT_SOURCE_DIR}/lm4/own_abi.lm4")
+set(LM4_PARSER_ABI "${CMAKE_CURRENT_SOURCE_DIR}/lm4/parser_abi.lm4")
+set(LM4_L4_LOADER_ABI "${CMAKE_CURRENT_SOURCE_DIR}/lm4/l4_loader_abi.lm4")
+set(LM2_L4_LOADER_UNIT_PAYLOAD "${CMAKE_CURRENT_SOURCE_DIR}/lm2/l4_loader_unit_payload.lm2")
+set(LM2_TO_LM1_REGISTRY_DEPS
+    "${LM4_CORE_REGISTRY}"
+    "${LM4_TRANS_REGISTRY}"
+    "${LM4_PARSER_REGISTRY}"
+    "${LM4_OWN_ABI}"
+    "${LM4_PARSER_ABI}"
+    "${LM4_L4_LOADER_ABI}"
+    "${LM2_L4_LOADER_UNIT_PAYLOAD}"
+)
 
 # ---- Generated L1 ownership helper ----
 
@@ -170,9 +183,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/own.lm2"
-            "${LM4_CORE_REGISTRY}"
-            "${LM4_TRANS_REGISTRY}"
-            "${LM4_PARSER_REGISTRY}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Refreshing lm1/build/own.lm1.c from lm2/own.lm2"
         VERBATIM
     )
@@ -185,9 +196,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans.lm2"
-            "${LM4_CORE_REGISTRY}"
-            "${LM4_TRANS_REGISTRY}"
-            "${LM4_PARSER_REGISTRY}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Refreshing lm1/build/trans.lm1.c from lm2/trans.lm2"
         VERBATIM
     )
@@ -200,9 +209,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser.lm2"
-            "${LM4_CORE_REGISTRY}"
-            "${LM4_TRANS_REGISTRY}"
-            "${LM4_PARSER_REGISTRY}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Refreshing lm1/build/parser.lm1.c from lm2/parser.lm2"
         VERBATIM
     )
@@ -216,9 +223,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/printTree.lm2"
-            "${LM4_CORE_REGISTRY}"
-            "${LM4_TRANS_REGISTRY}"
-            "${LM4_PARSER_REGISTRY}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Generating lm1/build/printTree.lm1.c from lm2/printTree.lm2"
         VERBATIM
     )
@@ -232,9 +237,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/make.lm2"
-            "${LM4_CORE_REGISTRY}"
-            "${LM4_TRANS_REGISTRY}"
-            "${LM4_PARSER_REGISTRY}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Generating lm1/build/make.lm1.c from lm2/make.lm2"
         VERBATIM
     )
@@ -248,9 +251,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/vcpkgFetch.lm2"
-            "${LM4_CORE_REGISTRY}"
-            "${LM4_TRANS_REGISTRY}"
-            "${LM4_PARSER_REGISTRY}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Generating lm1/build/vcpkgFetch.lm1.c from lm2/vcpkgFetch.lm2"
         VERBATIM
     )
@@ -264,9 +265,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/buildCore.lmx"
-            "${LM4_CORE_REGISTRY}"
-            "${LM4_TRANS_REGISTRY}"
-            "${LM4_PARSER_REGISTRY}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Generating lm1/build/buildCore.lm1.c from lm2/buildCore.lmx"
         VERBATIM
     )
