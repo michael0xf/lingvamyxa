@@ -1,11 +1,35 @@
 #include "own.lm1.h"
 #include "parser.lm1.h"
+#include "l4_loader.lm1.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+
+
+#define LM_P0_STREAM_EVENT_ITEM 1
+#define LM_P0_STREAM_EVENT_DELIM 2
+#define LM_P0_STREAM_EVENT_BLOCK_STRING 3
+#define LM_P0_STREAM_EVENT_DISABLED_BLOCK 4
+#define LM_P0_STREAM_EVENT_MIX 5
+#define LM_P0_TRAILER_ROLE_NONE 0
+#define LM_P0_TRAILER_ROLE_DASH_CUTTER 1
+#define LM_P0_TRAILER_ROLE_END 2
+#define LM_P0_TRAILER_ROLE_RETURN 3
+#define LM_P0_TRAILER_ROLE_UNTIL 4
+#define LM_P0_DASH_FENCE_NONE 0
+#define LM_P0_DASH_FENCE_VALID 1
+#define LM_P0_DASH_FENCE_TOO_LONG 2
+#define LM_P0_DASH_FENCE_TRAILING_TEXT 3
+#define LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON 1U
+#define LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL 2U
+#define LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL 4U
+#define LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS 8U
+#define LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR 16U
+#define LM_P0_MAX_FENCE_LENGTH 80U
+
 
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
 #define LM_P0_ENABLE_REGISTRY_COMPARE 1
@@ -14,12 +38,6 @@
 
 
 typedef int LmP0StreamEventKind;
-
-#define LM_P0_STREAM_EVENT_ITEM 1
-#define LM_P0_STREAM_EVENT_DELIM 2
-#define LM_P0_STREAM_EVENT_BLOCK_STRING 3
-#define LM_P0_STREAM_EVENT_DISABLED_BLOCK 4
-#define LM_P0_STREAM_EVENT_MIX 5
 
 typedef struct LmP0StreamEvent {
     LmP0StreamEventKind kind;
@@ -96,11 +114,7 @@ typedef struct LmP0Registry {
     int loading;
 } LmP0Registry;
 
-typedef struct LmP0RegistryColumn {
-    LmP0Text name;
-    LmP0Text descriptors[16];
-    size_t descriptor_count;
-} LmP0RegistryColumn;
+typedef LmL4Column LmP0RegistryColumn;
 
 static LmP0Registry lm_p0_registry;
 
@@ -179,28 +193,9 @@ static int lm_p0_document_register_lazy_text(
 
 typedef int LmP0TrailerRole;
 
-#define LM_P0_TRAILER_ROLE_NONE 0
-#define LM_P0_TRAILER_ROLE_DASH_CUTTER 1
-#define LM_P0_TRAILER_ROLE_END 2
-#define LM_P0_TRAILER_ROLE_RETURN 3
-#define LM_P0_TRAILER_ROLE_UNTIL 4
-
 typedef int LmP0DashFenceStatus;
 
-#define LM_P0_DASH_FENCE_NONE 0
-#define LM_P0_DASH_FENCE_VALID 1
-#define LM_P0_DASH_FENCE_TOO_LONG 2
-#define LM_P0_DASH_FENCE_TRAILING_TEXT 3
-
 typedef unsigned LmP0FieldParseFlags;
-
-#define LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON 1U
-#define LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL 2U
-#define LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL 4U
-#define LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS 8U
-#define LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR 16U
-
-#define LM_P0_MAX_FENCE_LENGTH 80U
 
 static void lm_p0_set_diagnostic(
     LmP0Document *document,
@@ -256,10 +251,6 @@ static int lm_p0_text_equals(LmP0Text text, const char *value) {
     }
     value_length = strlen(value);
     return text.length == value_length && memcmp(text.data, value, value_length) == 0;
-}
-
-static int lm_p0_text_same(LmP0Text left, LmP0Text right) {
-    return left.length == right.length && memcmp(left.data, right.data, left.length) == 0;
 }
 
 static char *lm_p0_text_copy_cstr(LmP0Text text) {
@@ -6351,240 +6342,6 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     return status;
 }
 
-static const LmP0Field *lm_p0_nth_field(const LmP0Structure *structure, size_t index) {
-    const LmP0Field *field;
-    size_t i;
-
-    if (structure == 0) {
-        return 0;
-    }
-
-    field = structure->first_field;
-    i = 0U;
-    while (field != 0 && i < index) {
-        field = field->next;
-        ++i;
-    }
-
-    return field;
-}
-
-static int lm_p0_node_is_ignored_for_registry(const LmP0Node *node) {
-    return node == 0 || (node->flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U;
-}
-
-static int lm_p0_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text) {
-    const LmP0Field *field;
-
-    if (trailer == 0 || out_text == 0) {
-        return 0;
-    }
-
-    field = trailer->body.first_field;
-    if (
-        field == 0 ||
-        field->next != 0 ||
-        field->value == 0 ||
-        field->value->kind != LM_P0_NODE_ATOM
-    ) {
-        return 0;
-    }
-
-    *out_text = field->value->as.atom;
-    return 1;
-}
-
-static int lm_p0_registry_row_from_frame(const LmP0Frame *frame) {
-    const LmP0Field *table_field;
-    const LmP0Field *key_field;
-    const LmP0Field *payload_field;
-
-    if (frame == 0 || !lm_p0_text_equals(frame->head, "row")) {
-        return 0;
-    }
-
-    table_field = lm_p0_nth_field(&frame->body, 0U);
-    key_field = lm_p0_nth_field(&frame->body, 1U);
-    payload_field = lm_p0_nth_field(&frame->body, 2U);
-    if (
-        table_field == 0 ||
-        key_field == 0 ||
-        payload_field == 0 ||
-        payload_field->next != 0 ||
-        table_field->value == 0 ||
-        key_field->value == 0 ||
-        payload_field->value == 0 ||
-        table_field->value->kind != LM_P0_NODE_ATOM ||
-        key_field->value->kind != LM_P0_NODE_ATOM ||
-        payload_field->value->kind != LM_P0_NODE_ATOM
-    ) {
-        fprintf(stderr, "parser registry error: row expects exactly three atom fields\n");
-        return -1;
-    }
-
-    if (
-        lm_p0_registry_push_row_atoms(
-            table_field->value->as.atom,
-            key_field->value->as.atom,
-            payload_field->value->as.atom
-        ) != 0
-    ) {
-        return -1;
-    }
-
-    return 1;
-}
-
-static int lm_p0_registry_frame_single_atom(
-    const LmP0Frame *frame,
-    const char *head,
-    LmP0Text *out_atom
-) {
-    const LmP0Field *field;
-
-    if (frame == 0 || out_atom == 0) {
-        return 0;
-    }
-    if (head != 0 && !lm_p0_text_equals(frame->head, head)) {
-        return 0;
-    }
-
-    field = lm_p0_nth_field(&frame->body, 0U);
-    if (
-        field == 0 ||
-        field->next != 0 ||
-        field->value == 0 ||
-        field->value->kind != LM_P0_NODE_ATOM
-    ) {
-        return -1;
-    }
-
-    *out_atom = field->value->as.atom;
-    return 1;
-}
-
-static int lm_p0_registry_column_name(
-    const LmP0Field *field,
-    LmP0RegistryColumn *out_column
-) {
-    const LmP0Node *node;
-    const LmP0Field *body_field;
-    size_t descriptor_count;
-
-    if (field == 0 || out_column == 0) {
-        return 0;
-    }
-
-    memset(out_column, 0, sizeof(*out_column));
-    node = field->value;
-    if (node == 0) {
-        return -1;
-    }
-
-    if (node->kind == LM_P0_NODE_ATOM) {
-        out_column->name = node->as.atom;
-        return 1;
-    }
-
-    if (node->kind == LM_P0_NODE_FRAME) {
-        if (lm_p0_registry_frame_single_atom(&node->as.frame, 0, &out_column->name) <= 0) {
-            return -1;
-        }
-        out_column->descriptors[0] = node->as.frame.head;
-        out_column->descriptor_count = 1U;
-        return 1;
-    }
-
-    if (node->kind != LM_P0_NODE_STRUCTURE) {
-        return -1;
-    }
-
-    body_field = node->as.structure.first_field;
-    while (body_field != 0 && lm_p0_node_is_ignored_for_registry(body_field->value)) {
-        body_field = body_field->next;
-    }
-    if (body_field == 0 || body_field->value == 0 || body_field->value->kind != LM_P0_NODE_ATOM) {
-        return -1;
-    }
-    out_column->name = body_field->value->as.atom;
-
-    descriptor_count = 0U;
-    body_field = body_field->next;
-    while (body_field != 0) {
-        if (body_field->value != 0 && !lm_p0_node_is_ignored_for_registry(body_field->value)) {
-            if (body_field->value->kind != LM_P0_NODE_ATOM) {
-                return -1;
-            }
-            if (descriptor_count >= sizeof(out_column->descriptors) / sizeof(out_column->descriptors[0])) {
-                return -1;
-            }
-            out_column->descriptors[descriptor_count] = body_field->value->as.atom;
-            ++descriptor_count;
-        }
-        body_field = body_field->next;
-    }
-    out_column->descriptor_count = descriptor_count;
-
-    return 1;
-}
-
-static int lm_p0_registry_columns_from_frame(
-    const LmP0Frame *frame,
-    LmP0RegistryColumn *columns,
-    size_t columns_capacity,
-    size_t *out_count
-) {
-    const LmP0Field *field;
-    LmP0RegistryColumn column;
-    LmP0Text first_column;
-    size_t count;
-    int status;
-
-    if (
-        frame == 0 ||
-        columns == 0 ||
-        out_count == 0 ||
-        columns_capacity == 0U ||
-        !lm_p0_text_equals(frame->head, "columns")
-    ) {
-        return 0;
-    }
-
-    count = 0U;
-    field = frame->body.first_field;
-    while (field != 0) {
-        if (field->value != 0 && !lm_p0_node_is_ignored_for_registry(field->value)) {
-            status = lm_p0_registry_column_name(field, &column);
-            if (status <= 0) {
-                fprintf(stderr, "parser registry error: columns expects atoms or anonymous descriptor structures\n");
-                return -1;
-            }
-            if (count >= columns_capacity) {
-                fprintf(stderr, "parser registry error: table has too many columns\n");
-                return -1;
-            }
-            columns[count] = column;
-            ++count;
-        }
-        field = field->next;
-    }
-
-    if (count < 2U) {
-        fprintf(stderr, "parser registry error: table expects at least two columns\n");
-        return -1;
-    }
-    if (
-        !lm_p0_registry_identifier_value(columns[0].name, &first_column) ||
-        !lm_p0_text_equals(first_column, "class")
-    ) {
-        fprintf(stderr, "parser registry error: first table column must be class\n");
-        return -1;
-    }
-
-    *out_count = count;
-    return 1;
-}
-
 static char *lm_p0_registry_join_text3(LmP0Text first, const char *separator, LmP0Text second) {
     size_t separator_length;
     size_t length;
@@ -6691,379 +6448,59 @@ static int lm_p0_registry_push_column_metadata(
     return 0;
 }
 
-static int lm_p0_registry_rows_from_frame(
-    const LmP0Frame *frame,
+static int lm_p0_registry_l4_push_row(
+    void *context,
+    LmP0Text table_atom,
+    LmP0Text key_atom,
+    const LmP0Node *payload_node
+) {
+    (void)context;
+    if (payload_node == 0 || payload_node->kind != LM_P0_NODE_ATOM) {
+        fprintf(stderr, "parser registry error: row expects exactly three atom fields\n");
+        return -1;
+    }
+    return lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node->as.atom);
+}
+
+static int lm_p0_registry_l4_push_cell(
+    void *context,
     LmP0Text table_name,
-    const LmP0RegistryColumn *columns,
+    const LmL4Column *column,
+    int split_by_column,
+    LmP0Text key_atom,
+    const LmP0Node *payload_node
+) {
+    (void)context;
+    if (payload_node == 0 || payload_node->kind != LM_P0_NODE_ATOM) {
+        fprintf(stderr, "parser registry error: table rows currently expect atom cells\n");
+        return -1;
+    }
+    return lm_p0_registry_push_table_cell(
+        table_name,
+        column,
+        split_by_column,
+        key_atom,
+        payload_node->as.atom
+    );
+}
+
+static int lm_p0_registry_l4_push_column_metadata(
+    void *context,
+    LmP0Text table_name,
+    const LmL4Column *columns,
     size_t column_count
 ) {
-    const LmP0Field *field;
-    const LmP0Node *key_node;
-    const LmP0Node *cell_node;
-    size_t field_index;
-    size_t column_index;
-    int split_by_column;
-
-    if (frame == 0 || !lm_p0_text_equals(frame->head, "rows")) {
-        return 0;
-    }
-    if (columns == 0 || column_count < 2U) {
-        fprintf(stderr, "parser registry error: rows require at least two columns\n");
-        return -1;
-    }
-
-    field_index = 0U;
-    key_node = 0;
-    split_by_column = column_count != 2U;
-    field = frame->body.first_field;
-    while (field != 0) {
-        if (field->value != 0 && !lm_p0_node_is_ignored_for_registry(field->value)) {
-            column_index = field_index % column_count;
-            if (column_index == 0U) {
-                key_node = field->value;
-                if (key_node->kind != LM_P0_NODE_ATOM) {
-                    fprintf(stderr, "parser registry error: table rows currently expect atom cells\n");
-                    return -1;
-                }
-            } else {
-                cell_node = field->value;
-                if (
-                    key_node == 0 ||
-                    cell_node->kind != LM_P0_NODE_ATOM ||
-                    lm_p0_registry_push_table_cell(
-                        table_name,
-                        &columns[column_index],
-                        split_by_column,
-                        key_node->as.atom,
-                        cell_node->as.atom
-                    ) != 0
-                ) {
-                    return -1;
-                }
-            }
-            ++field_index;
-        }
-        field = field->next;
-    }
-
-    if ((field_index % column_count) != 0U) {
-        fprintf(stderr, "parser registry error: rows field count is not divisible by column count\n");
-        return -1;
-    }
-    if (field_index == 0U) {
-        fprintf(stderr, "parser registry error: table rows must not be empty\n");
-        return -1;
-    }
-
-    return 1;
+    (void)context;
+    return lm_p0_registry_push_column_metadata(table_name, columns, column_count);
 }
 
-static int lm_p0_registry_validate_table_trailer(
-    const LmP0Frame *frame,
-    LmP0Text table_name
-) {
-    LmP0Text actual;
-    LmP0Text actual_payload;
-    LmP0Text expected_payload;
-
-    if (frame == 0 || frame->trailer == 0) {
-        return 0;
-    }
-    if (!lm_p0_text_equals(frame->trailer->spelling, "end")) {
-        return 0;
-    }
-    if (!lm_p0_trailer_single_atom(frame->trailer, &actual)) {
-        fprintf(stderr, "parser registry error: table end expects exactly one target name\n");
-        return 1;
-    }
-    if (
-        !lm_p0_registry_identifier_value(actual, &actual_payload) ||
-        !lm_p0_registry_identifier_value(table_name, &expected_payload) ||
-        !lm_p0_text_same(actual_payload, expected_payload)
-    ) {
-        fprintf(stderr, "parser registry error: table end target does not match table name\n");
-        return 1;
-    }
-
-    return 0;
-}
-
-static int lm_p0_registry_table_from_frame(const LmP0Frame *frame) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    LmP0RegistryColumn columns[128];
-    LmP0Text table_name;
-    size_t column_count;
-    int have_name;
-    int have_columns;
-    int have_rows;
-    int status;
-
-    if (frame == 0 || !lm_p0_text_equals(frame->head, "table")) {
-        return 0;
-    }
-
-    have_name = 0;
-    have_columns = 0;
-    have_rows = 0;
-    column_count = 0U;
-    field = frame->body.first_field;
-    while (field != 0) {
-        node = field->value;
-        if (node != 0 && !lm_p0_node_is_ignored_for_registry(node)) {
-            if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "parser registry error: table body expects name/columns/rows frames\n");
-                return -1;
-            }
-            status = lm_p0_registry_frame_single_atom(&node->as.frame, "name", &table_name);
-            if (status < 0) {
-                fprintf(stderr, "parser registry error: table name expects exactly one atom\n");
-                return -1;
-            }
-            if (status > 0) {
-                have_name = 1;
-            } else if (lm_p0_text_equals(node->as.frame.head, "columns")) {
-                if (!have_name) {
-                    fprintf(stderr, "parser registry error: table columns must appear after name\n");
-                    return -1;
-                }
-                status = lm_p0_registry_columns_from_frame(
-                    &node->as.frame,
-                    columns,
-                    sizeof(columns) / sizeof(columns[0]),
-                    &column_count
-                );
-                if (status <= 0) {
-                    return -1;
-                }
-                if (lm_p0_registry_push_column_metadata(table_name, columns, column_count) != 0) {
-                    fprintf(stderr, "parser registry error: cannot store table column metadata\n");
-                    return -1;
-                }
-                have_columns = 1;
-            } else if (lm_p0_text_equals(node->as.frame.head, "rows")) {
-                if (!have_name || !have_columns) {
-                    fprintf(stderr, "parser registry error: table rows must appear after name and columns\n");
-                    return -1;
-                }
-                status = lm_p0_registry_rows_from_frame(
-                    &node->as.frame,
-                    table_name,
-                    columns,
-                    column_count
-                );
-                if (status <= 0) {
-                    return -1;
-                }
-                have_rows = 1;
-            } else {
-                fprintf(stderr, "parser registry error: table body expects name/columns/rows frames\n");
-                return -1;
-            }
-        }
-        field = field->next;
-    }
-
-    if (!have_name || !have_columns || !have_rows) {
-        fprintf(stderr, "parser registry error: table requires name, columns and rows\n");
-        return -1;
-    }
-    if (lm_p0_registry_validate_table_trailer(frame, table_name) != 0) {
-        return -1;
-    }
-
-    return 1;
-}
-
-static int lm_p0_registry_load_rows(const LmP0Structure *structure) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    int status;
-
-    if (structure == 0) {
-        return 0;
-    }
-
-    field = structure->first_field;
-    while (field != 0) {
-        node = field->value;
-        if (!lm_p0_node_is_ignored_for_registry(node)) {
-            if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "parser registry error: registry body expects table or row frames\n");
-                return 1;
-            }
-            status = lm_p0_registry_row_from_frame(&node->as.frame);
-            if (status <= 0) {
-                if (status < 0) {
-                    return 1;
-                }
-                status = lm_p0_registry_table_from_frame(&node->as.frame);
-                if (status <= 0) {
-                    if (status == 0) {
-                        fprintf(stderr, "parser registry error: registry body expects table or row frames\n");
-                    }
-                    return 1;
-                }
-            }
-        }
-        field = field->next;
-    }
-
-    return 0;
-}
-
-static int lm_p0_registry_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
-    LmP0Text payload;
-    char *name;
-    size_t i;
-    char *existing;
-
-    if (seen == 0) {
-        return -1;
-    }
-    if (!lm_p0_registry_identifier_value(table_name, &payload)) {
-        return -1;
-    }
-
-    i = 0U;
-    while (i < seen->count) {
-        existing = (char *)lm_own_ptr_stack_at(seen, i);
-        if (existing != 0 && lm_p0_text_equals(payload, existing)) {
-            return 1;
-        }
-        ++i;
-    }
-
-    name = lm_p0_text_copy_cstr(payload);
-    if (name == 0) {
-        return -1;
-    }
-    if (lm_own_ptr_stack_push(seen, name) != 0) {
-        free(name);
-        return -1;
-    }
-    return 0;
-}
-
-static int lm_p0_registry_check_table_frame_unique(
-    const LmP0Frame *frame,
-    LmOwnPtrStack *seen
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    LmP0Text table_name;
-    LmP0Text payload;
-    int status;
-
-    if (frame == 0 || !lm_p0_text_equals(frame->head, "table")) {
-        return 0;
-    }
-
-    status = 0;
-    field = frame->body.first_field;
-    while (field != 0) {
-        node = field->value;
-        if (
-            node != 0 &&
-            !lm_p0_node_is_ignored_for_registry(node) &&
-            node->kind == LM_P0_NODE_FRAME
-        ) {
-            status = lm_p0_registry_frame_single_atom(&node->as.frame, "name", &table_name);
-            if (status < 0) {
-                fprintf(stderr, "parser registry error: table name expects exactly one atom\n");
-                return -1;
-            }
-            if (status > 0) {
-                break;
-            }
-        }
-        field = field->next;
-    }
-    if (status == 0) {
-        return 0;
-    }
-
-    status = lm_p0_registry_seen_table_add(seen, table_name);
-    if (status < 0) {
-        fprintf(stderr, "parser registry error: cannot record table name\n");
-        return -1;
-    }
-    if (status > 0) {
-        if (lm_p0_registry_identifier_value(table_name, &payload)) {
-            fprintf(
-                stderr,
-                "parser registry error: duplicate table in one L4 schema: %.*s\n",
-                (int)payload.length,
-                payload.data
-            );
-        } else {
-            fprintf(stderr, "parser registry error: duplicate table in one L4 schema\n");
-        }
-        return -1;
-    }
-
-    return 0;
-}
-
-static int lm_p0_registry_check_duplicate_tables_in_rows(
-    const LmP0Structure *structure,
-    LmOwnPtrStack *seen
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-
-    if (structure == 0) {
-        return 0;
-    }
-
-    field = structure->first_field;
-    while (field != 0) {
-        node = field->value;
-        if (
-            !lm_p0_node_is_ignored_for_registry(node) &&
-            node->kind == LM_P0_NODE_FRAME &&
-            lm_p0_text_equals(node->as.frame.head, "table") &&
-            lm_p0_registry_check_table_frame_unique(&node->as.frame, seen) != 0
-        ) {
-            return -1;
-        }
-        field = field->next;
-    }
-
-    return 0;
-}
-
-static int lm_p0_registry_check_duplicate_tables_in_root(
-    const LmP0Node *root,
-    int implicit_l4
-) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    LmOwnPtrStack seen;
-    int status;
-
-    lm_own_ptr_stack_init(&seen, free);
-    status = 0;
-
-    field = root->as.structure.first_field;
-    while (field != 0 && status == 0) {
-        node = field->value;
-        if (!lm_p0_node_is_ignored_for_registry(node) && node->kind == LM_P0_NODE_FRAME) {
-            if (
-                lm_p0_text_equals(node->as.frame.head, "L4") ||
-                lm_p0_text_equals(node->as.frame.head, "registry")
-            ) {
-                status = lm_p0_registry_check_duplicate_tables_in_rows(&node->as.frame.body, &seen);
-            } else if (implicit_l4 && lm_p0_text_equals(node->as.frame.head, "table")) {
-                status = lm_p0_registry_check_table_frame_unique(&node->as.frame, &seen);
-            }
-        }
-        field = field->next;
-    }
-
-    lm_own_ptr_stack_destroy(&seen);
-    return status;
-}
+static const LmL4Loader lm_p0_registry_l4_loader = {
+    "parser",
+    lm_p0_registry_l4_push_row,
+    lm_p0_registry_l4_push_cell,
+    0,
+    lm_p0_registry_l4_push_column_metadata
+};
 
 static int lm_p0_path_has_extension(const char *path, const char *extension) {
     size_t path_length;
@@ -7102,59 +6539,13 @@ static int lm_p0_path_has_extension(const char *path, const char *extension) {
 }
 
 static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
-    const LmP0Field *field;
-    const LmP0Node *node;
-    int loaded;
-
-    if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
-        fprintf(stderr, "parser registry error: root must be a Structure\n");
-        return 1;
-    }
-    if (lm_p0_registry_check_duplicate_tables_in_root(root, implicit_l4) != 0) {
-        return 1;
-    }
-
-    loaded = 0;
-    field = root->as.structure.first_field;
-    while (field != 0) {
-        node = field->value;
-        if (!lm_p0_node_is_ignored_for_registry(node)) {
-            if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "parser registry error: root fields must be L4/registry frames, or table/row frames in .lm4 files\n");
-                return 1;
-            }
-            if (
-                lm_p0_text_equals(node->as.frame.head, "L4") ||
-                lm_p0_text_equals(node->as.frame.head, "registry")
-            ) {
-                if (lm_p0_registry_load_rows(&node->as.frame.body) != 0) {
-                    return 1;
-                }
-                loaded = 1;
-            } else if (implicit_l4 && lm_p0_text_equals(node->as.frame.head, "row")) {
-                if (lm_p0_registry_row_from_frame(&node->as.frame) <= 0) {
-                    return 1;
-                }
-                loaded = 1;
-            } else if (implicit_l4 && lm_p0_text_equals(node->as.frame.head, "table")) {
-                if (lm_p0_registry_table_from_frame(&node->as.frame) <= 0) {
-                    return 1;
-                }
-                loaded = 1;
-            } else {
-                fprintf(stderr, "parser registry error: root fields must be L4/registry frames, or table/row frames in .lm4 files\n");
-                return 1;
-            }
-        }
-        field = field->next;
-    }
-
-    if (!loaded || lm_p0_registry.rows.count == 0U) {
-        fprintf(stderr, "parser registry error: no rows loaded\n");
-        return 1;
-    }
-
-    return 0;
+    return lm_l4_load_root(
+        &lm_p0_registry_l4_loader,
+        0,
+        root,
+        implicit_l4,
+        &lm_p0_registry.rows.count
+    );
 }
 
 static int lm_p0_registry_parse_unsigned_payload(const char *payload, unsigned *out_value) {

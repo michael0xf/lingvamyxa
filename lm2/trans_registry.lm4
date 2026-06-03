@@ -179,10 +179,12 @@ end: `receiver.statement`
 
 table:
     name: `receiver.atom.statement`
-    columns: class    (receiver binding)
+    columns: class     (receiver binding)
     rows:
-             include  lm_trans_atom_statement_emit_include_prelude
-             os       lm_trans_atom_statement_emit_os_prelude
+             include   lm_trans_atom_statement_emit_include_prelude
+             os        lm_trans_atom_statement_emit_os_prelude
+             layout    lm_trans_atom_statement_emit_layout_prelude
+             constant  lm_trans_atom_statement_emit_constant_prelude
 end: `receiver.atom.statement`
 
 table:
