@@ -347,6 +347,7 @@ table:
     rows:
              `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
              `callable.descriptor.value` lm_trans_materialize_callable_descriptor_value
+             `array.value`              lm_trans_materialize_array_value
 end: `materialize.argument`
 
 table:

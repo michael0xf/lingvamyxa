@@ -1,0 +1,43 @@
+import: "lm2/own.lm2"
+
+fn: IntSource () int
+
+fn: AddX (int: value) int
+
+fn: five () int
+    return: 5
+end: five
+
+fn: addDefault (int: base 4; int: value 3) int
+    return: base + value
+end: addDefault
+
+fn: addBase (int: base 4; int: value) int
+    return: base + value
+end: addBase
+
+fn: defaultValues () []: int
+    return: [2 4 6]
+end: defaultValues
+
+fn: pickLiteral ([3]: int values [2 4 6]; int: index 1) int
+    return: values[index]
+end: pickLiteral
+
+fn: pickGenerated ([]: int values defaultValues(); int: index 2) int
+    return: values[index]
+end: pickGenerated
+
+fn: callSource (IntSource: source five) int
+    return: source()
+end: callSource
+
+fn: callAdd (AddX: add) int
+    return: add(3)
+end: callAdd
+
+external:
+    fn: main () int
+        return: addDefault() != 7 || addDefault(10) != 13 || addDefault(; 8) != 12 || addDefault(value: 8) != 12 || callSource() != 5 || callAdd(addBase()) != 7 || pickLiteral() != 4 || pickLiteral(index: 2) != 6 || pickLiteral([2 4 6], 0) != 2 || pickGenerated() != 6
+    end: main
+end: external
