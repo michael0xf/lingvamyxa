@@ -19,32 +19,22 @@ L4:
 
     table:
         name: LmTableError
-        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 message  char                   0                       1
+                 message  char                   0                       1                                1
     end: LmTableError
+
+    table:
+        name: `layout.backend`
+        columns: class          (backend class)
+        rows:
+                 LmTableBuffer  c.struct
+                 LmTableColumn  c.struct
+                 LmTableError   c.struct
+    end: `layout.backend`
 end: L4
 
 include: "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "parser.lm1.h"
-
-L1:
-===
-typedef struct LmTableBuffer {
-    char *data;
-    size_t length;
-    size_t capacity;
-    int failed;
-} LmTableBuffer;
-
-typedef struct LmTableColumn {
-    char *spelling;
-    size_t width;
-} LmTableColumn;
-
-typedef struct LmTableError {
-    const char *message;
-} LmTableError;
-===
 
 fn: lm_table_text_equals (const: @(char data); size_t: text_length; const: @: char value) int
     size_t: length

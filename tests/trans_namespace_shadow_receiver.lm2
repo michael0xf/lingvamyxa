@@ -1,0 +1,9 @@
+external:
+    fn: main () int
+        int: os 0
+        int: fn 0
+        os: os + 1
+        fn: fn + 2
+        return: os != 1 || fn != 2
+    end: main
+end: external

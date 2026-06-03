@@ -27,6 +27,11 @@ table:
              `field.class`              relation
              `field.index`              relation
              `field.address-depth`      relation
+             `field.const`              relation
+             `layout.backend`           relation
+             `constant.backend`         relation
+             `constant.value`           relation
+             `class.present`            relation
 
              void                       primitive
              char                       primitive

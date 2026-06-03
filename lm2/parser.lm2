@@ -1,5 +1,59 @@
 include: "own.lm1.h" "parser.lm1.h" "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
 
+L4:
+    table:
+        name: `constant.backend`
+        columns: class                                             (backend class)
+        rows:
+                 LM_P0_STREAM_EVENT_ITEM                           c.define
+                 LM_P0_STREAM_EVENT_DELIM                          c.define
+                 LM_P0_STREAM_EVENT_BLOCK_STRING                   c.define
+                 LM_P0_STREAM_EVENT_DISABLED_BLOCK                 c.define
+                 LM_P0_STREAM_EVENT_MIX                            c.define
+                 LM_P0_TRAILER_ROLE_NONE                           c.define
+                 LM_P0_TRAILER_ROLE_DASH_CUTTER                    c.define
+                 LM_P0_TRAILER_ROLE_END                            c.define
+                 LM_P0_TRAILER_ROLE_RETURN                         c.define
+                 LM_P0_TRAILER_ROLE_UNTIL                          c.define
+                 LM_P0_DASH_FENCE_NONE                             c.define
+                 LM_P0_DASH_FENCE_VALID                            c.define
+                 LM_P0_DASH_FENCE_TOO_LONG                         c.define
+                 LM_P0_DASH_FENCE_TRAILING_TEXT                    c.define
+                 LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON               c.define
+                 LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL            c.define
+                 LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL    c.define
+                 LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS              c.define
+                 LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR  c.define
+                 LM_P0_MAX_FENCE_LENGTH                            c.define
+    end: `constant.backend`
+
+    table:
+        name: `constant.value`
+        columns: class                                             (value literal)
+        rows:
+                 LM_P0_STREAM_EVENT_ITEM                           1
+                 LM_P0_STREAM_EVENT_DELIM                          2
+                 LM_P0_STREAM_EVENT_BLOCK_STRING                   3
+                 LM_P0_STREAM_EVENT_DISABLED_BLOCK                 4
+                 LM_P0_STREAM_EVENT_MIX                            5
+                 LM_P0_TRAILER_ROLE_NONE                           0
+                 LM_P0_TRAILER_ROLE_DASH_CUTTER                    1
+                 LM_P0_TRAILER_ROLE_END                            2
+                 LM_P0_TRAILER_ROLE_RETURN                         3
+                 LM_P0_TRAILER_ROLE_UNTIL                          4
+                 LM_P0_DASH_FENCE_NONE                             0
+                 LM_P0_DASH_FENCE_VALID                            1
+                 LM_P0_DASH_FENCE_TOO_LONG                         2
+                 LM_P0_DASH_FENCE_TRAILING_TEXT                    3
+                 LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON               1U
+                 LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL            2U
+                 LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL    4U
+                 LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS              8U
+                 LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR  16U
+                 LM_P0_MAX_FENCE_LENGTH                            80U
+    end: `constant.value`
+end: L4
+
 L1:
 ===
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
@@ -9,12 +63,6 @@ L1:
 
 
 typedef int LmP0StreamEventKind;
-
-#define LM_P0_STREAM_EVENT_ITEM 1
-#define LM_P0_STREAM_EVENT_DELIM 2
-#define LM_P0_STREAM_EVENT_BLOCK_STRING 3
-#define LM_P0_STREAM_EVENT_DISABLED_BLOCK 4
-#define LM_P0_STREAM_EVENT_MIX 5
 
 typedef struct LmP0StreamEvent {
     LmP0StreamEventKind kind;
@@ -174,28 +222,9 @@ static int lm_p0_document_register_lazy_text(
 
 typedef int LmP0TrailerRole;
 
-#define LM_P0_TRAILER_ROLE_NONE 0
-#define LM_P0_TRAILER_ROLE_DASH_CUTTER 1
-#define LM_P0_TRAILER_ROLE_END 2
-#define LM_P0_TRAILER_ROLE_RETURN 3
-#define LM_P0_TRAILER_ROLE_UNTIL 4
-
 typedef int LmP0DashFenceStatus;
 
-#define LM_P0_DASH_FENCE_NONE 0
-#define LM_P0_DASH_FENCE_VALID 1
-#define LM_P0_DASH_FENCE_TOO_LONG 2
-#define LM_P0_DASH_FENCE_TRAILING_TEXT 3
-
 typedef unsigned LmP0FieldParseFlags;
-
-#define LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON 1U
-#define LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL 2U
-#define LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL 4U
-#define LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS 8U
-#define LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR 16U
-
-#define LM_P0_MAX_FENCE_LENGTH 80U
 
 static void lm_p0_set_diagnostic(
     LmP0Document *document,
