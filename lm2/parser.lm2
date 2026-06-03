@@ -1,4 +1,10 @@
-include: "own.lm1.h" "parser.lm1.h" "l4_loader.lm1.h" "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
+import: "lm4/own_abi.lm4"
+import: "lm4/parser_abi.lm4"
+import: "lm4/l4_loader_abi.lm4"
+include
+include: "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
+alias
+forward
 
 L4:
     table:
@@ -55,6 +61,10 @@ L4:
 end: L4
 
 constant
+fn
+layout
+prototype
+unit
 
 L1:
 ===

@@ -26,6 +26,7 @@ table:
              value                      class
              body                       class
              node                       class
+             prototype                  class
              NULL                       class
              forbidden                  class
              `field.class`              relation
@@ -75,6 +76,7 @@ table:
              synchronized               descriptor
              const                      descriptor
              external                   descriptor
+             import                     descriptor
              `end`                      descriptor
              `until`                    descriptor
              `()`                       descriptor

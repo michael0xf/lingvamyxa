@@ -20,9 +20,16 @@ L4:
     end: `layout.backend`
 end: L4
 
+import: "lm4/own_abi.lm4"
+include
+alias
+forward
+constant
+fn
 layout
+prototype
 
-include: "<stdio.h>" "<stdlib.h>" "<string.h>" "own.lm1.h"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
 
 os:
     win:

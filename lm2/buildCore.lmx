@@ -7,6 +7,13 @@ L4:
     end: LmBuildOptions
 
     table:
+        name: `layout.backend`
+        columns: class           (backend class)
+        rows:
+                 LmBuildOptions  c.struct
+    end: `layout.backend`
+
+    table:
         name: BUILD
         columns: class              (l2 binding)                (win char)                                       (unix char)
         rows:
@@ -24,15 +31,17 @@ L4:
     end: BUILD
 end: L4
 
-L1:
-===
-typedef struct LmBuildOptions {
-    int full_build;
-} LmBuildOptions;
-===
-
 L2:
-    include: "<stdio.h>" "<stdlib.h>" "<string.h>" "own.lm1.h"
+    import: "lm4/own_abi.lm4"
+    include
+    alias
+    forward
+    constant
+    fn
+    layout
+    prototype
+    
+    include: "<stdio.h>" "<stdlib.h>" "<string.h>"
     
     os:
         win:
@@ -464,18 +473,11 @@ L2:
     
     fn: lm_build_compile_trans (@: char make_tool; @: char parser_library; @: char own_library) int
         []: char command 4096
-        @: char legacy_compare
-        @: char legacy_flag
-    
-        legacy_compare: c.getenv("LM_TRANS_ENABLE_LEGACY_COMPARE")
-        legacy_flag: ""
-        if: legacy_compare != 0 && c.strcmp(legacy_compare, "0") = 0
-            legacy_flag: " -DLM_TRANS_ENABLE_LEGACY_COMPARE=0"
     
         c.snprintf:
             command c.sizeof(command)
-            "-std=c99 -Wall -Wextra -Wpedantic%s -I\"lm1\" \"lm1/build/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\""
-            legacy_flag parser_library own_library lm_build_exe_suffix()
+            "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\""
+            parser_library own_library lm_build_exe_suffix()
     
         if: lm_build_make(make_tool, "link", command) != 0
             return: 1

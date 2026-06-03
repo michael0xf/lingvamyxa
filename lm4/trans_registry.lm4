@@ -125,6 +125,7 @@ table:
              continue      `receiver.statement`
              synchronized  `receiver.statement`
              include       `receiver.statement`
+             import        `receiver.statement`
              os            `receiver.statement`
              guard         `receiver.statement`
              extern_c      `receiver.statement`
@@ -170,6 +171,7 @@ table:
              continue      lm_trans_statement_emit_loop_jump
              synchronized  lm_trans_statement_emit_synchronized
              include       lm_trans_statement_emit_include_prelude
+             import        lm_trans_statement_emit_import_noop
              os            lm_trans_statement_emit_os_prelude
              guard         lm_trans_statement_emit_guard_prelude
              extern_c      lm_trans_statement_emit_extern_c_prelude
@@ -192,6 +194,7 @@ table:
              constant         lm_trans_atom_statement_emit_constant_prelude
              alias            lm_trans_atom_statement_emit_alias_prelude
              forward          lm_trans_atom_statement_emit_forward_prelude
+             prototype        lm_trans_atom_statement_emit_prototype_prelude
              guard            lm_trans_atom_statement_emit_guard_prelude
              extern_c         lm_trans_atom_statement_emit_extern_c_prelude
              unit             lm_trans_atom_statement_emit_unit_prelude

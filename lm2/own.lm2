@@ -1,4 +1,13 @@
-include: "own.lm1.h" "<stdlib.h>" "<string.h>"
+import: "lm4/own_abi.lm4"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+include: "<stdlib.h>" "<string.h>"
 
 L1:
 ===

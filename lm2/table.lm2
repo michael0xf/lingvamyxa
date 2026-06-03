@@ -34,9 +34,16 @@ L4:
     end: `layout.backend`
 end: L4
 
+import: "lm4/parser_abi.lm4"
+include
+alias
+forward
+constant
+fn
 layout
+prototype
 
-include: "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "parser.lm1.h"
+include: "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
 
 fn: lm_table_text_equals (const: @(char data); size_t: text_length; const: @: char value) int
     size_t: length
