@@ -1,5 +1,127 @@
 L4:
     table:
+        name: `layout.backend`
+        columns: class          (backend class)
+        rows:
+                 LmTestLayout   c.struct
+                 LmTestNamed    c.named-struct
+                 LmTestUnion    c.union
+                 LmTestNode     c.struct
+    end: `layout.backend`
+
+    table:
+        name: `LmTestLayout.field.class`
+        columns: class    (field class)
+        rows:
+                 message  char
+                 next     LmTestForward
+    end: `LmTestLayout.field.class`
+
+    table:
+        name: `LmTestLayout.field.index`
+        columns: class    (index serial)
+        rows:
+                 message  0
+                 next     1
+    end: `LmTestLayout.field.index`
+
+    table:
+        name: `LmTestLayout.field.address-depth`
+        columns: class    (depth serial)
+        rows:
+                 next     1
+    end: `LmTestLayout.field.address-depth`
+
+    table:
+        name: `LmTestLayout.field.array-count`
+        columns: class    (count serial)
+        rows:
+                 message  16
+    end: `LmTestLayout.field.array-count`
+
+    table:
+        name: `LmTestNamed.field.class`
+        columns: class  (field class)
+        rows:
+                 value  int
+    end: `LmTestNamed.field.class`
+
+    table:
+        name: `LmTestNamed.field.index`
+        columns: class  (index serial)
+        rows:
+                 value  0
+    end: `LmTestNamed.field.index`
+
+    table:
+        name: `LmTestUnion.field.class`
+        columns: class  (field class)
+        rows:
+                 value  int
+                 text   char
+    end: `LmTestUnion.field.class`
+
+    table:
+        name: `LmTestUnion.field.index`
+        columns: class  (index serial)
+        rows:
+                 value  0
+                 text   1
+    end: `LmTestUnion.field.index`
+
+    table:
+        name: `LmTestUnion.field.address-depth`
+        columns: class  (depth serial)
+        rows:
+                 text   1
+    end: `LmTestUnion.field.address-depth`
+
+    table:
+        name: `LmTestNode.field.class`
+        columns: class  (field class)
+        rows:
+                 kind   int
+    end: `LmTestNode.field.class`
+
+    table:
+        name: `LmTestNode.field.union`
+        columns: class  (union class)
+        rows:
+                 as     LmTestNodeAs
+    end: `LmTestNode.field.union`
+
+    table:
+        name: `LmTestNode.field.index`
+        columns: class  (index serial)
+        rows:
+                 kind   0
+                 as     1
+    end: `LmTestNode.field.index`
+
+    table:
+        name: `LmTestNodeAs.field.class`
+        columns: class  (field class)
+        rows:
+                 number int
+                 text   char
+    end: `LmTestNodeAs.field.class`
+
+    table:
+        name: `LmTestNodeAs.field.index`
+        columns: class  (index serial)
+        rows:
+                 number 0
+                 text   1
+    end: `LmTestNodeAs.field.index`
+
+    table:
+        name: `LmTestNodeAs.field.address-depth`
+        columns: class  (depth serial)
+        rows:
+                 text   1
+    end: `LmTestNodeAs.field.address-depth`
+
+    table:
         name: `alias.backend`
         columns: class        (backend class)
         rows:
@@ -85,14 +207,22 @@ L4:
 
     table:
         name: `unit.payload`
-        columns: class        (payload char)
+        columns: class        (payload node)
         rows:
-                 lm_test_unit "int lm_test_unit(void) { return 0; }"
+                 lm_test_unit
+                 L2:
+                     external:
+                         fn: lm_test_unit () int
+                             return: 0
+                         end: lm_test_unit
+                     end: external
+                 end: L2
     end: `unit.payload`
 end: L4
 
 alias
 forward
+layout
 prototype
 callable_alias
 unit

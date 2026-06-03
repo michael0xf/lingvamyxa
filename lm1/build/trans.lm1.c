@@ -21,9 +21,13 @@ typedef LmL4Column LmTransRegistryColumn;
 typedef struct LmTransLayoutField {
     const char *name;
     const char *class_name;
+    const char *union_layout_name;
     size_t index;
     size_t address_depth;
+    size_t array_count;
     int is_const;
+    int has_array_count;
+    int is_union;
 } LmTransLayoutField;
 
 typedef struct LmTransAbiParam {
@@ -13304,6 +13308,23 @@ static int lm_trans_emit_l2_registry_os_node(
     return lm_trans_emit_l1_node(output, node);
 }
 
+static int lm_trans_emit_l4_payload_node(
+    FILE *output,
+    const LmP0Node *node,
+    LmTransNamespace *namespace_
+) {
+    if (node == 0) {
+        return 0;
+    }
+    if (node->kind == LM_P0_NODE_FRAME && lm_trans_text_equals(node->as.frame.head, "L2")) {
+        return lm_trans_emit_l2_structure_with_namespace(output, &node->as.frame.body, &node->as.frame, namespace_, 0);
+    }
+    if (node->kind == LM_P0_NODE_STRUCTURE && lm_trans_os_branch_looks_l2(&node->as.structure)) {
+        return lm_trans_emit_l2_structure_with_namespace(output, &node->as.structure, 0, namespace_, 0);
+    }
+    return lm_trans_emit_l1_node(output, node);
+}
+
 static int lm_trans_emit_l2_registry_os_table(
     FILE *output,
     LmTransNamespace *namespace_
@@ -13758,6 +13779,17 @@ static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *val
     return 0;
 }
 
+static int lm_trans_layout_backend_is_supported(const char *backend) {
+    return
+        backend != 0 &&
+        (
+            strcmp(backend, "c.struct") == 0 ||
+            strcmp(backend, "c.named-struct") == 0 ||
+            strcmp(backend, "c.union") == 0 ||
+            strcmp(backend, "c.named-union") == 0
+        );
+}
+
 static int lm_trans_registry_collect_layout_names(
     LmOwnPtrStack *names,
     const LmTransNamespace *namespace_
@@ -13788,7 +13820,7 @@ static int lm_trans_registry_collect_layout_names(
             row != 0 &&
             row->key != 0 &&
             row->payload != 0 &&
-            strcmp(row->payload, "c.struct") == 0
+            lm_trans_layout_backend_is_supported(row->payload)
         ) {
             key_text = lm_trans_text_from_cstr(row->key);
             if (lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") == 0) {
@@ -13808,6 +13840,190 @@ static int lm_trans_registry_collect_layout_names(
         }
     }
     return 0;
+}
+
+static int lm_trans_collect_layout_field_common(
+    const char *layout_name,
+    const char *field_name,
+    const LmOwnPtrStack *index_rows,
+    const LmOwnPtrStack *address_depth_rows,
+    const LmOwnPtrStack *const_rows,
+    const LmOwnPtrStack *array_count_rows,
+    LmTransLayoutField *field
+) {
+    size_t index;
+    LmTransRegistryRow *index_row;
+    LmTransRegistryRow *address_depth_row;
+    LmTransRegistryRow *const_row;
+    LmTransRegistryRow *array_count_row;
+    LmP0Text field_text;
+
+    if (layout_name == 0 || field_name == 0 || field == 0) {
+        return 1;
+    }
+
+    field_text = lm_trans_text_from_cstr(field_name);
+    index_row = lm_trans_registry_relation_stack_latest_row(index_rows, field_text);
+    address_depth_row = lm_trans_registry_relation_stack_latest_row(address_depth_rows, field_text);
+    const_row = lm_trans_registry_relation_stack_latest_row(const_rows, field_text);
+    array_count_row = lm_trans_registry_relation_stack_latest_row(array_count_rows, field_text);
+
+    if (index_row == 0 || !lm_trans_parse_size_payload(index_row->payload, &index)) {
+        fprintf(stderr, "trans L4 layout error: field %s.%s requires field.index\n", layout_name, field_name);
+        return 1;
+    }
+
+    memset(field, 0, sizeof(*field));
+    field->name = field_name;
+    field->index = index;
+
+    if (
+        address_depth_row != 0 &&
+        !lm_trans_parse_size_payload(address_depth_row->payload, &field->address_depth)
+    ) {
+        fprintf(stderr, "trans L4 layout error: field %s.%s has invalid field.address-depth\n", layout_name, field_name);
+        return 1;
+    }
+    if (const_row != 0) {
+        if (!lm_trans_parse_size_payload(const_row->payload, &index)) {
+            fprintf(stderr, "trans L4 layout error: field %s.%s has invalid field.const\n", layout_name, field_name);
+            return 1;
+        }
+        field->is_const = index != 0U;
+    }
+    if (array_count_row != 0) {
+        if (!lm_trans_parse_size_payload(array_count_row->payload, &field->array_count)) {
+            fprintf(stderr, "trans L4 layout error: field %s.%s has invalid field.array-count\n", layout_name, field_name);
+            return 1;
+        }
+        field->has_array_count = 1;
+    }
+    return 0;
+}
+
+static int lm_trans_collect_layout_fields(
+    const char *layout_name,
+    const LmTransNamespace *namespace_,
+    LmTransLayoutField *fields,
+    size_t capacity,
+    size_t *out_count
+) {
+    size_t i;
+    size_t field_count;
+    LmTransRegistryRow *row;
+    LmTransLayoutField *field;
+    const LmOwnPtrStack *class_rows;
+    const LmOwnPtrStack *union_rows;
+    const LmOwnPtrStack *index_rows;
+    const LmOwnPtrStack *address_depth_rows;
+    const LmOwnPtrStack *const_rows;
+    const LmOwnPtrStack *array_count_rows;
+    LmP0Text layout_text;
+
+    if (layout_name == 0 || fields == 0 || out_count == 0) {
+        return 1;
+    }
+
+    layout_text = lm_trans_text_from_cstr(layout_name);
+    class_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.class");
+    union_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.union");
+    index_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.index");
+    address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.address-depth");
+    const_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.const");
+    array_count_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.array-count");
+
+    if (class_rows == 0 && union_rows == 0) {
+        fprintf(stderr, "trans L4 layout error: layout %s requires field.class or field.union facts\n", layout_name);
+        return 1;
+    }
+
+    field_count = 0U;
+    if (class_rows != 0) {
+        for (i = 0U; i < class_rows->count; ++i) {
+            row = (LmTransRegistryRow *)lm_own_ptr_stack_at(class_rows, i);
+            if (row != 0 && row->key != 0 && row->payload != 0) {
+                if (field_count >= capacity) {
+                    fprintf(stderr, "trans L4 layout error: too many fields in %s\n", layout_name);
+                    return 1;
+                }
+                field = &fields[field_count];
+                if (
+                    lm_trans_collect_layout_field_common(
+                        layout_name,
+                        row->key,
+                        index_rows,
+                        address_depth_rows,
+                        const_rows,
+                        array_count_rows,
+                        field
+                    ) != 0
+                ) {
+                    return 1;
+                }
+                field->class_name = row->payload;
+                if (field->is_const && field->address_depth == 0U && !field->has_array_count) {
+                    fprintf(stderr, "trans L4 layout error: field %s.%s const value fields are not supported yet\n", layout_name, row->key);
+                    return 1;
+                }
+                ++field_count;
+            }
+        }
+    }
+
+    if (union_rows != 0) {
+        for (i = 0U; i < union_rows->count; ++i) {
+            row = (LmTransRegistryRow *)lm_own_ptr_stack_at(union_rows, i);
+            if (row != 0 && row->key != 0 && row->payload != 0) {
+                if (field_count >= capacity) {
+                    fprintf(stderr, "trans L4 layout error: too many fields in %s\n", layout_name);
+                    return 1;
+                }
+                field = &fields[field_count];
+                if (
+                    lm_trans_collect_layout_field_common(
+                        layout_name,
+                        row->key,
+                        index_rows,
+                        address_depth_rows,
+                        const_rows,
+                        array_count_rows,
+                        field
+                    ) != 0
+                ) {
+                    return 1;
+                }
+                field->is_union = 1;
+                field->union_layout_name = row->payload;
+                ++field_count;
+            }
+        }
+    }
+
+    *out_count = field_count;
+    return 0;
+}
+
+static void lm_trans_sort_layout_fields(
+    LmTransLayoutField *fields,
+    size_t field_count
+) {
+    size_t i;
+    size_t j;
+    LmTransLayoutField swap;
+
+    if (fields == 0) {
+        return;
+    }
+
+    for (i = 0U; i < field_count; ++i) {
+        for (j = i + 1U; j < field_count; ++j) {
+            if (fields[j].index < fields[i].index) {
+                swap = fields[i];
+                fields[i] = fields[j];
+                fields[j] = swap;
+            }
+        }
+    }
 }
 
 static int lm_trans_emit_layout_field_type(
@@ -13840,124 +14056,147 @@ static int lm_trans_emit_layout_field_type(
     return 0;
 }
 
-static int lm_trans_emit_layout_typedef(
+static int lm_trans_emit_layout_fields(
     FILE *file,
     const char *layout_name,
-    const LmTransNamespace *namespace_
+    const LmTransNamespace *namespace_,
+    unsigned indent
+);
+
+static int lm_trans_emit_layout_field(
+    FILE *file,
+    const LmTransLayoutField *field,
+    const LmTransNamespace *namespace_,
+    unsigned indent
+) {
+    if (file == 0 || field == 0) {
+        return 1;
+    }
+
+    if (field->is_union) {
+        if (
+            field->union_layout_name == 0 ||
+            lm_trans_emit_indent(file, indent) != 0 ||
+            lm_trans_put(file, "union {\n") != 0 ||
+            lm_trans_emit_layout_fields(file, field->union_layout_name, namespace_, indent + 1U) != 0 ||
+            lm_trans_emit_indent(file, indent) != 0 ||
+            lm_trans_put(file, "} ") != 0 ||
+            lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field->name)) != 0
+        ) {
+            return 1;
+        }
+    } else {
+        if (
+            lm_trans_emit_indent(file, indent) != 0 ||
+            lm_trans_emit_layout_field_type(file, field) != 0 ||
+            lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field->name)) != 0
+        ) {
+            return 1;
+        }
+    }
+
+    if (field->has_array_count) {
+        if (
+            lm_trans_put(file, "[") != 0 ||
+            lm_trans_emit_size_literal(file, field->array_count) != 0 ||
+            lm_trans_put(file, "]") != 0
+        ) {
+            return 1;
+        }
+    }
+
+    return lm_trans_put(file, ";\n");
+}
+
+static int lm_trans_emit_layout_fields(
+    FILE *file,
+    const char *layout_name,
+    const LmTransNamespace *namespace_,
+    unsigned indent
 ) {
     LmTransLayoutField fields[256];
     size_t field_count;
     size_t i;
-    size_t j;
-    size_t index;
-    LmTransLayoutField swap;
-    LmTransRegistryRow *row;
-    LmTransRegistryRow *index_row;
-    LmTransRegistryRow *address_depth_row;
-    LmTransRegistryRow *const_row;
-    const LmOwnPtrStack *class_rows;
-    const LmOwnPtrStack *index_rows;
-    const LmOwnPtrStack *address_depth_rows;
-    const LmOwnPtrStack *const_rows;
+
+    if (
+        lm_trans_collect_layout_fields(
+            layout_name,
+            namespace_,
+            fields,
+            sizeof(fields) / sizeof(fields[0]),
+            &field_count
+        ) != 0
+    ) {
+        return 1;
+    }
+    lm_trans_sort_layout_fields(fields, field_count);
+
+    for (i = 0U; i < field_count; ++i) {
+        if (lm_trans_emit_layout_field(file, &fields[i], namespace_, indent) != 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_layout_definition(
+    FILE *file,
+    const char *layout_name,
+    const LmTransNamespace *namespace_
+) {
+    LmTransRegistryRow *backend_row;
+    const LmOwnPtrStack *backend_rows;
+    const char *backend;
     LmP0Text layout_text;
-    LmP0Text field_text;
 
     if (file == 0 || layout_name == 0) {
         return 1;
     }
 
     layout_text = lm_trans_text_from_cstr(layout_name);
-    class_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.class");
-    index_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.index");
-    address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.address-depth");
-    const_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.const");
-    if (class_rows == 0) {
-        fprintf(stderr, "trans L4 layout error: layout %s requires field.class facts\n", layout_name);
+    backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend");
+    backend_row = lm_trans_registry_relation_stack_latest_row(backend_rows, layout_text);
+    backend = backend_row != 0 ? backend_row->payload : 0;
+    if (!lm_trans_layout_backend_is_supported(backend)) {
+        fprintf(stderr, "trans L4 layout error: layout %s has unsupported layout.backend\n", layout_name);
         return 1;
     }
 
-    field_count = 0U;
-    for (i = 0U; i < class_rows->count; ++i) {
-        row = (LmTransRegistryRow *)lm_own_ptr_stack_at(class_rows, i);
-        if (
-            row != 0 &&
-            row->key != 0 &&
-            row->payload != 0
-        ) {
-            if (field_count >= sizeof(fields) / sizeof(fields[0])) {
-                fprintf(stderr, "trans L4 layout error: too many fields in %s\n", layout_name);
-                return 1;
-            }
-
-            field_text = lm_trans_text_from_cstr(row->key);
-            index_row = lm_trans_registry_relation_stack_latest_row(index_rows, field_text);
-            address_depth_row = lm_trans_registry_relation_stack_latest_row(address_depth_rows, field_text);
-            const_row = lm_trans_registry_relation_stack_latest_row(const_rows, field_text);
-            if (index_row == 0 || !lm_trans_parse_size_payload(index_row->payload, &index)) {
-                fprintf(stderr, "trans L4 layout error: field %s.%s requires field.index\n", layout_name, row->key);
-                return 1;
-            }
-
-            fields[field_count].name = row->key;
-            fields[field_count].class_name = row->payload;
-            fields[field_count].index = index;
-            fields[field_count].address_depth = 0U;
-            fields[field_count].is_const = 0;
-            if (
-                address_depth_row != 0 &&
-                !lm_trans_parse_size_payload(address_depth_row->payload, &fields[field_count].address_depth)
-            ) {
-                fprintf(stderr, "trans L4 layout error: field %s.%s has invalid field.address-depth\n", layout_name, row->key);
-                return 1;
-            }
-            if (const_row != 0) {
-                if (!lm_trans_parse_size_payload(const_row->payload, &index)) {
-                    fprintf(stderr, "trans L4 layout error: field %s.%s has invalid field.const\n", layout_name, row->key);
-                    return 1;
-                }
-                fields[field_count].is_const = index != 0U;
-            }
-            if (fields[field_count].is_const && fields[field_count].address_depth == 0U) {
-                fprintf(stderr, "trans L4 layout error: field %s.%s const value fields are not supported yet\n", layout_name, row->key);
-                return 1;
-            }
-            ++field_count;
-        }
-    }
-
-    for (i = 0U; i < field_count; ++i) {
-        for (j = i + 1U; j < field_count; ++j) {
-            if (fields[j].index < fields[i].index) {
-                swap = fields[i];
-                fields[i] = fields[j];
-                fields[j] = swap;
-            }
-        }
-    }
-
     if (
-        lm_trans_put(file, "typedef struct ") != 0 ||
+        (
+            strcmp(backend, "c.struct") == 0 &&
+            lm_trans_put(file, "typedef struct ") != 0
+        ) ||
+        (
+            strcmp(backend, "c.named-struct") == 0 &&
+            lm_trans_put(file, "struct ") != 0
+        ) ||
+        (
+            strcmp(backend, "c.union") == 0 &&
+            lm_trans_put(file, "typedef union ") != 0
+        ) ||
+        (
+            strcmp(backend, "c.named-union") == 0 &&
+            lm_trans_put(file, "union ") != 0
+        ) ||
         lm_trans_emit_identifier(file, lm_trans_text_from_cstr(layout_name)) != 0 ||
         lm_trans_put(file, " {\n") != 0
     ) {
         return 1;
     }
 
-    for (i = 0U; i < field_count; ++i) {
-        if (
-            lm_trans_put(file, "    ") != 0 ||
-            lm_trans_emit_layout_field_type(file, &fields[i]) != 0 ||
-            lm_trans_emit_identifier(file, lm_trans_text_from_cstr(fields[i].name)) != 0 ||
-            lm_trans_put(file, ";\n") != 0
-        ) {
-            return 1;
-        }
+    if (lm_trans_emit_layout_fields(file, layout_name, namespace_, 1U) != 0) {
+        return 1;
     }
 
-    return
-        lm_trans_put(file, "} ") ||
-        lm_trans_emit_identifier(file, lm_trans_text_from_cstr(layout_name)) ||
-        lm_trans_put(file, ";\n");
+    if (strcmp(backend, "c.struct") == 0 || strcmp(backend, "c.union") == 0) {
+        return
+            lm_trans_put(file, "} ") ||
+            lm_trans_emit_identifier(file, lm_trans_text_from_cstr(layout_name)) ||
+            lm_trans_put(file, ";\n");
+    }
+    return lm_trans_put(file, "};\n");
 }
 
 static int lm_trans_emit_l4_layout_typedefs(
@@ -13980,7 +14219,7 @@ static int lm_trans_emit_l4_layout_typedefs(
             return 1;
         }
         name = (const char *)lm_own_ptr_stack_at(&names, i);
-        if (name != 0 && lm_trans_emit_layout_typedef(file, name, namespace_) != 0) {
+        if (name != 0 && lm_trans_emit_layout_definition(file, name, namespace_) != 0) {
             lm_own_ptr_stack_destroy(&names);
             return 1;
         }
@@ -14698,17 +14937,27 @@ static int lm_trans_emit_l4_units(
     for (i = 0U; i < names.count; ++i) {
         name = (const char *)lm_own_ptr_stack_at(&names, i);
         payload_row = lm_trans_registry_relation_stack_latest_row(payload_rows, lm_trans_text_from_cstr(name));
-        if (payload_row == 0 || payload_row->payload == 0) {
+        if (payload_row == 0 || (payload_row->payload == 0 && payload_row->payload_node == 0)) {
             fprintf(stderr, "trans L4 unit error: %s requires unit.payload\n", name);
             lm_own_ptr_stack_destroy(&names);
             return 1;
         }
-        if (
-            lm_trans_put(file, payload_row->payload) != 0 ||
-            lm_trans_put(file, "\n") != 0
-        ) {
-            lm_own_ptr_stack_destroy(&names);
-            return 1;
+        if (payload_row->payload_node != 0) {
+            if (
+                lm_trans_emit_l4_payload_node(file, payload_row->payload_node, (LmTransNamespace *)namespace_) != 0 ||
+                lm_trans_put(file, "\n") != 0
+            ) {
+                lm_own_ptr_stack_destroy(&names);
+                return 1;
+            }
+        } else {
+            if (
+                lm_trans_put(file, payload_row->payload) != 0 ||
+                lm_trans_put(file, "\n") != 0
+            ) {
+                lm_own_ptr_stack_destroy(&names);
+                return 1;
+            }
         }
     }
 
