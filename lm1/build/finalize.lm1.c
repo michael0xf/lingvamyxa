@@ -8,6 +8,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+char * getenv(const char *name);
+size_t strlen(const char *text);
+void * memcpy(void *target, const void *source, size_t length);
+char * strcpy(char *target, const char *source);
+int system(const char *command);
+int remove(const char *path);
+FILE * fopen(const char *path, const char *mode);
+int fclose(FILE *file);
+size_t fread(void *buffer, size_t item_size, size_t item_count, FILE *file);
+size_t fwrite(const void *buffer, size_t item_size, size_t item_count, FILE *file);
+int ferror(FILE *file);
+int strcmp(const char *left, const char *right);
+
+
 #if defined(_WIN32)
 #include <direct.h>
 #include <windows.h>
@@ -17,6 +31,14 @@
 #endif
 
 #if defined(_WIN32)
+static char * lm_finalize_platform_getcwd(char *buffer, size_t size);
+static int lm_finalize_platform_chdir(const char *path);
+static const char * lm_finalize_platform_exe_suffix(void);
+static const char * lm_finalize_platform_path_sep(void);
+static int lm_finalize_platform_is_drive_absolute(const char *path);
+static void lm_finalize_platform_sleep_retry(void);
+static const char * lm_finalize_platform_defer_command_format(void);
+
 static char * lm_finalize_platform_getcwd(char *buffer, size_t size) {
     return _getcwd(buffer, size);
 }
@@ -45,6 +67,14 @@ static const char * lm_finalize_platform_defer_command_format(void) {
     return "cd /d \"%s\" && start \"\" /B \"%s\" --copy";
 }
 #else
+static char * lm_finalize_platform_getcwd(char *buffer, size_t size);
+static int lm_finalize_platform_chdir(const char *path);
+static const char * lm_finalize_platform_exe_suffix(void);
+static const char * lm_finalize_platform_path_sep(void);
+static int lm_finalize_platform_is_drive_absolute(const char *path);
+static void lm_finalize_platform_sleep_retry(void);
+static const char * lm_finalize_platform_defer_command_format(void);
+
 static char * lm_finalize_platform_getcwd(char *buffer, size_t size) {
     return getcwd(buffer, size);
 }
@@ -69,13 +99,25 @@ static void lm_finalize_platform_sleep_retry(void) {
     struct timespec request;
     request.tv_sec = 0;
     request.tv_nsec = 250000000L;
-    nanosleep(& request, 0);
+    nanosleep(&request, 0);
 }
 
 static const char * lm_finalize_platform_defer_command_format(void) {
     return "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &";
 }
 #endif
+static int lm_finalize_is_path_separator(char value);
+static int lm_finalize_is_absolute_path(char *path);
+static int lm_finalize_trim_last_path_part(char *path);
+static int lm_finalize_enter_project_root(char *program_path);
+static void lm_finalize_log(char *message);
+static void lm_finalize_sleep_retry(void);
+static void lm_finalize_tool_path(char *path, size_t size, char *tool_name, char *variant);
+static int lm_finalize_copy_once(char *source_path, char *output_path, int quiet);
+static int lm_finalize_copy_with_retry(char *source_path, char *output_path);
+static int lm_finalize_install_next_tool(char *tool_name);
+static int lm_finalize_defer(void);
+int main(int argc, char **argv);
 
 static int lm_finalize_is_path_separator(char value) {
     return value == '/' || value == '\\';

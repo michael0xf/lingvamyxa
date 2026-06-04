@@ -2,6 +2,26 @@
 #include <stdlib.h>
 #include <string.h>
 
+char * getenv(const char *name);
+size_t strlen(const char *text);
+void * memcpy(void *target, const void *source, size_t length);
+int system(const char *command);
+FILE * fopen(const char *path, const char *mode);
+int fclose(FILE *file);
+size_t fread(void *buffer, size_t item_size, size_t item_count, FILE *file);
+size_t fwrite(const void *buffer, size_t item_size, size_t item_count, FILE *file);
+int ferror(FILE *file);
+int strcmp(const char *left, const char *right);
+
+static char * lm_make_env_or_default(char *name, char *fallback);
+static size_t lm_make_append(char *buffer, size_t size, size_t used, char *text);
+static size_t lm_make_append_arg(char *buffer, size_t size, size_t used, char *arg);
+static int lm_make_run_command(char *command);
+static int lm_make_run_tool(char *tool, int argc, char **argv, int start);
+static int lm_make_copy_file(char *source_path, char *output_path);
+static void lm_make_print_usage(void);
+int main(int argc, char **argv);
+
 static char * lm_make_env_or_default(char *name, char *fallback) {
     char *value;
     value = getenv(name);
