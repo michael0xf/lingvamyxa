@@ -3278,13 +3278,7 @@ static int lm_trans_l4_is_function_pointer_type(
     const char *name
 );
 static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *frame);
-static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cells);
-static int lm_trans_l4_receiver_row(const LmP0Frame *frame, int allow_node_cells);
-static int lm_trans_l4_receiver_fn_descriptor(const LmP0Frame *frame, int allow_node_cells);
-static int lm_trans_l4_root_receiver_registry(const LmP0Frame *frame, int allow_node_cells);
-static int lm_trans_l4_root_head_binding_resolve(LmP0Text head, LmTransL4HeadBinding *out);
-static int lm_trans_l4_atom_receiver_prelude_sequence(LmP0Text atom, int allow_node_cells);
-static int lm_trans_l4_atom_binding_resolve(LmP0Text atom, LmTransL4AtomBinding *out);
+static int lm_trans_l4_root_head_binding_resolve(const LmP0Text *head, LmTransL4HeadBinding *out);
 static int lm_trans_emit_l4_guard_markers(
     FILE *file,
     const LmTransNamespace *namespace_
@@ -3300,16 +3294,6 @@ static int lm_trans_emit_l4_units(
 static int lm_trans_declare_l2_registry_os_table(LmTransNamespace *namespace_);
 static int lm_trans_emit_l2_registry_os_table(
     FILE *output,
-    LmTransNamespace *namespace_
-);
-static int lm_trans_l4_payload_receiver_import(
-    FILE *output,
-    const LmP0Frame *frame,
-    LmTransNamespace *namespace_
-);
-static int lm_trans_l4_payload_receiver_l2(
-    FILE *output,
-    const LmP0Frame *frame,
     LmTransNamespace *namespace_
 );
 static int lm_trans_emit_l2_os_frame(
@@ -5362,34 +5346,6 @@ static int lm_trans_binding_resolve(const char *binding, LmTransBinding *out) {
     }
     if (strcmp(binding, "lm_trans_materialize_array_value") == 0) {
         out->expr_segment_materializer = lm_trans_materialize_array_value;
-        return 1;
-    }
-    if (strcmp(binding, "lm_trans_l4_receiver_table") == 0) {
-        out->l4_frame = lm_trans_l4_receiver_table;
-        return 1;
-    }
-    if (strcmp(binding, "lm_trans_l4_receiver_row") == 0) {
-        out->l4_frame = lm_trans_l4_receiver_row;
-        return 1;
-    }
-    if (strcmp(binding, "lm_trans_l4_receiver_fn_descriptor") == 0) {
-        out->l4_frame = lm_trans_l4_receiver_fn_descriptor;
-        return 1;
-    }
-    if (strcmp(binding, "lm_trans_l4_root_receiver_registry") == 0) {
-        out->l4_frame = lm_trans_l4_root_receiver_registry;
-        return 1;
-    }
-    if (strcmp(binding, "lm_trans_l4_atom_receiver_prelude_sequence") == 0) {
-        out->l4_atom = lm_trans_l4_atom_receiver_prelude_sequence;
-        return 1;
-    }
-    if (strcmp(binding, "lm_trans_l4_payload_receiver_import") == 0) {
-        out->l4_payload_frame = lm_trans_l4_payload_receiver_import;
-        return 1;
-    }
-    if (strcmp(binding, "lm_trans_l4_payload_receiver_l2") == 0) {
-        out->l4_payload_frame = lm_trans_l4_payload_receiver_l2;
         return 1;
     }
 

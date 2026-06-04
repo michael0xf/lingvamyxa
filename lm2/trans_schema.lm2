@@ -185,7 +185,7 @@ L4:
     ) int
 
     fn: LmTransL4AtomHandler (
-        LmP0Text: atom
+        const: @: LmP0Text atom
         int: allow_node_cells
     ) int
 
@@ -721,9 +721,6 @@ L4:
                  type_structure_value_alloc  LmTransTypeStructureValueAllocReceiver  7
                  type_structure_value_fill   LmTransTypeStructureValueFillReceiver   8
                  expr_segment_materializer   LmTransExprSegmentMaterializer          9
-                 l4_frame                    LmTransL4FrameHandler                   10
-                 l4_atom                     LmTransL4AtomHandler                    11
-                 l4_payload_frame            LmTransL4PayloadFrameHandler            12
     end: LmTransBinding
 
     table:
