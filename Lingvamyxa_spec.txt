@@ -867,6 +867,46 @@ At L2, aggregate layouts do not have to be source-level value objects. They may 
 
 There is no fundamental keyword `Struct` in the minimal source syntax.
 
+2.1. Type Compatibility as Analytical Registry Resolution
+
+Type compatibility in Lingvamyxa is an analytical process over descriptors and
+registry facts. It is not defined only by nominal equality, target-language
+spelling, ABI spelling, typedef identity or another fixed convention inherited
+from a backend.
+
+A type/class/descriptor compatibility decision may use facts such as:
+
+    exact descriptor equality;
+    descriptor imports, overlays, aliases and refinements;
+    declared casts and conversions;
+    representation and storage compatibility;
+    ownership, lifetime, mutability and constness constraints;
+    effect and capability constraints;
+    validator evidence and profile-specific admissibility rows;
+    available backend adapters or projection rules.
+
+Equality of descriptors is one possible proof of compatibility, but it is not
+the only one. A resolver may accept a value of descriptor `A` where descriptor
+`B` is expected when the active registry proves an admissible path from `A` to
+`B` for that use site. The proof is directional: `A` compatible with `B` does
+not imply `B` compatible with `A` unless the registry also proves the reverse
+path.
+
+For primitive descriptors, this may be as simple as a cast/conversion table. For
+aggregate descriptors, it may involve field compatibility, required validators,
+ownership policy, layout projection, capability/effect rows or other profile
+facts. For callable descriptors, the same principle applies to parameter and
+return descriptors, with the additional variance rules described in section
+21.3.1.
+
+If a compatibility proof requires a conversion at runtime or in generated code,
+the translator may select or synthesize an adapter, cast, wrapper, copy,
+borrowed view, closure record or other backend projection. If the registry
+proves semantic compatibility but no valid projection exists for the selected
+backend/profile, the translator must reject that lowering or select another
+representation. The source-level compatibility is the registry proof; the
+backend mechanism is its implementation.
+
 
 3. Structures and Frames
 
@@ -8496,6 +8536,73 @@ is valid when both `strategy` and `optimized strategy` resolve to compatible
 function/subroutine bindings, for example:
 
     fn: IntToInt (int) int
+
+21.3.1. Callable Descriptor Compatibility by Registry Evidence
+
+Callable descriptor compatibility is a specialization of the general analytical
+compatibility rule from section 2.1. It is not defined by equality of backend
+spelling, C typedef names or raw target-language function-pointer text. It is a
+logical compatibility query over the active registry facts.
+
+A callable descriptor records at least:
+
+    parameter count and parameter descriptors;
+    return descriptor;
+    effect/calling convention/lifetime facts when the active profile requires
+        them;
+    optional backend projection facts.
+
+One callable may be used where another callable descriptor is expected when the
+registry resolver can prove that the actual callable can safely satisfy the
+expected callable contract. For ordinary single-result callables, this proof is
+directional:
+
+    each expected parameter descriptor must be convertible to the corresponding
+        actual parameter descriptor;
+    the actual return descriptor must be convertible to the expected return
+        descriptor;
+    any effect, ownership, lifetime, calling-convention or environment
+        constraints required by the expected descriptor must also be satisfied.
+
+Thus parameter compatibility is contravariant with respect to the use site, and
+return compatibility is covariant.
+
+For example, these two backend shapes:
+
+    int  (*op)(int, int)
+    uint (*op2)(uint, uint)
+
+may be compatible in a direction only when the registry contains enough
+conversion evidence. To use `op2` where `op` is expected, the resolver needs:
+
+    cast.allowed[int -> uint]      for each argument position
+    cast.allowed[uint -> int]      for the return position
+
+If those rows are present and no other constraint blocks the use, the
+translator may select or generate an adapter such as:
+
+    static int op2_as_op(int a, int b) {
+        return (int)op2((uint)a, (uint)b);
+    }
+
+The adapter is a backend projection decision. The source-level compatibility is
+the registry proof, not the fact that ANSI C happens to admit a typedef spelling
+or an inline function-pointer spelling.
+
+Consequently, a C declaration such as:
+
+    typedef int (*op)(int, int);
+
+and an inline target declaration such as:
+
+    int (*op)(int, int);
+
+are not distinct source-semantic mechanisms in Lingvamyxa. A typedef-like
+projection may be useful for generated C readability or reuse, but the LMX
+identity of the callable is its descriptor facts. The active profile may choose
+to print a typedef, an inline function-pointer declaration, a closure record, a
+trampoline, a descriptor table entry or another backend representation without
+changing the source-level callable compatibility rule.
 
 21.4. Local Function/Subroutine Binding Replacement
 
