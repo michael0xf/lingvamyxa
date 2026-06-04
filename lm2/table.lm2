@@ -298,7 +298,7 @@ fn: lm_table_column_spelling_alloc (const: @(LmP0Node node); @: LmTableError err
     return: result
 end: lm_table_column_spelling_alloc
 
-sub: lm_table_columns_destroy (@: LmTableColumn columns; size_t: count)
+sub: lm_table_columns_destroy (@@: LmTableColumn columns; size_t: count)
     size_t: index
 
     if: columns = 0
@@ -306,20 +306,22 @@ sub: lm_table_columns_destroy (@: LmTableColumn columns; size_t: count)
 
     index: 0U
     while: index < count
-        lm_own_delete(c.columns[index].spelling, 0)
+        if: columns[index] != 0
+            lm_own_delete(columns[index]\spelling, 0)
+            lm_own_delete(columns[index], 0)
         index: index + 1U
     lm_own_delete(columns, 0)
 end: lm_table_columns_destroy
 
 fn: lm_table_columns_from_frame (
     const: @: LmP0Frame table_frame
-    @@: LmTableColumn out_columns
+    @@@: LmTableColumn out_columns
     @: size_t out_count
     @: LmTableError error
 ) int
     const: @: LmP0Frame columns_frame
     const: @: LmP0Node node
-    @: LmTableColumn columns
+    @@: LmTableColumn columns
     size_t: count
     size_t: index
 
@@ -333,7 +335,7 @@ fn: lm_table_columns_from_frame (
         lm_table_error_set(error, "columns: must not be empty")
         return: 0
 
-    columns: lm_own_new_zero(count * c.sizeof(c.LmTableColumn))
+    columns: lm_own_new_zero(count * c.sizeof(columns[0]))
     if: columns = 0
         lm_table_error_set(error, "out of memory while reading columns")
         return: 0
@@ -341,11 +343,16 @@ fn: lm_table_columns_from_frame (
     index: 0U
     while: index < count
         node: lm_table_nth_visible_field(columns_frame\body, index)
-        c.columns[index].spelling: lm_table_column_spelling_alloc(node, error)
-        if: c.columns[index].spelling = 0
+        columns[index]: lm_own_new_zero(c.sizeof(c.LmTableColumn))
+        if: columns[index] = 0
+            lm_table_error_set(error, "out of memory while reading columns")
             lm_table_columns_destroy(columns, count)
             return: 0
-        c.columns[index].width: c.strlen(c.columns[index].spelling)
+        columns[index]\spelling: lm_table_column_spelling_alloc(node, error)
+        if: columns[index]\spelling = 0
+            lm_table_columns_destroy(columns, count)
+            return: 0
+        columns[index]\width: c.strlen(columns[index]\spelling)
         index: index + 1U
 
     out_columns[0]: columns
@@ -480,7 +487,7 @@ end: lm_table_node_lmx_alloc
 
 fn: lm_table_measure_rows (
     const: @: LmP0Frame rows_frame
-    @: LmTableColumn columns
+    @@: LmTableColumn columns
     size_t: column_count
     @: size_t out_row_count
     @: LmTableError error
@@ -513,8 +520,8 @@ fn: lm_table_measure_rows (
             return: 0
         spelling_length: c.strlen(spelling)
         column_index: index % column_count
-        if: c.columns[column_index].width < spelling_length
-            c.columns[column_index].width: spelling_length
+        if: columns[column_index]\width < spelling_length
+            columns[column_index]\width: spelling_length
         lm_own_delete(spelling, 0)
         index: index + 1U
 
@@ -522,17 +529,17 @@ fn: lm_table_measure_rows (
     return: 1
 end: lm_table_measure_rows
 
-fn: lm_table_emit_columns (@: LmTableBuffer buffer; const: @(LmTableColumn columns); size_t: column_count) int
+fn: lm_table_emit_columns (@: LmTableBuffer buffer; @@: LmTableColumn columns; size_t: column_count) int
     size_t: index
     size_t: length
 
     lm_table_buffer_append_cstr(buffer, "    columns: ")
     index: 0U
     while: index < column_count
-        length: c.strlen(c.columns[index].spelling)
-        lm_table_buffer_append_cstr(buffer, c.columns[index].spelling)
+        length: c.strlen(columns[index]\spelling)
+        lm_table_buffer_append_cstr(buffer, columns[index]\spelling)
         if: index + 1U < column_count
-            lm_table_buffer_append_spaces(buffer, c.columns[index].width - length + 2U)
+            lm_table_buffer_append_spaces(buffer, columns[index]\width - length + 2U)
         index: index + 1U
 
     lm_table_buffer_append_cstr(buffer, "\n")
@@ -542,7 +549,7 @@ end: lm_table_emit_columns
 fn: lm_table_emit_rows (
     @: LmTableBuffer buffer
     const: @: LmP0Frame rows_frame
-    const: @: LmTableColumn columns
+    @@: LmTableColumn columns
     size_t: column_count
     size_t: row_count
     @: LmTableError error
@@ -568,7 +575,7 @@ fn: lm_table_emit_rows (
             spelling_length: c.strlen(spelling)
             lm_table_buffer_append_cstr(buffer, spelling)
             if: column_index + 1U < column_count
-                lm_table_buffer_append_spaces(buffer, c.columns[column_index].width - spelling_length + 2U)
+                lm_table_buffer_append_spaces(buffer, columns[column_index]\width - spelling_length + 2U)
             lm_own_delete(spelling, 0)
             column_index: column_index + 1U
         lm_table_buffer_append_cstr(buffer, "\n")
@@ -604,7 +611,7 @@ fn: lm_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: LmTableError erro
     size_t: table_name_length
     const: @: char end_name_data
     size_t: end_name_length
-    @: LmTableColumn columns
+    @@: LmTableColumn columns
     @: LmTableBuffer buffer
     size_t: column_count
     size_t: row_count

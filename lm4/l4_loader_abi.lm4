@@ -51,7 +51,7 @@ fn: LmL4NoteKey (
 fn: LmL4PushColumnMetadata (
     @: void context
     const: @: LmP0Text table_name
-    const: @: LmL4Column columns
+    @@: LmL4Column columns
     size_t: column_count
 ) int
 

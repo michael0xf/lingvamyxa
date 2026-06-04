@@ -2163,7 +2163,7 @@ static int lm_trans_registry_push_generated_row_text(
 
 static int lm_trans_registry_push_column_metadata(
     const LmP0Text *table_name,
-    const LmTransRegistryColumn *columns,
+    LmTransRegistryColumn **columns,
     size_t column_count
 ) {
     LmP0Text *table_payload;
@@ -2196,11 +2196,11 @@ static int lm_trans_registry_push_column_metadata(
     }
 
     for (index = 0U; index < column_count; ++index) {
-        if (columns[index].name == 0 || !lm_trans_registry_identifier_value(columns[index].name, column_payload)) {
+        if (columns[index] == 0 || columns[index]->name == 0 || !lm_trans_registry_identifier_value(columns[index]->name, column_payload)) {
             status = -1;
             goto cleanup;
         }
-        if (lm_trans_registry_note_class_present(columns[index].name) != 0) {
+        if (lm_trans_registry_note_class_present(columns[index]->name) != 0) {
             status = -1;
             goto cleanup;
         }
@@ -2211,7 +2211,7 @@ static int lm_trans_registry_push_column_metadata(
         }
 
         snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)index);
-        snprintf(count_buffer, sizeof(count_buffer), "%lu", (unsigned long)columns[index].descriptor_count);
+        snprintf(count_buffer, sizeof(count_buffer), "%lu", (unsigned long)columns[index]->descriptor_count);
 
         if (
             lm_trans_registry_push_generated_row_text("column.table", column_key, table_payload) != 0 ||
@@ -2224,7 +2224,7 @@ static int lm_trans_registry_push_column_metadata(
             goto cleanup;
         }
 
-        for (descriptor_index = 0U; descriptor_index < columns[index].descriptor_count; ++descriptor_index) {
+        for (descriptor_index = 0U; descriptor_index < columns[index]->descriptor_count; ++descriptor_index) {
             snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)descriptor_index);
             descriptor_key = lm_trans_registry_join_text3(lm_trans_text_from_cstr(column_key), ".", lm_trans_text_from_cstr(index_buffer));
             if (descriptor_key == 0) {
@@ -2233,8 +2233,8 @@ static int lm_trans_registry_push_column_metadata(
                 goto cleanup;
             }
             if (
-                columns[index].descriptors[descriptor_index] == 0 ||
-                lm_trans_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index].descriptors[descriptor_index]) != 0
+                columns[index]->descriptors[descriptor_index] == 0 ||
+                lm_trans_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index]->descriptors[descriptor_index]) != 0
             ) {
                 lm_own_delete(descriptor_key, 0);
                 lm_own_delete(column_key, 0);
@@ -3170,7 +3170,7 @@ static int lm_trans_registry_l4_push_cell(
 static int lm_trans_registry_l4_push_column_metadata(
     void *context,
     const LmP0Text *table_name,
-    const LmL4Column *columns,
+    LmL4Column **columns,
     size_t column_count
 ) {
     (void)context;

@@ -159,7 +159,7 @@ struct LmL4Loader {
     int (*push_row)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
     int (*push_cell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
     int (*note_key)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
-    int (*push_column_metadata)(void *context, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count);
+    int (*push_column_metadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
     int (*dispatch_frame)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 };
 typedef struct LmP0StreamEvent {
@@ -233,7 +233,7 @@ typedef void (*LmOwnDelete)(void *object);
 typedef int (*LmL4PushRow)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
 typedef int (*LmL4PushCell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
 typedef int (*LmL4NoteKey)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
-typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count);
+typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
 typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 
 void * lm_own_new_zero(size_t size);
@@ -314,10 +314,11 @@ static int lm_l4_identifier_equals(const LmP0Text *atom, const char *value);
 static int lm_l4_identifier_same(const LmP0Text *left, const LmP0Text *right);
 static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, const LmP0Text **out_atom);
 static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column);
-static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column *columns, size_t columns_capacity, size_t *out_count);
+static void lm_l4_columns_destroy(LmL4Column **columns, size_t count);
+static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column **columns, size_t columns_capacity, size_t *out_count);
 static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, const LmP0Text *expected_name);
 static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
-static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count);
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
 static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_seen_table_add(LmOwnPtrStack *seen, const LmP0Text *table_name);
 static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
@@ -597,13 +598,28 @@ static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column) {
     return 1;
 }
 
-static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column *columns, size_t columns_capacity, size_t *out_count) {
+static void lm_l4_columns_destroy(LmL4Column **columns, size_t count) {
+    size_t index;
+    if (columns == 0) {
+        return;
+    }
+    index = 0U;
+    while (index < count) {
+        lm_own_delete(columns[index], 0);
+        index = index + 1U;
+    }
+    lm_own_delete(columns, 0);
+}
+
+static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column **columns, size_t columns_capacity, size_t *out_count) {
     const LmP0Field *field;
+    LmL4Column *column;
     size_t count;
     int status;
     if (frame == 0 || columns == 0 || out_count == 0 || columns_capacity == 0U || lm_l4_text_equals(lm_l4_frame_head(frame), "columns") == 0) {
         return 0;
     }
+    *(out_count) = 0U;
     count = 0U;
     field = lm_l4_frame_body(frame) -> first_field;
     while (field != 0) {
@@ -612,12 +628,20 @@ static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *f
                 lm_l4_error(loader, "table has too many columns");
                 return - 1;
             }
-            status = lm_l4_column_name(field, &columns[count]);
+            column = lm_own_new_zero(sizeof(LmL4Column));
+            if (column == 0) {
+                lm_l4_error(loader, "out of memory while reading table columns");
+                return - 1;
+            }
+            status = lm_l4_column_name(field, column);
             if (status <= 0) {
+                lm_own_delete(column, 0);
                 lm_l4_error(loader, "columns expects atoms or anonymous descriptor structures");
                 return - 1;
             }
+            columns[count] = column;
             count = count + 1U;
+            *(out_count) = count;
         }
         field = field -> next;
     }
@@ -625,7 +649,7 @@ static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *f
         lm_l4_error(loader, "table expects at least two columns");
         return - 1;
     }
-    if (lm_l4_identifier_equals(columns[0].name, "class") == 0) {
+    if (lm_l4_identifier_equals(columns[0] -> name, "class") == 0) {
         lm_l4_error(loader, "first table column must be class");
         return - 1;
     }
@@ -684,7 +708,7 @@ static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const L
     return 1;
 }
 
-static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count) {
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, LmL4Column **columns, size_t column_count) {
     const LmP0Field *field;
     const LmP0Node *key_node;
     const LmP0Node *cell_node;
@@ -722,13 +746,13 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
                     lm_l4_error(loader, "table rows currently expect atom cells in the key column");
                     return - 1;
                 }
-                if (loader -> note_key != 0 && loader->note_key(context, table_name, &columns[0], key_atom) != 0) {
+                if (loader -> note_key != 0 && loader->note_key(context, table_name, columns[0], key_atom) != 0) {
                     return - 1;
                 }
             }
             if (column_index != 0U) {
                 cell_node = field -> value;
-                if (key_node == 0 || key_atom == 0 || loader->push_cell(context, table_name, &columns[column_index], split_by_column, key_atom, cell_node) != 0) {
+                if (key_node == 0 || key_atom == 0 || loader->push_cell(context, table_name, columns[column_index], split_by_column, key_atom, cell_node) != 0) {
                     return - 1;
                 }
             }
@@ -751,7 +775,7 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
     const LmP0Field *field;
     const LmP0Node *node;
     const LmP0Frame *node_frame;
-    LmL4Column *columns;
+    LmL4Column **columns;
     const LmP0Text *table_name;
     size_t column_count;
     int have_name;
@@ -761,7 +785,7 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
     if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "table") == 0) {
         return 0;
     }
-    columns = lm_own_new_zero(128U * sizeof(LmL4Column));
+    columns = lm_own_new_zero(128U * sizeof(columns[0]));
     if (columns == 0) {
         lm_l4_error(loader, "out of memory while reading table columns");
         return - 1;
@@ -777,14 +801,14 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
         if (node != 0 && lm_l4_node_is_ignored(node) == 0) {
             if (node -> kind != LM_P0_NODE_FRAME) {
                 lm_l4_error(loader, "table body expects name/columns/rows frames");
-                lm_own_delete(columns, 0);
+                lm_l4_columns_destroy(columns, column_count);
                 return - 1;
             }
             node_frame = lm_l4_node_frame(node);
             status = lm_l4_frame_single_atom(node_frame, "name", &table_name);
             if (status < 0) {
                 lm_l4_error(loader, "table name expects exactly one atom");
-                lm_own_delete(columns, 0);
+                lm_l4_columns_destroy(columns, column_count);
                 return - 1;
             }
             if (status > 0) {
@@ -795,17 +819,17 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
             if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "columns") != 0) {
                 if (have_name == 0) {
                     lm_l4_error(loader, "table columns must appear after name");
-                    lm_own_delete(columns, 0);
+                    lm_l4_columns_destroy(columns, column_count);
                     return - 1;
                 }
                 status = lm_l4_columns_from_frame(loader, node_frame, columns, 128U, &column_count);
                 if (status <= 0) {
-                    lm_own_delete(columns, 0);
+                    lm_l4_columns_destroy(columns, column_count);
                     return - 1;
                 }
                 if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(context, table_name, columns, column_count) != 0) {
                     lm_l4_error(loader, "cannot store table column metadata");
-                    lm_own_delete(columns, 0);
+                    lm_l4_columns_destroy(columns, column_count);
                     return - 1;
                 }
                 have_columns = 1;
@@ -815,12 +839,12 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
             if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "rows") != 0) {
                 if (have_name == 0 || have_columns == 0) {
                     lm_l4_error(loader, "table rows must appear after name and columns");
-                    lm_own_delete(columns, 0);
+                    lm_l4_columns_destroy(columns, column_count);
                     return - 1;
                 }
                 status = lm_l4_rows_from_frame(loader, context, node_frame, table_name, columns, column_count);
                 if (status <= 0) {
-                    lm_own_delete(columns, 0);
+                    lm_l4_columns_destroy(columns, column_count);
                     return - 1;
                 }
                 have_rows = 1;
@@ -828,21 +852,21 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
                 continue;
             }
             lm_l4_error(loader, "table body expects name/columns/rows frames");
-            lm_own_delete(columns, 0);
+            lm_l4_columns_destroy(columns, column_count);
             return - 1;
         }
         field = field -> next;
     }
     if (have_name == 0 || have_columns == 0 || have_rows == 0) {
         lm_l4_error(loader, "table requires name, columns and rows");
-        lm_own_delete(columns, 0);
+        lm_l4_columns_destroy(columns, column_count);
         return - 1;
     }
     if (lm_l4_validate_named_trailer(loader, frame, table_name) != 0) {
-        lm_own_delete(columns, 0);
+        lm_l4_columns_destroy(columns, column_count);
         return - 1;
     }
-    lm_own_delete(columns, 0);
+    lm_l4_columns_destroy(columns, column_count);
     return 1;
 }
 
@@ -7102,7 +7126,7 @@ static int lm_p0_registry_push_generated_row_text(
 
 static int lm_p0_registry_push_column_metadata(
     const LmP0Text *table_name,
-    const LmP0RegistryColumn *columns,
+    LmP0RegistryColumn **columns,
     size_t column_count
 ) {
     LmP0Text *table_payload;
@@ -7134,7 +7158,7 @@ static int lm_p0_registry_push_column_metadata(
     }
 
     for (index = 0U; index < column_count; ++index) {
-        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(columns[index].name, column_payload)) {
+        if (columns[index] == 0 || columns[index]->name == 0 || !lm_p0_registry_identifier_value(columns[index]->name, column_payload)) {
             status = -1;
             goto cleanup;
         }
@@ -7145,7 +7169,7 @@ static int lm_p0_registry_push_column_metadata(
         }
 
         snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)index);
-        snprintf(count_buffer, sizeof(count_buffer), "%lu", (unsigned long)columns[index].descriptor_count);
+        snprintf(count_buffer, sizeof(count_buffer), "%lu", (unsigned long)columns[index]->descriptor_count);
 
         if (
             lm_p0_registry_push_generated_row_text("column.table", column_key, table_payload) != 0 ||
@@ -7158,7 +7182,7 @@ static int lm_p0_registry_push_column_metadata(
             goto cleanup;
         }
 
-        for (descriptor_index = 0U; descriptor_index < columns[index].descriptor_count; ++descriptor_index) {
+        for (descriptor_index = 0U; descriptor_index < columns[index]->descriptor_count; ++descriptor_index) {
             snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)descriptor_index);
             descriptor_key = lm_p0_registry_join_text3(lm_p0_text_from_cstr(column_key), ".", lm_p0_text_from_cstr(index_buffer));
             if (descriptor_key == 0) {
@@ -7167,8 +7191,8 @@ static int lm_p0_registry_push_column_metadata(
                 goto cleanup;
             }
             if (
-                columns[index].descriptors[descriptor_index] == 0 ||
-                lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index].descriptors[descriptor_index]) != 0
+                columns[index]->descriptors[descriptor_index] == 0 ||
+                lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index]->descriptors[descriptor_index]) != 0
             ) {
                 lm_own_delete(descriptor_key, 0);
                 lm_own_delete(column_key, 0);
@@ -7226,7 +7250,7 @@ static int lm_p0_registry_l4_push_cell(
 static int lm_p0_registry_l4_push_column_metadata(
     void *context,
     const LmP0Text *table_name,
-    const LmL4Column *columns,
+    LmL4Column **columns,
     size_t column_count
 ) {
     (void)context;

@@ -1494,10 +1494,47 @@ cleanup:
     return result;
 }
 
+static LmTransStructReturnFieldValue **lm_trans_struct_return_field_values_new(size_t count) {
+    LmTransStructReturnFieldValue **values;
+    size_t index;
+
+    values = (LmTransStructReturnFieldValue **)lm_own_new_zero(sizeof(values[0]) * count);
+    if (values == 0) {
+        return 0;
+    }
+    for (index = 0U; index < count; ++index) {
+        values[index] = (LmTransStructReturnFieldValue *)lm_own_new_zero(sizeof(values[index][0]));
+        if (values[index] == 0) {
+            while (index != 0U) {
+                --index;
+                lm_own_delete(values[index], 0);
+            }
+            lm_own_delete(values, 0);
+            return 0;
+        }
+    }
+    return values;
+}
+
+static void lm_trans_struct_return_field_values_delete(
+    LmTransStructReturnFieldValue **values,
+    size_t count
+) {
+    size_t index;
+
+    if (values == 0) {
+        return;
+    }
+    for (index = 0U; index < count; ++index) {
+        lm_own_delete(values[index], 0);
+    }
+    lm_own_delete(values, 0);
+}
+
 static int lm_trans_struct_return_collect_value_fields(
     const LmP0Structure *descriptor,
     const LmP0Structure *value,
-    LmTransStructReturnFieldValue *fields,
+    LmTransStructReturnFieldValue **fields,
     size_t field_count
 ) {
     const LmP0Field *field;
@@ -1534,7 +1571,7 @@ static int lm_trans_struct_return_collect_value_fields(
             lm_trans_struct_return_field_index(descriptor, *field->value->as->frame->head, &named_index)
         ) {
             frame = field->value->as->frame;
-            if (fields[named_index].present) {
+            if (fields[named_index]->present) {
                 fprintf(stderr, "trans L2 error: duplicate named fm return field\n");
                 return 1;
             }
@@ -1542,9 +1579,9 @@ static int lm_trans_struct_return_collect_value_fields(
                 fprintf(stderr, "trans L2 error: named fm return field expects a value\n");
                 return 1;
             }
-            fields[named_index].first = frame->body->first_field;
-            fields[named_index].stop = 0;
-            fields[named_index].present = 1;
+            fields[named_index]->first = frame->body->first_field;
+            fields[named_index]->stop = 0;
+            fields[named_index]->present = 1;
             if (named_index == positional_index) {
                 ++positional_index;
             } else {
@@ -1562,13 +1599,13 @@ static int lm_trans_struct_return_collect_value_fields(
             fprintf(stderr, "trans L2 error: too many positional fm return fields\n");
             return 1;
         }
-        if (fields[positional_index].present) {
+        if (fields[positional_index]->present) {
             fprintf(stderr, "trans L2 error: duplicate positional fm return field\n");
             return 1;
         }
-        fields[positional_index].first = field;
-        fields[positional_index].stop = field->next;
-        fields[positional_index].present = 1;
+        fields[positional_index]->first = field;
+        fields[positional_index]->stop = field->next;
+        fields[positional_index]->present = 1;
         ++positional_index;
         field = field->next;
     }
@@ -1585,7 +1622,7 @@ static int lm_trans_emit_struct_value_return_statement(
 ) {
     const LmP0Structure *descriptor;
     const LmP0Structure *value;
-    LmTransStructReturnFieldValue *values;
+    LmTransStructReturnFieldValue **values;
     LmP0Text *return_name;
     LmP0Text *field_name;
     char return_name_storage[64];
@@ -1625,7 +1662,7 @@ static int lm_trans_emit_struct_value_return_statement(
         lm_trans_text_ref_destroy(&field_name);
         return 1;
     }
-    values = (LmTransStructReturnFieldValue *)lm_own_new_zero(sizeof(*values) * field_count);
+    values = lm_trans_struct_return_field_values_new(field_count);
     if (values == 0) {
         lm_trans_text_ref_destroy(&return_name);
         lm_trans_text_ref_destroy(&field_name);
@@ -1635,7 +1672,7 @@ static int lm_trans_emit_struct_value_return_statement(
     status = lm_trans_struct_return_collect_value_fields(descriptor, value, values, field_count);
     if (status == 0) {
         for (index = 0U; index < field_count; ++index) {
-            if (!values[index].present) {
+            if (!values[index]->present) {
                 fprintf(stderr, "trans L2 error: fm Structure return literal does not fill every return field\n");
                 status = 1;
                 break;
@@ -1672,7 +1709,7 @@ static int lm_trans_emit_struct_value_return_statement(
             lm_trans_put(file, ".") != 0 ||
             lm_trans_emit_identifier(file, field_name) != 0 ||
             lm_trans_put(file, " = ") != 0 ||
-            lm_trans_emit_expr_range(file, values[index].first, values[index].stop, namespace_) != 0 ||
+            lm_trans_emit_expr_range(file, values[index]->first, values[index]->stop, namespace_) != 0 ||
             lm_trans_put(file, ";\n") != 0
         ) {
             status = 1;
@@ -1697,7 +1734,7 @@ static int lm_trans_emit_struct_value_return_statement(
     status = 0;
 
 cleanup:
-    lm_own_delete(values, 0);
+    lm_trans_struct_return_field_values_delete(values, field_count);
     lm_trans_text_ref_destroy(&return_name);
     lm_trans_text_ref_destroy(&field_name);
     return status;
