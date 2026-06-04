@@ -159,29 +159,32 @@ external:
 end: external
 
 external:
-    sub: lm_own_arena_init (@: LmOwnArena arena)
-        if: arena != 0
+    fn: lm_own_arena_init (@: LmOwnArena arena) int
+        if: arena = 0
+            return: 1
+
+        arena\allocations: 0
+        arena\allocation_descriptors: 0
+        arena\lazy_edges: 0
+        arena\frozen: 1
+
+        arena\allocations: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+        arena\allocation_descriptors: lm_own_new_zero(c.sizeof(c.LmOwnValueStack))
+        arena\lazy_edges: lm_own_new_zero(c.sizeof(c.LmOwnValueStack))
+        if: arena\allocations = 0 || arena\allocation_descriptors = 0 || arena\lazy_edges = 0
+            lm_own_delete(arena\lazy_edges, 0)
+            lm_own_delete(arena\allocation_descriptors, 0)
+            lm_own_delete(arena\allocations, 0)
             arena\allocations: 0
             arena\allocation_descriptors: 0
             arena\lazy_edges: 0
-            arena\frozen: 1
+            return: 1
 
-            arena\allocations: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
-            arena\allocation_descriptors: lm_own_new_zero(c.sizeof(c.LmOwnValueStack))
-            arena\lazy_edges: lm_own_new_zero(c.sizeof(c.LmOwnValueStack))
-            if: arena\allocations = 0 || arena\allocation_descriptors = 0 || arena\lazy_edges = 0
-                lm_own_delete(arena\lazy_edges, 0)
-                lm_own_delete(arena\allocation_descriptors, 0)
-                lm_own_delete(arena\allocations, 0)
-                arena\allocations: 0
-                arena\allocation_descriptors: 0
-                arena\lazy_edges: 0
-                return
-
-            lm_own_ptr_stack_init(arena\allocations, c.free)
-            lm_own_value_stack_init(arena\allocation_descriptors, c.sizeof(c.LmOwnAllocationDescriptor))
-            lm_own_value_stack_init(arena\lazy_edges, c.sizeof(c.LmOwnLazyEdge))
-            arena\frozen: 0
+        lm_own_ptr_stack_init(arena\allocations, c.free)
+        lm_own_value_stack_init(arena\allocation_descriptors, c.sizeof(c.LmOwnAllocationDescriptor))
+        lm_own_value_stack_init(arena\lazy_edges, c.sizeof(c.LmOwnLazyEdge))
+        arena\frozen: 0
+        return: 0
     end: lm_own_arena_init
 end: external
 

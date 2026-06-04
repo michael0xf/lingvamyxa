@@ -73,7 +73,7 @@ int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
 void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void * lm_own_value_stack_top(const LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
-void lm_own_arena_init(LmOwnArena *arena);
+int lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
 void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
@@ -103,7 +103,7 @@ void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count);
 void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size);
 void lm_own_value_stack_destroy(LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
-void lm_own_arena_init(LmOwnArena *arena);
+int lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
 void lm_own_arena_freeze(LmOwnArena *arena);
 int lm_own_arena_is_frozen(const LmOwnArena *arena);
@@ -268,29 +268,31 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
     }
 }
 
-void lm_own_arena_init(LmOwnArena *arena) {
-    if (arena != 0) {
+int lm_own_arena_init(LmOwnArena *arena) {
+    if (arena == 0) {
+        return 1;
+    }
+    arena->allocations = 0;
+    arena->allocation_descriptors = 0;
+    arena->lazy_edges = 0;
+    arena->frozen = 1;
+    arena->allocations = lm_own_new_zero(sizeof(LmOwnPtrStack));
+    arena->allocation_descriptors = lm_own_new_zero(sizeof(LmOwnValueStack));
+    arena->lazy_edges = lm_own_new_zero(sizeof(LmOwnValueStack));
+    if (arena -> allocations == 0 || arena -> allocation_descriptors == 0 || arena -> lazy_edges == 0) {
+        lm_own_delete(arena -> lazy_edges, 0);
+        lm_own_delete(arena -> allocation_descriptors, 0);
+        lm_own_delete(arena -> allocations, 0);
         arena->allocations = 0;
         arena->allocation_descriptors = 0;
         arena->lazy_edges = 0;
-        arena->frozen = 1;
-        arena->allocations = lm_own_new_zero(sizeof(LmOwnPtrStack));
-        arena->allocation_descriptors = lm_own_new_zero(sizeof(LmOwnValueStack));
-        arena->lazy_edges = lm_own_new_zero(sizeof(LmOwnValueStack));
-        if (arena -> allocations == 0 || arena -> allocation_descriptors == 0 || arena -> lazy_edges == 0) {
-            lm_own_delete(arena -> lazy_edges, 0);
-            lm_own_delete(arena -> allocation_descriptors, 0);
-            lm_own_delete(arena -> allocations, 0);
-            arena->allocations = 0;
-            arena->allocation_descriptors = 0;
-            arena->lazy_edges = 0;
-            return;
-        }
-        lm_own_ptr_stack_init(arena -> allocations, free);
-        lm_own_value_stack_init(arena -> allocation_descriptors, sizeof(LmOwnAllocationDescriptor));
-        lm_own_value_stack_init(arena -> lazy_edges, sizeof(LmOwnLazyEdge));
-        arena->frozen = 0;
+        return 1;
     }
+    lm_own_ptr_stack_init(arena -> allocations, free);
+    lm_own_value_stack_init(arena -> allocation_descriptors, sizeof(LmOwnAllocationDescriptor));
+    lm_own_value_stack_init(arena -> lazy_edges, sizeof(LmOwnLazyEdge));
+    arena->frozen = 0;
+    return 0;
 }
 
 void lm_own_arena_destroy(LmOwnArena *arena) {

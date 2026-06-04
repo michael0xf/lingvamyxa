@@ -278,7 +278,7 @@ L4:
         columns: class              (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
                  identifiers        LmTransIdentifierTable 0             0
-                 value_arena        LmOwnArena            1              0
+                 value_arena        LmOwnArena            1              1
                  loaded_paths       LmOwnPtrStack         2              0
                  source_path        char                  3              1
                  loaded_fact_count  size_t                4              0

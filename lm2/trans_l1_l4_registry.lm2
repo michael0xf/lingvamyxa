@@ -1164,14 +1164,14 @@ static LmP0Node *lm_trans_registry_synthetic_node(LmP0NodeKind kind) {
     LmP0Node *node;
 
     node = (LmP0Node *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*node)
     );
     if (node == 0) {
         return 0;
     }
     node->as = (LmP0NodeAs *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*node->as)
     );
     if (node->as == 0) {
@@ -1225,7 +1225,7 @@ static LmP0Field *lm_trans_registry_synthetic_append_node(
     }
 
     field = (LmP0Field *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*field)
     );
     if (field == 0) {
@@ -1272,7 +1272,7 @@ static char *lm_trans_registry_synthetic_at_head(size_t address_depth) {
     }
 
     head = (char *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         address_depth + 1U
     );
     if (head == 0) {
@@ -1780,9 +1780,11 @@ static int lm_trans_emit_l4_units(
 static void lm_trans_registry_destroy(void) {
     if (lm_trans_registry->loaded) {
         lm_trans_identifier_table_destroy(&lm_trans_registry->identifiers);
-        lm_own_arena_destroy(&lm_trans_registry->value_arena);
+        lm_own_arena_destroy(lm_trans_registry->value_arena);
+        lm_own_delete(lm_trans_registry->value_arena, 0);
         lm_own_ptr_stack_destroy(&lm_trans_registry->loaded_paths);
         free(lm_trans_registry->source_path);
+        lm_trans_registry->value_arena = 0;
         lm_trans_registry->source_path = 0;
         lm_trans_registry->loaded_fact_count = 0U;
         lm_trans_registry->loaded = 0;
@@ -3216,16 +3218,19 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
 
     lm_trans_registry_destroy();
     lm_trans_identifier_table_init(&lm_trans_registry->identifiers);
-    lm_own_arena_init(&lm_trans_registry->value_arena);
+    lm_trans_registry->loaded = 1;
+    lm_trans_registry->value_arena = (LmOwnArena *)lm_own_new_zero(sizeof(*lm_trans_registry->value_arena));
+    if (lm_trans_registry->value_arena == 0 || lm_own_arena_init(lm_trans_registry->value_arena) != 0) {
+        lm_trans_registry_destroy();
+        return 1;
+    }
     lm_own_ptr_stack_init(&lm_trans_registry->loaded_paths, free);
     lm_trans_registry->source_path = lm_trans_text_copy_cstr_from_cstr(source_path);
     if (lm_trans_registry->source_path == 0) {
-        lm_trans_registry->loaded = 1;
         lm_trans_registry_destroy();
         return 1;
     }
     lm_trans_registry->loaded_fact_count = 0U;
-    lm_trans_registry->loaded = 1;
 
     if (lm_trans_registry_seed_l4_receivers() != 0) {
         lm_trans_registry_destroy();

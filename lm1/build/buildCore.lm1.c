@@ -76,7 +76,7 @@ int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
 void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void * lm_own_value_stack_top(const LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
-void lm_own_arena_init(LmOwnArena *arena);
+int lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
 void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);

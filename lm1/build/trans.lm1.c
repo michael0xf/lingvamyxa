@@ -181,7 +181,7 @@ typedef struct LmTransIdentifierTable {
 } LmTransIdentifierTable;
 typedef struct LmTransRegistry {
     LmTransIdentifierTable identifiers;
-    LmOwnArena value_arena;
+    LmOwnArena *value_arena;
     LmOwnPtrStack loaded_paths;
     char *source_path;
     size_t loaded_fact_count;
@@ -513,7 +513,7 @@ int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
 void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void * lm_own_value_stack_top(const LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
-void lm_own_arena_init(LmOwnArena *arena);
+int lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
 void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
@@ -1453,7 +1453,7 @@ static int lm_trans_registry_clone_structure(
 static LmP0Text *lm_trans_registry_new_text(void) {
     LmP0Text *text;
 
-    text = (LmP0Text *)lm_own_arena_new_zero(&lm_trans_registry->value_arena, sizeof(*text));
+    text = (LmP0Text *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*text));
     if (text != 0) {
         text->data = "";
         text->length = 0U;
@@ -1463,7 +1463,7 @@ static LmP0Text *lm_trans_registry_new_text(void) {
 
 static LmP0Structure *lm_trans_registry_new_structure(void) {
     return (LmP0Structure *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(LmP0Structure)
     );
 }
@@ -1471,7 +1471,7 @@ static LmP0Structure *lm_trans_registry_new_structure(void) {
 static LmP0Frame *lm_trans_registry_new_frame(void) {
     LmP0Frame *frame;
 
-    frame = (LmP0Frame *)lm_own_arena_new_zero(&lm_trans_registry->value_arena, sizeof(*frame));
+    frame = (LmP0Frame *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*frame));
     if (frame == 0) {
         return 0;
     }
@@ -1486,7 +1486,7 @@ static LmP0Frame *lm_trans_registry_new_frame(void) {
 static LmP0Trailer *lm_trans_registry_new_trailer(void) {
     LmP0Trailer *trailer;
 
-    trailer = (LmP0Trailer *)lm_own_arena_new_zero(&lm_trans_registry->value_arena, sizeof(*trailer));
+    trailer = (LmP0Trailer *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*trailer));
     if (trailer == 0) {
         return 0;
     }
@@ -1544,7 +1544,7 @@ static int lm_trans_registry_clone_structure(
     source_field = source->first_field;
     while (source_field != 0) {
         copy_field = (LmP0Field *)lm_own_arena_new_zero(
-            &lm_trans_registry->value_arena,
+            lm_trans_registry->value_arena,
             sizeof(*copy_field)
         );
         if (copy_field == 0) {
@@ -1583,7 +1583,7 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
     }
 
     copy = (LmP0Node *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*copy)
     );
     if (copy == 0) {
@@ -1594,7 +1594,7 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
     copy->flags = source->flags;
     copy->span = source->span;
     copy->as = (LmP0NodeAs *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*copy->as)
     );
     if (copy->as == 0) {
@@ -1739,7 +1739,7 @@ static int lm_trans_registry_push_row_values(
     LmTransRegistryFact *row;
 
     row = (LmTransRegistryFact *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*row)
     );
     if (row == 0) {
@@ -1774,7 +1774,7 @@ static int lm_trans_registry_push_row_node_values(
     }
 
     row = (LmTransRegistryFact *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*row)
     );
     if (row == 0) {
@@ -19824,14 +19824,14 @@ static LmP0Node *lm_trans_registry_synthetic_node(LmP0NodeKind kind) {
     LmP0Node *node;
 
     node = (LmP0Node *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*node)
     );
     if (node == 0) {
         return 0;
     }
     node->as = (LmP0NodeAs *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*node->as)
     );
     if (node->as == 0) {
@@ -19885,7 +19885,7 @@ static LmP0Field *lm_trans_registry_synthetic_append_node(
     }
 
     field = (LmP0Field *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*field)
     );
     if (field == 0) {
@@ -19932,7 +19932,7 @@ static char *lm_trans_registry_synthetic_at_head(size_t address_depth) {
     }
 
     head = (char *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         address_depth + 1U
     );
     if (head == 0) {
@@ -20440,9 +20440,11 @@ static int lm_trans_emit_l4_units(
 static void lm_trans_registry_destroy(void) {
     if (lm_trans_registry->loaded) {
         lm_trans_identifier_table_destroy(&lm_trans_registry->identifiers);
-        lm_own_arena_destroy(&lm_trans_registry->value_arena);
+        lm_own_arena_destroy(lm_trans_registry->value_arena);
+        lm_own_delete(lm_trans_registry->value_arena, 0);
         lm_own_ptr_stack_destroy(&lm_trans_registry->loaded_paths);
         free(lm_trans_registry->source_path);
+        lm_trans_registry->value_arena = 0;
         lm_trans_registry->source_path = 0;
         lm_trans_registry->loaded_fact_count = 0U;
         lm_trans_registry->loaded = 0;
@@ -21876,16 +21878,19 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
 
     lm_trans_registry_destroy();
     lm_trans_identifier_table_init(&lm_trans_registry->identifiers);
-    lm_own_arena_init(&lm_trans_registry->value_arena);
+    lm_trans_registry->loaded = 1;
+    lm_trans_registry->value_arena = (LmOwnArena *)lm_own_new_zero(sizeof(*lm_trans_registry->value_arena));
+    if (lm_trans_registry->value_arena == 0 || lm_own_arena_init(lm_trans_registry->value_arena) != 0) {
+        lm_trans_registry_destroy();
+        return 1;
+    }
     lm_own_ptr_stack_init(&lm_trans_registry->loaded_paths, free);
     lm_trans_registry->source_path = lm_trans_text_copy_cstr_from_cstr(source_path);
     if (lm_trans_registry->source_path == 0) {
-        lm_trans_registry->loaded = 1;
         lm_trans_registry_destroy();
         return 1;
     }
     lm_trans_registry->loaded_fact_count = 0U;
-    lm_trans_registry->loaded = 1;
 
     if (lm_trans_registry_seed_l4_receivers() != 0) {
         lm_trans_registry_destroy();
@@ -22347,7 +22352,7 @@ static char * lm_trans_registry_value_copy_cstr(const LmP0Text *value) {
         return 0;
     }
     length = value -> length;
-    copy = lm_own_arena_new_zero(&lm_trans_registry->value_arena, length + 1U);
+    copy = lm_own_arena_new_zero(lm_trans_registry->value_arena, length + 1U);
     if (copy == 0) {
         return 0;
     }
@@ -22374,7 +22379,7 @@ static int lm_trans_registry_clone_text(const LmP0Text *source, LmP0Text *out_te
     if (source -> data == 0) {
         return 1;
     }
-    copy = lm_own_arena_copy_bytes(&lm_trans_registry->value_arena, source -> data, source -> length);
+    copy = lm_own_arena_copy_bytes(lm_trans_registry->value_arena, source -> data, source -> length);
     if (copy == 0) {
         return 1;
     }

@@ -127,7 +127,7 @@ fn: lm_trans_registry_value_copy_cstr (const: @(LmP0Text value)) @: char
         return: 0
 
     length: value\length
-    copy: c.lm_own_arena_new_zero(c.&lm_trans_registry->value_arena, length + 1U)
+    copy: c.lm_own_arena_new_zero(c.lm_trans_registry->value_arena, length + 1U)
     if: copy = 0
         return: 0
     if: length != 0U
@@ -151,7 +151,7 @@ fn: lm_trans_registry_clone_text (const: @(LmP0Text source); @: LmP0Text out_tex
     if: source\data = 0
         return: 1
 
-    copy: c.lm_own_arena_copy_bytes(c.&lm_trans_registry->value_arena, source\data, source\length)
+    copy: c.lm_own_arena_copy_bytes(c.lm_trans_registry->value_arena, source\data, source\length)
     if: copy = 0
         return: 1
 

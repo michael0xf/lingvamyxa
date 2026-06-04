@@ -183,10 +183,10 @@ struct LmP0Document {
     size_t source_length;
     LmP0Node *root;
     LmP0Diagnostic diagnostic;
-    LmOwnArena source_owner;
-    LmOwnArena token_arena;
-    LmOwnArena tree_arena;
-    LmOwnArena diagnostic_arena;
+    LmOwnArena *source_owner;
+    LmOwnArena *token_arena;
+    LmOwnArena *tree_arena;
+    LmOwnArena *diagnostic_arena;
     int owners_initialized;
     int frozen;
 };
@@ -262,7 +262,7 @@ int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
 void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void * lm_own_value_stack_top(const LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
-void lm_own_arena_init(LmOwnArena *arena);
+int lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
 void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
@@ -1131,7 +1131,7 @@ static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 #include <string.h>
 #include <limits.h>
 
-static void lm_p0_document_init_owners(LmP0Document *document);
+static int lm_p0_document_init_owners(LmP0Document *document);
 static void lm_p0_document_destroy_owners(LmP0Document *document);
 static void lm_p0_document_freeze_tree(LmP0Document *document);
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
@@ -1204,7 +1204,7 @@ static void lm_p0_set_diagnostic(
     const char *format,
     ...
 );
-static void lm_p0_document_init_owners(LmP0Document *document);
+static int lm_p0_document_init_owners(LmP0Document *document);
 static void lm_p0_document_destroy_owners(LmP0Document *document);
 static void lm_p0_document_freeze_tree(LmP0Document *document);
 static int lm_p0_text_equals(const LmP0Text *text, const char *value);
@@ -1366,8 +1366,8 @@ static int lm_p0_document_register_lazy_text(
         document == 0 ||
         !document->owners_initialized ||
         lm_own_arena_add_lazy_edge(
-            &document->tree_arena,
-            &document->source_owner,
+            document->tree_arena,
+            document->source_owner,
             source,
             length,
             (const void **)patch_slot
@@ -1390,7 +1390,7 @@ static LmP0Text *lm_p0_new_text(
 ) {
     LmP0Text *text;
 
-    text = (LmP0Text *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*text));
+    text = (LmP0Text *)lm_own_arena_new_zero(document->tree_arena, sizeof(*text));
     if (text == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser text");
         return 0;
@@ -1408,7 +1408,7 @@ static LmP0Text *lm_p0_new_text(
 static LmP0Structure *lm_p0_new_structure(LmP0Document *document, size_t line, size_t column) {
     LmP0Structure *structure;
 
-    structure = (LmP0Structure *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*structure));
+    structure = (LmP0Structure *)lm_own_arena_new_zero(document->tree_arena, sizeof(*structure));
     if (structure == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser structure");
         return 0;
@@ -1420,7 +1420,7 @@ static LmP0Structure *lm_p0_new_structure(LmP0Document *document, size_t line, s
 static LmP0Frame *lm_p0_new_frame(LmP0Document *document, size_t line, size_t column) {
     LmP0Frame *frame;
 
-    frame = (LmP0Frame *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*frame));
+    frame = (LmP0Frame *)lm_own_arena_new_zero(document->tree_arena, sizeof(*frame));
     if (frame == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser frame");
         return 0;
@@ -1446,7 +1446,7 @@ static LmP0Trailer *lm_p0_new_trailer(
 ) {
     LmP0Trailer *trailer;
 
-    trailer = (LmP0Trailer *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*trailer));
+    trailer = (LmP0Trailer *)lm_own_arena_new_zero(document->tree_arena, sizeof(*trailer));
     if (trailer == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer");
         return 0;
@@ -2475,13 +2475,13 @@ static int lm_p0_scan_block_string_event(
 static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
     LmP0Node *node;
 
-    node = (LmP0Node *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*node));
+    node = (LmP0Node *)lm_own_arena_new_zero(document->tree_arena, sizeof(*node));
     if (node == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node");
         return 0;
     }
 
-    node->as = (LmP0NodeAs *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*node->as));
+    node->as = (LmP0NodeAs *)lm_own_arena_new_zero(document->tree_arena, sizeof(*node->as));
     if (node->as == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node payload");
         return 0;
@@ -2510,7 +2510,7 @@ static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
 static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, LmP0Node *node) {
     LmP0Field *field;
 
-    field = (LmP0Field *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*field));
+    field = (LmP0Field *)lm_own_arena_new_zero(document->tree_arena, sizeof(*field));
     if (field == 0) {
         lm_p0_set_diagnostic(document, 1, node != 0 ? node->span.line : 0U, node != 0 ? node->span.column : 0U, "out of memory while allocating parser field");
         return 0;
@@ -2710,7 +2710,10 @@ static int lm_p0_record_mix_mark(
     payload_length = end > start + 2U ? end - start - 2U : 0U;
     if (payload_length > 0U) {
         memset(&payload_document, 0, sizeof(payload_document));
-        lm_p0_document_init_owners(&payload_document);
+        if (lm_p0_document_init_owners(&payload_document) != 0) {
+            lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while creating MIX payload owners");
+            return 0;
+        }
         payload_document.source = (char *)(text + start + 1U);
         payload_document.source_length = payload_length;
 
@@ -2729,7 +2732,7 @@ static int lm_p0_record_mix_mark(
             lm_p0_document_destroy_owners(&payload_document);
             return 0;
         }
-        if (lm_own_tree_cut(&payload_document.tree_arena) != 0) {
+        if (lm_own_tree_cut(payload_document.tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while promoting MIX lazy text edges");
             lm_p0_document_destroy_owners(&payload_document);
             return 0;
@@ -2737,7 +2740,7 @@ static int lm_p0_record_mix_mark(
 
         node->as->structure = payload_document.root->as->structure;
         payload_document.root->as->structure = 0;
-        if (lm_own_arena_absorb(&document->tree_arena, &payload_document.tree_arena) != 0) {
+        if (lm_own_arena_absorb(document->tree_arena, payload_document.tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while moving MIX tree into parser arena");
             lm_p0_document_destroy_owners(&payload_document);
             return 0;
@@ -6802,7 +6805,10 @@ int lm_p0_parse_bytes(
     if (document == 0) {
         return 1;
     }
-    lm_p0_document_init_owners(document);
+    if (lm_p0_document_init_owners(document) != 0) {
+        lm_own_delete(document, 0);
+        return 1;
+    }
 
     if (source == 0) {
         source = "";
@@ -6816,7 +6822,7 @@ int lm_p0_parse_bytes(
     }
 
     document->source_length = source_length;
-    document->source = lm_own_arena_copy_bytes(&document->source_owner, source, document->source_length);
+    document->source = lm_own_arena_copy_bytes(document->source_owner, source, document->source_length);
     if (document->source == 0) {
         lm_p0_document_destroy_owners(document);
         lm_own_delete(document, 0);
@@ -6830,7 +6836,7 @@ int lm_p0_parse_bytes(
     }
 
     if (document->diagnostic.code == 0) {
-        if (lm_own_tree_cut(&document->tree_arena) != 0) {
+        if (lm_own_tree_cut(document->tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while promoting parser lazy text edges");
         } else {
             lm_p0_document_freeze_tree(document);
@@ -7698,22 +7704,50 @@ static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value) {
     return lm_p0_text_copy_cstr(value);
 }
 
-static void lm_p0_document_init_owners(LmP0Document *document) {
-    if (document != 0 && document -> owners_initialized == 0) {
-        lm_own_arena_init(&document->source_owner);
-        lm_own_arena_init(&document->token_arena);
-        lm_own_arena_init(&document->tree_arena);
-        lm_own_arena_init(&document->diagnostic_arena);
-        document->owners_initialized = 1;
+static int lm_p0_document_init_owners(LmP0Document *document) {
+    if (document == 0) {
+        return 1;
     }
+    if (document -> owners_initialized != 0) {
+        return 0;
+    }
+    document->source_owner = lm_own_new_zero(sizeof(LmOwnArena));
+    document->token_arena = lm_own_new_zero(sizeof(LmOwnArena));
+    document->tree_arena = lm_own_new_zero(sizeof(LmOwnArena));
+    document->diagnostic_arena = lm_own_new_zero(sizeof(LmOwnArena));
+    if (document -> source_owner == 0 || document -> token_arena == 0 || document -> tree_arena == 0 || document -> diagnostic_arena == 0) {
+        lm_own_delete(document -> diagnostic_arena, 0);
+        lm_own_delete(document -> tree_arena, 0);
+        lm_own_delete(document -> token_arena, 0);
+        lm_own_delete(document -> source_owner, 0);
+        document->diagnostic_arena = 0;
+        document->tree_arena = 0;
+        document->token_arena = 0;
+        document->source_owner = 0;
+        return 1;
+    }
+    document->owners_initialized = 1;
+    if (lm_own_arena_init(document -> source_owner) != 0 || lm_own_arena_init(document -> token_arena) != 0 || lm_own_arena_init(document -> tree_arena) != 0 || lm_own_arena_init(document -> diagnostic_arena) != 0) {
+        lm_p0_document_destroy_owners(document);
+        return 1;
+    }
+    return 0;
 }
 
 static void lm_p0_document_destroy_owners(LmP0Document *document) {
     if (document != 0 && document -> owners_initialized != 0) {
-        lm_own_arena_destroy(&document->diagnostic_arena);
-        lm_own_arena_destroy(&document->tree_arena);
-        lm_own_arena_destroy(&document->token_arena);
-        lm_own_arena_destroy(&document->source_owner);
+        lm_own_arena_destroy(document -> diagnostic_arena);
+        lm_own_delete(document -> diagnostic_arena, 0);
+        lm_own_arena_destroy(document -> tree_arena);
+        lm_own_delete(document -> tree_arena, 0);
+        lm_own_arena_destroy(document -> token_arena);
+        lm_own_delete(document -> token_arena, 0);
+        lm_own_arena_destroy(document -> source_owner);
+        lm_own_delete(document -> source_owner, 0);
+        document->diagnostic_arena = 0;
+        document->tree_arena = 0;
+        document->token_arena = 0;
+        document->source_owner = 0;
         document->owners_initialized = 0;
         document->frozen = 0;
     }
@@ -7721,8 +7755,8 @@ static void lm_p0_document_destroy_owners(LmP0Document *document) {
 
 static void lm_p0_document_freeze_tree(LmP0Document *document) {
     if (document != 0 && document -> owners_initialized != 0) {
-        lm_own_arena_freeze(&document->tree_arena);
-        lm_own_arena_freeze(&document->source_owner);
+        lm_own_arena_freeze(document -> tree_arena);
+        lm_own_arena_freeze(document -> source_owner);
         document->frozen = 1;
     }
 }

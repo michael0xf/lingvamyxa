@@ -92,7 +92,7 @@ static int lm_trans_registry_clone_structure(
 static LmP0Text *lm_trans_registry_new_text(void) {
     LmP0Text *text;
 
-    text = (LmP0Text *)lm_own_arena_new_zero(&lm_trans_registry->value_arena, sizeof(*text));
+    text = (LmP0Text *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*text));
     if (text != 0) {
         text->data = "";
         text->length = 0U;
@@ -102,7 +102,7 @@ static LmP0Text *lm_trans_registry_new_text(void) {
 
 static LmP0Structure *lm_trans_registry_new_structure(void) {
     return (LmP0Structure *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(LmP0Structure)
     );
 }
@@ -110,7 +110,7 @@ static LmP0Structure *lm_trans_registry_new_structure(void) {
 static LmP0Frame *lm_trans_registry_new_frame(void) {
     LmP0Frame *frame;
 
-    frame = (LmP0Frame *)lm_own_arena_new_zero(&lm_trans_registry->value_arena, sizeof(*frame));
+    frame = (LmP0Frame *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*frame));
     if (frame == 0) {
         return 0;
     }
@@ -125,7 +125,7 @@ static LmP0Frame *lm_trans_registry_new_frame(void) {
 static LmP0Trailer *lm_trans_registry_new_trailer(void) {
     LmP0Trailer *trailer;
 
-    trailer = (LmP0Trailer *)lm_own_arena_new_zero(&lm_trans_registry->value_arena, sizeof(*trailer));
+    trailer = (LmP0Trailer *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*trailer));
     if (trailer == 0) {
         return 0;
     }
@@ -183,7 +183,7 @@ static int lm_trans_registry_clone_structure(
     source_field = source->first_field;
     while (source_field != 0) {
         copy_field = (LmP0Field *)lm_own_arena_new_zero(
-            &lm_trans_registry->value_arena,
+            lm_trans_registry->value_arena,
             sizeof(*copy_field)
         );
         if (copy_field == 0) {
@@ -222,7 +222,7 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
     }
 
     copy = (LmP0Node *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*copy)
     );
     if (copy == 0) {
@@ -233,7 +233,7 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
     copy->flags = source->flags;
     copy->span = source->span;
     copy->as = (LmP0NodeAs *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*copy->as)
     );
     if (copy->as == 0) {
@@ -378,7 +378,7 @@ static int lm_trans_registry_push_row_values(
     LmTransRegistryFact *row;
 
     row = (LmTransRegistryFact *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*row)
     );
     if (row == 0) {
@@ -413,7 +413,7 @@ static int lm_trans_registry_push_row_node_values(
     }
 
     row = (LmTransRegistryFact *)lm_own_arena_new_zero(
-        &lm_trans_registry->value_arena,
+        lm_trans_registry->value_arena,
         sizeof(*row)
     );
     if (row == 0) {
