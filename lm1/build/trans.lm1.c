@@ -90,8 +90,8 @@ struct LmOwnLazyEdge {
 };
 struct LmOwnArena {
     LmOwnPtrStack *allocations;
-    LmOwnValueStack *allocation_descriptors;
-    LmOwnValueStack *lazy_edges;
+    LmOwnPtrStack *allocation_descriptors;
+    LmOwnPtrStack *lazy_edges;
     int frozen;
 };
 typedef struct LmP0Text {
@@ -2656,24 +2656,6 @@ static void lm_trans_ptr_stack_delete(LmOwnPtrStack **stack) {
     }
 }
 
-static LmOwnValueStack *lm_trans_value_stack_new(size_t item_size) {
-    LmOwnValueStack *stack;
-
-    stack = (LmOwnValueStack *)lm_own_new_zero(sizeof(*stack));
-    if (stack != 0) {
-        lm_own_value_stack_init(stack, item_size);
-    }
-    return stack;
-}
-
-static void lm_trans_value_stack_delete(LmOwnValueStack **stack) {
-    if (stack != 0 && *stack != 0) {
-        lm_own_value_stack_destroy(*stack);
-        lm_own_delete(*stack, 0);
-        *stack = 0;
-    }
-}
-
 static LmTransFunctionState *lm_trans_function_state_new(void) {
     return (LmTransFunctionState *)lm_own_new_zero(sizeof(LmTransFunctionState));
 }
@@ -5069,15 +5051,63 @@ static int lm_trans_expr_stack_push_lowered_range(
     return status;
 }
 
+static LmTransExprSegment *lm_trans_expr_segment_new(void) {
+    return (LmTransExprSegment *)lm_own_new_zero(sizeof(LmTransExprSegment));
+}
+
+static LmOwnPtrStack *lm_trans_expr_segment_stack_new(void) {
+    LmOwnPtrStack *segments;
+
+    segments = (LmOwnPtrStack *)lm_own_new_zero(sizeof(*segments));
+    if (segments != 0) {
+        lm_own_ptr_stack_init(segments, lm_own_delete_plain);
+    }
+    return segments;
+}
+
+static void lm_trans_expr_segment_stack_delete(LmOwnPtrStack **segments) {
+    if (segments != 0 && *segments != 0) {
+        lm_own_ptr_stack_destroy(*segments);
+        lm_own_delete(*segments, 0);
+        *segments = 0;
+    }
+}
+
+static int lm_trans_expr_segments_resize_blank(
+    LmOwnPtrStack *segments,
+    size_t count
+) {
+    LmTransExprSegment *segment;
+
+    if (segments == 0) {
+        return 1;
+    }
+    if (count < segments->count) {
+        lm_own_ptr_stack_truncate(segments, count);
+        return 0;
+    }
+    while (segments->count < count) {
+        segment = lm_trans_expr_segment_new();
+        if (segment == 0) {
+            return 1;
+        }
+        if (lm_own_ptr_stack_push(segments, segment) != 0) {
+            lm_own_delete(segment, 0);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int lm_trans_expr_segments_append(
-    LmOwnValueStack *segments,
+    LmOwnPtrStack *segments,
     const LmP0Field *first,
     const LmP0Field *stop
 ) {
     LmTransExprSegment *segment;
     int status;
 
-    segment = (LmTransExprSegment *)lm_own_new_zero(sizeof(*segment));
+    segment = lm_trans_expr_segment_new();
     if (segment == 0) {
         return 1;
     }
@@ -5085,21 +5115,23 @@ static int lm_trans_expr_segments_append(
     segment->stop = stop;
     segment->expected_param = 0;
     segment->present = 1;
-    status = lm_own_value_stack_push(segments, segment);
-    lm_own_delete(segment, 0);
+    status = lm_own_ptr_stack_push(segments, segment);
+    if (status != 0) {
+        lm_own_delete(segment, 0);
+    }
     return status;
 }
 
 static int lm_trans_expr_stack_push_name_text(LmTransExprStack *stack, LmP0Text name);
 static const LmP0Field *lm_trans_call_body_first_field(const LmP0Structure *body);
 static int lm_trans_expr_segments_parse_fields(
-    LmOwnValueStack *segments,
+    LmOwnPtrStack *segments,
     const LmP0Field *first
 );
 static int lm_trans_expr_stack_push_segments(
     FILE *file,
     LmTransExprStack *stack,
-    const LmOwnValueStack *segments,
+    const LmOwnPtrStack *segments,
     const LmTransNamespace *namespace_
 );
 
@@ -6867,7 +6899,7 @@ static int lm_trans_expr_stack_push_lazy_binder_call(
     size_t bound_count,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnValueStack *segments;
+    LmOwnPtrStack *segments;
     const LmP0Field *first;
     const LmP0Field *field;
     const LmP0Field *next;
@@ -6882,11 +6914,11 @@ static int lm_trans_expr_stack_push_lazy_binder_call(
     }
 
     first = lm_trans_call_body_first_field(body);
-    segments = lm_trans_value_stack_new(sizeof(LmTransExprSegment));
+    segments = lm_trans_expr_segment_stack_new();
     if (segments == 0) {
         return 1;
     }
-    status = lm_own_value_stack_resize_zero(segments, bound_count);
+    status = lm_trans_expr_segments_resize_blank(segments, bound_count);
     field = first;
     index = 0U;
     while (status == 0 && field != 0) {
@@ -6895,7 +6927,7 @@ static int lm_trans_expr_stack_push_lazy_binder_call(
             status = 1;
             break;
         }
-        segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        segment = (LmTransExprSegment *)lm_own_ptr_stack_at(segments, index);
         if (segment == 0) {
             status = 1;
             break;
@@ -6919,7 +6951,7 @@ static int lm_trans_expr_stack_push_lazy_binder_call(
         field = next;
     }
     while (status == 0 && index < bound_count) {
-        segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        segment = (LmTransExprSegment *)lm_own_ptr_stack_at(segments, index);
         if (segment == 0) {
             status = 1;
             break;
@@ -6934,7 +6966,7 @@ static int lm_trans_expr_stack_push_lazy_binder_call(
     if (status == 0) {
         status = lm_trans_expr_stack_push_segments(file, stack, segments, namespace_);
     }
-    lm_trans_value_stack_delete(&segments);
+    lm_trans_expr_segment_stack_delete(&segments);
     if (status != 0) {
         return 1;
     }
@@ -7385,7 +7417,7 @@ static int lm_trans_expr_stack_try_materialize_segment(
 }
 
 static int lm_trans_expr_segments_parse_fields(
-    LmOwnValueStack *segments,
+    LmOwnPtrStack *segments,
     const LmP0Field *first
 ) {
     const LmP0Field *field;
@@ -7410,7 +7442,7 @@ static int lm_trans_expr_segments_parse_fields(
 static int lm_trans_expr_stack_push_segments(
     FILE *file,
     LmTransExprStack *stack,
-    const LmOwnValueStack *segments,
+    const LmOwnPtrStack *segments,
     const LmTransNamespace *namespace_
 ) {
     size_t index;
@@ -7424,7 +7456,7 @@ static int lm_trans_expr_stack_push_segments(
     index = segments->count;
     while (index > 0U) {
         --index;
-        segment = (const LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        segment = (const LmTransExprSegment *)lm_own_ptr_stack_at(segments, index);
         if (segment == 0) {
             return 1;
         }
@@ -7465,7 +7497,7 @@ static const LmP0Field *lm_trans_call_body_first_field(const LmP0Structure *body
 }
 
 static int lm_trans_call_args_layout_signature(
-    LmOwnValueStack *segments,
+    LmOwnPtrStack *segments,
     const LmP0Field *field,
     const LmTransSymbol *callee
 ) {
@@ -7481,7 +7513,7 @@ static int lm_trans_call_args_layout_signature(
         return 1;
     }
 
-    if (lm_own_value_stack_resize_zero(segments, callee->param_names->count) != 0) {
+    if (lm_trans_expr_segments_resize_blank(segments, callee->param_names->count) != 0) {
         return 1;
     }
 
@@ -7490,7 +7522,7 @@ static int lm_trans_call_args_layout_signature(
     while (field != 0) {
         is_named = lm_trans_call_field_is_named_argument(field, callee, &named_index);
         if (is_named) {
-            segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, named_index);
+            segment = (LmTransExprSegment *)lm_own_ptr_stack_at(segments, named_index);
             if (segment == 0) {
                 return 1;
             }
@@ -7521,7 +7553,7 @@ static int lm_trans_call_args_layout_signature(
                 fprintf(stderr, "trans L2 error: too many arguments\n");
                 return 1;
             }
-            segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+            segment = (LmTransExprSegment *)lm_own_ptr_stack_at(segments, index);
             if (segment == 0) {
                 return 1;
             }
@@ -7538,7 +7570,7 @@ static int lm_trans_call_args_layout_signature(
             return 1;
         }
         next = lm_trans_expr_segment_end(field);
-        segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        segment = (LmTransExprSegment *)lm_own_ptr_stack_at(segments, index);
         if (segment == 0) {
             return 1;
         }
@@ -7551,7 +7583,7 @@ static int lm_trans_call_args_layout_signature(
     }
 
     for (index = 0U; index < callee->param_names->count; ++index) {
-        segment = (LmTransExprSegment *)lm_own_value_stack_at(segments, index);
+        segment = (LmTransExprSegment *)lm_own_ptr_stack_at(segments, index);
         if (segment == 0) {
             return 1;
         }
@@ -7567,7 +7599,7 @@ static int lm_trans_call_args_layout_signature(
 }
 
 static int lm_trans_call_args_layout(
-    LmOwnValueStack *segments,
+    LmOwnPtrStack *segments,
     const LmP0Structure *body,
     const LmTransSymbol *callee
 ) {
@@ -7588,10 +7620,10 @@ static int lm_trans_expr_stack_schedule_call_args(
     const LmTransSymbol *callee,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnValueStack *segments;
+    LmOwnPtrStack *segments;
     int status;
 
-    segments = lm_trans_value_stack_new(sizeof(LmTransExprSegment));
+    segments = lm_trans_expr_segment_stack_new();
     if (segments == 0) {
         return 1;
     }
@@ -7606,7 +7638,7 @@ static int lm_trans_expr_stack_schedule_call_args(
             status = 1;
         }
     }
-    lm_trans_value_stack_delete(&segments);
+    lm_trans_expr_segment_stack_delete(&segments);
     return status;
 }
 

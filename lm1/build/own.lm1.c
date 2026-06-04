@@ -45,8 +45,8 @@ struct LmOwnLazyEdge {
 };
 struct LmOwnArena {
     LmOwnPtrStack *allocations;
-    LmOwnValueStack *allocation_descriptors;
-    LmOwnValueStack *lazy_edges;
+    LmOwnPtrStack *allocation_descriptors;
+    LmOwnPtrStack *lazy_edges;
     int frozen;
 };
 
@@ -122,8 +122,8 @@ void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void * lm_own_value_stack_top(const LmOwnValueStack *stack);
 static int lm_own_size_multiply(size_t left, size_t right, size_t *out);
 static int lm_own_global_allocation_descriptors_init(void);
-static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnValueStack *descriptors, const void *address);
-static int lm_own_allocation_descriptor_push(LmOwnValueStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level);
+static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnPtrStack *descriptors, const void *address);
+static int lm_own_allocation_descriptor_push(LmOwnPtrStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level);
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
 const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
@@ -134,7 +134,7 @@ int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const voi
 int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
 
-static LmOwnValueStack *lm_own_global_allocation_descriptors;
+static LmOwnPtrStack *lm_own_global_allocation_descriptors;
 
 static int lm_own_global_allocation_descriptors_ready;
 void * lm_own_new_zero(size_t size) {
@@ -311,8 +311,8 @@ int lm_own_arena_init(LmOwnArena *arena) {
     arena->lazy_edges = 0;
     arena->frozen = 1;
     arena->allocations = lm_own_new_zero(sizeof(LmOwnPtrStack));
-    arena->allocation_descriptors = lm_own_new_zero(sizeof(LmOwnValueStack));
-    arena->lazy_edges = lm_own_new_zero(sizeof(LmOwnValueStack));
+    arena->allocation_descriptors = lm_own_new_zero(sizeof(LmOwnPtrStack));
+    arena->lazy_edges = lm_own_new_zero(sizeof(LmOwnPtrStack));
     if (arena -> allocations == 0 || arena -> allocation_descriptors == 0 || arena -> lazy_edges == 0) {
         lm_own_delete(arena -> lazy_edges, 0);
         lm_own_delete(arena -> allocation_descriptors, 0);
@@ -323,17 +323,17 @@ int lm_own_arena_init(LmOwnArena *arena) {
         return 1;
     }
     lm_own_ptr_stack_init(arena -> allocations, free);
-    lm_own_value_stack_init(arena -> allocation_descriptors, sizeof(LmOwnAllocationDescriptor));
-    lm_own_value_stack_init(arena -> lazy_edges, sizeof(LmOwnLazyEdge));
+    lm_own_ptr_stack_init(arena -> allocation_descriptors, lm_own_delete_plain);
+    lm_own_ptr_stack_init(arena -> lazy_edges, lm_own_delete_plain);
     arena->frozen = 0;
     return 0;
 }
 
 void lm_own_arena_destroy(LmOwnArena *arena) {
     if (arena != 0) {
-        lm_own_value_stack_destroy(arena -> lazy_edges);
+        lm_own_ptr_stack_destroy(arena -> lazy_edges);
         lm_own_delete(arena -> lazy_edges, 0);
-        lm_own_value_stack_destroy(arena -> allocation_descriptors);
+        lm_own_ptr_stack_destroy(arena -> allocation_descriptors);
         lm_own_delete(arena -> allocation_descriptors, 0);
         lm_own_ptr_stack_destroy(arena -> allocations);
         lm_own_delete(arena -> allocations, 0);
@@ -467,17 +467,17 @@ static int lm_own_size_multiply(size_t left, size_t right, size_t *out) {
 
 static int lm_own_global_allocation_descriptors_init(void) {
     if (lm_own_global_allocation_descriptors_ready == 0) {
-        lm_own_global_allocation_descriptors = lm_own_new_zero(sizeof(LmOwnValueStack));
+        lm_own_global_allocation_descriptors = lm_own_new_zero(sizeof(LmOwnPtrStack));
         if (lm_own_global_allocation_descriptors == 0) {
             return 1;
         }
-        lm_own_value_stack_init(lm_own_global_allocation_descriptors, sizeof(LmOwnAllocationDescriptor));
+        lm_own_ptr_stack_init(lm_own_global_allocation_descriptors, lm_own_delete_plain);
         lm_own_global_allocation_descriptors_ready = 1;
     }
     return 0;
 }
 
-static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnValueStack *descriptors, const void *address) {
+static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnPtrStack *descriptors, const void *address) {
     const LmOwnAllocationDescriptor *descriptor;
     size_t index;
     if (descriptors == 0 || address == 0) {
@@ -486,7 +486,7 @@ static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const
     index = descriptors -> count;
     while (index > 0U) {
         index = index - 1U;
-        descriptor = lm_own_value_stack_at(descriptors, index);
+        descriptor = lm_own_ptr_stack_at(descriptors, index);
         if (descriptor != 0 && descriptor -> address == address) {
             return descriptor;
         }
@@ -494,7 +494,7 @@ static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const
     return 0;
 }
 
-static int lm_own_allocation_descriptor_push(LmOwnValueStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level) {
+static int lm_own_allocation_descriptor_push(LmOwnPtrStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level) {
     LmOwnAllocationDescriptor *descriptor;
     int status;
     if (descriptors == 0 || address == 0) {
@@ -511,8 +511,10 @@ static int lm_own_allocation_descriptor_push(LmOwnValueStack *descriptors, void 
     descriptor->count = count;
     descriptor->rank = rank;
     descriptor->level = level;
-    status = lm_own_value_stack_push(descriptors, descriptor);
-    lm_own_delete(descriptor, 0);
+    status = lm_own_ptr_stack_push(descriptors, descriptor);
+    if (status != 0) {
+        lm_own_delete(descriptor, 0);
+    }
     return status;
 }
 
@@ -637,8 +639,10 @@ int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const voi
     edge->source = source_ptr;
     edge->size = size;
     edge->patch_slot = patch_slot;
-    status = lm_own_value_stack_push(target -> lazy_edges, edge);
-    lm_own_delete(edge, 0);
+    status = lm_own_ptr_stack_push(target -> lazy_edges, edge);
+    if (status != 0) {
+        lm_own_delete(edge, 0);
+    }
     return status;
 }
 
@@ -651,7 +655,7 @@ int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {
     }
     i = 0U;
     while (i < arena -> lazy_edges -> count) {
-        edge = lm_own_value_stack_at(arena -> lazy_edges, i);
+        edge = lm_own_ptr_stack_at(arena -> lazy_edges, i);
         if (edge == 0 || edge -> kind != LM_OWN_EDGE_LAZY_OWNED) {
             i = i + 1U;
             continue;
@@ -676,8 +680,6 @@ int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {
 
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
     void **items;
-    LmOwnAllocationDescriptor *source_descriptors;
-    LmOwnAllocationDescriptor *target_descriptors;
     size_t descriptor_base;
     size_t descriptor_new_count;
     size_t new_count;
@@ -685,8 +687,8 @@ int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
     size_t lazy_base;
     size_t lazy_new_count;
     size_t i;
+    LmOwnAllocationDescriptor *descriptor;
     LmOwnLazyEdge *edge;
-    LmOwnLazyEdge *target_edges;
     if (target == 0 || source == 0 || target -> frozen) {
         return 1;
     }
@@ -698,14 +700,6 @@ int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
     }
     if (source == target) {
         return 0;
-    }
-    lazy_base = target -> lazy_edges -> count;
-    lazy_new_count = lazy_base + source -> lazy_edges -> count;
-    if (source -> lazy_edges -> count > 0U) {
-        if (lm_own_value_stack_resize_zero(target -> lazy_edges, lazy_new_count) != 0) {
-            return 1;
-        }
-        target->lazy_edges->count = lazy_base;
     }
     if (source -> allocations -> count > 0U) {
         new_count = target -> allocations -> count + source -> allocations -> count;
@@ -734,35 +728,68 @@ int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
     descriptor_base = target -> allocation_descriptors -> count;
     descriptor_new_count = descriptor_base + source -> allocation_descriptors -> count;
     if (source -> allocation_descriptors -> count > 0U) {
-        if (lm_own_value_stack_resize_zero(target -> allocation_descriptors, descriptor_new_count) != 0) {
+        if (target -> allocation_descriptors -> capacity == 0U) {
+            capacity = 8U;
+        }
+        if (target -> allocation_descriptors -> capacity != 0U) {
+            capacity = target -> allocation_descriptors -> capacity;
+        }
+        while (capacity < descriptor_new_count) {
+            capacity = capacity * 2U;
+        }
+        items = realloc(target -> allocation_descriptors -> items, capacity * sizeof(items[0]));
+        if (items == 0) {
             return 1;
         }
-        target_descriptors = target -> allocation_descriptors -> items;
-        source_descriptors = source -> allocation_descriptors -> items;
-        memcpy(target_descriptors + descriptor_base, source_descriptors, source -> allocation_descriptors -> count * sizeof(target_descriptors[0]));
+        target->allocation_descriptors->items = items;
+        target->allocation_descriptors->capacity = capacity;
+        memcpy(target -> allocation_descriptors -> items + descriptor_base, source -> allocation_descriptors -> items, source -> allocation_descriptors -> count * sizeof(source -> allocation_descriptors -> items[0]));
         target->allocation_descriptors->count = descriptor_new_count;
         i = descriptor_base;
         while (i < target -> allocation_descriptors -> count) {
-            if (target_descriptors[i].owner == source) {
-                target_descriptors[i].owner = target;
+            descriptor = lm_own_ptr_stack_at(target -> allocation_descriptors, i);
+            if (descriptor != 0 && descriptor -> owner == source) {
+                descriptor->owner = target;
             }
             i = i + 1U;
         }
+        free(source -> allocation_descriptors -> items);
+        source->allocation_descriptors->items = 0;
         source->allocation_descriptors->count = 0U;
+        source->allocation_descriptors->capacity = 0U;
     }
+    lazy_base = target -> lazy_edges -> count;
+    lazy_new_count = lazy_base + source -> lazy_edges -> count;
     if (source -> lazy_edges -> count > 0U) {
-        target_edges = target -> lazy_edges -> items;
-        memcpy(target_edges + lazy_base, source -> lazy_edges -> items, source -> lazy_edges -> count * sizeof(target_edges[0]));
+        if (target -> lazy_edges -> capacity == 0U) {
+            capacity = 8U;
+        }
+        if (target -> lazy_edges -> capacity != 0U) {
+            capacity = target -> lazy_edges -> capacity;
+        }
+        while (capacity < lazy_new_count) {
+            capacity = capacity * 2U;
+        }
+        items = realloc(target -> lazy_edges -> items, capacity * sizeof(items[0]));
+        if (items == 0) {
+            return 1;
+        }
+        target->lazy_edges->items = items;
+        target->lazy_edges->capacity = capacity;
+        memcpy(target -> lazy_edges -> items + lazy_base, source -> lazy_edges -> items, source -> lazy_edges -> count * sizeof(source -> lazy_edges -> items[0]));
         target->lazy_edges->count = lazy_new_count;
         i = lazy_base;
         while (i < target -> lazy_edges -> count) {
-            edge = lm_own_value_stack_at(target -> lazy_edges, i);
+            edge = lm_own_ptr_stack_at(target -> lazy_edges, i);
             if (edge != 0 && edge -> target_owner == source) {
                 edge->target_owner = target;
             }
             i = i + 1U;
         }
+        free(source -> lazy_edges -> items);
+        source->lazy_edges->items = 0;
         source->lazy_edges->count = 0U;
+        source->lazy_edges->capacity = 0U;
     }
     return 0;
 }

@@ -148,24 +148,6 @@ static void lm_trans_ptr_stack_delete(LmOwnPtrStack **stack) {
     }
 }
 
-static LmOwnValueStack *lm_trans_value_stack_new(size_t item_size) {
-    LmOwnValueStack *stack;
-
-    stack = (LmOwnValueStack *)lm_own_new_zero(sizeof(*stack));
-    if (stack != 0) {
-        lm_own_value_stack_init(stack, item_size);
-    }
-    return stack;
-}
-
-static void lm_trans_value_stack_delete(LmOwnValueStack **stack) {
-    if (stack != 0 && *stack != 0) {
-        lm_own_value_stack_destroy(*stack);
-        lm_own_delete(*stack, 0);
-        *stack = 0;
-    }
-}
-
 static LmTransFunctionState *lm_trans_function_state_new(void) {
     return (LmTransFunctionState *)lm_own_new_zero(sizeof(LmTransFunctionState));
 }

@@ -98,8 +98,8 @@ struct LmOwnLazyEdge {
 };
 struct LmOwnArena {
     LmOwnPtrStack *allocations;
-    LmOwnValueStack *allocation_descriptors;
-    LmOwnValueStack *lazy_edges;
+    LmOwnPtrStack *allocation_descriptors;
+    LmOwnPtrStack *lazy_edges;
     int frozen;
 };
 typedef struct LmP0Text {
