@@ -2,6 +2,24 @@ L4: loadHeaders
 
 L4:
     table:
+        name: `constant.backend`
+        columns: class                                             (backend class)
+        rows:
+                 LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE            c.define
+                 LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY           c.define
+                 LM_REGISTRY_CONTROL_NODE_LMX_TRAILER_BODY         c.define
+    end: `constant.backend`
+
+    table:
+        name: `constant.value`
+        columns: class                                             (value literal)
+        rows:
+                 LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE            1
+                 LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY           2
+                 LM_REGISTRY_CONTROL_NODE_LMX_TRAILER_BODY         3
+    end: `constant.value`
+
+    table:
         name: LmRegistryControlBuffer
         columns: class     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
@@ -18,6 +36,31 @@ L4:
                  spelling  char                   0                       1
                  width     size_t                 1                       0
     end: LmRegistryControlColumn
+
+    table:
+        name: LmRegistryControlColumnSpellingFrame
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 field  LmP0Field              0                       1                                1
+                 first  int                    1                       0                                0
+    end: LmRegistryControlColumnSpellingFrame
+
+    table:
+        name: LmRegistryControlNodeLmxFrame
+        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 field    LmP0Field              0                       1                                1
+                 trailer  LmP0Trailer            1                       1                                1
+                 phase    int                    2                       0                                0
+                 first    int                    3                       0                                0
+    end: LmRegistryControlNodeLmxFrame
+
+    table:
+        name: LmRegistryControlRenameDescriptorFrame
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 field  LmP0Field              0                       1                                1
+    end: LmRegistryControlRenameDescriptorFrame
 
     table:
         name: LmRegistryControlError
@@ -42,6 +85,9 @@ L4:
         rows:
                  LmRegistryControlBuffer  c.struct
                  LmRegistryControlColumn  c.struct
+                 LmRegistryControlColumnSpellingFrame c.struct
+                 LmRegistryControlNodeLmxFrame c.struct
+                 LmRegistryControlRenameDescriptorFrame c.struct
                  LmRegistryControlError   c.struct
                  LmRegistryControlRename  c.struct
     end: `layout.backend`
@@ -264,33 +310,94 @@ fn: lm_registry_control_table_name_from_frame (const: @(LmP0Frame table_frame); 
     return: 1
 end: lm_registry_control_table_name_from_frame
 
+fn: lm_registry_control_column_spelling_frame_new (const: @(LmP0Field field)) @: LmRegistryControlColumnSpellingFrame
+    @: LmRegistryControlColumnSpellingFrame frame
+
+    frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlColumnSpellingFrame))
+    if: frame = 0
+        return: 0
+    frame\field: field
+    frame\first: 1
+    return: frame
+end: lm_registry_control_column_spelling_frame_new
+
 fn: lm_registry_control_column_spelling_append_node (@: LmRegistryControlBuffer buffer; const: @: LmP0Node node) int
-    const: @: LmP0Field field
-    int: first
+    @: LmOwnPtrStack stack
+    @: LmRegistryControlColumnSpellingFrame frame
+    const: @: LmP0Node current
+    int: done
+    int: status
 
     if: node = 0
         return: 0
 
-    if: node\kind = c.LM_P0_NODE_ATOM || node\kind = c.LM_P0_NODE_DISABLED
-        lm_registry_control_buffer_append_text(buffer, node\as\atom\data, node\as\atom\length)
-        return: buffer\failed = 0
-
-    if: node\kind != c.LM_P0_NODE_STRUCTURE
+    stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+    if: stack = 0
         return: 0
+    lm_own_ptr_stack_init(stack, c.lm_own_delete_plain)
 
-    lm_registry_control_buffer_append_cstr(buffer, "(")
-    first: 1
-    field: node\as\structure\first_field
-    while: field != 0
-        if: lm_registry_control_node_ignored(field\value) = 0
-            if: first = 0
-                lm_registry_control_buffer_append_cstr(buffer, " ")
-            if: lm_registry_control_column_spelling_append_node(buffer, field\value) = 0
-                return: 0
-            first: 0
-        field: field\next
-    lm_registry_control_buffer_append_cstr(buffer, ")")
-    return: buffer\failed = 0
+    current: node
+    done: 0
+    status: 1
+    while: status != 0 && done = 0
+        if: current != 0
+            if: current\kind = c.LM_P0_NODE_ATOM || current\kind = c.LM_P0_NODE_DISABLED
+                lm_registry_control_buffer_append_text(buffer, current\as\atom\data, current\as\atom\length)
+                if: buffer\failed != 0
+                    status: 0
+                current: 0
+                continue
+            if: current\kind != c.LM_P0_NODE_STRUCTURE
+                status: 0
+                current: 0
+                continue
+            lm_registry_control_buffer_append_cstr(buffer, "(")
+            if: buffer\failed != 0
+                status: 0
+                current: 0
+                continue
+            frame: lm_registry_control_column_spelling_frame_new(current\as\structure\first_field)
+            if: frame = 0
+                status: 0
+                current: 0
+                continue
+            if: lm_own_ptr_stack_push(stack, frame) != 0
+                lm_own_delete(frame, 0)
+                status: 0
+                current: 0
+                continue
+            current: 0
+            continue
+
+        frame: lm_own_ptr_stack_top(stack)
+        if: frame = 0
+            done: 1
+            continue
+
+        while: frame\field != 0 && lm_registry_control_node_ignored(frame\field\value) != 0
+            frame\field: frame\field\next
+
+        if: frame\field = 0
+            lm_registry_control_buffer_append_cstr(buffer, ")")
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: buffer\failed != 0
+                status: 0
+            continue
+
+        if: frame\first = 0
+            lm_registry_control_buffer_append_cstr(buffer, " ")
+            if: buffer\failed != 0
+                status: 0
+                continue
+            ---
+
+        current: frame\field\value
+        frame\field: frame\field\next
+        frame\first: 0
+
+    lm_own_ptr_stack_destroy(stack)
+    lm_own_delete(stack, 0)
+    return: status != 0 && buffer\failed = 0
 end: lm_registry_control_column_spelling_append_node
 
 fn: lm_registry_control_column_spelling_alloc (const: @(LmP0Node node); @: LmRegistryControlError error) @: char
@@ -387,62 +494,138 @@ fn: lm_registry_control_rows_frame_from_table (const: @(LmP0Frame table_frame); 
     return: rows_frame
 end: lm_registry_control_rows_frame_from_table
 
+fn: lm_registry_control_node_lmx_frame_new (const: @(LmP0Field field); const: @(LmP0Trailer trailer); int: phase; int: first) @: LmRegistryControlNodeLmxFrame
+    @: LmRegistryControlNodeLmxFrame frame
+
+    frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlNodeLmxFrame))
+    if: frame = 0
+        return: 0
+    frame\field: field
+    frame\trailer: trailer
+    frame\phase: phase
+    frame\first: first
+    return: frame
+end: lm_registry_control_node_lmx_frame_new
+
 fn: lm_registry_control_node_lmx_append_inline (@: LmRegistryControlBuffer buffer; const: @: LmP0Node node) int
-    const: @: LmP0Field field
-    const: @: LmP0Trailer trailer
-    int: first
+    @: LmOwnPtrStack stack
+    @: LmRegistryControlNodeLmxFrame frame
+    const: @: LmP0Node current
+    int: done
+    int: status
 
     if: node = 0
         return: 0
 
-    if: node\kind = c.LM_P0_NODE_ATOM || node\kind = c.LM_P0_NODE_DISABLED
-        lm_registry_control_buffer_append_text(buffer, node\as\atom\data, node\as\atom\length)
-        return: buffer\failed = 0
+    stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+    if: stack = 0
+        return: 0
+    lm_own_ptr_stack_init(stack, c.lm_own_delete_plain)
 
-    if: node\kind = c.LM_P0_NODE_STRUCTURE
-        lm_registry_control_buffer_append_cstr(buffer, "(")
-        first: 1
-        field: node\as\structure\first_field
-        while: field != 0
-            if: lm_registry_control_node_ignored(field\value) = 0
-                if: first = 0
+    current: node
+    done: 0
+    status: 1
+    while: status != 0 && done = 0
+        if: current != 0
+            if: current\kind = c.LM_P0_NODE_ATOM || current\kind = c.LM_P0_NODE_DISABLED
+                lm_registry_control_buffer_append_text(buffer, current\as\atom\data, current\as\atom\length)
+                if: buffer\failed != 0
+                    status: 0
+                current: 0
+                continue
+            if: current\kind = c.LM_P0_NODE_STRUCTURE
+                lm_registry_control_buffer_append_cstr(buffer, "(")
+                if: buffer\failed != 0
+                    status: 0
+                    current: 0
+                    continue
+                frame: lm_registry_control_node_lmx_frame_new(current\as\structure\first_field, 0, c.LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE, 1)
+                if: frame = 0
+                    status: 0
+                    current: 0
+                    continue
+                if: lm_own_ptr_stack_push(stack, frame) != 0
+                    lm_own_delete(frame, 0)
+                    status: 0
+                    current: 0
+                    continue
+                current: 0
+                continue
+            if: current\kind = c.LM_P0_NODE_FRAME
+                lm_registry_control_buffer_append_text(buffer, current\as\frame\head\data, current\as\frame\head\length)
+                lm_registry_control_buffer_append_cstr(buffer, ":")
+                if: buffer\failed != 0
+                    status: 0
+                    current: 0
+                    continue
+                frame: lm_registry_control_node_lmx_frame_new(current\as\frame\body\first_field, current\as\frame\trailer, c.LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY, 0)
+                if: frame = 0
+                    status: 0
+                    current: 0
+                    continue
+                if: lm_own_ptr_stack_push(stack, frame) != 0
+                    lm_own_delete(frame, 0)
+                    status: 0
+                    current: 0
+                    continue
+                current: 0
+                continue
+            status: 0
+            current: 0
+            continue
+
+        frame: lm_own_ptr_stack_top(stack)
+        if: frame = 0
+            done: 1
+            continue
+
+        while: frame\field != 0 && lm_registry_control_node_ignored(frame\field\value) != 0
+            frame\field: frame\field\next
+
+        if: frame\field != 0
+            if: frame\phase = c.LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE
+                if: frame\first = 0
                     lm_registry_control_buffer_append_cstr(buffer, " ")
-                if: lm_registry_control_node_lmx_append_inline(buffer, field\value) = 0
-                    return: 0
-                first: 0
-            field: field\next
-        lm_registry_control_buffer_append_cstr(buffer, ")")
-        return: buffer\failed = 0
-
-    if: node\kind = c.LM_P0_NODE_FRAME
-        lm_registry_control_buffer_append_text(buffer, node\as\frame\head\data, node\as\frame\head\length)
-        lm_registry_control_buffer_append_cstr(buffer, ":")
-        field: node\as\frame\body\first_field
-        while: field != 0
-            if: lm_registry_control_node_ignored(field\value) = 0
-                lm_registry_control_buffer_append_cstr(buffer, " ")
-                if: lm_registry_control_node_lmx_append_inline(buffer, field\value) = 0
-                    return: 0
-                ---
-            field: field\next
-
-        trailer: node\as\frame\trailer
-        if: trailer != 0
-            lm_registry_control_buffer_append_cstr(buffer, " ")
-            lm_registry_control_buffer_append_text(buffer, trailer\spelling\data, trailer\spelling\length)
-            lm_registry_control_buffer_append_cstr(buffer, ":")
-            field: trailer\body\first_field
-            while: field != 0
-                if: lm_registry_control_node_ignored(field\value) = 0
-                    lm_registry_control_buffer_append_cstr(buffer, " ")
-                    if: lm_registry_control_node_lmx_append_inline(buffer, field\value) = 0
-                        return: 0
+                    if: buffer\failed != 0
+                        status: 0
+                        continue
                     ---
-                field: field\next
-        ---
-        return: buffer\failed = 0
+                ---
+            if: frame\phase != c.LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE
+                lm_registry_control_buffer_append_cstr(buffer, " ")
+                if: buffer\failed != 0
+                    status: 0
+                    continue
+                ---
+            current: frame\field\value
+            frame\field: frame\field\next
+            frame\first: 0
+            continue
 
-    return: 0
+        if: frame\phase = c.LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE
+            lm_registry_control_buffer_append_cstr(buffer, ")")
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: buffer\failed != 0
+                status: 0
+            continue
+
+        if: frame\phase = c.LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY && frame\trailer != 0
+            lm_registry_control_buffer_append_cstr(buffer, " ")
+            lm_registry_control_buffer_append_text(buffer, frame\trailer\spelling\data, frame\trailer\spelling\length)
+            lm_registry_control_buffer_append_cstr(buffer, ":")
+            if: buffer\failed != 0
+                status: 0
+                continue
+            frame\field: frame\trailer\body\first_field
+            frame\trailer: 0
+            frame\phase: c.LM_REGISTRY_CONTROL_NODE_LMX_TRAILER_BODY
+            continue
+
+        lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+
+    lm_own_ptr_stack_destroy(stack)
+    lm_own_delete(stack, 0)
+    return: status != 0 && buffer\failed = 0
 end: lm_registry_control_node_lmx_append_inline
 
 fn: lm_registry_control_node_lmx_alloc (const: @(LmP0Node node); @: LmRegistryControlError error) @: char
@@ -832,8 +1015,22 @@ fn: lm_registry_control_rename_atom_if_match (@: LmP0Node node; @: LmRegistryCon
     return: 1
 end: lm_registry_control_rename_atom_if_match
 
+fn: lm_registry_control_rename_descriptor_frame_new (const: @(LmP0Field field)) @: LmRegistryControlRenameDescriptorFrame
+    @: LmRegistryControlRenameDescriptorFrame frame
+
+    frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlRenameDescriptorFrame))
+    if: frame = 0
+        return: 0
+    frame\field: field
+    return: frame
+end: lm_registry_control_rename_descriptor_frame_new
+
 fn: lm_registry_control_rename_descriptor_node (@: LmP0Node node; @: LmRegistryControlRename rename) int
-    @: LmP0Field field
+    @: LmOwnPtrStack stack
+    @: LmRegistryControlRenameDescriptorFrame frame
+    @: LmP0Node current
+    int: done
+    int: status
 
     if: node = 0
         return: 0
@@ -841,14 +1038,64 @@ fn: lm_registry_control_rename_descriptor_node (@: LmP0Node node; @: LmRegistryC
     if: node\kind = c.LM_P0_NODE_ATOM
         return: lm_registry_control_rename_atom_if_match(node, rename)
 
-    if: node\kind = c.LM_P0_NODE_STRUCTURE
-        field: node\as\structure\first_field
-        while: field != 0
-            if: lm_registry_control_node_ignored(field\value) = 0
-                lm_registry_control_rename_descriptor_node(field\value, rename)
-            field: field\next
+    if: node\kind != c.LM_P0_NODE_STRUCTURE
         return: 0
 
+    stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+    if: stack = 0
+        return: 0
+    lm_own_ptr_stack_init(stack, c.lm_own_delete_plain)
+
+    frame: lm_registry_control_rename_descriptor_frame_new(node\as\structure\first_field)
+    if: frame = 0
+        lm_own_ptr_stack_destroy(stack)
+        lm_own_delete(stack, 0)
+        return: 0
+    if: lm_own_ptr_stack_push(stack, frame) != 0
+        lm_own_delete(frame, 0)
+        lm_own_ptr_stack_destroy(stack)
+        lm_own_delete(stack, 0)
+        return: 0
+
+    done: 0
+    status: 1
+    while: status != 0 && done = 0
+        frame: lm_own_ptr_stack_top(stack)
+        if: frame = 0
+            done: 1
+            continue
+
+        while: frame\field != 0 && lm_registry_control_node_ignored(frame\field\value) != 0
+            frame\field: frame\field\next
+
+        if: frame\field = 0
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            continue
+
+        current: frame\field\value
+        frame\field: frame\field\next
+
+        if: current = 0
+            continue
+
+        if: current\kind = c.LM_P0_NODE_ATOM
+            lm_registry_control_rename_atom_if_match(current, rename)
+            continue
+
+        if: current\kind = c.LM_P0_NODE_STRUCTURE
+            frame: lm_registry_control_rename_descriptor_frame_new(current\as\structure\first_field)
+            if: frame = 0
+                status: 0
+                continue
+            if: lm_own_ptr_stack_push(stack, frame) != 0
+                lm_own_delete(frame, 0)
+                status: 0
+                continue
+            ---
+        ---
+
+    lm_own_ptr_stack_destroy(stack)
+    lm_own_delete(stack, 0)
     return: 0
 end: lm_registry_control_rename_descriptor_node
 

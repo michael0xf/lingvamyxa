@@ -4180,6 +4180,162 @@ static int lm_p0_parse_fields_until(
     size_t *index
 );
 
+typedef enum LmP0FieldParseLoopContinuation {
+    LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP,
+    LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY,
+    LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE,
+    LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY
+} LmP0FieldParseLoopContinuation;
+
+typedef struct LmP0FieldParseLoopFrame {
+    LmP0IndentStack *indent_stack;
+    LmP0Structure *structure;
+    const char *text;
+    size_t length;
+    size_t line;
+    size_t column;
+    size_t offset;
+    unsigned flags;
+    size_t short_source_level;
+    size_t layout_base_level;
+    size_t i;
+    size_t current_source_level;
+    int allow_empty_fields;
+    int expect_field;
+    int headless_group_after_separator;
+    int indent_stack_owned;
+    LmP0FieldParseLoopContinuation continuation;
+    LmP0Node *node;
+    size_t start;
+    size_t close_index;
+} LmP0FieldParseLoopFrame;
+
+static void lm_p0_field_parse_loop_frame_delete_any(void *object) {
+    LmP0FieldParseLoopFrame *frame;
+
+    frame = (LmP0FieldParseLoopFrame *)object;
+    if (frame == 0) {
+        return;
+    }
+    if (frame->indent_stack_owned) {
+        lm_p0_indent_stack_delete(frame->indent_stack);
+    }
+    lm_own_delete(frame, 0);
+}
+
+static LmOwnPtrStack *lm_p0_field_parse_loop_stack_new(
+    LmP0Document *document,
+    size_t line,
+    size_t column
+) {
+    LmOwnPtrStack *stack;
+
+    stack = (LmOwnPtrStack *)lm_own_new_zero(sizeof(*stack));
+    if (stack == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating parser field stack");
+        return 0;
+    }
+    lm_own_ptr_stack_init(stack, lm_p0_field_parse_loop_frame_delete_any);
+    return stack;
+}
+
+static void lm_p0_field_parse_loop_stack_delete(LmOwnPtrStack *stack) {
+    if (stack == 0) {
+        return;
+    }
+    lm_own_ptr_stack_destroy(stack);
+    lm_own_delete(stack, 0);
+}
+
+static int lm_p0_field_parse_loop_push(
+    LmP0Document *document,
+    LmOwnPtrStack *stack,
+    LmP0IndentStack *indent_stack,
+    int indent_stack_owned,
+    LmP0Structure *structure,
+    const char *text,
+    size_t length,
+    size_t line,
+    size_t column,
+    size_t offset,
+    unsigned flags,
+    size_t short_source_level,
+    size_t layout_base_level,
+    size_t i,
+    size_t current_source_level,
+    int allow_empty_fields,
+    int expect_field,
+    int headless_group_after_separator,
+    LmP0FieldParseLoopContinuation continuation,
+    LmP0Node *node,
+    size_t start,
+    size_t close_index
+) {
+    LmP0FieldParseLoopFrame *frame;
+
+    frame = (LmP0FieldParseLoopFrame *)lm_own_new_zero(sizeof(*frame));
+    if (frame == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack");
+        return 0;
+    }
+    frame->indent_stack = indent_stack;
+    frame->structure = structure;
+    frame->text = text;
+    frame->length = length;
+    frame->line = line;
+    frame->column = column;
+    frame->offset = offset;
+    frame->flags = flags;
+    frame->short_source_level = short_source_level;
+    frame->layout_base_level = layout_base_level;
+    frame->i = i;
+    frame->current_source_level = current_source_level;
+    frame->allow_empty_fields = allow_empty_fields;
+    frame->expect_field = expect_field;
+    frame->headless_group_after_separator = headless_group_after_separator;
+    frame->indent_stack_owned = indent_stack_owned;
+    frame->continuation = continuation;
+    frame->node = node;
+    frame->start = start;
+    frame->close_index = close_index;
+    if (lm_own_ptr_stack_push(stack, frame) != 0) {
+        lm_p0_field_parse_loop_frame_delete_any(frame);
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack");
+        return 0;
+    }
+    return 1;
+}
+
+static int lm_p0_parse_append_node_and_update(
+    LmP0Document *document,
+    LmP0Structure *structure,
+    LmP0Node *node,
+    unsigned flags,
+    int allow_empty_fields,
+    int *expect_field,
+    int *headless_group_after_separator
+) {
+    if (!lm_p0_append_field(document, structure, node)) {
+        return 0;
+    }
+    *expect_field = 0;
+    if (
+        allow_empty_fields &&
+        node->kind == LM_P0_NODE_FRAME &&
+        (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
+    ) {
+        *expect_field = 1;
+    }
+    if (
+        (flags & LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U &&
+        node->kind == LM_P0_NODE_FRAME &&
+        (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
+    ) {
+        *headless_group_after_separator = 1;
+    }
+    return 1;
+}
+
 static int lm_p0_parse_fields_until_with_layout(
     LmP0Document *document,
     LmP0IndentStack *indent_stack,
@@ -4196,22 +4352,44 @@ static int lm_p0_parse_fields_until_with_layout(
     size_t *index
 ) {
     size_t i;
+    size_t start;
+    size_t head_end;
+    size_t close_index;
     size_t current_source_level;
+    size_t child_index;
+    LmOwnPtrStack *parse_stack;
+    LmP0FieldParseLoopFrame *frame;
+    LmP0IndentStack *child_indent_stack;
+    LmP0Node *node;
     int allow_empty_fields;
     int expect_field;
     int headless_group_after_separator;
+    int indent_stack_owned;
 
+    parse_stack = lm_p0_field_parse_loop_stack_new(document, line, column);
+    if (parse_stack == 0) {
+        return 0;
+    }
     i = *index;
     current_source_level = initial_source_level;
     allow_empty_fields = (flags & LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS) != 0U;
     expect_field = allow_empty_fields;
     headless_group_after_separator = 0;
+    indent_stack_owned = 0;
+
+#define LM_P0_PARSE_FAIL() do { \
+        if (indent_stack_owned) { \
+            lm_p0_indent_stack_delete(indent_stack); \
+            indent_stack = 0; \
+            indent_stack_owned = 0; \
+        } \
+        lm_p0_field_parse_loop_stack_delete(parse_stack); \
+        return 0; \
+    } while (0)
+
+parse_context:
     while (i < length) {
-        size_t start;
-        size_t head_end;
-        size_t close_index;
         int stopped_by_source_level;
-        LmP0Node *node;
 
         if (!lm_p0_skip_field_space(
                 document,
@@ -4228,7 +4406,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 &current_source_level,
                 &stopped_by_source_level
             )) {
-            return 0;
+            LM_P0_PARSE_FAIL();
         }
         if (stopped_by_source_level) {
             break;
@@ -4244,54 +4422,51 @@ static int lm_p0_parse_fields_until_with_layout(
             !lm_p0_is_field_separator(text[i]) &&
             !lm_p0_field_start_looks_explicit_frame(document, text, length, i, line, column)
         ) {
-            size_t group_index;
             LmP0Node *group_node;
 
-            group_index = i;
             group_node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
             if (group_node == 0) {
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
-            if (!lm_p0_parse_fields_until_with_layout(
+            if (!lm_p0_field_parse_loop_push(
                     document,
+                    parse_stack,
                     indent_stack,
-                    group_node->as->structure,
+                    indent_stack_owned,
+                    structure,
                     text,
                     length,
                     line,
                     column,
                     offset,
-                    LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON |
-                    LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL |
-                    LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS,
-                    current_source_level,
-                    current_source_level + 1U,
+                    flags,
+                    short_source_level,
                     layout_base_level,
-                    &group_index
+                    i,
+                    current_source_level,
+                    allow_empty_fields,
+                    expect_field,
+                    headless_group_after_separator,
+                    LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP,
+                    group_node,
+                    i,
+                    0U
                 )) {
                 lm_p0_free_node(group_node);
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
-            if (group_index <= i) {
-                lm_p0_free_node(group_node);
-                headless_group_after_separator = 0;
-            } else {
-                group_node->span.line = line;
-                lm_p0_position_in_slice(text, length, i, line, column, &group_node->span.line, &group_node->span.column);
-                group_node->span.offset = offset + i;
-                group_node->span.length = group_index - i;
-                if (!lm_p0_append_field(document, structure, group_node)) {
-                    lm_p0_free_node(group_node);
-                    return 0;
-                }
-                expect_field = 0;
-                headless_group_after_separator =
-                    (flags & LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U &&
-                    group_index > 0U &&
-                    lm_p0_is_short_form_separator(text[group_index - 1U]);
-                i = group_index;
-                continue;
-            }
+            structure = group_node->as->structure;
+            flags =
+                    LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON |
+                    LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL |
+                    LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS;
+            short_source_level = current_source_level;
+            current_source_level = current_source_level + 1U;
+            allow_empty_fields = 1;
+            expect_field = 1;
+            headless_group_after_separator = 0;
+            indent_stack_owned = 0;
+            goto parse_context;
         } else if (headless_group_after_separator && !lm_p0_is_field_separator(text[i])) {
             headless_group_after_separator = 0;
         }
@@ -4308,18 +4483,18 @@ static int lm_p0_parse_fields_until_with_layout(
                 continue;
             }
             if (document->diagnostic->code != 0) {
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
             block_event = lm_p0_stream_event_new();
             if (block_event == 0) {
                 lm_p0_set_diagnostic(document, 1, field_line, field_column, "out of memory while creating block string event");
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
             if (lm_p0_scan_block_string_event(document, text, length, i, field_line, block_event, &next_offset, &next_line)) {
                 node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
                 if (node == 0) {
                     lm_p0_stream_event_delete(block_event);
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 node->as->atom->data = block_event->text;
                 node->as->atom->length = block_event->text_length;
@@ -4334,14 +4509,14 @@ static int lm_p0_parse_fields_until_with_layout(
                         &node->as->atom->data,
                         node->span.line,
                         node->span.column
-                    )) {
+                )) {
                     lm_p0_stream_event_delete(block_event);
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 if (!lm_p0_append_field(document, structure, node)) {
                     lm_p0_free_node(node);
                     lm_p0_stream_event_delete(block_event);
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 lm_p0_stream_event_delete(block_event);
                 expect_field = 0;
@@ -4350,7 +4525,7 @@ static int lm_p0_parse_fields_until_with_layout(
             }
             lm_p0_stream_event_delete(block_event);
             if (document->diagnostic->code != 0) {
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
         }
         if (lm_p0_is_field_separator(text[i])) {
@@ -4374,7 +4549,7 @@ static int lm_p0_parse_fields_until_with_layout(
                         offset,
                         separator_index
                     )) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
             }
             expect_field = allow_empty_fields;
@@ -4389,10 +4564,8 @@ static int lm_p0_parse_fields_until_with_layout(
         node = 0;
 
         if (text[i] == '(') {
-            size_t inner_index;
-
             if (!lm_p0_find_matching_paren(document, text, length, i, line, column, &close_index)) {
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
             if (close_index == i + 1U &&
                 close_index + 1U < length &&
@@ -4403,7 +4576,7 @@ static int lm_p0_parse_fields_until_with_layout(
 
                 node = lm_p0_new_node(document, LM_P0_NODE_FRAME);
                 if (node == 0) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 node->as->frame->head->data = text + start;
                 node->as->frame->head->length = close_index - start + 1U;
@@ -4425,101 +4598,156 @@ static int lm_p0_parse_fields_until_with_layout(
                     LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON |
                     LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL |
                     LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS;
-                if (!lm_p0_parse_fields_until_with_layout(
+                if (!lm_p0_field_parse_loop_push(
                         document,
+                        parse_stack,
                         indent_stack,
-                        node->as->frame->body,
+                        indent_stack_owned,
+                        structure,
                         text,
                         length,
                         line,
                         column,
                         offset,
-                        body_flags,
-                        current_source_level,
-                        current_source_level + 1U,
+                        flags,
+                        short_source_level,
                         layout_base_level,
-                        &body_index
+                        i,
+                        current_source_level,
+                        allow_empty_fields,
+                        expect_field,
+                        headless_group_after_separator,
+                        LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY,
+                        node,
+                        start,
+                        close_index
                     )) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
-                if (body_index > 0U && lm_p0_is_short_form_separator(text[body_index - 1U])) {
-                    node->as->frame->flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
-                }
-                node->span.line = line;
-                lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-                node->span.offset = offset + start;
-                node->span.length = body_index - start;
-                if (!lm_p0_document_register_lazy_text(
-                        document,
-                        node->as->frame->head->data,
-                        node->as->frame->head->length,
-                        &node->as->frame->head->data,
-                        node->span.line,
-                        node->span.column
-                    )) {
-                    return 0;
-                }
+                structure = node->as->frame->body;
+                flags = body_flags;
+                short_source_level = current_source_level;
+                current_source_level = current_source_level + 1U;
                 i = body_index;
+                allow_empty_fields = 1;
+                expect_field = 1;
+                headless_group_after_separator = 0;
+                indent_stack_owned = 0;
+                goto parse_context;
             } else {
                 node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
                 if (node == 0) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
-                inner_index = 0U;
-                if (!lm_p0_parse_fields_until(
+                child_indent_stack = lm_p0_indent_stack_new_empty();
+                if (child_indent_stack == 0) {
+                    lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack");
+                    LM_P0_PARSE_FAIL();
+                }
+                if (!lm_p0_field_parse_loop_push(
                         document,
-                        node->as->structure,
-                        text + i + 1U,
-                        close_index - i - 1U,
+                        parse_stack,
+                        indent_stack,
+                        indent_stack_owned,
+                        structure,
+                        text,
+                        length,
                         line,
-                        column + i + 1U,
-                        offset + i + 1U,
-                        LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL |
-                        LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS,
-                        current_source_level + 1U,
-                        current_source_level + 1U,
-                        &inner_index
+                        column,
+                        offset,
+                        flags,
+                        short_source_level,
+                        layout_base_level,
+                        i,
+                        current_source_level,
+                        allow_empty_fields,
+                        expect_field,
+                        headless_group_after_separator,
+                        LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE,
+                        node,
+                        start,
+                        close_index
                     )) {
-                    return 0;
+                    lm_p0_indent_stack_delete(child_indent_stack);
+                    LM_P0_PARSE_FAIL();
                 }
-                node->span.line = line;
-                lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-                node->span.offset = offset + i;
-                node->span.length = close_index - i + 1U;
-                i = close_index + 1U;
+                structure = node->as->structure;
+                text = text + i + 1U;
+                length = close_index - i - 1U;
+                column = column + i + 1U;
+                offset = offset + i + 1U;
+                flags =
+                    LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL |
+                    LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS;
+                short_source_level = current_source_level + 1U;
+                layout_base_level = current_source_level + 1U;
+                current_source_level = current_source_level + 1U;
+                i = 0U;
+                allow_empty_fields = 1;
+                expect_field = 1;
+                headless_group_after_separator = 0;
+                indent_stack = child_indent_stack;
+                indent_stack_owned = 1;
+                goto parse_context;
             }
         } else if (text[i] == '[' && !lm_p0_field_start_looks_explicit_frame(document, text, length, i, line, column)) {
-            size_t inner_index;
-
             if (!lm_p0_find_matching_bracket(document, text, length, i, line, column, &close_index)) {
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
             node = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
             if (node == 0) {
-                return 0;
+                LM_P0_PARSE_FAIL();
             }
-            inner_index = 0U;
-            if (!lm_p0_parse_fields_until(
+            child_indent_stack = lm_p0_indent_stack_new_empty();
+            if (child_indent_stack == 0) {
+                lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack");
+                LM_P0_PARSE_FAIL();
+            }
+            if (!lm_p0_field_parse_loop_push(
                     document,
-                    node->as->structure,
-                    text + i + 1U,
-                    close_index - i - 1U,
+                    parse_stack,
+                    indent_stack,
+                    indent_stack_owned,
+                    structure,
+                    text,
+                    length,
                     line,
-                    column + i + 1U,
-                    offset + i + 1U,
-                    LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL |
-                    LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS,
-                    current_source_level + 1U,
-                    current_source_level + 1U,
-                    &inner_index
+                    column,
+                    offset,
+                    flags,
+                    short_source_level,
+                    layout_base_level,
+                    i,
+                    current_source_level,
+                    allow_empty_fields,
+                    expect_field,
+                    headless_group_after_separator,
+                    LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE,
+                    node,
+                    start,
+                    close_index
                 )) {
-                return 0;
+                lm_p0_indent_stack_delete(child_indent_stack);
+                LM_P0_PARSE_FAIL();
             }
-            node->span.line = line;
-            lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-            node->span.offset = offset + i;
-            node->span.length = close_index - i + 1U;
-            i = close_index + 1U;
+            structure = node->as->structure;
+            text = text + i + 1U;
+            length = close_index - i - 1U;
+            column = column + i + 1U;
+            offset = offset + i + 1U;
+            flags =
+                LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL |
+                LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS;
+            short_source_level = current_source_level + 1U;
+            layout_base_level = current_source_level + 1U;
+            current_source_level = current_source_level + 1U;
+            i = 0U;
+            allow_empty_fields = 1;
+            expect_field = 1;
+            headless_group_after_separator = 0;
+            indent_stack = child_indent_stack;
+            indent_stack_owned = 1;
+            goto parse_context;
         } else {
             int quoted_head;
 
@@ -4529,19 +4757,19 @@ static int lm_p0_parse_fields_until_with_layout(
                 head_end = i;
             } else if (lm_p0_starts_c_prefixed_quote(text, length, i)) {
                 if (!lm_p0_scan_c_prefixed_quote(document, text, length, &i, line, column)) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 head_end = i;
                 quoted_head = 1;
             } else if (lm_p0_starts_python_string(text, length, i) || text[i] == '"' || text[i] == '`') {
                 if (!lm_p0_scan_quoted(document, text, length, &i, text[i], line, column)) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 head_end = i;
                 quoted_head = 1;
             } else if (text[i] == '\'') {
                 if (!lm_p0_scan_c_char(document, text, length, &i, line, column)) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 head_end = i;
                 quoted_head = 1;
@@ -4558,7 +4786,7 @@ static int lm_p0_parse_fields_until_with_layout(
                         size_t bracket_close_index;
 
                         if (!lm_p0_find_matching_bracket(document, text, length, i, line, column, &bracket_close_index)) {
-                            return 0;
+                            LM_P0_PARSE_FAIL();
                         }
                         i = bracket_close_index + 1U;
                         continue;
@@ -4578,7 +4806,7 @@ static int lm_p0_parse_fields_until_with_layout(
 
                         lm_p0_position_in_slice(text, length, i, line, column, &diagnostic_line, &diagnostic_column);
                         lm_p0_set_diagnostic(document, 18, diagnostic_line, diagnostic_column, "missing separator before quoted token");
-                        return 0;
+                        LM_P0_PARSE_FAIL();
                     }
                     ++i;
                 }
@@ -4592,7 +4820,7 @@ static int lm_p0_parse_fields_until_with_layout(
 
                 node = lm_p0_new_node(document, LM_P0_NODE_FRAME);
                 if (node == 0) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 node->as->frame->head->data = text + start;
                 node->as->frame->head->length = head_end - start;
@@ -4614,86 +4842,103 @@ static int lm_p0_parse_fields_until_with_layout(
                     LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON |
                     LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL |
                     LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS;
-                if (!lm_p0_parse_fields_until_with_layout(
+                if (!lm_p0_field_parse_loop_push(
                         document,
+                        parse_stack,
                         indent_stack,
-                        node->as->frame->body,
+                        indent_stack_owned,
+                        structure,
                         text,
                         length,
                         line,
                         column,
                         offset,
-                        body_flags,
-                        current_source_level,
-                        current_source_level + 1U,
+                        flags,
+                        short_source_level,
                         layout_base_level,
-                        &body_index
+                        i,
+                        current_source_level,
+                        allow_empty_fields,
+                        expect_field,
+                        headless_group_after_separator,
+                        LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY,
+                        node,
+                        start,
+                        0U
                     )) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
-                if (body_index > 0U && lm_p0_is_short_form_separator(text[body_index - 1U])) {
-                    node->as->frame->flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
-                }
-                node->span.line = line;
-                lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-                node->span.offset = offset + start;
-                node->span.length = body_index - start;
-                if (!lm_p0_document_register_lazy_text(
-                        document,
-                        node->as->frame->head->data,
-                        node->as->frame->head->length,
-                        &node->as->frame->head->data,
-                        node->span.line,
-                        node->span.column
-                    )) {
-                    return 0;
-                }
+                structure = node->as->frame->body;
+                flags = body_flags;
+                short_source_level = current_source_level;
+                current_source_level = current_source_level + 1U;
                 i = body_index;
+                allow_empty_fields = 1;
+                expect_field = 1;
+                headless_group_after_separator = 0;
+                indent_stack_owned = 0;
+                goto parse_context;
             } else if (i < length && text[i] == '(' && head_end > start) {
-                size_t inner_index;
-
                 node = lm_p0_new_node(document, LM_P0_NODE_FRAME);
                 if (node == 0) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 node->as->frame->head->data = text + start;
                 node->as->frame->head->length = head_end - start;
                 node->as->frame->flags = LM_P0_FRAME_COMPACT;
                 if (!lm_p0_find_matching_paren(document, text, length, i, line, column, &close_index)) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
-                inner_index = 0U;
-                if (!lm_p0_parse_fields_until(
+                child_indent_stack = lm_p0_indent_stack_new_empty();
+                if (child_indent_stack == 0) {
+                    lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack");
+                    LM_P0_PARSE_FAIL();
+                }
+                if (!lm_p0_field_parse_loop_push(
                         document,
-                        node->as->frame->body,
-                        text + i + 1U,
-                        close_index - i - 1U,
+                        parse_stack,
+                        indent_stack,
+                        indent_stack_owned,
+                        structure,
+                        text,
+                        length,
                         line,
-                        column + i + 1U,
-                        offset + i + 1U,
-                        LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL |
-                        LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS,
-                        current_source_level + 1U,
-                        current_source_level + 1U,
-                        &inner_index
+                        column,
+                        offset,
+                        flags,
+                        short_source_level,
+                        layout_base_level,
+                        i,
+                        current_source_level,
+                        allow_empty_fields,
+                        expect_field,
+                        headless_group_after_separator,
+                        LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY,
+                        node,
+                        start,
+                        close_index
                     )) {
-                    return 0;
+                    lm_p0_indent_stack_delete(child_indent_stack);
+                    LM_P0_PARSE_FAIL();
                 }
-                node->span.line = line;
-                lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-                node->span.offset = offset + start;
-                node->span.length = close_index - start + 1U;
-                if (!lm_p0_document_register_lazy_text(
-                        document,
-                        node->as->frame->head->data,
-                        node->as->frame->head->length,
-                        &node->as->frame->head->data,
-                        node->span.line,
-                        node->span.column
-                    )) {
-                    return 0;
-                }
-                i = close_index + 1U;
+                structure = node->as->frame->body;
+                text = text + i + 1U;
+                length = close_index - i - 1U;
+                column = column + i + 1U;
+                offset = offset + i + 1U;
+                flags =
+                    LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL |
+                    LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS;
+                short_source_level = current_source_level + 1U;
+                layout_base_level = current_source_level + 1U;
+                current_source_level = current_source_level + 1U;
+                i = 0U;
+                allow_empty_fields = 1;
+                expect_field = 1;
+                headless_group_after_separator = 0;
+                indent_stack = child_indent_stack;
+                indent_stack_owned = 1;
+                goto parse_context;
             } else {
                 if (head_end == start) {
                     size_t diagnostic_line;
@@ -4701,10 +4946,10 @@ static int lm_p0_parse_fields_until_with_layout(
 
                     lm_p0_position_in_slice(text, length, start, line, column, &diagnostic_line, &diagnostic_column);
                     lm_p0_set_diagnostic(document, 6, diagnostic_line, diagnostic_column, "unexpected character in field list");
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 if (quoted_head && !lm_p0_require_quoted_token_boundary(document, text, length, head_end, line, column)) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 if (!quoted_head) {
                     i = head_end;
@@ -4719,14 +4964,14 @@ static int lm_p0_parse_fields_until_with_layout(
                             start,
                             head_end
                         )) {
-                        return 0;
+                        LM_P0_PARSE_FAIL();
                     }
                     expect_field = 0;
                     continue;
                 }
                 node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
                 if (node == 0) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 node->as->atom->data = text + start;
                 node->as->atom->length = head_end - start;
@@ -4742,35 +4987,182 @@ static int lm_p0_parse_fields_until_with_layout(
                         node->span.line,
                         node->span.column
                     )) {
-                    return 0;
+                    LM_P0_PARSE_FAIL();
                 }
                 i = head_end;
             }
         }
 
-        if (!lm_p0_append_field(document, structure, node)) {
-            return 0;
-        }
-        expect_field = 0;
-        if (
-            allow_empty_fields &&
-            node->kind == LM_P0_NODE_FRAME &&
-            (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
-        ) {
-            expect_field = 1;
-        }
-        if (
-            (flags & LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U &&
-            node->kind == LM_P0_NODE_FRAME &&
-            (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
-        ) {
-            headless_group_after_separator = 1;
+        if (!lm_p0_parse_append_node_and_update(
+                document,
+                structure,
+                node,
+                flags,
+                allow_empty_fields,
+                &expect_field,
+                &headless_group_after_separator
+            )) {
+            LM_P0_PARSE_FAIL();
         }
     }
 
-    *index = i;
-    return 1;
+    child_index = i;
+    if (indent_stack_owned) {
+        lm_p0_indent_stack_delete(indent_stack);
+        indent_stack = 0;
+        indent_stack_owned = 0;
+    }
+    frame = (LmP0FieldParseLoopFrame *)lm_own_ptr_stack_pop(parse_stack);
+    if (frame == 0) {
+        *index = child_index;
+        lm_p0_field_parse_loop_stack_delete(parse_stack);
+        return 1;
+    }
+
+    indent_stack = frame->indent_stack;
+    structure = frame->structure;
+    text = frame->text;
+    length = frame->length;
+    line = frame->line;
+    column = frame->column;
+    offset = frame->offset;
+    flags = frame->flags;
+    short_source_level = frame->short_source_level;
+    layout_base_level = frame->layout_base_level;
+    i = frame->i;
+    current_source_level = frame->current_source_level;
+    allow_empty_fields = frame->allow_empty_fields;
+    expect_field = frame->expect_field;
+    headless_group_after_separator = frame->headless_group_after_separator;
+    indent_stack_owned = frame->indent_stack_owned;
+    node = frame->node;
+    start = frame->start;
+    close_index = frame->close_index;
+
+    if (frame->continuation == LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP) {
+        if (child_index <= start) {
+            lm_p0_free_node(node);
+            headless_group_after_separator = 0;
+        } else {
+            node->span.line = line;
+            lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
+            node->span.offset = offset + start;
+            node->span.length = child_index - start;
+            if (!lm_p0_append_field(document, structure, node)) {
+                lm_p0_free_node(node);
+                lm_own_delete(frame, 0);
+                LM_P0_PARSE_FAIL();
+            }
+            expect_field = 0;
+            headless_group_after_separator =
+                (flags & LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U &&
+                child_index > 0U &&
+                lm_p0_is_short_form_separator(text[child_index - 1U]);
+            i = child_index;
+        }
+        lm_own_delete(frame, 0);
+        goto parse_context;
+    }
+
+    if (frame->continuation == LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY) {
+        if (child_index > 0U && lm_p0_is_short_form_separator(text[child_index - 1U])) {
+            node->as->frame->flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
+        }
+        node->span.line = line;
+        lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
+        node->span.offset = offset + start;
+        node->span.length = child_index - start;
+        if (!lm_p0_document_register_lazy_text(
+                document,
+                node->as->frame->head->data,
+                node->as->frame->head->length,
+                &node->as->frame->head->data,
+                node->span.line,
+                node->span.column
+            )) {
+            lm_own_delete(frame, 0);
+            LM_P0_PARSE_FAIL();
+        }
+        i = child_index;
+        if (!lm_p0_parse_append_node_and_update(
+                document,
+                structure,
+                node,
+                flags,
+                allow_empty_fields,
+                &expect_field,
+                &headless_group_after_separator
+            )) {
+            lm_own_delete(frame, 0);
+            LM_P0_PARSE_FAIL();
+        }
+        lm_own_delete(frame, 0);
+        goto parse_context;
+    }
+
+    if (frame->continuation == LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE) {
+        (void)child_index;
+        node->span.line = line;
+        lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
+        node->span.offset = offset + start;
+        node->span.length = close_index - start + 1U;
+        i = close_index + 1U;
+        if (!lm_p0_parse_append_node_and_update(
+                document,
+                structure,
+                node,
+                flags,
+                allow_empty_fields,
+                &expect_field,
+                &headless_group_after_separator
+            )) {
+            lm_own_delete(frame, 0);
+            LM_P0_PARSE_FAIL();
+        }
+        lm_own_delete(frame, 0);
+        goto parse_context;
+    }
+
+    if (frame->continuation == LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY) {
+        (void)child_index;
+        node->span.line = line;
+        lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
+        node->span.offset = offset + start;
+        node->span.length = close_index - start + 1U;
+        if (!lm_p0_document_register_lazy_text(
+                document,
+                node->as->frame->head->data,
+                node->as->frame->head->length,
+                &node->as->frame->head->data,
+                node->span.line,
+                node->span.column
+            )) {
+            lm_own_delete(frame, 0);
+            LM_P0_PARSE_FAIL();
+        }
+        i = close_index + 1U;
+        if (!lm_p0_parse_append_node_and_update(
+                document,
+                structure,
+                node,
+                flags,
+                allow_empty_fields,
+                &expect_field,
+                &headless_group_after_separator
+            )) {
+            lm_own_delete(frame, 0);
+            LM_P0_PARSE_FAIL();
+        }
+        lm_own_delete(frame, 0);
+        goto parse_context;
+    }
+
+    lm_own_delete(frame, 0);
+    lm_p0_set_diagnostic(document, 1, line, column, "internal parser field stack continuation error");
+    LM_P0_PARSE_FAIL();
 }
+
+#undef LM_P0_PARSE_FAIL
 
 static int lm_p0_parse_fields_until(
     LmP0Document *document,
