@@ -222,6 +222,15 @@ table:
              frozen                  3
 end: `LmOwnArena.field.index`
 
+table:
+    name: `LmOwnArena.field.address-depth`
+    columns: class                   (depth serial)
+    rows:
+             allocations             1
+             allocation_descriptors  1
+             lazy_edges              1
+end: `LmOwnArena.field.address-depth`
+
 fn: lm_own_new_zero (size_t: size) @: void
 fn: lm_own_array_new_zero (size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
 fn: lm_own_allocation_descriptor (const: @(void address)) const: @: LmOwnAllocationDescriptor

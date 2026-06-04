@@ -44,9 +44,9 @@ struct LmOwnLazyEdge {
     const void **patch_slot;
 };
 struct LmOwnArena {
-    LmOwnPtrStack allocations;
-    LmOwnValueStack allocation_descriptors;
-    LmOwnValueStack lazy_edges;
+    LmOwnPtrStack *allocations;
+    LmOwnValueStack *allocation_descriptors;
+    LmOwnValueStack *lazy_edges;
     int frozen;
 };
 typedef struct LmBuildOptions {

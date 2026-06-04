@@ -161,9 +161,26 @@ end: external
 external:
     sub: lm_own_arena_init (@: LmOwnArena arena)
         if: arena != 0
-            lm_own_ptr_stack_init(c.&arena->allocations, c.free)
-            lm_own_value_stack_init(c.&arena->allocation_descriptors, c.sizeof(c.LmOwnAllocationDescriptor))
-            lm_own_value_stack_init(c.&arena->lazy_edges, c.sizeof(c.LmOwnLazyEdge))
+            arena\allocations: 0
+            arena\allocation_descriptors: 0
+            arena\lazy_edges: 0
+            arena\frozen: 1
+
+            arena\allocations: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+            arena\allocation_descriptors: lm_own_new_zero(c.sizeof(c.LmOwnValueStack))
+            arena\lazy_edges: lm_own_new_zero(c.sizeof(c.LmOwnValueStack))
+            if: arena\allocations = 0 || arena\allocation_descriptors = 0 || arena\lazy_edges = 0
+                lm_own_delete(arena\lazy_edges, 0)
+                lm_own_delete(arena\allocation_descriptors, 0)
+                lm_own_delete(arena\allocations, 0)
+                arena\allocations: 0
+                arena\allocation_descriptors: 0
+                arena\lazy_edges: 0
+                return
+
+            lm_own_ptr_stack_init(arena\allocations, c.free)
+            lm_own_value_stack_init(arena\allocation_descriptors, c.sizeof(c.LmOwnAllocationDescriptor))
+            lm_own_value_stack_init(arena\lazy_edges, c.sizeof(c.LmOwnLazyEdge))
             arena\frozen: 0
     end: lm_own_arena_init
 end: external
@@ -171,9 +188,15 @@ end: external
 external:
     sub: lm_own_arena_destroy (@: LmOwnArena arena)
         if: arena != 0
-            lm_own_value_stack_destroy(c.&arena->lazy_edges)
-            lm_own_value_stack_destroy(c.&arena->allocation_descriptors)
-            lm_own_ptr_stack_destroy(c.&arena->allocations)
+            lm_own_value_stack_destroy(arena\lazy_edges)
+            lm_own_delete(arena\lazy_edges, 0)
+            lm_own_value_stack_destroy(arena\allocation_descriptors)
+            lm_own_delete(arena\allocation_descriptors, 0)
+            lm_own_ptr_stack_destroy(arena\allocations)
+            lm_own_delete(arena\allocations, 0)
+            arena\lazy_edges: 0
+            arena\allocation_descriptors: 0
+            arena\allocations: 0
             arena\frozen: 0
     end: lm_own_arena_destroy
 end: external
@@ -304,7 +327,7 @@ external:
     end: lm_own_value_stack_top
 end: external
 
-LmOwnValueStack: lm_own_global_allocation_descriptors
+@: LmOwnValueStack lm_own_global_allocation_descriptors
 int: lm_own_global_allocation_descriptors_ready
 
 fn: lm_own_size_multiply (size_t: left; size_t: right; @: size_t out) int
@@ -318,7 +341,10 @@ end: lm_own_size_multiply
 
 fn: lm_own_global_allocation_descriptors_init () int
     if: lm_own_global_allocation_descriptors_ready = 0
-        lm_own_value_stack_init(@ lm_own_global_allocation_descriptors, c.sizeof(c.LmOwnAllocationDescriptor))
+        lm_own_global_allocation_descriptors: lm_own_new_zero(c.sizeof(c.LmOwnValueStack))
+        if: lm_own_global_allocation_descriptors = 0
+            return: 1
+        lm_own_value_stack_init(lm_own_global_allocation_descriptors, c.sizeof(c.LmOwnAllocationDescriptor))
         lm_own_global_allocation_descriptors_ready: 1
     return: 0
 end: lm_own_global_allocation_descriptors_init
@@ -342,19 +368,25 @@ fn: lm_own_allocation_descriptor_find (const: @(LmOwnValueStack descriptors); co
 end: lm_own_allocation_descriptor_find
 
 fn: lm_own_allocation_descriptor_push (@: LmOwnValueStack descriptors; @: void address; @: LmOwnArena owner; size_t: bytes; size_t: element_size; size_t: count; size_t: rank; size_t: level) int
-    LmOwnAllocationDescriptor: descriptor
+    @: LmOwnAllocationDescriptor descriptor
+    int: status
 
     if: descriptors = 0 || address = 0
         return: 1
 
-    c.descriptor.address: address
-    c.descriptor.owner: owner
-    c.descriptor.bytes: bytes
-    c.descriptor.element_size: element_size
-    c.descriptor.count: count
-    c.descriptor.rank: rank
-    c.descriptor.level: level
-    return: lm_own_value_stack_push(descriptors, @ descriptor)
+    descriptor: lm_own_new_zero(c.sizeof(c.LmOwnAllocationDescriptor))
+    if: descriptor = 0
+        return: 1
+    descriptor\address: address
+    descriptor\owner: owner
+    descriptor\bytes: bytes
+    descriptor\element_size: element_size
+    descriptor\count: count
+    descriptor\rank: rank
+    descriptor\level: level
+    status: lm_own_value_stack_push(descriptors, descriptor)
+    lm_own_delete(descriptor, 0)
+    return: status
 end: lm_own_allocation_descriptor_push
 
 external:
@@ -372,7 +404,7 @@ external:
         object: c.calloc(1U, bytes)
         if: object = 0
             return: 0
-        if: lm_own_allocation_descriptor_push(@ lm_own_global_allocation_descriptors, object, 0, bytes, element_size, count, rank, level) != 0
+        if: lm_own_allocation_descriptor_push(lm_own_global_allocation_descriptors, object, 0, bytes, element_size, count, rank, level) != 0
             c.free(object)
             return: 0
 
@@ -384,7 +416,7 @@ external:
     fn: lm_own_allocation_descriptor (const: @(void address)) const: @: LmOwnAllocationDescriptor
         if: lm_own_global_allocation_descriptors_ready = 0
             return: 0
-        return: lm_own_allocation_descriptor_find(@ lm_own_global_allocation_descriptors, address)
+        return: lm_own_allocation_descriptor_find(lm_own_global_allocation_descriptors, address)
     end: lm_own_allocation_descriptor
 end: external
 
@@ -392,17 +424,17 @@ external:
     fn: lm_own_arena_new_zero (@: LmOwnArena arena; size_t: size) @: void
         @: void object
 
-        if: arena = 0 || arena\frozen
+        if: arena = 0 || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
             return: 0
 
         object: c.calloc(1U, size)
         if: object = 0
             return: 0
-        if: lm_own_ptr_stack_push(c.&arena->allocations, object) != 0
+        if: lm_own_ptr_stack_push(arena\allocations, object) != 0
             c.free(object)
             return: 0
-        if: lm_own_allocation_descriptor_push(c.&arena->allocation_descriptors, object, arena, size, size, 1U, 0U, 0U) != 0
-            lm_own_ptr_stack_pop(c.&arena->allocations)
+        if: lm_own_allocation_descriptor_push(arena\allocation_descriptors, object, arena, size, size, 1U, 0U, 0U) != 0
+            lm_own_ptr_stack_pop(arena\allocations)
             c.free(object)
             return: 0
         return: object
@@ -414,7 +446,7 @@ external:
         @: void object
         size_t: bytes
 
-        if: arena = 0 || arena\frozen
+        if: arena = 0 || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
             return: 0
         if: lm_own_size_multiply(element_size, count, @ bytes) != 0
             return: 0
@@ -424,11 +456,11 @@ external:
         object: c.calloc(1U, bytes)
         if: object = 0
             return: 0
-        if: lm_own_ptr_stack_push(c.&arena->allocations, object) != 0
+        if: lm_own_ptr_stack_push(arena\allocations, object) != 0
             c.free(object)
             return: 0
-        if: lm_own_allocation_descriptor_push(c.&arena->allocation_descriptors, object, arena, bytes, element_size, count, rank, level) != 0
-            lm_own_ptr_stack_pop(c.&arena->allocations)
+        if: lm_own_allocation_descriptor_push(arena\allocation_descriptors, object, arena, bytes, element_size, count, rank, level) != 0
+            lm_own_ptr_stack_pop(arena\allocations)
             c.free(object)
             return: 0
 
@@ -438,9 +470,9 @@ end: external
 
 external:
     fn: lm_own_arena_allocation_descriptor (const: @(LmOwnArena arena); const: @(void address)) const: @: LmOwnAllocationDescriptor
-        if: arena = 0
+        if: arena = 0 || arena\allocation_descriptors = 0
             return: 0
-        return: lm_own_allocation_descriptor_find(c.&arena->allocation_descriptors, address)
+        return: lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
     end: lm_own_arena_allocation_descriptor
 end: external
 
@@ -460,22 +492,28 @@ end: external
 
 external:
     fn: lm_own_arena_add_lazy_edge (@: LmOwnArena target; @: LmOwnArena source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
-        LmOwnLazyEdge: edge
+        @: LmOwnLazyEdge edge
+        int: status
 
-        if: target = 0 || source = 0 || patch_slot = 0 || target\frozen
+        if: target = 0 || source = 0 || patch_slot = 0 || target\frozen || target\lazy_edges = 0
             return: 1
         if: size = 0U
             return: 0
         if: source_ptr = 0
             return: 1
 
-        c.edge.kind: c.LM_OWN_EDGE_LAZY_OWNED
-        c.edge.source_owner: source
-        c.edge.target_owner: target
-        c.edge.source: source_ptr
-        c.edge.size: size
-        c.edge.patch_slot: patch_slot
-        return: lm_own_value_stack_push(c.&target->lazy_edges, @ edge)
+        edge: lm_own_new_zero(c.sizeof(c.LmOwnLazyEdge))
+        if: edge = 0
+            return: 1
+        edge\kind: c.LM_OWN_EDGE_LAZY_OWNED
+        edge\source_owner: source
+        edge\target_owner: target
+        edge\source: source_ptr
+        edge\size: size
+        edge\patch_slot: patch_slot
+        status: lm_own_value_stack_push(target\lazy_edges, edge)
+        lm_own_delete(edge, 0)
+        return: status
     end: lm_own_arena_add_lazy_edge
 end: external
 
@@ -485,12 +523,12 @@ external:
         @: void copy
         size_t: i
 
-        if: arena = 0 || arena\frozen
+        if: arena = 0 || arena\frozen || arena\lazy_edges = 0
             return: 1
 
         i: 0U
-        while: i < c.arena->lazy_edges.count
-            edge: lm_own_value_stack_at(c.&arena->lazy_edges, i)
+        while: i < arena\lazy_edges\count
+            edge: lm_own_value_stack_at(arena\lazy_edges, i)
             if: edge = 0 || edge\kind != c.LM_OWN_EDGE_LAZY_OWNED
                 i: i + 1U
                 continue
@@ -529,64 +567,68 @@ external:
 
         if: target = 0 || source = 0 || target\frozen
             return: 1
+        if: target\allocations = 0 || target\allocation_descriptors = 0 || target\lazy_edges = 0
+            return: 1
+        if: source\allocations = 0 || source\allocation_descriptors = 0 || source\lazy_edges = 0
+            return: 1
         if: source = target
             return: 0
 
-        lazy_base: c.target->lazy_edges.count
-        lazy_new_count: lazy_base + c.source->lazy_edges.count
-        if: c.source->lazy_edges.count > 0U
-            if: lm_own_value_stack_resize_zero(c.&target->lazy_edges, lazy_new_count) != 0
+        lazy_base: target\lazy_edges\count
+        lazy_new_count: lazy_base + source\lazy_edges\count
+        if: source\lazy_edges\count > 0U
+            if: lm_own_value_stack_resize_zero(target\lazy_edges, lazy_new_count) != 0
                 return: 1
-            c.target->lazy_edges.count: lazy_base
+            target\lazy_edges\count: lazy_base
 
-        if: c.source->allocations.count > 0U
-            new_count: c.target->allocations.count + c.source->allocations.count
-            if: c.target->allocations.capacity = 0U
+        if: source\allocations\count > 0U
+            new_count: target\allocations\count + source\allocations\count
+            if: target\allocations\capacity = 0U
                 capacity: 8U
-            if: c.target->allocations.capacity != 0U
-                capacity: c.target->allocations.capacity
+            if: target\allocations\capacity != 0U
+                capacity: target\allocations\capacity
             while: capacity < new_count
                 capacity: capacity * 2U
-            items: c.realloc(c.target->allocations.items, capacity * c.sizeof(items[0]))
+            items: c.realloc(target\allocations\items, capacity * c.sizeof(items[0]))
             if: items = 0
                 return: 1
-            c.target->allocations.items: items
-            c.target->allocations.capacity: capacity
-            c.memcpy(c.target->allocations.items + c.target->allocations.count, c.source->allocations.items, c.source->allocations.count * c.sizeof(c.source->allocations.items[0]))
-            c.target->allocations.count: new_count
+            target\allocations\items: items
+            target\allocations\capacity: capacity
+            c.memcpy(target\allocations\items + target\allocations\count, source\allocations\items, source\allocations\count * c.sizeof(source\allocations\items[0]))
+            target\allocations\count: new_count
 
-            c.free(c.source->allocations.items)
-            c.source->allocations.items: 0
-            c.source->allocations.count: 0U
-            c.source->allocations.capacity: 0U
+            c.free(source\allocations\items)
+            source\allocations\items: 0
+            source\allocations\count: 0U
+            source\allocations\capacity: 0U
 
-        descriptor_base: c.target->allocation_descriptors.count
-        descriptor_new_count: descriptor_base + c.source->allocation_descriptors.count
-        if: c.source->allocation_descriptors.count > 0U
-            if: lm_own_value_stack_resize_zero(c.&target->allocation_descriptors, descriptor_new_count) != 0
+        descriptor_base: target\allocation_descriptors\count
+        descriptor_new_count: descriptor_base + source\allocation_descriptors\count
+        if: source\allocation_descriptors\count > 0U
+            if: lm_own_value_stack_resize_zero(target\allocation_descriptors, descriptor_new_count) != 0
                 return: 1
-            target_descriptors: c.target->allocation_descriptors.items
-            source_descriptors: c.source->allocation_descriptors.items
-            c.memcpy(target_descriptors + descriptor_base, source_descriptors, c.source->allocation_descriptors.count * c.sizeof(target_descriptors[0]))
-            c.target->allocation_descriptors.count: descriptor_new_count
+            target_descriptors: target\allocation_descriptors\items
+            source_descriptors: source\allocation_descriptors\items
+            c.memcpy(target_descriptors + descriptor_base, source_descriptors, source\allocation_descriptors\count * c.sizeof(target_descriptors[0]))
+            target\allocation_descriptors\count: descriptor_new_count
             i: descriptor_base
-            while: i < c.target->allocation_descriptors.count
+            while: i < target\allocation_descriptors\count
                 if: c.target_descriptors[i].owner = source
                     c.target_descriptors[i].owner: target
                 i: i + 1U
-            c.source->allocation_descriptors.count: 0U
+            source\allocation_descriptors\count: 0U
 
-        if: c.source->lazy_edges.count > 0U
-            target_edges: c.target->lazy_edges.items
-            c.memcpy(target_edges + lazy_base, c.source->lazy_edges.items, c.source->lazy_edges.count * c.sizeof(target_edges[0]))
-            c.target->lazy_edges.count: lazy_new_count
+        if: source\lazy_edges\count > 0U
+            target_edges: target\lazy_edges\items
+            c.memcpy(target_edges + lazy_base, source\lazy_edges\items, source\lazy_edges\count * c.sizeof(target_edges[0]))
+            target\lazy_edges\count: lazy_new_count
             i: lazy_base
-            while: i < c.target->lazy_edges.count
-                edge: lm_own_value_stack_at(c.&target->lazy_edges, i)
+            while: i < target\lazy_edges\count
+                edge: lm_own_value_stack_at(target\lazy_edges, i)
                 if: edge != 0 && edge\target_owner = source
                     edge\target_owner: target
                 i: i + 1U
-            c.source->lazy_edges.count: 0U
+            source\lazy_edges\count: 0U
 
         return: 0
     end: lm_own_arena_absorb
