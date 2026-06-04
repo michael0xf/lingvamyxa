@@ -15,17 +15,90 @@ static int lm_trans_namespace_declare_storage_binding(
     LmP0Text type_head
 );
 static LmTransExprAtomLowering *lm_trans_expr_atom_lowering_new(void);
+static void lm_trans_expr_atom_lowering_delete(LmTransExprAtomLowering *lowering);
+static void lm_trans_expr_callable_type_delete(LmTransL4CallableType *type);
+static void lm_trans_expr_call_lowering_delete(LmTransCallLowering *call);
 
 static LmTransBinding *lm_trans_expr_binding_new(void) {
     return (LmTransBinding *)lm_own_new_zero(sizeof(LmTransBinding));
 }
 
 static LmTransCallLowering *lm_trans_expr_call_lowering_new(void) {
-    return (LmTransCallLowering *)lm_own_new_zero(sizeof(LmTransCallLowering));
+    LmTransCallLowering *call;
+
+    call = (LmTransCallLowering *)lm_own_new_zero(sizeof(*call));
+    if (call != 0) {
+        call->name = lm_trans_text_ref_new_cstr("");
+        if (call->name == 0) {
+            lm_trans_expr_call_lowering_delete(call);
+            return 0;
+        }
+    }
+    return call;
+}
+
+static void lm_trans_expr_call_lowering_delete(LmTransCallLowering *call) {
+    if (call != 0) {
+        lm_trans_text_ref_destroy(&call->name);
+    }
+    lm_own_delete(call, 0);
+}
+
+static int lm_trans_callable_type_init_fields(LmTransL4CallableType *type) {
+    if (type == 0) {
+        return 1;
+    }
+    if (type->class_name == 0) {
+        type->class_name = lm_trans_text_ref_new_cstr("");
+    }
+    return type->class_name == 0;
+}
+
+static int lm_trans_callable_type_reset(LmTransL4CallableType *type) {
+    if (lm_trans_callable_type_init_fields(type) != 0) {
+        return 1;
+    }
+    type->class_name->data = "";
+    type->class_name->length = 0U;
+    type->address_depth = 0U;
+    type->is_const = 0;
+    return 0;
+}
+
+static int lm_trans_callable_type_copy(
+    LmTransL4CallableType *target,
+    const LmTransL4CallableType *source
+) {
+    if (target == 0 || source == 0 || lm_trans_callable_type_init_fields(target) != 0) {
+        return 1;
+    }
+    if (source->class_name != 0) {
+        *target->class_name = *source->class_name;
+    } else {
+        target->class_name->data = "";
+        target->class_name->length = 0U;
+    }
+    target->address_depth = source->address_depth;
+    target->is_const = source->is_const;
+    return 0;
 }
 
 static LmTransL4CallableType *lm_trans_expr_callable_type_new(void) {
-    return (LmTransL4CallableType *)lm_own_new_zero(sizeof(LmTransL4CallableType));
+    LmTransL4CallableType *type;
+
+    type = (LmTransL4CallableType *)lm_own_new_zero(sizeof(*type));
+    if (type != 0 && lm_trans_callable_type_init_fields(type) != 0) {
+        lm_trans_expr_callable_type_delete(type);
+        return 0;
+    }
+    return type;
+}
+
+static void lm_trans_expr_callable_type_delete(LmTransL4CallableType *type) {
+    if (type != 0) {
+        lm_trans_text_ref_destroy(&type->class_name);
+    }
+    lm_own_delete(type, 0);
 }
 
 static LmTransAbiParam *lm_trans_expr_abi_params_new(size_t capacity) {
@@ -59,7 +132,7 @@ static LmTransExprPiece *lm_trans_expr_piece_new(void) {
 
 static void lm_trans_expr_piece_destroy_fields(LmTransExprPiece *piece) {
     if (piece != 0) {
-        lm_own_delete(piece->atom, 0);
+        lm_trans_expr_atom_lowering_delete(piece->atom);
         piece->atom = 0;
     }
 }
@@ -78,7 +151,49 @@ static LmTransExprStack *lm_trans_expr_stack_new(void) {
 }
 
 static LmTransExprAtomLowering *lm_trans_expr_atom_lowering_new(void) {
-    return (LmTransExprAtomLowering *)lm_own_new_zero(sizeof(LmTransExprAtomLowering));
+    LmTransExprAtomLowering *lowering;
+
+    lowering = (LmTransExprAtomLowering *)lm_own_new_zero(sizeof(*lowering));
+    if (lowering != 0) {
+        lowering->text = lm_trans_text_ref_new_cstr("");
+        if (lowering->text == 0) {
+            lm_own_delete(lowering, 0);
+            return 0;
+        }
+    }
+    return lowering;
+}
+
+static void lm_trans_expr_atom_lowering_destroy_fields(LmTransExprAtomLowering *lowering) {
+    if (lowering != 0) {
+        lm_trans_text_ref_destroy(&lowering->text);
+    }
+}
+
+static void lm_trans_expr_atom_lowering_delete(LmTransExprAtomLowering *lowering) {
+    lm_trans_expr_atom_lowering_destroy_fields(lowering);
+    lm_own_delete(lowering, 0);
+}
+
+static int lm_trans_expr_atom_lowering_copy(
+    LmTransExprAtomLowering *target,
+    const LmTransExprAtomLowering *source
+) {
+    LmP0Text *text;
+
+    if (target == 0 || source == 0 || target->text == 0) {
+        return 1;
+    }
+    text = target->text;
+    *target = *source;
+    target->text = text;
+    if (source->text != 0) {
+        *target->text = *source->text;
+    } else {
+        target->text->data = "";
+        target->text->length = 0U;
+    }
+    return 0;
 }
 
 static int lm_trans_atom_starts_string(LmP0Text text) {
@@ -177,7 +292,7 @@ static int lm_trans_emit_expr_atom_mode(
 
     symbol = lm_trans_namespace_find(namespace_, &atom);
     if (symbol != 0 && symbol->has_c_name) {
-        return lm_trans_write_text(file, &symbol->c_name);
+        return lm_trans_write_text(file, symbol->c_name);
     }
 
     return lm_trans_emit_name(file, &atom);
@@ -288,7 +403,7 @@ static int lm_trans_lower_call(
         return 1;
     }
 
-    out->name = head;
+    *out->name = head;
     out->signature = 0;
     out->is_closure = 0;
     if (lm_trans_is_c_reference_name(&head)) {
@@ -309,7 +424,7 @@ static int lm_trans_lower_call(
     symbol = lm_trans_namespace_find(namespace_, &head);
     status = handler(head, symbol, out);
     if (status == 0 && symbol != 0 && symbol->has_c_name) {
-        out->name = symbol->c_name;
+        *out->name = *symbol->c_name;
     }
     return status;
 }
@@ -944,7 +1059,7 @@ static int lm_trans_formal_param_default_fields(
         return 0;
     }
     has_callable_type = lm_trans_l4_callable_type_from_node(node, ignored_type);
-    lm_own_delete(ignored_type, 0);
+    lm_trans_expr_callable_type_delete(ignored_type);
     if (has_callable_type) {
         field0 = lm_trans_nth_field(body, 0U);
         if (
@@ -1304,7 +1419,7 @@ static int lm_trans_callable_type_same(
         right != 0 &&
         left->address_depth == right->address_depth &&
         left->is_const == right->is_const &&
-        lm_trans_identifier_same(&left->class_name, &right->class_name);
+        lm_trans_identifier_same(left->class_name, right->class_name);
 }
 
 static int lm_trans_callable_return_type_from_node(
@@ -1316,13 +1431,15 @@ static int lm_trans_callable_return_type_from_node(
     if (out == 0) {
         return 0;
     }
+    if (lm_trans_callable_type_reset(out) != 0) {
+        return 0;
+    }
     if (node == 0) {
-        memset(out, 0, sizeof(*out));
         void_name = lm_trans_text_from_cstr("void");
         if (void_name == 0) {
             return 0;
         }
-        out->class_name = *void_name;
+        *out->class_name = *void_name;
         lm_trans_text_ref_destroy(&void_name);
         return 1;
     }
@@ -1344,7 +1461,9 @@ static int lm_trans_callable_descriptor_return_type(
     if (out == 0) {
         return 0;
     }
-    memset(out, 0, sizeof(*out));
+    if (lm_trans_callable_type_reset(out) != 0) {
+        return 0;
+    }
 
     return_key = lm_trans_text_ref_new_cstr("return");
     if (return_key == 0) {
@@ -1365,7 +1484,7 @@ static int lm_trans_callable_descriptor_return_type(
             lm_trans_text_ref_destroy(&return_key);
             return 0;
         }
-        out->class_name = *class_name;
+        *out->class_name = *class_name;
         lm_trans_text_ref_destroy(&class_name);
     }
     address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, &descriptor_name, "return.address-depth");
@@ -1414,15 +1533,15 @@ static int lm_trans_callable_signature_matches_descriptor_name(
     candidate_type = lm_trans_expr_callable_type_new();
     if (params == 0 || descriptor_type == 0 || candidate_type == 0) {
         lm_own_delete(params, 0);
-        lm_own_delete(descriptor_type, 0);
-        lm_own_delete(candidate_type, 0);
+        lm_trans_expr_callable_type_delete(descriptor_type);
+        lm_trans_expr_callable_type_delete(candidate_type);
         lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
     if (lm_trans_collect_abi_params(params, params_capacity, &param_count, namespace_, descriptor_cstr, "callable descriptor") != 0) {
         lm_own_delete(params, 0);
-        lm_own_delete(descriptor_type, 0);
-        lm_own_delete(candidate_type, 0);
+        lm_trans_expr_callable_type_delete(descriptor_type);
+        lm_trans_expr_callable_type_delete(candidate_type);
         lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
@@ -1430,14 +1549,14 @@ static int lm_trans_callable_signature_matches_descriptor_name(
 
     if (param_count != candidate->param_names->count) {
         lm_own_delete(params, 0);
-        lm_own_delete(descriptor_type, 0);
-        lm_own_delete(candidate_type, 0);
+        lm_trans_expr_callable_type_delete(descriptor_type);
+        lm_trans_expr_callable_type_delete(candidate_type);
         return 0;
     }
 
     for (index = 0U; index < param_count; ++index) {
         candidate_param = lm_trans_callable_param_node_at(candidate, index);
-        lm_trans_text_assign_cstr(&descriptor_type->class_name, params[index].class_name);
+        lm_trans_text_assign_cstr(descriptor_type->class_name, params[index].class_name);
         descriptor_type->address_depth = params[index].address_depth;
         descriptor_type->is_const = params[index].is_const;
         if (
@@ -1445,8 +1564,8 @@ static int lm_trans_callable_signature_matches_descriptor_name(
             !lm_trans_callable_type_same(descriptor_type, candidate_type)
         ) {
             lm_own_delete(params, 0);
-            lm_own_delete(descriptor_type, 0);
-            lm_own_delete(candidate_type, 0);
+            lm_trans_expr_callable_type_delete(descriptor_type);
+            lm_trans_expr_callable_type_delete(candidate_type);
             return 0;
         }
     }
@@ -1456,8 +1575,8 @@ static int lm_trans_callable_signature_matches_descriptor_name(
         lm_trans_callable_return_type_from_node(candidate->callable_return_node, candidate_type) &&
         lm_trans_callable_type_same(descriptor_type, candidate_type);
     lm_own_delete(params, 0);
-    lm_own_delete(descriptor_type, 0);
-    lm_own_delete(candidate_type, 0);
+    lm_trans_expr_callable_type_delete(descriptor_type);
+    lm_trans_expr_callable_type_delete(candidate_type);
     return result;
 }
 
@@ -1558,15 +1677,15 @@ static int lm_trans_callable_descriptor_return_descriptor_name(
         !lm_trans_callable_descriptor_return_type(namespace_, descriptor_name, return_type) ||
         return_type->address_depth != 0U ||
         return_type->is_const ||
-        !lm_trans_registry_is_function_pointer_type_name(namespace_, return_type->class_name)
+        !lm_trans_registry_is_function_pointer_type_name(namespace_, *return_type->class_name)
     ) {
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 0;
     }
 
-    *out_return_descriptor_name = return_type->class_name;
+    *out_return_descriptor_name = *return_type->class_name;
     result = 1;
-    lm_own_delete(return_type, 0);
+    lm_trans_expr_callable_type_delete(return_type);
     return result;
 }
 
@@ -1717,7 +1836,7 @@ static int lm_trans_emit_callable_type_named(
     if (type->is_const && lm_trans_put(file, "const ") != 0) {
         return 1;
     }
-    if (lm_trans_emit_type_name(file, &type->class_name) != 0) {
+    if (lm_trans_emit_type_name(file, type->class_name) != 0) {
         return 1;
     }
     if ((type->address_depth != 0U || (name != 0 && name->length != 0U)) && lm_trans_put(file, " ") != 0) {
@@ -1747,11 +1866,11 @@ static int lm_trans_emit_callable_param_node_named(
         return 1;
     }
     if (!lm_trans_l4_callable_type_from_node(param_node, type)) {
-        lm_own_delete(type, 0);
+        lm_trans_expr_callable_type_delete(type);
         return 1;
     }
     status = lm_trans_emit_callable_type_named(file, type, &name);
-    lm_own_delete(type, 0);
+    lm_trans_expr_callable_type_delete(type);
     return status;
 }
 
@@ -1884,7 +2003,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
     return_type = lm_trans_expr_callable_type_new();
     if (params == 0 || return_type == 0) {
         lm_own_delete(params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         lm_own_delete(descriptor_cstr, 0);
         lm_own_delete(adapter_name, 0);
         return 1;
@@ -1902,7 +2021,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
         !lm_trans_callable_descriptor_return_type(namespace_, descriptor_name, return_type)
     ) {
         lm_own_delete(params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         lm_own_delete(descriptor_cstr, 0);
         lm_own_delete(adapter_name, 0);
         return 1;
@@ -1911,7 +2030,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
     void_name = lm_trans_text_ref_new_cstr("void");
     if (void_name == 0) {
         lm_own_delete(params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         lm_own_delete(descriptor_cstr, 0);
         lm_own_delete(adapter_name, 0);
         return 1;
@@ -1919,7 +2038,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
     returns_void =
         return_type->address_depth == 0U &&
         !return_type->is_const &&
-        lm_trans_identifier_same(&return_type->class_name, void_name);
+        lm_trans_identifier_same(return_type->class_name, void_name);
 
     prelude_file = lm_trans_prelude_file(file);
     if (
@@ -1935,7 +2054,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
         lm_trans_emit_name(prelude_file, &source_name) != 0
     ) {
         lm_own_delete(params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         lm_trans_text_ref_destroy(&void_name);
         lm_own_delete(descriptor_cstr, 0);
         lm_own_delete(adapter_name, 0);
@@ -1945,7 +2064,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
     for (i = 0U; i < chain_depth; ++i) {
         if (lm_trans_put(prelude_file, "()") != 0) {
             lm_own_delete(params, 0);
-            lm_own_delete(return_type, 0);
+            lm_trans_expr_callable_type_delete(return_type);
             lm_trans_text_ref_destroy(&void_name);
             lm_own_delete(descriptor_cstr, 0);
             lm_own_delete(adapter_name, 0);
@@ -1959,7 +2078,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
         lm_trans_put(prelude_file, ");\n}\n\n") != 0
     ) {
         lm_own_delete(params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         lm_trans_text_ref_destroy(&void_name);
         lm_own_delete(descriptor_cstr, 0);
         lm_own_delete(adapter_name, 0);
@@ -1967,7 +2086,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
     }
 
     lm_own_delete(params, 0);
-    lm_own_delete(return_type, 0);
+    lm_trans_expr_callable_type_delete(return_type);
     lm_trans_text_ref_destroy(&void_name);
     lm_own_delete(descriptor_cstr, 0);
     if (lm_own_ptr_stack_push(lm_trans_emitted_callable_adapters, adapter_name) != 0) {
@@ -2055,7 +2174,7 @@ static int lm_trans_callable_type_is_void(const LmTransL4CallableType *type) {
         type != 0 &&
         type->address_depth == 0U &&
         !type->is_const &&
-        lm_trans_identifier_same(&type->class_name, void_name);
+        lm_trans_identifier_same(type->class_name, void_name);
     lm_trans_text_ref_destroy(&void_name);
     return result;
 }
@@ -2100,14 +2219,14 @@ static int lm_trans_callable_descriptor_accepts_source_bind(
     descriptor_type = lm_trans_expr_callable_type_new();
     source_type = lm_trans_expr_callable_type_new();
     if (descriptor_type == 0 || source_type == 0) {
-        lm_own_delete(descriptor_type, 0);
-        lm_own_delete(source_type, 0);
+        lm_trans_expr_callable_type_delete(descriptor_type);
+        lm_trans_expr_callable_type_delete(source_type);
         return 0;
     }
     descriptor_cstr = lm_trans_text_copy_cstr(&descriptor_name);
     if (descriptor_cstr == 0) {
-        lm_own_delete(descriptor_type, 0);
-        lm_own_delete(source_type, 0);
+        lm_trans_expr_callable_type_delete(descriptor_type);
+        lm_trans_expr_callable_type_delete(source_type);
         return 0;
     }
     result =
@@ -2123,8 +2242,8 @@ static int lm_trans_callable_descriptor_accepts_source_bind(
         descriptor_param_count + bound_count == source_param_count;
     lm_own_delete(descriptor_cstr, 0);
     if (!result) {
-        lm_own_delete(descriptor_type, 0);
-        lm_own_delete(source_type, 0);
+        lm_trans_expr_callable_type_delete(descriptor_type);
+        lm_trans_expr_callable_type_delete(source_type);
         return 0;
     }
 
@@ -2132,29 +2251,29 @@ static int lm_trans_callable_descriptor_accepts_source_bind(
         !lm_trans_callable_return_type_from_node(source_symbol->callable_return_node, source_type) ||
         !lm_trans_callable_type_same(out_return_type, source_type)
     ) {
-        lm_own_delete(descriptor_type, 0);
-        lm_own_delete(source_type, 0);
+        lm_trans_expr_callable_type_delete(descriptor_type);
+        lm_trans_expr_callable_type_delete(source_type);
         return 0;
     }
 
     for (index = 0U; index < descriptor_param_count; ++index) {
         source_param = lm_trans_callable_param_node_at(source_symbol, bound_count + index);
-        lm_trans_text_assign_cstr(&descriptor_type->class_name, descriptor_params[index].class_name);
+        lm_trans_text_assign_cstr(descriptor_type->class_name, descriptor_params[index].class_name);
         descriptor_type->address_depth = descriptor_params[index].address_depth;
         descriptor_type->is_const = descriptor_params[index].is_const;
         if (
             !lm_trans_l4_callable_type_from_node(source_param, source_type) ||
             !lm_trans_callable_type_same(descriptor_type, source_type)
         ) {
-            lm_own_delete(descriptor_type, 0);
-            lm_own_delete(source_type, 0);
+            lm_trans_expr_callable_type_delete(descriptor_type);
+            lm_trans_expr_callable_type_delete(source_type);
             return 0;
         }
     }
 
     *out_descriptor_param_count = descriptor_param_count;
-    lm_own_delete(descriptor_type, 0);
-    lm_own_delete(source_type, 0);
+    lm_trans_expr_callable_type_delete(descriptor_type);
+    lm_trans_expr_callable_type_delete(source_type);
     return 1;
 }
 
@@ -2336,7 +2455,7 @@ static int lm_trans_emit_callable_binder(
     return_type = lm_trans_expr_callable_type_new();
     if (descriptor_params == 0 || return_type == 0) {
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
 
@@ -2353,14 +2472,14 @@ static int lm_trans_emit_callable_binder(
         )
     ) {
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 0;
     }
 
     binder_name = lm_trans_callable_binder_name_new(source_name, descriptor_name, bound_count);
     if (binder_name == 0) {
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
     stored_name = lm_trans_string_stack_find(lm_trans_emitted_callable_binders, binder_name);
@@ -2369,7 +2488,7 @@ static int lm_trans_emit_callable_binder(
         out_binder_name->data = stored_name;
         out_binder_name->length = strlen(stored_name);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 0;
     }
 
@@ -2382,7 +2501,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
 
@@ -2394,7 +2513,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
 
@@ -2415,7 +2534,7 @@ static int lm_trans_emit_callable_binder(
             lm_own_delete(destroy_name, 0);
             lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
-            lm_own_delete(return_type, 0);
+            lm_trans_expr_callable_type_delete(return_type);
             return 1;
         }
     }
@@ -2435,7 +2554,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
     if (bound_count == 0U) {
@@ -2445,7 +2564,7 @@ static int lm_trans_emit_callable_binder(
             lm_own_delete(destroy_name, 0);
             lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
-            lm_own_delete(return_type, 0);
+            lm_trans_expr_callable_type_delete(return_type);
             return 1;
         }
     } else if (
@@ -2460,7 +2579,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
     if (
@@ -2483,7 +2602,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
 
@@ -2498,7 +2617,7 @@ static int lm_trans_emit_callable_binder(
             lm_own_delete(destroy_name, 0);
             lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
-            lm_own_delete(return_type, 0);
+            lm_trans_expr_callable_type_delete(return_type);
             return 1;
         }
     }
@@ -2519,7 +2638,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
     if (bound_count != 0U) {
@@ -2533,7 +2652,7 @@ static int lm_trans_emit_callable_binder(
             lm_own_delete(destroy_name, 0);
             lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
-            lm_own_delete(return_type, 0);
+            lm_trans_expr_callable_type_delete(return_type);
             return 1;
         }
     }
@@ -2547,7 +2666,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
     if (bound_count != 0U) {
@@ -2562,7 +2681,7 @@ static int lm_trans_emit_callable_binder(
             lm_own_delete(destroy_name, 0);
             lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
-            lm_own_delete(return_type, 0);
+            lm_trans_expr_callable_type_delete(return_type);
             return 1;
         }
     }
@@ -2588,7 +2707,7 @@ static int lm_trans_emit_callable_binder(
         lm_own_delete(destroy_name, 0);
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
 
@@ -2598,13 +2717,13 @@ static int lm_trans_emit_callable_binder(
     if (lm_own_ptr_stack_push(lm_trans_emitted_callable_binders, binder_name) != 0) {
         lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
-        lm_own_delete(return_type, 0);
+        lm_trans_expr_callable_type_delete(return_type);
         return 1;
     }
     out_binder_name->data = binder_name;
     out_binder_name->length = strlen(binder_name);
     lm_own_delete(descriptor_params, 0);
-    lm_own_delete(return_type, 0);
+    lm_trans_expr_callable_type_delete(return_type);
     return 0;
 }
 
@@ -2790,7 +2909,7 @@ static int lm_trans_should_force_zero_arg_callable(
     }
 
     if (out_name != 0) {
-        *out_name = symbol->has_c_name ? symbol->c_name : *atom;
+        *out_name = symbol->has_c_name ? *symbol->c_name : *atom;
     }
     if (out_symbol != 0) {
         *out_symbol = symbol;
@@ -2969,7 +3088,7 @@ static int lm_trans_materialize_callable_descriptor_value(
             goto cleanup;
         }
 
-        *name = symbol->has_c_name ? symbol->c_name : *frame->head;
+        *name = symbol->has_c_name ? *symbol->c_name : *frame->head;
         if (lm_trans_emit_callable_binder(file, namespace_, *name, symbol, *descriptor_name, bound_count, binder_name) != 0) {
             status = 1;
             goto cleanup;
@@ -3007,7 +3126,7 @@ static int lm_trans_materialize_callable_descriptor_value(
         goto cleanup;
     }
 
-    *name = symbol->has_c_name ? symbol->c_name : *atom;
+    *name = symbol->has_c_name ? *symbol->c_name : *atom;
     if (lm_trans_callable_signature_matches_descriptor_name(*descriptor_name, symbol, namespace_)) {
         if (!descriptor_is_function_pointer && !lm_trans_symbol_is(symbol, "closure")) {
             if (lm_trans_emit_callable_binder(file, namespace_, *name, symbol, *descriptor_name, 0U, binder_name) != 0) {
@@ -3352,7 +3471,7 @@ static int lm_trans_expr_stack_schedule_call_args(
     if (status == 0 && callee != 0 && callee->has_env_arg) {
         if (segments->count > 0U && lm_trans_expr_stack_push_text(stack, ", ") != 0) {
             status = 1;
-        } else if (lm_trans_expr_stack_push_text(stack, callee->env_arg.data) != 0) {
+        } else if (lm_trans_expr_stack_push_text(stack, callee->env_arg->data) != 0) {
             status = 1;
         }
     }
@@ -3569,26 +3688,26 @@ static int lm_trans_expr_stack_emit_frame(
     call = lm_trans_expr_call_lowering_new();
     expr_receiver = lm_trans_expr_binding_new();
     if (call == 0 || expr_receiver == 0) {
-        lm_own_delete(call, 0);
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 1;
     }
 
     expr_receiver_status = lm_trans_lookup_expr_frame_receiver_binding(namespace_, frame->head, expr_receiver);
     if (expr_receiver_status < 0) {
-        lm_own_delete(call, 0);
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 1;
     }
     if (expr_receiver_status > 0) {
         status = expr_receiver->expr_frame(file, stack, frame, namespace_);
-        lm_own_delete(call, 0);
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return status;
     }
 
     if (lm_trans_lower_call(*frame->head, namespace_, "function", call) != 0) {
-        lm_own_delete(call, 0);
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 1;
     }
@@ -3597,68 +3716,68 @@ static int lm_trans_expr_stack_emit_frame(
         has_args = call->signature != 0 && call->signature->param_names != 0 && call->signature->param_names->count > 0U;
         if (!has_args && lm_trans_call_body_first_field(frame->body) != 0) {
             fprintf(stderr, "trans L2 error: too many arguments\n");
-            lm_own_delete(call, 0);
+            lm_trans_expr_call_lowering_delete(call);
             lm_own_delete(expr_receiver, 0);
             return 1;
         }
-        if (lm_trans_emit_name(file, &call->name) != 0) {
-            lm_own_delete(call, 0);
+        if (lm_trans_emit_name(file, call->name) != 0) {
+            lm_trans_expr_call_lowering_delete(call);
             lm_own_delete(expr_receiver, 0);
             return 1;
         }
         if (lm_trans_put(file, "->call(") != 0) {
-            lm_own_delete(call, 0);
+            lm_trans_expr_call_lowering_delete(call);
             lm_own_delete(expr_receiver, 0);
             return 1;
         }
-        if (lm_trans_emit_name(file, &call->name) != 0) {
-            lm_own_delete(call, 0);
+        if (lm_trans_emit_name(file, call->name) != 0) {
+            lm_trans_expr_call_lowering_delete(call);
             lm_own_delete(expr_receiver, 0);
             return 1;
         }
         if (lm_trans_put(file, "->env") != 0) {
-            lm_own_delete(call, 0);
+            lm_trans_expr_call_lowering_delete(call);
             lm_own_delete(expr_receiver, 0);
             return 1;
         }
         if (lm_trans_expr_stack_push_text(stack, ")") != 0) {
-            lm_own_delete(call, 0);
+            lm_trans_expr_call_lowering_delete(call);
             lm_own_delete(expr_receiver, 0);
             return 1;
         }
         if (has_args) {
             if (lm_trans_expr_stack_push_call_args(stack, frame->body, call->signature) != 0) {
-                lm_own_delete(call, 0);
+                lm_trans_expr_call_lowering_delete(call);
                 lm_own_delete(expr_receiver, 0);
                 return 1;
             }
             status = lm_trans_expr_stack_push_text(stack, ", ");
-            lm_own_delete(call, 0);
+            lm_trans_expr_call_lowering_delete(call);
             lm_own_delete(expr_receiver, 0);
             return status;
         }
-        lm_own_delete(call, 0);
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 0;
     }
 
-    if (lm_trans_emit_name(file, &call->name) != 0) {
-        lm_own_delete(call, 0);
+    if (lm_trans_emit_name(file, call->name) != 0) {
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 1;
     }
     if (lm_trans_put(file, "(") != 0) {
-        lm_own_delete(call, 0);
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 1;
     }
     if (lm_trans_expr_stack_push_text(stack, ")") != 0) {
-        lm_own_delete(call, 0);
+        lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 1;
     }
     status = lm_trans_expr_stack_push_call_args(stack, frame->body, call->signature);
-    lm_own_delete(call, 0);
+    lm_trans_expr_call_lowering_delete(call);
     lm_own_delete(expr_receiver, 0);
     return status;
 }
@@ -3718,7 +3837,7 @@ static int lm_trans_expr_emit_value(
     const LmTransExprAtomLowering *lowering,
     const LmTransNamespace *namespace_
 ) {
-    return lm_trans_emit_expr_atom(file, lowering->text, namespace_);
+    return lm_trans_emit_expr_atom(file, *lowering->text, namespace_);
 }
 
 static int lm_trans_expr_emit_addressable_value(
@@ -3726,7 +3845,7 @@ static int lm_trans_expr_emit_addressable_value(
     const LmTransExprAtomLowering *lowering,
     const LmTransNamespace *namespace_
 ) {
-    return lm_trans_emit_expr_atom_mode(file, lowering->text, namespace_, 1);
+    return lm_trans_emit_expr_atom_mode(file, *lowering->text, namespace_, 1);
 }
 
 static int lm_trans_expr_emit_name(
@@ -3735,7 +3854,7 @@ static int lm_trans_expr_emit_name(
     const LmTransNamespace *namespace_
 ) {
     (void)namespace_;
-    return lm_trans_emit_name(file, &lowering->text);
+    return lm_trans_emit_name(file, lowering->text);
 }
 
 static int lm_trans_expr_emit_raw(
@@ -3744,7 +3863,7 @@ static int lm_trans_expr_emit_raw(
     const LmTransNamespace *namespace_
 ) {
     (void)namespace_;
-    return lm_trans_write_text(file, &lowering->text);
+    return lm_trans_write_text(file, lowering->text);
 }
 
 static int lm_trans_expr_state_value(
@@ -3757,7 +3876,7 @@ static int lm_trans_expr_state_value(
 ) {
     (void)expect_field_name;
     (void)expect_c_field_name;
-    *previous_operand = lm_trans_atom_is_operand_like(lowering->text) ? node : 0;
+    *previous_operand = lm_trans_atom_is_operand_like(*lowering->text) ? node : 0;
     *c_dot_path = lm_trans_node_is_c_reference_atom(*previous_operand);
     return 0;
 }
@@ -3771,7 +3890,7 @@ static int lm_trans_expr_state_field_name(
     int *c_dot_path
 ) {
     (void)expect_c_field_name;
-    if (!lm_trans_atom_is_identifier_like(lowering->text)) {
+    if (!lm_trans_atom_is_identifier_like(*lowering->text)) {
         fprintf(stderr, "trans L2 error: field-follow expects a field name\n");
         return 1;
     }
@@ -3790,7 +3909,7 @@ static int lm_trans_expr_state_c_field_name(
     int *c_dot_path
 ) {
     (void)expect_field_name;
-    if (!lm_trans_atom_is_identifier_like(lowering->text)) {
+    if (!lm_trans_atom_is_identifier_like(*lowering->text)) {
         fprintf(stderr, "trans L2 error: C value-field dot expects a field name\n");
         return 1;
     }
@@ -3924,7 +4043,7 @@ static void lm_trans_expr_atom_lowering_set_builtin(
     LmP0Text text,
     const char *binding
 ) {
-    lowering->text = text;
+    *lowering->text = text;
     if (lm_trans_expr_atom_lowering_set_binding(lowering, binding) != 0) {
         lowering->emit = lm_trans_expr_emit_value;
         lowering->update = lm_trans_expr_state_value;
@@ -3958,7 +4077,7 @@ static int lm_trans_expr_atom_lowering_set_from_tables(
         return 1;
     }
 
-    lm_trans_text_assign_cstr(&lowering->text, spelling);
+    lm_trans_text_assign_cstr(lowering->text, spelling);
     return 0;
 }
 
@@ -4137,7 +4256,10 @@ static int lm_trans_expr_lowered_range_append_atom(
     piece->emit = lm_trans_expr_piece_emit_atom;
     piece->leading_space = leading_space;
     piece->node = node;
-    *piece->atom = *lowering;
+    if (lm_trans_expr_atom_lowering_copy(piece->atom, lowering) != 0) {
+        lm_trans_expr_piece_delete(piece);
+        return 1;
+    }
     piece->first = 0;
     piece->stop = 0;
     status = lm_own_ptr_stack_push(range->pieces, piece);
@@ -4295,7 +4417,7 @@ static int lm_trans_expr_lowered_range_build(
                     c_dot_path,
                     atom
                 ) != 0) {
-                    lm_own_delete(atom, 0);
+                    lm_trans_expr_atom_lowering_delete(atom);
                     return 1;
                 }
                 if (
@@ -4321,7 +4443,7 @@ static int lm_trans_expr_lowered_range_build(
                         &c_dot_path
                     ) != 0
                 ) {
-                    lm_own_delete(atom, 0);
+                    lm_trans_expr_atom_lowering_delete(atom);
                     return 1;
                 }
                 if (lm_trans_text_equals(node->as->atom, "@")) {
@@ -4337,7 +4459,7 @@ static int lm_trans_expr_lowered_range_build(
                         atom
                     ) != 0
                 ) {
-                    lm_own_delete(atom, 0);
+                    lm_trans_expr_atom_lowering_delete(atom);
                     return 1;
                 }
             } else {
@@ -4348,7 +4470,7 @@ static int lm_trans_expr_lowered_range_build(
                         node
                     ) != 0
                 ) {
-                    lm_own_delete(atom, 0);
+                    lm_trans_expr_atom_lowering_delete(atom);
                     return 1;
                 }
                 previous_operand = node;
@@ -4364,16 +4486,16 @@ static int lm_trans_expr_lowered_range_build(
 
     if (expect_field_name) {
         fprintf(stderr, "trans L2 error: field-follow expects a field name\n");
-        lm_own_delete(atom, 0);
+        lm_trans_expr_atom_lowering_delete(atom);
         return 1;
     }
     if (expect_c_field_name) {
         fprintf(stderr, "trans L2 error: C value-field dot expects a field name\n");
-        lm_own_delete(atom, 0);
+        lm_trans_expr_atom_lowering_delete(atom);
         return 1;
     }
 
-    lm_own_delete(atom, 0);
+    lm_trans_expr_atom_lowering_delete(atom);
     return 0;
 }
 

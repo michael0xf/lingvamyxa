@@ -795,6 +795,13 @@ static LmTransSymbol *lm_trans_symbol_new(
         lm_trans_symbol_destroy(symbol);
         return 0;
     }
+    symbol->c_name = lm_trans_text_ref_new_cstr("");
+    symbol->env_arg = lm_trans_text_ref_new_cstr("");
+    symbol->closure_call_name = lm_trans_text_ref_new_cstr("");
+    if (symbol->c_name == 0 || symbol->env_arg == 0 || symbol->closure_call_name == 0) {
+        lm_trans_symbol_destroy(symbol);
+        return 0;
+    }
 
     symbol->param_names = lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any);
     if (symbol->param_names == 0) {
@@ -830,7 +837,7 @@ static int lm_trans_symbol_set_owned_name(LmTransSymbol *symbol, const LmP0Text 
 static int lm_trans_symbol_set_c_name(LmTransSymbol *symbol, const LmP0Text *c_name) {
     char *copy;
 
-    if (symbol == 0 || c_name == 0) {
+    if (symbol == 0 || symbol->c_name == 0 || c_name == 0) {
         return 1;
     }
 
@@ -843,8 +850,8 @@ static int lm_trans_symbol_set_c_name(LmTransSymbol *symbol, const LmP0Text *c_n
 
     lm_own_delete(symbol->c_name_storage, 0);
     symbol->c_name_storage = copy;
-    symbol->c_name.data = copy;
-    symbol->c_name.length = c_name->length;
+    symbol->c_name->data = copy;
+    symbol->c_name->length = c_name->length;
     symbol->has_c_name = 1;
     return 0;
 }
@@ -852,7 +859,7 @@ static int lm_trans_symbol_set_c_name(LmTransSymbol *symbol, const LmP0Text *c_n
 static int lm_trans_symbol_set_env_arg(LmTransSymbol *symbol, const LmP0Text *env_arg) {
     char *copy;
 
-    if (symbol == 0 || env_arg == 0) {
+    if (symbol == 0 || symbol->env_arg == 0 || env_arg == 0) {
         return 1;
     }
 
@@ -865,8 +872,8 @@ static int lm_trans_symbol_set_env_arg(LmTransSymbol *symbol, const LmP0Text *en
 
     lm_own_delete(symbol->env_arg_storage, 0);
     symbol->env_arg_storage = copy;
-    symbol->env_arg.data = copy;
-    symbol->env_arg.length = env_arg->length;
+    symbol->env_arg->data = copy;
+    symbol->env_arg->length = env_arg->length;
     symbol->has_env_arg = 1;
     return 0;
 }
@@ -874,7 +881,7 @@ static int lm_trans_symbol_set_env_arg(LmTransSymbol *symbol, const LmP0Text *en
 static int lm_trans_symbol_set_closure_call_name(LmTransSymbol *symbol, const LmP0Text *closure_call_name) {
     char *copy;
 
-    if (symbol == 0 || closure_call_name == 0) {
+    if (symbol == 0 || symbol->closure_call_name == 0 || closure_call_name == 0) {
         return 1;
     }
 
@@ -887,9 +894,36 @@ static int lm_trans_symbol_set_closure_call_name(LmTransSymbol *symbol, const Lm
 
     lm_own_delete(symbol->closure_call_name_storage, 0);
     symbol->closure_call_name_storage = copy;
-    symbol->closure_call_name.data = copy;
-    symbol->closure_call_name.length = closure_call_name->length;
+    symbol->closure_call_name->data = copy;
+    symbol->closure_call_name->length = closure_call_name->length;
     symbol->has_closure_call_name = 1;
+    return 0;
+}
+
+static int lm_trans_capture_init_fields(LmTransCapture *capture) {
+    if (capture == 0) {
+        return 1;
+    }
+    if (capture->name == 0) {
+        capture->name = lm_trans_text_ref_new_cstr("");
+    }
+    if (capture->type_head == 0) {
+        capture->type_head = lm_trans_text_ref_new_cstr("");
+    }
+    return capture->name == 0 || capture->type_head == 0;
+}
+
+static int lm_trans_capture_reset(LmTransCapture *capture) {
+    if (lm_trans_capture_init_fields(capture) != 0) {
+        return 1;
+    }
+    capture->name->data = "";
+    capture->name->length = 0U;
+    capture->type_head->data = "";
+    capture->type_head->length = 0U;
+    capture->type_node = 0;
+    capture->pointer_depth = 0U;
+    capture->type_is_head = 0;
     return 0;
 }
 
@@ -907,8 +941,14 @@ static LmTransCapture *lm_trans_capture_new(
     }
     capture = (LmTransCapture *)lm_own_new_zero(sizeof(*capture));
     if (capture != 0) {
-        capture->name = *name;
-        capture->type_head = *type_head;
+        if (lm_trans_capture_init_fields(capture) != 0) {
+            lm_trans_text_ref_destroy(&capture->name);
+            lm_trans_text_ref_destroy(&capture->type_head);
+            lm_own_delete(capture, 0);
+            return 0;
+        }
+        *capture->name = *name;
+        *capture->type_head = *type_head;
         capture->type_node = type_node;
         capture->pointer_depth = pointer_depth;
         capture->type_is_head = type_is_head;
@@ -917,6 +957,10 @@ static LmTransCapture *lm_trans_capture_new(
 }
 
 static void lm_trans_capture_destroy(LmTransCapture *capture) {
+    if (capture != 0) {
+        lm_trans_text_ref_destroy(&capture->name);
+        lm_trans_text_ref_destroy(&capture->type_head);
+    }
     lm_own_delete(capture, 0);
 }
 
@@ -937,6 +981,8 @@ static void lm_trans_hoisted_function_destroy(LmTransHoistedFunction *function) 
         function->env_var_storage = 0;
         lm_own_delete(function->closure_call_storage, 0);
         function->closure_call_storage = 0;
+        lm_trans_text_ref_destroy(&function->env_var_name);
+        lm_trans_text_ref_destroy(&function->closure_call_name);
     }
     lm_own_delete(function, 0);
 }

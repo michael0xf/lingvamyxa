@@ -348,11 +348,11 @@ L4:
 
     table:
         name: LmTransL4CallableType
-        columns: class          (`field.class` class)  (`field.index` serial)
+        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 class_name     LmP0Text               0
-                 address_depth  size_t                 1
-                 is_const       int                    2
+                 class_name     LmP0Text               0                       1                                0
+                 address_depth  size_t                 1                       0                                0
+                 is_const       int                    2                       0                                0
     end: LmTransL4CallableType
 
     table:
@@ -362,13 +362,13 @@ L4:
                  name                     LmP0Text               0                       1                                0
                  name_storage             char                   1                       1                                0
                  class_name               char                   2                       1                                1
-                 c_name                   LmP0Text               3                       0                                0
+                 c_name                   LmP0Text               3                       1                                0
                  c_name_storage           char                   4                       1                                0
                  has_c_name               int                    5                       0                                0
-                 env_arg                  LmP0Text               6                       0                                0
+                 env_arg                  LmP0Text               6                       1                                0
                  env_arg_storage          char                   7                       1                                0
                  has_env_arg              int                    8                       0                                0
-                 closure_call_name        LmP0Text               9                       0                                0
+                 closure_call_name        LmP0Text               9                       1                                0
                  closure_call_name_storage char                  10                      1                                0
                  has_closure_call_name    int                    11                      0                                0
                  depth                    unsigned               12                      0                                0
@@ -419,7 +419,7 @@ L4:
         name: LmTransCallLowering
         columns: class      (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 name       LmP0Text               0                       0                                0
+                 name       LmP0Text               0                       1                                0
                  signature  LmTransSymbol          1                       1                                1
                  is_closure int                    2                       0                                0
     end: LmTransCallLowering
@@ -462,11 +462,11 @@ L4:
 
     table:
         name: LmTransExprAtomLowering
-        columns: class   (`field.class` class)  (`field.index` serial)
+        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 emit    LmTransExprAtomEmitHandler   0
-                 update  LmTransExprAtomStateHandler  1
-                 text    LmP0Text                      2
+                 emit    LmTransExprAtomEmitHandler   0                  0                                0
+                 update  LmTransExprAtomStateHandler  1                  0                                0
+                 text    LmP0Text                      2                  1                                0
     end: LmTransExprAtomLowering
 
     table:
@@ -704,8 +704,8 @@ L4:
         name: LmTransCapture
         columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 name           LmP0Text               0                       0                                0
-                 type_head      LmP0Text               1                       0                                0
+                 name           LmP0Text               0                       1                                0
+                 type_head      LmP0Text               1                       1                                0
                  type_node      LmP0Node               2                       1                                1
                  pointer_depth  size_t                 3                       0                                0
                  type_is_head   int                    4                       0                                0
@@ -721,8 +721,8 @@ L4:
                  env_type_storage      char                   3                       1                                0
                  env_var_storage       char                   4                       1                                0
                  closure_call_storage  char                   5                       1                                0
-                 env_var_name          LmP0Text               6                       0                                0
-                 closure_call_name     LmP0Text               7                       0                                0
+                 env_var_name          LmP0Text               6                       1                                0
+                 closure_call_name     LmP0Text               7                       1                                0
     end: LmTransHoistedFunction
 
     table:

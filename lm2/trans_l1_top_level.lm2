@@ -35,6 +35,23 @@ static void lm_trans_top_level_item_destroy(LmTransTopLevelItem *item) {
     }
 }
 
+static LmTransTopLevelItem *lm_trans_top_level_item_new(void) {
+    return (LmTransTopLevelItem *)lm_own_new_zero(sizeof(LmTransTopLevelItem));
+}
+
+static void lm_trans_top_level_item_delete(LmTransTopLevelItem *item) {
+    lm_trans_top_level_item_destroy(item);
+    lm_own_delete(item, 0);
+}
+
+static LmTransHeadBinding *lm_trans_head_binding_new(void) {
+    return (LmTransHeadBinding *)lm_own_new_zero(sizeof(LmTransHeadBinding));
+}
+
+static LmP0Structure *lm_trans_p0_structure_view_new(void) {
+    return (LmP0Structure *)lm_own_new_zero(sizeof(LmP0Structure));
+}
+
 static int lm_trans_top_level_declare_function(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
@@ -882,7 +899,7 @@ static int lm_trans_lower_top_level_item(
     const LmP0Node *node,
     LmTransTopLevelItem *out
 ) {
-    LmTransHeadBinding binding;
+    LmTransHeadBinding *binding;
     LmTransL4HeadBinding *l4_root_binding;
     int function_status;
     int statement_status;
@@ -942,10 +959,16 @@ static int lm_trans_lower_top_level_item(
     lm_trans_function_header_destroy(out->function);
     out->function = 0;
 
-    if (lm_trans_head_binding_resolve(0, out->frame->head, &binding) != 0) {
+    binding = lm_trans_head_binding_new();
+    if (binding == 0) {
         return 1;
     }
-    statement_status = lm_trans_top_level_statement_binding(&binding, out);
+    if (lm_trans_head_binding_resolve(0, out->frame->head, binding) != 0) {
+        lm_own_delete(binding, 0);
+        return 1;
+    }
+    statement_status = lm_trans_top_level_statement_binding(binding, out);
+    lm_own_delete(binding, 0);
     if (statement_status != 0) {
         return 0;
     }
@@ -980,6 +1003,22 @@ static int lm_trans_lower_top_level_item(
 
     fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, L1, or registered L4 root receiver data\n");
     return 1;
+}
+
+static LmTransTopLevelItem *lm_trans_top_level_item_lowered_new(
+    const LmP0Node *node
+) {
+    LmTransTopLevelItem *item;
+
+    item = lm_trans_top_level_item_new();
+    if (item == 0) {
+        return 0;
+    }
+    if (lm_trans_lower_top_level_item(node, item) != 0) {
+        lm_trans_top_level_item_delete(item);
+        return 0;
+    }
+    return item;
 }
 
 static int lm_trans_emit_function(
@@ -1174,7 +1213,7 @@ static int lm_trans_emit_function(
                 lm_trans_ptr_stack_delete(&hoisted_functions);
                 return 1;
             }
-            capture_expr = lm_trans_captured_expr_new(capture->name);
+            capture_expr = lm_trans_captured_expr_new(*capture->name);
             if (capture_expr == 0) {
                 lm_trans_namespace_leave_scope(namespace_);
                 lm_trans_ptr_stack_delete(&hoisted_functions);
@@ -1190,7 +1229,7 @@ static int lm_trans_emit_function(
             if (
                 lm_trans_namespace_declare_c_name(
                     namespace_,
-                    &capture->name,
+                    capture->name,
                     "variable",
                     capture_text
                 ) != 0
@@ -1351,7 +1390,7 @@ static int lm_trans_emit_l2_structure_with_namespace(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     FILE *prelude_file;
 
     if (namespace_ == 0) {
@@ -1367,15 +1406,16 @@ static int lm_trans_emit_l2_structure_with_namespace(
         field = body != 0 ? body->first_field : 0;
         while (field != 0) {
             node = field->value;
-            if (lm_trans_lower_top_level_item(node, &item) != 0) {
+            item = lm_trans_top_level_item_lowered_new(node);
+            if (item == 0) {
                 return 1;
             }
 
-            if (item.declare != 0 && item.declare(namespace_, &item) != 0) {
-                lm_trans_top_level_item_destroy(&item);
+            if (item->declare != 0 && item->declare(namespace_, item) != 0) {
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
-            lm_trans_top_level_item_destroy(&item);
+            lm_trans_top_level_item_delete(item);
 
             field = field->next;
         }
@@ -1400,7 +1440,7 @@ static int lm_trans_emit_l2_structure_prelude(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int status;
     int emitted_prelude;
 
@@ -1412,28 +1452,29 @@ static int lm_trans_emit_l2_structure_prelude(
     field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
-        if (lm_trans_lower_top_level_item(node, &item) != 0) {
+        item = lm_trans_top_level_item_lowered_new(node);
+        if (item == 0) {
             return 1;
         }
 
-        if (item.emit_before_functions != 0) {
+        if (item->emit_before_functions != 0) {
             if (emitted_prelude && lm_trans_put(file, "\n") != 0) {
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
-            status = item.emit_before_functions(file, namespace_, &item);
+            status = item->emit_before_functions(file, namespace_, item);
         } else {
             status = 0;
         }
 
         if (status != 0) {
-            lm_trans_top_level_item_destroy(&item);
+            lm_trans_top_level_item_delete(item);
             return 1;
         }
-        if (item.emits_top_level) {
+        if (item->emits_top_level) {
             emitted_prelude = 1;
         }
-        lm_trans_top_level_item_destroy(&item);
+        lm_trans_top_level_item_delete(item);
         field = field->next;
     }
 
@@ -1447,7 +1488,7 @@ static int lm_trans_emit_l2_structure_prototypes(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int status;
     int emitted_prototype;
 
@@ -1459,19 +1500,20 @@ static int lm_trans_emit_l2_structure_prototypes(
     field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
-        if (lm_trans_lower_top_level_item(node, &item) != 0) {
+        item = lm_trans_top_level_item_lowered_new(node);
+        if (item == 0) {
             return 1;
         }
 
-        if (item.emit_prototype != 0) {
-            status = item.emit_prototype(file, namespace_, &item);
+        if (item->emit_prototype != 0) {
+            status = item->emit_prototype(file, namespace_, item);
             if (status != 0) {
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
             emitted_prototype = 1;
         }
-        lm_trans_top_level_item_destroy(&item);
+        lm_trans_top_level_item_delete(item);
         field = field->next;
     }
 
@@ -1485,7 +1527,7 @@ static int lm_trans_emit_l2_structure_after_prototypes(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int status;
     int emitted_prelude;
 
@@ -1497,28 +1539,29 @@ static int lm_trans_emit_l2_structure_after_prototypes(
     field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
-        if (lm_trans_lower_top_level_item(node, &item) != 0) {
+        item = lm_trans_top_level_item_lowered_new(node);
+        if (item == 0) {
             return 1;
         }
 
-        if (item.emit_after_prototypes != 0) {
+        if (item->emit_after_prototypes != 0) {
             if (emitted_prelude && lm_trans_put(file, "\n") != 0) {
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
-            status = item.emit_after_prototypes(file, namespace_, &item);
+            status = item->emit_after_prototypes(file, namespace_, item);
         } else {
             status = 0;
         }
 
         if (status != 0) {
-            lm_trans_top_level_item_destroy(&item);
+            lm_trans_top_level_item_delete(item);
             return 1;
         }
-        if (item.emits_top_level && item.emit_after_prototypes != 0) {
+        if (item->emits_top_level && item->emit_after_prototypes != 0) {
             emitted_prelude = 1;
         }
-        lm_trans_top_level_item_destroy(&item);
+        lm_trans_top_level_item_delete(item);
         field = field->next;
     }
 
@@ -1532,7 +1575,7 @@ static int lm_trans_emit_l2_structure_functions(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int status;
     int emitted_function;
 
@@ -1544,23 +1587,24 @@ static int lm_trans_emit_l2_structure_functions(
     field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
-        if (lm_trans_lower_top_level_item(node, &item) != 0) {
+        item = lm_trans_top_level_item_lowered_new(node);
+        if (item == 0) {
             return 1;
         }
 
-        if (item.emit_function != 0) {
+        if (item->emit_function != 0) {
             if (emitted_function && lm_trans_put(file, "\n") != 0) {
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
-            status = item.emit_function(file, namespace_, &item);
+            status = item->emit_function(file, namespace_, item);
             if (status != 0) {
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
             emitted_function = 1;
         }
-        lm_trans_top_level_item_destroy(&item);
+        lm_trans_top_level_item_delete(item);
         field = field->next;
     }
 
@@ -1755,7 +1799,7 @@ static int lm_trans_declare_l2_import_root(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
 
     if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
         return 1;
@@ -1777,14 +1821,15 @@ static int lm_trans_declare_l2_import_root(
                     return 1;
                 }
             } else {
-                if (lm_trans_lower_top_level_item(node, &item) != 0) {
+                item = lm_trans_top_level_item_lowered_new(node);
+                if (item == 0) {
                     return 1;
                 }
-                if (item.declare != 0 && item.declare(namespace_, &item) != 0) {
-                    lm_trans_top_level_item_destroy(&item);
+                if (item->declare != 0 && item->declare(namespace_, item) != 0) {
+                    lm_trans_top_level_item_delete(item);
                     return 1;
                 }
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
             }
         }
         field = field->next;
@@ -1801,7 +1846,7 @@ static int lm_trans_emit_l2_import_root_prelude(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int emitted;
     int status;
 
@@ -1824,22 +1869,23 @@ static int lm_trans_emit_l2_import_root_prelude(
             ) {
                 status = lm_trans_emit_l2_structure_prelude(file, node->as->frame->body, namespace_);
             } else {
-                if (lm_trans_lower_top_level_item(node, &item) != 0) {
+                item = lm_trans_top_level_item_lowered_new(node);
+                if (item == 0) {
                     return 1;
                 }
-                if (item.emit_before_functions != 0) {
+                if (item->emit_before_functions != 0) {
                     if (emitted && lm_trans_put(file, "\n") != 0) {
-                        lm_trans_top_level_item_destroy(&item);
+                        lm_trans_top_level_item_delete(item);
                         return 1;
                     }
-                    status = item.emit_before_functions(file, namespace_, &item);
+                    status = item->emit_before_functions(file, namespace_, item);
                 } else {
                     status = 0;
                 }
-                if (item.emits_top_level) {
+                if (item->emits_top_level) {
                     emitted = 1;
                 }
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
             }
             if (status != 0) {
                 return 1;
@@ -1859,7 +1905,7 @@ static int lm_trans_emit_l2_import_root_prototypes(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int status;
 
     if (root == 0 || root->kind != LM_P0_NODE_STRUCTURE) {
@@ -1880,13 +1926,14 @@ static int lm_trans_emit_l2_import_root_prototypes(
             ) {
                 status = lm_trans_emit_l2_structure_prototypes(file, node->as->frame->body, namespace_);
             } else {
-                if (lm_trans_lower_top_level_item(node, &item) != 0) {
+                item = lm_trans_top_level_item_lowered_new(node);
+                if (item == 0) {
                     return 1;
                 }
-                status = item.emit_prototype != 0
-                    ? item.emit_prototype(file, namespace_, &item)
+                status = item->emit_prototype != 0
+                    ? item->emit_prototype(file, namespace_, item)
                     : 0;
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
             }
             if (status != 0) {
                 return 1;
@@ -1906,7 +1953,7 @@ static int lm_trans_emit_l2_import_root_after_prototypes(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int emitted;
     int status;
 
@@ -1929,20 +1976,21 @@ static int lm_trans_emit_l2_import_root_after_prototypes(
             ) {
                 status = lm_trans_emit_l2_structure_after_prototypes(file, node->as->frame->body, namespace_);
             } else {
-                if (lm_trans_lower_top_level_item(node, &item) != 0) {
+                item = lm_trans_top_level_item_lowered_new(node);
+                if (item == 0) {
                     return 1;
                 }
-                if (item.emit_after_prototypes != 0) {
+                if (item->emit_after_prototypes != 0) {
                     if (emitted && lm_trans_put(file, "\n") != 0) {
-                        lm_trans_top_level_item_destroy(&item);
+                        lm_trans_top_level_item_delete(item);
                         return 1;
                     }
-                    status = item.emit_after_prototypes(file, namespace_, &item);
+                    status = item->emit_after_prototypes(file, namespace_, item);
                     emitted = 1;
                 } else {
                     status = 0;
                 }
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
             }
             if (status != 0) {
                 return 1;
@@ -1962,7 +2010,7 @@ static int lm_trans_emit_l2_import_root_functions(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
     int emitted;
     int status;
 
@@ -1992,20 +2040,21 @@ static int lm_trans_emit_l2_import_root_functions(
                 }
                 emitted = 1;
             } else {
-                if (lm_trans_lower_top_level_item(node, &item) != 0) {
+                item = lm_trans_top_level_item_lowered_new(node);
+                if (item == 0) {
                     return 1;
                 }
-                if (item.emit_function != 0) {
+                if (item->emit_function != 0) {
                     if (emitted && lm_trans_put(file, "\n") != 0) {
-                        lm_trans_top_level_item_destroy(&item);
+                        lm_trans_top_level_item_delete(item);
                         return 1;
                     }
-                    status = item.emit_function(file, namespace_, &item);
+                    status = item->emit_function(file, namespace_, item);
                     emitted = 1;
                 } else {
                     status = 0;
                 }
-                lm_trans_top_level_item_destroy(&item);
+                lm_trans_top_level_item_delete(item);
             }
             if (status != 0) {
                 return 1;
@@ -2590,27 +2639,28 @@ static int lm_trans_declare_l2_structure_import(
 ) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmTransTopLevelItem item;
+    LmTransTopLevelItem *item;
 
     field = body != 0 ? body->first_field : 0;
     while (field != 0) {
         node = field->value;
-        if (lm_trans_lower_top_level_item(node, &item) != 0) {
+        item = lm_trans_top_level_item_lowered_new(node);
+        if (item == 0) {
             return 1;
         }
 
-        if (item.function != 0 && item.function->frame != 0) {
-            if (lm_trans_top_level_declare_function_compatible(namespace_, &item) != 0) {
-                lm_trans_top_level_item_destroy(&item);
+        if (item->function != 0 && item->function->frame != 0) {
+            if (lm_trans_top_level_declare_function_compatible(namespace_, item) != 0) {
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
-        } else if (item.declare != 0) {
-            if (item.declare(namespace_, &item) != 0) {
-                lm_trans_top_level_item_destroy(&item);
+        } else if (item->declare != 0) {
+            if (item->declare(namespace_, item) != 0) {
+                lm_trans_top_level_item_delete(item);
                 return 1;
             }
         }
-        lm_trans_top_level_item_destroy(&item);
+        lm_trans_top_level_item_delete(item);
 
         field = field->next;
     }
@@ -2873,22 +2923,28 @@ static int lm_trans_declare_l2_guard_frame(
     const LmP0Frame *frame
 ) {
     LmP0Text *name;
-    LmP0Structure body;
+    LmP0Structure *body;
 
     name = lm_trans_text_from_cstr("");
-    if (name == 0) {
+    body = lm_trans_p0_structure_view_new();
+    if (name == 0 || body == 0) {
+        lm_trans_text_ref_destroy(&name);
+        lm_own_delete(body, 0);
         return 1;
     }
-    if (lm_trans_guard_body_from_frame(frame, name, &body) != 0) {
+    if (lm_trans_guard_body_from_frame(frame, name, body) != 0) {
         lm_trans_text_ref_destroy(&name);
+        lm_own_delete(body, 0);
         return 1;
     }
     (void)name;
-    if (lm_trans_declare_l2_wrapper_body(namespace_, &body) != 0) {
+    if (lm_trans_declare_l2_wrapper_body(namespace_, body) != 0) {
         lm_trans_text_ref_destroy(&name);
+        lm_own_delete(body, 0);
         return 1;
     }
     lm_trans_text_ref_destroy(&name);
+    lm_own_delete(body, 0);
     return lm_trans_validate_end_trailer(frame);
 }
 
@@ -2898,15 +2954,19 @@ static int lm_trans_emit_l2_guard_frame(
     LmTransNamespace *namespace_
 ) {
     LmP0Text *name;
-    LmP0Structure body;
+    LmP0Structure *body;
     int status;
 
     name = lm_trans_text_from_cstr("");
-    if (name == 0) {
+    body = lm_trans_p0_structure_view_new();
+    if (name == 0 || body == 0) {
+        lm_trans_text_ref_destroy(&name);
+        lm_own_delete(body, 0);
         return 1;
     }
-    if (lm_trans_guard_body_from_frame(frame, name, &body) != 0) {
+    if (lm_trans_guard_body_from_frame(frame, name, body) != 0) {
         lm_trans_text_ref_destroy(&name);
+        lm_own_delete(body, 0);
         return 1;
     }
     if (
@@ -2917,10 +2977,11 @@ static int lm_trans_emit_l2_guard_frame(
         lm_trans_put(output, "\n") != 0
     ) {
         lm_trans_text_ref_destroy(&name);
+        lm_own_delete(body, 0);
         return 1;
     }
     status = 0;
-    if (lm_trans_emit_l2_wrapper_body(output, &body, namespace_) != 0) {
+    if (lm_trans_emit_l2_wrapper_body(output, body, namespace_) != 0) {
         status = 1;
     } else if (lm_trans_put(output, "#endif\n") != 0) {
         status = 1;
@@ -2929,6 +2990,7 @@ static int lm_trans_emit_l2_guard_frame(
         status = 1;
     }
     lm_trans_text_ref_destroy(&name);
+    lm_own_delete(body, 0);
     return status;
 }
 
