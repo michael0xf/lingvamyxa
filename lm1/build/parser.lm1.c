@@ -229,7 +229,7 @@ typedef struct LmP0RegistryRow {
     char *payload;
 } LmP0RegistryRow;
 typedef struct LmP0Registry {
-    LmOwnPtrStack rows;
+    LmOwnPtrStack *rows;
     int loaded;
     int loading;
 } LmP0Registry;
@@ -1507,7 +1507,7 @@ static int lm_p0_registry_push_row_values(
         return -1;
     }
 
-    if (lm_own_ptr_stack_push(&lm_p0_registry.rows, row) != 0) {
+    if (lm_p0_registry.rows == 0 || lm_own_ptr_stack_push(lm_p0_registry.rows, row) != 0) {
         lm_p0_registry_row_destroy_any(row);
         return -1;
     }
@@ -3120,8 +3120,12 @@ static size_t lm_p0_scan_registry_compact_atom_piece(
 
     best_length = 0U;
     i = 0U;
-    while (i < lm_p0_registry.rows.count) {
-        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+    if (lm_p0_registry.rows == 0) {
+        return lm_p0_scan_builtin_compact_atom_piece(text, end, start);
+    }
+
+    while (i < lm_p0_registry.rows->count) {
+        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(lm_p0_registry.rows, i);
         if (
             row != 0 &&
             row->table != 0 &&
@@ -4829,10 +4833,14 @@ static LmP0TrailerRole lm_p0_registry_trailer_role(const char *text, size_t leng
         return LM_P0_TRAILER_ROLE_NONE;
     }
 
-    i = lm_p0_registry.rows.count;
+    if (lm_p0_registry.rows == 0) {
+        return LM_P0_TRAILER_ROLE_NONE;
+    }
+
+    i = lm_p0_registry.rows->count;
     while (i > 0U) {
         --i;
-        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(lm_p0_registry.rows, i);
         if (
             row != 0 &&
             row->table != 0 &&
@@ -7112,7 +7120,7 @@ static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
         0,
         root,
         implicit_l4,
-        &lm_p0_registry.rows.count
+        &lm_p0_registry.rows->count
     );
 }
 
@@ -7146,10 +7154,14 @@ static const char *lm_p0_registry_lookup_key_by_unsigned_payload(
         return 0;
     }
 
-    i = lm_p0_registry.rows.count;
+    if (lm_p0_registry.rows == 0) {
+        return 0;
+    }
+
+    i = lm_p0_registry.rows->count;
     while (i > 0U) {
         --i;
-        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(lm_p0_registry.rows, i);
         if (
             row != 0 &&
             row->table != 0 &&
@@ -7268,8 +7280,12 @@ static int lm_p0_registry_load_default(void) {
         return 0;
     }
 
+    lm_p0_registry.rows = (LmOwnPtrStack *)lm_own_new_zero(sizeof(*lm_p0_registry.rows));
+    if (lm_p0_registry.rows == 0) {
+        return 1;
+    }
     lm_p0_registry.loading = 1;
-    lm_own_ptr_stack_init(&lm_p0_registry.rows, lm_p0_registry_row_destroy_any);
+    lm_own_ptr_stack_init(lm_p0_registry.rows, lm_p0_registry_row_destroy_any);
 
     override_path = getenv("LM_P0_REGISTRY");
     override_enabled = override_path != 0 && override_path[0] != '\0';
@@ -7780,8 +7796,10 @@ static void lm_p0_registry_row_destroy_any(void *object) {
 }
 
 static void lm_p0_registry_destroy(void) {
-    if (lm_p0_registry.loaded != 0 || lm_p0_registry.loading != 0) {
-        lm_own_ptr_stack_destroy(&lm_p0_registry.rows);
+    if (lm_p0_registry.rows != 0) {
+        lm_own_ptr_stack_destroy(lm_p0_registry.rows);
+        lm_own_delete(lm_p0_registry.rows, 0);
+        lm_p0_registry.rows = 0;
     }
     lm_p0_registry.loaded = 0;
     lm_p0_registry.loading = 0;
@@ -7949,10 +7967,13 @@ static const char * lm_p0_registry_lookup(LmP0Text key, const char *table) {
     if (lm_p0_identifier_payload(&key, &key_payload) == 0) {
         return 0;
     }
-    i = lm_p0_registry.rows.count;
+    if (lm_p0_registry.rows == 0) {
+        return 0;
+    }
+    i = lm_p0_registry.rows->count;
     while (i > 0U) {
         i = i - 1U;
-        row = lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+        row = lm_own_ptr_stack_at(lm_p0_registry.rows, i);
         if (row != 0 && row -> table != 0 && row -> key != 0 && strcmp(row -> table, table) == 0 && lm_p0_text_equals(&key_payload, row -> key)) {
             return row -> payload;
         }
@@ -7966,9 +7987,12 @@ static int lm_p0_registry_table_has_rows(const char *table) {
     if (table == 0 || lm_p0_registry.loaded == 0) {
         return 0;
     }
+    if (lm_p0_registry.rows == 0) {
+        return 0;
+    }
     i = 0U;
-    while (i < lm_p0_registry.rows.count) {
-        row = lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+    while (i < lm_p0_registry.rows->count) {
+        row = lm_own_ptr_stack_at(lm_p0_registry.rows, i);
         if (row != 0 && row -> table != 0 && strcmp(row -> table, table) == 0) {
             return 1;
         }
@@ -7983,9 +8007,12 @@ static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table) {
     if (table == 0) {
         return 0;
     }
+    if (lm_p0_registry.rows == 0) {
+        return 0;
+    }
     i = 0U;
-    while (i < lm_p0_registry.rows.count) {
-        row = lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
+    while (i < lm_p0_registry.rows->count) {
+        row = lm_own_ptr_stack_at(lm_p0_registry.rows, i);
         if (row != 0 && row -> table != 0 && strcmp(row -> table, table) == 0) {
             return 1;
         }

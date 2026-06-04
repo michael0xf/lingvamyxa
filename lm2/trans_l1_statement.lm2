@@ -326,14 +326,14 @@ static int lm_trans_emit_cleanups_until(
     size_t index;
     const LmTransCleanup *cleanup;
 
-    if (namespace_ == 0 || cleanup_base > namespace_->cleanups.count) {
+    if (namespace_ == 0 || cleanup_base > namespace_->cleanups->count) {
         return 0;
     }
 
-    index = namespace_->cleanups.count;
+    index = namespace_->cleanups->count;
     while (index > cleanup_base) {
         --index;
-        cleanup = (const LmTransCleanup *)lm_own_ptr_stack_at(&namespace_->cleanups, index);
+        cleanup = (const LmTransCleanup *)lm_own_ptr_stack_at(namespace_->cleanups, index);
         if (cleanup == 0) {
             return 1;
         }
@@ -995,7 +995,7 @@ static int lm_trans_emit_array_value_helper(
         return 1;
     }
 
-    if (lm_own_ptr_stack_push(&lm_trans_emitted_array_value_helpers, helper_name) != 0) {
+    if (lm_own_ptr_stack_push(lm_trans_emitted_array_value_helpers, helper_name) != 0) {
         free(helper_name);
         return 1;
     }
@@ -1596,7 +1596,7 @@ static int lm_trans_emit_return_statement(
         return 0;
     }
 
-    if (namespace_ != 0 && namespace_->cleanups.count > 0U && namespace_->return_type_node != 0) {
+    if (namespace_ != 0 && namespace_->cleanups->count > 0U && namespace_->return_type_node != 0) {
         return_id = namespace_->next_return_id++;
         if (lm_trans_emit_indent(file, indent) != 0) {
             return 1;
@@ -2457,7 +2457,7 @@ static int lm_trans_emit_call_statement(
         return 1;
     }
     if (call.is_closure) {
-        has_args = call.signature != 0 && call.signature->param_names.count > 0U;
+        has_args = call.signature != 0 && call.signature->param_names != 0 && call.signature->param_names->count > 0U;
         if (!has_args && lm_trans_call_body_first_field(frame->body) != 0) {
             fprintf(stderr, "trans L2 error: too many arguments\n");
             return 1;
@@ -2801,7 +2801,7 @@ static int lm_trans_emit_function_return_structure_once(
         return 1;
     }
 
-    stored_name = lm_trans_string_stack_find(&lm_trans_emitted_function_return_structs, type_name);
+    stored_name = lm_trans_string_stack_find(lm_trans_emitted_function_return_structs, type_name);
     if (stored_name != 0) {
         free(type_name);
         return 0;
@@ -2812,7 +2812,7 @@ static int lm_trans_emit_function_return_structure_once(
         return 1;
     }
 
-    if (lm_own_ptr_stack_push(&lm_trans_emitted_function_return_structs, type_name) != 0) {
+    if (lm_own_ptr_stack_push(lm_trans_emitted_function_return_structs, type_name) != 0) {
         free(type_name);
         return 1;
     }
@@ -2831,16 +2831,16 @@ static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
 
 static void lm_trans_statement_stack_destroy(LmTransStatementStack *stack) {
     if (stack != 0) {
-        lm_own_value_stack_destroy(&stack->jobs);
+        lm_trans_value_stack_delete(&stack->jobs);
     }
 }
 
 static int lm_trans_statement_stack_push(LmTransStatementStack *stack, LmTransStatementJob job) {
-    if (stack == 0) {
+    if (stack == 0 || stack->jobs == 0) {
         return 1;
     }
 
-    return lm_own_value_stack_push(&stack->jobs, &job);
+    return lm_own_value_stack_push(stack->jobs, &job);
 }
 
 static int lm_trans_statement_job_emit_list(
@@ -4311,8 +4311,8 @@ static int lm_trans_statement_emit_nested_function(
         if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
             return 1;
         }
-        for (capture_index = 0U; capture_index < hoisted->captures.count; ++capture_index) {
-            capture = (const LmTransCapture *)lm_own_ptr_stack_at(&hoisted->captures, capture_index);
+        for (capture_index = 0U; capture_index < hoisted->captures->count; ++capture_index) {
+            capture = (const LmTransCapture *)lm_own_ptr_stack_at(hoisted->captures, capture_index);
             if (capture == 0) {
                 return 1;
             }
@@ -4659,11 +4659,15 @@ static int lm_trans_emit_statement_list(
     LmTransStatementJob job;
     int status;
 
-    lm_own_value_stack_init(&stack.jobs, sizeof(LmTransStatementJob));
+    memset(&stack, 0, sizeof(stack));
+    stack.jobs = lm_trans_value_stack_new(sizeof(LmTransStatementJob));
+    if (stack.jobs == 0) {
+        return 1;
+    }
     status = lm_trans_statement_stack_push_list(&stack, first, indent, 1, 0);
 
-    while (status == 0 && stack.jobs.count > 0U) {
-        if (lm_own_value_stack_pop(&stack.jobs, &job) != 0) {
+    while (status == 0 && stack.jobs != 0 && stack.jobs->count > 0U) {
+        if (lm_own_value_stack_pop(stack.jobs, &job) != 0) {
             status = 1;
             break;
         }
@@ -4931,7 +4935,7 @@ static int lm_trans_namespace_set_signature(
     const LmP0Field *params_field;
     const LmP0Field *field;
     LmP0Text param_name;
-    LmOwnPtrStack param_names;
+    LmOwnPtrStack *param_names;
     LmP0Text *param_name_ref;
     LmP0Text *existing_param_name_ref;
     size_t index;
@@ -4957,7 +4961,10 @@ static int lm_trans_namespace_set_signature(
         return 1;
     }
 
-    lm_own_ptr_stack_init(&param_names, lm_trans_text_ref_delete_any);
+    param_names = lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any);
+    if (param_names == 0) {
+        return 1;
+    }
 
     allow_unnamed_params = lm_trans_symbol_is(symbol, "callableDescriptor");
     index = 0U;
@@ -4972,31 +4979,31 @@ static int lm_trans_namespace_set_signature(
                     name.data,
                     (unsigned long)index
                 );
-                lm_own_ptr_stack_destroy(&param_names);
+                lm_trans_ptr_stack_delete(&param_names);
                 return 1;
             }
             param_name = lm_trans_text_from_cstr("");
         }
         for (i = 0U; i < index; ++i) {
-            param_name_ref = (LmP0Text *)lm_own_ptr_stack_at(&param_names, i);
+            param_name_ref = (LmP0Text *)lm_own_ptr_stack_at(param_names, i);
             if (
                 param_name.length != 0U &&
                 param_name_ref != 0 &&
                 lm_trans_identifier_same(param_name_ref, &param_name)
             ) {
                 fprintf(stderr, "trans L2 error: duplicate function parameter name\n");
-                lm_own_ptr_stack_destroy(&param_names);
+                lm_trans_ptr_stack_delete(&param_names);
                 return 1;
             }
         }
         param_name_ref = lm_trans_text_ref_new(&param_name);
         if (param_name_ref == 0) {
-            lm_own_ptr_stack_destroy(&param_names);
+            lm_trans_ptr_stack_delete(&param_names);
             return 1;
         }
-        if (lm_own_ptr_stack_push(&param_names, param_name_ref) != 0) {
+        if (lm_own_ptr_stack_push(param_names, param_name_ref) != 0) {
             lm_trans_text_ref_delete_any(param_name_ref);
-            lm_own_ptr_stack_destroy(&param_names);
+            lm_trans_ptr_stack_delete(&param_names);
             return 1;
         }
         ++index;
@@ -5004,29 +5011,29 @@ static int lm_trans_namespace_set_signature(
     }
 
     if (symbol->has_signature) {
-        if (symbol->param_names.count != param_names.count) {
+        if (symbol->param_names == 0 || symbol->param_names->count != param_names->count) {
             fprintf(stderr, "trans L2 error: os-imported function signatures must match\n");
-            lm_own_ptr_stack_destroy(&param_names);
+            lm_trans_ptr_stack_delete(&param_names);
             return 1;
         }
-        for (i = 0U; i < param_names.count; ++i) {
-            existing_param_name_ref = (LmP0Text *)lm_own_ptr_stack_at(&symbol->param_names, i);
-            param_name_ref = (LmP0Text *)lm_own_ptr_stack_at(&param_names, i);
+        for (i = 0U; i < param_names->count; ++i) {
+            existing_param_name_ref = (LmP0Text *)lm_own_ptr_stack_at(symbol->param_names, i);
+            param_name_ref = (LmP0Text *)lm_own_ptr_stack_at(param_names, i);
             if (
                 existing_param_name_ref == 0 ||
                 param_name_ref == 0 ||
                 !lm_trans_identifier_same(existing_param_name_ref, param_name_ref)
             ) {
                 fprintf(stderr, "trans L2 error: os-imported function signatures must match\n");
-                lm_own_ptr_stack_destroy(&param_names);
+                lm_trans_ptr_stack_delete(&param_names);
                 return 1;
             }
         }
-        lm_own_ptr_stack_destroy(&param_names);
+        lm_trans_ptr_stack_delete(&param_names);
         return 0;
     }
 
-    lm_own_ptr_stack_destroy(&symbol->param_names);
+    lm_trans_ptr_stack_delete(&symbol->param_names);
     symbol->param_names = param_names;
     symbol->has_signature = 1;
     return 0;
@@ -6057,7 +6064,7 @@ static int lm_trans_analyze_function_captures(
     const LmOwnPtrStack *candidates,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack local_names;
+    LmOwnPtrStack *local_names;
     const LmP0Field *field;
     LmP0Text param_name;
     int status;
@@ -6066,7 +6073,10 @@ static int lm_trans_analyze_function_captures(
         return 1;
     }
 
-    lm_own_ptr_stack_init(&local_names, lm_trans_text_ref_delete_any);
+    local_names = lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any);
+    if (local_names == 0) {
+        return 1;
+    }
     status = 0;
 
     if (
@@ -6076,7 +6086,7 @@ static int lm_trans_analyze_function_captures(
         field = hoisted->function.params_node->as->structure->first_field;
         while (status == 0 && field != 0) {
             if (lm_trans_formal_param_name(field->value, &param_name)) {
-                status = lm_trans_local_name_stack_add(&local_names, param_name);
+                status = lm_trans_local_name_stack_add(local_names, param_name);
             }
             field = field->next;
         }
@@ -6084,21 +6094,21 @@ static int lm_trans_analyze_function_captures(
 
     if (status == 0) {
         status = lm_trans_collect_local_names_from_fields(
-            &local_names,
+            local_names,
             hoisted->function.body_start,
             namespace_
         );
     }
     if (status == 0) {
         status = lm_trans_collect_capture_uses_from_fields(
-            &hoisted->captures,
+            hoisted->captures,
             candidates,
-            &local_names,
+            local_names,
             hoisted->function.body_start
         );
     }
 
-    lm_own_ptr_stack_destroy(&local_names);
+    lm_trans_ptr_stack_delete(&local_names);
     return status;
 }
 
@@ -6176,9 +6186,13 @@ static int lm_trans_collect_hoisted_function(
     hoisted->function.c_name = lm_trans_text_from_cstr(c_name);
     hoisted->function.is_external = 0;
     hoisted->function.declare_self_alias = 1;
-    lm_own_ptr_stack_init(&hoisted->captures, lm_trans_capture_delete_any);
     hoisted->c_name_storage = c_name;
     hoisted->closure_call_storage = closure_call_name;
+    hoisted->captures = lm_trans_ptr_stack_new(lm_trans_capture_delete_any);
+    if (hoisted->captures == 0) {
+        lm_trans_hoisted_function_destroy(hoisted);
+        return 1;
+    }
     hoisted->closure_call_name = lm_trans_text_from_cstr(closure_call_name);
 
     if (lm_trans_analyze_function_captures(hoisted, candidates, namespace_) != 0) {
@@ -6186,7 +6200,7 @@ static int lm_trans_collect_hoisted_function(
         return 1;
     }
 
-    if (hoisted->captures.count > 0U) {
+    if (hoisted->captures->count > 0U) {
         env_type_name = lm_trans_hoisted_suffix_name_new(hoisted->function.c_name, "Env");
         env_var_name = lm_trans_hoisted_suffix_name_new(hoisted->function.c_name, "_env");
         if (env_type_name == 0 || env_var_name == 0) {
@@ -6199,7 +6213,7 @@ static int lm_trans_collect_hoisted_function(
         hoisted->env_var_storage = env_var_name;
         hoisted->env_var_name = lm_trans_text_from_cstr(env_var_name);
         hoisted->function.env_type_name = lm_trans_text_from_cstr(env_type_name);
-        hoisted->function.captures = &hoisted->captures;
+        hoisted->function.captures = hoisted->captures;
         hoisted->function.has_env = 1;
     }
 

@@ -442,34 +442,37 @@ static int lm_trans_emit_l4_layout_typedefs(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     size_t i;
     const char *name;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_layout_names(&names, namespace_) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_layout_names(names, namespace_) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    for (i = 0U; i < names.count; ++i) {
+    for (i = 0U; i < names->count; ++i) {
         if (i == 0U && lm_trans_put(file, "#include <stddef.h>\n\n") != 0) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         if (name != 0 && lm_trans_emit_layout_definition(file, name, namespace_) != 0) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -529,15 +532,18 @@ static int lm_trans_emit_l4_constant_defines(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     size_t i;
     const char *name;
     LmTransRegistryFact *value_row;
     const LmOwnPtrStack *value_rows;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_constant_define_names(&names, namespace_) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_constant_define_names(names, namespace_) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
@@ -547,15 +553,15 @@ static int lm_trans_emit_l4_constant_defines(
         "value"
     );
 
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         value_row = lm_trans_registry_relation_stack_latest_row(
             value_rows,
             lm_trans_text_from_cstr(name)
         );
         if (value_row == 0 || value_row->payload == 0) {
             fprintf(stderr, "trans L4 constant error: %s requires constant.value\n", name);
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
         if (
@@ -565,17 +571,17 @@ static int lm_trans_emit_l4_constant_defines(
             lm_trans_put(file, value_row->payload) != 0 ||
             lm_trans_put(file, "\n") != 0
         ) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -946,7 +952,7 @@ static int lm_trans_emit_l4_alias_typedefs(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     const LmOwnPtrStack *target_rows;
     const LmOwnPtrStack *address_depth_rows;
     const LmOwnPtrStack *const_rows;
@@ -957,9 +963,12 @@ static int lm_trans_emit_l4_alias_typedefs(
     size_t address_depth;
     size_t const_flag;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_backend_names(&names, namespace_, "alias", "c.typedef", "alias", 1) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_backend_names(names, namespace_, "alias", "c.typedef", "alias", 1) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
@@ -967,13 +976,13 @@ static int lm_trans_emit_l4_alias_typedefs(
     address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.address-depth");
     const_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.const");
 
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         name_text = lm_trans_text_from_cstr(name);
         target_row = lm_trans_registry_relation_stack_latest_row(target_rows, name_text);
         if (target_row == 0 || target_row->payload == 0) {
             fprintf(stderr, "trans L4 alias error: %s requires alias.target\n", name);
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
         if (
@@ -981,7 +990,7 @@ static int lm_trans_emit_l4_alias_typedefs(
             !lm_trans_registry_latest_size_payload(const_rows, name_text, 0U, &const_flag)
         ) {
             fprintf(stderr, "trans L4 alias error: %s has invalid alias target flags\n", name);
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
         if (
@@ -989,16 +998,16 @@ static int lm_trans_emit_l4_alias_typedefs(
             lm_trans_emit_abi_typed_name(file, target_row->payload, address_depth, const_flag != 0U, name) != 0 ||
             lm_trans_put(file, ";\n") != 0
         ) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -1006,30 +1015,33 @@ static int lm_trans_emit_l4_forward_typedefs(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     const LmOwnPtrStack *backend_rows;
     LmTransRegistryFact *backend_row;
     const char *name;
     const char *tag;
     size_t i;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_backend_names(&names, namespace_, "forward", "c.struct", "forward", 1) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
         return 1;
     }
-    if (lm_trans_registry_collect_backend_names(&names, namespace_, "forward", "c.union", "forward", 1) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (lm_trans_registry_collect_backend_names(names, namespace_, "forward", "c.struct", "forward", 1) != 0) {
+        lm_trans_ptr_stack_delete(&names);
+        return 1;
+    }
+    if (lm_trans_registry_collect_backend_names(names, namespace_, "forward", "c.union", "forward", 1) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
     backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend");
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         backend_row = lm_trans_registry_relation_stack_latest_row(backend_rows, lm_trans_text_from_cstr(name));
         if (backend_row == 0 || backend_row->payload == 0) {
             fprintf(stderr, "trans L4 forward error: %s requires forward.backend\n", name);
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
         if (strcmp(backend_row->payload, "c.struct") == 0) {
@@ -1038,7 +1050,7 @@ static int lm_trans_emit_l4_forward_typedefs(
             tag = "union";
         } else {
             fprintf(stderr, "trans L4 forward error: unsupported backend %s for %s\n", backend_row->payload, name);
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
         if (
@@ -1050,16 +1062,16 @@ static int lm_trans_emit_l4_forward_typedefs(
             lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 ||
             lm_trans_put(file, ";\n") != 0
         ) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -1131,32 +1143,35 @@ static int lm_trans_emit_l4_prototypes(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     const char *name;
     size_t i;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_relation_names(&names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         if (lm_trans_l4_is_function_pointer_type(namespace_, name)) {
             continue;
         }
         if (lm_trans_emit_l4_prototype_name(file, namespace_, name, "fn") != 0) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -1538,7 +1553,7 @@ static int lm_trans_declare_l4_fn_descriptor(
 static int lm_trans_declare_l4_fn_descriptors(
     LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     const char *name;
     size_t i;
 
@@ -1546,21 +1561,24 @@ static int lm_trans_declare_l4_fn_descriptors(
         return 1;
     }
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_relation_names(&names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         if (lm_trans_declare_l4_fn_descriptor(namespace_, name) != 0) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -1616,32 +1634,35 @@ static int lm_trans_emit_l4_function_pointer_type_typedefs(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     const char *name;
     size_t i;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
     if (
-        lm_trans_registry_collect_relation_names(&names, namespace_, "functionPointerType", "value", "functionPointerType", 1) != 0 ||
-        lm_trans_registry_collect_relation_names(&names, namespace_, "functionPointerType", "row", "functionPointerType", 1) != 0
+        lm_trans_registry_collect_relation_names(names, namespace_, "functionPointerType", "value", "functionPointerType", 1) != 0 ||
+        lm_trans_registry_collect_relation_names(names, namespace_, "functionPointerType", "row", "functionPointerType", 1) != 0
     ) {
-        lm_own_ptr_stack_destroy(&names);
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         if (lm_trans_emit_l4_function_pointer_type_name(file, namespace_, name, "functionPointerType") != 0) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -1656,18 +1677,21 @@ static int lm_trans_emit_l4_guard_markers(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     const char *name;
     size_t i;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_backend_names(&names, namespace_, "guard", "c.header-guard", "guard", 1) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_backend_names(names, namespace_, "guard", "c.header-guard", "guard", 1) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         if (
             lm_trans_put(file, "#ifndef ") != 0 ||
             lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 ||
@@ -1675,16 +1699,16 @@ static int lm_trans_emit_l4_guard_markers(
             lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 ||
             lm_trans_put(file, "\n#endif\n") != 0
         ) {
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -1692,26 +1716,29 @@ static int lm_trans_emit_l4_extern_c_markers(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_backend_names(&names, namespace_, "extern_c", "c.wrapper", "extern_c", 0) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_backend_names(names, namespace_, "extern_c", "c.wrapper", "extern_c", 0) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
     if (
-        names.count != 0U &&
+        names->count != 0U &&
         (
             lm_trans_put(file, "#ifdef __cplusplus\nextern \"C\" {\n#endif\n") != 0 ||
             lm_trans_put(file, "#ifdef __cplusplus\n}\n#endif\n\n") != 0
         )
     ) {
-        lm_own_ptr_stack_destroy(&names);
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
@@ -1719,7 +1746,7 @@ static int lm_trans_emit_l4_units(
     FILE *file,
     const LmTransNamespace *namespace_
 ) {
-    LmOwnPtrStack names;
+    LmOwnPtrStack *names;
     const LmOwnPtrStack *backend_rows;
     const LmOwnPtrStack *payload_rows;
     LmTransRegistryFact *payload_row;
@@ -1735,19 +1762,22 @@ static int lm_trans_emit_l4_units(
         return 0;
     }
 
-    lm_own_ptr_stack_init(&names, lm_trans_free_any);
-    if (lm_trans_registry_collect_backend_names(&names, namespace_, "unit", "c.static-unit", "unit", 1) != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    names = lm_trans_ptr_stack_new(lm_trans_free_any);
+    if (names == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_collect_backend_names(names, namespace_, "unit", "c.static-unit", "unit", 1) != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
 
     payload_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("unit"), "payload");
-    for (i = 0U; i < names.count; ++i) {
-        name = (const char *)lm_own_ptr_stack_at(&names, i);
+    for (i = 0U; i < names->count; ++i) {
+        name = (const char *)lm_own_ptr_stack_at(names, i);
         payload_row = lm_trans_registry_relation_stack_latest_row(payload_rows, lm_trans_text_from_cstr(name));
         if (payload_row == 0 || (payload_row->payload == 0 && payload_row->payload_node == 0)) {
             fprintf(stderr, "trans L4 unit error: %s requires unit.payload\n", name);
-            lm_own_ptr_stack_destroy(&names);
+            lm_trans_ptr_stack_delete(&names);
             return 1;
         }
         if (payload_row->payload_node != 0) {
@@ -1755,7 +1785,7 @@ static int lm_trans_emit_l4_units(
                 lm_trans_emit_l4_payload_node(file, payload_row->payload_node, (LmTransNamespace *)namespace_) != 0 ||
                 lm_trans_put(file, "\n") != 0
             ) {
-                lm_own_ptr_stack_destroy(&names);
+                lm_trans_ptr_stack_delete(&names);
                 return 1;
             }
         } else {
@@ -1763,26 +1793,26 @@ static int lm_trans_emit_l4_units(
                 lm_trans_put(file, payload_row->payload) != 0 ||
                 lm_trans_put(file, "\n") != 0
             ) {
-                lm_own_ptr_stack_destroy(&names);
+                lm_trans_ptr_stack_delete(&names);
                 return 1;
             }
         }
     }
 
-    if (names.count != 0U && lm_trans_put(file, "\n") != 0) {
-        lm_own_ptr_stack_destroy(&names);
+    if (names->count != 0U && lm_trans_put(file, "\n") != 0) {
+        lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    lm_own_ptr_stack_destroy(&names);
+    lm_trans_ptr_stack_delete(&names);
     return 0;
 }
 
 static void lm_trans_registry_destroy(void) {
     if (lm_trans_registry->loaded) {
-        lm_trans_identifier_table_destroy(&lm_trans_registry->identifiers);
+        lm_trans_identifier_table_delete(&lm_trans_registry->identifiers);
         lm_own_arena_destroy(lm_trans_registry->value_arena);
         lm_own_delete(lm_trans_registry->value_arena, 0);
-        lm_own_ptr_stack_destroy(&lm_trans_registry->loaded_paths);
+        lm_trans_ptr_stack_delete(&lm_trans_registry->loaded_paths);
         free(lm_trans_registry->source_path);
         lm_trans_registry->value_arena = 0;
         lm_trans_registry->source_path = 0;
@@ -2718,8 +2748,8 @@ static int lm_trans_registry_path_already_loaded(const char *registry_path) {
         return 0;
     }
 
-    for (i = 0U; i < lm_trans_registry->loaded_paths.count; ++i) {
-        loaded_path = (const char *)lm_own_ptr_stack_at(&lm_trans_registry->loaded_paths, i);
+    for (i = 0U; i < lm_trans_registry->loaded_paths->count; ++i) {
+        loaded_path = (const char *)lm_own_ptr_stack_at(lm_trans_registry->loaded_paths, i);
         if (loaded_path != 0 && strcmp(loaded_path, registry_path) == 0) {
             return 1;
         }
@@ -2743,7 +2773,7 @@ static int lm_trans_registry_note_loaded_path(const char *registry_path) {
         return 1;
     }
 
-    if (lm_own_ptr_stack_push(&lm_trans_registry->loaded_paths, copy) != 0) {
+    if (lm_own_ptr_stack_push(lm_trans_registry->loaded_paths, copy) != 0) {
         free(copy);
         return 1;
     }
@@ -3217,14 +3247,19 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
     size_t candidate_index;
 
     lm_trans_registry_destroy();
-    lm_trans_identifier_table_init(&lm_trans_registry->identifiers);
     lm_trans_registry->loaded = 1;
+    lm_trans_registry->identifiers = lm_trans_identifier_table_new();
     lm_trans_registry->value_arena = (LmOwnArena *)lm_own_new_zero(sizeof(*lm_trans_registry->value_arena));
-    if (lm_trans_registry->value_arena == 0 || lm_own_arena_init(lm_trans_registry->value_arena) != 0) {
+    lm_trans_registry->loaded_paths = lm_trans_ptr_stack_new(free);
+    if (
+        lm_trans_registry->identifiers == 0 ||
+        lm_trans_registry->value_arena == 0 ||
+        lm_own_arena_init(lm_trans_registry->value_arena) != 0 ||
+        lm_trans_registry->loaded_paths == 0
+    ) {
         lm_trans_registry_destroy();
         return 1;
     }
-    lm_own_ptr_stack_init(&lm_trans_registry->loaded_paths, free);
     lm_trans_registry->source_path = lm_trans_text_copy_cstr_from_cstr(source_path);
     if (lm_trans_registry->source_path == 0) {
         lm_trans_registry_destroy();
@@ -3427,17 +3462,31 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
 
     lm_trans_prelude_output = prelude_output;
     lm_trans_current_source_path = source_path;
-    lm_own_ptr_stack_init(&lm_trans_declared_import_paths, free);
-    lm_own_ptr_stack_init(&lm_trans_declared_import_documents, lm_trans_import_document_delete);
-    lm_own_ptr_stack_init(&lm_trans_emitted_import_prelude_paths, free);
-    lm_own_ptr_stack_init(&lm_trans_emitted_import_function_paths, free);
-    lm_own_ptr_stack_init(&lm_trans_emitted_callable_adapters, free);
-    lm_own_ptr_stack_init(&lm_trans_emitted_callable_binders, free);
-    lm_own_ptr_stack_init(&lm_trans_emitted_array_value_helpers, free);
-    lm_own_ptr_stack_init(&lm_trans_emitted_function_return_structs, free);
     lm_trans_next_array_value_helper_id = 0U;
     emitted = 0;
-    status = lm_trans_emit_module_prelude_plan(prelude_output);
+    lm_trans_declared_import_paths = lm_trans_ptr_stack_new(free);
+    lm_trans_declared_import_documents = lm_trans_ptr_stack_new(lm_trans_import_document_delete);
+    lm_trans_emitted_import_prelude_paths = lm_trans_ptr_stack_new(free);
+    lm_trans_emitted_import_function_paths = lm_trans_ptr_stack_new(free);
+    lm_trans_emitted_callable_adapters = lm_trans_ptr_stack_new(free);
+    lm_trans_emitted_callable_binders = lm_trans_ptr_stack_new(free);
+    lm_trans_emitted_array_value_helpers = lm_trans_ptr_stack_new(free);
+    lm_trans_emitted_function_return_structs = lm_trans_ptr_stack_new(free);
+    if (
+        lm_trans_declared_import_paths == 0 ||
+        lm_trans_declared_import_documents == 0 ||
+        lm_trans_emitted_import_prelude_paths == 0 ||
+        lm_trans_emitted_import_function_paths == 0 ||
+        lm_trans_emitted_callable_adapters == 0 ||
+        lm_trans_emitted_callable_binders == 0 ||
+        lm_trans_emitted_array_value_helpers == 0 ||
+        lm_trans_emitted_function_return_structs == 0
+    ) {
+        fprintf(stderr, "trans error: out of memory while creating module state stacks\n");
+        status = 1;
+    } else {
+        status = lm_trans_emit_module_prelude_plan(prelude_output);
+    }
     if (status == 0) {
         status = lm_trans_emit_root_sequence(
             body_output,
@@ -3446,14 +3495,14 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
             &emitted
         );
     }
-    lm_own_ptr_stack_destroy(&lm_trans_emitted_function_return_structs);
-    lm_own_ptr_stack_destroy(&lm_trans_emitted_array_value_helpers);
-    lm_own_ptr_stack_destroy(&lm_trans_emitted_callable_binders);
-    lm_own_ptr_stack_destroy(&lm_trans_emitted_callable_adapters);
-    lm_own_ptr_stack_destroy(&lm_trans_emitted_import_function_paths);
-    lm_own_ptr_stack_destroy(&lm_trans_emitted_import_prelude_paths);
-    lm_own_ptr_stack_destroy(&lm_trans_declared_import_documents);
-    lm_own_ptr_stack_destroy(&lm_trans_declared_import_paths);
+    lm_trans_ptr_stack_delete(&lm_trans_emitted_function_return_structs);
+    lm_trans_ptr_stack_delete(&lm_trans_emitted_array_value_helpers);
+    lm_trans_ptr_stack_delete(&lm_trans_emitted_callable_binders);
+    lm_trans_ptr_stack_delete(&lm_trans_emitted_callable_adapters);
+    lm_trans_ptr_stack_delete(&lm_trans_emitted_import_function_paths);
+    lm_trans_ptr_stack_delete(&lm_trans_emitted_import_prelude_paths);
+    lm_trans_ptr_stack_delete(&lm_trans_declared_import_documents);
+    lm_trans_ptr_stack_delete(&lm_trans_declared_import_paths);
     lm_trans_current_source_path = 0;
     lm_trans_prelude_output = previous_prelude_output;
     if (status == 0 && !emitted) {

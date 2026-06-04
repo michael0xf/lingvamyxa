@@ -2,14 +2,14 @@ L1:
 ===
 static FILE *lm_trans_prelude_output;
 static const char *lm_trans_current_source_path;
-static LmOwnPtrStack lm_trans_declared_import_paths;
-static LmOwnPtrStack lm_trans_declared_import_documents;
-static LmOwnPtrStack lm_trans_emitted_import_prelude_paths;
-static LmOwnPtrStack lm_trans_emitted_import_function_paths;
-static LmOwnPtrStack lm_trans_emitted_callable_adapters;
-static LmOwnPtrStack lm_trans_emitted_callable_binders;
-static LmOwnPtrStack lm_trans_emitted_array_value_helpers;
-static LmOwnPtrStack lm_trans_emitted_function_return_structs;
+static LmOwnPtrStack *lm_trans_declared_import_paths;
+static LmOwnPtrStack *lm_trans_declared_import_documents;
+static LmOwnPtrStack *lm_trans_emitted_import_prelude_paths;
+static LmOwnPtrStack *lm_trans_emitted_import_function_paths;
+static LmOwnPtrStack *lm_trans_emitted_callable_adapters;
+static LmOwnPtrStack *lm_trans_emitted_callable_binders;
+static LmOwnPtrStack *lm_trans_emitted_array_value_helpers;
+static LmOwnPtrStack *lm_trans_emitted_function_return_structs;
 static unsigned lm_trans_next_array_value_helper_id;
 
 static LmTransRegistry lm_trans_registry_storage;
@@ -305,7 +305,7 @@ static int lm_trans_registry_index_row_relation(
         return 1;
     }
 
-    card = lm_trans_identifier_table_get_card(&lm_trans_registry->identifiers, &card_name);
+    card = lm_trans_identifier_table_get_card(lm_trans_registry->identifiers, &card_name);
     if (card == 0) {
         return 1;
     }
@@ -315,7 +315,7 @@ static int lm_trans_registry_index_row_relation(
         return 1;
     }
 
-    return lm_own_ptr_stack_push(&relation->symbols, row);
+    return lm_own_ptr_stack_push(relation->symbols, row);
 }
 
 static int lm_trans_registry_index_row_table_view(LmTransRegistryFact *row) {
@@ -351,7 +351,7 @@ static int lm_trans_registry_index_row(LmTransRegistryFact *row) {
 
     key_name = lm_trans_text_from_cstr(row->key);
     card = lm_trans_identifier_table_get_card(
-        &lm_trans_registry->identifiers,
+        lm_trans_registry->identifiers,
         &key_name
     );
     if (card == 0) {
@@ -363,7 +363,7 @@ static int lm_trans_registry_index_row(LmTransRegistryFact *row) {
         return 1;
     }
 
-    if (lm_own_ptr_stack_push(&relation->symbols, row) != 0) {
+    if (lm_own_ptr_stack_push(relation->symbols, row) != 0) {
         return 1;
     }
 
@@ -649,7 +649,7 @@ static LmTransRegistryFact *lm_trans_registry_lookup_row_in_identifiers(
     if (relation == 0) {
         return 0;
     }
-    return (LmTransRegistryFact *)lm_own_ptr_stack_top(&relation->symbols);
+    return (LmTransRegistryFact *)lm_own_ptr_stack_top(relation->symbols);
 }
 
 static const LmOwnPtrStack *lm_trans_registry_relation_stack_in_identifiers(
@@ -670,7 +670,7 @@ static const LmOwnPtrStack *lm_trans_registry_relation_stack_in_identifiers(
     }
 
     relation = lm_trans_identifier_card_find_relation(card, relation_name);
-    return relation != 0 ? &relation->symbols : 0;
+    return relation != 0 ? relation->symbols : 0;
 }
 
 static const LmOwnPtrStack *lm_trans_registry_relation_stack(
@@ -678,7 +678,7 @@ static const LmOwnPtrStack *lm_trans_registry_relation_stack(
     const char *relation_name
 ) {
     return lm_trans_registry_relation_stack_in_identifiers(
-        &lm_trans_registry->identifiers,
+        lm_trans_registry->identifiers,
         key,
         relation_name
     );
@@ -757,7 +757,7 @@ static const char *lm_trans_registry_lookup(LmP0Text key, const char *table) {
     LmTransRegistryFact *row;
 
     row = lm_trans_registry_lookup_row_in_identifiers(
-        &lm_trans_registry->identifiers,
+        lm_trans_registry->identifiers,
         key,
         table
     );

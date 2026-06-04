@@ -247,7 +247,7 @@ L4:
         columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
                  name     char                   0                       1                                1
-                 symbols  LmOwnPtrStack          1                       0                                0
+                 symbols  LmOwnPtrStack          1                       1                                0
                  next     LmTransIdentifierRelation 2                    1                                0
     end: LmTransIdentifierRelation
 
@@ -258,7 +258,7 @@ L4:
                  name                  LmP0Text              0                       1
                  name_storage          char                  1                       1
                  hash                  ulong                 2                       0
-                 symbols               LmOwnPtrStack         3                       0
+                 symbols               LmOwnPtrStack         3                       1
                  relation_buckets      LmTransIdentifierRelation 4                  2
                  relation_bucket_count size_t                5                       0
                  next                  LmTransIdentifierCard 6                       1
@@ -277,9 +277,9 @@ L4:
         name: LmTransRegistry
         columns: class              (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 identifiers        LmTransIdentifierTable 0             0
+                 identifiers        LmTransIdentifierTable 0             1
                  value_arena        LmOwnArena            1              1
-                 loaded_paths       LmOwnPtrStack         2              0
+                 loaded_paths       LmOwnPtrStack         2              1
                  source_path        char                  3              1
                  loaded_fact_count  size_t                4              0
                  loaded             int                   5              0
@@ -369,7 +369,7 @@ L4:
                  closure_call_name_storage char                  10                      1                                0
                  has_closure_call_name    int                    11                      0                                0
                  depth                    unsigned               12                      0                                0
-                 param_names              LmOwnPtrStack          13                      0                                0
+                 param_names              LmOwnPtrStack          13                      1                                0
                  has_signature            int                    14                      0                                0
                  callable_params_node     LmP0Node               15                      1                                1
                  callable_return_node     LmP0Node               16                      1                                1
@@ -423,17 +423,17 @@ L4:
 
     table:
         name: LmTransExprLoweredRange
-        columns: class   (`field.class` class)  (`field.index` serial)
+        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 pieces  LmOwnValueStack        0
-                 index   size_t                 1
+                 pieces  LmOwnValueStack        0                       1
+                 index   size_t                 1                       0
     end: LmTransExprLoweredRange
 
     table:
         name: LmTransExprStack
-        columns: class  (`field.class` class)  (`field.index` serial)
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 jobs   LmOwnValueStack        0
+                 jobs   LmOwnValueStack        0                       1
     end: LmTransExprStack
 
     table:
@@ -590,9 +590,9 @@ L4:
 
     table:
         name: LmTransStatementStack
-        columns: class  (`field.class` class)  (`field.index` serial)
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 jobs   LmOwnValueStack        0
+                 jobs   LmOwnValueStack        0                       1
     end: LmTransStatementStack
 
     table:
@@ -655,8 +655,8 @@ L4:
                  current_return_type_name    LmP0Text               3                       1                                0
                  previous_next_return_id     unsigned               4                       0                                0
                  previous_hoisted_functions  LmOwnPtrStack          5                       1                                1
-                 previous_cleanups           LmOwnPtrStack          6                       0                                0
-                 previous_loops              LmOwnPtrStack          7                       0                                0
+                 previous_cleanups           LmOwnPtrStack          6                       1                                0
+                 previous_loops              LmOwnPtrStack          7                       1                                0
                  has_previous_control_stacks int                    8                       0                                0
     end: LmTransFunctionState
 
@@ -698,7 +698,7 @@ L4:
         columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
                  function              LmTransFunctionHeader  0                       0                                0
-                 captures              LmOwnPtrStack          1                       0                                0
+                 captures              LmOwnPtrStack          1                       1                                0
                  c_name_storage        char                   2                       1                                0
                  env_type_storage      char                   3                       1                                0
                  env_var_storage       char                   4                       1                                0
@@ -775,12 +775,12 @@ L4:
         name: LmTransNamespace
         columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 items                LmOwnPtrStack          0                       0                                0
-                 identifiers          LmTransIdentifierTable 1                       0                                0
+                 items                LmOwnPtrStack          0                       1                                0
+                 identifiers          LmTransIdentifierTable 1                       1                                0
                  registry_identifiers LmTransIdentifierTable 2                       1                                1
                  depth                unsigned               3                       0                                0
-                 cleanups             LmOwnPtrStack          4                       0                                0
-                 loops                LmOwnPtrStack          5                       0                                0
+                 cleanups             LmOwnPtrStack          4                       1                                0
+                 loops                LmOwnPtrStack          5                       1                                0
                  next_cleanup_id      unsigned               6                       0                                0
                  return_type_node     LmP0Node               7                       1                                1
                  return_type_is_struct int                   8                       0                                0

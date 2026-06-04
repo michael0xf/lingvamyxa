@@ -6,9 +6,14 @@ end: delete_factory
 
 external:
     fn: main () int
-        LmOwnPtrStack: stack
-        lm_own_ptr_stack_init(@ stack; delete_factory)
-        lm_own_ptr_stack_destroy(@ stack)
+        @: LmOwnPtrStack stack
+
+        stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+        if: stack = 0
+            return: 1
+        lm_own_ptr_stack_init(stack; delete_factory)
+        lm_own_ptr_stack_destroy(stack)
+        lm_own_delete(stack, 0)
         return: 0
     end: main
 end: external

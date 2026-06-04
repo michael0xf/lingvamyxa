@@ -64,7 +64,7 @@ sub: lm_trans_symbol_destroy_fields (@: LmTransSymbol symbol)
         c.symbol->closure_call_name.data: ""
         c.symbol->closure_call_name.length: 0U
         symbol\has_closure_call_name: 0
-        c.lm_own_ptr_stack_destroy(c.&symbol->param_names)
+        c.lm_trans_ptr_stack_delete(c.&symbol->param_names)
         symbol\has_signature: 0
         symbol\callable_params_node: 0
         symbol\callable_return_node: 0
