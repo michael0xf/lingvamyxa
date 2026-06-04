@@ -325,7 +325,7 @@ static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP
 static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
-static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4, size_t *out_row_count);
+static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
 
 static LmOwnPtrStack *lm_l4_seen_tables;
 static LmOwnPtrStack * lm_l4_seen_tables_get(void) {
@@ -1020,7 +1020,7 @@ static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0St
     return status;
 }
 
-static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4, size_t *out_row_count) {
+static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4) {
     const LmP0Field *field;
     const LmP0Node *node;
     LmOwnPtrStack *seen;
@@ -1030,9 +1030,6 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
     if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE) {
         lm_l4_error(loader, "root must be a Structure");
         return 1;
-    }
-    if (out_row_count != 0) {
-        *(out_row_count) = 0U;
     }
     seen = lm_own_new_zero(sizeof(seen[0]));
     if (seen == 0) {
@@ -7354,15 +7351,11 @@ static int lm_p0_path_has_extension(const char *path, const char *extension) {
 }
 
 static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
-    size_t loaded_count;
-
-    loaded_count = 0U;
     return lm_l4_load_root(
         &lm_p0_registry_l4_loader,
         0,
         root,
-        implicit_l4,
-        &loaded_count
+        implicit_l4
     );
 }
 

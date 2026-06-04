@@ -638,7 +638,7 @@ L2:
         return: status
     end: lm_l4_load_rows
 
-    fn: lm_l4_load_root (const: @(LmL4Loader loader); @: void context; const: @(LmP0Node root); int: implicit_l4; @: size_t out_row_count) int
+    fn: lm_l4_load_root (const: @(LmL4Loader loader); @: void context; const: @(LmP0Node root); int: implicit_l4) int
         const: @: LmP0Field field
         const: @: LmP0Node node
         @: LmOwnPtrStack seen
@@ -649,8 +649,6 @@ L2:
         if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
             lm_l4_error(loader, "root must be a Structure")
             return: 1
-        if: out_row_count != 0
-            \out_row_count: 0U
 
         seen: lm_own_new_zero(c.sizeof(seen[0]))
         if: seen = 0
