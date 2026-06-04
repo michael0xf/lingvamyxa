@@ -23,8 +23,7 @@ L4:
 end: L4
 
 import: "lm4/own_abi.lm4"
-
-include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+import: "lm4/libc_abi.lm4"
 
 os:
     win:
@@ -157,11 +156,11 @@ os:
 end: os
 
 fn: lm_vcpkg_options_new () @: LmVcpkgOptions
-    return: c.lm_own_new_zero(c.sizeof(c.LmVcpkgOptions))
+    return: lm_own_new_zero(c.sizeof(c.LmVcpkgOptions))
 end: lm_vcpkg_options_new
 
 sub: lm_vcpkg_options_delete (@: LmVcpkgOptions options)
-    c.lm_own_delete(options, 0)
+    lm_own_delete(options, 0)
 end: lm_vcpkg_options_delete
 
 fn: lm_vcpkg_is_path_separator (char: value) int
@@ -169,7 +168,7 @@ fn: lm_vcpkg_is_path_separator (char: value) int
 end: lm_vcpkg_is_path_separator
 
 fn: lm_vcpkg_has_path_separator (@: char path) int
-    return: c.strchr(path, '/') != 0 || c.strchr(path, '\\') != 0
+    return: strchr(path, '/') != 0 || strchr(path, '\\') != 0
 end: lm_vcpkg_has_path_separator
 
 fn: lm_vcpkg_is_absolute_path (@: char path) int
@@ -188,28 +187,28 @@ fn: lm_vcpkg_join_path (@: char buffer; size_t: size; @: char base; @: char tail
     size_t: used
     size_t: separator_length
 
-    base_length: c.strlen(base)
-    tail_length: c.strlen(tail)
+    base_length: strlen(base)
+    tail_length: strlen(tail)
     used: base_length
-    separator_length: c.strlen(lm_vcpkg_platform_path_sep())
+    separator_length: strlen(lm_vcpkg_platform_path_sep())
 
     if: base_length + tail_length + separator_length + 1U >= size
         c.fprintf: c.stderr "vcpkgFetch.lm0: path is too long\n"
         return: 1
 
-    c.memcpy(buffer, base, base_length)
+    memcpy(buffer, base, base_length)
     if: base_length > 0U && tail_length > 0U && lm_vcpkg_is_path_separator(base[base_length-1U]) = 0 && lm_vcpkg_is_path_separator(tail[0]) = 0
-        c.memcpy(buffer + used, lm_vcpkg_platform_path_sep(), separator_length)
+        memcpy(buffer + used, lm_vcpkg_platform_path_sep(), separator_length)
         used: used + separator_length
 
-    c.memcpy(buffer + used, tail, tail_length + 1U)
+    memcpy(buffer + used, tail, tail_length + 1U)
     return: 0
 end: lm_vcpkg_join_path
 
 fn: lm_vcpkg_trim_last_path_part (@: char path) int
     size_t: length
 
-    length: c.strlen(path)
+    length: strlen(path)
     while: length > 0U && lm_vcpkg_is_path_separator(path[length-1U])
         path[length-1U]: '\0'
         length: length - 1U
@@ -228,11 +227,11 @@ end: lm_vcpkg_trim_last_path_part
 fn: lm_vcpkg_file_exists (@: char path) int
     @: FILE file
 
-    file: c.fopen(path, "rb")
+    file: fopen(path, "rb")
     if: file = 0
         return: 0
 
-    c.fclose: file
+    fclose: file
     return: 1
 end: lm_vcpkg_file_exists
 
@@ -257,21 +256,21 @@ fn: lm_vcpkg_enter_project_root (@: char program_path) int
 
     if: program_path != 0 && program_path[0] != '\0' && lm_vcpkg_has_path_separator(program_path)
         if: lm_vcpkg_is_absolute_path(program_path)
-            if: c.strlen(program_path) >= c.sizeof(executable_path)
+            if: strlen(program_path) >= c.sizeof(executable_path)
                 c.fprintf: c.stderr "vcpkgFetch.lm0: executable path is too long\n"
                 return: 1
-            c.strcpy(executable_path, program_path)
+            strcpy(executable_path, program_path)
         if: lm_vcpkg_is_absolute_path(program_path) = 0
             if: lm_vcpkg_join_path(executable_path, c.sizeof(executable_path), cwd, program_path) != 0
                 return: 1
         ---
 
-        c.strcpy(search_path, executable_path)
+        strcpy(search_path, executable_path)
         lm_vcpkg_trim_last_path_part(search_path)
     ---
 
     if: program_path = 0 || program_path[0] = '\0' || lm_vcpkg_has_path_separator(program_path) = 0
-        c.strcpy(search_path, cwd)
+        strcpy(search_path, cwd)
 
     depth: 0
     while: depth < 12 && search_path[0] != '\0'
@@ -290,7 +289,7 @@ end: lm_vcpkg_enter_project_root
 fn: lm_vcpkg_env_or_default (@: char name; @: char fallback) @: char
     @: char value
 
-    value: c.getenv(name)
+    value: getenv(name)
     if: value = 0 || value[0] = '\0'
         return: fallback
 
@@ -300,12 +299,12 @@ end: lm_vcpkg_env_or_default
 fn: lm_vcpkg_append (@: char buffer; size_t: size; size_t: used; @: char text) size_t
     size_t: length
 
-    length: c.strlen(text)
+    length: strlen(text)
     if: used + length >= size
         c.fprintf: c.stderr "vcpkgFetch.lm0: command line is too long\n"
         return: size
 
-    c.memcpy(buffer + used, text, length + 1U)
+    memcpy(buffer + used, text, length + 1U)
     return: used + length
 end: lm_vcpkg_append
 
@@ -330,12 +329,12 @@ end: lm_vcpkg_append_quoted
 fn: lm_vcpkg_append_prefixed_arg (@: char buffer; size_t: size; size_t: used; @: char prefix; @: char value) size_t
     []: char arg 2048
 
-    if: c.strlen(prefix) + c.strlen(value) >= c.sizeof(arg)
+    if: strlen(prefix) + strlen(value) >= c.sizeof(arg)
         c.fprintf: c.stderr "vcpkgFetch.lm0: vcpkg argument is too long\n"
         return: size
 
-    c.strcpy(arg, prefix)
-    c.strcat(arg, value)
+    strcpy(arg, prefix)
+    strcat(arg, value)
     return: lm_vcpkg_append_quoted(buffer, size, used, arg, 1)
 end: lm_vcpkg_append_prefixed_arg
 
@@ -346,43 +345,43 @@ fn: lm_vcpkg_discover_tool (@: char buffer; size_t: size; @@: char root_out) int
 
     root_out[0]: 0
 
-    tool_env: c.getenv("LM_VCPKG")
+    tool_env: getenv("LM_VCPKG")
     if: tool_env != 0 && tool_env[0] != '\0'
-        if: c.strlen(tool_env) >= size
+        if: strlen(tool_env) >= size
             c.fprintf: c.stderr "vcpkgFetch.lm0: LM_VCPKG is too long\n"
             return: 1
-        c.strcpy(buffer, tool_env)
+        strcpy(buffer, tool_env)
         return: 0
     ---
 
-    root_env: c.getenv("VCPKG_ROOT")
+    root_env: getenv("VCPKG_ROOT")
     if: root_env != 0 && root_env[0] != '\0'
         if: lm_vcpkg_join_path(candidate, c.sizeof(candidate), root_env, lm_vcpkg_platform_tool_file()) != 0
             return: 1
         if: lm_vcpkg_file_exists(candidate)
-            if: c.strlen(candidate) >= size
+            if: strlen(candidate) >= size
                 c.fprintf: c.stderr "vcpkgFetch.lm0: vcpkg path is too long\n"
                 return: 1
-            c.strcpy(buffer, candidate)
+            strcpy(buffer, candidate)
             root_out[0]: root_env
             return: 0
     ---
 
     if: lm_vcpkg_platform_has_default_tool() != 0 && lm_vcpkg_file_exists(lm_vcpkg_platform_default_tool())
-        if: c.strlen(lm_vcpkg_platform_default_tool()) >= size
+        if: strlen(lm_vcpkg_platform_default_tool()) >= size
             c.fprintf: c.stderr "vcpkgFetch.lm0: default vcpkg path is too long\n"
             return: 1
-        c.strcpy(buffer, lm_vcpkg_platform_default_tool())
+        strcpy(buffer, lm_vcpkg_platform_default_tool())
         root_out[0]: lm_vcpkg_platform_default_root()
         return: 0
     ---
 
-    if: c.strlen("vcpkg") >= size
+    if: strlen("vcpkg") >= size
         c.fprintf: c.stderr "vcpkgFetch.lm0: fallback vcpkg command is too long\n"
         return: 1
     ---
 
-    c.strcpy(buffer, "vcpkg")
+    strcpy(buffer, "vcpkg")
     return: 0
 end: lm_vcpkg_discover_tool
 
@@ -410,7 +409,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
 
     index: 1
     while: index < argc
-        if: c.strcmp(argv[index], "--output") = 0 || c.strcmp(argv[index], "-o") = 0
+        if: strcmp(argv[index], "--output") = 0 || strcmp(argv[index], "-o") = 0
             if: index + 1 >= argc
                 c.fprintf: c.stderr "vcpkgFetch.lm0: --output expects a directory\n"
                 return: 1
@@ -419,7 +418,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
             index: index + 1
             continue
 
-        if: c.strcmp(argv[index], "--manifest-root") = 0
+        if: strcmp(argv[index], "--manifest-root") = 0
             if: index + 1 >= argc
                 c.fprintf: c.stderr "vcpkgFetch.lm0: --manifest-root expects a directory\n"
                 return: 1
@@ -428,7 +427,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
             index: index + 1
             continue
 
-        if: c.strcmp(argv[index], "--triplet") = 0
+        if: strcmp(argv[index], "--triplet") = 0
             if: index + 1 >= argc
                 c.fprintf: c.stderr "vcpkgFetch.lm0: --triplet expects a value\n"
                 return: 1
@@ -437,7 +436,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
             index: index + 1
             continue
 
-        if: c.strcmp(argv[index], "--host-triplet") = 0
+        if: strcmp(argv[index], "--host-triplet") = 0
             if: index + 1 >= argc
                 c.fprintf: c.stderr "vcpkgFetch.lm0: --host-triplet expects a value\n"
                 return: 1
@@ -446,7 +445,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
             index: index + 1
             continue
 
-        if: c.strcmp(argv[index], "--vcpkg") = 0
+        if: strcmp(argv[index], "--vcpkg") = 0
             if: index + 1 >= argc
                 c.fprintf: c.stderr "vcpkgFetch.lm0: --vcpkg expects a path\n"
                 return: 1
@@ -455,7 +454,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
             index: index + 1
             continue
 
-        if: c.strcmp(argv[index], "--vcpkg-root") = 0
+        if: strcmp(argv[index], "--vcpkg-root") = 0
             if: index + 1 >= argc
                 c.fprintf: c.stderr "vcpkgFetch.lm0: --vcpkg-root expects a directory\n"
                 return: 1
@@ -464,12 +463,12 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
             index: index + 1
             continue
 
-        if: c.strcmp(argv[index], "--dry-run") = 0
+        if: strcmp(argv[index], "--dry-run") = 0
             options\dry_run: 1
             index: index + 1
             continue
 
-        if: c.strcmp(argv[index], "--help") = 0 || c.strcmp(argv[index], "-h") = 0
+        if: strcmp(argv[index], "--help") = 0 || strcmp(argv[index], "-h") = 0
             lm_vcpkg_print_usage()
             return: 2
 
@@ -489,10 +488,10 @@ fn: lm_vcpkg_build_command (@: LmVcpkgOptions options; @: char command; size_t: 
     size_t: used
 
     if: options\vcpkg_tool[0] != '\0'
-        if: c.strlen(options\vcpkg_tool) >= c.sizeof(discovered_tool)
+        if: strlen(options\vcpkg_tool) >= c.sizeof(discovered_tool)
             c.fprintf: c.stderr "vcpkgFetch.lm0: vcpkg path is too long\n"
             return: 1
-        c.strcpy(discovered_tool, options\vcpkg_tool)
+        strcpy(discovered_tool, options\vcpkg_tool)
 
     if: options\vcpkg_tool[0] = '\0'
         if: lm_vcpkg_discover_tool(discovered_tool, c.sizeof(discovered_tool), @ discovered_root) != 0
@@ -596,7 +595,7 @@ external:
         lm_vcpkg_options_delete(options)
 
         c.printf: "%s\n" command
-        status: c.system(command)
+        status: system(command)
         if: status != 0
             c.fprintf: c.stderr "vcpkgFetch.lm0: command failed with status %d\n" status
             return: 1
