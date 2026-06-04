@@ -1,0 +1,19 @@
+L1:
+===
+#define LM_TEST_IFDEF_ROOT 1
+===
+
+ifdef:
+    LM_TEST_IFDEF_ROOT:
+        "int lm_test_ifdef_root_value(void) {\n    return 7;\n}\n"
+    default:
+        "int lm_test_ifdef_root_value(void) {\n    return 0;\n}\n"
+end: ifdef
+
+L2:
+    external:
+        fn: main () int
+            return: c.lm_test_ifdef_root_value() != 7
+        end: main
+    end: external
+end: L2

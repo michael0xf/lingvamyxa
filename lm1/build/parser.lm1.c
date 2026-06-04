@@ -1025,6 +1025,8 @@ static LmP0DashFenceStatus lm_p0_dash_fence_status(const char *text, size_t leng
 static int lm_p0_validate_dash_fence_line(LmP0Document *document, const char *text, size_t length, size_t line, size_t column);
 static int lm_p0_match_block_string_fence_line(const char *source, size_t line_start, size_t line_end, size_t eq_count);
 static int lm_p0_match_raw_comment_fence_line(const char *source, size_t line_start, size_t line_end, size_t star_count);
+static void lm_p0_dump_append_size(LmP0Dump *dump, size_t value);
+static void lm_p0_dump_append_field_count_line(LmP0Dump *dump, size_t field_count);
 
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
 #define LM_P0_ENABLE_REGISTRY_COMPARE 1
@@ -7142,38 +7144,6 @@ static void lm_p0_dump_append_cstr(LmP0Dump *dump, const char *text) {
     lm_p0_dump_append(dump, text, strlen(text));
 }
 
-static void lm_p0_dump_appendf(LmP0Dump *dump, const char *format, ...) {
-    char stack_buffer[256];
-    va_list args;
-    int needed;
-
-    va_start(args, format);
-    needed = vsnprintf(stack_buffer, sizeof(stack_buffer), format, args);
-    va_end(args);
-
-    if (needed < 0) {
-        dump->failed = 1;
-        return;
-    }
-
-    if ((size_t)needed < sizeof(stack_buffer)) {
-        lm_p0_dump_append(dump, stack_buffer, (size_t)needed);
-    } else {
-        char *heap_buffer;
-
-        heap_buffer = (char *)malloc((size_t)needed + 1U);
-        if (heap_buffer == 0) {
-            dump->failed = 1;
-            return;
-        }
-        va_start(args, format);
-        (void)vsnprintf(heap_buffer, (size_t)needed + 1U, format, args);
-        va_end(args);
-        lm_p0_dump_append(dump, heap_buffer, (size_t)needed);
-        free(heap_buffer);
-    }
-}
-
 static void lm_p0_dump_indent(LmP0Dump *dump, size_t indent) {
     size_t i;
 
@@ -7202,7 +7172,7 @@ static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_
         lm_p0_dump_append_cstr(dump, "Trailer spelling=");
     }
     lm_p0_dump_text(dump, trailer->spelling);
-    lm_p0_dump_appendf(dump, " fields=%lu\n", (unsigned long)trailer->body.field_count);
+    lm_p0_dump_append_field_count_line(dump, trailer->body.field_count);
     lm_p0_dump_structure(dump, &trailer->body, indent + 1U);
 }
 
@@ -7225,35 +7195,34 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
         lm_p0_dump_append_cstr(dump, "PositionalSkip ");
     }
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        lm_p0_dump_appendf(
-            dump,
-            "%s fields=%lu\n",
-            lm_p0_node_kind_class_name(node->kind),
-            (unsigned long)node->as.structure.field_count
-        );
+        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_field_count_line(dump, node->as.structure.field_count);
         lm_p0_dump_structure(dump, &node->as.structure, indent + 1U);
         lm_p0_dump_trailer(dump, node->as.structure.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_FRAME) {
-        lm_p0_dump_appendf(dump, "%s head=", lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_cstr(dump, " head=");
         lm_p0_dump_text(dump, node->as.frame.head);
-        lm_p0_dump_appendf(
-            dump,
-            " body=%s fields=%lu\n",
-            structure_name,
-            (unsigned long)node->as.frame.body.field_count
-        );
+        lm_p0_dump_append_cstr(dump, " body=");
+        lm_p0_dump_append_cstr(dump, structure_name);
+        lm_p0_dump_append_field_count_line(dump, node->as.frame.body.field_count);
         lm_p0_dump_structure(dump, &node->as.frame.body, indent + 1U);
         lm_p0_dump_trailer(dump, node->as.frame.trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_ATOM) {
-        lm_p0_dump_appendf(dump, "%s ", lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_cstr(dump, " ");
         lm_p0_dump_text(dump, node->as.atom);
         lm_p0_dump_append_cstr(dump, "\n");
     } else if (node->kind == LM_P0_NODE_DISABLED) {
-        lm_p0_dump_appendf(dump, "%s ", lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_cstr(dump, " ");
         lm_p0_dump_text(dump, node->as.atom);
         lm_p0_dump_append_cstr(dump, "\n");
     } else {
-        lm_p0_dump_appendf(dump, "%s kind=%d\n", lm_p0_node_kind_class_name(node->kind), node->kind);
+        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+        lm_p0_dump_append_cstr(dump, " kind=");
+        lm_p0_dump_append_size(dump, (size_t)node->kind);
+        lm_p0_dump_append_cstr(dump, "\n");
     }
 }
 
@@ -8073,4 +8042,26 @@ static int lm_p0_match_raw_comment_fence_line(const char *source, size_t line_st
         return 0;
     }
     return lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end);
+}
+
+static void lm_p0_dump_append_size(LmP0Dump *dump, size_t value) {
+    char buffer[32];
+    size_t index;
+    if (value == 0U) {
+        lm_p0_dump_append_cstr(dump, "0");
+        return;
+    }
+    index = sizeof(buffer);
+    while (value > 0U) {
+        index = index - 1U;
+        buffer[index] = '0' + value % 10U;
+        value = value / 10U;
+    }
+    lm_p0_dump_append(dump, buffer + index, sizeof(buffer) - index);
+}
+
+static void lm_p0_dump_append_field_count_line(LmP0Dump *dump, size_t field_count) {
+    lm_p0_dump_append_cstr(dump, " fields=");
+    lm_p0_dump_append_size(dump, field_count);
+    lm_p0_dump_append_cstr(dump, "\n");
 }

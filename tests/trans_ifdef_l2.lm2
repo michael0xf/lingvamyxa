@@ -1,0 +1,23 @@
+L1:
+===
+#define LM_TEST_IFDEF_L2 0
+===
+
+L2:
+    ifdef:
+        `!LM_TEST_IFDEF_L2`:
+            fn: lm_test_ifdef_l2_value () int
+                return: 11
+            end: lm_test_ifdef_l2_value
+        default:
+            fn: lm_test_ifdef_l2_value () int
+                return: 0
+            end: lm_test_ifdef_l2_value
+    end: ifdef
+
+    external:
+        fn: main () int
+            return: lm_test_ifdef_l2_value() != 11
+        end: main
+    end: external
+end: L2

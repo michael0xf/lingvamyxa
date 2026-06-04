@@ -139,6 +139,7 @@ table:
              include       `receiver.statement`
              import        `receiver.statement`
              os            `receiver.statement`
+             ifdef         `receiver.statement`
              guard         `receiver.statement`
              extern_c      `receiver.statement`
              const         `receiver.statement`
@@ -189,6 +190,7 @@ table:
              include       lm_trans_statement_emit_include_prelude
              import        lm_trans_statement_emit_import
              os            lm_trans_statement_emit_os_prelude
+             ifdef         lm_trans_statement_emit_ifdef_prelude
              guard         lm_trans_statement_emit_guard_prelude
              extern_c      lm_trans_statement_emit_extern_c_prelude
              const         lm_trans_statement_emit_const_declaration

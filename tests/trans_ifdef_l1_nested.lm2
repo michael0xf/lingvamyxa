@@ -1,0 +1,19 @@
+L1:
+    "#define LM_TEST_IFDEF_L1_NESTED 1\n"
+    "static int lm_test_ifdef_l1_nested_value(void) {\n"
+    ifdef:
+        LM_TEST_IFDEF_L1_NESTED:
+            "    return 13;\n"
+        default:
+            "    return 0;\n"
+    end: ifdef
+    "}\n"
+end: L1
+
+L2:
+    external:
+        fn: main () int
+            return: c.lm_test_ifdef_l1_nested_value() != 13
+        end: main
+    end: external
+end: L2

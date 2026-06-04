@@ -9806,6 +9806,7 @@ static int lm_trans_head_can_declare_storage(
 
     symbol = lm_trans_namespace_find(namespace_, head);
     return
+        lm_trans_symbol_is(symbol, "class") ||
         lm_trans_symbol_is(symbol, "callableDescriptor");
 }
 
@@ -11231,6 +11232,11 @@ static int lm_trans_emit_l2_os_frame(
     const LmP0Frame *frame,
     LmTransNamespace *namespace_
 );
+static int lm_trans_emit_l2_ifdef_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+);
 static int lm_trans_emit_l2_guard_frame(
     FILE *output,
     const LmP0Frame *frame,
@@ -11350,6 +11356,18 @@ static int lm_trans_statement_emit_os_prelude(
     (void)stack;
     (void)indent;
     return lm_trans_emit_l2_os_frame(lm_trans_prelude_file(file), frame, namespace_);
+}
+
+static int lm_trans_statement_emit_ifdef_prelude(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)stack;
+    (void)indent;
+    return lm_trans_emit_l2_ifdef_frame(lm_trans_prelude_file(file), frame, namespace_);
 }
 
 static int lm_trans_statement_emit_guard_prelude(
@@ -13154,6 +13172,10 @@ static int lm_trans_binding_resolve(const char *binding, LmTransBinding *out) {
         out->statement_frame = lm_trans_statement_emit_os_prelude;
         return 1;
     }
+    if (strcmp(binding, "lm_trans_statement_emit_ifdef_prelude") == 0) {
+        out->statement_frame = lm_trans_statement_emit_ifdef_prelude;
+        return 1;
+    }
     if (strcmp(binding, "lm_trans_statement_emit_guard_prelude") == 0) {
         out->statement_frame = lm_trans_statement_emit_guard_prelude;
         return 1;
@@ -14188,13 +14210,23 @@ static const LmTransHoistedFunction *lm_trans_namespace_find_hoisted_function(
 
 static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
 static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame);
+static int lm_trans_emit_l1_ifdef_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_l2_os_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+);
+static int lm_trans_emit_l2_ifdef_frame(
     FILE *output,
     const LmP0Frame *frame,
     LmTransNamespace *namespace_
 );
 static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_top_level_declare_os(
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+);
+static int lm_trans_top_level_declare_ifdef(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
 );
@@ -14281,6 +14313,14 @@ static int lm_trans_top_level_emit_os(
     const LmTransTopLevelItem *item
 ) {
     return lm_trans_emit_l2_os_frame(file, item->frame, namespace_);
+}
+
+static int lm_trans_top_level_emit_ifdef(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    return lm_trans_emit_l2_ifdef_frame(file, item->frame, namespace_);
 }
 
 static int lm_trans_top_level_declare_guard(
@@ -14566,6 +14606,12 @@ static int lm_trans_top_level_statement_binding(
     if (strcmp(receiver, "lm_trans_statement_emit_os_prelude") == 0) {
         out->declare = lm_trans_top_level_declare_os;
         out->emit_before_functions = lm_trans_top_level_emit_os;
+        out->emits_top_level = 1;
+        return 1;
+    }
+    if (strcmp(receiver, "lm_trans_statement_emit_ifdef_prelude") == 0) {
+        out->declare = lm_trans_top_level_declare_ifdef;
+        out->emit_before_functions = lm_trans_top_level_emit_ifdef;
         out->emits_top_level = 1;
         return 1;
     }
@@ -16253,6 +16299,21 @@ static const char *lm_trans_os_condition(LmP0Text name) {
     return 0;
 }
 
+static int lm_trans_ifdef_condition_payload(
+    LmP0Text name,
+    LmP0Text *out_condition
+) {
+    if (
+        out_condition == 0 ||
+        lm_trans_identifier_payload(name, out_condition) == 0 ||
+        out_condition->length == 0U
+    ) {
+        fprintf(stderr, "trans preprocessor error: ifdef branch expects a non-empty condition\n");
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_os_branch_looks_l2(const LmP0Structure *body) {
     const LmP0Field *field;
     const LmP0Node *node;
@@ -16270,6 +16331,7 @@ static int lm_trans_os_branch_looks_l2(const LmP0Structure *body) {
                     !lm_trans_text_equals(node->as.frame.head, "L1") &&
                     !lm_trans_text_equals(node->as.frame.head, "include") &&
                     !lm_trans_text_equals(node->as.frame.head, "os") &&
+                    !lm_trans_text_equals(node->as.frame.head, "ifdef") &&
                     !lm_trans_is_end_target(&node->as.frame, "L1")
                 ) {
                     return 1;
@@ -16345,6 +16407,69 @@ static int lm_trans_declare_l2_os_frame(
     }
 
     return lm_trans_validate_end_trailer(frame);
+}
+
+static int lm_trans_declare_l2_ifdef_frame(
+    LmTransNamespace *namespace_,
+    const LmP0Frame *frame
+) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Frame *branch;
+    LmP0Text condition;
+    int emitted_default;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    emitted_default = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans L2 error: ifdef receiver expects condition/default frames\n");
+                return 1;
+            }
+
+            branch = &node->as.frame;
+            if (lm_trans_text_equals(branch->head, "default")) {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L2 error: ifdef receiver has duplicate default branch\n");
+                    return 1;
+                }
+                emitted_default = 1;
+            } else {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L2 error: ifdef default branch must be last\n");
+                    return 1;
+                }
+                if (lm_trans_ifdef_condition_payload(branch->head, &condition) != 0) {
+                    return 1;
+                }
+            }
+
+            if (lm_trans_os_branch_looks_l2(&branch->body)) {
+                if (lm_trans_declare_l2_structure_import(namespace_, &branch->body) != 0) {
+                    return 1;
+                }
+            }
+            if (lm_trans_validate_end_trailer(branch) != 0) {
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    return lm_trans_validate_end_trailer(frame);
+}
+
+static int lm_trans_top_level_declare_ifdef(
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    return lm_trans_declare_l2_ifdef_frame(namespace_, item != 0 ? item->frame : 0);
 }
 
 static int lm_trans_declare_l2_structure_import(
@@ -16449,6 +16574,79 @@ static int lm_trans_emit_l2_os_frame(
                     return 1;
                 }
                 if (lm_trans_put(output, condition) != 0 || lm_trans_put(output, "\n") != 0) {
+                    return 1;
+                }
+                opened = 1;
+            }
+
+            if (lm_trans_emit_l2_os_branch(output, branch, namespace_) != 0) {
+                return 1;
+            }
+            if (lm_trans_validate_end_trailer(branch) != 0) {
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    if (opened && lm_trans_put(output, "#endif\n") != 0) {
+        return 1;
+    }
+
+    return lm_trans_validate_end_trailer(frame);
+}
+
+static int lm_trans_emit_l2_ifdef_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Frame *branch;
+    LmP0Text condition;
+    int opened;
+    int emitted_default;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    opened = 0;
+    emitted_default = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans L2 error: ifdef receiver expects condition/default frames\n");
+                return 1;
+            }
+
+            branch = &node->as.frame;
+            if (lm_trans_text_equals(branch->head, "default")) {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L2 error: ifdef receiver has duplicate default branch\n");
+                    return 1;
+                }
+                emitted_default = 1;
+                if (opened) {
+                    if (lm_trans_put(output, "#else\n") != 0) {
+                        return 1;
+                    }
+                }
+            } else {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L2 error: ifdef default branch must be last\n");
+                    return 1;
+                }
+                if (lm_trans_ifdef_condition_payload(branch->head, &condition) != 0) {
+                    return 1;
+                }
+                if (lm_trans_put(output, opened ? "#elif " : "#if ") != 0) {
+                    return 1;
+                }
+                if (lm_trans_write_text(output, condition) != 0 || lm_trans_put(output, "\n") != 0) {
                     return 1;
                 }
                 opened = 1;
@@ -16745,6 +16943,7 @@ static int lm_trans_l4_payload_structure_looks_bare_l2(const LmP0Structure *body
                     lm_trans_text_equals(node->as.frame.head, "L2") ||
                     lm_trans_text_equals(node->as.frame.head, "include") ||
                     lm_trans_text_equals(node->as.frame.head, "os") ||
+                    lm_trans_text_equals(node->as.frame.head, "ifdef") ||
                     lm_trans_is_end_target(&node->as.frame, "L1")
                 ) {
                     return 0;
@@ -17105,6 +17304,75 @@ static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame) {
     return lm_trans_validate_end_trailer(frame);
 }
 
+static int lm_trans_emit_l1_ifdef_frame(FILE *output, const LmP0Frame *frame) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Frame *branch;
+    LmP0Text condition;
+    int opened;
+    int emitted_default;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    opened = 0;
+    emitted_default = 0;
+    field = frame->body.first_field;
+    while (field != 0) {
+        node = field->value;
+        if (!lm_trans_node_is_ignored(node)) {
+            if (node->kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans L1 error: ifdef receiver expects condition/default frames\n");
+                return 1;
+            }
+
+            branch = &node->as.frame;
+            if (lm_trans_text_equals(branch->head, "default")) {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L1 error: ifdef receiver has duplicate default branch\n");
+                    return 1;
+                }
+                emitted_default = 1;
+                if (opened) {
+                    if (lm_trans_put(output, "#else\n") != 0) {
+                        return 1;
+                    }
+                }
+            } else {
+                if (emitted_default) {
+                    fprintf(stderr, "trans L1 error: ifdef default branch must be last\n");
+                    return 1;
+                }
+                if (lm_trans_ifdef_condition_payload(branch->head, &condition) != 0) {
+                    return 1;
+                }
+                if (lm_trans_put(output, opened ? "#elif " : "#if ") != 0) {
+                    return 1;
+                }
+                if (lm_trans_write_text(output, condition) != 0 || lm_trans_put(output, "\n") != 0) {
+                    return 1;
+                }
+                opened = 1;
+            }
+
+            if (lm_trans_emit_l1_structure(output, &branch->body) != 0) {
+                return 1;
+            }
+            if (lm_trans_validate_end_trailer(branch) != 0) {
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    if (opened && lm_trans_put(output, "#endif\n") != 0) {
+        return 1;
+    }
+
+    return lm_trans_validate_end_trailer(frame);
+}
+
 static int lm_trans_emit_l1_include_target_text(
     FILE *output,
     const char *data,
@@ -17245,6 +17513,9 @@ static int lm_trans_emit_l1_node(FILE *output, const LmP0Node *node) {
         if (lm_trans_text_equals(node->as.frame.head, "os")) {
             return lm_trans_emit_l1_os_frame(output, &node->as.frame);
         }
+        if (lm_trans_text_equals(node->as.frame.head, "ifdef")) {
+            return lm_trans_emit_l1_ifdef_frame(output, &node->as.frame);
+        }
         if (lm_trans_text_equals(node->as.frame.head, "include")) {
             return lm_trans_emit_l1_include_frame(output, &node->as.frame);
         }
@@ -17352,7 +17623,7 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int i
                 return 1;
             }
             if (node->kind != LM_P0_NODE_FRAME) {
-                fprintf(stderr, "trans error: root field must be L1, L2, registered L4 root receiver, os, include, raw L1 text, or end: L1\n");
+                fprintf(stderr, "trans error: root field must be L1, L2, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n");
                 return 1;
             }
             if (lm_trans_l4_root_head_binding_resolve(node->as.frame.head, &l4_root_binding) != 0) {
@@ -17375,6 +17646,11 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int i
                     return 1;
                 }
                 *emitted = 1;
+            } else if (lm_trans_text_equals(node->as.frame.head, "ifdef")) {
+                if (lm_trans_emit_l1_ifdef_frame(prelude_file, &node->as.frame) != 0) {
+                    return 1;
+                }
+                *emitted = 1;
             } else if (lm_trans_text_equals(node->as.frame.head, "include")) {
                 if (lm_trans_emit_l1_include_frame(prelude_file, &node->as.frame) != 0) {
                     return 1;
@@ -17383,7 +17659,7 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int i
             } else if (lm_trans_is_end_target(&node->as.frame, "L1")) {
                 *emitted = 1;
             } else {
-                fprintf(stderr, "trans error: root field must be L1, L2, registered L4 root receiver, os, include, raw L1 text, or end: L1\n");
+                fprintf(stderr, "trans error: root field must be L1, L2, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n");
                 return 1;
             }
         }
