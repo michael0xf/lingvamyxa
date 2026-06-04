@@ -49,7 +49,7 @@ static int lm_trans_emit_abi_return_type(
     const char *owner_name,
     const char *error_name
 );
-static int lm_trans_emit_type_name(FILE *file, LmP0Text name);
+static int lm_trans_emit_type_name(FILE *file, const LmP0Text *name);
 static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node);
 static int lm_trans_registry_latest_size_payload(
     const LmOwnPtrStack *stack,
@@ -278,11 +278,11 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
 
 static LmTransIdentifierCard *lm_trans_identifier_table_find_card(
     const LmTransIdentifierTable *table,
-    LmP0Text name
+    const LmP0Text *name
 );
 static LmTransIdentifierCard *lm_trans_identifier_table_get_card(
     LmTransIdentifierTable *table,
-    LmP0Text name
+    const LmP0Text *name
 );
 static LmTransIdentifierRelation *lm_trans_identifier_card_find_relation(
     const LmTransIdentifierCard *card,
@@ -305,7 +305,7 @@ static int lm_trans_registry_index_row_relation(
         return 1;
     }
 
-    card = lm_trans_identifier_table_get_card(&lm_trans_registry->identifiers, card_name);
+    card = lm_trans_identifier_table_get_card(&lm_trans_registry->identifiers, &card_name);
     if (card == 0) {
         return 1;
     }
@@ -343,14 +343,16 @@ static int lm_trans_registry_index_row_table_view(LmTransRegistryFact *row) {
 static int lm_trans_registry_index_row(LmTransRegistryFact *row) {
     LmTransIdentifierCard *card;
     LmTransIdentifierRelation *relation;
+    LmP0Text key_name;
 
     if (row == 0 || row->table == 0 || row->key == 0) {
         return 1;
     }
 
+    key_name = lm_trans_text_from_cstr(row->key);
     card = lm_trans_identifier_table_get_card(
         &lm_trans_registry->identifiers,
-        lm_trans_text_from_cstr(row->key)
+        &key_name
     );
     if (card == 0) {
         return 1;
@@ -639,7 +641,7 @@ static LmTransRegistryFact *lm_trans_registry_lookup_row_in_identifiers(
         return 0;
     }
 
-    card = lm_trans_identifier_table_find_card(identifiers, key);
+    card = lm_trans_identifier_table_find_card(identifiers, &key);
     if (card == 0) {
         return 0;
     }
@@ -662,7 +664,7 @@ static const LmOwnPtrStack *lm_trans_registry_relation_stack_in_identifiers(
         return 0;
     }
 
-    card = lm_trans_identifier_table_find_card(identifiers, key);
+    card = lm_trans_identifier_table_find_card(identifiers, &key);
     if (card == 0) {
         return 0;
     }

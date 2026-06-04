@@ -31,11 +31,11 @@ static int lm_trans_emit_capture_field(
         return 1;
     }
     if (capture->type_is_head) {
-        if (lm_trans_builtin_c_type_name(capture->type_head)) {
-            if (lm_trans_emit_type_name(file, capture->type_head) != 0) {
+        if (lm_trans_builtin_c_type_name(&capture->type_head)) {
+            if (lm_trans_emit_type_name(file, &capture->type_head) != 0) {
                 return 1;
             }
-        } else if (lm_trans_emit_name(file, capture->type_head) != 0) {
+        } else if (lm_trans_emit_name(file, &capture->type_head) != 0) {
             return 1;
         }
     } else if (lm_trans_emit_type_node(file, capture->type_node) != 0) {
@@ -1441,7 +1441,7 @@ static int lm_trans_current_return_is_callable_descriptor(
     }
 
     type_name = *namespace_->return_type_node->as->atom;
-    symbol = lm_trans_namespace_find(namespace_, type_name);
+    symbol = lm_trans_namespace_find(namespace_, &type_name);
     if (!lm_trans_symbol_is(symbol, "callableDescriptor")) {
         return 0;
     }
@@ -1474,7 +1474,7 @@ static int lm_trans_emit_closure_return_statement(
         return 0;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, atom);
+    symbol = lm_trans_namespace_find(namespace_, &atom);
     if (
         symbol == 0 ||
         !lm_trans_symbol_is(symbol, "function") ||
@@ -1719,12 +1719,12 @@ static int lm_trans_emit_declaration_with_qualifier(
     if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
         return 1;
     }
-    if (lm_trans_builtin_c_type_name(*frame->head)) {
-        if (lm_trans_emit_type_name(file, *frame->head) != 0) {
+    if (lm_trans_builtin_c_type_name(frame->head)) {
+        if (lm_trans_emit_type_name(file, frame->head) != 0) {
             return 1;
         }
     } else {
-        if (lm_trans_emit_name(file, *frame->head) != 0) {
+        if (lm_trans_emit_name(file, frame->head) != 0) {
             return 1;
         }
     }
@@ -1756,16 +1756,16 @@ static int lm_trans_namespace_declare_storage_binding(
     LmTransSymbol *symbol;
     const LmTransSymbol *type_symbol;
 
-    type_symbol = lm_trans_namespace_find(namespace_, type_head);
+    type_symbol = lm_trans_namespace_find(namespace_, &type_head);
     if (lm_trans_symbol_is(type_symbol, "callableDescriptor")) {
-        if (lm_trans_namespace_declare(namespace_, name, "closure") != 0) {
+        if (lm_trans_namespace_declare(namespace_, &name, "closure") != 0) {
             return 1;
         }
-        symbol = lm_trans_namespace_find_mutable(namespace_, name);
+        symbol = lm_trans_namespace_find_mutable(namespace_, &name);
         return lm_trans_symbol_copy_signature(symbol, type_symbol);
     }
 
-    return lm_trans_namespace_declare(namespace_, name, "variable");
+    return lm_trans_namespace_declare(namespace_, &name, "variable");
 }
 
 static int lm_trans_emit_declaration(
@@ -1787,7 +1787,7 @@ static int lm_trans_head_can_declare_storage(
 ) {
     const LmTransSymbol *symbol;
 
-    if (lm_trans_builtin_c_type_name(head)) {
+    if (lm_trans_builtin_c_type_name(&head)) {
         return 1;
     }
 
@@ -1798,7 +1798,7 @@ static int lm_trans_head_can_declare_storage(
         return 0;
     }
 
-    if (lm_trans_is_reserved_head_name(head)) {
+    if (lm_trans_is_reserved_head_name(&head)) {
         return 0;
     }
 
@@ -1806,7 +1806,7 @@ static int lm_trans_head_can_declare_storage(
         return 1;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, head);
+    symbol = lm_trans_namespace_find(namespace_, &head);
     return
         lm_trans_symbol_is(symbol, "class") ||
         lm_trans_symbol_is(symbol, "callableDescriptor");
@@ -1893,7 +1893,7 @@ static int lm_trans_emit_pointer_declaration_with_qualifier(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
 }
 
 static int lm_trans_emit_pointer_declaration(
@@ -2119,7 +2119,7 @@ static int lm_trans_emit_array_declaration_with_qualifier(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
 }
 
 static int lm_trans_emit_array_declaration(
@@ -2205,7 +2205,7 @@ static int lm_trans_emit_pointer_declaration_repeat_with_qualifier(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
 }
 
 static int lm_trans_emit_array_declaration_repeat_with_qualifier(
@@ -2343,7 +2343,7 @@ static int lm_trans_emit_array_declaration_repeat_with_qualifier(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
 }
 
 static int lm_trans_emit_c_tagged_declaration(
@@ -2376,13 +2376,13 @@ static int lm_trans_emit_c_tagged_declaration(
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
-    if (lm_trans_emit_name(file, *frame->head) != 0) {
+    if (lm_trans_emit_name(file, frame->head) != 0) {
         return 1;
     }
     if (lm_trans_put(file, " ") != 0) {
         return 1;
     }
-    if (lm_trans_emit_name(file, *type_node->as->atom) != 0) {
+    if (lm_trans_emit_name(file, type_node->as->atom) != 0) {
         return 1;
     }
     if (lm_trans_put(file, " ") != 0) {
@@ -2402,7 +2402,7 @@ static int lm_trans_emit_c_tagged_declaration(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
 }
 
 static int lm_trans_emit_const_statement(
@@ -2462,13 +2462,13 @@ static int lm_trans_emit_call_statement(
             fprintf(stderr, "trans L2 error: too many arguments\n");
             return 1;
         }
-        if (lm_trans_emit_name(file, call.name) != 0) {
+        if (lm_trans_emit_name(file, &call.name) != 0) {
             return 1;
         }
         if (lm_trans_put(file, "->call(") != 0) {
             return 1;
         }
-        if (lm_trans_emit_name(file, call.name) != 0) {
+        if (lm_trans_emit_name(file, &call.name) != 0) {
             return 1;
         }
         if (lm_trans_put(file, "->env") != 0) {
@@ -2487,7 +2487,7 @@ static int lm_trans_emit_call_statement(
         }
         return lm_trans_put(file, ";\n");
     }
-    if (lm_trans_emit_name(file, call.name) != 0) {
+    if (lm_trans_emit_name(file, &call.name) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "(") != 0) {
@@ -2519,7 +2519,7 @@ static int lm_trans_head_looks_assignable_target(LmP0Text head) {
     return
         lm_trans_text_contains_char(head, '[') ||
         lm_trans_text_contains_char(head, '\\') ||
-        lm_trans_c_reference_has_path_dot(head);
+        lm_trans_c_reference_has_path_dot(&head);
 }
 
 static int lm_trans_emit_assignment_target(FILE *file, LmP0Text target) {
@@ -2548,7 +2548,7 @@ static int lm_trans_emit_assignment_target(FILE *file, LmP0Text target) {
         return 1;
     }
 
-    is_c_reference_path = lm_trans_is_c_reference_name(target_path);
+    is_c_reference_path = lm_trans_is_c_reference_name(&target_path);
     if (!is_c_reference_path && lm_trans_text_contains_char(target_path, '.')) {
         fprintf(stderr, "trans L2 error: dot belongs only to c.* ANSI C surface names; use \\ for Lingvamyxa structures\n");
         return 1;
@@ -2719,7 +2719,7 @@ static int lm_trans_emit_struct_field_with_qualifier(
     if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
         return 1;
     }
-    if (lm_trans_emit_name(file, *frame->head) != 0) {
+    if (lm_trans_emit_name(file, frame->head) != 0) {
         return 1;
     }
     if (lm_trans_put(file, " ") != 0) {
@@ -2823,8 +2823,8 @@ static int lm_trans_emit_function_return_structure_once(
 static int lm_trans_frame_looks_label_declaration(const LmP0Frame *frame) {
     return
         frame != 0 &&
-        !lm_trans_is_c_reference_name(*frame->head) &&
-        !lm_trans_is_reserved_head_name(*frame->head) &&
+        !lm_trans_is_c_reference_name(frame->head) &&
+        !lm_trans_is_reserved_head_name(frame->head) &&
         (frame->flags & LM_P0_FRAME_COLON) != 0U &&
         (frame->flags & LM_P0_FRAME_INLINE_BODY) == 0U;
 }
@@ -3185,7 +3185,7 @@ static int lm_trans_statement_stack_schedule_label(
 ) {
     int status;
 
-    if (lm_trans_namespace_declare(namespace_, *frame->head, "label") != 0) {
+    if (lm_trans_namespace_declare(namespace_, frame->head, "label") != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(file, indent) != 0) {
@@ -3648,7 +3648,7 @@ static int lm_trans_statement_lowering_from_head(
         return 0;
     }
 
-    if (lm_trans_head_binding_resolve(0, head, &binding) != 0) {
+    if (lm_trans_head_binding_resolve(0, &head, &binding) != 0) {
         return 0;
     }
     if (binding.statement_frame == 0) {
@@ -3672,7 +3672,7 @@ static int lm_trans_lower_statement_frame(
         return 1;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, *frame->head);
+    symbol = lm_trans_namespace_find(namespace_, frame->head);
     if (symbol != 0) {
         if (lm_trans_symbol_is(symbol, "variable")) {
             out->emit = lm_trans_statement_emit_assignment;
@@ -3720,7 +3720,7 @@ static int lm_trans_lower_statement_frame(
         out->emit = lm_trans_statement_emit_label;
         return 0;
     }
-    if (lm_trans_is_c_reference_name(*frame->head)) {
+    if (lm_trans_is_c_reference_name(frame->head)) {
         out->emit = lm_trans_statement_emit_call;
         return 0;
     }
@@ -4343,9 +4343,9 @@ static int lm_trans_statement_emit_nested_function(
     if (
         lm_trans_namespace_declare_c_name(
             namespace_,
-            function.name,
+            &function.name,
             function.symbol_class,
-            hoisted->function.c_name
+            &hoisted->function.c_name
         ) != 0
     ) {
         return 1;
@@ -4357,14 +4357,14 @@ static int lm_trans_statement_emit_nested_function(
             return 1;
         }
         env_arg_text = lm_trans_text_from_cstr(env_arg);
-        status = lm_trans_namespace_set_env_arg(namespace_, function.name, env_arg_text);
+        status = lm_trans_namespace_set_env_arg(namespace_, &function.name, &env_arg_text);
         free(env_arg);
         if (status != 0) {
             return 1;
         }
     }
 
-    if (lm_trans_namespace_set_closure_call_name(namespace_, function.name, hoisted->closure_call_name) != 0) {
+    if (lm_trans_namespace_set_closure_call_name(namespace_, &function.name, &hoisted->closure_call_name) != 0) {
         return 1;
     }
 
@@ -4942,7 +4942,7 @@ static int lm_trans_namespace_set_signature(
         return 1;
     }
 
-    symbol = lm_trans_namespace_find_mutable(namespace_, name);
+    symbol = lm_trans_namespace_find_mutable(namespace_, &name);
     if (symbol == 0) {
         return 1;
     }
@@ -4989,7 +4989,7 @@ static int lm_trans_namespace_set_signature(
                 return 1;
             }
         }
-        param_name_ref = lm_trans_text_ref_new(param_name);
+        param_name_ref = lm_trans_text_ref_new(&param_name);
         if (param_name_ref == 0) {
             lm_own_ptr_stack_destroy(&param_names);
             return 1;
@@ -5046,7 +5046,7 @@ static int lm_trans_namespace_set_callable_shape(
         return 1;
     }
 
-    symbol = lm_trans_namespace_find_mutable(namespace_, function->name);
+    symbol = lm_trans_namespace_find_mutable(namespace_, &function->name);
     if (symbol == 0) {
         return 1;
     }
@@ -5400,7 +5400,7 @@ static int lm_trans_function_header_from_frame(
         return 0;
     }
 
-    if (lm_trans_head_binding_resolve(0, *frame->head, &binding) != 0) {
+    if (lm_trans_head_binding_resolve(0, frame->head, &binding) != 0) {
         return -1;
     }
     if (binding.function_receiver == 0) {
@@ -5639,8 +5639,8 @@ static int lm_trans_capture_stack_add_copy(
     }
 
     copy = lm_trans_capture_new(
-        source->name,
-        source->type_head,
+        &source->name,
+        &source->type_head,
         source->type_node,
         source->pointer_depth,
         source->type_is_head
@@ -5681,7 +5681,7 @@ static int lm_trans_local_name_stack_add(LmOwnPtrStack *names, LmP0Text name) {
     if (lm_trans_local_name_stack_has(names, name)) {
         return 0;
     }
-    copy = lm_trans_text_ref_new(name);
+    copy = lm_trans_text_ref_new(&name);
     if (copy == 0) {
         return 1;
     }
@@ -5821,8 +5821,8 @@ static int lm_trans_capture_candidates_add_decl(
     }
 
     stored = lm_trans_capture_new(
-        capture.name,
-        capture.type_head,
+        &capture.name,
+        &capture.type_head,
         capture.type_node,
         capture.pointer_depth,
         capture.type_is_head

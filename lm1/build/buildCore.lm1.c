@@ -97,6 +97,17 @@ int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
 
 #if defined(_WIN32)
 #include <direct.h>
+static char * lm_build_exe_suffix(void);
+static char * lm_build_path_sep(void);
+static int lm_build_platform_chdir(char *path);
+static char * lm_build_platform_getcwd(char *buffer, size_t size);
+static int lm_build_platform_absolute(char *path);
+static int lm_build_file_exists(char *path);
+static int lm_build_has_qt_cmake(void);
+static int lm_build_has_qt_mingw_make(void);
+static int lm_build_has_qt_gcc(void);
+static int lm_build_has_qt_gxx(void);
+
 static char * lm_build_exe_suffix(void) {
     return ".exe";
 }
@@ -144,6 +155,17 @@ static int lm_build_has_qt_gxx(void) {
 }
 #else
 #include <unistd.h>
+static char * lm_build_exe_suffix(void);
+static char * lm_build_path_sep(void);
+static int lm_build_platform_chdir(char *path);
+static char * lm_build_platform_getcwd(char *buffer, size_t size);
+static int lm_build_platform_absolute(char *path);
+static int lm_build_file_exists(char *path);
+static int lm_build_has_qt_cmake(void);
+static int lm_build_has_qt_mingw_make(void);
+static int lm_build_has_qt_gcc(void);
+static int lm_build_has_qt_gxx(void);
+
 static char * lm_build_exe_suffix(void) {
     return "";
 }
@@ -190,6 +212,43 @@ static int lm_build_has_qt_gxx(void) {
     return 0;
 }
 #endif
+static LmBuildOptions * lm_build_options_new(void);
+static void lm_build_options_delete(LmBuildOptions *options);
+static int lm_build_is_path_separator(char value);
+static int lm_build_has_path_separator(char *path);
+static int lm_build_is_absolute_path(char *path);
+static int lm_build_join_path(char *buffer, size_t size, char *base, char *tail);
+static int lm_build_trim_last_path_part(char *path);
+static int lm_build_has_project_marker(char *path);
+static int lm_build_enter_project_root(char *program_path);
+static char * lm_build_env_or_default(char *name, char *fallback);
+static char * lm_build_default_cmake(void);
+static char * lm_build_default_generator(void);
+static char * lm_build_default_make_program(void);
+static char * lm_build_default_cc(void);
+static char * lm_build_default_cxx(void);
+static void lm_build_print_usage(void);
+static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options);
+static size_t lm_build_append(char *buffer, size_t size, size_t used, char *text);
+static size_t lm_build_append_arg(char *buffer, size_t size, size_t used, char *arg);
+static size_t lm_build_append_prefixed_arg(char *buffer, size_t size, size_t used, char *prefix, char *value);
+static int lm_build_run(char *command);
+static int lm_build_make(char *make_tool, char *operation, char *args);
+static int lm_build_trans(char *trans_tool, char *source_path, char *output_path);
+static int lm_build_generate_all(char *trans_tool);
+static int lm_build_parser_library(char *make_tool);
+static int lm_build_own_library(char *make_tool);
+static int lm_build_compile_trans(char *make_tool, char *parser_library, char *own_library);
+static int lm_build_compile_generated_tools(char *make_tool);
+static int lm_build_defer_finalize(void);
+static int lm_build_extract_third_party_zips(void);
+static int lm_build_clear_full_cmake_cache(char *cmake_tool, char *build_dir);
+static int lm_build_full_configure(void);
+static int lm_build_full_build(void);
+static int lm_build_full_project(void);
+static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans);
+int main(int argc, char **argv);
+
 static LmBuildOptions * lm_build_options_new(void) {
     return lm_own_new_zero(sizeof(LmBuildOptions));
 }

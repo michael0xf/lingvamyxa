@@ -741,6 +741,7 @@ static int lm_trans_emit_abi_typed_name(
     const char *name
 ) {
     size_t i;
+    LmP0Text class_text;
 
     if (file == 0 || class_name == 0) {
         return 1;
@@ -749,7 +750,8 @@ static int lm_trans_emit_abi_typed_name(
     if (is_const && lm_trans_put(file, "const ") != 0) {
         return 1;
     }
-    if (lm_trans_emit_type_name(file, lm_trans_text_from_cstr(class_name)) != 0) {
+    class_text = lm_trans_text_from_cstr(class_name);
+    if (lm_trans_emit_type_name(file, &class_text) != 0) {
         return 1;
     }
     if ((address_depth != 0U || name != 0) && lm_trans_put(file, " ") != 0) {
@@ -1489,6 +1491,7 @@ static int lm_trans_declare_l4_fn_descriptor(
     LmP0Node *return_node;
     LmP0Node *frame_node;
     LmTransFunctionHeader function;
+    LmP0Text name_text;
 
     if (namespace_ == 0 || name == 0) {
         return 1;
@@ -1496,7 +1499,8 @@ static int lm_trans_declare_l4_fn_descriptor(
     if (lm_trans_l4_is_function_pointer_type(namespace_, name)) {
         return 0;
     }
-    if (lm_trans_namespace_find(namespace_, lm_trans_text_from_cstr(name)) != 0) {
+    name_text = lm_trans_text_from_cstr(name);
+    if (lm_trans_namespace_find(namespace_, &name_text) != 0) {
         return 0;
     }
 
@@ -1519,9 +1523,9 @@ static int lm_trans_declare_l4_fn_descriptor(
     if (
         lm_trans_namespace_declare_c_name(
             namespace_,
-            function.name,
+            &function.name,
             function.symbol_class,
-            function.c_name
+            &function.c_name
         ) != 0 ||
         lm_trans_namespace_set_callable_shape(namespace_, &function) != 0
     ) {
@@ -2829,7 +2833,7 @@ static int lm_trans_registry_load_imports_from_structure(
             !lm_trans_node_is_ignored(node) &&
             node->kind == LM_P0_NODE_FRAME
         ) {
-            if (lm_trans_head_binding_resolve(0, *node->as->frame->head, &binding) != 0) {
+            if (lm_trans_head_binding_resolve(0, node->as->frame->head, &binding) != 0) {
                 return 1;
             }
             if (binding.statement_frame == lm_trans_statement_emit_import) {

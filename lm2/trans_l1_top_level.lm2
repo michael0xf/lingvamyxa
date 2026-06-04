@@ -38,7 +38,7 @@ static int lm_trans_top_level_declare_function(
     if (lm_trans_registry_note_class_kind(item->function.name, item->function.symbol_class) != 0) {
         return 1;
     }
-    if (lm_trans_namespace_declare(namespace_, item->function.name, item->function.symbol_class) != 0) {
+    if (lm_trans_namespace_declare(namespace_, &item->function.name, item->function.symbol_class) != 0) {
         return 1;
     }
     if (lm_trans_namespace_set_callable_shape(namespace_, &item->function) != 0) {
@@ -50,7 +50,7 @@ static int lm_trans_top_level_declare_function(
             return 1;
         }
         return_type_name = lm_trans_text_from_cstr(return_type_name_storage);
-        if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "class") != 0) {
+        if (lm_trans_namespace_declare_generated(namespace_, &return_type_name, "class") != 0) {
             free(return_type_name_storage);
             return 1;
         }
@@ -69,7 +69,7 @@ static int lm_trans_top_level_declare_function_compatible(
     if (lm_trans_registry_note_class_kind(item->function.name, item->function.symbol_class) != 0) {
         return 1;
     }
-    if (lm_trans_namespace_declare_compatible(namespace_, item->function.name, item->function.symbol_class) != 0) {
+    if (lm_trans_namespace_declare_compatible(namespace_, &item->function.name, item->function.symbol_class) != 0) {
         return 1;
     }
     if (lm_trans_namespace_set_callable_shape(namespace_, &item->function) != 0) {
@@ -81,7 +81,7 @@ static int lm_trans_top_level_declare_function_compatible(
             return 1;
         }
         return_type_name = lm_trans_text_from_cstr(return_type_name_storage);
-        if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "class") != 0) {
+        if (lm_trans_namespace_declare_generated(namespace_, &return_type_name, "class") != 0) {
             free(return_type_name_storage);
             return 1;
         }
@@ -768,7 +768,7 @@ static int lm_trans_top_level_declare_storage_declaration(
         if (name_node == 0 || name_node->kind != LM_P0_NODE_ATOM) {
             return 1;
         }
-        return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+        return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
     }
 
     if (lm_trans_text_is_array_receiver_head(frame->head)) {
@@ -803,7 +803,7 @@ static int lm_trans_top_level_declare_storage_declaration(
         if (name_node == 0 || name_node->kind != LM_P0_NODE_ATOM) {
             return 1;
         }
-        return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+        return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
     }
 
     return 1;
@@ -898,7 +898,7 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
-    if (lm_trans_head_binding_resolve(0, *out->frame->head, &binding) != 0) {
+    if (lm_trans_head_binding_resolve(0, out->frame->head, &binding) != 0) {
         return 1;
     }
     statement_status = lm_trans_top_level_statement_binding(&binding, out);
@@ -943,6 +943,7 @@ static int lm_trans_emit_function(
     LmTransHoistedFunction *hoisted;
     size_t hoisted_index;
     int status;
+    LmP0Text env_text;
 
     if (function == 0 || function->frame == 0) {
         return 1;
@@ -1070,9 +1071,9 @@ static int lm_trans_emit_function(
         if (
             lm_trans_namespace_declare_c_name(
                 namespace_,
-                function->name,
+                &function->name,
                 function->symbol_class,
-                function->c_name
+                &function->c_name
             ) != 0 ||
             lm_trans_namespace_set_callable_shape(namespace_, function) != 0
         ) {
@@ -1081,11 +1082,12 @@ static int lm_trans_emit_function(
             return 1;
         }
         if (function->has_env) {
+            env_text = lm_trans_text_from_cstr("lm_env");
             if (
                 lm_trans_namespace_set_env_arg(
                     namespace_,
-                    function->name,
-                    lm_trans_text_from_cstr("lm_env")
+                    &function->name,
+                    &env_text
                 ) != 0
             ) {
                 lm_trans_namespace_leave_scope(namespace_);
@@ -1117,9 +1119,9 @@ static int lm_trans_emit_function(
             if (
                 lm_trans_namespace_declare_c_name(
                     namespace_,
-                    capture->name,
+                    &capture->name,
                     "variable",
-                    capture_text
+                    &capture_text
                 ) != 0
             ) {
                 free(capture_expr);
@@ -1149,7 +1151,7 @@ static int lm_trans_emit_function(
     }
 
     if (function->is_struct_return) {
-        state->current_return_type_name = lm_trans_text_ref_new(function->c_name);
+        state->current_return_type_name = lm_trans_text_ref_new(&function->c_name);
         if (state->current_return_type_name == 0) {
             lm_trans_function_state_delete(state);
             lm_trans_namespace_leave_scope(namespace_);

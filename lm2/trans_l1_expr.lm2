@@ -27,7 +27,7 @@ static int lm_trans_atom_is_identifier_like(LmP0Text text) {
     }
 
     if (
-        lm_trans_text_is_operator_atom(text) ||
+        lm_trans_text_is_operator_atom(&text) ||
         lm_trans_text_equals(&text, "@") ||
         lm_trans_text_equals(&text, "\\")
     ) {
@@ -56,11 +56,11 @@ static int lm_trans_validate_expr_atom_mode(
 ) {
     const LmTransSymbol *symbol;
 
-    if (lm_trans_is_c_reference_name(atom) || !lm_trans_atom_is_identifier_like(atom)) {
+    if (lm_trans_is_c_reference_name(&atom) || !lm_trans_atom_is_identifier_like(atom)) {
         return 0;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, atom);
+    symbol = lm_trans_namespace_find(namespace_, &atom);
     if (symbol == 0) {
         fprintf(
             stderr,
@@ -109,12 +109,12 @@ static int lm_trans_emit_expr_atom_mode(
         return 1;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, atom);
+    symbol = lm_trans_namespace_find(namespace_, &atom);
     if (symbol != 0 && symbol->has_c_name) {
         return lm_trans_write_text(file, &symbol->c_name);
     }
 
-    return lm_trans_emit_name(file, atom);
+    return lm_trans_emit_name(file, &atom);
 }
 
 static int lm_trans_emit_expr_atom(
@@ -218,7 +218,7 @@ static int lm_trans_lower_call(
     out->name = head;
     out->signature = 0;
     out->is_closure = 0;
-    if (lm_trans_is_c_reference_name(head)) {
+    if (lm_trans_is_c_reference_name(&head)) {
         return 0;
     }
 
@@ -233,7 +233,7 @@ static int lm_trans_lower_call(
         return 1;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, head);
+    symbol = lm_trans_namespace_find(namespace_, &head);
     status = handler(head, symbol, out);
     if (status == 0 && symbol != 0 && symbol->has_c_name) {
         out->name = symbol->c_name;
@@ -243,14 +243,14 @@ static int lm_trans_lower_call(
 
 static int lm_trans_atom_is_prefix_expr_operator(LmP0Text text) {
     return lm_trans_registry_has_expr_emitter_binding_class(
-        text,
+        &text,
         "operator.prefix"
     );
 }
 
 static int lm_trans_atom_is_postfix_expr_operator(LmP0Text text) {
     return lm_trans_registry_has_expr_emitter_binding_class(
-        text,
+        &text,
         "operator.postfix"
     );
 }
@@ -270,7 +270,7 @@ static int lm_trans_atom_is_infix_expr_operator(
     int registry_result;
 
     if (lm_trans_text_equals(&text, "\\")) {
-        if (!lm_trans_registry_has_expr_emitter_class(text, "operator.infix")) {
+        if (!lm_trans_registry_has_expr_emitter_class(&text, "operator.infix")) {
             return 0;
         }
         registry_result =
@@ -281,7 +281,7 @@ static int lm_trans_atom_is_infix_expr_operator(
     }
 
     return lm_trans_registry_has_expr_emitter_binding_class(
-        text,
+        &text,
         "operator.infix"
     );
 }
@@ -1024,7 +1024,7 @@ static int lm_trans_node_callable_descriptor_name(
     }
 
     if (node->kind == LM_P0_NODE_ATOM) {
-        symbol = lm_trans_namespace_find(namespace_, *node->as->atom);
+        symbol = lm_trans_namespace_find(namespace_, node->as->atom);
         if (lm_trans_symbol_is(symbol, "callableDescriptor") && symbol->name != 0) {
             *out_name = *symbol->name;
             return 1;
@@ -1049,7 +1049,7 @@ static int lm_trans_node_callable_descriptor_name(
         return 0;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, *frame->head);
+    symbol = lm_trans_namespace_find(namespace_, frame->head);
     if (lm_trans_symbol_is(symbol, "callableDescriptor") && symbol->name != 0) {
         *out_name = *symbol->name;
         return 1;
@@ -1413,7 +1413,7 @@ static int lm_trans_emit_callable_type_named(
     if (type->is_const && lm_trans_put(file, "const ") != 0) {
         return 1;
     }
-    if (lm_trans_emit_type_name(file, type->class_name) != 0) {
+    if (lm_trans_emit_type_name(file, &type->class_name) != 0) {
         return 1;
     }
     if ((type->address_depth != 0U || name.length != 0U) && lm_trans_put(file, " ") != 0) {
@@ -1505,7 +1505,7 @@ static int lm_trans_emit_callable_adapter_source_prototype(
                 : lm_trans_put(file, "void")
         ) != 0 ||
         lm_trans_put(file, " ") != 0 ||
-        lm_trans_emit_name(file, source_name) != 0 ||
+        lm_trans_emit_name(file, &source_name) != 0 ||
         lm_trans_put(file, "(") != 0 ||
         lm_trans_emit_callable_symbol_param_slice(
             file,
@@ -1599,7 +1599,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
         lm_trans_emit_abi_params(prelude_file, params, param_count) != 0 ||
         lm_trans_put(prelude_file, ") {\n    ") != 0 ||
         (!returns_void && lm_trans_put(prelude_file, "return ") != 0) ||
-        lm_trans_emit_name(prelude_file, source_name) != 0
+        lm_trans_emit_name(prelude_file, &source_name) != 0
     ) {
         free(descriptor_cstr);
         free(adapter_name);
@@ -2070,7 +2070,7 @@ static int lm_trans_emit_callable_binder(
     if (
         lm_trans_put(prelude_file, "    ") != 0 ||
         (!returns_void && lm_trans_put(prelude_file, "return ") != 0) ||
-        lm_trans_emit_name(prelude_file, source_name) != 0 ||
+        lm_trans_emit_name(prelude_file, &source_name) != 0 ||
         lm_trans_put(prelude_file, "(") != 0 ||
         lm_trans_emit_callable_binder_source_call_args(
             prelude_file,
@@ -2105,13 +2105,13 @@ static int lm_trans_emit_callable_binder(
 
     if (
         lm_trans_put(prelude_file, "static ") != 0 ||
-        lm_trans_emit_type_name(prelude_file, descriptor_name) != 0 ||
+        lm_trans_emit_type_name(prelude_file, &descriptor_name) != 0 ||
         lm_trans_put(prelude_file, " ") != 0 ||
         lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(binder_name)) != 0 ||
         lm_trans_put(prelude_file, "(") != 0 ||
         lm_trans_emit_callable_symbol_param_slice(prelude_file, source_symbol, 0U, bound_count) != 0 ||
         lm_trans_put(prelude_file, ") {\n    ") != 0 ||
-        lm_trans_emit_type_name(prelude_file, descriptor_name) != 0 ||
+        lm_trans_emit_type_name(prelude_file, &descriptor_name) != 0 ||
         lm_trans_put(prelude_file, " lm_result;\n") != 0
     ) {
         free(env_type_name);
@@ -2135,7 +2135,7 @@ static int lm_trans_emit_callable_binder(
     }
     if (
         lm_trans_put(prelude_file, "    lm_result = (") != 0 ||
-        lm_trans_emit_type_name(prelude_file, descriptor_name) != 0 ||
+        lm_trans_emit_type_name(prelude_file, &descriptor_name) != 0 ||
         lm_trans_put(prelude_file, ")lm_own_new_zero(sizeof(*lm_result));\n    if (lm_result == 0) {\n        return 0;\n    }\n") != 0
     ) {
         free(env_type_name);
@@ -2359,7 +2359,7 @@ static int lm_trans_should_force_zero_arg_callable(
     }
 
     atom = *segment->first->value->as->atom;
-    symbol = lm_trans_namespace_find(namespace_, atom);
+    symbol = lm_trans_namespace_find(namespace_, &atom);
     if (
         !lm_trans_symbol_is_value_callable(symbol) ||
         !lm_trans_callable_has_no_params(symbol) ||
@@ -2482,7 +2482,7 @@ static int lm_trans_materialize_callable_descriptor_value(
     node = segment->first->value;
     if (node->kind == LM_P0_NODE_FRAME) {
         frame = node->as->frame;
-        symbol = lm_trans_namespace_find(namespace_, *frame->head);
+        symbol = lm_trans_namespace_find(namespace_, frame->head);
         if (
             symbol != 0 &&
             lm_trans_symbol_is_executable_callable(symbol) &&
@@ -2532,7 +2532,7 @@ static int lm_trans_materialize_callable_descriptor_value(
     }
 
     atom = *node->as->atom;
-    if (lm_trans_is_c_reference_name(atom)) {
+    if (lm_trans_is_c_reference_name(&atom)) {
         if (!descriptor_is_function_pointer) {
             return 0;
         }
@@ -2543,7 +2543,7 @@ static int lm_trans_materialize_callable_descriptor_value(
         return 0;
     }
 
-    symbol = lm_trans_namespace_find(namespace_, atom);
+    symbol = lm_trans_namespace_find(namespace_, &atom);
     if (symbol == 0 || !lm_trans_symbol_is_executable_callable(symbol)) {
         return 0;
     }
@@ -3083,13 +3083,13 @@ static int lm_trans_expr_stack_emit_frame(
             fprintf(stderr, "trans L2 error: too many arguments\n");
             return 1;
         }
-        if (lm_trans_emit_name(file, call.name) != 0) {
+        if (lm_trans_emit_name(file, &call.name) != 0) {
             return 1;
         }
         if (lm_trans_put(file, "->call(") != 0) {
             return 1;
         }
-        if (lm_trans_emit_name(file, call.name) != 0) {
+        if (lm_trans_emit_name(file, &call.name) != 0) {
             return 1;
         }
         if (lm_trans_put(file, "->env") != 0) {
@@ -3107,7 +3107,7 @@ static int lm_trans_expr_stack_emit_frame(
         return 0;
     }
 
-    if (lm_trans_emit_name(file, call.name) != 0) {
+    if (lm_trans_emit_name(file, &call.name) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "(") != 0) {
@@ -3157,14 +3157,14 @@ static int lm_trans_expr_stack_emit_node(
 
 static int lm_trans_atom_is_operand_like(LmP0Text text) {
     return
-        !lm_trans_text_is_operator_atom(text) &&
+        !lm_trans_text_is_operator_atom(&text) &&
         !lm_trans_text_equals(&text, "@") &&
         !lm_trans_text_equals(&text, "\\");
 }
 
 static int lm_trans_atom_is_index_operator(LmP0Text text) {
     return lm_trans_registry_has_expr_emitter_binding_class(
-        text,
+        &text,
         "operator.index"
     );
 }
@@ -3191,7 +3191,7 @@ static int lm_trans_expr_emit_name(
     const LmTransNamespace *namespace_
 ) {
     (void)namespace_;
-    return lm_trans_emit_name(file, lowering->text);
+    return lm_trans_emit_name(file, &lowering->text);
 }
 
 static int lm_trans_expr_emit_raw(
@@ -3453,7 +3453,7 @@ static int lm_trans_lower_expr_atom(
         lm_trans_expr_atom_lowering_set_builtin(out, *node->as->atom, "lm_trans_expr_emit_field_name");
     } else if (expect_c_field_name) {
         lm_trans_expr_atom_lowering_set_builtin(out, *node->as->atom, "lm_trans_expr_emit_c_field_name");
-    } else if (lm_trans_is_c_reference_name(*node->as->atom)) {
+    } else if (lm_trans_is_c_reference_name(node->as->atom)) {
         lm_trans_expr_atom_lowering_set_builtin(out, *node->as->atom, "lm_trans_expr_emit_c_surface");
     } else if (lm_trans_text_equals(node->as->atom, "\\")) {
         if (previous_operand != 0 && lm_trans_nodes_touch(previous_operand, node)) {
@@ -3469,7 +3469,7 @@ static int lm_trans_lower_expr_atom(
                 "operator.prefix"
             );
         }
-    } else if (lm_trans_registry_has_expr_emitter_binding(*node->as->atom, "expr.atom.emitter")) {
+    } else if (lm_trans_registry_has_expr_emitter_binding(node->as->atom, "expr.atom.emitter")) {
         return lm_trans_expr_atom_lowering_set_from_tables(
             out,
             *node->as->atom,
@@ -3488,15 +3488,15 @@ static int lm_trans_lower_expr_atom(
             *node->as->atom,
             "operator.infix"
         );
-    } else if (lm_trans_text_is_operator_atom(*node->as->atom)) {
-        if (lm_trans_registry_has_expr_emitter_class(*node->as->atom, "operator.prefix")) {
+    } else if (lm_trans_text_is_operator_atom(node->as->atom)) {
+        if (lm_trans_registry_has_expr_emitter_class(node->as->atom, "operator.prefix")) {
             return lm_trans_expr_atom_lowering_set_from_class(
                 out,
                 *node->as->atom,
                 "operator.prefix"
             );
         }
-        if (lm_trans_registry_has_expr_emitter_class(*node->as->atom, "operator.postfix")) {
+        if (lm_trans_registry_has_expr_emitter_class(node->as->atom, "operator.postfix")) {
             return lm_trans_expr_atom_lowering_set_from_class(
                 out,
                 *node->as->atom,
@@ -3955,7 +3955,7 @@ static int lm_trans_expr_job_emit_name_text(
 ) {
     (void)stack;
     (void)namespace_;
-    return lm_trans_emit_name(file, job->as.name_text);
+    return lm_trans_emit_name(file, &job->as.name_text);
 }
 
 static int lm_trans_expr_job_emit_node(
@@ -4270,7 +4270,7 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
     }
 
     if (type_node->kind == LM_P0_NODE_ATOM) {
-        return lm_trans_emit_type_name(file, *type_node->as->atom);
+        return lm_trans_emit_type_name(file, type_node->as->atom);
     }
 
     if (
@@ -4398,7 +4398,7 @@ static int lm_trans_emit_callable_descriptor_param_frame(
     }
 
     if (lm_trans_head_can_declare_storage(*frame->head, namespace_)) {
-        return lm_trans_emit_type_name(file, *frame->head);
+        return lm_trans_emit_type_name(file, frame->head);
     }
 
     fprintf(stderr, "trans L2 error: unsupported callable descriptor parameter type\n");
@@ -4550,10 +4550,10 @@ static int lm_trans_emit_type_head_only(
     FILE *file,
     LmP0Text type_head
 ) {
-    if (lm_trans_builtin_c_type_name(type_head)) {
-        return lm_trans_emit_type_name(file, type_head);
+    if (lm_trans_builtin_c_type_name(&type_head)) {
+        return lm_trans_emit_type_name(file, &type_head);
     }
-    return lm_trans_emit_name(file, type_head);
+    return lm_trans_emit_name(file, &type_head);
 }
 
 static int lm_trans_emit_c_dimension_text(
@@ -4804,7 +4804,7 @@ static int lm_trans_emit_array_param(FILE *file, const LmP0Frame *frame, LmTrans
         }
     }
 
-    return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
 }
 
 static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespace *namespace_) {
@@ -4864,7 +4864,7 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespac
             return 1;
         }
         name_node = field0->value;
-        if (lm_trans_emit_name(file, *node->as->frame->head) != 0) {
+        if (lm_trans_emit_name(file, node->as->frame->head) != 0) {
             return 1;
         }
         if (lm_trans_put(file, " ") != 0) {
@@ -4902,7 +4902,7 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespac
         ) {
             return 1;
         }
-        return lm_trans_namespace_declare(namespace_, *name_node->as->atom, "variable");
+        return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
     }
 
     if (lm_trans_text_is_array_receiver_head(node->as->frame->head)) {
