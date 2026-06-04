@@ -1,0 +1,18 @@
+L2:
+    L1:
+===
+static int call_later(void) {
+    return later();
+}
+===
+
+    fn: later () int
+        return: 7
+    end: later
+
+    external:
+        fn: main () int
+            return: c.call_later() != 7
+        end: main
+    end: external
+end: L2

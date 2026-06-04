@@ -90,6 +90,35 @@ int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
 
 #include <stdlib.h>
 #include <string.h>
+void * lm_own_new_zero(size_t size);
+void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
+void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item);
+void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item);
+void lm_own_ptr_stack_destroy(LmOwnPtrStack *stack);
+int lm_own_ptr_stack_push(LmOwnPtrStack *stack, void *item);
+void * lm_own_ptr_stack_pop(LmOwnPtrStack *stack);
+void * lm_own_ptr_stack_at(const LmOwnPtrStack *stack, size_t index);
+void * lm_own_ptr_stack_top(const LmOwnPtrStack *stack);
+void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count);
+void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size);
+void lm_own_value_stack_destroy(LmOwnValueStack *stack);
+void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
+void lm_own_arena_init(LmOwnArena *arena);
+void lm_own_arena_destroy(LmOwnArena *arena);
+void lm_own_arena_freeze(LmOwnArena *arena);
+int lm_own_arena_is_frozen(const LmOwnArena *arena);
+int lm_own_tree_cut(LmOwnArena *arena);
+int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
+static int lm_own_allocation_descriptor_push(LmOwnValueStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level);
+void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
+void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
+void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor * lm_own_arena_allocation_descriptor(const LmOwnArena *arena, const void *address);
+char * lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t length);
+int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
+int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);
+int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
 
 int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
     unsigned char *items;

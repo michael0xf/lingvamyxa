@@ -1,0 +1,19 @@
+L2:
+    L1:
+===
+static int call_pair_left(void) {
+    pairReturn value = pair();
+    return value.left;
+}
+===
+
+    fm: pair () (int: left; int: right)
+        return: (3 4)
+    end: pair
+
+    external:
+        fn: main () int
+            return: c.call_pair_left() != 3
+        end: main
+    end: external
+end: L2

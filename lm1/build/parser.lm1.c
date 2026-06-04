@@ -291,6 +291,30 @@ static LmOwnPtrStack *lm_l4_seen_tables_get(void) {
 static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables) {
     lm_l4_seen_tables = seen_tables;
 }
+static int lm_l4_text_equals(LmP0Text text, const char *value);
+static int lm_l4_text_same(LmP0Text left, LmP0Text right);
+static int lm_l4_node_is_ignored(const LmP0Node *node);
+static const char * lm_l4_error_prefix(const LmL4Loader *loader);
+static void lm_l4_error(const LmL4Loader *loader, const char *message);
+static const LmP0Field * lm_l4_nth_field(const LmP0Structure *structure, size_t index);
+static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text);
+static int lm_l4_identifier_value(LmP0Text atom, LmP0Text *out_payload);
+static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, LmP0Text *out_atom);
+static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column);
+static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column *columns, size_t columns_capacity, size_t *out_count);
+static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, LmP0Text expected_name);
+static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
+static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name);
+static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
+static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, LmP0Text head);
+static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
+static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4, size_t *out_row_count);
+
 static int lm_l4_text_equals(LmP0Text text, const char *value) {
     size_t length;
     if (value == 0) {
@@ -939,6 +963,68 @@ static const LmL4Receiver lm_l4_default_receivers[] = {
 #include <string.h>
 #include <limits.h>
 
+static void lm_p0_document_init_owners(LmP0Document *document);
+static void lm_p0_document_destroy_owners(LmP0Document *document);
+static void lm_p0_document_freeze_tree(LmP0Document *document);
+static int lm_p0_text_equals(LmP0Text text, const char *value);
+static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload);
+static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload);
+static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload);
+static int lm_p0_registry_payload_is_null(LmP0Text atom);
+static int lm_p0_is_horizontal_space(char value);
+static int lm_p0_is_line_break(char value);
+static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index);
+static int lm_p0_is_field_space(char value);
+static int lm_p0_is_field_separator(char value);
+static int lm_p0_is_short_form_separator(char value);
+static int lm_p0_is_quoted_token_boundary(char value);
+static int lm_p0_starts_python_string(const char *text, size_t length, size_t index);
+static int lm_p0_is_decimal_digit(char value);
+static char * lm_p0_copy_bytes(const char *source, size_t length);
+static LmP0Text lm_p0_text_from_cstr(const char *text);
+static char * lm_p0_text_copy_cstr(LmP0Text text);
+static char * lm_p0_registry_value_copy_cstr(LmP0Text value);
+static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
+static void lm_p0_registry_row_destroy_any(void *object);
+static void lm_p0_registry_destroy(void);
+static void lm_p0_indent_stack_free(LmP0IndentStack *stack);
+static void lm_p0_indent_stack_free_any(void *object);
+static int lm_p0_indent_stack_push(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column);
+static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack);
+static LmP0IndentStack * lm_p0_indent_stack_new_empty(void);
+static LmP0IndentStack * lm_p0_indent_stack_new(LmP0Document *document);
+static void lm_p0_indent_stack_delete(LmP0IndentStack *stack);
+static int lm_p0_indent_stack_copy(LmP0Document *document, LmP0IndentStack *target, const LmP0IndentStack *source, size_t line, size_t column);
+static LmP0IndentStack * lm_p0_indent_stack_clone(LmP0Document *document, const LmP0IndentStack *source, size_t line, size_t column);
+static size_t lm_p0_indent_tab_column(size_t column);
+static void lm_p0_scan_indent_column(const char *source, size_t start, size_t end, size_t *out_offset, size_t *out_column);
+static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end);
+static const char * lm_p0_registry_lookup(LmP0Text key, const char *table);
+static int lm_p0_registry_table_has_rows(const char *table);
+static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table);
+static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end);
+static void lm_p0_position_in_slice(const char *text, size_t length, size_t index, size_t base_line, size_t base_column, size_t *out_line, size_t *out_column);
+static void lm_p0_advance_layout_line(const char *source, size_t length, size_t line_start, size_t line_end, size_t *offset, size_t *line);
+static int lm_p0_index_is_line_start(const char *text, size_t index);
+static int lm_p0_line_rest_is_horizontal_space(const char *source, size_t start, size_t end);
+static size_t lm_p0_find_physical_line_end(const char *source, size_t length, size_t start);
+static int lm_p0_text_has_prefix_name(const char *text, size_t length, const char *name, int allow_bare);
+static LmP0TrailerRole lm_p0_legacy_trailer_role(const char *text, size_t length);
+static LmP0TrailerRole lm_p0_trailer_role_from_payload(const char *payload);
+static const char * lm_p0_trailer_role_payload(LmP0TrailerRole role);
+static int lm_p0_registry_trailer_allows_bare(const char *class_name);
+static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role);
+static int lm_p0_node_head_is(const LmP0Node *node, const char *name);
+static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target);
+static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event);
+static int lm_p0_find_python_string_end(const char *text, size_t length, size_t start, size_t *out_end);
+static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start);
+static void lm_p0_scan_layout_prefix(const char *source, size_t length, size_t start, size_t *out_offset, size_t *out_indent_column, size_t *out_dot_level);
+static int lm_p0_layout_prefix_is_deeper(size_t indent_column, size_t dot_level, size_t base_indent_column, size_t base_dot_level);
+static LmP0DashFenceStatus lm_p0_dash_fence_status(const char *text, size_t length, size_t *out_dash_count);
+static int lm_p0_validate_dash_fence_line(LmP0Document *document, const char *text, size_t length, size_t line, size_t column);
+static int lm_p0_match_block_string_fence_line(const char *source, size_t line_start, size_t line_end, size_t eq_count);
+static int lm_p0_match_raw_comment_fence_line(const char *source, size_t line_start, size_t line_end, size_t star_count);
 
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
 #define LM_P0_ENABLE_REGISTRY_COMPARE 1
