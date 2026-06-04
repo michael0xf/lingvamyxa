@@ -31,6 +31,7 @@ table:
              `receiver.function`        relation
              `receiver.statement`       relation
              `receiver.atom.statement`  relation
+             `receiver.expr`            relation
              `receiver.l4`              relation
              `receiver.l4.root`         relation
              `receiver.l4.atom`         relation
@@ -47,6 +48,7 @@ table:
              expr_emitter_binding       relation
              `call.lowering`            relation
              `materialize.argument`     relation
+             `cast.target`              relation
              `operator.prefix`          relation
              `operator.postfix`         relation
              `operator.infix`           relation
@@ -202,6 +204,13 @@ table:
 end: `receiver.statement`
 
 table:
+    name: `receiver.expr`
+    columns: class  (receiver binding)
+    rows:
+             cast   lm_trans_expr_emit_cast_frame
+end: `receiver.expr`
+
+table:
     name: `namespace.l4`
     columns: class  (`receiver.type` class)
     rows:
@@ -351,6 +360,50 @@ table:
              `callable.descriptor.value` lm_trans_materialize_callable_descriptor_value
              `array.value`              lm_trans_materialize_array_value
 end: `materialize.argument`
+
+table:
+    name: `cast.target`
+    columns: class                    (value serial)
+    rows:
+             char                     1
+             uchar                    1
+             int                      1
+             unsigned                 1
+             long                     1
+             ulong                    1
+             size_t                   1
+             void                     1
+             LmOwnAllocationDescriptor 1
+             LmP0DisabledState        1
+             LmP0Document             1
+             LmP0Dump                 1
+             LmP0Field                1
+             LmP0Frame                1
+             LmP0Node                 1
+             LmP0PendingDelimiter     1
+             LmP0PendingMix           1
+             LmP0RegistryRow          1
+             LmP0Stack                1
+             LmP0StreamEvent          1
+             LmP0Structure            1
+             LmP0Text                 1
+             LmP0Trailer              1
+             LmTransCapture           1
+             LmTransCleanup           1
+             LmTransExprLoweredRange  1
+             LmTransExprPiece         1
+             LmTransExprSegment       1
+             LmTransFunctionState     1
+             LmTransHoistedFunction   1
+             LmTransIdentifierCard    1
+             LmTransIdentifierRelation 1
+             LmTransL4LoadContext     1
+             LmTransLoop              1
+             LmTransNamespace         1
+             LmTransRegistryFact      1
+             LmTransSymbol            1
+             LmTransStructReturnFieldValue 1
+end: `cast.target`
 
 table:
     name: `operator.prefix`

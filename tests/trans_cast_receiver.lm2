@@ -1,0 +1,27 @@
+include: "<ctype.h>" "<stdlib.h>"
+
+L2:
+    external:
+        fn: main () int
+            char: c 'A'
+            int: alpha
+            int: result
+            @: void raw
+            @: uchar bytes
+            size_t: max
+
+            alpha: c.isalpha(cast: uchar c)
+            raw: c.malloc(2U)
+            if: raw = 0
+                return: 1
+
+            bytes: cast: (@: uchar) raw
+            bytes[0]: cast: uchar c
+            max: cast: size_t -1
+            result: alpha = 0 || bytes[0] != (cast: uchar c) || max = 0U
+            c.free(raw)
+
+            return: result
+        end: main
+    end: external
+end: L2

@@ -403,6 +403,7 @@ typedef struct LmTransHoistedFunction {
 } LmTransHoistedFunction;
 typedef struct LmTransBinding {
     int (*call_lowering)(LmP0Text head, const LmTransSymbol *symbol, LmTransCallLowering *out);
+    int (*expr_frame)(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
     int (*expr_emit)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
     int (*expr_state)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
     int (*statement_frame)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
@@ -471,6 +472,7 @@ typedef int (*LmL4PushColumnMetadata)(void *context, LmP0Text table_name, const 
 typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 typedef int (*LmTransExprSegmentMaterializer)(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
 typedef int (*LmTransCallLoweringHandler)(LmP0Text head, const LmTransSymbol *symbol, LmTransCallLowering *out);
+typedef int (*LmTransExprFrameHandler)(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 typedef int (*LmTransExprAtomEmitHandler)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
 typedef int (*LmTransExprAtomStateHandler)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
 typedef int (*LmTransExprPieceEmitHandler)(FILE *file, LmTransExprStack *stack, LmTransExprLoweredRange *lowered, const LmTransExprPiece *piece, const LmTransNamespace *namespace_, int *out_suspend);
@@ -6315,6 +6317,181 @@ static int lm_trans_expr_stack_schedule_call_args(
     return status;
 }
 
+static LmP0Text lm_trans_strip_c_prefix(LmP0Text text) {
+    if (lm_trans_text_starts_with(text, "c.") && text.length > 2U) {
+        text.data += 2U;
+        text.length -= 2U;
+    }
+    return text;
+}
+
+static const LmP0Node *lm_trans_single_type_body_node(const LmP0Structure *body) {
+    const LmP0Field *field;
+    const LmP0Field *inner_field;
+
+    if (body == 0) {
+        return 0;
+    }
+
+    field = body->first_field;
+    if (field == 0 || field->next != 0 || field->value == 0) {
+        return 0;
+    }
+
+    if (field->value->kind == LM_P0_NODE_STRUCTURE) {
+        inner_field = field->value->as.structure.first_field;
+        if (inner_field == 0 || inner_field->next != 0) {
+            return 0;
+        }
+        return inner_field->value;
+    }
+
+    return field->value;
+}
+
+static int lm_trans_cast_type_base_key(const LmP0Node *type_node, LmP0Text *out_key) {
+    const LmP0Node *inner;
+
+    if (out_key != 0) {
+        out_key->data = "";
+        out_key->length = 0U;
+    }
+    if (type_node == 0 || out_key == 0) {
+        return 0;
+    }
+
+    if (type_node->kind == LM_P0_NODE_STRUCTURE) {
+        inner = lm_trans_single_type_body_node(&type_node->as.structure);
+        return inner != 0 && lm_trans_cast_type_base_key(inner, out_key);
+    }
+
+    if (type_node->kind == LM_P0_NODE_ATOM) {
+        *out_key = lm_trans_strip_c_prefix(type_node->as.atom);
+        return 1;
+    }
+
+    if (
+        type_node->kind == LM_P0_NODE_FRAME &&
+        (
+            lm_trans_text_equals(type_node->as.frame.head, "const") ||
+            lm_trans_text_all_char(type_node->as.frame.head, '@')
+        )
+    ) {
+        inner = lm_trans_single_type_body_node(&type_node->as.frame.body);
+        return inner != 0 && lm_trans_cast_type_base_key(inner, out_key);
+    }
+
+    return 0;
+}
+
+static int lm_trans_cast_type_is_allowed(
+    const LmP0Node *type_node,
+    const LmTransNamespace *namespace_
+) {
+    LmP0Text key;
+
+    if (!lm_trans_cast_type_base_key(type_node, &key)) {
+        fprintf(stderr, "trans L2 error: cast target expects a type\n");
+        return 0;
+    }
+
+    if (lm_trans_namespace_registry_lookup(namespace_, key, "cast.target") != 0) {
+        return 1;
+    }
+
+    fprintf(
+        stderr,
+        "trans L2 error: cast target type \"%.*s\" is not listed in cast.target\n",
+        (int)key.length,
+        key.data
+    );
+    return 0;
+}
+
+static int lm_trans_expr_emit_cast_frame(
+    FILE *file,
+    LmTransExprStack *stack,
+    const LmP0Frame *frame,
+    const LmTransNamespace *namespace_
+) {
+    const LmP0Field *type_field;
+    const LmP0Field *expr_first;
+    const LmP0Node *type_node;
+
+    if (frame == 0) {
+        return 0;
+    }
+
+    type_field = lm_trans_call_body_first_field(&frame->body);
+    if (type_field == 0 || type_field->value == 0) {
+        fprintf(stderr, "trans L2 error: cast expects a target type and an expression\n");
+        return 1;
+    }
+
+    expr_first = type_field->next;
+    if (expr_first == 0) {
+        fprintf(stderr, "trans L2 error: cast expects an expression after the target type\n");
+        return 1;
+    }
+
+    type_node = type_field->value;
+    if (type_node->kind == LM_P0_NODE_STRUCTURE) {
+        type_node = lm_trans_single_type_body_node(&type_node->as.structure);
+    }
+    if (type_node == 0) {
+        fprintf(stderr, "trans L2 error: cast target expects a type\n");
+        return 1;
+    }
+
+    if (!lm_trans_cast_type_is_allowed(type_node, namespace_)) {
+        return 1;
+    }
+
+    if (
+        lm_trans_put(file, "((") != 0 ||
+        lm_trans_emit_type_node(file, type_node) != 0 ||
+        lm_trans_put(file, ")") != 0 ||
+        lm_trans_expr_stack_push_text(stack, ")") != 0 ||
+        lm_trans_expr_stack_push_range(stack, expr_first, 0) != 0
+    ) {
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_lookup_expr_frame_receiver_binding(
+    const LmTransNamespace *namespace_,
+    LmP0Text head,
+    LmTransBinding *out
+) {
+    const char *binding;
+
+    if (out != 0) {
+        memset(out, 0, sizeof(*out));
+    }
+    if (out == 0) {
+        return -1;
+    }
+
+    binding = lm_trans_namespace_registry_lookup(namespace_, head, "receiver.expr");
+    if (binding == 0) {
+        return 0;
+    }
+
+    if (!lm_trans_binding_resolve(binding, out) || out->expr_frame == 0) {
+        fprintf(
+            stderr,
+            "trans registry inconsistency: receiver.expr[\"%.*s\"] has unknown expression receiver binding %s\n",
+            (int)head.length,
+            head.data,
+            binding
+        );
+        return -1;
+    }
+
+    return 1;
+}
+
 static int lm_trans_expr_stack_emit_frame(
     FILE *file,
     LmTransExprStack *stack,
@@ -6322,10 +6499,20 @@ static int lm_trans_expr_stack_emit_frame(
     const LmTransNamespace *namespace_
 ) {
     LmTransCallLowering call;
+    LmTransBinding expr_receiver;
+    int expr_receiver_status;
     int has_args;
 
     if (frame == 0) {
         return 0;
+    }
+
+    expr_receiver_status = lm_trans_lookup_expr_frame_receiver_binding(namespace_, frame->head, &expr_receiver);
+    if (expr_receiver_status < 0) {
+        return 1;
+    }
+    if (expr_receiver_status > 0) {
+        return expr_receiver.expr_frame(file, stack, frame, namespace_);
     }
 
     if (lm_trans_lower_call(frame->head, namespace_, "function", &call) != 0) {
@@ -13273,6 +13460,10 @@ static int lm_trans_binding_resolve(const char *binding, LmTransBinding *out) {
     if (strcmp(binding, "lm_trans_expr_emit_c_dot") == 0) {
         out->expr_emit = lm_trans_expr_emit_raw;
         out->expr_state = lm_trans_expr_state_c_dot;
+        return 1;
+    }
+    if (strcmp(binding, "lm_trans_expr_emit_cast_frame") == 0) {
+        out->expr_frame = lm_trans_expr_emit_cast_frame;
         return 1;
     }
     if (strcmp(binding, "lm_trans_statement_emit_return") == 0) {
