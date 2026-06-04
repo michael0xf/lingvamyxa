@@ -277,6 +277,7 @@ int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **o
 int lm_p0_parse_file(const char *path, LmP0Document **out_document);
 void lm_p0_document_destroy(LmP0Document *document);
 const LmP0Node * lm_p0_document_root(const LmP0Document *document);
+LmP0Node * lm_p0_document_mutable_root(LmP0Document *document);
 const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document *document);
 const LmP0Structure * lm_p0_node_structure(const LmP0Node *node);
 const LmP0Frame * lm_p0_node_frame(const LmP0Node *node);
@@ -7615,6 +7616,10 @@ void lm_p0_document_destroy(LmP0Document *document) {
 }
 
 const LmP0Node *lm_p0_document_root(const LmP0Document *document) {
+    return document != 0 ? document->root : 0;
+}
+
+LmP0Node *lm_p0_document_mutable_root(LmP0Document *document) {
     return document != 0 ? document->root : 0;
 }
 

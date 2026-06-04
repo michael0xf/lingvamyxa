@@ -35,7 +35,7 @@ static LmP0Text *lm_trans_text_from_cstr(const char *text);
 static int lm_trans_text_assign_cstr(LmP0Text *out_text, const char *text);
 static int lm_trans_l4_callable_type_from_node(const LmP0Node *node, LmTransL4CallableType *out);
 static int lm_trans_collect_abi_params(
-    LmTransAbiParam *params,
+    LmTransAbiParam **params,
     size_t capacity,
     size_t *out_count,
     const LmTransNamespace *namespace_,
@@ -44,7 +44,7 @@ static int lm_trans_collect_abi_params(
 );
 static int lm_trans_emit_abi_params(
     FILE *file,
-    const LmTransAbiParam *params,
+    LmTransAbiParam **params,
     size_t count
 );
 static int lm_trans_emit_abi_return_type(

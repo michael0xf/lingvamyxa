@@ -459,6 +459,107 @@ fn: lm_registry_control_node_lmx_alloc (const: @(LmP0Node node); @: LmRegistryCo
     return: result
 end: lm_registry_control_node_lmx_alloc
 
+fn: lm_registry_control_fn_descriptor_frame (const: @(LmP0Frame frame)) int
+    const: @: LmP0Node params_node
+    size_t: field_count
+
+    if: frame = 0 || frame\trailer != 0
+        return: 0
+    if: lm_registry_control_text_equals(frame\head\data, frame\head\length, "fn") = 0 && lm_registry_control_text_equals(frame\head\data, frame\head\length, "lazy fn") = 0
+        return: 0
+
+    field_count: lm_registry_control_visible_field_count(frame\body)
+    if: field_count < 2U
+        return: 0
+
+    params_node: lm_registry_control_nth_visible_field(frame\body, 1U)
+    return: params_node != 0 && params_node\kind = c.LM_P0_NODE_STRUCTURE
+end: lm_registry_control_fn_descriptor_frame
+
+fn: lm_registry_control_fn_params_append_lmx (@: LmRegistryControlBuffer buffer; const: @(LmP0Structure params)) int
+    const: @: LmP0Field field
+    size_t: param_count
+
+    param_count: lm_registry_control_visible_field_count(params)
+    if: param_count = 0U
+        lm_registry_control_buffer_append_cstr(buffer, "()")
+        return: buffer\failed = 0
+
+    lm_registry_control_buffer_append_cstr(buffer, "(\n")
+    field: params\first_field
+    while: field != 0
+        if: lm_registry_control_node_ignored(field\value) = 0
+            lm_registry_control_buffer_append_cstr(buffer, "    ")
+            if: lm_registry_control_node_lmx_append_inline(buffer, field\value) = 0
+                return: 0
+            lm_registry_control_buffer_append_cstr(buffer, "\n")
+        field: field\next
+
+    lm_registry_control_buffer_append_cstr(buffer, ")")
+    return: buffer\failed = 0
+end: lm_registry_control_fn_params_append_lmx
+
+fn: lm_registry_control_fn_to_lmx_append (@: LmRegistryControlBuffer buffer; const: @(LmP0Frame fn_frame); @: LmRegistryControlError error) int
+    const: @: LmP0Node name_node
+    const: @: LmP0Node params_node
+    const: @: LmP0Node node
+    size_t: field_count
+    size_t: index
+
+    if: lm_registry_control_fn_descriptor_frame(fn_frame) = 0
+        lm_registry_control_error_set(error, "fn: descriptor expects name and parameter Structure")
+        return: 0
+
+    name_node: lm_registry_control_nth_visible_field(fn_frame\body, 0U)
+    params_node: lm_registry_control_nth_visible_field(fn_frame\body, 1U)
+    if: name_node = 0 || params_node = 0 || params_node\kind != c.LM_P0_NODE_STRUCTURE
+        lm_registry_control_error_set(error, "fn: descriptor expects name and parameter Structure")
+        return: 0
+
+    if: lm_registry_control_text_equals(fn_frame\head\data, fn_frame\head\length, "lazy fn")
+        lm_registry_control_buffer_append_cstr(buffer, "`lazy fn`: ")
+    if: lm_registry_control_text_equals(fn_frame\head\data, fn_frame\head\length, "lazy fn") = 0
+        lm_registry_control_buffer_append_cstr(buffer, "fn: ")
+    ---
+
+    if: lm_registry_control_node_lmx_append_inline(buffer, name_node) = 0
+        return: 0
+    lm_registry_control_buffer_append_cstr(buffer, " ")
+    if: lm_registry_control_fn_params_append_lmx(buffer, params_node\as\structure) = 0
+        return: 0
+
+    field_count: lm_registry_control_visible_field_count(fn_frame\body)
+    index: 2U
+    while: index < field_count
+        node: lm_registry_control_nth_visible_field(fn_frame\body, index)
+        lm_registry_control_buffer_append_cstr(buffer, " ")
+        if: lm_registry_control_node_lmx_append_inline(buffer, node) = 0
+            return: 0
+        index: index + 1U
+
+    return: buffer\failed = 0
+end: lm_registry_control_fn_to_lmx_append
+
+fn: lm_registry_control_fn_to_lmx_alloc (const: @(LmP0Frame fn_frame); @: LmRegistryControlError error) @: char
+    @: LmRegistryControlBuffer buffer
+    @: char result
+
+    buffer: lm_registry_control_buffer_new()
+    if: buffer = 0
+        lm_registry_control_error_set(error, "out of memory while creating fn formatter")
+        return: 0
+
+    if: lm_registry_control_fn_to_lmx_append(buffer, fn_frame, error) = 0
+        lm_registry_control_buffer_delete(buffer)
+        return: 0
+
+    result: lm_registry_control_buffer_take(buffer)
+    lm_registry_control_buffer_delete(buffer)
+    if: result = 0
+        lm_registry_control_error_set(error, "out of memory while formatting fn descriptor")
+    return: result
+end: lm_registry_control_fn_to_lmx_alloc
+
 fn: lm_registry_control_measure_rows (
     const: @: LmP0Frame rows_frame
     @: LmRegistryControlColumn columns
@@ -645,6 +746,7 @@ fn: lm_registry_control_emit_frame_from_node (
 ) int
     @: char text
     int: is_table
+    int: is_fn
 
     if: lm_registry_control_node_ignored(node) != 0
         return: 1
@@ -658,9 +760,12 @@ fn: lm_registry_control_emit_frame_from_node (
 
     text: 0
     is_table: lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "table")
+    is_fn: lm_registry_control_fn_descriptor_frame(node\as\frame)
     if: is_table
         text: lm_registry_control_table_to_lmx_alloc(node\as\frame, error)
-    if: is_table = 0
+    if: is_table = 0 && is_fn
+        text: lm_registry_control_fn_to_lmx_alloc(node\as\frame, error)
+    if: is_table = 0 && is_fn = 0
         text: lm_registry_control_node_lmx_alloc(node, error)
 
     if: text = 0
@@ -785,7 +890,7 @@ fn: lm_registry_control_rename_structure_tables (@: LmP0Structure structure; @: 
     return: 0
 end: lm_registry_control_rename_structure_tables
 
-fn: lm_registry_control_rename_document_column_descriptor (const: @(LmP0Document document); const: @(char old_name); const: @(char new_name); @: size_t out_changed) int
+fn: lm_registry_control_rename_document_column_descriptor (@: LmP0Document document; const: @(char old_name); const: @(char new_name); @: size_t out_changed) int
     @: LmP0Node root
     @: LmRegistryControlRename rename
 
@@ -801,7 +906,7 @@ fn: lm_registry_control_rename_document_column_descriptor (const: @(LmP0Document
     rename\old_name: old_name
     rename\new_name: new_name
 
-    root: c.lm_p0_document_root(document)
+    root: c.lm_p0_document_mutable_root(document)
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         lm_registry_control_rename_delete(rename)
         return: 1
@@ -866,29 +971,42 @@ fn: lm_registry_control_write_text_file (const: @(char path); const: @(char text
     return: 0
 end: lm_registry_control_write_text_file
 
+fn: lm_registry_control_mutable_document_load_file (const: @(char path); @@: LmP0Document out_document; @: LmRegistryControlError error) int
+    return: lm_registry_control_parse_file(path, out_document, error)
+end: lm_registry_control_mutable_document_load_file
+
+sub: lm_registry_control_mutable_document_destroy (@: LmP0Document document)
+    c.lm_p0_document_destroy(document)
+end: lm_registry_control_mutable_document_destroy
+
+fn: lm_registry_control_mutable_document_save_file (const: @(char path); @: LmP0Document document; @: LmRegistryControlError error) int
+    @: char text
+    int: status
+
+    text: lm_registry_control_document_to_lmx_alloc(document, error)
+    if: text = 0
+        return: 1
+
+    status: lm_registry_control_write_text_file(path, text, error)
+    lm_own_delete(text, 0)
+    return: status
+end: lm_registry_control_mutable_document_save_file
+
 fn: lm_registry_control_rename_file_column_descriptor (const: @(char path); const: @(char old_name); const: @(char new_name); @: size_t out_changed; @: LmRegistryControlError error) int
     @: LmP0Document document
-    @: char text
     int: status
 
     if: out_changed != 0
         out_changed[0]: 0U
 
     document: 0
-    if: lm_registry_control_parse_file(path, @ document, error) != 0
+    if: lm_registry_control_mutable_document_load_file(path, @ document, error) != 0
         return: 1
 
     status: lm_registry_control_rename_document_column_descriptor(document, old_name, new_name, out_changed)
     if: status = 0
-        text: lm_registry_control_document_to_lmx_alloc(document, error)
-        if: text = 0
-            status: 1
-        ---
-    if: status = 0
-        status: lm_registry_control_write_text_file(path, text, error)
-    if: text != 0
-        lm_own_delete(text, 0)
-    c.lm_p0_document_destroy(document)
+        status: lm_registry_control_mutable_document_save_file(path, document, error)
+    lm_registry_control_mutable_document_destroy(document)
     return: status
 end: lm_registry_control_rename_file_column_descriptor
 

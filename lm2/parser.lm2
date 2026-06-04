@@ -7566,6 +7566,10 @@ const LmP0Node *lm_p0_document_root(const LmP0Document *document) {
     return document != 0 ? document->root : 0;
 }
 
+LmP0Node *lm_p0_document_mutable_root(LmP0Document *document) {
+    return document != 0 ? document->root : 0;
+}
+
 const LmP0Diagnostic *lm_p0_document_diagnostic(const LmP0Document *document) {
     if (document == 0 || document->diagnostic == 0 || document->diagnostic->code == 0) {
         return 0;

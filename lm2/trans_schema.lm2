@@ -483,73 +483,18 @@ L4:
 
     table:
         name: LmTransExprJob
-        columns: class    (`field.class` class)  (`field.index` serial)
+        columns: class          (`field.class` class)       (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 run      LmTransExprJobHandler         0
-                 destroy  LmTransExprJobDestroyHandler  1
+                 run            LmTransExprJobHandler       0                       0                                0
+                 destroy        LmTransExprJobDestroyHandler 1                       0                                0
+                 text           char                        2                       1                                1
+                 name_text      LmP0Text                    3                       1                                0
+                 node           LmP0Node                    4                       1                                1
+                 frame          LmP0Frame                   5                       1                                1
+                 range          LmTransExprRangeJob         6                       1                                0
+                 call_args      LmTransExprCallArgsJob      7                       1                                0
+                 lowered_range  LmTransExprLoweredRange     8                       1                                0
     end: LmTransExprJob
-
-    table:
-        name: `LmTransExprJob.field.union`
-        columns: class  (union class)
-        rows:
-                 as     LmTransExprJobAs
-    end: `LmTransExprJob.field.union`
-
-    table:
-        name: `LmTransExprJob.field.index`
-        columns: class  (index serial)
-        rows:
-                 as     2
-    end: `LmTransExprJob.field.index`
-
-    table:
-        name: `LmTransExprJobAs.field.class`
-        columns: class          (field class)
-        rows:
-                 text           char
-                 name_text      LmP0Text
-                 node           LmP0Node
-                 frame          LmP0Frame
-                 range          LmTransExprRangeJob
-                 call_args      LmTransExprCallArgsJob
-                 lowered_range  LmTransExprLoweredRange
-    end: `LmTransExprJobAs.field.class`
-
-    table:
-        name: `LmTransExprJobAs.field.index`
-        columns: class          (index serial)
-        rows:
-                 text           0
-                 name_text      1
-                 node           2
-                 frame          3
-                 range          4
-                 call_args      5
-                 lowered_range  6
-    end: `LmTransExprJobAs.field.index`
-
-    table:
-        name: `LmTransExprJobAs.field.address-depth`
-        columns: class          (depth serial)
-        rows:
-                 text           1
-                 name_text      1
-                 node           1
-                 frame          1
-                 range          1
-                 call_args      1
-                 lowered_range  1
-    end: `LmTransExprJobAs.field.address-depth`
-
-    table:
-        name: `LmTransExprJobAs.field.const`
-        columns: class  (value serial)
-        rows:
-                 text   1
-                 node   1
-                 frame  1
-    end: `LmTransExprJobAs.field.const`
 
     table:
         name: LmTransStatementListJob
@@ -603,58 +548,16 @@ L4:
 
     table:
         name: LmTransStatementJob
-        columns: class  (`field.class` class)  (`field.index` serial)
+        columns: class       (`field.class` class)            (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 run    LmTransStatementJobHandler  0
-                 destroy LmTransStatementJobDestroyHandler 1
+                 run         LmTransStatementJobHandler        0                       0
+                 destroy     LmTransStatementJobDestroyHandler 1                       0
+                 list        LmTransStatementListJob           2                       1
+                 node        LmTransStatementNodeJob           3                       1
+                 frame       LmTransStatementFrameJob          4                       1
+                 text        LmTransStatementTextJob           5                       1
+                 sync_leave  LmTransStatementSyncLeaveJob      6                       1
     end: LmTransStatementJob
-
-    table:
-        name: `LmTransStatementJob.field.union`
-        columns: class  (union class)
-        rows:
-                 as     LmTransStatementJobAs
-    end: `LmTransStatementJob.field.union`
-
-    table:
-        name: `LmTransStatementJob.field.index`
-        columns: class  (index serial)
-        rows:
-                 as     2
-    end: `LmTransStatementJob.field.index`
-
-    table:
-        name: `LmTransStatementJobAs.field.class`
-        columns: class       (field class)
-        rows:
-                 list        LmTransStatementListJob
-                 node        LmTransStatementNodeJob
-                 frame       LmTransStatementFrameJob
-                 text        LmTransStatementTextJob
-                 sync_leave  LmTransStatementSyncLeaveJob
-    end: `LmTransStatementJobAs.field.class`
-
-    table:
-        name: `LmTransStatementJobAs.field.index`
-        columns: class       (index serial)
-        rows:
-                 list        0
-                 node        1
-                 frame       2
-                 text        3
-                 sync_leave  4
-    end: `LmTransStatementJobAs.field.index`
-
-    table:
-        name: `LmTransStatementJobAs.field.address-depth`
-        columns: class       (depth serial)
-        rows:
-                 list        1
-                 node        1
-                 frame       1
-                 text        1
-                 sync_leave  1
-    end: `LmTransStatementJobAs.field.address-depth`
 
     table:
         name: LmTransStatementLowering

@@ -19,11 +19,78 @@ static void lm_trans_l4_text_view_delete(LmP0Text **view) {
     lm_trans_text_ref_destroy(view);
 }
 
-static LmTransAbiParam *lm_trans_l4_abi_params_new(size_t capacity) {
+static LmTransAbiParam **lm_trans_l4_abi_params_new(size_t capacity) {
+    LmTransAbiParam **params;
+    size_t i;
+
     if (capacity == 0U) {
         return 0;
     }
-    return (LmTransAbiParam *)lm_own_new_zero(sizeof(LmTransAbiParam) * capacity);
+    params = (LmTransAbiParam **)lm_own_new_zero(sizeof(params[0]) * capacity);
+    if (params == 0) {
+        return 0;
+    }
+    for (i = 0U; i < capacity; ++i) {
+        params[i] = (LmTransAbiParam *)lm_own_new_zero(sizeof(params[i][0]));
+        if (params[i] == 0) {
+            while (i != 0U) {
+                --i;
+                lm_own_delete(params[i], 0);
+            }
+            lm_own_delete(params, 0);
+            return 0;
+        }
+    }
+    return params;
+}
+
+static void lm_trans_l4_abi_params_delete(LmTransAbiParam **params, size_t capacity) {
+    size_t i;
+
+    if (params == 0) {
+        return;
+    }
+    for (i = 0U; i < capacity; ++i) {
+        lm_own_delete(params[i], 0);
+    }
+    lm_own_delete(params, 0);
+}
+
+static LmTransLayoutField **lm_trans_layout_fields_new(size_t capacity) {
+    LmTransLayoutField **fields;
+    size_t i;
+
+    if (capacity == 0U) {
+        return 0;
+    }
+    fields = (LmTransLayoutField **)lm_own_new_zero(sizeof(fields[0]) * capacity);
+    if (fields == 0) {
+        return 0;
+    }
+    for (i = 0U; i < capacity; ++i) {
+        fields[i] = (LmTransLayoutField *)lm_own_new_zero(sizeof(fields[i][0]));
+        if (fields[i] == 0) {
+            while (i != 0U) {
+                --i;
+                lm_own_delete(fields[i], 0);
+            }
+            lm_own_delete(fields, 0);
+            return 0;
+        }
+    }
+    return fields;
+}
+
+static void lm_trans_layout_fields_delete(LmTransLayoutField **fields, size_t capacity) {
+    size_t i;
+
+    if (fields == 0) {
+        return;
+    }
+    for (i = 0U; i < capacity; ++i) {
+        lm_own_delete(fields[i], 0);
+    }
+    lm_own_delete(fields, 0);
 }
 
 static int lm_trans_registry_collect_layout_names(
@@ -156,7 +223,7 @@ static int lm_trans_collect_layout_field_common(
 static int lm_trans_collect_layout_fields(
     const char *layout_name,
     const LmTransNamespace *namespace_,
-    LmTransLayoutField *fields,
+    LmTransLayoutField **fields,
     size_t capacity,
     size_t *out_count
 ) {
@@ -203,7 +270,7 @@ static int lm_trans_collect_layout_fields(
                     lm_trans_l4_text_view_delete(&layout_text);
                     return 1;
                 }
-                field = &fields[field_count];
+                field = fields[field_count];
                 if (
                     lm_trans_collect_layout_field_common(
                         layout_name,
@@ -238,7 +305,7 @@ static int lm_trans_collect_layout_fields(
                     lm_trans_l4_text_view_delete(&layout_text);
                     return 1;
                 }
-                field = &fields[field_count];
+                field = fields[field_count];
                 if (
                     lm_trans_collect_layout_field_common(
                         layout_name,
@@ -266,31 +333,26 @@ static int lm_trans_collect_layout_fields(
 }
 
 static int lm_trans_sort_layout_fields(
-    LmTransLayoutField *fields,
+    LmTransLayoutField **fields,
     size_t field_count
 ) {
     size_t i;
     size_t j;
-    void *swap;
+    LmTransLayoutField *swap;
 
     if (fields == 0) {
-        return 1;
-    }
-    swap = lm_own_new_zero(sizeof(fields[0]));
-    if (swap == 0) {
         return 1;
     }
 
     for (i = 0U; i < field_count; ++i) {
         for (j = i + 1U; j < field_count; ++j) {
-            if (fields[j].index < fields[i].index) {
-                memcpy(swap, &fields[i], sizeof(fields[i]));
-                memcpy(&fields[i], &fields[j], sizeof(fields[i]));
-                memcpy(&fields[j], swap, sizeof(fields[j]));
+            if (fields[j]->index < fields[i]->index) {
+                swap = fields[i];
+                fields[i] = fields[j];
+                fields[j] = swap;
             }
         }
     }
-    lm_own_delete(swap, 0);
     return 0;
 }
 
@@ -392,13 +454,13 @@ static int lm_trans_emit_layout_fields(
     const LmTransNamespace *namespace_,
     unsigned indent
 ) {
-    LmTransLayoutField *fields;
+    LmTransLayoutField **fields;
     size_t field_capacity;
     size_t field_count;
     size_t i;
 
     field_capacity = 256U;
-    fields = (LmTransLayoutField *)lm_own_new_zero(sizeof(fields[0]) * field_capacity);
+    fields = lm_trans_layout_fields_new(field_capacity);
     if (fields == 0) {
         return 1;
     }
@@ -411,22 +473,22 @@ static int lm_trans_emit_layout_fields(
             &field_count
         ) != 0
     ) {
-        lm_own_delete(fields, 0);
+        lm_trans_layout_fields_delete(fields, field_capacity);
         return 1;
     }
     if (lm_trans_sort_layout_fields(fields, field_count) != 0) {
-        lm_own_delete(fields, 0);
+        lm_trans_layout_fields_delete(fields, field_capacity);
         return 1;
     }
 
     for (i = 0U; i < field_count; ++i) {
-        if (lm_trans_emit_layout_field(file, &fields[i], namespace_, indent) != 0) {
-            lm_own_delete(fields, 0);
+        if (lm_trans_emit_layout_field(file, fields[i], namespace_, indent) != 0) {
+            lm_trans_layout_fields_delete(fields, field_capacity);
             return 1;
         }
     }
 
-    lm_own_delete(fields, 0);
+    lm_trans_layout_fields_delete(fields, field_capacity);
     return 0;
 }
 
@@ -936,7 +998,7 @@ static LmTransRegistryFact *lm_trans_registry_relation_stack_latest_return_row(
 }
 
 static int lm_trans_collect_abi_params(
-    LmTransAbiParam *params,
+    LmTransAbiParam **params,
     size_t capacity,
     size_t *out_count,
     const LmTransNamespace *namespace_,
@@ -955,7 +1017,7 @@ static int lm_trans_collect_abi_params(
     size_t j;
     size_t index;
     size_t const_flag;
-    void *swap;
+    LmTransAbiParam *swap;
     int status;
 
     if (params == 0 || out_count == 0 || owner_name == 0 || error_name == 0) {
@@ -964,11 +1026,9 @@ static int lm_trans_collect_abi_params(
 
     owner_text = lm_trans_l4_text_view_new(owner_name);
     param_text = lm_trans_l4_text_view_new("");
-    swap = lm_own_new_zero(sizeof(params[0]));
-    if (owner_text == 0 || param_text == 0 || swap == 0) {
+    if (owner_text == 0 || param_text == 0) {
         lm_trans_l4_text_view_delete(&owner_text);
         lm_trans_l4_text_view_delete(&param_text);
-        lm_own_delete(swap, 0);
         return 1;
     }
 
@@ -1001,15 +1061,15 @@ static int lm_trans_collect_abi_params(
             goto cleanup;
         }
 
-        params[*out_count].name = row->key;
-        params[*out_count].class_name = row->payload;
-        params[*out_count].index = index;
+        params[*out_count]->name = row->key;
+        params[*out_count]->class_name = row->payload;
+        params[*out_count]->index = index;
         if (
             !lm_trans_registry_latest_size_payload(
                 address_depth_rows,
                 param_text,
                 0U,
-                &params[*out_count].address_depth
+                &params[*out_count]->address_depth
             )
         ) {
             fprintf(stderr, "trans L4 %s error: parameter %s.%s has invalid param.address-depth\n", error_name, owner_name, row->key);
@@ -1028,17 +1088,17 @@ static int lm_trans_collect_abi_params(
             status = 1;
             goto cleanup;
         }
-        params[*out_count].is_const = const_flag != 0U;
-        params[*out_count].index = index;
+        params[*out_count]->is_const = const_flag != 0U;
+        params[*out_count]->index = index;
         ++*out_count;
     }
 
     for (i = 0U; i < *out_count; ++i) {
         for (j = i + 1U; j < *out_count; ++j) {
-            if (params[j].index < params[i].index) {
-                memcpy(swap, &params[i], sizeof(params[i]));
-                memcpy(&params[i], &params[j], sizeof(params[i]));
-                memcpy(&params[j], swap, sizeof(params[j]));
+            if (params[j]->index < params[i]->index) {
+                swap = params[i];
+                params[i] = params[j];
+                params[j] = swap;
             }
         }
     }
@@ -1046,13 +1106,12 @@ static int lm_trans_collect_abi_params(
 cleanup:
     lm_trans_l4_text_view_delete(&owner_text);
     lm_trans_l4_text_view_delete(&param_text);
-    lm_own_delete(swap, 0);
     return status;
 }
 
 static int lm_trans_emit_abi_params(
     FILE *file,
-    const LmTransAbiParam *params,
+    LmTransAbiParam **params,
     size_t count
 ) {
     size_t i;
@@ -1072,10 +1131,10 @@ static int lm_trans_emit_abi_params(
         if (
             lm_trans_emit_abi_typed_name(
                 file,
-                params[i].class_name,
-                params[i].address_depth,
-                params[i].is_const,
-                params[i].name
+                params[i]->class_name,
+                params[i]->address_depth,
+                params[i]->is_const,
+                params[i]->name
             ) != 0
         ) {
             return 1;
@@ -1285,7 +1344,7 @@ static int lm_trans_emit_l4_prototype_name(
     const char *name,
     const char *error_name
 ) {
-    LmTransAbiParam *params;
+    LmTransAbiParam **params;
     size_t param_capacity;
     size_t param_count;
     int status;
@@ -1307,7 +1366,7 @@ static int lm_trans_emit_l4_prototype_name(
         lm_trans_put(file, "(") != 0 ||
         lm_trans_emit_abi_params(file, params, param_count) != 0 ||
         lm_trans_put(file, ");\n") != 0;
-    lm_own_delete(params, 0);
+    lm_trans_l4_abi_params_delete(params, param_capacity);
     return status;
 }
 
@@ -1603,7 +1662,7 @@ static LmP0Node *lm_trans_registry_synthetic_params_node(
     const LmTransNamespace *namespace_,
     const char *name
 ) {
-    LmTransAbiParam *params;
+    LmTransAbiParam **params;
     LmP0Node *params_node;
     LmP0Node *param_node;
     size_t param_capacity;
@@ -1627,22 +1686,22 @@ static LmP0Node *lm_trans_registry_synthetic_params_node(
         name,
         "fn import"
     ) != 0) {
-        lm_own_delete(params, 0);
+        lm_trans_l4_abi_params_delete(params, param_capacity);
         return 0;
     }
 
     params_node = lm_trans_registry_synthetic_structure_node();
     if (params_node == 0) {
-        lm_own_delete(params, 0);
+        lm_trans_l4_abi_params_delete(params, param_capacity);
         return 0;
     }
 
     for (i = 0U; i < param_count; ++i) {
         param_node = lm_trans_registry_synthetic_callable_type_node(
-            params[i].class_name,
-            params[i].address_depth,
-            params[i].is_const,
-            params[i].name
+            params[i]->class_name,
+            params[i]->address_depth,
+            params[i]->is_const,
+            params[i]->name
         );
         if (
             param_node == 0 ||
@@ -1651,12 +1710,12 @@ static LmP0Node *lm_trans_registry_synthetic_params_node(
                 param_node
             ) == 0
         ) {
-            lm_own_delete(params, 0);
+            lm_trans_l4_abi_params_delete(params, param_capacity);
             return 0;
         }
     }
 
-    lm_own_delete(params, 0);
+    lm_trans_l4_abi_params_delete(params, param_capacity);
     return params_node;
 }
 
@@ -1793,7 +1852,7 @@ static int lm_trans_emit_l4_function_pointer_type_name(
     const char *name,
     const char *error_name
 ) {
-    LmTransAbiParam *params;
+    LmTransAbiParam **params;
     size_t param_capacity;
     size_t param_count;
     int status;
@@ -1816,7 +1875,7 @@ static int lm_trans_emit_l4_function_pointer_type_name(
         lm_trans_put(file, ")(") != 0 ||
         lm_trans_emit_abi_params(file, params, param_count) != 0 ||
         lm_trans_put(file, ");\n") != 0;
-    lm_own_delete(params, 0);
+    lm_trans_l4_abi_params_delete(params, param_capacity);
     return status;
 }
 
@@ -1827,7 +1886,7 @@ static int lm_trans_emit_l4_function_pointer_type_field(
     const char *field_name,
     const char *error_name
 ) {
-    LmTransAbiParam *params;
+    LmTransAbiParam **params;
     size_t param_capacity;
     size_t param_count;
     int status;
@@ -1849,7 +1908,7 @@ static int lm_trans_emit_l4_function_pointer_type_field(
         lm_trans_put(file, ")(") != 0 ||
         lm_trans_emit_abi_params(file, params, param_count) != 0 ||
         lm_trans_put(file, ")") != 0;
-    lm_own_delete(params, 0);
+    lm_trans_l4_abi_params_delete(params, param_capacity);
     return status;
 }
 

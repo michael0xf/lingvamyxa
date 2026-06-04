@@ -330,6 +330,7 @@ fn: lm_p0_parse_bytes (const: @(char source); size_t: source_length; @@: LmP0Doc
 fn: lm_p0_parse_file (const: @(char path); @@: LmP0Document out_document) int
 fn: lm_p0_document_destroy (@: LmP0Document document) void
 fn: lm_p0_document_root (const: @(LmP0Document document)) const: @: LmP0Node
+fn: lm_p0_document_mutable_root (@: LmP0Document document) @: LmP0Node
 fn: lm_p0_document_diagnostic (const: @(LmP0Document document)) const: @: LmP0Diagnostic
 fn: lm_p0_node_structure (const: @(LmP0Node node)) const: @: LmP0Structure
 fn: lm_p0_node_frame (const: @(LmP0Node node)) const: @: LmP0Frame
