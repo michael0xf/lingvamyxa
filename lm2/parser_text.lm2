@@ -49,13 +49,18 @@ fn: lm_p0_registry_literal_value (const: @(LmP0Text atom); @: LmP0Text out_paylo
 end: lm_p0_registry_literal_value
 
 fn: lm_p0_registry_payload_is_null (const: @(LmP0Text atom)) int
-    LmP0Text: payload
-    @: LmP0Text payload_ref
+    @: LmP0Text payload
+    int: is_null
 
-    if: lm_p0_registry_identifier_value(atom, @ payload) = 0
+    payload: lm_p0_text_view_new_cstr("")
+    if: payload = 0
         return: 0
-    payload_ref: @ payload
-    return: payload_ref\length = 4U && c.memcmp(payload_ref\data, "NULL", 4U) = 0
+    if: lm_p0_registry_identifier_value(atom, payload) = 0
+        lm_p0_text_view_delete(payload)
+        return: 0
+    is_null: payload\length = 4U && c.memcmp(payload\data, "NULL", 4U) = 0
+    lm_p0_text_view_delete(payload)
+    return: is_null
 end: lm_p0_registry_payload_is_null
 
 fn: lm_p0_is_horizontal_space (char: value) int
@@ -122,18 +127,37 @@ fn: lm_p0_copy_bytes (const: @(char source); size_t: length) @: char
     return: copy
 end: lm_p0_copy_bytes
 
-fn: lm_p0_text_from_cstr (const: @(char text)) LmP0Text
-    LmP0Text: result
-    @: LmP0Text result_ref
+fn: lm_p0_text_view_new_cstr (const: @(char text)) @: LmP0Text
+    @: LmP0Text result
 
-    result_ref: @ result
+    result: c.calloc(1U, c.sizeof(c.LmP0Text))
+    if: result = 0
+        return: 0
     if: text != 0
-        result_ref\data: text
+        result\data: text
     if: text = 0
-        result_ref\data: ""
-    result_ref\length: c.strlen(result_ref\data)
+        result\data: ""
+    result\length: c.strlen(result\data)
     return: result
+end: lm_p0_text_view_new_cstr
+
+sub: lm_p0_text_view_delete (@: LmP0Text text)
+    c.free(text)
+end: lm_p0_text_view_delete
+
+fn: lm_p0_text_from_cstr (const: @(char text)) @: LmP0Text
+    return: lm_p0_text_view_new_cstr(text)
 end: lm_p0_text_from_cstr
+
+fn: lm_p0_text_assign_cstr (@: LmP0Text out_text; const: @(char text)) int
+    if: out_text = 0
+        return: 0
+    if: text = 0
+        text: ""
+    out_text\data: text
+    out_text\length: c.strlen(text)
+    return: 1
+end: lm_p0_text_assign_cstr
 
 fn: lm_p0_text_copy_cstr (const: @(LmP0Text text)) @: char
     if: text = 0

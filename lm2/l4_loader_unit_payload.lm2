@@ -255,7 +255,6 @@ L2:
 
     fn: lm_l4_columns_from_frame (const: @(LmL4Loader loader); const: @(LmP0Frame frame); @: LmL4Column columns; size_t: columns_capacity; @: size_t out_count) int
         const: @: LmP0Field field
-        LmL4Column: column
         size_t: count
         int: status
 
@@ -266,14 +265,13 @@ L2:
         field: lm_l4_frame_body(frame)\first_field
         while: field != 0
             if: field\value != 0 && lm_l4_node_is_ignored(field\value) = 0
-                status: lm_l4_column_name(field, @ column)
-                if: status <= 0
-                    lm_l4_error(loader, "columns expects atoms or anonymous descriptor structures")
-                    return: -1
                 if: count >= columns_capacity
                     lm_l4_error(loader, "table has too many columns")
                     return: -1
-                columns[count]: column
+                status: lm_l4_column_name(field, c.&columns[count])
+                if: status <= 0
+                    lm_l4_error(loader, "columns expects atoms or anonymous descriptor structures")
+                    return: -1
                 count: count + 1U
             field: field\next
 
@@ -396,7 +394,7 @@ L2:
         const: @: LmP0Field field
         const: @: LmP0Node node
         const: @: LmP0Frame node_frame
-        [128]: LmL4Column columns
+        @: LmL4Column columns
         const: @: LmP0Text table_name
         size_t: column_count
         int: have_name
@@ -406,6 +404,11 @@ L2:
 
         if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "table") = 0
             return: 0
+
+        columns: c.calloc(128U, c.sizeof(c.LmL4Column))
+        if: columns = 0
+            lm_l4_error(loader, "out of memory while reading table columns")
+            return: -1
 
         have_name: 0
         have_columns: 0
@@ -418,11 +421,13 @@ L2:
             if: node != 0 && lm_l4_node_is_ignored(node) = 0
                 if: node\kind != c.LM_P0_NODE_FRAME
                     lm_l4_error(loader, "table body expects name/columns/rows frames")
+                    c.free(columns)
                     return: -1
                 node_frame: lm_l4_node_frame(node)
                 status: lm_l4_frame_single_atom(node_frame, "name", @ table_name)
                 if: status < 0
                     lm_l4_error(loader, "table name expects exactly one atom")
+                    c.free(columns)
                     return: -1
                 if: status > 0
                     have_name: 1
@@ -431,12 +436,15 @@ L2:
                 if: lm_l4_text_equals(lm_l4_frame_head(node_frame), "columns") != 0
                     if: have_name = 0
                         lm_l4_error(loader, "table columns must appear after name")
+                        c.free(columns)
                         return: -1
-                    status: lm_l4_columns_from_frame(loader, node_frame, columns, c.sizeof(columns) / c.sizeof(columns[0]), @ column_count)
+                    status: lm_l4_columns_from_frame(loader, node_frame, columns, 128U, @ column_count)
                     if: status <= 0
+                        c.free(columns)
                         return: -1
                     if: loader != 0 && loader\push_column_metadata != 0 && c.loader->push_column_metadata(context, table_name, columns, column_count) != 0
                         lm_l4_error(loader, "cannot store table column metadata")
+                        c.free(columns)
                         return: -1
                     have_columns: 1
                     field: field\next
@@ -444,23 +452,29 @@ L2:
                 if: lm_l4_text_equals(lm_l4_frame_head(node_frame), "rows") != 0
                     if: have_name = 0 || have_columns = 0
                         lm_l4_error(loader, "table rows must appear after name and columns")
+                        c.free(columns)
                         return: -1
                     status: lm_l4_rows_from_frame(loader, context, node_frame, table_name, columns, column_count)
                     if: status <= 0
+                        c.free(columns)
                         return: -1
                     have_rows: 1
                     field: field\next
                     continue
                 lm_l4_error(loader, "table body expects name/columns/rows frames")
+                c.free(columns)
                 return: -1
             field: field\next
 
         if: have_name = 0 || have_columns = 0 || have_rows = 0
             lm_l4_error(loader, "table requires name, columns and rows")
+            c.free(columns)
             return: -1
         if: lm_l4_validate_named_trailer(loader, frame, table_name) != 0
+            c.free(columns)
             return: -1
 
+        c.free(columns)
         return: 1
     end: lm_l4_table_from_frame
 

@@ -611,28 +611,37 @@ fn: lm_p0_visual_column_between (const: @(char source); size_t: start; size_t: e
     return: column
 end: lm_p0_visual_column_between
 
-fn: lm_p0_registry_lookup (LmP0Text: key; const: @(char table)) const: @: char
+fn: lm_p0_registry_lookup (const: @(LmP0Text key); const: @(char table)) const: @: char
     size_t: i
     @: LmP0RegistryRow row
-    LmP0Text: key_payload
+    @: LmP0Text key_payload
+    const: @: char payload
 
     if: table = 0 || c.lm_p0_registry.loaded = 0
         return: 0
-    if: lm_p0_identifier_payload(@ key, @ key_payload) = 0
+    key_payload: lm_p0_text_from_cstr("")
+    if: key_payload = 0
+        return: 0
+    if: lm_p0_identifier_payload(key, key_payload) = 0
+        lm_p0_text_view_delete(key_payload)
         return: 0
 
     if: c.lm_p0_registry.rows = 0
+        lm_p0_text_view_delete(key_payload)
         return: 0
 
+    payload: 0
     i: c.lm_p0_registry.rows->count
     while: i > 0U
         i: i - 1U
         row: c.lm_own_ptr_stack_at(c.lm_p0_registry.rows, i)
-        if: row != 0 && row\table != 0 && row\key != 0 && c.strcmp(row\table, table) = 0 && lm_p0_text_equals(@ key_payload, row\key)
-            return: row\payload
+        if: row != 0 && row\table != 0 && row\key != 0 && c.strcmp(row\table, table) = 0 && lm_p0_text_equals(key_payload, row\key)
+            payload: row\payload
+            break
     ---
 
-    return: 0
+    lm_p0_text_view_delete(key_payload)
+    return: payload
 end: lm_p0_registry_lookup
 
 fn: lm_p0_registry_table_has_rows (const: @(char table)) int
@@ -1154,7 +1163,8 @@ static int lm_p0_is_quoted_token_boundary(char value);
 static int lm_p0_starts_python_string(const char *text, size_t length, size_t index);
 static int lm_p0_is_decimal_digit(char value);
 static char *lm_p0_copy_bytes(const char *source, size_t length);
-static LmP0Text lm_p0_text_from_cstr(const char *text);
+static LmP0Text *lm_p0_text_from_cstr(const char *text);
+static int lm_p0_text_assign_cstr(LmP0Text *out_text, const char *text);
 static char *lm_p0_text_copy_cstr(const LmP0Text *text);
 static char *lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
@@ -1197,7 +1207,7 @@ static void lm_p0_scan_indent_column(
     size_t *out_column
 );
 static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end);
-static const char *lm_p0_registry_lookup(LmP0Text key, const char *table);
+static const char *lm_p0_registry_lookup(const LmP0Text *key, const char *table);
 static int lm_p0_registry_table_has_rows(const char *table);
 static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table);
 static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end);
@@ -1430,9 +1440,9 @@ static void lm_p0_set_diagnostic(
 }
 
 static int lm_p0_registry_push_row_values(
-    LmP0Text table_value,
-    LmP0Text key_value,
-    LmP0Text payload_value
+    const LmP0Text *table_value,
+    const LmP0Text *key_value,
+    const LmP0Text *payload_value
 ) {
     LmP0RegistryRow *row;
 
@@ -1441,9 +1451,9 @@ static int lm_p0_registry_push_row_values(
         return -1;
     }
 
-    row->table = lm_p0_registry_value_copy_cstr(&table_value);
-    row->key = lm_p0_registry_value_copy_cstr(&key_value);
-    row->payload = lm_p0_registry_value_copy_cstr(&payload_value);
+    row->table = lm_p0_registry_value_copy_cstr(table_value);
+    row->key = lm_p0_registry_value_copy_cstr(key_value);
+    row->payload = lm_p0_registry_value_copy_cstr(payload_value);
     if (row->table == 0 || row->key == 0 || row->payload == 0) {
         lm_p0_registry_row_destroy_any(row);
         return -1;
@@ -1458,16 +1468,16 @@ static int lm_p0_registry_push_row_values(
 }
 
 static int lm_p0_registry_push_row_atoms(
-    LmP0Text table_atom,
-    LmP0Text key_atom,
-    LmP0Text payload_atom
+    const LmP0Text *table_atom,
+    const LmP0Text *key_atom,
+    const LmP0Text *payload_atom
 ) {
     LmP0Text *table_value;
     LmP0Text *key_value;
     LmP0Text *payload_value;
     int status;
 
-    if (lm_p0_registry_payload_is_null(&payload_atom)) {
+    if (lm_p0_registry_payload_is_null(payload_atom)) {
         return 0;
     }
 
@@ -1482,13 +1492,13 @@ static int lm_p0_registry_push_row_atoms(
     }
     status = -1;
     if (
-        !lm_p0_registry_identifier_value(&table_atom, table_value) ||
-        !lm_p0_registry_identifier_value(&key_atom, key_value) ||
-        !lm_p0_registry_literal_value(&payload_atom, payload_value)
+        !lm_p0_registry_identifier_value(table_atom, table_value) ||
+        !lm_p0_registry_identifier_value(key_atom, key_value) ||
+        !lm_p0_registry_literal_value(payload_atom, payload_value)
     ) {
         goto cleanup;
     }
-    status = lm_p0_registry_push_row_values(*table_value, *key_value, *payload_value);
+    status = lm_p0_registry_push_row_values(table_value, key_value, payload_value);
 
 cleanup:
     lm_p0_text_ref_delete(table_value);
@@ -1529,25 +1539,25 @@ static int lm_p0_registry_column_has_descriptor(
 }
 
 static int lm_p0_registry_cell_value(
-    LmP0Text atom,
+    const LmP0Text *atom,
     const LmP0RegistryColumn *column,
     LmP0Text *out_value
 ) {
-    if (lm_p0_registry_payload_is_null(&atom)) {
+    if (lm_p0_registry_payload_is_null(atom)) {
         return 0;
     }
     if (lm_p0_registry_column_has_descriptor(column, "char")) {
-        return lm_p0_registry_literal_value(&atom, out_value) ? 1 : -1;
+        return lm_p0_registry_literal_value(atom, out_value) ? 1 : -1;
     }
-    return lm_p0_registry_identifier_value(&atom, out_value) ? 1 : -1;
+    return lm_p0_registry_identifier_value(atom, out_value) ? 1 : -1;
 }
 
 static int lm_p0_registry_push_table_cell(
-    LmP0Text table_name,
+    const LmP0Text *table_name,
     const LmP0RegistryColumn *column,
     int split_by_column,
-    LmP0Text key_atom,
-    LmP0Text payload_atom
+    const LmP0Text *key_atom,
+    const LmP0Text *payload_atom
 ) {
     LmP0Text *table_payload;
     LmP0Text *column_payload;
@@ -1585,18 +1595,18 @@ static int lm_p0_registry_push_table_cell(
         goto cleanup_refs;
     }
 
-    if (!lm_p0_registry_identifier_value(&table_name, table_payload)) {
+    if (!lm_p0_registry_identifier_value(table_name, table_payload)) {
         status = -1;
         goto cleanup_refs;
     }
 
-    if (!lm_p0_registry_identifier_value(&key_atom, key_payload)) {
+    if (!lm_p0_registry_identifier_value(key_atom, key_payload)) {
         status = -1;
         goto cleanup_refs;
     }
 
     if (!split_by_column) {
-        status = lm_p0_registry_push_row_values(*table_payload, *key_payload, *payload_value);
+        status = lm_p0_registry_push_row_values(table_payload, key_payload, payload_value);
         goto cleanup_refs;
     }
 
@@ -1616,8 +1626,8 @@ static int lm_p0_registry_push_table_cell(
     memcpy(relation_name + table_payload->length + 1U, column_payload->data, column_payload->length);
     relation_name[relation_length] = '\0';
 
-    *relation_table = lm_p0_text_from_cstr(relation_name);
-    status = lm_p0_registry_push_row_values(*relation_table, *key_payload, *payload_value);
+    lm_p0_text_assign_cstr(relation_table, relation_name);
+    status = lm_p0_registry_push_row_values(relation_table, key_payload, payload_value);
     free(relation_name);
 
 cleanup_refs:
@@ -6965,20 +6975,23 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     return status;
 }
 
-static char *lm_p0_registry_join_text3(LmP0Text first, const char *separator, LmP0Text second) {
+static char *lm_p0_registry_join_text3(const LmP0Text *first, const char *separator, const LmP0Text *second) {
     size_t separator_length;
     size_t length;
     char *result;
 
+    if (first == 0 || second == 0 || separator == 0) {
+        return 0;
+    }
     separator_length = strlen(separator);
-    length = first.length + separator_length + second.length;
+    length = first->length + separator_length + second->length;
     result = (char *)malloc(length + 1U);
     if (result == 0) {
         return 0;
     }
-    memcpy(result, first.data, first.length);
-    memcpy(result + first.length, separator, separator_length);
-    memcpy(result + first.length + separator_length, second.data, second.length);
+    memcpy(result, first->data, first->length);
+    memcpy(result + first->length, separator, separator_length);
+    memcpy(result + first->length + separator_length, second->data, second->length);
     result[length] = '\0';
     return result;
 }
@@ -6998,7 +7011,7 @@ static int lm_p0_registry_push_generated_row_cstr(
 static int lm_p0_registry_push_generated_row_text(
     const char *table,
     const char *key,
-    LmP0Text payload
+    const LmP0Text *payload
 ) {
     return lm_p0_registry_push_row_atoms(
         lm_p0_text_from_cstr(table),
@@ -7008,7 +7021,7 @@ static int lm_p0_registry_push_generated_row_text(
 }
 
 static int lm_p0_registry_push_column_metadata(
-    LmP0Text table_name,
+    const LmP0Text *table_name,
     const LmP0RegistryColumn *columns,
     size_t column_count
 ) {
@@ -7035,7 +7048,7 @@ static int lm_p0_registry_push_column_metadata(
     }
     status = 0;
 
-    if (!lm_p0_registry_identifier_value(&table_name, table_payload)) {
+    if (!lm_p0_registry_identifier_value(table_name, table_payload)) {
         status = -1;
         goto cleanup;
     }
@@ -7045,7 +7058,7 @@ static int lm_p0_registry_push_column_metadata(
             status = -1;
             goto cleanup;
         }
-        column_key = lm_p0_registry_join_text3(*table_payload, ".", *column_payload);
+        column_key = lm_p0_registry_join_text3(table_payload, ".", column_payload);
         if (column_key == 0) {
             status = -1;
             goto cleanup;
@@ -7055,8 +7068,8 @@ static int lm_p0_registry_push_column_metadata(
         snprintf(count_buffer, sizeof(count_buffer), "%lu", (unsigned long)columns[index].descriptor_count);
 
         if (
-            lm_p0_registry_push_generated_row_text("column.table", column_key, *table_payload) != 0 ||
-            lm_p0_registry_push_generated_row_text("column.name", column_key, *column_payload) != 0 ||
+            lm_p0_registry_push_generated_row_text("column.table", column_key, table_payload) != 0 ||
+            lm_p0_registry_push_generated_row_text("column.name", column_key, column_payload) != 0 ||
             lm_p0_registry_push_generated_row_cstr("column.index", column_key, index_buffer) != 0 ||
             lm_p0_registry_push_generated_row_cstr("column.descriptor.count", column_key, count_buffer) != 0
         ) {
@@ -7075,7 +7088,7 @@ static int lm_p0_registry_push_column_metadata(
             }
             if (
                 columns[index].descriptors[descriptor_index] == 0 ||
-                lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, *columns[index].descriptors[descriptor_index]) != 0
+                lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index].descriptors[descriptor_index]) != 0
             ) {
                 free(descriptor_key);
                 free(column_key);
@@ -7105,7 +7118,7 @@ static int lm_p0_registry_l4_push_row(
         fprintf(stderr, "parser registry error: row expects exactly three atom fields\n");
         return -1;
     }
-    return lm_p0_registry_push_row_atoms(*table_atom, *key_atom, *payload_node->as->atom);
+    return lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node->as->atom);
 }
 
 static int lm_p0_registry_l4_push_cell(
@@ -7122,11 +7135,11 @@ static int lm_p0_registry_l4_push_cell(
         return -1;
     }
     return lm_p0_registry_push_table_cell(
-        *table_name,
+        table_name,
         column,
         split_by_column,
-        *key_atom,
-        *payload_node->as->atom
+        key_atom,
+        payload_node->as->atom
     );
 }
 
@@ -7140,7 +7153,7 @@ static int lm_p0_registry_l4_push_column_metadata(
     if (table_name == 0) {
         return -1;
     }
-    return lm_p0_registry_push_column_metadata(*table_name, columns, column_count);
+    return lm_p0_registry_push_column_metadata(table_name, columns, column_count);
 }
 
 static const LmL4Loader lm_p0_registry_l4_loader = {

@@ -137,6 +137,24 @@ sub: lm_table_buffer_destroy (@: LmTableBuffer buffer)
         buffer\failed: 0
 end: lm_table_buffer_destroy
 
+fn: lm_table_buffer_new () @: LmTableBuffer
+    return: c.calloc(1U, c.sizeof(c.LmTableBuffer))
+end: lm_table_buffer_new
+
+sub: lm_table_buffer_delete (@: LmTableBuffer buffer)
+    if: buffer != 0
+        lm_table_buffer_destroy(buffer)
+        c.free(buffer)
+end: lm_table_buffer_delete
+
+fn: lm_table_error_new () @: LmTableError
+    return: c.calloc(1U, c.sizeof(c.LmTableError))
+end: lm_table_error_new
+
+sub: lm_table_error_delete (@: LmTableError error)
+    c.free(error)
+end: lm_table_error_delete
+
 fn: lm_table_node_ignored (const: @: LmP0Node node) int
     return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
 end: lm_table_node_ignored
@@ -259,18 +277,21 @@ fn: lm_table_column_spelling_append_node (@: LmTableBuffer buffer; const: @: LmP
 end: lm_table_column_spelling_append_node
 
 fn: lm_table_column_spelling_alloc (const: @(LmP0Node node); @: LmTableError error) @: char
-    LmTableBuffer: buffer
+    @: LmTableBuffer buffer
     @: char result
 
-    c.memset(@ buffer, 0, c.sizeof(buffer))
-
-    if: lm_table_column_spelling_append_node(@ buffer, node) = 0
-        lm_table_error_set(error, "columns: fields must be atoms or descriptor structures")
-        lm_table_buffer_destroy(@ buffer)
+    buffer: lm_table_buffer_new()
+    if: buffer = 0
+        lm_table_error_set(error, "out of memory while creating column formatter")
         return: 0
 
-    result: lm_table_buffer_take(@ buffer)
-    lm_table_buffer_destroy(@ buffer)
+    if: lm_table_column_spelling_append_node(buffer, node) = 0
+        lm_table_error_set(error, "columns: fields must be atoms or descriptor structures")
+        lm_table_buffer_delete(buffer)
+        return: 0
+
+    result: lm_table_buffer_take(buffer)
+    lm_table_buffer_delete(buffer)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting column")
     return: result
@@ -436,18 +457,21 @@ fn: lm_table_node_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Node
 end: lm_table_node_lmx_append_inline
 
 fn: lm_table_node_lmx_alloc (const: @(LmP0Node node); @: LmTableError error) @: char
-    LmTableBuffer: buffer
+    @: LmTableBuffer buffer
     @: char result
 
-    c.memset(@ buffer, 0, c.sizeof(buffer))
-
-    if: lm_table_node_lmx_append_inline(@ buffer, node) = 0
-        lm_table_error_set(error, "rows: cannot format cell node")
-        lm_table_buffer_destroy(@ buffer)
+    buffer: lm_table_buffer_new()
+    if: buffer = 0
+        lm_table_error_set(error, "out of memory while creating cell formatter")
         return: 0
 
-    result: lm_table_buffer_take(@ buffer)
-    lm_table_buffer_destroy(@ buffer)
+    if: lm_table_node_lmx_append_inline(buffer, node) = 0
+        lm_table_error_set(error, "rows: cannot format cell node")
+        lm_table_buffer_delete(buffer)
+        return: 0
+
+    result: lm_table_buffer_take(buffer)
+    lm_table_buffer_delete(buffer)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting cell")
     return: result
@@ -580,45 +604,52 @@ fn: lm_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: LmTableError erro
     const: @: char end_name_data
     size_t: end_name_length
     @: LmTableColumn columns
-    LmTableBuffer: buffer
+    @: LmTableBuffer buffer
     size_t: column_count
     size_t: row_count
     @: char result
 
-    c.memset(@ buffer, 0, c.sizeof(buffer))
+    buffer: lm_table_buffer_new()
+    if: buffer = 0
+        lm_table_error_set(error, "out of memory while creating table formatter")
+        return: 0
     columns: 0
     column_count: 0U
     row_count: 0U
 
     if: lm_table_name_from_frame(table_frame, @ table_name_data, @ table_name_length, error) = 0
+        lm_table_buffer_delete(buffer)
         return: 0
     if: lm_table_columns_from_frame(table_frame, @ columns, @ column_count, error) = 0
+        lm_table_buffer_delete(buffer)
         return: 0
 
     rows_frame: lm_table_rows_frame_from_table(table_frame, error)
     if: rows_frame = 0
         lm_table_columns_destroy(columns, column_count)
+        lm_table_buffer_delete(buffer)
         return: 0
 
     if: lm_table_measure_rows(rows_frame, columns, column_count, @ row_count, error) = 0
         lm_table_columns_destroy(columns, column_count)
+        lm_table_buffer_delete(buffer)
         return: 0
 
     lm_table_end_name(table_frame, table_name_data, table_name_length, @ end_name_data, @ end_name_length)
 
-    lm_table_buffer_append_cstr(@ buffer, "table:\n")
-    lm_table_buffer_append_cstr(@ buffer, "    name: ")
-    lm_table_buffer_append_text(@ buffer, table_name_data, table_name_length)
-    lm_table_buffer_append_cstr(@ buffer, "\n")
-    lm_table_emit_columns(@ buffer, columns, column_count)
-    lm_table_emit_rows(@ buffer, rows_frame, columns, column_count, row_count, error)
-    lm_table_buffer_append_cstr(@ buffer, "end: ")
-    lm_table_buffer_append_text(@ buffer, end_name_data, end_name_length)
-    lm_table_buffer_append_cstr(@ buffer, "\n")
+    lm_table_buffer_append_cstr(buffer, "table:\n")
+    lm_table_buffer_append_cstr(buffer, "    name: ")
+    lm_table_buffer_append_text(buffer, table_name_data, table_name_length)
+    lm_table_buffer_append_cstr(buffer, "\n")
+    lm_table_emit_columns(buffer, columns, column_count)
+    lm_table_emit_rows(buffer, rows_frame, columns, column_count, row_count, error)
+    lm_table_buffer_append_cstr(buffer, "end: ")
+    lm_table_buffer_append_text(buffer, end_name_data, end_name_length)
+    lm_table_buffer_append_cstr(buffer, "\n")
 
     lm_table_columns_destroy(columns, column_count)
-    result: lm_table_buffer_take(@ buffer)
-    lm_table_buffer_destroy(@ buffer)
+    result: lm_table_buffer_take(buffer)
+    lm_table_buffer_delete(buffer)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting table")
     return: result
@@ -666,20 +697,23 @@ return: 1
 
 fn: lm_table_document_tables_to_lmx_alloc (const: @(LmP0Document document); @: LmTableError error) @: char
     const: @: LmP0Node root
-    LmTableBuffer: output
+    @: LmTableBuffer output
     int: emitted
     @: char result
 
-    c.memset(@ output, 0, c.sizeof(output))
+    output: lm_table_buffer_new()
+    if: output = 0
+        lm_table_error_set(error, "out of memory while creating document formatter")
+        return: 0
     emitted: 0
     root: c.lm_p0_document_root(document)
 
-    if: lm_table_emit_tables_from_node(@ output, root, @ emitted, error) = 0
-        lm_table_buffer_destroy(@ output)
+    if: lm_table_emit_tables_from_node(output, root, @ emitted, error) = 0
+        lm_table_buffer_delete(output)
         return: 0
 
-    result: lm_table_buffer_take(@ output)
-    lm_table_buffer_destroy(@ output)
+    result: lm_table_buffer_take(output)
+    lm_table_buffer_delete(output)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting document tables")
     return: result
@@ -689,7 +723,7 @@ external:
     fn: main (int: argc; @@: char argv) int
         @: LmP0Document document 0
         const: @: LmP0Diagnostic diagnostic
-        LmTableError: error
+        @: LmTableError error
         @: char text
         int: status
 
@@ -700,7 +734,11 @@ external:
             c.printf: "usage: table.lm0[.exe] <source.lmx>\n"
             return: 0
 
-        c.memset(@ error, 0, c.sizeof(error))
+        error: lm_table_error_new()
+        if: error = 0
+            c.fprintf: c.stderr "table toLmx error: out of memory while creating error state\n"
+            return: 1
+
         status: c.lm_p0_parse_file(argv[1], @ document)
         if: status != 0
             diagnostic: c.lm_p0_document_diagnostic(document)
@@ -714,21 +752,24 @@ external:
                 c.fprintf: c.stderr "P0 parse error while reading %s\n" argv[1]
             ---
             c.lm_p0_document_destroy(document)
+            lm_table_error_delete(error)
             return: 1
 
-        text: lm_table_document_tables_to_lmx_alloc(document, @ error)
+        text: lm_table_document_tables_to_lmx_alloc(document, error)
         if: text = 0
-            if: c.error.message != 0
-                c.fprintf: c.stderr "table toLmx error: %s\n" c.error.message
-            if: c.error.message = 0
+            if: error\message != 0
+                c.fprintf: c.stderr "table toLmx error: %s\n" error\message
+            if: error\message = 0
                 c.fprintf: c.stderr "table toLmx error: %s\n" "unknown error"
             ---
             c.lm_p0_document_destroy(document)
+            lm_table_error_delete(error)
             return: 1
 
         c.fputs: text c.stdout
         c.free(text)
         c.lm_p0_document_destroy(document)
+        lm_table_error_delete(error)
         return: 0
     end: main
 end: external

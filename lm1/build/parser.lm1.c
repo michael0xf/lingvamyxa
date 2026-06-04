@@ -604,7 +604,6 @@ static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column) {
 
 static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column *columns, size_t columns_capacity, size_t *out_count) {
     const LmP0Field *field;
-    LmL4Column column;
     size_t count;
     int status;
     if (frame == 0 || columns == 0 || out_count == 0 || columns_capacity == 0U || lm_l4_text_equals(lm_l4_frame_head(frame), "columns") == 0) {
@@ -614,16 +613,15 @@ static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *f
     field = lm_l4_frame_body(frame) -> first_field;
     while (field != 0) {
         if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
-            status = lm_l4_column_name(field, &column);
-            if (status <= 0) {
-                lm_l4_error(loader, "columns expects atoms or anonymous descriptor structures");
-                return - 1;
-            }
             if (count >= columns_capacity) {
                 lm_l4_error(loader, "table has too many columns");
                 return - 1;
             }
-            columns[count] = column;
+            status = lm_l4_column_name(field, &columns[count]);
+            if (status <= 0) {
+                lm_l4_error(loader, "columns expects atoms or anonymous descriptor structures");
+                return - 1;
+            }
             count = count + 1U;
         }
         field = field -> next;
@@ -758,7 +756,7 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
     const LmP0Field *field;
     const LmP0Node *node;
     const LmP0Frame *node_frame;
-    LmL4Column columns[128];
+    LmL4Column *columns;
     const LmP0Text *table_name;
     size_t column_count;
     int have_name;
@@ -767,6 +765,11 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
     int status;
     if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "table") == 0) {
         return 0;
+    }
+    columns = calloc(128U, sizeof(LmL4Column));
+    if (columns == 0) {
+        lm_l4_error(loader, "out of memory while reading table columns");
+        return - 1;
     }
     have_name = 0;
     have_columns = 0;
@@ -779,12 +782,14 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
         if (node != 0 && lm_l4_node_is_ignored(node) == 0) {
             if (node -> kind != LM_P0_NODE_FRAME) {
                 lm_l4_error(loader, "table body expects name/columns/rows frames");
+                free(columns);
                 return - 1;
             }
             node_frame = lm_l4_node_frame(node);
             status = lm_l4_frame_single_atom(node_frame, "name", &table_name);
             if (status < 0) {
                 lm_l4_error(loader, "table name expects exactly one atom");
+                free(columns);
                 return - 1;
             }
             if (status > 0) {
@@ -795,14 +800,17 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
             if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "columns") != 0) {
                 if (have_name == 0) {
                     lm_l4_error(loader, "table columns must appear after name");
+                    free(columns);
                     return - 1;
                 }
-                status = lm_l4_columns_from_frame(loader, node_frame, columns, sizeof(columns) / sizeof(columns[0]), &column_count);
+                status = lm_l4_columns_from_frame(loader, node_frame, columns, 128U, &column_count);
                 if (status <= 0) {
+                    free(columns);
                     return - 1;
                 }
                 if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(context, table_name, columns, column_count) != 0) {
                     lm_l4_error(loader, "cannot store table column metadata");
+                    free(columns);
                     return - 1;
                 }
                 have_columns = 1;
@@ -812,10 +820,12 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
             if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "rows") != 0) {
                 if (have_name == 0 || have_columns == 0) {
                     lm_l4_error(loader, "table rows must appear after name and columns");
+                    free(columns);
                     return - 1;
                 }
                 status = lm_l4_rows_from_frame(loader, context, node_frame, table_name, columns, column_count);
                 if (status <= 0) {
+                    free(columns);
                     return - 1;
                 }
                 have_rows = 1;
@@ -823,17 +833,21 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
                 continue;
             }
             lm_l4_error(loader, "table body expects name/columns/rows frames");
+            free(columns);
             return - 1;
         }
         field = field -> next;
     }
     if (have_name == 0 || have_columns == 0 || have_rows == 0) {
         lm_l4_error(loader, "table requires name, columns and rows");
+        free(columns);
         return - 1;
     }
     if (lm_l4_validate_named_trailer(loader, frame, table_name) != 0) {
+        free(columns);
         return - 1;
     }
+    free(columns);
     return 1;
 }
 
@@ -1120,7 +1134,10 @@ static int lm_p0_is_quoted_token_boundary(char value);
 static int lm_p0_starts_python_string(const char *text, size_t length, size_t index);
 static int lm_p0_is_decimal_digit(char value);
 static char * lm_p0_copy_bytes(const char *source, size_t length);
-static LmP0Text lm_p0_text_from_cstr(const char *text);
+static LmP0Text * lm_p0_text_view_new_cstr(const char *text);
+static void lm_p0_text_view_delete(LmP0Text *text);
+static LmP0Text * lm_p0_text_from_cstr(const char *text);
+static int lm_p0_text_assign_cstr(LmP0Text *out_text, const char *text);
 static char * lm_p0_text_copy_cstr(const LmP0Text *text);
 static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 
@@ -1149,7 +1166,7 @@ static LmP0IndentStack * lm_p0_indent_stack_clone(LmP0Document *document, const 
 static size_t lm_p0_indent_tab_column(size_t column);
 static void lm_p0_scan_indent_column(const char *source, size_t start, size_t end, size_t *out_offset, size_t *out_column);
 static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end);
-static const char * lm_p0_registry_lookup(LmP0Text key, const char *table);
+static const char * lm_p0_registry_lookup(const LmP0Text *key, const char *table);
 static int lm_p0_registry_table_has_rows(const char *table);
 static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table);
 static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end);
@@ -1222,7 +1239,8 @@ static int lm_p0_is_quoted_token_boundary(char value);
 static int lm_p0_starts_python_string(const char *text, size_t length, size_t index);
 static int lm_p0_is_decimal_digit(char value);
 static char *lm_p0_copy_bytes(const char *source, size_t length);
-static LmP0Text lm_p0_text_from_cstr(const char *text);
+static LmP0Text *lm_p0_text_from_cstr(const char *text);
+static int lm_p0_text_assign_cstr(LmP0Text *out_text, const char *text);
 static char *lm_p0_text_copy_cstr(const LmP0Text *text);
 static char *lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
@@ -1254,6 +1272,8 @@ static LmP0IndentStack *lm_p0_indent_stack_clone(
     size_t line,
     size_t column
 );
+static LmP0StreamEvent *lm_p0_stream_event_new(void);
+static void lm_p0_stream_event_delete(LmP0StreamEvent *event);
 static size_t lm_p0_indent_tab_column(size_t column);
 static void lm_p0_scan_indent_column(
     const char *source,
@@ -1263,7 +1283,7 @@ static void lm_p0_scan_indent_column(
     size_t *out_column
 );
 static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end);
-static const char *lm_p0_registry_lookup(LmP0Text key, const char *table);
+static const char *lm_p0_registry_lookup(const LmP0Text *key, const char *table);
 static int lm_p0_registry_table_has_rows(const char *table);
 static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table);
 static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end);
@@ -1346,6 +1366,14 @@ static int lm_p0_match_raw_comment_fence_line(
     size_t line_end,
     size_t star_count
 );
+
+static LmP0Text *lm_p0_text_ref_new_empty(void) {
+    return (LmP0Text *)lm_own_new_zero(sizeof(LmP0Text));
+}
+
+static void lm_p0_text_ref_delete(LmP0Text *text) {
+    lm_own_delete(text, 0);
+}
 
 static int lm_p0_document_register_lazy_text(
     LmP0Document *document,
@@ -1488,9 +1516,9 @@ static void lm_p0_set_diagnostic(
 }
 
 static int lm_p0_registry_push_row_values(
-    LmP0Text table_value,
-    LmP0Text key_value,
-    LmP0Text payload_value
+    const LmP0Text *table_value,
+    const LmP0Text *key_value,
+    const LmP0Text *payload_value
 ) {
     LmP0RegistryRow *row;
 
@@ -1499,9 +1527,9 @@ static int lm_p0_registry_push_row_values(
         return -1;
     }
 
-    row->table = lm_p0_registry_value_copy_cstr(&table_value);
-    row->key = lm_p0_registry_value_copy_cstr(&key_value);
-    row->payload = lm_p0_registry_value_copy_cstr(&payload_value);
+    row->table = lm_p0_registry_value_copy_cstr(table_value);
+    row->key = lm_p0_registry_value_copy_cstr(key_value);
+    row->payload = lm_p0_registry_value_copy_cstr(payload_value);
     if (row->table == 0 || row->key == 0 || row->payload == 0) {
         lm_p0_registry_row_destroy_any(row);
         return -1;
@@ -1516,25 +1544,43 @@ static int lm_p0_registry_push_row_values(
 }
 
 static int lm_p0_registry_push_row_atoms(
-    LmP0Text table_atom,
-    LmP0Text key_atom,
-    LmP0Text payload_atom
+    const LmP0Text *table_atom,
+    const LmP0Text *key_atom,
+    const LmP0Text *payload_atom
 ) {
-    LmP0Text table_value;
-    LmP0Text key_value;
-    LmP0Text payload_value;
+    LmP0Text *table_value;
+    LmP0Text *key_value;
+    LmP0Text *payload_value;
+    int status;
 
-    if (lm_p0_registry_payload_is_null(&payload_atom)) {
+    if (lm_p0_registry_payload_is_null(payload_atom)) {
         return 0;
     }
-    if (
-        !lm_p0_registry_identifier_value(&table_atom, &table_value) ||
-        !lm_p0_registry_identifier_value(&key_atom, &key_value) ||
-        !lm_p0_registry_literal_value(&payload_atom, &payload_value)
-    ) {
+
+    table_value = lm_p0_text_ref_new_empty();
+    key_value = lm_p0_text_ref_new_empty();
+    payload_value = lm_p0_text_ref_new_empty();
+    if (table_value == 0 || key_value == 0 || payload_value == 0) {
+        lm_p0_text_ref_delete(table_value);
+        lm_p0_text_ref_delete(key_value);
+        lm_p0_text_ref_delete(payload_value);
         return -1;
     }
-    return lm_p0_registry_push_row_values(table_value, key_value, payload_value);
+    status = -1;
+    if (
+        !lm_p0_registry_identifier_value(table_atom, table_value) ||
+        !lm_p0_registry_identifier_value(key_atom, key_value) ||
+        !lm_p0_registry_literal_value(payload_atom, payload_value)
+    ) {
+        goto cleanup;
+    }
+    status = lm_p0_registry_push_row_values(table_value, key_value, payload_value);
+
+cleanup:
+    lm_p0_text_ref_delete(table_value);
+    lm_p0_text_ref_delete(key_value);
+    lm_p0_text_ref_delete(payload_value);
+    return status;
 }
 
 static int lm_p0_registry_column_has_descriptor(
@@ -1542,92 +1588,130 @@ static int lm_p0_registry_column_has_descriptor(
     const char *descriptor
 ) {
     size_t i;
-    LmP0Text payload;
+    LmP0Text *payload;
+    int result;
 
     if (column == 0 || descriptor == 0) {
         return 0;
     }
 
+    payload = lm_p0_text_ref_new_empty();
+    if (payload == 0) {
+        return 0;
+    }
+    result = 0;
     for (i = 0U; i < column->descriptor_count; ++i) {
         if (
             column->descriptors[i] != 0 &&
-            lm_p0_registry_identifier_value(column->descriptors[i], &payload) &&
-            lm_p0_text_equals(&payload, descriptor)
+            lm_p0_registry_identifier_value(column->descriptors[i], payload) &&
+            lm_p0_text_equals(payload, descriptor)
         ) {
-            return 1;
+            result = 1;
+            break;
         }
     }
-    return 0;
+    lm_p0_text_ref_delete(payload);
+    return result;
 }
 
 static int lm_p0_registry_cell_value(
-    LmP0Text atom,
+    const LmP0Text *atom,
     const LmP0RegistryColumn *column,
     LmP0Text *out_value
 ) {
-    if (lm_p0_registry_payload_is_null(&atom)) {
+    if (lm_p0_registry_payload_is_null(atom)) {
         return 0;
     }
     if (lm_p0_registry_column_has_descriptor(column, "char")) {
-        return lm_p0_registry_literal_value(&atom, out_value) ? 1 : -1;
+        return lm_p0_registry_literal_value(atom, out_value) ? 1 : -1;
     }
-    return lm_p0_registry_identifier_value(&atom, out_value) ? 1 : -1;
+    return lm_p0_registry_identifier_value(atom, out_value) ? 1 : -1;
 }
 
 static int lm_p0_registry_push_table_cell(
-    LmP0Text table_name,
+    const LmP0Text *table_name,
     const LmP0RegistryColumn *column,
     int split_by_column,
-    LmP0Text key_atom,
-    LmP0Text payload_atom
+    const LmP0Text *key_atom,
+    const LmP0Text *payload_atom
 ) {
-    LmP0Text table_payload;
-    LmP0Text column_payload;
-    LmP0Text key_payload;
-    LmP0Text payload_value;
-    LmP0Text relation_table;
+    LmP0Text *table_payload;
+    LmP0Text *column_payload;
+    LmP0Text *key_payload;
+    LmP0Text *payload_value;
+    LmP0Text *relation_table;
     char *relation_name;
     size_t relation_length;
     int status;
     int cell_status;
 
-    cell_status = lm_p0_registry_cell_value(payload_atom, column, &payload_value);
+    table_payload = lm_p0_text_ref_new_empty();
+    column_payload = lm_p0_text_ref_new_empty();
+    key_payload = lm_p0_text_ref_new_empty();
+    payload_value = lm_p0_text_ref_new_empty();
+    relation_table = lm_p0_text_ref_new_empty();
+    if (
+        table_payload == 0 ||
+        column_payload == 0 ||
+        key_payload == 0 ||
+        payload_value == 0 ||
+        relation_table == 0
+    ) {
+        status = -1;
+        goto cleanup_refs;
+    }
+
+    cell_status = lm_p0_registry_cell_value(payload_atom, column, payload_value);
     if (cell_status == 0) {
-        return 0;
+        status = 0;
+        goto cleanup_refs;
     }
     if (cell_status < 0) {
-        return -1;
+        status = -1;
+        goto cleanup_refs;
     }
 
-    if (!lm_p0_registry_identifier_value(&table_name, &table_payload)) {
-        return -1;
+    if (!lm_p0_registry_identifier_value(table_name, table_payload)) {
+        status = -1;
+        goto cleanup_refs;
     }
 
-    if (!lm_p0_registry_identifier_value(&key_atom, &key_payload)) {
-        return -1;
+    if (!lm_p0_registry_identifier_value(key_atom, key_payload)) {
+        status = -1;
+        goto cleanup_refs;
     }
 
     if (!split_by_column) {
-        return lm_p0_registry_push_row_values(table_payload, key_payload, payload_value);
+        status = lm_p0_registry_push_row_values(table_payload, key_payload, payload_value);
+        goto cleanup_refs;
     }
 
-    if (column->name == 0 || !lm_p0_registry_identifier_value(column->name, &column_payload)) {
-        return -1;
+    if (column->name == 0 || !lm_p0_registry_identifier_value(column->name, column_payload)) {
+        status = -1;
+        goto cleanup_refs;
     }
 
-    relation_length = table_payload.length + 1U + column_payload.length;
+    relation_length = table_payload->length + 1U + column_payload->length;
     relation_name = (char *)malloc(relation_length + 1U);
     if (relation_name == 0) {
-        return -1;
+        status = -1;
+        goto cleanup_refs;
     }
-    memcpy(relation_name, table_payload.data, table_payload.length);
-    relation_name[table_payload.length] = '.';
-    memcpy(relation_name + table_payload.length + 1U, column_payload.data, column_payload.length);
+    memcpy(relation_name, table_payload->data, table_payload->length);
+    relation_name[table_payload->length] = '.';
+    memcpy(relation_name + table_payload->length + 1U, column_payload->data, column_payload->length);
     relation_name[relation_length] = '\0';
 
-    relation_table = lm_p0_text_from_cstr(relation_name);
+    lm_p0_text_assign_cstr(relation_table, relation_name);
     status = lm_p0_registry_push_row_values(relation_table, key_payload, payload_value);
     free(relation_name);
+
+cleanup_refs:
+    lm_p0_text_ref_delete(table_payload);
+    lm_p0_text_ref_delete(column_payload);
+    lm_p0_text_ref_delete(key_payload);
+    lm_p0_text_ref_delete(payload_value);
+    lm_p0_text_ref_delete(relation_table);
     return status;
 }
 
@@ -2676,12 +2760,13 @@ static int lm_p0_record_mix_mark(
     size_t column
 ) {
     LmP0Node *node;
-    LmP0Document payload_document;
+    LmP0Document *payload_document;
     size_t span_line;
     size_t span_column;
     size_t absolute_offset;
     size_t payload_offset;
     size_t payload_length;
+    int status;
 
     if (document == 0 || structure == 0 || end <= start || text[start] != '{') {
         return 1;
@@ -2709,44 +2794,51 @@ static int lm_p0_record_mix_mark(
     payload_offset = node->span.offset + 1U;
     payload_length = end > start + 2U ? end - start - 2U : 0U;
     if (payload_length > 0U) {
-        memset(&payload_document, 0, sizeof(payload_document));
-        if (lm_p0_document_init_owners(&payload_document) != 0) {
+        payload_document = (LmP0Document *)lm_own_new_zero(sizeof(*payload_document));
+        if (payload_document == 0) {
+            lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while creating MIX payload document");
+            return 0;
+        }
+        status = 0;
+        if (lm_p0_document_init_owners(payload_document) != 0) {
             lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while creating MIX payload owners");
-            return 0;
+            goto payload_cleanup;
         }
-        payload_document.source = (char *)(text + start + 1U);
-        payload_document.source_length = payload_length;
+        payload_document->source = (char *)(text + start + 1U);
+        payload_document->source_length = payload_length;
 
-        if (!lm_p0_parse_stream(&payload_document)) {
-            lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
-            lm_p0_document_destroy_owners(&payload_document);
-            return 0;
+        if (!lm_p0_parse_stream(payload_document)) {
+            lm_p0_copy_payload_diagnostic(document, payload_document, payload_offset);
+            goto payload_cleanup;
         }
-        if (!lm_p0_postprocess_node(&payload_document, payload_document.root)) {
-            lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
-            lm_p0_document_destroy_owners(&payload_document);
-            return 0;
+        if (!lm_p0_postprocess_node(payload_document, payload_document->root)) {
+            lm_p0_copy_payload_diagnostic(document, payload_document, payload_offset);
+            goto payload_cleanup;
         }
-        if (!lm_p0_validate_nonempty_colon_frames_in_node(&payload_document, payload_document.root)) {
-            lm_p0_copy_payload_diagnostic(document, &payload_document, payload_offset);
-            lm_p0_document_destroy_owners(&payload_document);
-            return 0;
+        if (!lm_p0_validate_nonempty_colon_frames_in_node(payload_document, payload_document->root)) {
+            lm_p0_copy_payload_diagnostic(document, payload_document, payload_offset);
+            goto payload_cleanup;
         }
-        if (lm_own_tree_cut(payload_document.tree_arena) != 0) {
+        if (lm_own_tree_cut(payload_document->tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while promoting MIX lazy text edges");
-            lm_p0_document_destroy_owners(&payload_document);
-            return 0;
+            goto payload_cleanup;
         }
 
-        node->as->structure = payload_document.root->as->structure;
-        payload_document.root->as->structure = 0;
-        if (lm_own_arena_absorb(document->tree_arena, payload_document.tree_arena) != 0) {
+        node->as->structure = payload_document->root->as->structure;
+        payload_document->root->as->structure = 0;
+        if (lm_own_arena_absorb(document->tree_arena, payload_document->tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while moving MIX tree into parser arena");
-            lm_p0_document_destroy_owners(&payload_document);
+            goto payload_cleanup;
+        }
+        lm_p0_adjust_structure_spans_to_document(document, node->as->structure, payload_offset);
+        status = 1;
+
+payload_cleanup:
+        lm_p0_document_destroy_owners(payload_document);
+        lm_own_delete(payload_document, 0);
+        if (!status) {
             return 0;
         }
-        lm_p0_document_destroy_owners(&payload_document);
-        lm_p0_adjust_structure_spans_to_document(document, node->as->structure, payload_offset);
     }
 
     return 1;
@@ -4180,7 +4272,7 @@ static int lm_p0_parse_fields_until_with_layout(
             size_t field_column;
             size_t next_offset;
             size_t next_line;
-            LmP0StreamEvent block_event;
+            LmP0StreamEvent *block_event;
 
             lm_p0_position_in_slice(text, length, i, line, column, &field_line, &field_column);
             if (lm_p0_scan_raw_comment_block(document, text, length, i, field_line, &next_offset, &next_line)) {
@@ -4190,13 +4282,19 @@ static int lm_p0_parse_fields_until_with_layout(
             if (document->diagnostic.code != 0) {
                 return 0;
             }
-            if (lm_p0_scan_block_string_event(document, text, length, i, field_line, &block_event, &next_offset, &next_line)) {
+            block_event = lm_p0_stream_event_new();
+            if (block_event == 0) {
+                lm_p0_set_diagnostic(document, 1, field_line, field_column, "out of memory while creating block string event");
+                return 0;
+            }
+            if (lm_p0_scan_block_string_event(document, text, length, i, field_line, block_event, &next_offset, &next_line)) {
                 node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
                 if (node == 0) {
+                    lm_p0_stream_event_delete(block_event);
                     return 0;
                 }
-                node->as->atom->data = block_event.text;
-                node->as->atom->length = block_event.text_length;
+                node->as->atom->data = block_event->text;
+                node->as->atom->length = block_event->text_length;
                 node->span.line = field_line;
                 node->span.column = field_column;
                 node->span.offset = offset + i;
@@ -4209,16 +4307,20 @@ static int lm_p0_parse_fields_until_with_layout(
                         node->span.line,
                         node->span.column
                     )) {
+                    lm_p0_stream_event_delete(block_event);
                     return 0;
                 }
                 if (!lm_p0_append_field(document, structure, node)) {
                     lm_p0_free_node(node);
+                    lm_p0_stream_event_delete(block_event);
                     return 0;
                 }
+                lm_p0_stream_event_delete(block_event);
                 expect_field = 0;
                 i = next_offset;
                 continue;
             }
+            lm_p0_stream_event_delete(block_event);
             if (document->diagnostic.code != 0) {
                 return 0;
             }
@@ -4918,6 +5020,10 @@ static void lm_p0_stack_delete(LmP0Stack *stack) {
 
 static LmP0PendingDelimiter *lm_p0_pending_delimiter_new(void) {
     return (LmP0PendingDelimiter *)calloc(1U, sizeof(LmP0PendingDelimiter));
+}
+
+static LmP0StreamEvent *lm_p0_stream_event_new(void) {
+    return (LmP0StreamEvent *)calloc(1U, sizeof(LmP0StreamEvent));
 }
 
 static LmP0StreamEvent *lm_p0_stream_event_new_copy(const LmP0StreamEvent *event) {
@@ -5700,13 +5806,20 @@ static int lm_p0_pending_mix_flush(
 
     i = 0U;
     while (i < pending_mix->count) {
-        LmP0StreamEvent event;
+        LmP0StreamEvent *event;
 
-        event = pending_mix->events[i];
-        event.level = level;
-        if (!lm_p0_stream_apply_event(document, stack, pending_delimiter, &event)) {
+        event = lm_p0_stream_event_new();
+        if (event == 0) {
+            lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while flushing pending MIX event");
             return 0;
         }
+        *event = pending_mix->events[i];
+        event->level = level;
+        if (!lm_p0_stream_apply_event(document, stack, pending_delimiter, event)) {
+            lm_p0_stream_event_delete(event);
+            return 0;
+        }
+        lm_p0_stream_event_delete(event);
         ++i;
     }
 
@@ -6110,6 +6223,7 @@ static int lm_p0_validate_disabled_block(
 ) {
     LmP0IndentStack *local_indent;
     LmP0DisabledState *state;
+    LmP0StreamEvent *event;
     size_t offset;
     size_t line;
     int status;
@@ -6129,12 +6243,19 @@ static int lm_p0_validate_disabled_block(
         return 0;
     }
 
+    event = lm_p0_stream_event_new();
+    if (event == 0) {
+        lm_p0_set_diagnostic(document, 1, header_line, header_column, "out of memory while creating disabled block event");
+        lm_p0_disabled_state_delete(state);
+        lm_p0_indent_stack_delete(local_indent);
+        return 0;
+    }
+
     offset = first_next_offset;
     line = first_next_line;
     status = 1;
 
     while (status && offset <= document->source_length) {
-        LmP0StreamEvent event;
         size_t event_offset;
         size_t event_line;
         int has_event;
@@ -6143,7 +6264,8 @@ static int lm_p0_validate_disabled_block(
 
         event_offset = offset;
         event_line = line;
-        if (!lm_p0_disabled_scan_next_event(document, local_indent, &offset, &line, &event, &has_event)) {
+        memset(event, 0, sizeof(*event));
+        if (!lm_p0_disabled_scan_next_event(document, local_indent, &offset, &line, event, &has_event)) {
             status = 0;
             break;
         }
@@ -6158,7 +6280,7 @@ static int lm_p0_validate_disabled_block(
         if (!lm_p0_disabled_state_accept_event(
                 document,
                 state,
-                &event,
+                event,
                 &done_after_event,
                 &done_before_event
             )) {
@@ -6175,6 +6297,7 @@ static int lm_p0_validate_disabled_block(
         }
     }
 
+    lm_p0_stream_event_delete(event);
     lm_p0_disabled_state_delete(state);
     lm_p0_indent_stack_delete(local_indent);
     *out_offset = offset;
@@ -6191,6 +6314,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     LmP0Stack *stack;
     LmP0PendingDelimiter *pending;
     LmP0PendingMix *pending_mix;
+    LmP0StreamEvent *event;
     int status;
     int has_last_physical_level;
     size_t last_physical_level;
@@ -6206,6 +6330,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     stack = 0;
     pending = 0;
     pending_mix = 0;
+    event = 0;
 
     document->root = lm_p0_new_node(document, LM_P0_NODE_STRUCTURE);
     if (document->root == 0) {
@@ -6234,6 +6359,15 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     }
     stack->parents[0] = document->root->as->structure;
     stack->owners[0] = document->root;
+    event = lm_p0_stream_event_new();
+    if (event == 0) {
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating stream event");
+        lm_p0_indent_stack_delete(indent_stack);
+        lm_p0_stack_delete(stack);
+        lm_p0_pending_delimiter_delete(pending);
+        lm_p0_pending_mix_delete(pending_mix);
+        return 0;
+    }
 
     while (offset <= length) {
         size_t line_start;
@@ -6245,7 +6379,6 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         const char *text;
         size_t text_length;
         unsigned node_flags;
-        LmP0StreamEvent event;
         int has_leading_mix_prefix;
         size_t mix_prefix_start;
         size_t mix_prefix_end;
@@ -6273,16 +6406,16 @@ static int lm_p0_parse_stream(LmP0Document *document) {
                 length,
                 line_start,
                 line,
-                &event,
+                event,
                 &offset,
                 &line
             )) {
-            event.level = lm_p0_stream_block_string_level(stack, pending);
-            if (!lm_p0_pending_mix_flush(document, stack, pending, pending_mix, event.level)) {
+            event->level = lm_p0_stream_block_string_level(stack, pending);
+            if (!lm_p0_pending_mix_flush(document, stack, pending, pending_mix, event->level)) {
                 status = 0;
                 break;
             }
-            if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
+            if (!lm_p0_stream_apply_event(document, stack, pending, event)) {
                 status = 0;
                 break;
             }
@@ -6336,14 +6469,14 @@ static int lm_p0_parse_stream(LmP0Document *document) {
                 break;
             }
             if (standalone_mix) {
-                memset(&event, 0, sizeof(event));
-                event.kind = LM_P0_STREAM_EVENT_MIX;
-                event.text = source + p;
-                event.text_length = (line_start + raw_length) - p;
-                event.line = line;
-                event.column = (size_t)(p - line_start) + 1U;
-                event.offset = p;
-                if (!lm_p0_pending_mix_push(document, pending_mix, &event)) {
+                memset(event, 0, sizeof(*event));
+                event->kind = LM_P0_STREAM_EVENT_MIX;
+                event->text = source + p;
+                event->text_length = (line_start + raw_length) - p;
+                event->line = line;
+                event->column = (size_t)(p - line_start) + 1U;
+                event->offset = p;
+                if (!lm_p0_pending_mix_push(document, pending_mix, event)) {
                     status = 0;
                     break;
                 }
@@ -6494,17 +6627,17 @@ static int lm_p0_parse_stream(LmP0Document *document) {
                 break;
             }
 
-            memset(&event, 0, sizeof(event));
-            event.kind = LM_P0_STREAM_EVENT_DISABLED_BLOCK;
-            event.level = level;
-            event.node_flags = node_flags;
-            event.text = text;
-            event.text_length = text_length;
-            event.line = line;
-            event.column = header_column;
-            event.offset = (size_t)(text - source);
+            memset(event, 0, sizeof(*event));
+            event->kind = LM_P0_STREAM_EVENT_DISABLED_BLOCK;
+            event->level = level;
+            event->node_flags = node_flags;
+            event->text = text;
+            event->text_length = text_length;
+            event->line = line;
+            event->column = header_column;
+            event->offset = (size_t)(text - source);
 
-            if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
+            if (!lm_p0_stream_apply_event(document, stack, pending, event)) {
                 status = 0;
                 break;
             }
@@ -6514,30 +6647,30 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             continue;
         }
 
-        memset(&event, 0, sizeof(event));
-        event.level = level;
-        event.node_flags = node_flags;
-        event.text = text;
-        event.text_length = text_length;
-        event.line = line;
-        event.column = (size_t)(text - (source + line_start)) + 1U;
-        event.offset = (size_t)(text - source);
-        event.kind = text_length == 0U && level > 0U
+        memset(event, 0, sizeof(*event));
+        event->level = level;
+        event->node_flags = node_flags;
+        event->text = text;
+        event->text_length = text_length;
+        event->line = line;
+        event->column = (size_t)(text - (source + line_start)) + 1U;
+        event->offset = (size_t)(text - source);
+        event->kind = text_length == 0U && level > 0U
             ? LM_P0_STREAM_EVENT_DELIM
             : LM_P0_STREAM_EVENT_ITEM;
 
         if (has_last_physical_level) {
             if (level > last_physical_level + 1U) {
-                lm_p0_set_diagnostic(document, 13, line, event.column, "source level increase must be one step");
+                lm_p0_set_diagnostic(document, 13, line, event->column, "source level increase must be one step");
                 status = 0;
                 break;
             }
-            if (level + 1U < last_physical_level && !lm_p0_stream_event_is_tail_cutter(&event)) {
+            if (level + 1U < last_physical_level && !lm_p0_stream_event_is_tail_cutter(event)) {
                 lm_p0_set_diagnostic(
                     document,
                     13,
                     line,
-                    event.column,
+                    event->column,
                     "source level decrease must be one step unless a tail cutter is used"
                 );
                 status = 0;
@@ -6550,23 +6683,30 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             break;
         }
         if (has_leading_mix_prefix) {
-            LmP0StreamEvent mix_event;
+            LmP0StreamEvent *mix_event;
 
-            memset(&mix_event, 0, sizeof(mix_event));
-            mix_event.kind = LM_P0_STREAM_EVENT_MIX;
-            mix_event.level = level;
-            mix_event.text = source + mix_prefix_start;
-            mix_event.text_length = mix_prefix_end - mix_prefix_start;
-            mix_event.line = line;
-            mix_event.column = (size_t)(mix_prefix_start - line_start) + 1U;
-            mix_event.offset = mix_prefix_start;
-            if (!lm_p0_stream_apply_event(document, stack, pending, &mix_event)) {
+            mix_event = lm_p0_stream_event_new();
+            if (mix_event == 0) {
+                lm_p0_set_diagnostic(document, 1, line, (size_t)(mix_prefix_start - line_start) + 1U, "out of memory while creating leading MIX event");
                 status = 0;
                 break;
             }
+            mix_event->kind = LM_P0_STREAM_EVENT_MIX;
+            mix_event->level = level;
+            mix_event->text = source + mix_prefix_start;
+            mix_event->text_length = mix_prefix_end - mix_prefix_start;
+            mix_event->line = line;
+            mix_event->column = (size_t)(mix_prefix_start - line_start) + 1U;
+            mix_event->offset = mix_prefix_start;
+            if (!lm_p0_stream_apply_event(document, stack, pending, mix_event)) {
+                lm_p0_stream_event_delete(mix_event);
+                status = 0;
+                break;
+            }
+            lm_p0_stream_event_delete(mix_event);
         }
 
-        if (!lm_p0_stream_apply_event(document, stack, pending, &event)) {
+        if (!lm_p0_stream_apply_event(document, stack, pending, event)) {
             status = 0;
             break;
         }
@@ -6592,6 +6732,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         status = 0;
     }
 
+    lm_p0_stream_event_delete(event);
     lm_p0_indent_stack_delete(indent_stack);
     lm_p0_stack_delete(stack);
     lm_p0_pending_delimiter_delete(pending);
@@ -6910,20 +7051,23 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     return status;
 }
 
-static char *lm_p0_registry_join_text3(LmP0Text first, const char *separator, LmP0Text second) {
+static char *lm_p0_registry_join_text3(const LmP0Text *first, const char *separator, const LmP0Text *second) {
     size_t separator_length;
     size_t length;
     char *result;
 
+    if (first == 0 || second == 0 || separator == 0) {
+        return 0;
+    }
     separator_length = strlen(separator);
-    length = first.length + separator_length + second.length;
+    length = first->length + separator_length + second->length;
     result = (char *)malloc(length + 1U);
     if (result == 0) {
         return 0;
     }
-    memcpy(result, first.data, first.length);
-    memcpy(result + first.length, separator, separator_length);
-    memcpy(result + first.length + separator_length, second.data, second.length);
+    memcpy(result, first->data, first->length);
+    memcpy(result + first->length, separator, separator_length);
+    memcpy(result + first->length + separator_length, second->data, second->length);
     result[length] = '\0';
     return result;
 }
@@ -6943,7 +7087,7 @@ static int lm_p0_registry_push_generated_row_cstr(
 static int lm_p0_registry_push_generated_row_text(
     const char *table,
     const char *key,
-    LmP0Text payload
+    const LmP0Text *payload
 ) {
     return lm_p0_registry_push_row_atoms(
         lm_p0_text_from_cstr(table),
@@ -6953,33 +7097,47 @@ static int lm_p0_registry_push_generated_row_text(
 }
 
 static int lm_p0_registry_push_column_metadata(
-    LmP0Text table_name,
+    const LmP0Text *table_name,
     const LmP0RegistryColumn *columns,
     size_t column_count
 ) {
-    LmP0Text table_payload;
-    LmP0Text column_payload;
+    LmP0Text *table_payload;
+    LmP0Text *column_payload;
     size_t index;
     size_t descriptor_index;
     char *column_key;
     char *descriptor_key;
     char index_buffer[32];
     char count_buffer[32];
+    int status;
 
     if (columns == 0) {
         return -1;
     }
-    if (!lm_p0_registry_identifier_value(&table_name, &table_payload)) {
+
+    table_payload = lm_p0_text_ref_new_empty();
+    column_payload = lm_p0_text_ref_new_empty();
+    if (table_payload == 0 || column_payload == 0) {
+        lm_p0_text_ref_delete(table_payload);
+        lm_p0_text_ref_delete(column_payload);
         return -1;
+    }
+    status = 0;
+
+    if (!lm_p0_registry_identifier_value(table_name, table_payload)) {
+        status = -1;
+        goto cleanup;
     }
 
     for (index = 0U; index < column_count; ++index) {
-        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(columns[index].name, &column_payload)) {
-            return -1;
+        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(columns[index].name, column_payload)) {
+            status = -1;
+            goto cleanup;
         }
         column_key = lm_p0_registry_join_text3(table_payload, ".", column_payload);
         if (column_key == 0) {
-            return -1;
+            status = -1;
+            goto cleanup;
         }
 
         snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)index);
@@ -6992,7 +7150,8 @@ static int lm_p0_registry_push_column_metadata(
             lm_p0_registry_push_generated_row_cstr("column.descriptor.count", column_key, count_buffer) != 0
         ) {
             free(column_key);
-            return -1;
+            status = -1;
+            goto cleanup;
         }
 
         for (descriptor_index = 0U; descriptor_index < columns[index].descriptor_count; ++descriptor_index) {
@@ -7000,15 +7159,17 @@ static int lm_p0_registry_push_column_metadata(
             descriptor_key = lm_p0_registry_join_text3(lm_p0_text_from_cstr(column_key), ".", lm_p0_text_from_cstr(index_buffer));
             if (descriptor_key == 0) {
                 free(column_key);
-                return -1;
+                status = -1;
+                goto cleanup;
             }
             if (
                 columns[index].descriptors[descriptor_index] == 0 ||
-                lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, *columns[index].descriptors[descriptor_index]) != 0
+                lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index].descriptors[descriptor_index]) != 0
             ) {
                 free(descriptor_key);
                 free(column_key);
-                return -1;
+                status = -1;
+                goto cleanup;
             }
             free(descriptor_key);
         }
@@ -7016,7 +7177,10 @@ static int lm_p0_registry_push_column_metadata(
         free(column_key);
     }
 
-    return 0;
+cleanup:
+    lm_p0_text_ref_delete(table_payload);
+    lm_p0_text_ref_delete(column_payload);
+    return status;
 }
 
 static int lm_p0_registry_l4_push_row(
@@ -7030,7 +7194,7 @@ static int lm_p0_registry_l4_push_row(
         fprintf(stderr, "parser registry error: row expects exactly three atom fields\n");
         return -1;
     }
-    return lm_p0_registry_push_row_atoms(*table_atom, *key_atom, *payload_node->as->atom);
+    return lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node->as->atom);
 }
 
 static int lm_p0_registry_l4_push_cell(
@@ -7047,11 +7211,11 @@ static int lm_p0_registry_l4_push_cell(
         return -1;
     }
     return lm_p0_registry_push_table_cell(
-        *table_name,
+        table_name,
         column,
         split_by_column,
-        *key_atom,
-        *payload_node->as->atom
+        key_atom,
+        payload_node->as->atom
     );
 }
 
@@ -7065,7 +7229,7 @@ static int lm_p0_registry_l4_push_column_metadata(
     if (table_name == 0) {
         return -1;
     }
-    return lm_p0_registry_push_column_metadata(*table_name, columns, column_count);
+    return lm_p0_registry_push_column_metadata(table_name, columns, column_count);
 }
 
 static const LmL4Loader lm_p0_registry_l4_loader = {
@@ -7617,13 +7781,19 @@ static int lm_p0_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payl
 }
 
 static int lm_p0_registry_payload_is_null(const LmP0Text *atom) {
-    LmP0Text payload;
-    LmP0Text *payload_ref;
-    if (lm_p0_registry_identifier_value(atom, &payload) == 0) {
+    LmP0Text *payload;
+    int is_null;
+    payload = lm_p0_text_view_new_cstr("");
+    if (payload == 0) {
         return 0;
     }
-    payload_ref = &payload;
-    return payload_ref -> length == 4U && memcmp(payload_ref -> data, "NULL", 4U) == 0;
+    if (lm_p0_registry_identifier_value(atom, payload) == 0) {
+        lm_p0_text_view_delete(payload);
+        return 0;
+    }
+    is_null = payload -> length == 4U && memcmp(payload -> data, "NULL", 4U) == 0;
+    lm_p0_text_view_delete(payload);
+    return is_null;
 }
 
 static int lm_p0_is_horizontal_space(char value) {
@@ -7695,18 +7865,40 @@ static char * lm_p0_copy_bytes(const char *source, size_t length) {
     return copy;
 }
 
-static LmP0Text lm_p0_text_from_cstr(const char *text) {
-    LmP0Text result;
-    LmP0Text *result_ref;
-    result_ref = &result;
+static LmP0Text * lm_p0_text_view_new_cstr(const char *text) {
+    LmP0Text *result;
+    result = calloc(1U, sizeof(LmP0Text));
+    if (result == 0) {
+        return 0;
+    }
     if (text != 0) {
-        result_ref->data = text;
+        result->data = text;
     }
     if (text == 0) {
-        result_ref->data = "";
+        result->data = "";
     }
-    result_ref->length = strlen(result_ref -> data);
+    result->length = strlen(result -> data);
     return result;
+}
+
+static void lm_p0_text_view_delete(LmP0Text *text) {
+    free(text);
+}
+
+static LmP0Text * lm_p0_text_from_cstr(const char *text) {
+    return lm_p0_text_view_new_cstr(text);
+}
+
+static int lm_p0_text_assign_cstr(LmP0Text *out_text, const char *text) {
+    if (out_text == 0) {
+        return 0;
+    }
+    if (text == 0) {
+        text = "";
+    }
+    out_text->data = text;
+    out_text->length = strlen(text);
+    return 1;
 }
 
 static char * lm_p0_text_copy_cstr(const LmP0Text *text) {
@@ -7957,28 +8149,38 @@ static size_t lm_p0_visual_column_between(const char *source, size_t start, size
     return column;
 }
 
-static const char * lm_p0_registry_lookup(LmP0Text key, const char *table) {
+static const char * lm_p0_registry_lookup(const LmP0Text *key, const char *table) {
     size_t i;
     LmP0RegistryRow *row;
-    LmP0Text key_payload;
+    LmP0Text *key_payload;
+    const char *payload;
     if (table == 0 || lm_p0_registry.loaded == 0) {
         return 0;
     }
-    if (lm_p0_identifier_payload(&key, &key_payload) == 0) {
+    key_payload = lm_p0_text_from_cstr("");
+    if (key_payload == 0) {
+        return 0;
+    }
+    if (lm_p0_identifier_payload(key, key_payload) == 0) {
+        lm_p0_text_view_delete(key_payload);
         return 0;
     }
     if (lm_p0_registry.rows == 0) {
+        lm_p0_text_view_delete(key_payload);
         return 0;
     }
+    payload = 0;
     i = lm_p0_registry.rows->count;
     while (i > 0U) {
         i = i - 1U;
         row = lm_own_ptr_stack_at(lm_p0_registry.rows, i);
-        if (row != 0 && row -> table != 0 && row -> key != 0 && strcmp(row -> table, table) == 0 && lm_p0_text_equals(&key_payload, row -> key)) {
-            return row -> payload;
+        if (row != 0 && row -> table != 0 && row -> key != 0 && strcmp(row -> table, table) == 0 && lm_p0_text_equals(key_payload, row -> key)) {
+            payload = row -> payload;
+            break;
         }
     }
-    return 0;
+    lm_p0_text_view_delete(key_payload);
+    return payload;
 }
 
 static int lm_p0_registry_table_has_rows(const char *table) {

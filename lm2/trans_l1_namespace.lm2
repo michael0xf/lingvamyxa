@@ -114,7 +114,7 @@ static int lm_trans_registry_has_expr_emitter_binding(const LmP0Text *key, const
         return 0;
     }
 
-    binding = lm_trans_registry_lookup(*key, table);
+    binding = lm_trans_registry_lookup(key, table);
     if (binding == 0) {
         return 0;
     }
@@ -150,10 +150,10 @@ static const char *lm_trans_expr_emitter_binding_table(const char *class_name) {
     if (class_text == 0) {
         exit(2);
     }
-    table = lm_trans_registry_lookup(*class_text, "expr_emitter_binding");
+    table = lm_trans_registry_lookup(class_text, "expr_emitter_binding");
     if (
         table != 0 &&
-        lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", *class_text, table) != 0
+        lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, table) != 0
     ) {
         lm_trans_text_ref_destroy(&class_text);
         exit(2);
@@ -170,10 +170,10 @@ static const char *lm_trans_expr_spelling_binding_table(const char *class_name) 
     if (class_text == 0) {
         exit(2);
     }
-    table = lm_trans_registry_lookup(*class_text, "expr_spelling_binding");
+    table = lm_trans_registry_lookup(class_text, "expr_spelling_binding");
     if (
         table != 0 &&
-        lm_trans_registry_assert_payload_table_exists("expr_spelling_binding", *class_text, table) != 0
+        lm_trans_registry_assert_payload_table_exists("expr_spelling_binding", class_text, table) != 0
     ) {
         lm_trans_text_ref_destroy(&class_text);
         exit(2);
@@ -1088,7 +1088,7 @@ static int lm_trans_is_reserved_head_name(const LmP0Text *name) {
     if (name == 0) {
         return 0;
     }
-    namespace_class = lm_trans_registry_lookup_table_link_checked(*name, "namespace", "receiver.type");
+    namespace_class = lm_trans_registry_lookup_table_link_checked(name, "namespace", "receiver.type");
     return namespace_class != 0;
 }
 
@@ -1112,14 +1112,14 @@ static int lm_trans_head_binding_resolve(
     out->symbol = lm_trans_namespace_find(namespace_, head);
     out->receiver_type = lm_trans_namespace_registry_lookup_table_link_checked(
         namespace_,
-        *head,
+        head,
         "namespace",
         "receiver.type"
     );
 
     out->function_receiver_binding = lm_trans_namespace_registry_lookup(
         namespace_,
-        *head,
+        head,
         "receiver.function"
     );
     if (out->function_receiver_binding != 0) {
@@ -1140,7 +1140,7 @@ static int lm_trans_head_binding_resolve(
 
     out->statement_receiver_binding = lm_trans_namespace_registry_lookup(
         namespace_,
-        *head,
+        head,
         "receiver.statement"
     );
     if (out->statement_receiver_binding != 0) {
@@ -1378,7 +1378,7 @@ static const char *lm_trans_class_c_spelling(const LmP0Text *name) {
     if (name == 0) {
         return 0;
     }
-    return lm_trans_registry_lookup(*name, "class.spelling");
+    return lm_trans_registry_lookup(name, "class.spelling");
 }
 
 static int lm_trans_builtin_c_type_tail(const LmP0Text *name) {
@@ -1387,7 +1387,7 @@ static int lm_trans_builtin_c_type_tail(const LmP0Text *name) {
     }
     return
         lm_trans_class_c_spelling(name) != 0 ||
-        lm_trans_registry_has(*name, "class.cTail");
+        lm_trans_registry_has(name, "class.cTail");
 }
 
 static int lm_trans_builtin_c_type_name(const LmP0Text *name) {
@@ -1434,7 +1434,7 @@ static int lm_trans_emit_name(FILE *file, const LmP0Text *name) {
         return status;
     }
 
-    return lm_trans_emit_identifier(file, *name);
+    return lm_trans_emit_identifier(file, name);
 }
 
 static int lm_trans_emit_type_name(FILE *file, const LmP0Text *name) {
@@ -1465,7 +1465,7 @@ static int lm_trans_emit_type_name(FILE *file, const LmP0Text *name) {
     if (spelling != 0) {
         return lm_trans_put(file, spelling);
     }
-    return lm_trans_emit_identifier(file, *name);
+    return lm_trans_emit_identifier(file, name);
 }
 
 static int lm_trans_is_c_reference_name(const LmP0Text *name) {

@@ -58,8 +58,10 @@ fn: lm_registry_control_text_equals (const: @(char data); size_t: text_length; c
     return: text_length = length && c.memcmp(data, value, length) = 0
 end: lm_registry_control_text_equals
 
-fn: lm_registry_control_text_equals_text (LmP0Text: text; const: @: char value) int
-    return: lm_registry_control_text_equals(c.text.data, c.text.length, value)
+fn: lm_registry_control_text_equals_text (const: @(LmP0Text text); const: @: char value) int
+    if: text = 0
+        return: 0
+    return: lm_registry_control_text_equals(text\data, text\length, value)
 end: lm_registry_control_text_equals_text
 
 sub: lm_registry_control_error_set (@: LmRegistryControlError error; const: @: char message)
@@ -151,6 +153,32 @@ sub: lm_registry_control_buffer_destroy (@: LmRegistryControlBuffer buffer)
         buffer\capacity: 0U
         buffer\failed: 0
 end: lm_registry_control_buffer_destroy
+
+fn: lm_registry_control_buffer_new () @: LmRegistryControlBuffer
+    return: c.calloc(1U, c.sizeof(c.LmRegistryControlBuffer))
+end: lm_registry_control_buffer_new
+
+sub: lm_registry_control_buffer_delete (@: LmRegistryControlBuffer buffer)
+    if: buffer != 0
+        lm_registry_control_buffer_destroy(buffer)
+        c.free(buffer)
+end: lm_registry_control_buffer_delete
+
+fn: lm_registry_control_error_new () @: LmRegistryControlError
+    return: c.calloc(1U, c.sizeof(c.LmRegistryControlError))
+end: lm_registry_control_error_new
+
+sub: lm_registry_control_error_delete (@: LmRegistryControlError error)
+    c.free(error)
+end: lm_registry_control_error_delete
+
+fn: lm_registry_control_rename_new () @: LmRegistryControlRename
+    return: c.calloc(1U, c.sizeof(c.LmRegistryControlRename))
+end: lm_registry_control_rename_new
+
+sub: lm_registry_control_rename_delete (@: LmRegistryControlRename rename)
+    c.free(rename)
+end: lm_registry_control_rename_delete
 
 fn: lm_registry_control_node_ignored (const: @: LmP0Node node) int
     return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
@@ -265,17 +293,21 @@ fn: lm_registry_control_column_spelling_append_node (@: LmRegistryControlBuffer 
 end: lm_registry_control_column_spelling_append_node
 
 fn: lm_registry_control_column_spelling_alloc (const: @(LmP0Node node); @: LmRegistryControlError error) @: char
-    LmRegistryControlBuffer: buffer
+    @: LmRegistryControlBuffer buffer
     @: char result
 
-    c.memset(@ buffer, 0, c.sizeof(buffer))
-    if: lm_registry_control_column_spelling_append_node(@ buffer, node) = 0
-        lm_registry_control_error_set(error, "columns: cannot format column descriptor")
-        lm_registry_control_buffer_destroy(@ buffer)
+    buffer: lm_registry_control_buffer_new()
+    if: buffer = 0
+        lm_registry_control_error_set(error, "out of memory while creating column formatter")
         return: 0
 
-    result: lm_registry_control_buffer_take(@ buffer)
-    lm_registry_control_buffer_destroy(@ buffer)
+    if: lm_registry_control_column_spelling_append_node(buffer, node) = 0
+        lm_registry_control_error_set(error, "columns: cannot format column descriptor")
+        lm_registry_control_buffer_delete(buffer)
+        return: 0
+
+    result: lm_registry_control_buffer_take(buffer)
+    lm_registry_control_buffer_delete(buffer)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting column")
     return: result
@@ -406,17 +438,21 @@ fn: lm_registry_control_node_lmx_append_inline (@: LmRegistryControlBuffer buffe
 end: lm_registry_control_node_lmx_append_inline
 
 fn: lm_registry_control_node_lmx_alloc (const: @(LmP0Node node); @: LmRegistryControlError error) @: char
-    LmRegistryControlBuffer: buffer
+    @: LmRegistryControlBuffer buffer
     @: char result
 
-    c.memset(@ buffer, 0, c.sizeof(buffer))
-    if: lm_registry_control_node_lmx_append_inline(@ buffer, node) = 0
-        lm_registry_control_error_set(error, "cannot format P0 node")
-        lm_registry_control_buffer_destroy(@ buffer)
+    buffer: lm_registry_control_buffer_new()
+    if: buffer = 0
+        lm_registry_control_error_set(error, "out of memory while creating node formatter")
         return: 0
 
-    result: lm_registry_control_buffer_take(@ buffer)
-    lm_registry_control_buffer_destroy(@ buffer)
+    if: lm_registry_control_node_lmx_append_inline(buffer, node) = 0
+        lm_registry_control_error_set(error, "cannot format P0 node")
+        lm_registry_control_buffer_delete(buffer)
+        return: 0
+
+    result: lm_registry_control_buffer_take(buffer)
+    lm_registry_control_buffer_delete(buffer)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting P0 node")
     return: result
@@ -549,45 +585,52 @@ fn: lm_registry_control_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: 
     const: @: char end_name_data
     size_t: end_name_length
     @: LmRegistryControlColumn columns
-    LmRegistryControlBuffer: buffer
+    @: LmRegistryControlBuffer buffer
     size_t: column_count
     size_t: row_count
     @: char result
 
-    c.memset(@ buffer, 0, c.sizeof(buffer))
+    buffer: lm_registry_control_buffer_new()
+    if: buffer = 0
+        lm_registry_control_error_set(error, "out of memory while creating table formatter")
+        return: 0
     columns: 0
     column_count: 0U
     row_count: 0U
 
     if: lm_registry_control_table_name_from_frame(table_frame, @ table_name_data, @ table_name_length, error) = 0
+        lm_registry_control_buffer_delete(buffer)
         return: 0
     if: lm_registry_control_columns_from_frame(table_frame, @ columns, @ column_count, error) = 0
+        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     rows_frame: lm_registry_control_rows_frame_from_table(table_frame, error)
     if: rows_frame = 0
         lm_registry_control_columns_destroy(columns, column_count)
+        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     if: lm_registry_control_measure_rows(rows_frame, columns, column_count, @ row_count, error) = 0
         lm_registry_control_columns_destroy(columns, column_count)
+        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     lm_registry_control_table_end_name(table_frame, table_name_data, table_name_length, @ end_name_data, @ end_name_length)
 
-    lm_registry_control_buffer_append_cstr(@ buffer, "table:\n")
-    lm_registry_control_buffer_append_cstr(@ buffer, "    name: ")
-    lm_registry_control_buffer_append_text(@ buffer, table_name_data, table_name_length)
-    lm_registry_control_buffer_append_cstr(@ buffer, "\n")
-    lm_registry_control_emit_columns(@ buffer, columns, column_count)
-    lm_registry_control_emit_rows(@ buffer, rows_frame, columns, column_count, row_count, error)
-    lm_registry_control_buffer_append_cstr(@ buffer, "end: ")
-    lm_registry_control_buffer_append_text(@ buffer, end_name_data, end_name_length)
-    lm_registry_control_buffer_append_cstr(@ buffer, "\n")
+    lm_registry_control_buffer_append_cstr(buffer, "table:\n")
+    lm_registry_control_buffer_append_cstr(buffer, "    name: ")
+    lm_registry_control_buffer_append_text(buffer, table_name_data, table_name_length)
+    lm_registry_control_buffer_append_cstr(buffer, "\n")
+    lm_registry_control_emit_columns(buffer, columns, column_count)
+    lm_registry_control_emit_rows(buffer, rows_frame, columns, column_count, row_count, error)
+    lm_registry_control_buffer_append_cstr(buffer, "end: ")
+    lm_registry_control_buffer_append_text(buffer, end_name_data, end_name_length)
+    lm_registry_control_buffer_append_cstr(buffer, "\n")
 
     lm_registry_control_columns_destroy(columns, column_count)
-    result: lm_registry_control_buffer_take(@ buffer)
-    lm_registry_control_buffer_destroy(@ buffer)
+    result: lm_registry_control_buffer_take(buffer)
+    lm_registry_control_buffer_delete(buffer)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting table")
     return: result
@@ -633,27 +676,30 @@ end: lm_registry_control_emit_frame_from_node
 fn: lm_registry_control_document_to_lmx_alloc (const: @(LmP0Document document); @: LmRegistryControlError error) @: char
     const: @: LmP0Node root
     const: @: LmP0Field field
-    LmRegistryControlBuffer: output
+    @: LmRegistryControlBuffer output
     int: emitted
     @: char result
 
-    c.memset(@ output, 0, c.sizeof(output))
+    output: lm_registry_control_buffer_new()
+    if: output = 0
+        lm_registry_control_error_set(error, "out of memory while creating document formatter")
+        return: 0
     emitted: 0
     root: c.lm_p0_document_root(document)
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         lm_registry_control_error_set(error, "document root must be a Structure")
-        lm_registry_control_buffer_destroy(@ output)
+        lm_registry_control_buffer_delete(output)
         return: 0
 
     field: root\as\structure\first_field
     while: field != 0
-        if: lm_registry_control_emit_frame_from_node(@ output, field\value, @ emitted, error) = 0
-            lm_registry_control_buffer_destroy(@ output)
+        if: lm_registry_control_emit_frame_from_node(output, field\value, @ emitted, error) = 0
+            lm_registry_control_buffer_delete(output)
             return: 0
         field: field\next
 
-    result: lm_registry_control_buffer_take(@ output)
-    lm_registry_control_buffer_destroy(@ output)
+    result: lm_registry_control_buffer_take(output)
+    lm_registry_control_buffer_delete(output)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting registry document")
     return: result
@@ -740,7 +786,7 @@ end: lm_registry_control_rename_structure_tables
 
 fn: lm_registry_control_rename_document_column_descriptor (const: @(LmP0Document document); const: @(char old_name); const: @(char new_name); @: size_t out_changed) int
     @: LmP0Node root
-    LmRegistryControlRename: rename
+    @: LmRegistryControlRename rename
 
     if: out_changed != 0
         out_changed[0]: 0U
@@ -748,17 +794,21 @@ fn: lm_registry_control_rename_document_column_descriptor (const: @(LmP0Document
     if: document = 0 || old_name = 0 || new_name = 0
         return: 1
 
-    c.memset(@ rename, 0, c.sizeof(rename))
-    c.rename.old_name: old_name
-    c.rename.new_name: new_name
+    rename: lm_registry_control_rename_new()
+    if: rename = 0
+        return: 1
+    rename\old_name: old_name
+    rename\new_name: new_name
 
     root: c.lm_p0_document_root(document)
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        lm_registry_control_rename_delete(rename)
         return: 1
 
-    lm_registry_control_rename_structure_tables(root\as\structure, @ rename)
+    lm_registry_control_rename_structure_tables(root\as\structure, rename)
     if: out_changed != 0
-        out_changed[0]: c.rename.changed_count
+        out_changed[0]: rename\changed_count
+    lm_registry_control_rename_delete(rename)
     return: 0
 end: lm_registry_control_rename_document_column_descriptor
 
