@@ -20318,23 +20318,37 @@ typedef struct LmTransL4PayloadPointerBinding {
     LmTransL4PayloadFrameHandler handler;
 } LmTransL4PayloadPointerBinding;
 
-static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_bindings[] = {
-    { "import", "l4.payload", lm_trans_l4_payload_receiver_import },
-    { "L2", "l4.payload", lm_trans_l4_payload_receiver_l2 }
+static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_binding_import = {
+    "import",
+    "l4.payload",
+    lm_trans_l4_payload_receiver_import
+};
+
+static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_binding_l2 = {
+    "L2",
+    "l4.payload",
+    lm_trans_l4_payload_receiver_l2
+};
+
+static const LmTransL4PayloadPointerBinding *const lm_trans_l4_payload_pointer_bindings[] = {
+    &lm_trans_l4_payload_pointer_binding_import,
+    &lm_trans_l4_payload_pointer_binding_l2
 };
 
 static const LmTransL4PayloadPointerBinding *lm_trans_l4_payload_pointer_binding_find(
     const LmP0Text *head
 ) {
     size_t i;
+    const LmTransL4PayloadPointerBinding *binding;
 
     if (head == 0) {
         return 0;
     }
 
     for (i = 0U; i < sizeof(lm_trans_l4_payload_pointer_bindings) / sizeof(lm_trans_l4_payload_pointer_bindings[0]); ++i) {
-        if (lm_trans_text_equals(head, lm_trans_l4_payload_pointer_bindings[i].head)) {
-            return &lm_trans_l4_payload_pointer_bindings[i];
+        binding = lm_trans_l4_payload_pointer_bindings[i];
+        if (binding != 0 && lm_trans_text_equals(head, binding->head)) {
+            return binding;
         }
     }
     return 0;
@@ -23589,36 +23603,80 @@ typedef struct LmTransL4AtomPointerBinding {
 
 static int lm_trans_l4_root_receiver_registry(const LmP0Frame *frame, int allow_node_cells);
 
-static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_bindings[] = {
-    { "table", "l4.frame", lm_trans_l4_receiver_table },
-    { "row", "l4.frame", lm_trans_l4_receiver_row },
-    { "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor },
-    { "lazy fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor }
+static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_table = {
+    "table",
+    "l4.frame",
+    lm_trans_l4_receiver_table
 };
 
-static const LmTransL4FramePointerBinding lm_trans_l4_root_frame_pointer_bindings[] = {
-    { "L4", "l4.root", lm_trans_l4_root_receiver_registry },
-    { "registry", "l4.root", lm_trans_l4_root_receiver_registry }
+static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_row = {
+    "row",
+    "l4.frame",
+    lm_trans_l4_receiver_row
 };
 
-static const LmTransL4AtomPointerBinding lm_trans_l4_atom_pointer_bindings[] = {
-    { "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence }
+static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_fn = {
+    "fn",
+    "l4.frame",
+    lm_trans_l4_receiver_fn_descriptor
+};
+
+static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_lazy_fn = {
+    "lazy fn",
+    "l4.frame",
+    lm_trans_l4_receiver_fn_descriptor
+};
+
+static const LmTransL4FramePointerBinding *const lm_trans_l4_frame_pointer_bindings[] = {
+    &lm_trans_l4_frame_pointer_binding_table,
+    &lm_trans_l4_frame_pointer_binding_row,
+    &lm_trans_l4_frame_pointer_binding_fn,
+    &lm_trans_l4_frame_pointer_binding_lazy_fn
+};
+
+static const LmTransL4FramePointerBinding lm_trans_l4_root_frame_pointer_binding_l4 = {
+    "L4",
+    "l4.root",
+    lm_trans_l4_root_receiver_registry
+};
+
+static const LmTransL4FramePointerBinding lm_trans_l4_root_frame_pointer_binding_registry = {
+    "registry",
+    "l4.root",
+    lm_trans_l4_root_receiver_registry
+};
+
+static const LmTransL4FramePointerBinding *const lm_trans_l4_root_frame_pointer_bindings[] = {
+    &lm_trans_l4_root_frame_pointer_binding_l4,
+    &lm_trans_l4_root_frame_pointer_binding_registry
+};
+
+static const LmTransL4AtomPointerBinding lm_trans_l4_atom_pointer_binding_load_headers = {
+    "loadHeaders",
+    "l4.atom",
+    lm_trans_l4_atom_receiver_prelude_sequence
+};
+
+static const LmTransL4AtomPointerBinding *const lm_trans_l4_atom_pointer_bindings[] = {
+    &lm_trans_l4_atom_pointer_binding_load_headers
 };
 
 static const LmTransL4FramePointerBinding *lm_trans_l4_frame_pointer_binding_find(
     const LmP0Text *head,
-    const LmTransL4FramePointerBinding *bindings,
+    const LmTransL4FramePointerBinding *const *bindings,
     size_t count
 ) {
     size_t i;
+    const LmTransL4FramePointerBinding *binding;
 
     if (head == 0 || bindings == 0) {
         return 0;
     }
 
     for (i = 0U; i < count; ++i) {
-        if (lm_trans_text_equals(head, bindings[i].head)) {
-            return &bindings[i];
+        binding = bindings[i];
+        if (binding != 0 && lm_trans_text_equals(head, binding->head)) {
+            return binding;
         }
     }
     return 0;
@@ -23626,18 +23684,20 @@ static const LmTransL4FramePointerBinding *lm_trans_l4_frame_pointer_binding_fin
 
 static const LmTransL4AtomPointerBinding *lm_trans_l4_atom_pointer_binding_find(
     const LmP0Text *atom,
-    const LmTransL4AtomPointerBinding *bindings,
+    const LmTransL4AtomPointerBinding *const *bindings,
     size_t count
 ) {
     size_t i;
+    const LmTransL4AtomPointerBinding *binding;
 
     if (atom == 0 || bindings == 0) {
         return 0;
     }
 
     for (i = 0U; i < count; ++i) {
-        if (lm_trans_text_equals(atom, bindings[i].atom)) {
-            return &bindings[i];
+        binding = bindings[i];
+        if (binding != 0 && lm_trans_text_equals(atom, binding->atom)) {
+            return binding;
         }
     }
     return 0;
@@ -23646,7 +23706,7 @@ static const LmTransL4AtomPointerBinding *lm_trans_l4_atom_pointer_binding_find(
 static int lm_trans_l4_head_binding_resolve_from_pointer_table(
     const LmP0Text *head,
     const char *namespace_table,
-    const LmTransL4FramePointerBinding *bindings,
+    const LmTransL4FramePointerBinding *const *bindings,
     size_t binding_count,
     LmTransL4HeadBinding *out
 ) {
@@ -23723,7 +23783,7 @@ static int lm_trans_l4_root_head_binding_resolve(
 static int lm_trans_l4_atom_binding_resolve_from_pointer_table(
     const LmP0Text *atom,
     const char *namespace_table,
-    const LmTransL4AtomPointerBinding *bindings,
+    const LmTransL4AtomPointerBinding *const *bindings,
     size_t binding_count,
     LmTransL4AtomBinding *out
 ) {

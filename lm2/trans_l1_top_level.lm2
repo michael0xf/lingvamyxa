@@ -3386,23 +3386,37 @@ typedef struct LmTransL4PayloadPointerBinding {
     LmTransL4PayloadFrameHandler handler;
 } LmTransL4PayloadPointerBinding;
 
-static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_bindings[] = {
-    { "import", "l4.payload", lm_trans_l4_payload_receiver_import },
-    { "L2", "l4.payload", lm_trans_l4_payload_receiver_l2 }
+static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_binding_import = {
+    "import",
+    "l4.payload",
+    lm_trans_l4_payload_receiver_import
+};
+
+static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_binding_l2 = {
+    "L2",
+    "l4.payload",
+    lm_trans_l4_payload_receiver_l2
+};
+
+static const LmTransL4PayloadPointerBinding *const lm_trans_l4_payload_pointer_bindings[] = {
+    &lm_trans_l4_payload_pointer_binding_import,
+    &lm_trans_l4_payload_pointer_binding_l2
 };
 
 static const LmTransL4PayloadPointerBinding *lm_trans_l4_payload_pointer_binding_find(
     const LmP0Text *head
 ) {
     size_t i;
+    const LmTransL4PayloadPointerBinding *binding;
 
     if (head == 0) {
         return 0;
     }
 
     for (i = 0U; i < sizeof(lm_trans_l4_payload_pointer_bindings) / sizeof(lm_trans_l4_payload_pointer_bindings[0]); ++i) {
-        if (lm_trans_text_equals(head, lm_trans_l4_payload_pointer_bindings[i].head)) {
-            return &lm_trans_l4_payload_pointer_bindings[i];
+        binding = lm_trans_l4_payload_pointer_bindings[i];
+        if (binding != 0 && lm_trans_text_equals(head, binding->head)) {
+            return binding;
         }
     }
     return 0;
