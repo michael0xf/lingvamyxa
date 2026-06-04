@@ -199,21 +199,21 @@ fn: lm_registry_control_find_child_frame (const: @(LmP0Frame frame); const: @: c
     if: frame = 0
         return: 0
 
-    field: c.frame->body.first_field
+    field: frame\body\first_field
     while: field != 0
         node: field\value
-        if: lm_registry_control_node_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME && lm_registry_control_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, head)
-            return: c.&node->as.frame
+        if: lm_registry_control_node_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME && lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, head)
+            return: node\as\frame
         field: field\next
 
     return: 0
 end: lm_registry_control_find_child_frame
 
 fn: lm_registry_control_single_body_node (const: @: LmP0Frame frame) const: @: LmP0Node
-    if: frame = 0 || lm_registry_control_visible_field_count(c.&frame->body) != 1U
+    if: frame = 0 || lm_registry_control_visible_field_count(frame\body) != 1U
         return: 0
 
-    return: lm_registry_control_nth_visible_field(c.&frame->body, 0U)
+    return: lm_registry_control_nth_visible_field(frame\body, 0U)
 end: lm_registry_control_single_body_node
 
 fn: lm_registry_control_table_name_from_frame (const: @(LmP0Frame table_frame); const: @@(char out_name_data); @: size_t out_name_length; @: LmRegistryControlError error) int
@@ -230,8 +230,8 @@ fn: lm_registry_control_table_name_from_frame (const: @(LmP0Frame table_frame); 
         lm_registry_control_error_set(error, "table name: expects exactly one atom")
         return: 0
 
-    out_name_data[0]: c.name_node->as.atom.data
-    out_name_length[0]: c.name_node->as.atom.length
+    out_name_data[0]: name_node\as\atom\data
+    out_name_length[0]: name_node\as\atom\length
     return: 1
 end: lm_registry_control_table_name_from_frame
 
@@ -243,7 +243,7 @@ fn: lm_registry_control_column_spelling_append_node (@: LmRegistryControlBuffer 
         return: 0
 
     if: node\kind = c.LM_P0_NODE_ATOM || node\kind = c.LM_P0_NODE_DISABLED
-        lm_registry_control_buffer_append_text(buffer, c.node->as.atom.data, c.node->as.atom.length)
+        lm_registry_control_buffer_append_text(buffer, node\as\atom\data, node\as\atom\length)
         return: buffer\failed = 0
 
     if: node\kind != c.LM_P0_NODE_STRUCTURE
@@ -251,7 +251,7 @@ fn: lm_registry_control_column_spelling_append_node (@: LmRegistryControlBuffer 
 
     lm_registry_control_buffer_append_cstr(buffer, "(")
     first: 1
-    field: c.node->as.structure.first_field
+    field: node\as\structure\first_field
     while: field != 0
         if: lm_registry_control_node_ignored(field\value) = 0
             if: first = 0
@@ -311,7 +311,7 @@ fn: lm_registry_control_columns_from_frame (
         lm_registry_control_error_set(error, "table must contain columns:")
         return: 0
 
-    count: lm_registry_control_visible_field_count(c.&columns_frame->body)
+    count: lm_registry_control_visible_field_count(columns_frame\body)
     if: count = 0U
         lm_registry_control_error_set(error, "columns: must not be empty")
         return: 0
@@ -323,7 +323,7 @@ fn: lm_registry_control_columns_from_frame (
 
     index: 0U
     while: index < count
-        node: lm_registry_control_nth_visible_field(c.&columns_frame->body, index)
+        node: lm_registry_control_nth_visible_field(columns_frame\body, index)
         c.columns[index].spelling: lm_registry_control_column_spelling_alloc(node, error)
         if: c.columns[index].spelling = 0
             lm_registry_control_columns_destroy(columns, count)
@@ -356,13 +356,13 @@ fn: lm_registry_control_node_lmx_append_inline (@: LmRegistryControlBuffer buffe
         return: 0
 
     if: node\kind = c.LM_P0_NODE_ATOM || node\kind = c.LM_P0_NODE_DISABLED
-        lm_registry_control_buffer_append_text(buffer, c.node->as.atom.data, c.node->as.atom.length)
+        lm_registry_control_buffer_append_text(buffer, node\as\atom\data, node\as\atom\length)
         return: buffer\failed = 0
 
     if: node\kind = c.LM_P0_NODE_STRUCTURE
         lm_registry_control_buffer_append_cstr(buffer, "(")
         first: 1
-        field: c.node->as.structure.first_field
+        field: node\as\structure\first_field
         while: field != 0
             if: lm_registry_control_node_ignored(field\value) = 0
                 if: first = 0
@@ -375,9 +375,9 @@ fn: lm_registry_control_node_lmx_append_inline (@: LmRegistryControlBuffer buffe
         return: buffer\failed = 0
 
     if: node\kind = c.LM_P0_NODE_FRAME
-        lm_registry_control_buffer_append_text(buffer, c.node->as.frame.head.data, c.node->as.frame.head.length)
+        lm_registry_control_buffer_append_text(buffer, node\as\frame\head\data, node\as\frame\head\length)
         lm_registry_control_buffer_append_cstr(buffer, ":")
-        field: c.node->as.frame.body.first_field
+        field: node\as\frame\body\first_field
         while: field != 0
             if: lm_registry_control_node_ignored(field\value) = 0
                 lm_registry_control_buffer_append_cstr(buffer, " ")
@@ -386,12 +386,12 @@ fn: lm_registry_control_node_lmx_append_inline (@: LmRegistryControlBuffer buffe
                 ---
             field: field\next
 
-        trailer: c.node->as.frame.trailer
+        trailer: node\as\frame\trailer
         if: trailer != 0
             lm_registry_control_buffer_append_cstr(buffer, " ")
-            lm_registry_control_buffer_append_text(buffer, c.trailer->spelling.data, c.trailer->spelling.length)
+            lm_registry_control_buffer_append_text(buffer, trailer\spelling\data, trailer\spelling\length)
             lm_registry_control_buffer_append_cstr(buffer, ":")
-            field: c.trailer->body.first_field
+            field: trailer\body\first_field
             while: field != 0
                 if: lm_registry_control_node_ignored(field\value) = 0
                     lm_registry_control_buffer_append_cstr(buffer, " ")
@@ -436,7 +436,7 @@ fn: lm_registry_control_measure_rows (
     size_t: column_index
     size_t: spelling_length
 
-    cell_count: lm_registry_control_visible_field_count(c.&rows_frame->body)
+    cell_count: lm_registry_control_visible_field_count(rows_frame\body)
     if: cell_count = 0U
         out_row_count[0]: 0U
         return: 1
@@ -447,7 +447,7 @@ fn: lm_registry_control_measure_rows (
 
     index: 0U
     while: index < cell_count
-        node: lm_registry_control_nth_visible_field(c.&rows_frame->body, index)
+        node: lm_registry_control_nth_visible_field(rows_frame\body, index)
         if: node = 0
             lm_registry_control_error_set(error, "rows: cell is empty")
             return: 0
@@ -505,7 +505,7 @@ fn: lm_registry_control_emit_rows (
         column_index: 0U
         while: column_index < column_count
             cell_index: row_index * column_count + column_index
-            node: lm_registry_control_nth_visible_field(c.&rows_frame->body, cell_index)
+            node: lm_registry_control_nth_visible_field(rows_frame\body, cell_index)
             spelling: lm_registry_control_node_lmx_alloc(node, error)
             if: spelling = 0
                 return: 0
@@ -530,11 +530,11 @@ sub: lm_registry_control_table_end_name (
 )
     const: @: LmP0Node node
 
-    if: table_frame != 0 && table_frame\trailer != 0 && lm_registry_control_text_equals(c.table_frame->trailer->spelling.data, c.table_frame->trailer->spelling.length, "end") && lm_registry_control_visible_field_count(c.&table_frame->trailer->body) = 1U
-        node: lm_registry_control_nth_visible_field(c.&table_frame->trailer->body, 0U)
+    if: table_frame != 0 && table_frame\trailer != 0 && lm_registry_control_text_equals(table_frame\trailer\spelling\data, table_frame\trailer\spelling\length, "end") && lm_registry_control_visible_field_count(table_frame\trailer\body) = 1U
+        node: lm_registry_control_nth_visible_field(table_frame\trailer\body, 0U)
         if: node != 0 && node\kind = c.LM_P0_NODE_ATOM
-            out_name_data[0]: c.node->as.atom.data
-            out_name_length[0]: c.node->as.atom.length
+            out_name_data[0]: node\as\atom\data
+            out_name_length[0]: node\as\atom\length
             return
     ---
 
@@ -613,9 +613,9 @@ fn: lm_registry_control_emit_frame_from_node (
         lm_registry_control_buffer_append_cstr(output, "\n")
 
     text: 0
-    is_table: lm_registry_control_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, "table")
+    is_table: lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "table")
     if: is_table
-        text: lm_registry_control_table_to_lmx_alloc(c.&node->as.frame, error)
+        text: lm_registry_control_table_to_lmx_alloc(node\as\frame, error)
     if: is_table = 0
         text: lm_registry_control_node_lmx_alloc(node, error)
 
@@ -645,7 +645,7 @@ fn: lm_registry_control_document_to_lmx_alloc (const: @(LmP0Document document); 
         lm_registry_control_buffer_destroy(@ output)
         return: 0
 
-    field: c.root->as.structure.first_field
+    field: root\as\structure\first_field
     while: field != 0
         if: lm_registry_control_emit_frame_from_node(@ output, field\value, @ emitted, error) = 0
             lm_registry_control_buffer_destroy(@ output)
@@ -663,12 +663,12 @@ fn: lm_registry_control_rename_atom_if_match (@: LmP0Node node; @: LmRegistryCon
     if: node = 0 || rename = 0 || node\kind != c.LM_P0_NODE_ATOM
         return: 0
 
-    if: lm_registry_control_text_equals(c.node->as.atom.data, c.node->as.atom.length, rename\old_name) = 0
+    if: lm_registry_control_text_equals(node\as\atom\data, node\as\atom\length, rename\old_name) = 0
         return: 0
 
     rename\found_count: rename\found_count + 1U
-    c.node->as.atom.data: rename\new_name
-    c.node->as.atom.length: c.strlen(rename\new_name)
+    node\as\atom\data: rename\new_name
+    node\as\atom\length: c.strlen(rename\new_name)
     rename\changed_count: rename\changed_count + 1U
     return: 1
 end: lm_registry_control_rename_atom_if_match
@@ -683,7 +683,7 @@ fn: lm_registry_control_rename_descriptor_node (@: LmP0Node node; @: LmRegistryC
         return: lm_registry_control_rename_atom_if_match(node, rename)
 
     if: node\kind = c.LM_P0_NODE_STRUCTURE
-        field: c.node->as.structure.first_field
+        field: node\as\structure\first_field
         while: field != 0
             if: lm_registry_control_node_ignored(field\value) = 0
                 lm_registry_control_rename_descriptor_node(field\value, rename)
@@ -704,7 +704,7 @@ fn: lm_registry_control_rename_table_column_descriptors (@: LmP0Frame table_fram
     if: columns_frame = 0
         return: 0
 
-    field: c.columns_frame->body.first_field
+    field: columns_frame\body\first_field
     while: field != 0
         if: lm_registry_control_node_ignored(field\value) = 0
             lm_registry_control_rename_descriptor_node(field\value, rename)
@@ -725,12 +725,12 @@ fn: lm_registry_control_rename_structure_tables (@: LmP0Structure structure; @: 
     while: field != 0
         node: field\value
         if: lm_registry_control_node_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME
-            is_table: lm_registry_control_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, "table")
+            is_table: lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "table")
             if: is_table
-                lm_registry_control_rename_table_column_descriptors(c.&node->as.frame, rename)
+                lm_registry_control_rename_table_column_descriptors(node\as\frame, rename)
             if: is_table = 0
-                if: lm_registry_control_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, "L4") || lm_registry_control_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, "registry")
-                    lm_registry_control_rename_structure_tables(c.&node->as.frame.body, rename)
+                if: lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "L4") || lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "registry")
+                    lm_registry_control_rename_structure_tables(node\as\frame\body, rename)
                 ---
             ---
         field: field\next
@@ -756,7 +756,7 @@ fn: lm_registry_control_rename_document_column_descriptor (const: @(LmP0Document
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         return: 1
 
-    lm_registry_control_rename_structure_tables(c.&root->as.structure, @ rename)
+    lm_registry_control_rename_structure_tables(root\as\structure, @ rename)
     if: out_changed != 0
         out_changed[0]: c.rename.changed_count
     return: 0

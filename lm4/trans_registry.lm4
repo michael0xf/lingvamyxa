@@ -38,6 +38,7 @@ table:
              `receiver.l4.payload`      relation
              `receiver.modifier`        relation
              `receiver.trailer`         relation
+             `receiver.formal-param.unwrap` relation
              `namespace.l4`             relation
              `namespace.l4.root`        relation
              `namespace.l4.atom`        relation
@@ -314,9 +315,17 @@ table:
              sub           name              0
              synchronized  name              0
              `()`          name              0
+             `@`           name              1
              `[]`          name              1
              entry         name              0
 end: `receiver.positional-name`
+
+table:
+    name: `receiver.formal-param.unwrap`
+    columns: class  (index serial)
+    rows:
+             const  0
+end: `receiver.formal-param.unwrap`
 
 table:
     name: `expr_spelling_binding`

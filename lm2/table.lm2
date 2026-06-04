@@ -186,20 +186,20 @@ fn: lm_table_find_child_frame (const: @(LmP0Frame frame); const: @: char head) c
     if: frame = 0
         return: 0
 
-    field: c.frame->body.first_field
+    field: frame\body\first_field
     while: field != 0
         node: field\value
-        if: lm_table_node_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME && lm_table_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, head)
-            return: c.&node->as.frame
+        if: lm_table_node_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME && lm_table_text_equals(node\as\frame\head\data, node\as\frame\head\length, head)
+            return: node\as\frame
         field: field\next
 
     return: 0
 end: lm_table_find_child_frame
 
 fn: lm_table_single_body_node (const: @: LmP0Frame frame) const: @: LmP0Node
-    if: frame = 0 || lm_table_visible_field_count(c.&frame->body) != 1U
+    if: frame = 0 || lm_table_visible_field_count(frame\body) != 1U
         return: 0
-    return: lm_table_nth_visible_field(c.&frame->body, 0U)
+    return: lm_table_nth_visible_field(frame\body, 0U)
 end: lm_table_single_body_node
 
 fn: lm_table_name_from_frame (const: @(LmP0Frame table_frame); const: @@(char out_name_data); @: size_t out_name_length; @: LmTableError error) int
@@ -212,8 +212,8 @@ fn: lm_table_name_from_frame (const: @(LmP0Frame table_frame); const: @@(char ou
         lm_table_error_set(error, "table must contain name: <atom>")
         return: 0
 
-    out_name_data[0]: c.name_node->as.atom.data
-    out_name_length[0]: c.name_node->as.atom.length
+    out_name_data[0]: name_node\as\atom\data
+    out_name_length[0]: name_node\as\atom\length
     return: 1
 end: lm_table_name_from_frame
 
@@ -226,13 +226,13 @@ fn: lm_table_column_spelling_append_node (@: LmTableBuffer buffer; const: @: LmP
         return: 0
 
     if: node\kind = c.LM_P0_NODE_ATOM
-        lm_table_buffer_append_text(buffer, c.node->as.atom.data, c.node->as.atom.length)
+        lm_table_buffer_append_text(buffer, node\as\atom\data, node\as\atom\length)
         return: buffer\failed = 0
 
     if: node\kind = c.LM_P0_NODE_STRUCTURE
         lm_table_buffer_append_cstr(buffer, "(")
         first: 1
-        field: c.node->as.structure.first_field
+        field: node\as\structure\first_field
         while: field != 0
             if: lm_table_node_ignored(field\value) = 0
                 if: first = 0
@@ -245,10 +245,10 @@ fn: lm_table_column_spelling_append_node (@: LmTableBuffer buffer; const: @: LmP
         return: first = 0 && buffer\failed = 0
 
     if: node\kind = c.LM_P0_NODE_FRAME
-        argument: lm_table_single_body_node(c.&node->as.frame)
+        argument: lm_table_single_body_node(node\as\frame)
         if: argument = 0
             return: 0
-        lm_table_buffer_append_text(buffer, c.node->as.frame.head.data, c.node->as.frame.head.length)
+        lm_table_buffer_append_text(buffer, node\as\frame\head\data, node\as\frame\head\length)
         lm_table_buffer_append_cstr(buffer, "(")
         if: lm_table_column_spelling_append_node(buffer, argument) = 0
             return: 0
@@ -306,7 +306,7 @@ fn: lm_table_columns_from_frame (
         lm_table_error_set(error, "table must contain columns:")
         return: 0
 
-    count: lm_table_visible_field_count(c.&columns_frame->body)
+    count: lm_table_visible_field_count(columns_frame\body)
     if: count = 0U
         lm_table_error_set(error, "columns: must not be empty")
         return: 0
@@ -318,7 +318,7 @@ fn: lm_table_columns_from_frame (
 
     index: 0U
     while: index < count
-        node: lm_table_nth_visible_field(c.&columns_frame->body, index)
+        node: lm_table_nth_visible_field(columns_frame\body, index)
         c.columns[index].spelling: lm_table_column_spelling_alloc(node, error)
         if: c.columns[index].spelling = 0
             lm_table_columns_destroy(columns, count)
@@ -350,8 +350,8 @@ static int lm_table_frame_lmx_append_inline(LmTableBuffer *buffer, const LmP0Fra
 static int lm_table_trailer_lmx_append_inline(LmTableBuffer *buffer, const LmP0Trailer *trailer);
 ===
 
-fn: lm_table_atom_lmx_append_inline (@: LmTableBuffer buffer; LmP0Text: atom) int
-    lm_table_buffer_append_text(buffer, c.atom.data, c.atom.length)
+fn: lm_table_atom_lmx_append_inline (@: LmTableBuffer buffer; const: @(LmP0Text atom)) int
+    lm_table_buffer_append_text(buffer, atom\data, atom\length)
     return: buffer\failed = 0
 end: lm_table_atom_lmx_append_inline
 
@@ -384,9 +384,9 @@ fn: lm_table_trailer_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0T
         return: 1
 
     lm_table_buffer_append_cstr(buffer, " ")
-    lm_table_buffer_append_text(buffer, c.trailer->spelling.data, c.trailer->spelling.length)
+    lm_table_buffer_append_text(buffer, trailer\spelling\data, trailer\spelling\length)
     lm_table_buffer_append_cstr(buffer, ":")
-    field: c.trailer->body.first_field
+    field: trailer\body\first_field
     while: field != 0
         if: lm_table_node_ignored(field\value) = 0
             lm_table_buffer_append_cstr(buffer, " ")
@@ -403,9 +403,9 @@ fn: lm_table_frame_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Fra
     if: frame = 0
         return: 0
 
-    lm_table_buffer_append_text(buffer, c.frame->head.data, c.frame->head.length)
+    lm_table_buffer_append_text(buffer, frame\head\data, frame\head\length)
     lm_table_buffer_append_cstr(buffer, ":")
-    field: c.frame->body.first_field
+    field: frame\body\first_field
     while: field != 0
         if: lm_table_node_ignored(field\value) = 0
             lm_table_buffer_append_cstr(buffer, " ")
@@ -414,7 +414,7 @@ fn: lm_table_frame_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Fra
             ---
         field: field\next
 
-    if: lm_table_trailer_lmx_append_inline(buffer, c.frame->trailer) = 0
+    if: lm_table_trailer_lmx_append_inline(buffer, frame\trailer) = 0
         return: 0
     return: buffer\failed = 0
 end: lm_table_frame_lmx_append_inline
@@ -424,13 +424,13 @@ fn: lm_table_node_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Node
         return: 0
 
     if: node\kind = c.LM_P0_NODE_ATOM || node\kind = c.LM_P0_NODE_DISABLED
-        return: lm_table_atom_lmx_append_inline(buffer, c.node->as.atom)
+        return: lm_table_atom_lmx_append_inline(buffer, node\as\atom)
 
     if: node\kind = c.LM_P0_NODE_STRUCTURE
-        return: lm_table_structure_lmx_append_inline(buffer, c.&node->as.structure)
+        return: lm_table_structure_lmx_append_inline(buffer, node\as\structure)
 
     if: node\kind = c.LM_P0_NODE_FRAME
-        return: lm_table_frame_lmx_append_inline(buffer, c.&node->as.frame)
+        return: lm_table_frame_lmx_append_inline(buffer, node\as\frame)
 
     return: 0
 end: lm_table_node_lmx_append_inline
@@ -467,7 +467,7 @@ fn: lm_table_measure_rows (
     size_t: column_index
     size_t: spelling_length
 
-    cell_count: lm_table_visible_field_count(c.&rows_frame->body)
+    cell_count: lm_table_visible_field_count(rows_frame\body)
     if: cell_count = 0U
         out_row_count[0]: 0U
         return: 1
@@ -478,7 +478,7 @@ fn: lm_table_measure_rows (
 
     index: 0U
     while: index < cell_count
-        node: lm_table_nth_visible_field(c.&rows_frame->body, index)
+        node: lm_table_nth_visible_field(rows_frame\body, index)
         if: node = 0
             lm_table_error_set(error, "rows: cell is empty")
             return: 0
@@ -536,7 +536,7 @@ fn: lm_table_emit_rows (
         column_index: 0U
         while: column_index < column_count
             cell_index: row_index * column_count + column_index
-            node: lm_table_nth_visible_field(c.&rows_frame->body, cell_index)
+            node: lm_table_nth_visible_field(rows_frame\body, cell_index)
             spelling: lm_table_node_lmx_alloc(node, error)
             if: spelling = 0
                 return: 0
@@ -561,11 +561,11 @@ sub: lm_table_end_name (
 )
     const: @: LmP0Node node
 
-    if: table_frame != 0 && table_frame\trailer != 0 && lm_table_text_equals(c.table_frame->trailer->spelling.data, c.table_frame->trailer->spelling.length, "end") && lm_table_visible_field_count(c.&table_frame->trailer->body) = 1U
-        node: lm_table_nth_visible_field(c.&table_frame->trailer->body, 0U)
+    if: table_frame != 0 && table_frame\trailer != 0 && lm_table_text_equals(table_frame\trailer\spelling\data, table_frame\trailer\spelling\length, "end") && lm_table_visible_field_count(table_frame\trailer\body) = 1U
+        node: lm_table_nth_visible_field(table_frame\trailer\body, 0U)
         if: node != 0 && node\kind = c.LM_P0_NODE_ATOM
-            out_name_data[0]: c.node->as.atom.data
-            out_name_length[0]: c.node->as.atom.length
+            out_name_data[0]: node\as\atom\data
+            out_name_length[0]: node\as\atom\length
             return
     ---
 
@@ -637,8 +637,8 @@ fn: lm_table_emit_tables_from_node (
         return: 1
 
     if: node\kind = c.LM_P0_NODE_FRAME
-        if: lm_table_text_equals(c.node->as.frame.head.data, c.node->as.frame.head.length, "table")
-            table_text: lm_table_to_lmx_alloc(c.&node->as.frame, error)
+        if: lm_table_text_equals(node\as\frame\head\data, node\as\frame\head\length, "table")
+            table_text: lm_table_to_lmx_alloc(node\as\frame, error)
             if: table_text = 0
                 return: 0
             if: emitted[0] != 0
@@ -648,7 +648,7 @@ fn: lm_table_emit_tables_from_node (
             emitted[0]: 1
             return: output\failed = 0
 
-        field: c.node->as.frame.body.first_field
+        field: node\as\frame\body\first_field
         while: field != 0
             if: lm_table_emit_tables_from_node(output, field\value, emitted, error) = 0
                 return: 0
@@ -656,7 +656,7 @@ fn: lm_table_emit_tables_from_node (
         return: 1
 
     if: node\kind = c.LM_P0_NODE_STRUCTURE
-        field: c.node->as.structure.first_field
+        field: node\as\structure\first_field
         while: field != 0
             if: lm_table_emit_tables_from_node(output, field\value, emitted, error) = 0
                 return: 0

@@ -81,6 +81,7 @@ table:
              LmP0Structure   c.struct
              LmP0Trailer     c.named-struct
              LmP0Frame       c.struct
+             LmP0NodeAs      c.struct
              LmP0Node        c.named-struct
              LmP0Field       c.named-struct
 end: `layout.backend`
@@ -210,6 +211,14 @@ table:
 end: `LmP0Trailer.field.index`
 
 table:
+    name: `LmP0Trailer.field.address-depth`
+    columns: class     (depth serial)
+    rows:
+             spelling  1
+             body      1
+end: `LmP0Trailer.field.address-depth`
+
+table:
     name: `LmP0Frame.field.class`
     columns: class    (field class)
     rows:
@@ -233,6 +242,8 @@ table:
     name: `LmP0Frame.field.address-depth`
     columns: class    (depth serial)
     rows:
+             head     1
+             body     1
              trailer  1
 end: `LmP0Frame.field.address-depth`
 
@@ -243,14 +254,8 @@ table:
              kind   LmP0NodeKind
              flags  unsigned
              span   LmP0Span
-end: `LmP0Node.field.class`
-
-table:
-    name: `LmP0Node.field.union`
-    columns: class  (union class)
-    rows:
              as     LmP0NodeAs
-end: `LmP0Node.field.union`
+end: `LmP0Node.field.class`
 
 table:
     name: `LmP0Node.field.index`
@@ -261,6 +266,13 @@ table:
              span   2
              as     3
 end: `LmP0Node.field.index`
+
+table:
+    name: `LmP0Node.field.address-depth`
+    columns: class  (depth serial)
+    rows:
+             as     1
+end: `LmP0Node.field.address-depth`
 
 table:
     name: `LmP0NodeAs.field.class`
@@ -279,6 +291,15 @@ table:
              frame      1
              atom       2
 end: `LmP0NodeAs.field.index`
+
+table:
+    name: `LmP0NodeAs.field.address-depth`
+    columns: class      (depth serial)
+    rows:
+             structure  1
+             frame      1
+             atom       1
+end: `LmP0NodeAs.field.address-depth`
 
 table:
     name: `LmP0Field.field.class`
@@ -310,6 +331,15 @@ fn: lm_p0_parse_file (const: @(char path); @@: LmP0Document out_document) int
 fn: lm_p0_document_destroy (@: LmP0Document document) void
 fn: lm_p0_document_root (const: @(LmP0Document document)) const: @: LmP0Node
 fn: lm_p0_document_diagnostic (const: @(LmP0Document document)) const: @: LmP0Diagnostic
+fn: lm_p0_node_structure (const: @(LmP0Node node)) const: @: LmP0Structure
+fn: lm_p0_node_frame (const: @(LmP0Node node)) const: @: LmP0Frame
+fn: lm_p0_node_atom (const: @(LmP0Node node)) const: @: LmP0Text
+fn: lm_p0_structure_trailer (const: @(LmP0Structure structure)) const: @: LmP0Trailer
+fn: lm_p0_frame_head (const: @(LmP0Frame frame)) const: @: LmP0Text
+fn: lm_p0_frame_body (const: @(LmP0Frame frame)) const: @: LmP0Structure
+fn: lm_p0_frame_trailer (const: @(LmP0Frame frame)) const: @: LmP0Trailer
+fn: lm_p0_trailer_spelling (const: @(LmP0Trailer trailer)) const: @: LmP0Text
+fn: lm_p0_trailer_body (const: @(LmP0Trailer trailer)) const: @: LmP0Structure
 fn: lm_p0_node_kind_class_name (LmP0NodeKind: kind) const: @: char
 fn: lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
 fn: lm_p0_free (@: void ptr) void

@@ -125,33 +125,34 @@ typedef struct LmP0Structure {
     LmP0Trailer *trailer;
 } LmP0Structure;
 struct LmP0Trailer {
-    LmP0Text spelling;
+    LmP0Text *spelling;
     unsigned flags;
-    LmP0Structure body;
+    LmP0Structure *body;
 };
 typedef struct LmP0Frame {
-    LmP0Text head;
+    LmP0Text *head;
     unsigned flags;
-    LmP0Structure body;
+    LmP0Structure *body;
     LmP0Trailer *trailer;
 } LmP0Frame;
+typedef struct LmP0NodeAs {
+    LmP0Structure *structure;
+    LmP0Frame *frame;
+    LmP0Text *atom;
+} LmP0NodeAs;
 struct LmP0Node {
     LmP0NodeKind kind;
     unsigned flags;
     LmP0Span span;
-    union {
-        LmP0Structure structure;
-        LmP0Frame frame;
-        LmP0Text atom;
-    } as;
+    LmP0NodeAs *as;
 };
 struct LmP0Field {
     LmP0Node *value;
     LmP0Field *next;
 };
 struct LmL4Column {
-    LmP0Text name;
-    LmP0Text descriptors[16U];
+    const LmP0Text *name;
+    const LmP0Text *descriptors[16U];
     size_t descriptor_count;
 };
 struct LmL4Receiver {
@@ -160,10 +161,10 @@ struct LmL4Receiver {
 };
 struct LmL4Loader {
     const char *error_prefix;
-    int (*push_row)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
-    int (*push_cell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
-    int (*note_key)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
-    int (*push_column_metadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
+    int (*push_row)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
+    int (*push_cell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
+    int (*note_key)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
+    int (*push_column_metadata)(void *context, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count);
     const LmL4Receiver *receivers;
     size_t receiver_count;
 };
@@ -235,10 +236,10 @@ typedef struct LmP0Registry {
 
 typedef void (*LmOwnDestroyFields)(void *object);
 typedef void (*LmOwnDelete)(void *object);
-typedef int (*LmL4PushRow)(void *context, LmP0Text table_atom, LmP0Text key_atom, const LmP0Node *payload_node);
-typedef int (*LmL4PushCell)(void *context, LmP0Text table_name, const LmL4Column *column, int split_by_column, LmP0Text key_atom, const LmP0Node *payload_node);
-typedef int (*LmL4NoteKey)(void *context, LmP0Text table_name, const LmL4Column *column, LmP0Text key_atom);
-typedef int (*LmL4PushColumnMetadata)(void *context, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
+typedef int (*LmL4PushRow)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4PushCell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4NoteKey)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
+typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count);
 typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 
 void * lm_own_new_zero(size_t size);
@@ -280,6 +281,15 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document);
 void lm_p0_document_destroy(LmP0Document *document);
 const LmP0Node * lm_p0_document_root(const LmP0Document *document);
 const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document *document);
+const LmP0Structure * lm_p0_node_structure(const LmP0Node *node);
+const LmP0Frame * lm_p0_node_frame(const LmP0Node *node);
+const LmP0Text * lm_p0_node_atom(const LmP0Node *node);
+const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure);
+const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame);
+const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame);
+const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame);
+const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer);
+const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer *trailer);
 const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
 char * lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
@@ -291,51 +301,123 @@ static LmOwnPtrStack *lm_l4_seen_tables_get(void) {
 static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables) {
     lm_l4_seen_tables = seen_tables;
 }
-static int lm_l4_text_equals(LmP0Text text, const char *value);
-static int lm_l4_text_same(LmP0Text left, LmP0Text right);
+static int lm_l4_text_equals(const LmP0Text *text, const char *value);
+static int lm_l4_text_slice_equals(const char *data, size_t length, const char *value);
+static int lm_l4_text_slice_same(const char *left_data, size_t left_length, const char *right_data, size_t right_length);
 static int lm_l4_node_is_ignored(const LmP0Node *node);
+static const LmP0Structure * lm_l4_node_structure(const LmP0Node *node);
+static const LmP0Frame * lm_l4_node_frame(const LmP0Node *node);
+static const LmP0Text * lm_l4_node_atom(const LmP0Node *node);
+static const LmP0Text * lm_l4_frame_head(const LmP0Frame *frame);
+static const LmP0Structure * lm_l4_frame_body(const LmP0Frame *frame);
+static const LmP0Text * lm_l4_trailer_spelling(const LmP0Trailer *trailer);
+static const LmP0Structure * lm_l4_trailer_body(const LmP0Trailer *trailer);
 static const char * lm_l4_error_prefix(const LmL4Loader *loader);
 static void lm_l4_error(const LmL4Loader *loader, const char *message);
 static const LmP0Field * lm_l4_nth_field(const LmP0Structure *structure, size_t index);
-static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text);
-static int lm_l4_identifier_value(LmP0Text atom, LmP0Text *out_payload);
-static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, LmP0Text *out_atom);
+static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, const LmP0Text **out_text);
+static int lm_l4_identifier_payload(const LmP0Text *atom, const char **out_data, size_t *out_length);
+static int lm_l4_identifier_equals(const LmP0Text *atom, const char *value);
+static int lm_l4_identifier_same(const LmP0Text *left, const LmP0Text *right);
+static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, const LmP0Text **out_atom);
 static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column);
 static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column *columns, size_t columns_capacity, size_t *out_count);
-static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, LmP0Text expected_name);
+static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, const LmP0Text *expected_name);
 static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
-static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, LmP0Text table_name, const LmL4Column *columns, size_t column_count);
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count);
 static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
-static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name);
+static int lm_l4_seen_table_add(LmOwnPtrStack *seen, const LmP0Text *table_name);
 static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
-static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, LmP0Text head);
+static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, const LmP0Text *head);
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4, size_t *out_row_count);
 
-static int lm_l4_text_equals(LmP0Text text, const char *value) {
+static int lm_l4_text_equals(const LmP0Text *text, const char *value) {
     size_t length;
-    if (value == 0) {
+    if (text == 0 || value == 0) {
         return 0;
     }
     length = strlen(value);
-    return text.length == length && memcmp(text.data, value, length) == 0;
+    return text -> length == length && memcmp(text -> data, value, length) == 0;
 }
 
-static int lm_l4_text_same(LmP0Text left, LmP0Text right) {
-    if (left.length != right.length) {
+static int lm_l4_text_slice_equals(const char *data, size_t length, const char *value) {
+    size_t value_length;
+    if (data == 0 || value == 0) {
         return 0;
     }
-    if (left.length == 0U) {
+    value_length = strlen(value);
+    return length == value_length && memcmp(data, value, length) == 0;
+}
+
+static int lm_l4_text_slice_same(const char *left_data, size_t left_length, const char *right_data, size_t right_length) {
+    if (left_data == 0 || right_data == 0) {
+        return 0;
+    }
+    if (left_length != right_length) {
+        return 0;
+    }
+    if (left_length == 0U) {
         return 1;
     }
-    return memcmp(left.data, right.data, left.length) == 0;
+    return memcmp(left_data, right_data, left_length) == 0;
 }
 
 static int lm_l4_node_is_ignored(const LmP0Node *node) {
     return node == 0 || (node -> flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U;
+}
+
+static const LmP0Structure * lm_l4_node_structure(const LmP0Node *node) {
+    if (node == 0 || node -> kind != LM_P0_NODE_STRUCTURE) {
+        return 0;
+    }
+    return node -> as -> structure;
+}
+
+static const LmP0Frame * lm_l4_node_frame(const LmP0Node *node) {
+    if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
+        return 0;
+    }
+    return node -> as -> frame;
+}
+
+static const LmP0Text * lm_l4_node_atom(const LmP0Node *node) {
+    if (node == 0 || (node -> kind != LM_P0_NODE_ATOM && node -> kind != LM_P0_NODE_DISABLED)) {
+        return 0;
+    }
+    return node -> as -> atom;
+}
+
+static const LmP0Text * lm_l4_frame_head(const LmP0Frame *frame) {
+    if (frame == 0) {
+        return 0;
+    }
+    return frame -> head;
+}
+
+static const LmP0Structure * lm_l4_frame_body(const LmP0Frame *frame) {
+    if (frame == 0) {
+        return 0;
+    }
+    return frame -> body;
+}
+
+static const LmP0Text * lm_l4_trailer_spelling(const LmP0Trailer *trailer) {
+    if (trailer == 0) {
+        return 0;
+    }
+    return trailer -> spelling;
+}
+
+static const LmP0Structure * lm_l4_trailer_body(const LmP0Trailer *trailer) {
+    if (trailer == 0) {
+        return 0;
+    }
+    return trailer -> body;
 }
 
 static const char * lm_l4_error_prefix(const LmL4Loader *loader) {
@@ -364,52 +446,87 @@ static const LmP0Field * lm_l4_nth_field(const LmP0Structure *structure, size_t 
     return field;
 }
 
-static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text) {
+static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, const LmP0Text **out_text) {
     const LmP0Field *field;
+    const LmP0Text *atom;
     if (trailer == 0 || out_text == 0) {
         return 0;
     }
-    field = trailer->body.first_field;
+    field = lm_l4_trailer_body(trailer) -> first_field;
     if (field == 0 || field -> next != 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
         return 0;
     }
-    out_text[0] = field->value->as.atom;
-    return 1;
-}
-
-static int lm_l4_identifier_value(LmP0Text atom, LmP0Text *out_payload) {
-    if (out_payload == 0 || atom.data == 0) {
+    atom = lm_l4_node_atom(field -> value);
+    if (atom == 0) {
         return 0;
     }
-    if (atom.length >= 2U && atom.data[0] == '`' && atom.data[atom.length - 1U] == '`') {
-        out_payload[0] = atom;
-        out_payload->data = atom.data + 1U;
-        out_payload->length = atom.length - 2U;
-        return 1;
-    }
-    out_payload[0] = atom;
+    *(out_text) = atom;
     return 1;
 }
 
-static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, LmP0Text *out_atom) {
+static int lm_l4_identifier_payload(const LmP0Text *atom, const char **out_data, size_t *out_length) {
+    if (atom == 0 || out_data == 0 || out_length == 0 || atom -> data == 0) {
+        return 0;
+    }
+    if (atom -> length >= 2U && atom -> data[0] == '`' && atom -> data[atom -> length - 1U] == '`') {
+        *(out_data) = atom -> data + 1U;
+        *(out_length) = atom -> length - 2U;
+        return 1;
+    }
+    *(out_data) = atom -> data;
+    *(out_length) = atom -> length;
+    return 1;
+}
+
+static int lm_l4_identifier_equals(const LmP0Text *atom, const char *value) {
+    const char *data;
+    size_t length;
+    if (lm_l4_identifier_payload(atom, &data, &length) == 0) {
+        return 0;
+    }
+    return lm_l4_text_slice_equals(data, length, value);
+}
+
+static int lm_l4_identifier_same(const LmP0Text *left, const LmP0Text *right) {
+    const char *left_data;
+    const char *right_data;
+    size_t left_length;
+    size_t right_length;
+    if (lm_l4_identifier_payload(left, &left_data, &left_length) == 0 || lm_l4_identifier_payload(right, &right_data, &right_length) == 0) {
+        return 0;
+    }
+    return lm_l4_text_slice_same(left_data, left_length, right_data, right_length);
+}
+
+static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, const LmP0Text **out_atom) {
     const LmP0Field *field;
+    const LmP0Text *frame_head;
+    const LmP0Text *atom;
     if (frame == 0 || out_atom == 0) {
         return 0;
     }
-    if (head != 0 && lm_l4_text_equals(frame -> head, head) == 0) {
+    frame_head = lm_l4_frame_head(frame);
+    if (head != 0 && (frame_head == 0 || lm_l4_text_equals(frame_head, head) == 0)) {
         return 0;
     }
-    field = lm_l4_nth_field(&frame->body, 0U);
+    field = lm_l4_nth_field(lm_l4_frame_body(frame), 0U);
     if (field == 0 || field -> next != 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
         return - 1;
     }
-    out_atom[0] = field->value->as.atom;
+    atom = lm_l4_node_atom(field -> value);
+    if (atom == 0) {
+        return - 1;
+    }
+    *(out_atom) = atom;
     return 1;
 }
 
 static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column) {
     const LmP0Node *node;
+    const LmP0Frame *node_frame;
+    const LmP0Structure *node_structure;
     const LmP0Field *body_field;
+    const LmP0Text *atom;
     size_t descriptor_count;
     if (field == 0 || out_column == 0) {
         return 0;
@@ -420,28 +537,42 @@ static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column) {
         return - 1;
     }
     if (node -> kind == LM_P0_NODE_ATOM) {
-        out_column->name = node->as.atom;
+        atom = lm_l4_node_atom(node);
+        if (atom == 0) {
+            return - 1;
+        }
+        out_column->name = atom;
         return 1;
     }
     if (node -> kind == LM_P0_NODE_FRAME) {
-        if (lm_l4_frame_single_atom(&node->as.frame, 0, &out_column->name) <= 0) {
+        node_frame = lm_l4_node_frame(node);
+        if (lm_l4_frame_single_atom(node_frame, 0, &atom) <= 0) {
             return - 1;
         }
-        out_column->descriptors[0] = node->as.frame.head;
+        out_column->name = atom;
+        out_column->descriptors[0] = lm_l4_frame_head(node_frame);
         out_column->descriptor_count = 1U;
         return 1;
     }
     if (node -> kind != LM_P0_NODE_STRUCTURE) {
         return - 1;
     }
-    body_field = node->as.structure.first_field;
+    node_structure = lm_l4_node_structure(node);
+    if (node_structure == 0) {
+        return - 1;
+    }
+    body_field = node_structure -> first_field;
     while (body_field != 0 && lm_l4_node_is_ignored(body_field -> value) != 0) {
         body_field = body_field -> next;
     }
     if (body_field == 0 || body_field -> value == 0 || body_field -> value -> kind != LM_P0_NODE_ATOM) {
         return - 1;
     }
-    out_column->name = body_field->value->as.atom;
+    atom = lm_l4_node_atom(body_field -> value);
+    if (atom == 0) {
+        return - 1;
+    }
+    out_column->name = atom;
     descriptor_count = 0U;
     body_field = body_field -> next;
     while (body_field != 0) {
@@ -452,7 +583,11 @@ static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column) {
             if (descriptor_count >= sizeof(out_column -> descriptors) / sizeof(out_column -> descriptors[0])) {
                 return - 1;
             }
-            out_column->descriptors[descriptor_count] = body_field->value->as.atom;
+            atom = lm_l4_node_atom(body_field -> value);
+            if (atom == 0) {
+                return - 1;
+            }
+            out_column->descriptors[descriptor_count] = atom;
             descriptor_count = descriptor_count + 1U;
         }
         body_field = body_field -> next;
@@ -464,14 +599,13 @@ static int lm_l4_column_name(const LmP0Field *field, LmL4Column *out_column) {
 static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *frame, LmL4Column *columns, size_t columns_capacity, size_t *out_count) {
     const LmP0Field *field;
     LmL4Column column;
-    LmP0Text first_column;
     size_t count;
     int status;
-    if (frame == 0 || columns == 0 || out_count == 0 || columns_capacity == 0U || lm_l4_text_equals(frame -> head, "columns") == 0) {
+    if (frame == 0 || columns == 0 || out_count == 0 || columns_capacity == 0U || lm_l4_text_equals(lm_l4_frame_head(frame), "columns") == 0) {
         return 0;
     }
     count = 0U;
-    field = frame->body.first_field;
+    field = lm_l4_frame_body(frame) -> first_field;
     while (field != 0) {
         if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
             status = lm_l4_column_name(field, &column);
@@ -492,29 +626,27 @@ static int lm_l4_columns_from_frame(const LmL4Loader *loader, const LmP0Frame *f
         lm_l4_error(loader, "table expects at least two columns");
         return - 1;
     }
-    if (lm_l4_identifier_value(columns[0].name, &first_column) == 0 || lm_l4_text_equals(first_column, "class") == 0) {
+    if (lm_l4_identifier_equals(columns[0].name, "class") == 0) {
         lm_l4_error(loader, "first table column must be class");
         return - 1;
     }
-    out_count[0] = count;
+    *(out_count) = count;
     return 1;
 }
 
-static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, LmP0Text expected_name) {
-    LmP0Text actual;
-    LmP0Text actual_payload;
-    LmP0Text expected_payload;
+static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, const LmP0Text *expected_name) {
+    const LmP0Text *actual;
     if (frame == 0 || frame -> trailer == 0) {
         return 0;
     }
-    if (lm_l4_text_equals(frame->trailer->spelling, "end") == 0) {
+    if (lm_l4_text_equals(lm_l4_trailer_spelling(frame -> trailer), "end") == 0) {
         return 0;
     }
     if (lm_l4_trailer_single_atom(frame -> trailer, &actual) == 0) {
         lm_l4_error(loader, "end trailer expects exactly one target name");
         return 1;
     }
-    if (lm_l4_identifier_value(actual, &actual_payload) == 0 || lm_l4_identifier_value(expected_name, &expected_payload) == 0 || lm_l4_text_same(actual_payload, expected_payload) == 0) {
+    if (lm_l4_identifier_same(actual, expected_name) == 0) {
         lm_l4_error(loader, "end trailer target does not match head/name");
         return 1;
     }
@@ -525,13 +657,21 @@ static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const L
     const LmP0Field *table_field;
     const LmP0Field *key_field;
     const LmP0Field *payload_field;
-    if (frame == 0 || lm_l4_text_equals(frame -> head, "row") == 0) {
+    const LmP0Text *table_atom;
+    const LmP0Text *key_atom;
+    if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "row") == 0) {
         return 0;
     }
-    table_field = lm_l4_nth_field(&frame->body, 0U);
-    key_field = lm_l4_nth_field(&frame->body, 1U);
-    payload_field = lm_l4_nth_field(&frame->body, 2U);
+    table_field = lm_l4_nth_field(lm_l4_frame_body(frame), 0U);
+    key_field = lm_l4_nth_field(lm_l4_frame_body(frame), 1U);
+    payload_field = lm_l4_nth_field(lm_l4_frame_body(frame), 2U);
     if (table_field == 0 || key_field == 0 || payload_field == 0 || payload_field -> next != 0 || table_field -> value == 0 || key_field -> value == 0 || payload_field -> value == 0 || table_field -> value -> kind != LM_P0_NODE_ATOM || key_field -> value -> kind != LM_P0_NODE_ATOM) {
+        lm_l4_error(loader, "row expects table and key atoms plus one payload field");
+        return - 1;
+    }
+    table_atom = lm_l4_node_atom(table_field -> value);
+    key_atom = lm_l4_node_atom(key_field -> value);
+    if (table_atom == 0 || key_atom == 0) {
         lm_l4_error(loader, "row expects table and key atoms plus one payload field");
         return - 1;
     }
@@ -539,20 +679,21 @@ static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const L
         lm_l4_error(loader, "row consumer is not configured");
         return - 1;
     }
-    if (loader->push_row(context, table_field->value->as.atom, key_field->value->as.atom, payload_field -> value) != 0) {
+    if (loader->push_row(context, table_atom, key_atom, payload_field -> value) != 0) {
         return - 1;
     }
     return 1;
 }
 
-static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, LmP0Text table_name, const LmL4Column *columns, size_t column_count) {
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count) {
     const LmP0Field *field;
     const LmP0Node *key_node;
     const LmP0Node *cell_node;
+    const LmP0Text *key_atom;
     size_t field_index;
     size_t column_index;
     int split_by_column;
-    if (frame == 0 || lm_l4_text_equals(frame -> head, "rows") == 0) {
+    if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "rows") == 0) {
         return 0;
     }
     if (loader == 0 || loader -> push_cell == 0) {
@@ -565,8 +706,9 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
     }
     field_index = 0U;
     key_node = 0;
+    key_atom = 0;
     split_by_column = column_count != 2U;
-    field = frame->body.first_field;
+    field = lm_l4_frame_body(frame) -> first_field;
     while (field != 0) {
         if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
             column_index = field_index % column_count;
@@ -576,13 +718,18 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
                     lm_l4_error(loader, "table rows currently expect atom cells in the key column");
                     return - 1;
                 }
-                if (loader -> note_key != 0 && loader->note_key(context, table_name, &columns[0], key_node->as.atom) != 0) {
+                key_atom = lm_l4_node_atom(key_node);
+                if (key_atom == 0) {
+                    lm_l4_error(loader, "table rows currently expect atom cells in the key column");
+                    return - 1;
+                }
+                if (loader -> note_key != 0 && loader->note_key(context, table_name, &columns[0], key_atom) != 0) {
                     return - 1;
                 }
             }
             if (column_index != 0U) {
                 cell_node = field -> value;
-                if (key_node == 0 || loader->push_cell(context, table_name, &columns[column_index], split_by_column, key_node->as.atom, cell_node) != 0) {
+                if (key_node == 0 || key_atom == 0 || loader->push_cell(context, table_name, &columns[column_index], split_by_column, key_atom, cell_node) != 0) {
                     return - 1;
                 }
             }
@@ -604,21 +751,23 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
 static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     const LmP0Field *field;
     const LmP0Node *node;
+    const LmP0Frame *node_frame;
     LmL4Column columns[128];
-    LmP0Text table_name;
+    const LmP0Text *table_name;
     size_t column_count;
     int have_name;
     int have_columns;
     int have_rows;
     int status;
-    if (frame == 0 || lm_l4_text_equals(frame -> head, "table") == 0) {
+    if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "table") == 0) {
         return 0;
     }
     have_name = 0;
     have_columns = 0;
     have_rows = 0;
     column_count = 0U;
-    field = frame->body.first_field;
+    table_name = 0;
+    field = lm_l4_frame_body(frame) -> first_field;
     while (field != 0) {
         node = field -> value;
         if (node != 0 && lm_l4_node_is_ignored(node) == 0) {
@@ -626,7 +775,8 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
                 lm_l4_error(loader, "table body expects name/columns/rows frames");
                 return - 1;
             }
-            status = lm_l4_frame_single_atom(&node->as.frame, "name", &table_name);
+            node_frame = lm_l4_node_frame(node);
+            status = lm_l4_frame_single_atom(node_frame, "name", &table_name);
             if (status < 0) {
                 lm_l4_error(loader, "table name expects exactly one atom");
                 return - 1;
@@ -636,12 +786,12 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
                 field = field -> next;
                 continue;
             }
-            if (lm_l4_text_equals(node->as.frame.head, "columns") != 0) {
+            if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "columns") != 0) {
                 if (have_name == 0) {
                     lm_l4_error(loader, "table columns must appear after name");
                     return - 1;
                 }
-                status = lm_l4_columns_from_frame(loader, &node->as.frame, columns, sizeof(columns) / sizeof(columns[0]), &column_count);
+                status = lm_l4_columns_from_frame(loader, node_frame, columns, sizeof(columns) / sizeof(columns[0]), &column_count);
                 if (status <= 0) {
                     return - 1;
                 }
@@ -653,12 +803,12 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
                 field = field -> next;
                 continue;
             }
-            if (lm_l4_text_equals(node->as.frame.head, "rows") != 0) {
+            if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "rows") != 0) {
                 if (have_name == 0 || have_columns == 0) {
                     lm_l4_error(loader, "table rows must appear after name and columns");
                     return - 1;
                 }
-                status = lm_l4_rows_from_frame(loader, context, &node->as.frame, table_name, columns, column_count);
+                status = lm_l4_rows_from_frame(loader, context, node_frame, table_name, columns, column_count);
                 if (status <= 0) {
                     return - 1;
                 }
@@ -681,8 +831,8 @@ static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const
     return 1;
 }
 
-static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
-    LmP0Text payload;
+static int lm_l4_seen_table_add(LmOwnPtrStack *seen, const LmP0Text *table_name) {
+    const char *payload_data;
     char *name;
     size_t i;
     size_t payload_length;
@@ -690,14 +840,13 @@ static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
     if (seen == 0) {
         return - 1;
     }
-    if (lm_l4_identifier_value(table_name, &payload) == 0) {
+    if (lm_l4_identifier_payload(table_name, &payload_data, &payload_length) == 0) {
         return - 1;
     }
-    payload_length = payload.length;
     i = 0U;
     while (i < seen -> count) {
         existing = lm_own_ptr_stack_at(seen, i);
-        if (existing != 0 && lm_l4_text_equals(payload, existing) != 0) {
+        if (existing != 0 && lm_l4_text_slice_equals(payload_data, payload_length, existing) != 0) {
             return 1;
         }
         i = i + 1U;
@@ -707,7 +856,7 @@ static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
         return - 1;
     }
     if (payload_length > 0U) {
-        memcpy(name, payload.data, payload_length);
+        memcpy(name, payload_data, payload_length);
     }
     name[payload_length] = '\0';
     if (lm_own_ptr_stack_push(seen, name) != 0) {
@@ -720,20 +869,23 @@ static int lm_l4_seen_table_add(LmOwnPtrStack *seen, LmP0Text table_name) {
 static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen) {
     const LmP0Field *field;
     const LmP0Node *node;
-    LmP0Text table_name;
+    const LmP0Frame *node_frame;
+    const LmP0Text *table_name;
     int status;
-    if (frame == 0 || lm_l4_text_equals(frame -> head, "table") == 0) {
+    if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "table") == 0) {
         return 0;
     }
     status = 0;
-    field = frame->body.first_field;
+    table_name = 0;
+    field = lm_l4_frame_body(frame) -> first_field;
     while (field != 0) {
         node = field -> value;
         if (node == 0 || lm_l4_node_is_ignored(node) != 0 || node -> kind != LM_P0_NODE_FRAME) {
             field = field -> next;
             continue;
         }
-        status = lm_l4_frame_single_atom(&node->as.frame, "name", &table_name);
+        node_frame = lm_l4_node_frame(node);
+        status = lm_l4_frame_single_atom(node_frame, "name", &table_name);
         if (status < 0) {
             lm_l4_error(loader, "table name expects exactly one atom");
             return - 1;
@@ -759,8 +911,10 @@ static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Fr
 }
 
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
+    LmOwnPtrStack *seen;
     int status;
-    if (lm_l4_seen_tables_get() != 0 && lm_l4_check_table_frame_unique(loader, frame, lm_l4_seen_tables_get()) != 0) {
+    seen = lm_l4_seen_tables_get();
+    if (seen != 0 && lm_l4_check_table_frame_unique(loader, frame, seen) != 0) {
         return 1;
     }
     status = lm_l4_table_from_frame(loader, context, frame);
@@ -785,7 +939,14 @@ static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP
     return 0;
 }
 
-static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, LmP0Text head) {
+static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
+    if (loader != 0 || context != 0 || frame != 0) {
+        return 0;
+    }
+    return 0;
+}
+
+static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, const LmP0Text *head) {
     size_t i;
     if (loader == 0 || loader -> receivers == 0) {
         return 0;
@@ -805,7 +966,7 @@ static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const L
     if (frame == 0) {
         return 1;
     }
-    receiver = lm_l4_find_receiver(loader, frame -> head);
+    receiver = lm_l4_find_receiver(loader, lm_l4_frame_head(frame));
     if (receiver == 0 || receiver -> frame == 0) {
         lm_l4_error(loader, "registry body expects registered L4 receiver frames");
         return 1;
@@ -823,9 +984,9 @@ static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0St
     if (structure == 0) {
         return 0;
     }
-    owns_seen = lm_l4_seen_tables_get() == 0;
     seen = 0;
-    previous_seen = 0;
+    previous_seen = lm_l4_seen_tables_get();
+    owns_seen = previous_seen == 0;
     if (owns_seen != 0) {
         seen = malloc(sizeof(seen[0]));
         if (seen == 0) {
@@ -833,7 +994,6 @@ static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0St
             return 1;
         }
         lm_own_ptr_stack_init(seen, free);
-        previous_seen = lm_l4_seen_tables_get();
         lm_l4_seen_tables_set(seen);
     }
     status = 0;
@@ -850,7 +1010,7 @@ static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0St
             field = field -> next;
             continue;
         }
-        if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
+        if (lm_l4_dispatch_frame(loader, context, lm_l4_node_frame(node)) != 0) {
             status = 1;
         }
         field = field -> next;
@@ -875,7 +1035,7 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
         return 1;
     }
     if (out_row_count != 0) {
-        out_row_count[0] = 0U;
+        *(out_row_count) = 0U;
     }
     seen = malloc(sizeof(seen[0]));
     if (seen == 0) {
@@ -887,7 +1047,7 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
     lm_l4_seen_tables_set(seen);
     loaded = 0;
     status = 0;
-    field = root->as.structure.first_field;
+    field = lm_l4_node_structure(root) -> first_field;
     while (field != 0 && status == 0) {
         node = field -> value;
         if (lm_l4_node_is_ignored(node) != 0) {
@@ -900,11 +1060,11 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
             field = field -> next;
             continue;
         }
-        if (lm_l4_text_equals(node->as.frame.head, "L4") != 0 || lm_l4_text_equals(node->as.frame.head, "registry") != 0) {
-            if (lm_l4_load_rows(loader, context, &node->as.frame.body) != 0) {
+        if (lm_l4_text_equals(lm_l4_frame_head(lm_l4_node_frame(node)), "L4") != 0 || lm_l4_text_equals(lm_l4_frame_head(lm_l4_node_frame(node)), "registry") != 0) {
+            if (lm_l4_load_rows(loader, context, lm_l4_frame_body(lm_l4_node_frame(node))) != 0) {
                 status = 1;
             }
-            if (status == 0 && lm_l4_validate_named_trailer(loader, &node->as.frame, node->as.frame.head) != 0) {
+            if (status == 0 && lm_l4_validate_named_trailer(loader, lm_l4_node_frame(node), lm_l4_frame_head(lm_l4_node_frame(node))) != 0) {
                 status = 1;
             }
             if (status == 0) {
@@ -914,7 +1074,7 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
             continue;
         }
         if (implicit_l4 != 0) {
-            if (lm_l4_dispatch_frame(loader, context, &node->as.frame) != 0) {
+            if (lm_l4_dispatch_frame(loader, context, lm_l4_node_frame(node)) != 0) {
                 status = 1;
             }
             if (status == 0) {
@@ -936,17 +1096,6 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
     free(seen);
     return status;
 }
-static int lm_l4_receiver_ignore(
-    const LmL4Loader *loader,
-    void *context,
-    const LmP0Frame *frame
-) {
-    (void)loader;
-    (void)context;
-    (void)frame;
-    return 0;
-}
-
 static const LmL4Receiver lm_l4_default_receivers[] = {
     { "table", lm_l4_receiver_table },
     { "row", lm_l4_receiver_row },
@@ -1016,6 +1165,15 @@ static int lm_p0_registry_trailer_allows_bare(const char *class_name);
 static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role);
 static int lm_p0_node_head_is(const LmP0Node *node, const char *name);
 static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target);
+const LmP0Structure * lm_p0_node_structure(const LmP0Node *node);
+const LmP0Frame * lm_p0_node_frame(const LmP0Node *node);
+const LmP0Text * lm_p0_node_atom(const LmP0Node *node);
+const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure);
+const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame);
+const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame);
+const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame);
+const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer);
+const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer *trailer);
 static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event);
 static int lm_p0_find_python_string_end(const char *text, size_t length, size_t start, size_t *out_end);
 static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start);
@@ -1222,6 +1380,89 @@ static int lm_p0_document_register_lazy_text(
     return 1;
 }
 
+static LmP0Text *lm_p0_new_text(
+    LmP0Document *document,
+    const char *source,
+    size_t length,
+    size_t line,
+    size_t column
+) {
+    LmP0Text *text;
+
+    text = (LmP0Text *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*text));
+    if (text == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser text");
+        return 0;
+    }
+
+    text->data = source != 0 ? source : "";
+    text->length = source != 0 ? length : 0U;
+    if (!lm_p0_document_register_lazy_text(document, text->data, text->length, &text->data, line, column)) {
+        return 0;
+    }
+
+    return text;
+}
+
+static LmP0Structure *lm_p0_new_structure(LmP0Document *document, size_t line, size_t column) {
+    LmP0Structure *structure;
+
+    structure = (LmP0Structure *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*structure));
+    if (structure == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser structure");
+        return 0;
+    }
+
+    return structure;
+}
+
+static LmP0Frame *lm_p0_new_frame(LmP0Document *document, size_t line, size_t column) {
+    LmP0Frame *frame;
+
+    frame = (LmP0Frame *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*frame));
+    if (frame == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser frame");
+        return 0;
+    }
+    frame->head = lm_p0_new_text(document, "", 0U, line, column);
+    if (frame->head == 0) {
+        return 0;
+    }
+    frame->body = lm_p0_new_structure(document, line, column);
+    if (frame->body == 0) {
+        return 0;
+    }
+
+    return frame;
+}
+
+static LmP0Trailer *lm_p0_new_trailer(
+    LmP0Document *document,
+    const char *spelling,
+    size_t spelling_length,
+    size_t line,
+    size_t column
+) {
+    LmP0Trailer *trailer;
+
+    trailer = (LmP0Trailer *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*trailer));
+    if (trailer == 0) {
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer");
+        return 0;
+    }
+
+    trailer->spelling = lm_p0_new_text(document, spelling, spelling_length, line, column);
+    if (trailer->spelling == 0) {
+        return 0;
+    }
+    trailer->body = lm_p0_new_structure(document, line, column);
+    if (trailer->body == 0) {
+        return 0;
+    }
+
+    return trailer;
+}
+
 static void lm_p0_set_diagnostic(
     LmP0Document *document,
     int code,
@@ -1308,7 +1549,8 @@ static int lm_p0_registry_column_has_descriptor(
 
     for (i = 0U; i < column->descriptor_count; ++i) {
         if (
-            lm_p0_registry_identifier_value(column->descriptors[i], &payload) &&
+            column->descriptors[i] != 0 &&
+            lm_p0_registry_identifier_value(*column->descriptors[i], &payload) &&
             lm_p0_text_equals(payload, descriptor)
         ) {
             return 1;
@@ -1368,7 +1610,7 @@ static int lm_p0_registry_push_table_cell(
         return lm_p0_registry_push_row_values(table_payload, key_payload, payload_value);
     }
 
-    if (!lm_p0_registry_identifier_value(column->name, &column_payload)) {
+    if (column->name == 0 || !lm_p0_registry_identifier_value(*column->name, &column_payload)) {
         return -1;
     }
 
@@ -2238,7 +2480,29 @@ static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
         return 0;
     }
 
+    node->as = (LmP0NodeAs *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*node->as));
+    if (node->as == 0) {
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node payload");
+        return 0;
+    }
+
     node->kind = kind;
+    if (kind == LM_P0_NODE_STRUCTURE) {
+        node->as->structure = lm_p0_new_structure(document, 0U, 0U);
+        if (node->as->structure == 0) {
+            return 0;
+        }
+    } else if (kind == LM_P0_NODE_FRAME) {
+        node->as->frame = lm_p0_new_frame(document, 0U, 0U);
+        if (node->as->frame == 0) {
+            return 0;
+        }
+    } else if (kind == LM_P0_NODE_ATOM || kind == LM_P0_NODE_DISABLED) {
+        node->as->atom = lm_p0_new_text(document, "", 0U, 0U, 0U);
+        if (node->as->atom == 0) {
+            return 0;
+        }
+    }
     return node;
 }
 
@@ -2374,14 +2638,14 @@ static void lm_p0_adjust_node_span_to_document(
     );
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        lm_p0_adjust_structure_spans_to_document(document, &node->as.structure, base_offset);
-        if (node->as.structure.trailer != 0) {
-            lm_p0_adjust_structure_spans_to_document(document, &node->as.structure.trailer->body, base_offset);
+        lm_p0_adjust_structure_spans_to_document(document, node->as->structure, base_offset);
+        if (node->as->structure->trailer != 0) {
+            lm_p0_adjust_structure_spans_to_document(document, node->as->structure->trailer->body, base_offset);
         }
     } else if (node->kind == LM_P0_NODE_FRAME) {
-        lm_p0_adjust_structure_spans_to_document(document, &node->as.frame.body, base_offset);
-        if (node->as.frame.trailer != 0) {
-            lm_p0_adjust_structure_spans_to_document(document, &node->as.frame.trailer->body, base_offset);
+        lm_p0_adjust_structure_spans_to_document(document, node->as->frame->body, base_offset);
+        if (node->as->frame->trailer != 0) {
+            lm_p0_adjust_structure_spans_to_document(document, node->as->frame->trailer->body, base_offset);
         }
     }
 }
@@ -2470,15 +2734,15 @@ static int lm_p0_record_mix_mark(
             return 0;
         }
 
-        node->as.structure = payload_document.root->as.structure;
-        memset(&payload_document.root->as.structure, 0, sizeof(payload_document.root->as.structure));
+        node->as->structure = payload_document.root->as->structure;
+        payload_document.root->as->structure = 0;
         if (lm_own_arena_absorb(&document->tree_arena, &payload_document.tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while moving MIX tree into parser arena");
             lm_p0_document_destroy_owners(&payload_document);
             return 0;
         }
         lm_p0_document_destroy_owners(&payload_document);
-        lm_p0_adjust_structure_spans_to_document(document, &node->as.structure, payload_offset);
+        lm_p0_adjust_structure_spans_to_document(document, node->as->structure, payload_offset);
     }
 
     return 1;
@@ -2963,17 +3227,17 @@ static int lm_p0_append_atom_slice(
     if (node == 0) {
         return 0;
     }
-    node->as.atom.data = text + start;
-    node->as.atom.length = end - start;
+    node->as->atom->data = text + start;
+    node->as->atom->length = end - start;
     node->span.line = line;
     lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
     node->span.offset = offset + start;
     node->span.length = end - start;
     if (!lm_p0_document_register_lazy_text(
             document,
-            node->as.atom.data,
-            node->as.atom.length,
-            &node->as.atom.data,
+            node->as->atom->data,
+            node->as->atom->length,
+            &node->as->atom->data,
             node->span.line,
             node->span.column
         )) {
@@ -3000,8 +3264,8 @@ static int lm_p0_append_positional_skip(
         return 0;
     }
     node->flags |= LM_P0_NODE_POSITIONAL_SKIP;
-    node->as.atom.data = "";
-    node->as.atom.length = 0U;
+    node->as->atom->data = "";
+    node->as->atom->length = 0U;
     node->span.line = line;
     lm_p0_position_in_slice(text, length, index, line, column, &node->span.line, &node->span.column);
     node->span.offset = offset + index;
@@ -3863,7 +4127,7 @@ static int lm_p0_parse_fields_until_with_layout(
             if (!lm_p0_parse_fields_until_with_layout(
                     document,
                     indent_stack,
-                    &group_node->as.structure,
+                    group_node->as->structure,
                     text,
                     length,
                     line,
@@ -3923,17 +4187,17 @@ static int lm_p0_parse_fields_until_with_layout(
                 if (node == 0) {
                     return 0;
                 }
-                node->as.atom.data = block_event.text;
-                node->as.atom.length = block_event.text_length;
+                node->as->atom->data = block_event.text;
+                node->as->atom->length = block_event.text_length;
                 node->span.line = field_line;
                 node->span.column = field_column;
                 node->span.offset = offset + i;
                 node->span.length = next_offset - i;
                 if (!lm_p0_document_register_lazy_text(
                         document,
-                        node->as.atom.data,
-                        node->as.atom.length,
-                        &node->as.atom.data,
+                        node->as->atom->data,
+                        node->as->atom->length,
+                        &node->as->atom->data,
                         node->span.line,
                         node->span.column
                     )) {
@@ -4003,9 +4267,9 @@ static int lm_p0_parse_fields_until_with_layout(
                 if (node == 0) {
                     return 0;
                 }
-                node->as.frame.head.data = text + start;
-                node->as.frame.head.length = close_index - start + 1U;
-                node->as.frame.flags = LM_P0_FRAME_COLON;
+                node->as->frame->head->data = text + start;
+                node->as->frame->head->length = close_index - start + 1U;
+                node->as->frame->flags = LM_P0_FRAME_COLON;
                 i = close_index + 2U;
                 while (i < length && lm_p0_is_horizontal_space(text[i])) {
                     ++i;
@@ -4017,7 +4281,7 @@ static int lm_p0_parse_fields_until_with_layout(
                     text[i] != ')' &&
                     text[i] != '#';
                 if (has_inline_body) {
-                    node->as.frame.flags |= LM_P0_FRAME_INLINE_BODY;
+                    node->as->frame->flags |= LM_P0_FRAME_INLINE_BODY;
                 }
                 body_flags =
                     LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON |
@@ -4026,7 +4290,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 if (!lm_p0_parse_fields_until_with_layout(
                         document,
                         indent_stack,
-                        &node->as.frame.body,
+                        node->as->frame->body,
                         text,
                         length,
                         line,
@@ -4041,7 +4305,7 @@ static int lm_p0_parse_fields_until_with_layout(
                     return 0;
                 }
                 if (body_index > 0U && lm_p0_is_short_form_separator(text[body_index - 1U])) {
-                    node->as.frame.flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
+                    node->as->frame->flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
                 }
                 node->span.line = line;
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
@@ -4049,9 +4313,9 @@ static int lm_p0_parse_fields_until_with_layout(
                 node->span.length = body_index - start;
                 if (!lm_p0_document_register_lazy_text(
                         document,
-                        node->as.frame.head.data,
-                        node->as.frame.head.length,
-                        &node->as.frame.head.data,
+                        node->as->frame->head->data,
+                        node->as->frame->head->length,
+                        &node->as->frame->head->data,
                         node->span.line,
                         node->span.column
                     )) {
@@ -4066,7 +4330,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 inner_index = 0U;
                 if (!lm_p0_parse_fields_until(
                         document,
-                        &node->as.structure,
+                        node->as->structure,
                         text + i + 1U,
                         close_index - i - 1U,
                         line,
@@ -4099,7 +4363,7 @@ static int lm_p0_parse_fields_until_with_layout(
             inner_index = 0U;
             if (!lm_p0_parse_fields_until(
                     document,
-                    &node->as.structure,
+                    node->as->structure,
                     text + i + 1U,
                     close_index - i - 1U,
                     line,
@@ -4192,9 +4456,9 @@ static int lm_p0_parse_fields_until_with_layout(
                 if (node == 0) {
                     return 0;
                 }
-                node->as.frame.head.data = text + start;
-                node->as.frame.head.length = head_end - start;
-                node->as.frame.flags = LM_P0_FRAME_COLON;
+                node->as->frame->head->data = text + start;
+                node->as->frame->head->length = head_end - start;
+                node->as->frame->flags = LM_P0_FRAME_COLON;
                 ++i;
                 while (i < length && lm_p0_is_horizontal_space(text[i])) {
                     ++i;
@@ -4206,7 +4470,7 @@ static int lm_p0_parse_fields_until_with_layout(
                     text[i] != ')' &&
                     text[i] != '#';
                 if (has_inline_body) {
-                    node->as.frame.flags |= LM_P0_FRAME_INLINE_BODY;
+                    node->as->frame->flags |= LM_P0_FRAME_INLINE_BODY;
                 }
                 body_flags =
                     LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON |
@@ -4215,7 +4479,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 if (!lm_p0_parse_fields_until_with_layout(
                         document,
                         indent_stack,
-                        &node->as.frame.body,
+                        node->as->frame->body,
                         text,
                         length,
                         line,
@@ -4230,7 +4494,7 @@ static int lm_p0_parse_fields_until_with_layout(
                     return 0;
                 }
                 if (body_index > 0U && lm_p0_is_short_form_separator(text[body_index - 1U])) {
-                    node->as.frame.flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
+                    node->as->frame->flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
                 }
                 node->span.line = line;
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
@@ -4238,9 +4502,9 @@ static int lm_p0_parse_fields_until_with_layout(
                 node->span.length = body_index - start;
                 if (!lm_p0_document_register_lazy_text(
                         document,
-                        node->as.frame.head.data,
-                        node->as.frame.head.length,
-                        &node->as.frame.head.data,
+                        node->as->frame->head->data,
+                        node->as->frame->head->length,
+                        &node->as->frame->head->data,
                         node->span.line,
                         node->span.column
                     )) {
@@ -4254,16 +4518,16 @@ static int lm_p0_parse_fields_until_with_layout(
                 if (node == 0) {
                     return 0;
                 }
-                node->as.frame.head.data = text + start;
-                node->as.frame.head.length = head_end - start;
-                node->as.frame.flags = LM_P0_FRAME_COMPACT;
+                node->as->frame->head->data = text + start;
+                node->as->frame->head->length = head_end - start;
+                node->as->frame->flags = LM_P0_FRAME_COMPACT;
                 if (!lm_p0_find_matching_paren(document, text, length, i, line, column, &close_index)) {
                     return 0;
                 }
                 inner_index = 0U;
                 if (!lm_p0_parse_fields_until(
                         document,
-                        &node->as.frame.body,
+                        node->as->frame->body,
                         text + i + 1U,
                         close_index - i - 1U,
                         line,
@@ -4283,9 +4547,9 @@ static int lm_p0_parse_fields_until_with_layout(
                 node->span.length = close_index - start + 1U;
                 if (!lm_p0_document_register_lazy_text(
                         document,
-                        node->as.frame.head.data,
-                        node->as.frame.head.length,
-                        &node->as.frame.head.data,
+                        node->as->frame->head->data,
+                        node->as->frame->head->length,
+                        &node->as->frame->head->data,
                         node->span.line,
                         node->span.column
                     )) {
@@ -4326,17 +4590,17 @@ static int lm_p0_parse_fields_until_with_layout(
                 if (node == 0) {
                     return 0;
                 }
-                node->as.atom.data = text + start;
-                node->as.atom.length = head_end - start;
+                node->as->atom->data = text + start;
+                node->as->atom->length = head_end - start;
                 node->span.line = line;
                 lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
                 node->span.offset = offset + start;
                 node->span.length = head_end - start;
                 if (!lm_p0_document_register_lazy_text(
                         document,
-                        node->as.atom.data,
-                        node->as.atom.length,
-                        &node->as.atom.data,
+                        node->as->atom->data,
+                        node->as->atom->length,
+                        &node->as->atom->data,
                         node->span.line,
                         node->span.column
                     )) {
@@ -4353,14 +4617,14 @@ static int lm_p0_parse_fields_until_with_layout(
         if (
             allow_empty_fields &&
             node->kind == LM_P0_NODE_FRAME &&
-            (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
+            (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
         ) {
             expect_field = 1;
         }
         if (
             (flags & LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U &&
             node->kind == LM_P0_NODE_FRAME &&
-            (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
+            (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) != 0U
         ) {
             headless_group_after_separator = 1;
         }
@@ -4527,14 +4791,14 @@ static int lm_p0_stack_level_is_trailer_body(const LmP0Stack *stack, size_t leve
     }
 
     if (owner->kind == LM_P0_NODE_FRAME &&
-        owner->as.frame.trailer != 0 &&
-        stack->parents[level] == &owner->as.frame.trailer->body) {
+        owner->as->frame->trailer != 0 &&
+        stack->parents[level] == owner->as->frame->trailer->body) {
         return 1;
     }
 
     if (owner->kind == LM_P0_NODE_STRUCTURE &&
-        owner->as.structure.trailer != 0 &&
-        stack->parents[level] == &owner->as.structure.trailer->body) {
+        owner->as->structure->trailer != 0 &&
+        stack->parents[level] == owner->as->structure->trailer->body) {
         return 1;
     }
 
@@ -4761,18 +5025,18 @@ static void lm_p0_disabled_state_delete(LmP0DisabledState *state) {
 static int lm_p0_node_keeps_source_child_level(LmP0Node *node) {
     if (node->kind == LM_P0_NODE_FRAME) {
         return
-            (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U &&
-            (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) == 0U;
+            (node->as->frame->flags & LM_P0_FRAME_COLON) != 0U &&
+            (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) == 0U;
     }
     return 0;
 }
 
 static LmP0Structure *lm_p0_node_child_structure(LmP0Node *node) {
     if (node->kind == LM_P0_NODE_FRAME) {
-        return &node->as.frame.body;
+        return node->as->frame->body;
     }
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        return &node->as.structure;
+        return node->as->structure;
     }
     return 0;
 }
@@ -4786,8 +5050,8 @@ static LmP0Node *lm_p0_structure_last_colon_frame(LmP0Structure *structure) {
 
     node = structure->last_field->value;
     if (node->kind == LM_P0_NODE_FRAME &&
-        (node->as.frame.flags & LM_P0_FRAME_COLON) != 0U &&
-        (node->as.frame.flags & LM_P0_FRAME_SEPARATOR_CLOSED) == 0U) {
+        (node->as->frame->flags & LM_P0_FRAME_COLON) != 0U &&
+        (node->as->frame->flags & LM_P0_FRAME_SEPARATOR_CLOSED) == 0U) {
         return node;
     }
 
@@ -4889,7 +5153,7 @@ static int lm_p0_stack_open_implicit_anonymous(
     if (!lm_p0_stack_ensure(document, stack, parent_level + 1U)) {
         return 0;
     }
-    stack->parents[parent_level + 1U] = &anonymous_node->as.structure;
+    stack->parents[parent_level + 1U] = anonymous_node->as->structure;
     stack->owners[parent_level + 1U] = anonymous_node;
     stack->hard[parent_level + 1U] = 1U;
     lm_p0_stack_truncate_deeper(stack, parent_level + 1U);
@@ -4898,10 +5162,10 @@ static int lm_p0_stack_open_implicit_anonymous(
 
 static LmP0Trailer **lm_p0_node_trailer_slot(LmP0Node *node) {
     if (node->kind == LM_P0_NODE_FRAME) {
-        return &node->as.frame.trailer;
+        return &node->as->frame->trailer;
     }
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        return &node->as.structure.trailer;
+        return &node->as->structure->trailer;
     }
     return 0;
 }
@@ -4928,24 +5192,11 @@ static LmP0Trailer *lm_p0_attach_trailer(
         return 0;
     }
 
-    trailer = (LmP0Trailer *)lm_own_arena_new_zero(&document->tree_arena, sizeof(*trailer));
+    trailer = lm_p0_new_trailer(document, spelling, spelling_length, line, column);
     if (trailer == 0) {
-        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer");
         return 0;
     }
-    trailer->spelling.data = spelling;
-    trailer->spelling.length = spelling_length;
     trailer->flags = flags;
-    if (!lm_p0_document_register_lazy_text(
-            document,
-            trailer->spelling.data,
-            trailer->spelling.length,
-            &trailer->spelling.data,
-            line,
-            column
-        )) {
-        return 0;
-    }
     *slot = trailer;
     return trailer;
 }
@@ -5033,7 +5284,7 @@ static int lm_p0_parse_trailer_item(
 
     if (!lm_p0_parse_fields_into(
             document,
-            &trailer->body,
+            trailer->body,
             text + body_start,
             length - body_start,
             line,
@@ -5043,7 +5294,7 @@ static int lm_p0_parse_trailer_item(
         return 0;
     }
 
-    *out_body = &trailer->body;
+    *out_body = trailer->body;
     return 1;
 }
 
@@ -5101,7 +5352,7 @@ static int lm_p0_stream_resolve_pending_delimiter(
             lm_p0_free_node(anonymous_node);
             return 0;
         }
-        stack->parents[event->level + 1U] = &anonymous_node->as.structure;
+        stack->parents[event->level + 1U] = anonymous_node->as->structure;
         stack->owners[event->level + 1U] = anonymous_node;
         stack->hard[event->level + 1U] = 1U;
         lm_p0_stack_truncate_deeper(stack, event->level + 1U);
@@ -5266,17 +5517,17 @@ static int lm_p0_stream_apply_item_event(
         if (node == 0) {
             return 0;
         }
-        node->as.atom.data = event->text;
-        node->as.atom.length = event->text_length;
+        node->as->atom->data = event->text;
+        node->as->atom->length = event->text_length;
         node->span.line = event->line;
         node->span.column = event->column;
         node->span.offset = event->offset;
         node->span.length = event->text_length;
         if (!lm_p0_document_register_lazy_text(
                 document,
-                node->as.atom.data,
-                node->as.atom.length,
-                &node->as.atom.data,
+                node->as->atom->data,
+                node->as->atom->length,
+                &node->as->atom->data,
                 node->span.line,
                 node->span.column
             )) {
@@ -5287,17 +5538,17 @@ static int lm_p0_stream_apply_item_event(
         if (node == 0) {
             return 0;
         }
-        node->as.atom.data = event->text;
-        node->as.atom.length = event->text_length;
+        node->as->atom->data = event->text;
+        node->as->atom->length = event->text_length;
         node->span.line = event->line;
         node->span.column = event->column;
         node->span.offset = event->offset;
         node->span.length = event->text_length;
         if (!lm_p0_document_register_lazy_text(
                 document,
-                node->as.atom.data,
-                node->as.atom.length,
-                &node->as.atom.data,
+                node->as->atom->data,
+                node->as->atom->length,
+                &node->as->atom->data,
                 node->span.line,
                 node->span.column
             )) {
@@ -5969,7 +6220,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
         lm_p0_pending_mix_delete(pending_mix);
         return 0;
     }
-    stack->parents[0] = &document->root->as.structure;
+    stack->parents[0] = document->root->as->structure;
     stack->owners[0] = document->root;
 
     while (offset <= length) {
@@ -6370,7 +6621,7 @@ static int lm_p0_postprocess_trailer(LmP0Document *document, LmP0Trailer *traile
     if (trailer == 0) {
         return 1;
     }
-    return lm_p0_postprocess_structure(document, &trailer->body);
+    return lm_p0_postprocess_structure(document, trailer->body);
 }
 
 static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
@@ -6379,26 +6630,26 @@ static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
     }
 
     if (node->kind == LM_P0_NODE_FRAME) {
-        if (!lm_p0_postprocess_structure(document, &node->as.frame.body)) {
+        if (!lm_p0_postprocess_structure(document, node->as->frame->body)) {
             return 0;
         }
-        if ((node->as.frame.flags & LM_P0_FRAME_INLINE_BODY) != 0U &&
+        if ((node->as->frame->flags & LM_P0_FRAME_INLINE_BODY) != 0U &&
             !lm_p0_wrap_fields_from_line(
                 document,
-                &node->as.frame.body,
+                node->as->frame->body,
                 node->span.line,
                 node->span.offset + node->span.length
             )) {
             return 0;
         }
-        return lm_p0_postprocess_trailer(document, node->as.frame.trailer);
+        return lm_p0_postprocess_trailer(document, node->as->frame->trailer);
     }
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        if (!lm_p0_postprocess_structure(document, &node->as.structure)) {
+        if (!lm_p0_postprocess_structure(document, node->as->structure)) {
             return 0;
         }
-        return lm_p0_postprocess_trailer(document, node->as.structure.trailer);
+        return lm_p0_postprocess_trailer(document, node->as->structure->trailer);
     }
 
     return 1;
@@ -6447,7 +6698,7 @@ static int lm_p0_wrap_fields_from_line(
         next_move = move->next;
         value = move->value;
         move->value = 0;
-        if (!lm_p0_append_field(document, &group_node->as.structure, value)) {
+        if (!lm_p0_append_field(document, group_node->as->structure, value)) {
             lm_p0_free_node(group_node);
             return 0;
         }
@@ -6492,7 +6743,7 @@ static int lm_p0_validate_nonempty_colon_frames_in_trailer(
     if (trailer == 0) {
         return 1;
     }
-    return lm_p0_validate_nonempty_colon_frames_in_structure(document, &trailer->body);
+    return lm_p0_validate_nonempty_colon_frames_in_structure(document, trailer->body);
 }
 
 static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, const LmP0Node *node) {
@@ -6501,17 +6752,17 @@ static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, 
     }
 
     if (node->kind == LM_P0_NODE_FRAME) {
-        if (!lm_p0_validate_nonempty_colon_frames_in_structure(document, &node->as.frame.body)) {
+        if (!lm_p0_validate_nonempty_colon_frames_in_structure(document, node->as->frame->body)) {
             return 0;
         }
-        return lm_p0_validate_nonempty_colon_frames_in_trailer(document, node->as.frame.trailer);
+        return lm_p0_validate_nonempty_colon_frames_in_trailer(document, node->as->frame->trailer);
     }
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
-        if (!lm_p0_validate_nonempty_colon_frames_in_structure(document, &node->as.structure)) {
+        if (!lm_p0_validate_nonempty_colon_frames_in_structure(document, node->as->structure)) {
             return 0;
         }
-        return lm_p0_validate_nonempty_colon_frames_in_trailer(document, node->as.structure.trailer);
+        return lm_p0_validate_nonempty_colon_frames_in_trailer(document, node->as->structure->trailer);
     }
 
     return 1;
@@ -6708,7 +6959,7 @@ static int lm_p0_registry_push_column_metadata(
     }
 
     for (index = 0U; index < column_count; ++index) {
-        if (!lm_p0_registry_identifier_value(columns[index].name, &column_payload)) {
+        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(*columns[index].name, &column_payload)) {
             return -1;
         }
         column_key = lm_p0_registry_join_text3(table_payload, ".", column_payload);
@@ -6736,7 +6987,10 @@ static int lm_p0_registry_push_column_metadata(
                 free(column_key);
                 return -1;
             }
-            if (lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index].descriptors[descriptor_index]) != 0) {
+            if (
+                columns[index].descriptors[descriptor_index] == 0 ||
+                lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, *columns[index].descriptors[descriptor_index]) != 0
+            ) {
                 free(descriptor_key);
                 free(column_key);
                 return -1;
@@ -6752,48 +7006,51 @@ static int lm_p0_registry_push_column_metadata(
 
 static int lm_p0_registry_l4_push_row(
     void *context,
-    LmP0Text table_atom,
-    LmP0Text key_atom,
+    const LmP0Text *table_atom,
+    const LmP0Text *key_atom,
     const LmP0Node *payload_node
 ) {
     (void)context;
-    if (payload_node == 0 || payload_node->kind != LM_P0_NODE_ATOM) {
+    if (table_atom == 0 || key_atom == 0 || payload_node == 0 || payload_node->kind != LM_P0_NODE_ATOM) {
         fprintf(stderr, "parser registry error: row expects exactly three atom fields\n");
         return -1;
     }
-    return lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node->as.atom);
+    return lm_p0_registry_push_row_atoms(*table_atom, *key_atom, *payload_node->as->atom);
 }
 
 static int lm_p0_registry_l4_push_cell(
     void *context,
-    LmP0Text table_name,
+    const LmP0Text *table_name,
     const LmL4Column *column,
     int split_by_column,
-    LmP0Text key_atom,
+    const LmP0Text *key_atom,
     const LmP0Node *payload_node
 ) {
     (void)context;
-    if (payload_node == 0 || payload_node->kind != LM_P0_NODE_ATOM) {
+    if (table_name == 0 || key_atom == 0 || payload_node == 0 || payload_node->kind != LM_P0_NODE_ATOM) {
         fprintf(stderr, "parser registry error: table rows currently expect atom cells\n");
         return -1;
     }
     return lm_p0_registry_push_table_cell(
-        table_name,
+        *table_name,
         column,
         split_by_column,
-        key_atom,
-        payload_node->as.atom
+        *key_atom,
+        *payload_node->as->atom
     );
 }
 
 static int lm_p0_registry_l4_push_column_metadata(
     void *context,
-    LmP0Text table_name,
+    const LmP0Text *table_name,
     const LmL4Column *columns,
     size_t column_count
 ) {
     (void)context;
-    return lm_p0_registry_push_column_metadata(table_name, columns, column_count);
+    if (table_name == 0) {
+        return -1;
+    }
+    return lm_p0_registry_push_column_metadata(*table_name, columns, column_count);
 }
 
 static const LmL4Loader lm_p0_registry_l4_loader = {
@@ -7171,9 +7428,9 @@ static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_
     } else {
         lm_p0_dump_append_cstr(dump, "Trailer spelling=");
     }
-    lm_p0_dump_text(dump, trailer->spelling);
-    lm_p0_dump_append_field_count_line(dump, trailer->body.field_count);
-    lm_p0_dump_structure(dump, &trailer->body, indent + 1U);
+    lm_p0_dump_text(dump, *trailer->spelling);
+    lm_p0_dump_append_field_count_line(dump, trailer->body->field_count);
+    lm_p0_dump_structure(dump, trailer->body, indent + 1U);
 }
 
 static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent) {
@@ -7196,27 +7453,27 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
     }
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
-        lm_p0_dump_append_field_count_line(dump, node->as.structure.field_count);
-        lm_p0_dump_structure(dump, &node->as.structure, indent + 1U);
-        lm_p0_dump_trailer(dump, node->as.structure.trailer, indent + 1U);
+        lm_p0_dump_append_field_count_line(dump, node->as->structure->field_count);
+        lm_p0_dump_structure(dump, node->as->structure, indent + 1U);
+        lm_p0_dump_trailer(dump, node->as->structure->trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_FRAME) {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_append_cstr(dump, " head=");
-        lm_p0_dump_text(dump, node->as.frame.head);
+        lm_p0_dump_text(dump, *node->as->frame->head);
         lm_p0_dump_append_cstr(dump, " body=");
         lm_p0_dump_append_cstr(dump, structure_name);
-        lm_p0_dump_append_field_count_line(dump, node->as.frame.body.field_count);
-        lm_p0_dump_structure(dump, &node->as.frame.body, indent + 1U);
-        lm_p0_dump_trailer(dump, node->as.frame.trailer, indent + 1U);
+        lm_p0_dump_append_field_count_line(dump, node->as->frame->body->field_count);
+        lm_p0_dump_structure(dump, node->as->frame->body, indent + 1U);
+        lm_p0_dump_trailer(dump, node->as->frame->trailer, indent + 1U);
     } else if (node->kind == LM_P0_NODE_ATOM) {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_append_cstr(dump, " ");
-        lm_p0_dump_text(dump, node->as.atom);
+        lm_p0_dump_text(dump, *node->as->atom);
         lm_p0_dump_append_cstr(dump, "\n");
     } else if (node->kind == LM_P0_NODE_DISABLED) {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_append_cstr(dump, " ");
-        lm_p0_dump_text(dump, node->as.atom);
+        lm_p0_dump_text(dump, *node->as->atom);
         lm_p0_dump_append_cstr(dump, "\n");
     } else {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
@@ -7862,7 +8119,7 @@ static int lm_p0_node_head_is(const LmP0Node *node, const char *name) {
         return 0;
     }
     name_length = strlen(name);
-    return node->as.frame.head.length == name_length && memcmp(node->as.frame.head.data, name, name_length) == 0;
+    return node -> as -> frame -> head -> length == name_length && memcmp(node -> as -> frame -> head -> data, name, name_length) == 0;
 }
 
 static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target) {
@@ -7880,6 +8137,69 @@ static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Nod
         return lm_p0_node_head_is(target, "fn");
     }
     return lm_p0_trailer_role_is_tail_cutter(role);
+}
+
+const LmP0Structure * lm_p0_node_structure(const LmP0Node *node) {
+    if (node == 0 || node -> kind != LM_P0_NODE_STRUCTURE) {
+        return 0;
+    }
+    return node -> as -> structure;
+}
+
+const LmP0Frame * lm_p0_node_frame(const LmP0Node *node) {
+    if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
+        return 0;
+    }
+    return node -> as -> frame;
+}
+
+const LmP0Text * lm_p0_node_atom(const LmP0Node *node) {
+    if (node == 0 || (node -> kind != LM_P0_NODE_ATOM && node -> kind != LM_P0_NODE_DISABLED)) {
+        return 0;
+    }
+    return node -> as -> atom;
+}
+
+const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure) {
+    if (structure == 0) {
+        return 0;
+    }
+    return structure -> trailer;
+}
+
+const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame) {
+    if (frame == 0) {
+        return 0;
+    }
+    return frame -> head;
+}
+
+const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame) {
+    if (frame == 0) {
+        return 0;
+    }
+    return frame -> body;
+}
+
+const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame) {
+    if (frame == 0) {
+        return 0;
+    }
+    return frame -> trailer;
+}
+
+const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer) {
+    if (trailer == 0) {
+        return 0;
+    }
+    return trailer -> spelling;
+}
+
+const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer *trailer) {
+    if (trailer == 0) {
+        return 0;
+    }
+    return trailer -> body;
 }
 
 static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event) {

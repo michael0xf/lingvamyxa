@@ -27,30 +27,30 @@ fn: LmL4FrameReceiver (
 
 fn: LmL4PushRow (
     @: void context
-    LmP0Text: table_atom
-    LmP0Text: key_atom
+    const: @: LmP0Text table_atom
+    const: @: LmP0Text key_atom
     const: @: LmP0Node payload_node
 ) int
 
 fn: LmL4PushCell (
     @: void context
-    LmP0Text: table_name
+    const: @: LmP0Text table_name
     const: @: LmL4Column column
     int: split_by_column
-    LmP0Text: key_atom
+    const: @: LmP0Text key_atom
     const: @: LmP0Node payload_node
 ) int
 
 fn: LmL4NoteKey (
     @: void context
-    LmP0Text: table_name
+    const: @: LmP0Text table_name
     const: @: LmL4Column column
-    LmP0Text: key_atom
+    const: @: LmP0Text key_atom
 ) int
 
 fn: LmL4PushColumnMetadata (
     @: void context
-    LmP0Text: table_name
+    const: @: LmP0Text table_name
     const: @: LmL4Column columns
     size_t: column_count
 ) int
@@ -97,6 +97,22 @@ table:
     rows:
              descriptors  16
 end: `LmL4Column.field.array-count`
+
+table:
+    name: `LmL4Column.field.address-depth`
+    columns: class        (depth serial)
+    rows:
+             name         1
+             descriptors  1
+end: `LmL4Column.field.address-depth`
+
+table:
+    name: `LmL4Column.field.const`
+    columns: class        (value serial)
+    rows:
+             name         1
+             descriptors  1
+end: `LmL4Column.field.const`
 
 table:
     name: `LmL4Receiver.field.class`
