@@ -109,6 +109,14 @@ void lm_own_arena_freeze(LmOwnArena *arena);
 int lm_own_arena_is_frozen(const LmOwnArena *arena);
 int lm_own_tree_cut(LmOwnArena *arena);
 int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
+int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item);
+int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count);
+int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
+void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
+void * lm_own_value_stack_top(const LmOwnValueStack *stack);
+static int lm_own_size_multiply(size_t left, size_t right, size_t *out);
+static int lm_own_global_allocation_descriptors_init(void);
+static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnValueStack *descriptors, const void *address);
 static int lm_own_allocation_descriptor_push(LmOwnValueStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level);
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
 const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
@@ -120,142 +128,9 @@ int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const voi
 int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
 
-int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
-    unsigned char *items;
-    size_t capacity;
-
-    if (stack == 0 || item == 0 || stack->item_size == 0U) {
-        return 1;
-    }
-
-    if (stack->count == stack->capacity) {
-        capacity = stack->capacity == 0U ? 8U : stack->capacity * 2U;
-        items = (unsigned char *)realloc(stack->items, capacity * stack->item_size);
-        if (items == 0) {
-            return 1;
-        }
-        stack->items = items;
-        stack->capacity = capacity;
-    }
-
-    memcpy((unsigned char *)stack->items + stack->count * stack->item_size, item, stack->item_size);
-    ++stack->count;
-    return 0;
-}
-
-int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count) {
-    unsigned char *items;
-    size_t capacity;
-    size_t previous_count;
-
-    if (stack == 0 || stack->item_size == 0U) {
-        return 1;
-    }
-
-    if (count > stack->capacity) {
-        capacity = stack->capacity == 0U ? 8U : stack->capacity;
-        while (capacity < count) {
-            capacity *= 2U;
-        }
-        items = (unsigned char *)realloc(stack->items, capacity * stack->item_size);
-        if (items == 0) {
-            return 1;
-        }
-        stack->items = items;
-        stack->capacity = capacity;
-    }
-
-    previous_count = stack->count;
-    if (count > previous_count) {
-        memset(
-            (unsigned char *)stack->items + previous_count * stack->item_size,
-            0,
-            (count - previous_count) * stack->item_size
-        );
-    }
-    stack->count = count;
-    return 0;
-}
-
-int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item) {
-    unsigned char *source;
-
-    if (stack == 0 || stack->count == 0U || stack->item_size == 0U) {
-        return 1;
-    }
-
-    --stack->count;
-    source = (unsigned char *)stack->items + stack->count * stack->item_size;
-    if (out_item != 0) {
-        memcpy(out_item, source, stack->item_size);
-    }
-    return 0;
-}
-
-void *lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index) {
-    if (stack == 0 || index >= stack->count || stack->item_size == 0U) {
-        return 0;
-    }
-
-    return (unsigned char *)stack->items + index * stack->item_size;
-}
-
-void *lm_own_value_stack_top(const LmOwnValueStack *stack) {
-    if (stack == 0 || stack->count == 0U || stack->item_size == 0U) {
-        return 0;
-    }
-
-    return (unsigned char *)stack->items + (stack->count - 1U) * stack->item_size;
-}
-
 static LmOwnValueStack lm_own_global_allocation_descriptors;
+
 static int lm_own_global_allocation_descriptors_ready;
-
-static int lm_own_size_multiply(size_t left, size_t right, size_t *out) {
-    if (out == 0) {
-        return 1;
-    }
-    if (left != 0U && right > ((size_t)-1) / left) {
-        return 1;
-    }
-    *out = left * right;
-    return 0;
-}
-
-static int lm_own_global_allocation_descriptors_init(void) {
-    if (!lm_own_global_allocation_descriptors_ready) {
-        lm_own_value_stack_init(
-            &lm_own_global_allocation_descriptors,
-            sizeof(LmOwnAllocationDescriptor)
-        );
-        lm_own_global_allocation_descriptors_ready = 1;
-    }
-    return 0;
-}
-
-static const LmOwnAllocationDescriptor *lm_own_allocation_descriptor_find(
-    const LmOwnValueStack *descriptors,
-    const void *address
-) {
-    const LmOwnAllocationDescriptor *descriptor;
-    size_t index;
-
-    if (descriptors == 0 || address == 0) {
-        return 0;
-    }
-
-    index = descriptors->count;
-    while (index > 0U) {
-        --index;
-        descriptor = (const LmOwnAllocationDescriptor *)lm_own_value_stack_at(descriptors, index);
-        if (descriptor != 0 && descriptor->address == address) {
-            return descriptor;
-        }
-    }
-
-    return 0;
-}
-
 void * lm_own_new_zero(size_t size) {
     return calloc(1U, size);
 }
@@ -427,6 +302,134 @@ int lm_own_tree_cut(LmOwnArena *arena) {
 
 int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena) {
     return lm_own_arena_promote_lazy_edges(arena);
+}
+
+int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
+    unsigned char *items;
+    unsigned char *target;
+    size_t capacity;
+    if (stack == 0 || item == 0 || stack -> item_size == 0U) {
+        return 1;
+    }
+    if (stack -> count == stack -> capacity) {
+        if (stack -> capacity == 0U) {
+            capacity = 8U;
+        }
+        if (stack -> capacity != 0U) {
+            capacity = stack -> capacity * 2U;
+        }
+        items = ((unsigned char *)realloc(stack -> items, capacity * stack -> item_size));
+        if (items == 0) {
+            return 1;
+        }
+        stack->items = ((void *)items);
+        stack->capacity = capacity;
+    }
+    target = (((unsigned char *)stack -> items)) + stack -> count * stack -> item_size;
+    memcpy(target, item, stack -> item_size);
+    stack->count = stack -> count + 1U;
+    return 0;
+}
+
+int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count) {
+    unsigned char *items;
+    unsigned char *target;
+    size_t capacity;
+    size_t previous_count;
+    if (stack == 0 || stack -> item_size == 0U) {
+        return 1;
+    }
+    if (count > stack -> capacity) {
+        if (stack -> capacity == 0U) {
+            capacity = 8U;
+        }
+        if (stack -> capacity != 0U) {
+            capacity = stack -> capacity;
+        }
+        while (capacity < count) {
+            capacity = capacity * 2U;
+        }
+        items = ((unsigned char *)realloc(stack -> items, capacity * stack -> item_size));
+        if (items == 0) {
+            return 1;
+        }
+        stack->items = ((void *)items);
+        stack->capacity = capacity;
+    }
+    previous_count = stack -> count;
+    if (count > previous_count) {
+        target = (((unsigned char *)stack -> items)) + previous_count * stack -> item_size;
+        memset(target, 0, (count - previous_count) * stack -> item_size);
+    }
+    stack->count = count;
+    return 0;
+}
+
+int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item) {
+    unsigned char *source;
+    if (stack == 0 || stack -> count == 0U || stack -> item_size == 0U) {
+        return 1;
+    }
+    stack->count = stack -> count - 1U;
+    source = (((unsigned char *)stack -> items)) + stack -> count * stack -> item_size;
+    if (out_item != 0) {
+        memcpy(out_item, source, stack -> item_size);
+    }
+    return 0;
+}
+
+void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index) {
+    unsigned char *item;
+    if (stack == 0 || index >= stack -> count || stack -> item_size == 0U) {
+        return 0;
+    }
+    item = (((unsigned char *)stack -> items)) + index * stack -> item_size;
+    return item;
+}
+
+void * lm_own_value_stack_top(const LmOwnValueStack *stack) {
+    unsigned char *item;
+    if (stack == 0 || stack -> count == 0U || stack -> item_size == 0U) {
+        return 0;
+    }
+    item = (((unsigned char *)stack -> items)) + (stack -> count - 1U) * stack -> item_size;
+    return item;
+}
+
+static int lm_own_size_multiply(size_t left, size_t right, size_t *out) {
+    if (out == 0) {
+        return 1;
+    }
+    if (left != 0U && right > (((size_t)- 1)) / left) {
+        return 1;
+    }
+    out[0] = left * right;
+    return 0;
+}
+
+static int lm_own_global_allocation_descriptors_init(void) {
+    if (lm_own_global_allocation_descriptors_ready == 0) {
+        lm_own_value_stack_init(&lm_own_global_allocation_descriptors, sizeof(LmOwnAllocationDescriptor));
+        lm_own_global_allocation_descriptors_ready = 1;
+    }
+    return 0;
+}
+
+static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnValueStack *descriptors, const void *address) {
+    const LmOwnAllocationDescriptor *descriptor;
+    size_t index;
+    if (descriptors == 0 || address == 0) {
+        return 0;
+    }
+    index = descriptors -> count;
+    while (index > 0U) {
+        index = index - 1U;
+        descriptor = lm_own_value_stack_at(descriptors, index);
+        if (descriptor != 0 && descriptor -> address == address) {
+            return descriptor;
+        }
+    }
+    return 0;
 }
 
 static int lm_own_allocation_descriptor_push(LmOwnValueStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level) {

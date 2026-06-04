@@ -294,13 +294,8 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
 char * lm_p0_dump_alloc(const LmP0Document *document);
 void lm_p0_free(void *ptr);
 
-static LmOwnPtrStack *lm_l4_seen_tables;
-static LmOwnPtrStack *lm_l4_seen_tables_get(void) {
-    return lm_l4_seen_tables;
-}
-static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables) {
-    lm_l4_seen_tables = seen_tables;
-}
+static LmOwnPtrStack * lm_l4_seen_tables_get(void);
+static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables);
 static int lm_l4_text_equals(const LmP0Text *text, const char *value);
 static int lm_l4_text_slice_equals(const char *data, size_t length, const char *value);
 static int lm_l4_text_slice_same(const char *left_data, size_t left_length, const char *right_data, size_t right_length);
@@ -335,6 +330,17 @@ static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, const 
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4, size_t *out_row_count);
+
+static LmOwnPtrStack *lm_l4_seen_tables;
+
+static const LmL4Receiver lm_l4_default_receivers[3] = {{"table", lm_l4_receiver_table}, {"row", lm_l4_receiver_row}, {"fn", lm_l4_receiver_ignore}};
+static LmOwnPtrStack * lm_l4_seen_tables_get(void) {
+    return lm_l4_seen_tables;
+}
+
+static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables) {
+    lm_l4_seen_tables = seen_tables;
+}
 
 static int lm_l4_text_equals(const LmP0Text *text, const char *value) {
     size_t length;
@@ -1096,30 +1102,14 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
     free(seen);
     return status;
 }
-static const LmL4Receiver lm_l4_default_receivers[] = {
-    { "table", lm_l4_receiver_table },
-    { "row", lm_l4_receiver_row },
-    { "fn", lm_l4_receiver_ignore }
-};
 
 
 
-
-#include <ctype.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
-
-static void lm_p0_document_init_owners(LmP0Document *document);
-static void lm_p0_document_destroy_owners(LmP0Document *document);
-static void lm_p0_document_freeze_tree(LmP0Document *document);
-static int lm_p0_text_equals(LmP0Text text, const char *value);
-static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_payload_is_null(LmP0Text atom);
+static int lm_p0_text_equals(const LmP0Text *text, const char *value);
+static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_payload_is_null(const LmP0Text *atom);
 static int lm_p0_is_horizontal_space(char value);
 static int lm_p0_is_line_break(char value);
 static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index);
@@ -1131,8 +1121,19 @@ static int lm_p0_starts_python_string(const char *text, size_t length, size_t in
 static int lm_p0_is_decimal_digit(char value);
 static char * lm_p0_copy_bytes(const char *source, size_t length);
 static LmP0Text lm_p0_text_from_cstr(const char *text);
-static char * lm_p0_text_copy_cstr(LmP0Text text);
-static char * lm_p0_registry_value_copy_cstr(LmP0Text value);
+static char * lm_p0_text_copy_cstr(const LmP0Text *text);
+static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value);
+
+#include <ctype.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+static void lm_p0_document_init_owners(LmP0Document *document);
+static void lm_p0_document_destroy_owners(LmP0Document *document);
+static void lm_p0_document_freeze_tree(LmP0Document *document);
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
 static void lm_p0_registry_row_destroy_any(void *object);
 static void lm_p0_registry_destroy(void);
@@ -1206,11 +1207,11 @@ static void lm_p0_set_diagnostic(
 static void lm_p0_document_init_owners(LmP0Document *document);
 static void lm_p0_document_destroy_owners(LmP0Document *document);
 static void lm_p0_document_freeze_tree(LmP0Document *document);
-static int lm_p0_text_equals(LmP0Text text, const char *value);
-static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_payload_is_null(LmP0Text atom);
+static int lm_p0_text_equals(const LmP0Text *text, const char *value);
+static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_payload_is_null(const LmP0Text *atom);
 static int lm_p0_is_horizontal_space(char value);
 static int lm_p0_is_line_break(char value);
 static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index);
@@ -1222,8 +1223,8 @@ static int lm_p0_starts_python_string(const char *text, size_t length, size_t in
 static int lm_p0_is_decimal_digit(char value);
 static char *lm_p0_copy_bytes(const char *source, size_t length);
 static LmP0Text lm_p0_text_from_cstr(const char *text);
-static char *lm_p0_text_copy_cstr(LmP0Text text);
-static char *lm_p0_registry_value_copy_cstr(LmP0Text value);
+static char *lm_p0_text_copy_cstr(const LmP0Text *text);
+static char *lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
 static void lm_p0_registry_row_destroy_any(void *object);
 static void lm_p0_registry_destroy(void);
@@ -1498,9 +1499,9 @@ static int lm_p0_registry_push_row_values(
         return -1;
     }
 
-    row->table = lm_p0_registry_value_copy_cstr(table_value);
-    row->key = lm_p0_registry_value_copy_cstr(key_value);
-    row->payload = lm_p0_registry_value_copy_cstr(payload_value);
+    row->table = lm_p0_registry_value_copy_cstr(&table_value);
+    row->key = lm_p0_registry_value_copy_cstr(&key_value);
+    row->payload = lm_p0_registry_value_copy_cstr(&payload_value);
     if (row->table == 0 || row->key == 0 || row->payload == 0) {
         lm_p0_registry_row_destroy_any(row);
         return -1;
@@ -1523,13 +1524,13 @@ static int lm_p0_registry_push_row_atoms(
     LmP0Text key_value;
     LmP0Text payload_value;
 
-    if (lm_p0_registry_payload_is_null(payload_atom)) {
+    if (lm_p0_registry_payload_is_null(&payload_atom)) {
         return 0;
     }
     if (
-        !lm_p0_registry_identifier_value(table_atom, &table_value) ||
-        !lm_p0_registry_identifier_value(key_atom, &key_value) ||
-        !lm_p0_registry_literal_value(payload_atom, &payload_value)
+        !lm_p0_registry_identifier_value(&table_atom, &table_value) ||
+        !lm_p0_registry_identifier_value(&key_atom, &key_value) ||
+        !lm_p0_registry_literal_value(&payload_atom, &payload_value)
     ) {
         return -1;
     }
@@ -1550,8 +1551,8 @@ static int lm_p0_registry_column_has_descriptor(
     for (i = 0U; i < column->descriptor_count; ++i) {
         if (
             column->descriptors[i] != 0 &&
-            lm_p0_registry_identifier_value(*column->descriptors[i], &payload) &&
-            lm_p0_text_equals(payload, descriptor)
+            lm_p0_registry_identifier_value(column->descriptors[i], &payload) &&
+            lm_p0_text_equals(&payload, descriptor)
         ) {
             return 1;
         }
@@ -1564,13 +1565,13 @@ static int lm_p0_registry_cell_value(
     const LmP0RegistryColumn *column,
     LmP0Text *out_value
 ) {
-    if (lm_p0_registry_payload_is_null(atom)) {
+    if (lm_p0_registry_payload_is_null(&atom)) {
         return 0;
     }
     if (lm_p0_registry_column_has_descriptor(column, "char")) {
-        return lm_p0_registry_literal_value(atom, out_value) ? 1 : -1;
+        return lm_p0_registry_literal_value(&atom, out_value) ? 1 : -1;
     }
-    return lm_p0_registry_identifier_value(atom, out_value) ? 1 : -1;
+    return lm_p0_registry_identifier_value(&atom, out_value) ? 1 : -1;
 }
 
 static int lm_p0_registry_push_table_cell(
@@ -1598,11 +1599,11 @@ static int lm_p0_registry_push_table_cell(
         return -1;
     }
 
-    if (!lm_p0_registry_identifier_value(table_name, &table_payload)) {
+    if (!lm_p0_registry_identifier_value(&table_name, &table_payload)) {
         return -1;
     }
 
-    if (!lm_p0_registry_identifier_value(key_atom, &key_payload)) {
+    if (!lm_p0_registry_identifier_value(&key_atom, &key_payload)) {
         return -1;
     }
 
@@ -1610,7 +1611,7 @@ static int lm_p0_registry_push_table_cell(
         return lm_p0_registry_push_row_values(table_payload, key_payload, payload_value);
     }
 
-    if (column->name == 0 || !lm_p0_registry_identifier_value(*column->name, &column_payload)) {
+    if (column->name == 0 || !lm_p0_registry_identifier_value(column->name, &column_payload)) {
         return -1;
     }
 
@@ -6954,12 +6955,12 @@ static int lm_p0_registry_push_column_metadata(
     if (columns == 0) {
         return -1;
     }
-    if (!lm_p0_registry_identifier_value(table_name, &table_payload)) {
+    if (!lm_p0_registry_identifier_value(&table_name, &table_payload)) {
         return -1;
     }
 
     for (index = 0U; index < column_count; ++index) {
-        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(*columns[index].name, &column_payload)) {
+        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(columns[index].name, &column_payload)) {
             return -1;
         }
         column_key = lm_p0_registry_join_text3(table_payload, ".", column_payload);
@@ -7542,90 +7543,65 @@ char *lm_p0_dump_alloc(const LmP0Document *document) {
     return data;
 }
 
-static void lm_p0_document_init_owners(LmP0Document *document) {
-    if (document != 0 && document -> owners_initialized == 0) {
-        lm_own_arena_init(&document->source_owner);
-        lm_own_arena_init(&document->token_arena);
-        lm_own_arena_init(&document->tree_arena);
-        lm_own_arena_init(&document->diagnostic_arena);
-        document->owners_initialized = 1;
-    }
-}
-
-static void lm_p0_document_destroy_owners(LmP0Document *document) {
-    if (document != 0 && document -> owners_initialized != 0) {
-        lm_own_arena_destroy(&document->diagnostic_arena);
-        lm_own_arena_destroy(&document->tree_arena);
-        lm_own_arena_destroy(&document->token_arena);
-        lm_own_arena_destroy(&document->source_owner);
-        document->owners_initialized = 0;
-        document->frozen = 0;
-    }
-}
-
-static void lm_p0_document_freeze_tree(LmP0Document *document) {
-    if (document != 0 && document -> owners_initialized != 0) {
-        lm_own_arena_freeze(&document->tree_arena);
-        lm_own_arena_freeze(&document->source_owner);
-        document->frozen = 1;
-    }
-}
-
-static int lm_p0_text_equals(LmP0Text text, const char *value) {
+static int lm_p0_text_equals(const LmP0Text *text, const char *value) {
     size_t value_length;
-    if (value == 0) {
+    if (text == 0 || value == 0) {
         return 0;
     }
     value_length = strlen(value);
-    return text.length == value_length && memcmp(text.data, value, value_length) == 0;
+    return text -> length == value_length && memcmp(text -> data, value, value_length) == 0;
 }
 
-static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload) {
-    if (out_payload == 0) {
+static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload) {
+    if (atom == 0 || out_payload == 0 || atom -> data == 0) {
         return 0;
     }
-    out_payload[0] = atom;
-    if (atom.length >= 2U && atom.data[0] == '`' && atom.data[atom.length - 1U] == '`') {
-        out_payload->data = atom.data + 1U;
-        out_payload->length = atom.length - 2U;
+    out_payload->data = atom -> data;
+    out_payload->length = atom -> length;
+    if (atom -> length >= 2U && atom -> data[0] == '`' && atom -> data[atom -> length - 1U] == '`') {
+        out_payload->data = atom -> data + 1U;
+        out_payload->length = atom -> length - 2U;
     }
     return 1;
 }
 
-static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload) {
-    if (out_payload == 0) {
+static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload) {
+    if (atom == 0 || out_payload == 0) {
         return 0;
     }
-    if (atom.length > 0U && (atom.data[0] == '"' || atom.data[0] == '\'')) {
+    if (atom -> length > 0U && (atom -> data[0] == '"' || atom -> data[0] == '\'')) {
         return 0;
     }
     return lm_p0_identifier_payload(atom, out_payload);
 }
 
-static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload) {
+static int lm_p0_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payload) {
     char quote;
-    if (out_payload == 0) {
+    if (atom == 0 || out_payload == 0 || atom -> data == 0) {
         return 0;
     }
-    out_payload[0] = atom;
-    if (atom.length < 2U) {
+    out_payload->data = atom -> data;
+    out_payload->length = atom -> length;
+    if (atom -> length < 2U) {
         return 1;
     }
-    quote = atom.data[0];
-    if ((quote == '"' || quote == '\'') && atom.data[atom.length - 1U] == quote) {
-        out_payload->data = atom.data + 1U;
-        out_payload->length = atom.length - 2U;
+    quote = atom -> data[0];
+    if ((quote == '"' || quote == '\'') && atom -> data[atom -> length - 1U] == quote) {
+        out_payload->data = atom -> data + 1U;
+        out_payload->length = atom -> length - 2U;
         return 1;
     }
     return lm_p0_identifier_payload(atom, out_payload);
 }
 
-static int lm_p0_registry_payload_is_null(LmP0Text atom) {
+static int lm_p0_registry_payload_is_null(const LmP0Text *atom) {
     LmP0Text payload;
+    LmP0Text *payload_ref;
     if (lm_p0_registry_identifier_value(atom, &payload) == 0) {
         return 0;
     }
-    return payload.length == 4U && memcmp(payload.data, "NULL", 4U) == 0;
+    payload_ref = &payload;
+    return payload_ref -> length == 4U && memcmp(payload_ref -> data, "NULL", 4U) == 0;
 }
 
 static int lm_p0_is_horizontal_space(char value) {
@@ -7699,22 +7675,56 @@ static char * lm_p0_copy_bytes(const char *source, size_t length) {
 
 static LmP0Text lm_p0_text_from_cstr(const char *text) {
     LmP0Text result;
+    LmP0Text *result_ref;
+    result_ref = &result;
     if (text != 0) {
-        result.data = text;
+        result_ref->data = text;
     }
     if (text == 0) {
-        result.data = "";
+        result_ref->data = "";
     }
-    result.length = strlen(result.data);
+    result_ref->length = strlen(result_ref -> data);
     return result;
 }
 
-static char * lm_p0_text_copy_cstr(LmP0Text text) {
-    return lm_p0_copy_bytes(text.data, text.length);
+static char * lm_p0_text_copy_cstr(const LmP0Text *text) {
+    if (text == 0) {
+        return 0;
+    }
+    return lm_p0_copy_bytes(text -> data, text -> length);
 }
 
-static char * lm_p0_registry_value_copy_cstr(LmP0Text value) {
+static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value) {
     return lm_p0_text_copy_cstr(value);
+}
+
+static void lm_p0_document_init_owners(LmP0Document *document) {
+    if (document != 0 && document -> owners_initialized == 0) {
+        lm_own_arena_init(&document->source_owner);
+        lm_own_arena_init(&document->token_arena);
+        lm_own_arena_init(&document->tree_arena);
+        lm_own_arena_init(&document->diagnostic_arena);
+        document->owners_initialized = 1;
+    }
+}
+
+static void lm_p0_document_destroy_owners(LmP0Document *document) {
+    if (document != 0 && document -> owners_initialized != 0) {
+        lm_own_arena_destroy(&document->diagnostic_arena);
+        lm_own_arena_destroy(&document->tree_arena);
+        lm_own_arena_destroy(&document->token_arena);
+        lm_own_arena_destroy(&document->source_owner);
+        document->owners_initialized = 0;
+        document->frozen = 0;
+    }
+}
+
+static void lm_p0_document_freeze_tree(LmP0Document *document) {
+    if (document != 0 && document -> owners_initialized != 0) {
+        lm_own_arena_freeze(&document->tree_arena);
+        lm_own_arena_freeze(&document->source_owner);
+        document->frozen = 1;
+    }
 }
 
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row) {
@@ -7902,14 +7912,14 @@ static const char * lm_p0_registry_lookup(LmP0Text key, const char *table) {
     if (table == 0 || lm_p0_registry.loaded == 0) {
         return 0;
     }
-    if (lm_p0_identifier_payload(key, &key_payload) == 0) {
+    if (lm_p0_identifier_payload(&key, &key_payload) == 0) {
         return 0;
     }
     i = lm_p0_registry.rows.count;
     while (i > 0U) {
         i = i - 1U;
         row = lm_own_ptr_stack_at(&lm_p0_registry.rows, i);
-        if (row != 0 && row -> table != 0 && row -> key != 0 && strcmp(row -> table, table) == 0 && lm_p0_text_equals(key_payload, row -> key)) {
+        if (row != 0 && row -> table != 0 && row -> key != 0 && strcmp(row -> table, table) == 0 && lm_p0_text_equals(&key_payload, row -> key)) {
             return row -> payload;
         }
     }

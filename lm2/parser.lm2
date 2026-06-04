@@ -1,6 +1,7 @@
 import: "lm4/own_abi.lm4"
 import: "lm4/parser_abi.lm4"
 import: "lm4/l4_loader_abi.lm4"
+import: "lm2/parser_text.lm2"
 
 L4: loadHeaders
 
@@ -402,145 +403,6 @@ sub: lm_p0_document_freeze_tree (@: LmP0Document document)
         document\frozen: 1
 end: lm_p0_document_freeze_tree
 
-fn: lm_p0_text_equals (LmP0Text: text; const: @(char value)) int
-    size_t: value_length
-
-    if: value = 0
-        return: 0
-    value_length: c.strlen(value)
-    return: c.text.length = value_length && c.memcmp(c.text.data, value, value_length) = 0
-end: lm_p0_text_equals
-
-fn: lm_p0_identifier_payload (LmP0Text: atom; @: LmP0Text out_payload) int
-    if: out_payload = 0
-        return: 0
-
-    out_payload[0]: atom
-    if: c.atom.length >= 2U && c.atom.data[0] = '`' && c.atom.data[atom.length - 1U] = '`'
-        out_payload\data: c.atom.data + 1U
-        out_payload\length: c.atom.length - 2U
-
-    return: 1
-end: lm_p0_identifier_payload
-
-fn: lm_p0_registry_identifier_value (LmP0Text: atom; @: LmP0Text out_payload) int
-    if: out_payload = 0
-        return: 0
-    if: c.atom.length > 0U && (c.atom.data[0] = '"' || c.atom.data[0] = '\'')
-        return: 0
-    return: lm_p0_identifier_payload(atom, out_payload)
-end: lm_p0_registry_identifier_value
-
-fn: lm_p0_registry_literal_value (LmP0Text: atom; @: LmP0Text out_payload) int
-    char: quote
-
-    if: out_payload = 0
-        return: 0
-
-    out_payload[0]: atom
-    if: c.atom.length < 2U
-        return: 1
-
-    quote: c.atom.data[0]
-    if: (quote = '"' || quote = '\'') && c.atom.data[atom.length - 1U] = quote
-        out_payload\data: c.atom.data + 1U
-        out_payload\length: c.atom.length - 2U
-        return: 1
-
-    return: lm_p0_identifier_payload(atom, out_payload)
-end: lm_p0_registry_literal_value
-
-fn: lm_p0_registry_payload_is_null (LmP0Text: atom) int
-    LmP0Text: payload
-
-    if: lm_p0_registry_identifier_value(atom, @ payload) = 0
-        return: 0
-    return: c.payload.length = 4U && c.memcmp(c.payload.data, "NULL", 4U) = 0
-end: lm_p0_registry_payload_is_null
-
-fn: lm_p0_is_horizontal_space (char: value) int
-    return: value = ' ' || value = '\t'
-end: lm_p0_is_horizontal_space
-
-fn: lm_p0_is_line_break (char: value) int
-    return: value = '\n' || value = '\r'
-end: lm_p0_is_line_break
-
-fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
-    if: index >= length
-        return: 0U
-    if: source[index] = '\r'
-        if: index + 1U < length && source[index + 1U] = '\n'
-            return: 2U
-        return: 1U
-    if: source[index] = '\n'
-        return: 1U
-    return: 0U
-end: lm_p0_line_break_width_at
-
-fn: lm_p0_is_field_space (char: value) int
-    return: lm_p0_is_horizontal_space(value) || lm_p0_is_line_break(value)
-end: lm_p0_is_field_space
-
-fn: lm_p0_is_field_separator (char: value) int
-    return: value = ',' || value = ';'
-end: lm_p0_is_field_separator
-
-fn: lm_p0_is_short_form_separator (char: value) int
-    return: value = ';'
-end: lm_p0_is_short_form_separator
-
-fn: lm_p0_is_quoted_token_boundary (char: value) int
-    return: lm_p0_is_field_space(value) || lm_p0_is_field_separator(value) || value = '(' || value = ')' || value = '#'
-end: lm_p0_is_quoted_token_boundary
-
-fn: lm_p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
-    char: quote
-
-    if: index + 2U >= length
-        return: 0
-    quote: text[index]
-    if: quote != '"' && quote != '\''
-        return: 0
-    return: text[index + 1U] = quote && text[index + 2U] = quote
-end: lm_p0_starts_python_string
-
-fn: lm_p0_is_decimal_digit (char: value) int
-    return: value >= '0' && value <= '9'
-end: lm_p0_is_decimal_digit
-
-fn: lm_p0_copy_bytes (const: @(char source); size_t: length) @: char
-    @: char copy
-
-    copy: c.malloc(length + 1U)
-    if: copy = 0
-        return: 0
-
-    if: length > 0U
-        c.memcpy(copy, source, length)
-    copy[length]: '\0'
-    return: copy
-end: lm_p0_copy_bytes
-
-fn: lm_p0_text_from_cstr (const: @(char text)) LmP0Text
-    LmP0Text: result
-
-    if: text != 0
-        c.result.data: text
-    if: text = 0
-        c.result.data: ""
-    c.result.length: c.strlen(c.result.data)
-    return: result
-end: lm_p0_text_from_cstr
-
-fn: lm_p0_text_copy_cstr (LmP0Text: text) @: char
-    return: lm_p0_copy_bytes(c.text.data, c.text.length)
-end: lm_p0_text_copy_cstr
-
-fn: lm_p0_registry_value_copy_cstr (LmP0Text: value) @: char
-    return: lm_p0_text_copy_cstr(value)
-end: lm_p0_registry_value_copy_cstr
-
 sub: lm_p0_registry_row_destroy_fields (@: LmP0RegistryRow row)
     if: row != 0
         c.free(row\table)
@@ -716,14 +578,14 @@ fn: lm_p0_registry_lookup (LmP0Text: key; const: @(char table)) const: @: char
 
     if: table = 0 || c.lm_p0_registry.loaded = 0
         return: 0
-    if: lm_p0_identifier_payload(key, @ key_payload) = 0
+    if: lm_p0_identifier_payload(@ key, @ key_payload) = 0
         return: 0
 
     i: c.lm_p0_registry.rows.count
     while: i > 0U
         i: i - 1U
         row: c.lm_own_ptr_stack_at(c.&lm_p0_registry.rows, i)
-        if: row != 0 && row\table != 0 && row\key != 0 && c.strcmp(row\table, table) = 0 && lm_p0_text_equals(key_payload, row\key)
+        if: row != 0 && row\table != 0 && row\key != 0 && c.strcmp(row\table, table) = 0 && lm_p0_text_equals(@ key_payload, row\key)
             return: row\payload
     ---
 
@@ -1228,11 +1090,11 @@ static void lm_p0_set_diagnostic(
 static void lm_p0_document_init_owners(LmP0Document *document);
 static void lm_p0_document_destroy_owners(LmP0Document *document);
 static void lm_p0_document_freeze_tree(LmP0Document *document);
-static int lm_p0_text_equals(LmP0Text text, const char *value);
-static int lm_p0_identifier_payload(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_identifier_value(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_literal_value(LmP0Text atom, LmP0Text *out_payload);
-static int lm_p0_registry_payload_is_null(LmP0Text atom);
+static int lm_p0_text_equals(const LmP0Text *text, const char *value);
+static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_payload_is_null(const LmP0Text *atom);
 static int lm_p0_is_horizontal_space(char value);
 static int lm_p0_is_line_break(char value);
 static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index);
@@ -1244,8 +1106,8 @@ static int lm_p0_starts_python_string(const char *text, size_t length, size_t in
 static int lm_p0_is_decimal_digit(char value);
 static char *lm_p0_copy_bytes(const char *source, size_t length);
 static LmP0Text lm_p0_text_from_cstr(const char *text);
-static char *lm_p0_text_copy_cstr(LmP0Text text);
-static char *lm_p0_registry_value_copy_cstr(LmP0Text value);
+static char *lm_p0_text_copy_cstr(const LmP0Text *text);
+static char *lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
 static void lm_p0_registry_row_destroy_any(void *object);
 static void lm_p0_registry_destroy(void);
@@ -1520,9 +1382,9 @@ static int lm_p0_registry_push_row_values(
         return -1;
     }
 
-    row->table = lm_p0_registry_value_copy_cstr(table_value);
-    row->key = lm_p0_registry_value_copy_cstr(key_value);
-    row->payload = lm_p0_registry_value_copy_cstr(payload_value);
+    row->table = lm_p0_registry_value_copy_cstr(&table_value);
+    row->key = lm_p0_registry_value_copy_cstr(&key_value);
+    row->payload = lm_p0_registry_value_copy_cstr(&payload_value);
     if (row->table == 0 || row->key == 0 || row->payload == 0) {
         lm_p0_registry_row_destroy_any(row);
         return -1;
@@ -1545,13 +1407,13 @@ static int lm_p0_registry_push_row_atoms(
     LmP0Text key_value;
     LmP0Text payload_value;
 
-    if (lm_p0_registry_payload_is_null(payload_atom)) {
+    if (lm_p0_registry_payload_is_null(&payload_atom)) {
         return 0;
     }
     if (
-        !lm_p0_registry_identifier_value(table_atom, &table_value) ||
-        !lm_p0_registry_identifier_value(key_atom, &key_value) ||
-        !lm_p0_registry_literal_value(payload_atom, &payload_value)
+        !lm_p0_registry_identifier_value(&table_atom, &table_value) ||
+        !lm_p0_registry_identifier_value(&key_atom, &key_value) ||
+        !lm_p0_registry_literal_value(&payload_atom, &payload_value)
     ) {
         return -1;
     }
@@ -1572,8 +1434,8 @@ static int lm_p0_registry_column_has_descriptor(
     for (i = 0U; i < column->descriptor_count; ++i) {
         if (
             column->descriptors[i] != 0 &&
-            lm_p0_registry_identifier_value(*column->descriptors[i], &payload) &&
-            lm_p0_text_equals(payload, descriptor)
+            lm_p0_registry_identifier_value(column->descriptors[i], &payload) &&
+            lm_p0_text_equals(&payload, descriptor)
         ) {
             return 1;
         }
@@ -1586,13 +1448,13 @@ static int lm_p0_registry_cell_value(
     const LmP0RegistryColumn *column,
     LmP0Text *out_value
 ) {
-    if (lm_p0_registry_payload_is_null(atom)) {
+    if (lm_p0_registry_payload_is_null(&atom)) {
         return 0;
     }
     if (lm_p0_registry_column_has_descriptor(column, "char")) {
-        return lm_p0_registry_literal_value(atom, out_value) ? 1 : -1;
+        return lm_p0_registry_literal_value(&atom, out_value) ? 1 : -1;
     }
-    return lm_p0_registry_identifier_value(atom, out_value) ? 1 : -1;
+    return lm_p0_registry_identifier_value(&atom, out_value) ? 1 : -1;
 }
 
 static int lm_p0_registry_push_table_cell(
@@ -1620,11 +1482,11 @@ static int lm_p0_registry_push_table_cell(
         return -1;
     }
 
-    if (!lm_p0_registry_identifier_value(table_name, &table_payload)) {
+    if (!lm_p0_registry_identifier_value(&table_name, &table_payload)) {
         return -1;
     }
 
-    if (!lm_p0_registry_identifier_value(key_atom, &key_payload)) {
+    if (!lm_p0_registry_identifier_value(&key_atom, &key_payload)) {
         return -1;
     }
 
@@ -1632,7 +1494,7 @@ static int lm_p0_registry_push_table_cell(
         return lm_p0_registry_push_row_values(table_payload, key_payload, payload_value);
     }
 
-    if (column->name == 0 || !lm_p0_registry_identifier_value(*column->name, &column_payload)) {
+    if (column->name == 0 || !lm_p0_registry_identifier_value(column->name, &column_payload)) {
         return -1;
     }
 
@@ -6976,12 +6838,12 @@ static int lm_p0_registry_push_column_metadata(
     if (columns == 0) {
         return -1;
     }
-    if (!lm_p0_registry_identifier_value(table_name, &table_payload)) {
+    if (!lm_p0_registry_identifier_value(&table_name, &table_payload)) {
         return -1;
     }
 
     for (index = 0U; index < column_count; ++index) {
-        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(*columns[index].name, &column_payload)) {
+        if (columns[index].name == 0 || !lm_p0_registry_identifier_value(columns[index].name, &column_payload)) {
             return -1;
         }
         column_key = lm_p0_registry_join_text3(table_payload, ".", column_payload);

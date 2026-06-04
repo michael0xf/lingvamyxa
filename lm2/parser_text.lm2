@@ -1,0 +1,146 @@
+fn: lm_p0_text_equals (const: @(LmP0Text text); const: @(char value)) int
+    size_t: value_length
+
+    if: text = 0 || value = 0
+        return: 0
+    value_length: c.strlen(value)
+    return: text\length = value_length && c.memcmp(text\data, value, value_length) = 0
+end: lm_p0_text_equals
+
+fn: lm_p0_identifier_payload (const: @(LmP0Text atom); @: LmP0Text out_payload) int
+    if: atom = 0 || out_payload = 0 || atom\data = 0
+        return: 0
+
+    out_payload\data: atom\data
+    out_payload\length: atom\length
+    if: atom\length >= 2U && atom\data[0] = '`' && atom\data[atom\length - 1U] = '`'
+        out_payload\data: atom\data + 1U
+        out_payload\length: atom\length - 2U
+
+    return: 1
+end: lm_p0_identifier_payload
+
+fn: lm_p0_registry_identifier_value (const: @(LmP0Text atom); @: LmP0Text out_payload) int
+    if: atom = 0 || out_payload = 0
+        return: 0
+    if: atom\length > 0U && (atom\data[0] = '"' || atom\data[0] = '\'')
+        return: 0
+    return: lm_p0_identifier_payload(atom, out_payload)
+end: lm_p0_registry_identifier_value
+
+fn: lm_p0_registry_literal_value (const: @(LmP0Text atom); @: LmP0Text out_payload) int
+    char: quote
+
+    if: atom = 0 || out_payload = 0 || atom\data = 0
+        return: 0
+
+    out_payload\data: atom\data
+    out_payload\length: atom\length
+    if: atom\length < 2U
+        return: 1
+
+    quote: atom\data[0]
+    if: (quote = '"' || quote = '\'') && atom\data[atom\length - 1U] = quote
+        out_payload\data: atom\data + 1U
+        out_payload\length: atom\length - 2U
+        return: 1
+
+    return: lm_p0_identifier_payload(atom, out_payload)
+end: lm_p0_registry_literal_value
+
+fn: lm_p0_registry_payload_is_null (const: @(LmP0Text atom)) int
+    LmP0Text: payload
+    @: LmP0Text payload_ref
+
+    if: lm_p0_registry_identifier_value(atom, @ payload) = 0
+        return: 0
+    payload_ref: @ payload
+    return: payload_ref\length = 4U && c.memcmp(payload_ref\data, "NULL", 4U) = 0
+end: lm_p0_registry_payload_is_null
+
+fn: lm_p0_is_horizontal_space (char: value) int
+    return: value = ' ' || value = '\t'
+end: lm_p0_is_horizontal_space
+
+fn: lm_p0_is_line_break (char: value) int
+    return: value = '\n' || value = '\r'
+end: lm_p0_is_line_break
+
+fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+    if: index >= length
+        return: 0U
+    if: source[index] = '\r'
+        if: index + 1U < length && source[index + 1U] = '\n'
+            return: 2U
+        return: 1U
+    if: source[index] = '\n'
+        return: 1U
+    return: 0U
+end: lm_p0_line_break_width_at
+
+fn: lm_p0_is_field_space (char: value) int
+    return: lm_p0_is_horizontal_space(value) || lm_p0_is_line_break(value)
+end: lm_p0_is_field_space
+
+fn: lm_p0_is_field_separator (char: value) int
+    return: value = ',' || value = ';'
+end: lm_p0_is_field_separator
+
+fn: lm_p0_is_short_form_separator (char: value) int
+    return: value = ';'
+end: lm_p0_is_short_form_separator
+
+fn: lm_p0_is_quoted_token_boundary (char: value) int
+    return: lm_p0_is_field_space(value) || lm_p0_is_field_separator(value) || value = '(' || value = ')' || value = '#'
+end: lm_p0_is_quoted_token_boundary
+
+fn: lm_p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
+    char: quote
+
+    if: index + 2U >= length
+        return: 0
+    quote: text[index]
+    if: quote != '"' && quote != '\''
+        return: 0
+    return: text[index + 1U] = quote && text[index + 2U] = quote
+end: lm_p0_starts_python_string
+
+fn: lm_p0_is_decimal_digit (char: value) int
+    return: value >= '0' && value <= '9'
+end: lm_p0_is_decimal_digit
+
+fn: lm_p0_copy_bytes (const: @(char source); size_t: length) @: char
+    @: char copy
+
+    copy: c.malloc(length + 1U)
+    if: copy = 0
+        return: 0
+
+    if: length > 0U
+        c.memcpy(copy, source, length)
+    copy[length]: '\0'
+    return: copy
+end: lm_p0_copy_bytes
+
+fn: lm_p0_text_from_cstr (const: @(char text)) LmP0Text
+    LmP0Text: result
+    @: LmP0Text result_ref
+
+    result_ref: @ result
+    if: text != 0
+        result_ref\data: text
+    if: text = 0
+        result_ref\data: ""
+    result_ref\length: c.strlen(result_ref\data)
+    return: result
+end: lm_p0_text_from_cstr
+
+fn: lm_p0_text_copy_cstr (const: @(LmP0Text text)) @: char
+    if: text = 0
+        return: 0
+    return: lm_p0_copy_bytes(text\data, text\length)
+end: lm_p0_text_copy_cstr
+
+fn: lm_p0_registry_value_copy_cstr (const: @(LmP0Text value)) @: char
+    return: lm_p0_text_copy_cstr(value)
+end: lm_p0_registry_value_copy_cstr
