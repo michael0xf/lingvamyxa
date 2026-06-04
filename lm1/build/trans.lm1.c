@@ -14,7 +14,6 @@ typedef struct LmP0Field LmP0Field;
 typedef struct LmP0Trailer LmP0Trailer;
 typedef struct LmP0Document LmP0Document;
 typedef struct LmL4Column LmL4Column;
-typedef struct LmL4Receiver LmL4Receiver;
 typedef struct LmL4Loader LmL4Loader;
 typedef struct LmTransIdentifierRelation LmTransIdentifierRelation;
 typedef struct LmTransIdentifierCard LmTransIdentifierCard;
@@ -147,18 +146,13 @@ struct LmL4Column {
     const LmP0Text *descriptors[16U];
     size_t descriptor_count;
 };
-struct LmL4Receiver {
-    const char *name;
-    int (*frame)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
-};
 struct LmL4Loader {
     const char *error_prefix;
     int (*push_row)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
     int (*push_cell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
     int (*note_key)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
     int (*push_column_metadata)(void *context, const LmP0Text *table_name, const LmL4Column *columns, size_t column_count);
-    const LmL4Receiver *receivers;
-    size_t receiver_count;
+    int (*dispatch_frame)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 };
 struct LmTransIdentifierRelation {
     const char *name;
@@ -579,14 +573,11 @@ static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Fr
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
-static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, const LmP0Text *head);
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4, size_t *out_row_count);
 
 static LmOwnPtrStack *lm_l4_seen_tables;
-
-static const LmL4Receiver lm_l4_default_receivers[3] = {{"table", lm_l4_receiver_table}, {"row", lm_l4_receiver_row}, {"fn", lm_l4_receiver_ignore}};
 static LmOwnPtrStack * lm_l4_seen_tables_get(void) {
     return lm_l4_seen_tables;
 }
@@ -1219,32 +1210,15 @@ static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const 
     return 0;
 }
 
-static const LmL4Receiver * lm_l4_find_receiver(const LmL4Loader *loader, const LmP0Text *head) {
-    size_t i;
-    if (loader == 0 || loader -> receivers == 0) {
-        return 0;
-    }
-    i = 0U;
-    while (i < loader -> receiver_count) {
-        if (loader->receivers[i].name != 0 && lm_l4_text_equals(head, loader->receivers[i].name) != 0) {
-            return &loader->receivers[i];
-        }
-        i = i + 1U;
-    }
-    return 0;
-}
-
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
-    const LmL4Receiver *receiver;
     if (frame == 0) {
         return 1;
     }
-    receiver = lm_l4_find_receiver(loader, lm_l4_frame_head(frame));
-    if (receiver == 0 || receiver -> frame == 0) {
+    if (loader == 0 || loader -> dispatch_frame == 0) {
         lm_l4_error(loader, "registry body expects registered L4 receiver frames");
         return 1;
     }
-    return receiver->frame(loader, context, frame);
+    return loader->dispatch_frame(loader, context, frame);
 }
 
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure) {
@@ -24079,14 +24053,75 @@ static int lm_trans_registry_l4_push_column_metadata(
     return lm_trans_registry_push_column_metadata(table_name, columns, column_count);
 }
 
+static LmL4FrameReceiver lm_trans_registry_l4_resolve_frame(
+    const LmL4Loader *loader,
+    const LmP0Text *head
+) {
+    const char *receiver_type;
+
+    (void)loader;
+    receiver_type = lm_trans_registry_lookup(head, "namespace.l4");
+    if (receiver_type == 0) {
+        return 0;
+    }
+    if (strcmp(receiver_type, "l4.frame") != 0) {
+        fprintf(
+            stderr,
+            "trans registry inconsistency: namespace.l4[\"%.*s\"] has receiver marker %s, expected l4.frame\n",
+            head != 0 ? (int)head->length : 0,
+            head != 0 ? head->data : "",
+            receiver_type
+        );
+        return 0;
+    }
+    if (lm_trans_text_equals(head, "table")) {
+        return lm_l4_receiver_table;
+    }
+    if (lm_trans_text_equals(head, "row")) {
+        return lm_l4_receiver_row;
+    }
+    if (lm_trans_text_equals(head, "fn") || lm_trans_text_equals(head, "lazy fn")) {
+        return lm_l4_receiver_ignore;
+    }
+    fprintf(
+        stderr,
+        "trans registry inconsistency: namespace.l4[\"%.*s\"] has no direct frame receiver binding\n",
+        head != 0 ? (int)head->length : 0,
+        head != 0 ? head->data : ""
+    );
+    return 0;
+}
+
+static int lm_trans_registry_l4_dispatch_frame(
+    const LmL4Loader *loader,
+    void *context,
+    const LmP0Frame *frame
+) {
+    LmL4FrameReceiver receiver;
+
+    if (frame == 0) {
+        return 1;
+    }
+    receiver = lm_trans_registry_l4_resolve_frame(loader, frame->head);
+    if (receiver == 0) {
+        fprintf(
+            stderr,
+            "trans registry error: registry body expects registered L4 receiver frames, got \"%.*s\"\n",
+            frame->head != 0 ? (int)frame->head->length : 0,
+            frame->head != 0 ? frame->head->data : ""
+        );
+        return 1;
+    }
+    return receiver(loader, context, frame);
+}
+
 static const LmL4Loader lm_trans_registry_l4_loader = {
     "trans",
     lm_trans_registry_l4_push_row,
     lm_trans_registry_l4_push_cell,
     lm_trans_registry_l4_note_key,
     lm_trans_registry_l4_push_column_metadata,
-    lm_l4_default_receivers,
-    sizeof(lm_l4_default_receivers) / sizeof(lm_l4_default_receivers[0])
+    lm_trans_registry_l4_dispatch_frame
 };
 
 static int lm_trans_registry_load_root(const LmP0Node *root, int implicit_l4, int allow_node_cells) {

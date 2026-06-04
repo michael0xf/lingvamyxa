@@ -584,30 +584,13 @@ L2:
         return: 0
     end: lm_l4_receiver_ignore
 
-    fn: lm_l4_find_receiver (const: @(LmL4Loader loader); const: @(LmP0Text head)) const: @: LmL4Receiver
-        size_t: i
-
-        if: loader = 0 || loader\receivers = 0
-            return: 0
-
-        i: 0U
-        while: i < loader\receiver_count
-            if: c.loader->receivers[i].name != 0 && lm_l4_text_equals(head, c.loader->receivers[i].name) != 0
-                return: c.&loader->receivers[i]
-            i: i + 1U
-        return: 0
-    end: lm_l4_find_receiver
-
     fn: lm_l4_dispatch_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
-        const: @: LmL4Receiver receiver
-
         if: frame = 0
             return: 1
-        receiver: lm_l4_find_receiver(loader, lm_l4_frame_head(frame))
-        if: receiver = 0 || receiver\frame = 0
+        if: loader = 0 || loader\dispatch_frame = 0
             lm_l4_error(loader, "registry body expects registered L4 receiver frames")
             return: 1
-        return: c.receiver->frame(loader, context, frame)
+        return: c.loader->dispatch_frame(loader, context, frame)
     end: lm_l4_dispatch_frame
 
     fn: lm_l4_load_rows (const: @(LmL4Loader loader); @: void context; const: @(LmP0Structure structure)) int
@@ -719,10 +702,4 @@ L2:
         lm_own_delete(seen, 0)
         return: status
     end: lm_l4_load_root
-
-    const:
-        [3]: LmL4Receiver lm_l4_default_receivers
-            []: "table" lm_l4_receiver_table
-            []: "row" lm_l4_receiver_row
-            []: "fn" lm_l4_receiver_ignore
 end: L2
