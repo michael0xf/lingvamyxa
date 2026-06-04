@@ -903,7 +903,7 @@ static LmTransNamespace *lm_trans_namespace_new(void) {
     if (namespace_ != 0) {
         namespace_->items = lm_trans_ptr_stack_new(lm_trans_symbol_delete_any);
         namespace_->identifiers = lm_trans_identifier_table_new();
-        namespace_->registry_identifiers = lm_trans_registry->identifiers;
+        namespace_->registry_identifiers = lm_trans_registry != 0 ? lm_trans_registry->identifiers : 0;
         namespace_->cleanups = lm_trans_ptr_stack_new(lm_trans_cleanup_delete_any);
         namespace_->loops = lm_trans_ptr_stack_new(lm_trans_loop_delete_any);
         if (
@@ -1259,7 +1259,7 @@ static int lm_trans_namespace_declare_generated(
 static int lm_trans_namespace_attach_registry(
     LmTransNamespace *namespace_
 ) {
-    if (namespace_ == 0) {
+    if (namespace_ == 0 || lm_trans_registry == 0) {
         return 1;
     }
     namespace_->registry_identifiers = lm_trans_registry->identifiers;

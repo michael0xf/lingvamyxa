@@ -81,7 +81,7 @@ sub: lm_trans_symbol_destroy_fields_any (@: void object)
 end: lm_trans_symbol_destroy_fields_any
 
 sub: lm_trans_symbol_destroy (@: LmTransSymbol symbol)
-    c.lm_own_delete(symbol, c.lm_trans_symbol_destroy_fields_any)
+    lm_own_delete(symbol, c.lm_trans_symbol_destroy_fields_any)
 end: lm_trans_symbol_destroy
 
 sub: lm_trans_symbol_delete_any (@: void object)

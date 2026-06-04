@@ -1552,7 +1552,7 @@ static const char *lm_trans_import_source_path(void) {
     if (lm_trans_current_source_path != 0) {
         return lm_trans_current_source_path;
     }
-    return lm_trans_registry->source_path;
+    return lm_trans_registry != 0 ? lm_trans_registry->source_path : 0;
 }
 
 static int lm_trans_import_stack_note(LmOwnPtrStack *stack, const char *path) {

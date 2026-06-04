@@ -12,9 +12,9 @@ static LmOwnPtrStack *lm_trans_emitted_array_value_helpers;
 static LmOwnPtrStack *lm_trans_emitted_function_return_structs;
 static unsigned lm_trans_next_array_value_helper_id;
 
-static LmTransRegistry lm_trans_registry_storage;
-static LmTransRegistry *lm_trans_registry = &lm_trans_registry_storage;
+static LmTransRegistry *lm_trans_registry;
 
+static int lm_trans_registry_init(void);
 static int lm_trans_text_equals(const LmP0Text *text, const char *value);
 static int lm_trans_text_same(const LmP0Text *left, const LmP0Text *right);
 static int lm_trans_text_starts_with(const LmP0Text *text, const char *prefix);

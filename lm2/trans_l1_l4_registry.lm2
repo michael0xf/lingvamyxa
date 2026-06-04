@@ -2030,7 +2030,18 @@ static int lm_trans_emit_l4_units(
     return 0;
 }
 
+static int lm_trans_registry_init(void) {
+    if (lm_trans_registry != 0) {
+        return 0;
+    }
+    lm_trans_registry = (LmTransRegistry *)lm_own_new_zero(sizeof(*lm_trans_registry));
+    return lm_trans_registry == 0 ? 1 : 0;
+}
+
 static void lm_trans_registry_destroy(void) {
+    if (lm_trans_registry == 0) {
+        return;
+    }
     if (lm_trans_registry->loaded) {
         lm_trans_identifier_table_delete(&lm_trans_registry->identifiers);
         lm_own_arena_destroy(lm_trans_registry->value_arena);
@@ -2042,6 +2053,8 @@ static void lm_trans_registry_destroy(void) {
         lm_trans_registry->loaded_fact_count = 0U;
         lm_trans_registry->loaded = 0;
     }
+    lm_own_delete(lm_trans_registry, 0);
+    lm_trans_registry = 0;
 }
 
 static char *lm_trans_registry_join_text3(const LmP0Text *first, const char *separator, const LmP0Text *second) {
@@ -3645,6 +3658,9 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
     size_t candidate_index;
 
     lm_trans_registry_destroy();
+    if (lm_trans_registry_init() != 0) {
+        return 1;
+    }
     lm_trans_registry->loaded = 1;
     lm_trans_registry->identifiers = lm_trans_identifier_table_new();
     lm_trans_registry->value_arena = (LmOwnArena *)lm_own_new_zero(sizeof(*lm_trans_registry->value_arena));
