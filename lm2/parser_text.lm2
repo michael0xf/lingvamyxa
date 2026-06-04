@@ -1,3 +1,5 @@
+import: "lm4/own_abi.lm4"
+
 fn: lm_p0_text_equals (const: @(LmP0Text text); const: @(char value)) int
     size_t: value_length
 
@@ -115,22 +117,13 @@ fn: lm_p0_is_decimal_digit (char: value) int
 end: lm_p0_is_decimal_digit
 
 fn: lm_p0_copy_bytes (const: @(char source); size_t: length) @: char
-    @: char copy
-
-    copy: c.malloc(length + 1U)
-    if: copy = 0
-        return: 0
-
-    if: length > 0U
-        c.memcpy(copy, source, length)
-    copy[length]: '\0'
-    return: copy
+    return: lm_own_copy_bytes(source, length)
 end: lm_p0_copy_bytes
 
 fn: lm_p0_text_view_new_cstr (const: @(char text)) @: LmP0Text
     @: LmP0Text result
 
-    result: c.calloc(1U, c.sizeof(c.LmP0Text))
+    result: lm_own_new_zero(1U * c.sizeof(c.LmP0Text))
     if: result = 0
         return: 0
     if: text != 0
@@ -142,7 +135,7 @@ fn: lm_p0_text_view_new_cstr (const: @(char text)) @: LmP0Text
 end: lm_p0_text_view_new_cstr
 
 sub: lm_p0_text_view_delete (@: LmP0Text text)
-    c.free(text)
+    lm_own_delete(text, 0)
 end: lm_p0_text_view_delete
 
 fn: lm_p0_text_from_cstr (const: @(char text)) @: LmP0Text

@@ -54,9 +54,12 @@ typedef void (*LmOwnDestroyFields)(void *object);
 typedef void (*LmOwnDelete)(void *object);
 
 void * lm_own_new_zero(size_t size);
+void * lm_own_resize(void *object, size_t size);
+char * lm_own_copy_bytes(const char *source, size_t length);
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
 const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
+void lm_own_delete_plain(void *object);
 void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item);
 void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item);
 void lm_own_ptr_stack_destroy(LmOwnPtrStack *stack);
@@ -91,7 +94,10 @@ int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
 #include <stdlib.h>
 #include <string.h>
 void * lm_own_new_zero(size_t size);
+void * lm_own_resize(void *object, size_t size);
+char * lm_own_copy_bytes(const char *source, size_t length);
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
+void lm_own_delete_plain(void *object);
 void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item);
 void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item);
 void lm_own_ptr_stack_destroy(LmOwnPtrStack *stack);
@@ -135,6 +141,30 @@ void * lm_own_new_zero(size_t size) {
     return calloc(1U, size);
 }
 
+void * lm_own_resize(void *object, size_t size) {
+    if (size == 0U) {
+        free(object);
+        return 0;
+    }
+    return realloc(object, size);
+}
+
+char * lm_own_copy_bytes(const char *source, size_t length) {
+    char *copy;
+    if (length == (((size_t)- 1))) {
+        return 0;
+    }
+    copy = lm_own_new_zero(length + 1U);
+    if (copy == 0) {
+        return 0;
+    }
+    if (source != 0 && length > 0U) {
+        memcpy(copy, source, length);
+    }
+    copy[length] = '\0';
+    return copy;
+}
+
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields) {
     if (object != 0) {
         if (destroy_fields != 0) {
@@ -142,6 +172,10 @@ void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields) {
         }
         free(object);
     }
+}
+
+void lm_own_delete_plain(void *object) {
+    lm_own_delete(object, 0);
 }
 
 void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item) {

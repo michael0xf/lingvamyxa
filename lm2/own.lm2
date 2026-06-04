@@ -11,12 +11,43 @@ external:
 end: external
 
 external:
+    fn: lm_own_resize (@: void object; size_t: size) @: void
+        if: size = 0U
+            c.free(object)
+            return: 0
+        return: c.realloc(object, size)
+    end: lm_own_resize
+end: external
+
+external:
+    fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
+        @: char copy
+
+        if: length = (cast: size_t -1)
+            return: 0
+        copy: lm_own_new_zero(length + 1U)
+        if: copy = 0
+            return: 0
+        if: source != 0 && length > 0U
+            c.memcpy(copy, source, length)
+        copy[length]: '\0'
+        return: copy
+    end: lm_own_copy_bytes
+end: external
+
+external:
     sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
         if: object != 0
             if: destroy_fields != 0
                 c.destroy_fields(object)
             c.free(object)
     end: lm_own_delete
+end: external
+
+external:
+    sub: lm_own_delete_plain (@: void object)
+        lm_own_delete(object, 0)
+    end: lm_own_delete_plain
 end: external
 
 external:

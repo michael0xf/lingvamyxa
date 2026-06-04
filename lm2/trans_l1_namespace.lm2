@@ -265,7 +265,7 @@ static char *lm_trans_temp_output_path_new(const char *output_path, const char *
 
     output_length = strlen(output_path);
     suffix_length = strlen(suffix);
-    result = (char *)malloc(output_length + suffix_length + 1U);
+    result = (char *)lm_own_new_zero(output_length + suffix_length + 1U);
     if (result == 0) {
         return 0;
     }
@@ -365,11 +365,11 @@ static void lm_trans_identifier_card_destroy(LmTransIdentifierCard *card) {
             }
         }
     }
-    free(card->relation_buckets);
+    lm_own_delete(card->relation_buckets, 0);
     card->relation_buckets = 0;
     card->relation_bucket_count = 0U;
     lm_trans_text_ref_destroy(&card->name);
-    free(card->name_storage);
+    lm_own_delete(card->name_storage, 0);
     card->name_storage = 0;
     lm_own_delete(card, 0);
 }
@@ -395,10 +395,7 @@ static int lm_trans_identifier_table_ensure_buckets(
     }
 
     bucket_count = 257U;
-    table->buckets = (LmTransIdentifierCard **)calloc(
-        bucket_count,
-        sizeof(*table->buckets)
-    );
+    table->buckets = (LmTransIdentifierCard **)lm_own_new_zero(bucket_count * sizeof(*table->buckets));
     if (table->buckets == 0) {
         return 1;
     }
@@ -425,7 +422,7 @@ static void lm_trans_identifier_table_destroy(LmTransIdentifierTable *table) {
             }
         }
     }
-    free(table->buckets);
+    lm_own_delete(table->buckets, 0);
     table->buckets = 0;
     table->bucket_count = 0U;
     table->count = 0U;
@@ -548,10 +545,7 @@ static LmTransIdentifierCard *lm_trans_identifier_table_get_card(
         return 0;
     }
     card->relation_bucket_count = 31U;
-    card->relation_buckets = (LmTransIdentifierRelation **)calloc(
-        card->relation_bucket_count,
-        sizeof(*card->relation_buckets)
-    );
+    card->relation_buckets = (LmTransIdentifierRelation **)lm_own_new_zero(card->relation_bucket_count * sizeof(*card->relation_buckets));
     if (card->relation_buckets == 0) {
         lm_trans_text_ref_destroy(&payload);
         lm_trans_identifier_card_destroy(card);
@@ -736,14 +730,14 @@ static int lm_trans_symbol_set_owned_name(LmTransSymbol *symbol, const LmP0Text 
         return 1;
     }
 
-    copy = (char *)malloc(name->length + 1U);
+    copy = (char *)lm_own_new_zero(name->length + 1U);
     if (copy == 0) {
         return 1;
     }
     memcpy(copy, name->data, name->length);
     copy[name->length] = '\0';
 
-    free(symbol->name_storage);
+    lm_own_delete(symbol->name_storage, 0);
     symbol->name_storage = copy;
     symbol->name->data = copy;
     symbol->name->length = name->length;
@@ -757,14 +751,14 @@ static int lm_trans_symbol_set_c_name(LmTransSymbol *symbol, const LmP0Text *c_n
         return 1;
     }
 
-    copy = (char *)malloc(c_name->length + 1U);
+    copy = (char *)lm_own_new_zero(c_name->length + 1U);
     if (copy == 0) {
         return 1;
     }
     memcpy(copy, c_name->data, c_name->length);
     copy[c_name->length] = '\0';
 
-    free(symbol->c_name_storage);
+    lm_own_delete(symbol->c_name_storage, 0);
     symbol->c_name_storage = copy;
     symbol->c_name.data = copy;
     symbol->c_name.length = c_name->length;
@@ -779,14 +773,14 @@ static int lm_trans_symbol_set_env_arg(LmTransSymbol *symbol, const LmP0Text *en
         return 1;
     }
 
-    copy = (char *)malloc(env_arg->length + 1U);
+    copy = (char *)lm_own_new_zero(env_arg->length + 1U);
     if (copy == 0) {
         return 1;
     }
     memcpy(copy, env_arg->data, env_arg->length);
     copy[env_arg->length] = '\0';
 
-    free(symbol->env_arg_storage);
+    lm_own_delete(symbol->env_arg_storage, 0);
     symbol->env_arg_storage = copy;
     symbol->env_arg.data = copy;
     symbol->env_arg.length = env_arg->length;
@@ -801,14 +795,14 @@ static int lm_trans_symbol_set_closure_call_name(LmTransSymbol *symbol, const Lm
         return 1;
     }
 
-    copy = (char *)malloc(closure_call_name->length + 1U);
+    copy = (char *)lm_own_new_zero(closure_call_name->length + 1U);
     if (copy == 0) {
         return 1;
     }
     memcpy(copy, closure_call_name->data, closure_call_name->length);
     copy[closure_call_name->length] = '\0';
 
-    free(symbol->closure_call_name_storage);
+    lm_own_delete(symbol->closure_call_name_storage, 0);
     symbol->closure_call_name_storage = copy;
     symbol->closure_call_name.data = copy;
     symbol->closure_call_name.length = closure_call_name->length;
@@ -850,13 +844,13 @@ static void lm_trans_capture_delete_any(void *object) {
 static void lm_trans_hoisted_function_destroy(LmTransHoistedFunction *function) {
     if (function != 0) {
         lm_trans_ptr_stack_delete(&function->captures);
-        free(function->c_name_storage);
+        lm_own_delete(function->c_name_storage, 0);
         function->c_name_storage = 0;
-        free(function->env_type_storage);
+        lm_own_delete(function->env_type_storage, 0);
         function->env_type_storage = 0;
-        free(function->env_var_storage);
+        lm_own_delete(function->env_var_storage, 0);
         function->env_var_storage = 0;
-        free(function->closure_call_storage);
+        lm_own_delete(function->closure_call_storage, 0);
         function->closure_call_storage = 0;
     }
     lm_own_delete(function, 0);

@@ -651,7 +651,7 @@ static int lm_trans_registry_push_table_cell(
     }
 
     relation_length = table_payload->length + 1U + column_payload->length;
-    relation_name = (char *)malloc(relation_length + 1U);
+    relation_name = (char *)lm_own_new_zero(relation_length + 1U);
     if (relation_name == 0) {
         goto cleanup;
     }
@@ -671,7 +671,7 @@ static int lm_trans_registry_push_table_cell(
     }
 
 cleanup:
-    free(relation_name);
+    lm_own_delete(relation_name, 0);
     lm_trans_text_ref_destroy(&relation_table);
     lm_trans_text_ref_destroy(&table_payload);
     lm_trans_text_ref_destroy(&column_payload);

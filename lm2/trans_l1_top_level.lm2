@@ -51,16 +51,16 @@ static int lm_trans_top_level_declare_function(
         }
         return_type_name = lm_trans_text_from_cstr(return_type_name_storage);
         if (return_type_name == 0) {
-            free(return_type_name_storage);
+            lm_own_delete(return_type_name_storage, 0);
             return 1;
         }
         if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "class") != 0) {
             lm_trans_text_ref_destroy(&return_type_name);
-            free(return_type_name_storage);
+            lm_own_delete(return_type_name_storage, 0);
             return 1;
         }
         lm_trans_text_ref_destroy(&return_type_name);
-        free(return_type_name_storage);
+        lm_own_delete(return_type_name_storage, 0);
     }
     return 0;
 }
@@ -88,16 +88,16 @@ static int lm_trans_top_level_declare_function_compatible(
         }
         return_type_name = lm_trans_text_from_cstr(return_type_name_storage);
         if (return_type_name == 0) {
-            free(return_type_name_storage);
+            lm_own_delete(return_type_name_storage, 0);
             return 1;
         }
         if (lm_trans_namespace_declare_generated(namespace_, return_type_name, "class") != 0) {
             lm_trans_text_ref_destroy(&return_type_name);
-            free(return_type_name_storage);
+            lm_own_delete(return_type_name_storage, 0);
             return 1;
         }
         lm_trans_text_ref_destroy(&return_type_name);
-        free(return_type_name_storage);
+        lm_own_delete(return_type_name_storage, 0);
     }
     return 0;
 }
@@ -579,7 +579,7 @@ static int lm_trans_top_level_emit_callable_descriptor(
     }
 
     if (lm_trans_registry_materialize_fn_descriptor_frame(item->frame) != 0) {
-        free(descriptor_name_storage);
+        lm_own_delete(descriptor_name_storage, 0);
         return 1;
     }
 
@@ -593,7 +593,7 @@ static int lm_trans_top_level_emit_callable_descriptor(
     } else {
         status = lm_trans_emit_callable_descriptor(file, &item->function, namespace_);
     }
-    free(descriptor_name_storage);
+    lm_own_delete(descriptor_name_storage, 0);
     if (status != 0) {
         return 1;
     }
@@ -1154,7 +1154,7 @@ static int lm_trans_emit_function(
             }
             capture_text = lm_trans_text_from_cstr(capture_expr);
             if (capture_text == 0) {
-                free(capture_expr);
+                lm_own_delete(capture_expr, 0);
                 lm_trans_namespace_leave_scope(namespace_);
                 lm_trans_ptr_stack_delete(&hoisted_functions);
                 return 1;
@@ -1168,13 +1168,13 @@ static int lm_trans_emit_function(
                 ) != 0
             ) {
                 lm_trans_text_ref_destroy(&capture_text);
-                free(capture_expr);
+                lm_own_delete(capture_expr, 0);
                 lm_trans_namespace_leave_scope(namespace_);
                 lm_trans_ptr_stack_delete(&hoisted_functions);
                 return 1;
             }
             lm_trans_text_ref_destroy(&capture_text);
-            free(capture_expr);
+            lm_own_delete(capture_expr, 0);
         }
     }
     if (lm_trans_emit_function_params(file, function, namespace_) != 0) {
@@ -1277,6 +1277,12 @@ static int lm_trans_registry_candidate_path(
     const char *candidate_name,
     char *registry_path,
     size_t registry_path_size
+);
+static int lm_trans_emit_l4_payload_import_document(
+    FILE *output,
+    const char *payload_path,
+    const LmP0Node *root,
+    LmTransNamespace *namespace_
 );
 static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root);
 static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *value);
@@ -1564,7 +1570,7 @@ static int lm_trans_import_stack_note(LmOwnPtrStack *stack, const char *path) {
         return 1;
     }
     if (lm_own_ptr_stack_push(stack, copy) != 0) {
-        free(copy);
+        lm_own_delete(copy, 0);
         return 1;
     }
     return 0;
@@ -1651,7 +1657,7 @@ static int lm_trans_import_resolve_node(
         path,
         path_size
     );
-    free(candidate_name);
+    lm_own_delete(candidate_name, 0);
     if (status != 0) {
         fprintf(
             stderr,
@@ -3116,12 +3122,12 @@ static int lm_trans_emit_l4_payload_import_frame(
                     sizeof(payload_path)
             ) != 0
             ) {
-                free(candidate_name);
+                lm_own_delete(candidate_name, 0);
                 fprintf(stderr, "trans L4 unit error: unit.payload import path is too long\n");
                 lm_trans_text_ref_destroy(&path_value);
                 return 1;
             }
-            free(candidate_name);
+            lm_own_delete(candidate_name, 0);
 
             document = 0;
             status = lm_p0_parse_file(payload_path, &document);
@@ -3145,7 +3151,14 @@ static int lm_trans_emit_l4_payload_import_frame(
                 return 1;
             }
 
-            if (lm_trans_emit_l4_payload_node(output, lm_p0_document_root(document), namespace_) != 0) {
+            if (
+                lm_trans_emit_l4_payload_import_document(
+                    output,
+                    payload_path,
+                    lm_p0_document_root(document),
+                    namespace_
+                ) != 0
+            ) {
                 lm_p0_document_destroy(document);
                 lm_trans_text_ref_destroy(&path_value);
                 return 1;
@@ -3163,6 +3176,75 @@ static int lm_trans_emit_l4_payload_import_frame(
     }
     lm_trans_text_ref_destroy(&path_value);
     return 0;
+}
+
+static int lm_trans_emit_l4_payload_import_document(
+    FILE *output,
+    const char *payload_path,
+    const LmP0Node *root,
+    LmTransNamespace *namespace_
+) {
+    const char *previous_source_path;
+    FILE *prelude_file;
+    int loaded;
+    int status;
+
+    if (output == 0 || payload_path == 0 || root == 0 || namespace_ == 0) {
+        return 1;
+    }
+
+    if (!lm_trans_path_has_extension(payload_path, ".lm2")) {
+        return lm_trans_emit_l4_payload_node(output, root, namespace_);
+    }
+
+    if (lm_trans_registry_load_file_path(payload_path, 1, &loaded) != 0) {
+        return 1;
+    }
+
+    previous_source_path = lm_trans_current_source_path;
+    lm_trans_current_source_path = payload_path;
+
+    status = lm_trans_declare_l2_import_root(
+        namespace_,
+        root,
+        1
+    );
+    prelude_file = lm_trans_prelude_file(output);
+    if (status == 0) {
+        status = lm_trans_emit_l2_import_root_prelude(
+            prelude_file,
+            root,
+            1,
+            namespace_
+        );
+    }
+    if (status == 0) {
+        status = lm_trans_emit_l2_import_root_prototypes(
+            prelude_file,
+            root,
+            1,
+            namespace_
+        );
+    }
+    if (status == 0) {
+        status = lm_trans_emit_l2_import_root_after_prototypes(
+            prelude_file,
+            root,
+            1,
+            namespace_
+        );
+    }
+    if (status == 0) {
+        status = lm_trans_emit_l2_import_root_functions(
+            output,
+            root,
+            1,
+            namespace_
+        );
+    }
+
+    lm_trans_current_source_path = previous_source_path;
+    return status;
 }
 
 static int lm_trans_l4_payload_receiver_import(

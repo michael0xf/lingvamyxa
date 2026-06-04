@@ -36,6 +36,7 @@ L4:
     end: `layout.backend`
 end: L4
 
+import: "lm4/own_abi.lm4"
 import: "lm4/parser_abi.lm4"
 
 include: "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
@@ -78,7 +79,7 @@ fn: lm_table_buffer_reserve (@: LmTableBuffer buffer; size_t: extra) int
             return: 0
         new_capacity: new_capacity * 2U
 
-    new_data: c.realloc(buffer\data, new_capacity)
+    new_data: lm_own_resize(buffer\data, new_capacity)
     if: new_data = 0
         buffer\failed: 1
         return: 0
@@ -130,7 +131,7 @@ end: lm_table_buffer_take
 
 sub: lm_table_buffer_destroy (@: LmTableBuffer buffer)
     if: buffer != 0
-        c.free(buffer\data)
+        lm_own_delete(buffer\data, 0)
         buffer\data: 0
         buffer\length: 0U
         buffer\capacity: 0U
@@ -138,21 +139,21 @@ sub: lm_table_buffer_destroy (@: LmTableBuffer buffer)
 end: lm_table_buffer_destroy
 
 fn: lm_table_buffer_new () @: LmTableBuffer
-    return: c.calloc(1U, c.sizeof(c.LmTableBuffer))
+    return: lm_own_new_zero(1U * c.sizeof(c.LmTableBuffer))
 end: lm_table_buffer_new
 
 sub: lm_table_buffer_delete (@: LmTableBuffer buffer)
     if: buffer != 0
         lm_table_buffer_destroy(buffer)
-        c.free(buffer)
+        lm_own_delete(buffer, 0)
 end: lm_table_buffer_delete
 
 fn: lm_table_error_new () @: LmTableError
-    return: c.calloc(1U, c.sizeof(c.LmTableError))
+    return: lm_own_new_zero(1U * c.sizeof(c.LmTableError))
 end: lm_table_error_new
 
 sub: lm_table_error_delete (@: LmTableError error)
-    c.free(error)
+    lm_own_delete(error, 0)
 end: lm_table_error_delete
 
 fn: lm_table_node_ignored (const: @: LmP0Node node) int
@@ -305,9 +306,9 @@ sub: lm_table_columns_destroy (@: LmTableColumn columns; size_t: count)
 
     index: 0U
     while: index < count
-        c.free(c.columns[index].spelling)
+        lm_own_delete(c.columns[index].spelling, 0)
         index: index + 1U
-    c.free(columns)
+    lm_own_delete(columns, 0)
 end: lm_table_columns_destroy
 
 fn: lm_table_columns_from_frame (
@@ -332,7 +333,7 @@ fn: lm_table_columns_from_frame (
         lm_table_error_set(error, "columns: must not be empty")
         return: 0
 
-    columns: c.calloc(count, c.sizeof(c.LmTableColumn))
+    columns: lm_own_new_zero(count * c.sizeof(c.LmTableColumn))
     if: columns = 0
         lm_table_error_set(error, "out of memory while reading columns")
         return: 0
@@ -514,7 +515,7 @@ fn: lm_table_measure_rows (
         column_index: index % column_count
         if: c.columns[column_index].width < spelling_length
             c.columns[column_index].width: spelling_length
-        c.free(spelling)
+        lm_own_delete(spelling, 0)
         index: index + 1U
 
     out_row_count[0]: cell_count / column_count
@@ -568,7 +569,7 @@ fn: lm_table_emit_rows (
             lm_table_buffer_append_cstr(buffer, spelling)
             if: column_index + 1U < column_count
                 lm_table_buffer_append_spaces(buffer, c.columns[column_index].width - spelling_length + 2U)
-            c.free(spelling)
+            lm_own_delete(spelling, 0)
             column_index: column_index + 1U
         lm_table_buffer_append_cstr(buffer, "\n")
         row_index: row_index + 1U
@@ -675,7 +676,7 @@ fn: lm_table_emit_tables_from_node (
             if: emitted[0] != 0
                 lm_table_buffer_append_cstr(output, "\n")
             lm_table_buffer_append_cstr(output, table_text)
-            c.free(table_text)
+            lm_own_delete(table_text, 0)
             emitted[0]: 1
             return: output\failed = 0
 
@@ -767,7 +768,7 @@ external:
             return: 1
 
         c.fputs: text c.stdout
-        c.free(text)
+        lm_own_delete(text, 0)
         c.lm_p0_document_destroy(document)
         lm_table_error_delete(error)
         return: 0

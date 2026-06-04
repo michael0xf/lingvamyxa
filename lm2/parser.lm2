@@ -443,9 +443,9 @@ end: lm_p0_document_freeze_tree
 
 sub: lm_p0_registry_row_destroy_fields (@: LmP0RegistryRow row)
     if: row != 0
-        c.free(row\table)
-        c.free(row\key)
-        c.free(row\payload)
+        lm_own_delete(row\table, 0)
+        lm_own_delete(row\key, 0)
+        lm_own_delete(row\payload, 0)
         row\table: 0
         row\key: 0
         row\payload: 0
@@ -469,7 +469,7 @@ sub: lm_p0_registry_destroy ()
 end: lm_p0_registry_destroy
 
 sub: lm_p0_indent_stack_free (@: LmP0IndentStack stack)
-    c.free(stack\columns)
+    lm_own_delete(stack\columns, 0)
     stack\columns: 0
     stack\count: 0U
     stack\capacity: 0U
@@ -491,7 +491,7 @@ fn: lm_p0_indent_stack_push (@: LmP0Document document; @: LmP0IndentStack stack;
             new_capacity: 8U
         if: stack\capacity != 0U
             new_capacity: stack\capacity * 2U
-        columns: c.realloc(stack\columns, new_capacity * c.sizeof(columns[0]))
+        columns: lm_own_resize(stack\columns, new_capacity * c.sizeof(columns[0]))
         if: columns = 0
             c.lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels")
             return: 0
@@ -509,7 +509,7 @@ fn: lm_p0_indent_stack_init (@: LmP0Document document; @: LmP0IndentStack stack)
 end: lm_p0_indent_stack_init
 
 fn: lm_p0_indent_stack_new_empty () @: LmP0IndentStack
-    return: c.calloc(1U, c.sizeof(c.LmP0IndentStack))
+    return: lm_own_new_zero(1U * c.sizeof(c.LmP0IndentStack))
 end: lm_p0_indent_stack_new_empty
 
 fn: lm_p0_indent_stack_new (@: LmP0Document document) @: LmP0IndentStack
@@ -540,7 +540,7 @@ fn: lm_p0_indent_stack_copy (@: LmP0Document document; @: LmP0IndentStack target
     if: capacity = 0U
         return: 1
 
-    target\columns: c.malloc(capacity * c.sizeof(c.target->columns[0]))
+    target\columns: lm_own_new_zero(capacity * c.sizeof(c.target->columns[0]))
     if: target\columns = 0
         c.lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels")
         return: 0
@@ -1616,7 +1616,7 @@ static int lm_p0_registry_push_table_cell(
     }
 
     relation_length = table_payload->length + 1U + column_payload->length;
-    relation_name = (char *)malloc(relation_length + 1U);
+    relation_name = (char *)lm_own_new_zero(relation_length + 1U);
     if (relation_name == 0) {
         status = -1;
         goto cleanup_refs;
@@ -1628,7 +1628,7 @@ static int lm_p0_registry_push_table_cell(
 
     lm_p0_text_assign_cstr(relation_table, relation_name);
     status = lm_p0_registry_push_row_values(relation_table, key_payload, payload_value);
-    free(relation_name);
+    lm_own_delete(relation_name, 0);
 
 cleanup_refs:
     lm_p0_text_ref_delete(table_payload);
@@ -4753,18 +4753,18 @@ static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t l
         new_capacity *= 2U;
     }
 
-    parents = (LmP0Structure **)realloc(stack->parents, new_capacity * sizeof(*parents));
+    parents = (LmP0Structure **)lm_own_resize(stack->parents, new_capacity * sizeof(*parents));
     if (parents == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
         return 0;
     }
-    owners = (LmP0Node **)realloc(stack->owners, new_capacity * sizeof(*owners));
+    owners = (LmP0Node **)lm_own_resize(stack->owners, new_capacity * sizeof(*owners));
     if (owners == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
         stack->parents = parents;
         return 0;
     }
-    hard = (unsigned char *)realloc(stack->hard, new_capacity * sizeof(*hard));
+    hard = (unsigned char *)lm_own_resize(stack->hard, new_capacity * sizeof(*hard));
     if (hard == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack");
         stack->parents = parents;
@@ -4921,9 +4921,9 @@ static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
 }
 
 static void lm_p0_stack_free(LmP0Stack *stack) {
-    free(stack->parents);
-    free(stack->owners);
-    free(stack->hard);
+    lm_own_delete(stack->parents, 0);
+    lm_own_delete(stack->owners, 0);
+    lm_own_delete(stack->hard, 0);
     stack->parents = 0;
     stack->owners = 0;
     stack->hard = 0;
@@ -4935,7 +4935,7 @@ static void lm_p0_stack_free_any(void *object) {
 }
 
 static LmP0Stack *lm_p0_stack_new(void) {
-    return (LmP0Stack *)calloc(1U, sizeof(LmP0Stack));
+    return (LmP0Stack *)lm_own_new_zero(1U * sizeof(LmP0Stack));
 }
 
 static void lm_p0_stack_delete(LmP0Stack *stack) {
@@ -4943,11 +4943,11 @@ static void lm_p0_stack_delete(LmP0Stack *stack) {
 }
 
 static LmP0PendingDelimiter *lm_p0_pending_delimiter_new(void) {
-    return (LmP0PendingDelimiter *)calloc(1U, sizeof(LmP0PendingDelimiter));
+    return (LmP0PendingDelimiter *)lm_own_new_zero(1U * sizeof(LmP0PendingDelimiter));
 }
 
 static LmP0StreamEvent *lm_p0_stream_event_new(void) {
-    return (LmP0StreamEvent *)calloc(1U, sizeof(LmP0StreamEvent));
+    return (LmP0StreamEvent *)lm_own_new_zero(1U * sizeof(LmP0StreamEvent));
 }
 
 static LmP0StreamEvent *lm_p0_stream_event_new_copy(const LmP0StreamEvent *event) {
@@ -4956,7 +4956,7 @@ static LmP0StreamEvent *lm_p0_stream_event_new_copy(const LmP0StreamEvent *event
     if (event == 0) {
         return 0;
     }
-    copy = (LmP0StreamEvent *)calloc(1U, sizeof(*copy));
+    copy = (LmP0StreamEvent *)lm_own_new_zero(1U * sizeof(*copy));
     if (copy != 0) {
         *copy = *event;
     }
@@ -5002,12 +5002,12 @@ static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter *pending) {
 }
 
 static LmP0PendingMix *lm_p0_pending_mix_new(void) {
-    return (LmP0PendingMix *)calloc(1U, sizeof(LmP0PendingMix));
+    return (LmP0PendingMix *)lm_own_new_zero(1U * sizeof(LmP0PendingMix));
 }
 
 static void lm_p0_pending_mix_free(LmP0PendingMix *pending) {
     if (pending != 0) {
-        free(pending->events);
+        lm_own_delete(pending->events, 0);
         pending->events = 0;
         pending->count = 0U;
         pending->capacity = 0U;
@@ -5035,7 +5035,7 @@ static int lm_p0_pending_mix_push(
     }
     if (pending->count == pending->capacity) {
         new_capacity = pending->capacity == 0U ? 4U : pending->capacity * 2U;
-        events = (LmP0StreamEvent *)realloc(pending->events, new_capacity * sizeof(*events));
+        events = (LmP0StreamEvent *)lm_own_resize(pending->events, new_capacity * sizeof(*events));
         if (events == 0) {
             lm_p0_set_diagnostic(document, 1, event->line, event->column, "out of memory while storing pending MIX marks");
             return 0;
@@ -5050,7 +5050,7 @@ static int lm_p0_pending_mix_push(
 static LmP0DisabledState *lm_p0_disabled_state_new(size_t base_level) {
     LmP0DisabledState *state;
 
-    state = (LmP0DisabledState *)calloc(1U, sizeof(*state));
+    state = (LmP0DisabledState *)lm_own_new_zero(1U * sizeof(*state));
     if (state != 0) {
         state->base_level = base_level;
         state->top_level = base_level;
@@ -6957,7 +6957,7 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
         return 1;
     }
 
-    buffer = (char *)malloc((size_t)size + 1U);
+    buffer = (char *)lm_own_new_zero((size_t)size + 1U);
     if (buffer == 0) {
         fclose(file);
         return 1;
@@ -6965,13 +6965,13 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     read_size = fread(buffer, 1U, (size_t)size, file);
     fclose(file);
     if (read_size != (size_t)size) {
-        free(buffer);
+        lm_own_delete(buffer, 0);
         return 1;
     }
     buffer[read_size] = '\0';
 
     status = lm_p0_parse_bytes(buffer, read_size, out_document);
-    free(buffer);
+    lm_own_delete(buffer, 0);
     return status;
 }
 
@@ -6985,7 +6985,7 @@ static char *lm_p0_registry_join_text3(const LmP0Text *first, const char *separa
     }
     separator_length = strlen(separator);
     length = first->length + separator_length + second->length;
-    result = (char *)malloc(length + 1U);
+    result = (char *)lm_own_new_zero(length + 1U);
     if (result == 0) {
         return 0;
     }
@@ -7073,7 +7073,7 @@ static int lm_p0_registry_push_column_metadata(
             lm_p0_registry_push_generated_row_cstr("column.index", column_key, index_buffer) != 0 ||
             lm_p0_registry_push_generated_row_cstr("column.descriptor.count", column_key, count_buffer) != 0
         ) {
-            free(column_key);
+            lm_own_delete(column_key, 0);
             status = -1;
             goto cleanup;
         }
@@ -7082,7 +7082,7 @@ static int lm_p0_registry_push_column_metadata(
             snprintf(index_buffer, sizeof(index_buffer), "%lu", (unsigned long)descriptor_index);
             descriptor_key = lm_p0_registry_join_text3(lm_p0_text_from_cstr(column_key), ".", lm_p0_text_from_cstr(index_buffer));
             if (descriptor_key == 0) {
-                free(column_key);
+                lm_own_delete(column_key, 0);
                 status = -1;
                 goto cleanup;
             }
@@ -7090,15 +7090,15 @@ static int lm_p0_registry_push_column_metadata(
                 columns[index].descriptors[descriptor_index] == 0 ||
                 lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index].descriptors[descriptor_index]) != 0
             ) {
-                free(descriptor_key);
-                free(column_key);
+                lm_own_delete(descriptor_key, 0);
+                lm_own_delete(column_key, 0);
                 status = -1;
                 goto cleanup;
             }
-            free(descriptor_key);
+            lm_own_delete(descriptor_key, 0);
         }
 
-        free(column_key);
+        lm_own_delete(column_key, 0);
     }
 
 cleanup:
@@ -7489,7 +7489,7 @@ static int lm_p0_dump_reserve(LmP0Dump *dump, size_t extra) {
         new_capacity *= 2U;
     }
 
-    data = (char *)realloc(dump->data, new_capacity);
+    data = (char *)lm_own_resize(dump->data, new_capacity);
     if (data == 0) {
         dump->failed = 1;
         return 0;
@@ -7605,7 +7605,7 @@ static void lm_p0_dump_structure(LmP0Dump *dump, const LmP0Structure *structure,
 }
 
 static LmP0Dump *lm_p0_dump_new(void) {
-    return (LmP0Dump *)calloc(1U, sizeof(LmP0Dump));
+    return (LmP0Dump *)lm_own_new_zero(1U * sizeof(LmP0Dump));
 }
 
 static char *lm_p0_dump_take_data(LmP0Dump *dump) {

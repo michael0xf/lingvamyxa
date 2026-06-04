@@ -1331,17 +1331,17 @@ static int lm_trans_callable_signature_matches_descriptor_name(
         lm_own_delete(params, 0);
         lm_own_delete(descriptor_type, 0);
         lm_own_delete(candidate_type, 0);
-        free(descriptor_cstr);
+        lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
     if (lm_trans_collect_abi_params(params, params_capacity, &param_count, namespace_, descriptor_cstr, "callable descriptor") != 0) {
         lm_own_delete(params, 0);
         lm_own_delete(descriptor_type, 0);
         lm_own_delete(candidate_type, 0);
-        free(descriptor_cstr);
+        lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
-    free(descriptor_cstr);
+    lm_own_delete(descriptor_cstr, 0);
 
     if (param_count != candidate->param_names->count) {
         lm_own_delete(params, 0);
@@ -1393,7 +1393,7 @@ static int lm_trans_callable_descriptor_has_no_params(
     params_capacity = 256U;
     params = lm_trans_expr_abi_params_new(params_capacity);
     if (params == 0) {
-        free(descriptor_cstr);
+        lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
 
@@ -1408,7 +1408,7 @@ static int lm_trans_callable_descriptor_has_no_params(
         ) == 0 &&
         param_count == 0U;
     lm_own_delete(params, 0);
-    free(descriptor_cstr);
+    lm_own_delete(descriptor_cstr, 0);
     return result;
 }
 
@@ -1434,7 +1434,7 @@ static int lm_trans_callable_descriptor_param_count(
     params_capacity = 256U;
     params = lm_trans_expr_abi_params_new(params_capacity);
     if (params == 0) {
-        free(descriptor_cstr);
+        lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
     result =
@@ -1447,7 +1447,7 @@ static int lm_trans_callable_descriptor_param_count(
             "callable descriptor"
         ) == 0;
     lm_own_delete(params, 0);
-    free(descriptor_cstr);
+    lm_own_delete(descriptor_cstr, 0);
     return result;
 }
 
@@ -1578,7 +1578,7 @@ static char *lm_trans_callable_adapter_name_new(
     prefix_length = strlen(prefix);
     middle_length = strlen(middle);
     length = prefix_length + source_name.length + middle_length + descriptor_name.length;
-    name = (char *)malloc(length + 1U);
+    name = (char *)lm_own_new_zero(length + 1U);
     if (name == 0) {
         return 0;
     }
@@ -1782,7 +1782,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
 
     stored_name = lm_trans_string_stack_find(lm_trans_emitted_callable_adapters, adapter_name);
     if (stored_name != 0) {
-        free(adapter_name);
+        lm_own_delete(adapter_name, 0);
         out_adapter_name->data = stored_name;
         out_adapter_name->length = strlen(stored_name);
         return 0;
@@ -1790,7 +1790,7 @@ static int lm_trans_emit_callable_return_chain_adapter(
 
     descriptor_cstr = lm_trans_text_copy_cstr(&descriptor_name);
     if (descriptor_cstr == 0) {
-        free(adapter_name);
+        lm_own_delete(adapter_name, 0);
         return 1;
     }
 
@@ -1800,8 +1800,8 @@ static int lm_trans_emit_callable_return_chain_adapter(
     if (params == 0 || return_type == 0) {
         lm_own_delete(params, 0);
         lm_own_delete(return_type, 0);
-        free(descriptor_cstr);
-        free(adapter_name);
+        lm_own_delete(descriptor_cstr, 0);
+        lm_own_delete(adapter_name, 0);
         return 1;
     }
 
@@ -1818,8 +1818,8 @@ static int lm_trans_emit_callable_return_chain_adapter(
     ) {
         lm_own_delete(params, 0);
         lm_own_delete(return_type, 0);
-        free(descriptor_cstr);
-        free(adapter_name);
+        lm_own_delete(descriptor_cstr, 0);
+        lm_own_delete(adapter_name, 0);
         return 1;
     }
 
@@ -1827,8 +1827,8 @@ static int lm_trans_emit_callable_return_chain_adapter(
     if (void_name == 0) {
         lm_own_delete(params, 0);
         lm_own_delete(return_type, 0);
-        free(descriptor_cstr);
-        free(adapter_name);
+        lm_own_delete(descriptor_cstr, 0);
+        lm_own_delete(adapter_name, 0);
         return 1;
     }
     returns_void =
@@ -1852,8 +1852,8 @@ static int lm_trans_emit_callable_return_chain_adapter(
         lm_own_delete(params, 0);
         lm_own_delete(return_type, 0);
         lm_trans_text_ref_destroy(&void_name);
-        free(descriptor_cstr);
-        free(adapter_name);
+        lm_own_delete(descriptor_cstr, 0);
+        lm_own_delete(adapter_name, 0);
         return 1;
     }
 
@@ -1862,8 +1862,8 @@ static int lm_trans_emit_callable_return_chain_adapter(
             lm_own_delete(params, 0);
             lm_own_delete(return_type, 0);
             lm_trans_text_ref_destroy(&void_name);
-            free(descriptor_cstr);
-            free(adapter_name);
+            lm_own_delete(descriptor_cstr, 0);
+            lm_own_delete(adapter_name, 0);
             return 1;
         }
     }
@@ -1876,17 +1876,17 @@ static int lm_trans_emit_callable_return_chain_adapter(
         lm_own_delete(params, 0);
         lm_own_delete(return_type, 0);
         lm_trans_text_ref_destroy(&void_name);
-        free(descriptor_cstr);
-        free(adapter_name);
+        lm_own_delete(descriptor_cstr, 0);
+        lm_own_delete(adapter_name, 0);
         return 1;
     }
 
     lm_own_delete(params, 0);
     lm_own_delete(return_type, 0);
     lm_trans_text_ref_destroy(&void_name);
-    free(descriptor_cstr);
+    lm_own_delete(descriptor_cstr, 0);
     if (lm_own_ptr_stack_push(lm_trans_emitted_callable_adapters, adapter_name) != 0) {
-        free(adapter_name);
+        lm_own_delete(adapter_name, 0);
         return 1;
     }
     out_adapter_name->data = adapter_name;
@@ -1917,7 +1917,7 @@ static char *lm_trans_callable_binder_name_new(
     middle_length = strlen(middle);
     count_length = strlen(count_buffer);
     length = prefix_length + source_name.length + middle_length + descriptor_name.length + count_length;
-    name = (char *)malloc(length + 1U);
+    name = (char *)lm_own_new_zero(length + 1U);
     if (name == 0) {
         return 0;
     }
@@ -1948,7 +1948,7 @@ static char *lm_trans_cstr_suffix_new(const char *base, const char *suffix) {
     }
     base_length = strlen(base);
     suffix_length = strlen(suffix);
-    result = (char *)malloc(base_length + suffix_length + 1U);
+    result = (char *)lm_own_new_zero(base_length + suffix_length + 1U);
     if (result == 0) {
         return 0;
     }
@@ -2036,7 +2036,7 @@ static int lm_trans_callable_descriptor_accepts_source_bind(
         ) == 0 &&
         lm_trans_callable_descriptor_return_type(namespace_, descriptor_name, out_return_type) &&
         descriptor_param_count + bound_count == source_param_count;
-    free(descriptor_cstr);
+    lm_own_delete(descriptor_cstr, 0);
     if (!result) {
         lm_own_delete(descriptor_type, 0);
         lm_own_delete(source_type, 0);
@@ -2280,7 +2280,7 @@ static int lm_trans_emit_callable_binder(
     }
     stored_name = lm_trans_string_stack_find(lm_trans_emitted_callable_binders, binder_name);
     if (stored_name != 0) {
-        free(binder_name);
+        lm_own_delete(binder_name, 0);
         out_binder_name->data = stored_name;
         out_binder_name->length = strlen(stored_name);
         lm_own_delete(descriptor_params, 0);
@@ -2292,10 +2292,10 @@ static int lm_trans_emit_callable_binder(
     call_name = lm_trans_cstr_suffix_new(binder_name, "_call");
     destroy_name = lm_trans_cstr_suffix_new(binder_name, "_destroy");
     if (env_type_name == 0 || call_name == 0 || destroy_name == 0) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
@@ -2304,10 +2304,10 @@ static int lm_trans_emit_callable_binder(
     prelude_file = lm_trans_prelude_file(file);
     returns_void = lm_trans_callable_type_is_void(return_type);
     if (lm_trans_emit_callable_adapter_source_prototype(prelude_file, source_name, source_symbol) != 0) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
@@ -2325,10 +2325,10 @@ static int lm_trans_emit_callable_binder(
             lm_trans_emit_callable_binder_env_fields(prelude_file, source_symbol, bound_count) != 0 ||
             lm_trans_put(prelude_file, "};\n") != 0
         ) {
-            free(env_type_name);
-            free(call_name);
-            free(destroy_name);
-            free(binder_name);
+            lm_own_delete(env_type_name, 0);
+            lm_own_delete(call_name, 0);
+            lm_own_delete(destroy_name, 0);
+            lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
             lm_own_delete(return_type, 0);
             return 1;
@@ -2345,20 +2345,20 @@ static int lm_trans_emit_callable_binder(
         lm_trans_emit_callable_binder_descriptor_param_list(prelude_file, descriptor_params, descriptor_param_count) != 0 ||
         lm_trans_put(prelude_file, ") {\n") != 0
     ) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
     }
     if (bound_count == 0U) {
         if (lm_trans_put(prelude_file, "    (void)lm_env;\n") != 0) {
-            free(env_type_name);
-            free(call_name);
-            free(destroy_name);
-            free(binder_name);
+            lm_own_delete(env_type_name, 0);
+            lm_own_delete(call_name, 0);
+            lm_own_delete(destroy_name, 0);
+            lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
             lm_own_delete(return_type, 0);
             return 1;
@@ -2370,10 +2370,10 @@ static int lm_trans_emit_callable_binder(
         lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(env_type_name)) != 0 ||
         lm_trans_put(prelude_file, " *)lm_env;\n") != 0
     ) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
@@ -2393,10 +2393,10 @@ static int lm_trans_emit_callable_binder(
         ) != 0 ||
         lm_trans_put(prelude_file, ");\n}\n") != 0
     ) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
@@ -2408,10 +2408,10 @@ static int lm_trans_emit_callable_binder(
             lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(destroy_name)) != 0 ||
             lm_trans_put(prelude_file, "(void *lm_env) {\n    lm_own_delete(lm_env, 0);\n}\n") != 0
         ) {
-            free(env_type_name);
-            free(call_name);
-            free(destroy_name);
-            free(binder_name);
+            lm_own_delete(env_type_name, 0);
+            lm_own_delete(call_name, 0);
+            lm_own_delete(destroy_name, 0);
+            lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
             lm_own_delete(return_type, 0);
             return 1;
@@ -2429,10 +2429,10 @@ static int lm_trans_emit_callable_binder(
         lm_trans_emit_type_name(prelude_file, &descriptor_name) != 0 ||
         lm_trans_put(prelude_file, " lm_result;\n") != 0
     ) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
@@ -2443,10 +2443,10 @@ static int lm_trans_emit_callable_binder(
             lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(env_type_name)) != 0 ||
             lm_trans_put(prelude_file, " *lm_env;\n") != 0
         ) {
-            free(env_type_name);
-            free(call_name);
-            free(destroy_name);
-            free(binder_name);
+            lm_own_delete(env_type_name, 0);
+            lm_own_delete(call_name, 0);
+            lm_own_delete(destroy_name, 0);
+            lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
             lm_own_delete(return_type, 0);
             return 1;
@@ -2457,10 +2457,10 @@ static int lm_trans_emit_callable_binder(
         lm_trans_emit_type_name(prelude_file, &descriptor_name) != 0 ||
         lm_trans_put(prelude_file, ")lm_own_new_zero(sizeof(*lm_result));\n    if (lm_result == 0) {\n        return 0;\n    }\n") != 0
     ) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
@@ -2472,10 +2472,10 @@ static int lm_trans_emit_callable_binder(
             lm_trans_put(prelude_file, " *)lm_own_new_zero(sizeof(*lm_env));\n    if (lm_env == 0) {\n        lm_own_delete(lm_result, 0);\n        return 0;\n    }\n") != 0 ||
             lm_trans_emit_callable_binder_env_assignments(prelude_file, source_symbol, bound_count, "lm_env") != 0
         ) {
-            free(env_type_name);
-            free(call_name);
-            free(destroy_name);
-            free(binder_name);
+            lm_own_delete(env_type_name, 0);
+            lm_own_delete(call_name, 0);
+            lm_own_delete(destroy_name, 0);
+            lm_own_delete(binder_name, 0);
             lm_own_delete(descriptor_params, 0);
             lm_own_delete(return_type, 0);
             return 1;
@@ -2498,20 +2498,20 @@ static int lm_trans_emit_callable_binder(
         ) != 0 ||
         lm_trans_put(prelude_file, ";\n    return lm_result;\n}\n\n") != 0
     ) {
-        free(env_type_name);
-        free(call_name);
-        free(destroy_name);
-        free(binder_name);
+        lm_own_delete(env_type_name, 0);
+        lm_own_delete(call_name, 0);
+        lm_own_delete(destroy_name, 0);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
     }
 
-    free(env_type_name);
-    free(call_name);
-    free(destroy_name);
+    lm_own_delete(env_type_name, 0);
+    lm_own_delete(call_name, 0);
+    lm_own_delete(destroy_name, 0);
     if (lm_own_ptr_stack_push(lm_trans_emitted_callable_binders, binder_name) != 0) {
-        free(binder_name);
+        lm_own_delete(binder_name, 0);
         lm_own_delete(descriptor_params, 0);
         lm_own_delete(return_type, 0);
         return 1;
@@ -5033,7 +5033,7 @@ static char *lm_trans_function_return_struct_type_name_new(LmP0Text function_nam
 
     suffix = "Return";
     suffix_length = strlen(suffix);
-    name = (char *)malloc(function_name.length + suffix_length + 1U);
+    name = (char *)lm_own_new_zero(function_name.length + suffix_length + 1U);
     if (name == 0) {
         return 0;
     }

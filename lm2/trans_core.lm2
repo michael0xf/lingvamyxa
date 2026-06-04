@@ -47,19 +47,19 @@ end: lm_trans_symbol_is_value_callable
 sub: lm_trans_symbol_destroy_fields (@: LmTransSymbol symbol)
     if: symbol != 0
         c.lm_trans_text_ref_destroy(c.&symbol->name)
-        c.free(symbol\name_storage)
+        lm_own_delete(symbol\name_storage, 0)
         symbol\name_storage: 0
-        c.free(symbol\c_name_storage)
+        lm_own_delete(symbol\c_name_storage, 0)
         symbol\c_name_storage: 0
         c.symbol->c_name.data: ""
         c.symbol->c_name.length: 0U
         symbol\has_c_name: 0
-        c.free(symbol\env_arg_storage)
+        lm_own_delete(symbol\env_arg_storage, 0)
         symbol\env_arg_storage: 0
         c.symbol->env_arg.data: ""
         c.symbol->env_arg.length: 0U
         symbol\has_env_arg: 0
-        c.free(symbol\closure_call_name_storage)
+        lm_own_delete(symbol\closure_call_name_storage, 0)
         symbol\closure_call_name_storage: 0
         c.symbol->closure_call_name.data: ""
         c.symbol->closure_call_name.length: 0U
@@ -92,5 +92,5 @@ sub: lm_trans_symbol_delete_any (@: void object)
 end: lm_trans_symbol_delete_any
 
 sub: lm_trans_free_any (@: void object)
-    c.free(object)
+    lm_own_delete(object, 0)
 end: lm_trans_free_any

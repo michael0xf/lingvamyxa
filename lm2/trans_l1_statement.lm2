@@ -736,7 +736,7 @@ static int lm_trans_emit_array_structure_value_fill(
     if (rank == 0U) {
         return 1;
     }
-    indices = (size_t *)calloc(rank, sizeof(*indices));
+    indices = (size_t *)lm_own_new_zero(rank * sizeof(*indices));
     if (indices == 0) {
         return 1;
     }
@@ -751,7 +751,7 @@ static int lm_trans_emit_array_structure_value_fill(
         namespace_,
         indices
     );
-    free(indices);
+    lm_own_delete(indices, 0);
     return status;
 }
 
@@ -1004,7 +1004,7 @@ static char *lm_trans_array_value_helper_name_new(void) {
         return 0;
     }
 
-    name = (char *)malloc((size_t)written + 1U);
+    name = (char *)lm_own_new_zero((size_t)written + 1U);
     if (name == 0) {
         return 0;
     }
@@ -1049,7 +1049,7 @@ static int lm_trans_emit_array_value_helper(
     helper_name_text = lm_trans_text_ref_new_cstr(helper_name);
     target_name = lm_trans_text_ref_new_cstr("lm_value");
     if (helper_name_text == 0 || target_name == 0) {
-        free(helper_name);
+        lm_own_delete(helper_name, 0);
         lm_trans_text_ref_destroy(&helper_name_text);
         lm_trans_text_ref_destroy(&target_name);
         return 1;
@@ -1133,7 +1133,7 @@ static int lm_trans_emit_array_value_helper(
 
 cleanup_error:
     if (status != 0) {
-        free(helper_name);
+        lm_own_delete(helper_name, 0);
     }
     lm_trans_text_ref_destroy(&helper_name_text);
     lm_trans_text_ref_destroy(&target_name);
@@ -3149,17 +3149,17 @@ static int lm_trans_emit_function_return_structure_once(
 
     stored_name = lm_trans_string_stack_find(lm_trans_emitted_function_return_structs, type_name);
     if (stored_name != 0) {
-        free(type_name);
+        lm_own_delete(type_name, 0);
         return 0;
     }
 
     if (lm_trans_emit_function_return_structure(file, function_name, return_node) != 0) {
-        free(type_name);
+        lm_own_delete(type_name, 0);
         return 1;
     }
 
     if (lm_own_ptr_stack_push(lm_trans_emitted_function_return_structs, type_name) != 0) {
-        free(type_name);
+        lm_own_delete(type_name, 0);
         return 1;
     }
 
@@ -4853,7 +4853,7 @@ static int lm_trans_statement_emit_nested_function(
     status = lm_trans_namespace_set_callable_shape(namespace_, function);
 
 cleanup:
-    free(env_arg);
+    lm_own_delete(env_arg, 0);
     lm_trans_text_ref_destroy(&env_arg_text);
     lm_own_delete(function, 0);
     return status;
@@ -5977,7 +5977,7 @@ static char *lm_trans_hoisted_c_name_new(
         return 0;
     }
 
-    name = (char *)malloc((size_t)needed + 1U);
+    name = (char *)lm_own_new_zero((size_t)needed + 1U);
     if (name == 0) {
         return 0;
     }
@@ -5994,7 +5994,7 @@ static char *lm_trans_hoisted_c_name_new(
             index
         ) != needed
     ) {
-        free(name);
+        lm_own_delete(name, 0);
         return 0;
     }
 
@@ -6017,7 +6017,7 @@ static char *lm_trans_hoisted_suffix_name_new(const LmP0Text *base_name, const c
         return 0;
     }
 
-    name = (char *)malloc((size_t)needed + 1U);
+    name = (char *)lm_own_new_zero((size_t)needed + 1U);
     if (name == 0) {
         return 0;
     }
@@ -6032,7 +6032,7 @@ static char *lm_trans_hoisted_suffix_name_new(const LmP0Text *base_name, const c
             suffix != 0 ? suffix : ""
         ) != needed
     ) {
-        free(name);
+        lm_own_delete(name, 0);
         return 0;
     }
 
@@ -6054,7 +6054,7 @@ static char *lm_trans_captured_expr_new(LmP0Text name) {
         return 0;
     }
 
-    text = (char *)malloc((size_t)needed + 1U);
+    text = (char *)lm_own_new_zero((size_t)needed + 1U);
     if (text == 0) {
         return 0;
     }
@@ -6067,7 +6067,7 @@ static char *lm_trans_captured_expr_new(LmP0Text name) {
             name.data
         ) != needed
     ) {
-        free(text);
+        lm_own_delete(text, 0);
         return 0;
     }
     return text;
@@ -6088,7 +6088,7 @@ static char *lm_trans_env_arg_new(LmP0Text env_var_name) {
         return 0;
     }
 
-    text = (char *)malloc((size_t)needed + 1U);
+    text = (char *)lm_own_new_zero((size_t)needed + 1U);
     if (text == 0) {
         return 0;
     }
@@ -6101,7 +6101,7 @@ static char *lm_trans_env_arg_new(LmP0Text env_var_name) {
             env_var_name.data
         ) != needed
     ) {
-        free(text);
+        lm_own_delete(text, 0);
         return 0;
     }
     return text;
@@ -6709,14 +6709,14 @@ static int lm_trans_collect_hoisted_function(
     }
     closure_call_name = lm_trans_hoisted_suffix_name_new(lm_trans_text_from_cstr(c_name), "_closure_call");
     if (closure_call_name == 0) {
-        free(c_name);
+        lm_own_delete(c_name, 0);
         return 1;
     }
 
     hoisted = (LmTransHoistedFunction *)lm_own_new_zero(sizeof(*hoisted));
     if (hoisted == 0) {
-        free(c_name);
-        free(closure_call_name);
+        lm_own_delete(c_name, 0);
+        lm_own_delete(closure_call_name, 0);
         return 1;
     }
 
@@ -6743,8 +6743,8 @@ static int lm_trans_collect_hoisted_function(
         env_type_name = lm_trans_hoisted_suffix_name_new(&hoisted->function.c_name, "Env");
         env_var_name = lm_trans_hoisted_suffix_name_new(&hoisted->function.c_name, "_env");
         if (env_type_name == 0 || env_var_name == 0) {
-            free(env_type_name);
-            free(env_var_name);
+            lm_own_delete(env_type_name, 0);
+            lm_own_delete(env_var_name, 0);
             lm_trans_hoisted_function_destroy(hoisted);
             return 1;
         }

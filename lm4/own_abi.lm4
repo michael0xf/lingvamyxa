@@ -232,9 +232,12 @@ table:
 end: `LmOwnArena.field.address-depth`
 
 fn: lm_own_new_zero (size_t: size) @: void
+fn: lm_own_resize (@: void object; size_t: size) @: void
+fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
 fn: lm_own_array_new_zero (size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
 fn: lm_own_allocation_descriptor (const: @(void address)) const: @: LmOwnAllocationDescriptor
 fn: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields) void
+fn: lm_own_delete_plain (@: void object) void
 fn: lm_own_pointer_array_delete (@@: void items; size_t: count; LmOwnDelete: delete_item) void
 fn: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item) void
 fn: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack) void

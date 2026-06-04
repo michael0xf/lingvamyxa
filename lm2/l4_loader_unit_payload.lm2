@@ -1,4 +1,6 @@
 L2:
+    import: "lm4/own_abi.lm4"
+
     @: LmOwnPtrStack lm_l4_seen_tables
 
     fn: lm_l4_seen_tables_get () @: LmOwnPtrStack
@@ -405,7 +407,7 @@ L2:
         if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "table") = 0
             return: 0
 
-        columns: c.calloc(128U, c.sizeof(c.LmL4Column))
+        columns: lm_own_new_zero(128U * c.sizeof(c.LmL4Column))
         if: columns = 0
             lm_l4_error(loader, "out of memory while reading table columns")
             return: -1
@@ -421,13 +423,13 @@ L2:
             if: node != 0 && lm_l4_node_is_ignored(node) = 0
                 if: node\kind != c.LM_P0_NODE_FRAME
                     lm_l4_error(loader, "table body expects name/columns/rows frames")
-                    c.free(columns)
+                    lm_own_delete(columns, 0)
                     return: -1
                 node_frame: lm_l4_node_frame(node)
                 status: lm_l4_frame_single_atom(node_frame, "name", @ table_name)
                 if: status < 0
                     lm_l4_error(loader, "table name expects exactly one atom")
-                    c.free(columns)
+                    lm_own_delete(columns, 0)
                     return: -1
                 if: status > 0
                     have_name: 1
@@ -436,15 +438,15 @@ L2:
                 if: lm_l4_text_equals(lm_l4_frame_head(node_frame), "columns") != 0
                     if: have_name = 0
                         lm_l4_error(loader, "table columns must appear after name")
-                        c.free(columns)
+                        lm_own_delete(columns, 0)
                         return: -1
                     status: lm_l4_columns_from_frame(loader, node_frame, columns, 128U, @ column_count)
                     if: status <= 0
-                        c.free(columns)
+                        lm_own_delete(columns, 0)
                         return: -1
                     if: loader != 0 && loader\push_column_metadata != 0 && c.loader->push_column_metadata(context, table_name, columns, column_count) != 0
                         lm_l4_error(loader, "cannot store table column metadata")
-                        c.free(columns)
+                        lm_own_delete(columns, 0)
                         return: -1
                     have_columns: 1
                     field: field\next
@@ -452,29 +454,29 @@ L2:
                 if: lm_l4_text_equals(lm_l4_frame_head(node_frame), "rows") != 0
                     if: have_name = 0 || have_columns = 0
                         lm_l4_error(loader, "table rows must appear after name and columns")
-                        c.free(columns)
+                        lm_own_delete(columns, 0)
                         return: -1
                     status: lm_l4_rows_from_frame(loader, context, node_frame, table_name, columns, column_count)
                     if: status <= 0
-                        c.free(columns)
+                        lm_own_delete(columns, 0)
                         return: -1
                     have_rows: 1
                     field: field\next
                     continue
                 lm_l4_error(loader, "table body expects name/columns/rows frames")
-                c.free(columns)
+                lm_own_delete(columns, 0)
                 return: -1
             field: field\next
 
         if: have_name = 0 || have_columns = 0 || have_rows = 0
             lm_l4_error(loader, "table requires name, columns and rows")
-            c.free(columns)
+            lm_own_delete(columns, 0)
             return: -1
         if: lm_l4_validate_named_trailer(loader, frame, table_name) != 0
-            c.free(columns)
+            lm_own_delete(columns, 0)
             return: -1
 
-        c.free(columns)
+        lm_own_delete(columns, 0)
         return: 1
     end: lm_l4_table_from_frame
 
@@ -492,19 +494,19 @@ L2:
 
         i: 0U
         while: i < seen\count
-            existing: c.lm_own_ptr_stack_at(seen, i)
+            existing: lm_own_ptr_stack_at(seen, i)
             if: existing != 0 && lm_l4_text_slice_equals(payload_data, payload_length, existing) != 0
                 return: 1
             i: i + 1U
 
-        name: c.malloc(payload_length + 1U)
+        name: lm_own_new_zero(payload_length + 1U)
         if: name = 0
             return: -1
         if: payload_length > 0U
             c.memcpy(name, payload_data, payload_length)
         name[payload_length]: '\0'
-        if: c.lm_own_ptr_stack_push(seen, name) != 0
-            c.free(name)
+        if: lm_own_ptr_stack_push(seen, name) != 0
+            lm_own_delete(name, 0)
             return: -1
         return: 0
     end: lm_l4_seen_table_add
@@ -623,11 +625,11 @@ L2:
         previous_seen: lm_l4_seen_tables_get()
         owns_seen: previous_seen = 0
         if: owns_seen != 0
-            seen: c.malloc(c.sizeof(seen[0]))
+            seen: lm_own_new_zero(c.sizeof(seen[0]))
             if: seen = 0
                 lm_l4_error(loader, "cannot allocate table duplicate tracker")
                 return: 1
-            c.lm_own_ptr_stack_init: seen c.free
+            lm_own_ptr_stack_init: seen lm_own_delete_plain
             lm_l4_seen_tables_set: seen
         status: 0
 
@@ -648,8 +650,8 @@ L2:
 
         if: owns_seen != 0
             lm_l4_seen_tables_set: previous_seen
-            c.lm_own_ptr_stack_destroy: seen
-            c.free(seen)
+            lm_own_ptr_stack_destroy: seen
+            lm_own_delete(seen, 0)
         return: status
     end: lm_l4_load_rows
 
@@ -667,11 +669,11 @@ L2:
         if: out_row_count != 0
             \out_row_count: 0U
 
-        seen: c.malloc(c.sizeof(seen[0]))
+        seen: lm_own_new_zero(c.sizeof(seen[0]))
         if: seen = 0
             lm_l4_error(loader, "cannot allocate table duplicate tracker")
             return: 1
-        c.lm_own_ptr_stack_init: seen c.free
+        lm_own_ptr_stack_init: seen lm_own_delete_plain
         previous_seen: lm_l4_seen_tables_get()
         lm_l4_seen_tables_set: seen
         loaded: 0
@@ -713,8 +715,8 @@ L2:
             status: 1
 
         lm_l4_seen_tables_set: previous_seen
-        c.lm_own_ptr_stack_destroy: seen
-        c.free(seen)
+        lm_own_ptr_stack_destroy: seen
+        lm_own_delete(seen, 0)
         return: status
     end: lm_l4_load_root
 
