@@ -1,0 +1,96 @@
+fn: lm_trans_node_is_ignored (const: @(LmP0Node node)) int
+    return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
+end: lm_trans_node_is_ignored
+
+fn: lm_trans_node_is_positional_skip (const: @(LmP0Node node)) int
+    return: node != 0 && (node\flags & c.LM_P0_NODE_POSITIONAL_SKIP) != 0U
+end: lm_trans_node_is_positional_skip
+
+fn: lm_trans_trailer_single_atom (const: @(LmP0Trailer trailer); @: LmP0Text out_text) int
+    const: @: LmP0Text atom
+    const: @: LmP0Field field
+
+    if: trailer = 0 || out_text = 0
+        return: 0
+
+    field: trailer\body\first_field
+    if: field = 0 || field\next != 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+
+    atom: field\value\as\atom
+    out_text[0]: c.*atom
+    return: 1
+end: lm_trans_trailer_single_atom
+
+fn: lm_trans_symbol_class_name (const: @(char class_name)) const: @: char
+    if: class_name != 0
+        return: class_name
+    return: "symbol"
+end: lm_trans_symbol_class_name
+
+fn: lm_trans_symbol_class_is (const: @(char class_name); const: @(char expected)) int
+    return: class_name != 0 && expected != 0 && c.strcmp(class_name, expected) = 0
+end: lm_trans_symbol_class_is
+
+fn: lm_trans_symbol_is (const: @(LmTransSymbol symbol); const: @(char class_name)) int
+    return: symbol != 0 && lm_trans_symbol_class_is(symbol\class_name, class_name) != 0
+end: lm_trans_symbol_is
+
+fn: lm_trans_symbol_is_executable_callable (const: @(LmTransSymbol symbol)) int
+    return: symbol != 0 && symbol\has_callable_shape != 0 && (lm_trans_symbol_is(symbol, "function") != 0 || lm_trans_symbol_is(symbol, "procedure") != 0 || lm_trans_symbol_is(symbol, "closure") != 0)
+end: lm_trans_symbol_is_executable_callable
+
+fn: lm_trans_symbol_is_value_callable (const: @(LmTransSymbol symbol)) int
+    return: lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol\callable_returns_value != 0
+end: lm_trans_symbol_is_value_callable
+
+sub: lm_trans_symbol_destroy_fields (@: LmTransSymbol symbol)
+    if: symbol != 0
+        c.lm_trans_text_ref_destroy(c.&symbol->name)
+        c.free(symbol\name_storage)
+        symbol\name_storage: 0
+        c.free(symbol\c_name_storage)
+        symbol\c_name_storage: 0
+        c.symbol->c_name.data: ""
+        c.symbol->c_name.length: 0U
+        symbol\has_c_name: 0
+        c.free(symbol\env_arg_storage)
+        symbol\env_arg_storage: 0
+        c.symbol->env_arg.data: ""
+        c.symbol->env_arg.length: 0U
+        symbol\has_env_arg: 0
+        c.free(symbol\closure_call_name_storage)
+        symbol\closure_call_name_storage: 0
+        c.symbol->closure_call_name.data: ""
+        c.symbol->closure_call_name.length: 0U
+        symbol\has_closure_call_name: 0
+        c.lm_own_ptr_stack_destroy(c.&symbol->param_names)
+        symbol\has_signature: 0
+        symbol\callable_params_node: 0
+        symbol\callable_return_node: 0
+        symbol\has_callable_shape: 0
+        symbol\callable_returns_value: 0
+        symbol\callable_is_struct_return: 0
+end: lm_trans_symbol_destroy_fields
+
+sub: lm_trans_symbol_destroy_fields_any (@: void object)
+    @: LmTransSymbol symbol
+
+    symbol: object
+    lm_trans_symbol_destroy_fields(symbol)
+end: lm_trans_symbol_destroy_fields_any
+
+sub: lm_trans_symbol_destroy (@: LmTransSymbol symbol)
+    c.lm_own_delete(symbol, c.lm_trans_symbol_destroy_fields_any)
+end: lm_trans_symbol_destroy
+
+sub: lm_trans_symbol_delete_any (@: void object)
+    @: LmTransSymbol symbol
+
+    symbol: object
+    lm_trans_symbol_destroy(symbol)
+end: lm_trans_symbol_delete_any
+
+sub: lm_trans_free_any (@: void object)
+    c.free(object)
+end: lm_trans_free_any

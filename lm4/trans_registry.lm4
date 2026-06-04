@@ -49,6 +49,7 @@ table:
              expr_emitter_binding       relation
              `call.lowering`            relation
              `materialize.argument`     relation
+             `callable.lazy`            relation
              `cast.target`              relation
              `operator.prefix`          relation
              `operator.postfix`         relation
@@ -119,6 +120,7 @@ table:
     columns: class  (receiver binding)
     rows:
              fn     lm_trans_receiver_fn
+             `lazy fn` lm_trans_receiver_lazy_fn
              fm     lm_trans_receiver_fm
              sub    lm_trans_receiver_sub
 end: `receiver.function`
@@ -130,6 +132,7 @@ table:
              L1            `receiver.level`
              L2            `receiver.level`
              fn            `receiver.function`
+             `lazy fn`     `receiver.function`
              fm            `receiver.function`
              sub           `receiver.function`
              if            `receiver.statement`
@@ -218,6 +221,7 @@ table:
              table  `receiver.l4`
              row    `receiver.l4`
              fn     `receiver.l4`
+             `lazy fn` `receiver.l4`
 end: `namespace.l4`
 
 table:
@@ -227,6 +231,7 @@ table:
              table  lm_trans_l4_receiver_table
              row    lm_trans_l4_receiver_row
              fn     lm_trans_l4_receiver_fn_descriptor
+             `lazy fn` lm_trans_l4_receiver_fn_descriptor
 end: `receiver.l4`
 
 table:

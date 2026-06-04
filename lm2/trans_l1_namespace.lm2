@@ -1,0 +1,1296 @@
+L1:
+===
+static LmP0Text *lm_trans_text_ref_new(LmP0Text text) {
+    LmP0Text *copy;
+
+    copy = (LmP0Text *)lm_own_new_zero(sizeof(*copy));
+    if (copy != 0) {
+        *copy = text;
+    }
+    return copy;
+}
+
+static void lm_trans_text_ref_destroy(LmP0Text **text) {
+    if (text != 0 && *text != 0) {
+        lm_own_delete(*text, 0);
+        *text = 0;
+    }
+}
+
+static void lm_trans_text_ref_delete_any(void *object) {
+    lm_own_delete(object, 0);
+}
+
+static LmTransFunctionState *lm_trans_function_state_new(void) {
+    return (LmTransFunctionState *)lm_own_new_zero(sizeof(LmTransFunctionState));
+}
+
+static void lm_trans_function_state_destroy(LmTransFunctionState *state) {
+    if (state != 0) {
+        lm_trans_text_ref_destroy(&state->current_return_type_name);
+        if (state->has_previous_control_stacks) {
+            lm_own_ptr_stack_destroy(&state->previous_cleanups);
+            lm_own_ptr_stack_destroy(&state->previous_loops);
+            state->has_previous_control_stacks = 0;
+        }
+    }
+}
+
+static void lm_trans_function_state_destroy_any(void *object) {
+    lm_trans_function_state_destroy((LmTransFunctionState *)object);
+}
+
+static void lm_trans_function_state_delete(LmTransFunctionState *state) {
+    lm_own_delete(state, lm_trans_function_state_destroy_any);
+}
+
+static int lm_trans_registry_has_expr_emitter_binding(LmP0Text key, const char *table) {
+    const char *binding;
+    LmTransBinding resolved;
+
+    binding = lm_trans_registry_lookup(key, table);
+    if (binding == 0) {
+        return 0;
+    }
+    if (
+        !lm_trans_binding_resolve(binding, &resolved) ||
+        resolved.expr_emit == 0 ||
+        resolved.expr_state == 0
+    ) {
+        fprintf(
+            stderr,
+            "trans registry inconsistency: %s[\"%.*s\"] has unknown expression emitter binding %s\n",
+            table != 0 ? table : "<none>",
+            (int)key.length,
+            key.data,
+            binding
+        );
+        exit(2);
+    }
+    return 1;
+}
+
+static const char *lm_trans_expr_emitter_binding_table(const char *class_name) {
+    LmP0Text class_text;
+    const char *table;
+
+    class_text = lm_trans_text_from_cstr(class_name);
+    table = lm_trans_registry_lookup(class_text, "expr_emitter_binding");
+    if (
+        table != 0 &&
+        lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, table) != 0
+    ) {
+        exit(2);
+    }
+    return table;
+}
+
+static const char *lm_trans_expr_spelling_binding_table(const char *class_name) {
+    LmP0Text class_text;
+    const char *table;
+
+    class_text = lm_trans_text_from_cstr(class_name);
+    table = lm_trans_registry_lookup(class_text, "expr_spelling_binding");
+    if (
+        table != 0 &&
+        lm_trans_registry_assert_payload_table_exists("expr_spelling_binding", class_text, table) != 0
+    ) {
+        exit(2);
+    }
+    return table != 0 ? table : class_name;
+}
+
+static int lm_trans_registry_has_expr_emitter_class(LmP0Text key, const char *class_name) {
+    const char *table;
+
+    table = lm_trans_expr_emitter_binding_table(class_name);
+    return table != 0 && lm_trans_registry_has_expr_emitter_binding(key, table);
+}
+
+static int lm_trans_registry_has_expr_emitter_binding_class(
+    LmP0Text key,
+    const char *class_name
+) {
+    return lm_trans_registry_has_expr_emitter_class(key, class_name);
+}
+
+static int lm_trans_registry_has_any_expr_emitter_binding(LmP0Text key) {
+    size_t i;
+    LmTransRegistryFact *row;
+    const LmOwnPtrStack *rows;
+
+    rows = lm_trans_registry_relation_stack(
+        lm_trans_text_from_cstr("expr_emitter_binding"),
+        "row"
+    );
+    if (rows == 0) {
+        return 0;
+    }
+
+    i = 0U;
+    while (i < rows->count) {
+        row = (LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i);
+        if (
+            row != 0 &&
+            row->payload != 0 &&
+            row->key != 0
+        ) {
+            if (
+                lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", lm_trans_text_from_cstr(row->key), row->payload) != 0
+            ) {
+                exit(2);
+            }
+            if (lm_trans_registry_has_expr_emitter_binding(key, row->payload)) {
+                return 1;
+            }
+        }
+        ++i;
+    }
+    return 0;
+}
+
+static int lm_trans_text_is_operator_atom(LmP0Text text) {
+    return lm_trans_registry_has_any_expr_emitter_binding(text);
+}
+
+static int lm_trans_copy_stream(FILE *target, FILE *source) {
+    char buffer[4096];
+    size_t count;
+
+    if (target == 0 || source == 0) {
+        return 1;
+    }
+    if (fflush(source) != 0 || fseek(source, 0L, SEEK_SET) != 0) {
+        return 1;
+    }
+    while ((count = fread(buffer, 1U, sizeof(buffer), source)) != 0U) {
+        if (fwrite(buffer, 1U, count, target) != count) {
+            return 1;
+        }
+    }
+
+    return ferror(source) ? 1 : 0;
+}
+
+static char *lm_trans_temp_output_path_new(const char *output_path, const char *suffix) {
+    size_t output_length;
+    size_t suffix_length;
+    char *result;
+
+    if (output_path == 0 || suffix == 0) {
+        return 0;
+    }
+
+    output_length = strlen(output_path);
+    suffix_length = strlen(suffix);
+    result = (char *)malloc(output_length + suffix_length + 1U);
+    if (result == 0) {
+        return 0;
+    }
+    memcpy(result, output_path, output_length);
+    memcpy(result + output_length, suffix, suffix_length + 1U);
+    return result;
+}
+
+static const LmP0Structure *lm_trans_unwrap_single_anonymous_structure(
+    const LmP0Structure *structure
+) {
+    const LmP0Field *field;
+
+    while (structure != 0) {
+        field = structure->first_field;
+        if (
+            field == 0 ||
+            field->next != 0 ||
+            field->value == 0 ||
+            field->value->kind != LM_P0_NODE_STRUCTURE
+        ) {
+            break;
+        }
+        structure = field->value->as->structure;
+    }
+
+    return structure;
+}
+
+static unsigned long lm_trans_hash_bytes(const char *data, size_t length) {
+    unsigned long hash;
+    size_t i;
+
+    hash = 2166136261UL;
+    for (i = 0U; i < length; ++i) {
+        hash ^= (unsigned char)data[i];
+        hash *= 16777619UL;
+    }
+    return hash;
+}
+
+static unsigned long lm_trans_hash_cstr(const char *text) {
+    return text != 0 ? lm_trans_hash_bytes(text, strlen(text)) : 0UL;
+}
+
+static void lm_trans_ptr_stack_remove_pointer(
+    LmOwnPtrStack *stack,
+    const void *item
+) {
+    size_t i;
+
+    if (stack == 0 || item == 0) {
+        return;
+    }
+
+    i = stack->count;
+    while (i > 0U) {
+        --i;
+        if (stack->items[i] == item) {
+            while (i + 1U < stack->count) {
+                stack->items[i] = stack->items[i + 1U];
+                ++i;
+            }
+            --stack->count;
+            stack->items[stack->count] = 0;
+            return;
+        }
+    }
+}
+
+static void lm_trans_identifier_relation_destroy(
+    LmTransIdentifierRelation *relation
+) {
+    if (relation != 0) {
+        lm_own_ptr_stack_destroy(&relation->symbols);
+    }
+    lm_own_delete(relation, 0);
+}
+
+static void lm_trans_identifier_card_destroy(LmTransIdentifierCard *card) {
+    size_t i;
+    LmTransIdentifierRelation *relation;
+    LmTransIdentifierRelation *next;
+
+    if (card == 0) {
+        return;
+    }
+
+    lm_own_ptr_stack_destroy(&card->symbols);
+    if (card->relation_buckets != 0) {
+        for (i = 0U; i < card->relation_bucket_count; ++i) {
+            relation = card->relation_buckets[i];
+            while (relation != 0) {
+                next = relation->next;
+                lm_trans_identifier_relation_destroy(relation);
+                relation = next;
+            }
+        }
+    }
+    free(card->relation_buckets);
+    card->relation_buckets = 0;
+    card->relation_bucket_count = 0U;
+    lm_trans_text_ref_destroy(&card->name);
+    free(card->name_storage);
+    card->name_storage = 0;
+    lm_own_delete(card, 0);
+}
+
+static void lm_trans_identifier_table_init(LmTransIdentifierTable *table) {
+    if (table != 0) {
+        table->buckets = 0;
+        table->bucket_count = 0U;
+        table->count = 0U;
+    }
+}
+
+static int lm_trans_identifier_table_ensure_buckets(
+    LmTransIdentifierTable *table
+) {
+    size_t bucket_count;
+
+    if (table == 0) {
+        return 1;
+    }
+    if (table->buckets != 0) {
+        return 0;
+    }
+
+    bucket_count = 257U;
+    table->buckets = (LmTransIdentifierCard **)calloc(
+        bucket_count,
+        sizeof(*table->buckets)
+    );
+    if (table->buckets == 0) {
+        return 1;
+    }
+    table->bucket_count = bucket_count;
+    return 0;
+}
+
+static void lm_trans_identifier_table_destroy(LmTransIdentifierTable *table) {
+    size_t i;
+    LmTransIdentifierCard *card;
+    LmTransIdentifierCard *next;
+
+    if (table == 0) {
+        return;
+    }
+
+    if (table->buckets != 0) {
+        for (i = 0U; i < table->bucket_count; ++i) {
+            card = table->buckets[i];
+            while (card != 0) {
+                next = card->next;
+                lm_trans_identifier_card_destroy(card);
+                card = next;
+            }
+        }
+    }
+    free(table->buckets);
+    table->buckets = 0;
+    table->bucket_count = 0U;
+    table->count = 0U;
+}
+
+static LmTransIdentifierCard *lm_trans_identifier_table_find_card(
+    const LmTransIdentifierTable *table,
+    LmP0Text name
+) {
+    LmP0Text payload;
+    unsigned long hash;
+    size_t bucket;
+    LmTransIdentifierCard *card;
+
+    if (
+        table == 0 ||
+        table->buckets == 0 ||
+        table->bucket_count == 0U ||
+        !lm_trans_identifier_payload(&name, &payload)
+    ) {
+        return 0;
+    }
+
+    hash = lm_trans_hash_bytes(payload.data, payload.length);
+    bucket = (size_t)(hash % table->bucket_count);
+    card = table->buckets[bucket];
+    while (card != 0) {
+        if (
+            card->hash == hash &&
+            card->name != 0 &&
+            lm_trans_text_same(card->name, &payload)
+        ) {
+            return card;
+        }
+        card = card->next;
+    }
+    return 0;
+}
+
+static LmTransIdentifierCard *lm_trans_identifier_table_get_card(
+    LmTransIdentifierTable *table,
+    LmP0Text name
+) {
+    LmP0Text payload;
+    unsigned long hash;
+    size_t bucket;
+    LmTransIdentifierCard *card;
+    char *copy;
+
+    if (
+        table == 0 ||
+        !lm_trans_identifier_payload(&name, &payload) ||
+        lm_trans_identifier_table_ensure_buckets(table) != 0
+    ) {
+        return 0;
+    }
+
+    card = lm_trans_identifier_table_find_card(table, name);
+    if (card != 0) {
+        return card;
+    }
+
+    hash = lm_trans_hash_bytes(payload.data, payload.length);
+    bucket = (size_t)(hash % table->bucket_count);
+    card = (LmTransIdentifierCard *)lm_own_new_zero(sizeof(*card));
+    if (card == 0) {
+        return 0;
+    }
+
+    copy = lm_trans_text_copy_cstr(&payload);
+    if (copy == 0) {
+        lm_trans_identifier_card_destroy(card);
+        return 0;
+    }
+    card->name_storage = copy;
+    card->name = lm_trans_text_ref_new(lm_trans_text_from_cstr(copy));
+    if (card->name == 0) {
+        lm_trans_identifier_card_destroy(card);
+        return 0;
+    }
+
+    lm_own_ptr_stack_init(&card->symbols, 0);
+    card->relation_bucket_count = 31U;
+    card->relation_buckets = (LmTransIdentifierRelation **)calloc(
+        card->relation_bucket_count,
+        sizeof(*card->relation_buckets)
+    );
+    if (card->relation_buckets == 0) {
+        lm_trans_identifier_card_destroy(card);
+        return 0;
+    }
+
+    card->hash = hash;
+    card->next = table->buckets[bucket];
+    table->buckets[bucket] = card;
+    ++table->count;
+    return card;
+}
+
+static LmTransIdentifierRelation *lm_trans_identifier_card_find_relation(
+    const LmTransIdentifierCard *card,
+    const char *relation_name
+) {
+    unsigned long hash;
+    size_t bucket;
+    LmTransIdentifierRelation *relation;
+
+    if (
+        card == 0 ||
+        relation_name == 0 ||
+        card->relation_buckets == 0 ||
+        card->relation_bucket_count == 0U
+    ) {
+        return 0;
+    }
+
+    hash = lm_trans_hash_cstr(relation_name);
+    bucket = (size_t)(hash % card->relation_bucket_count);
+    relation = card->relation_buckets[bucket];
+    while (relation != 0) {
+        if (relation->name != 0 && strcmp(relation->name, relation_name) == 0) {
+            return relation;
+        }
+        relation = relation->next;
+    }
+    return 0;
+}
+
+static LmTransIdentifierRelation *lm_trans_identifier_card_get_relation(
+    LmTransIdentifierCard *card,
+    const char *relation_name
+) {
+    unsigned long hash;
+    size_t bucket;
+    LmTransIdentifierRelation *relation;
+
+    if (
+        card == 0 ||
+        relation_name == 0 ||
+        card->relation_buckets == 0 ||
+        card->relation_bucket_count == 0U
+    ) {
+        return 0;
+    }
+
+    hash = lm_trans_hash_cstr(relation_name);
+    bucket = (size_t)(hash % card->relation_bucket_count);
+    relation = card->relation_buckets[bucket];
+    while (relation != 0) {
+        if (relation->name != 0 && strcmp(relation->name, relation_name) == 0) {
+            return relation;
+        }
+        relation = relation->next;
+    }
+
+    relation = (LmTransIdentifierRelation *)lm_own_new_zero(sizeof(*relation));
+    if (relation == 0) {
+        return 0;
+    }
+    relation->name = relation_name;
+    lm_own_ptr_stack_init(&relation->symbols, 0);
+    relation->next = card->relation_buckets[bucket];
+    card->relation_buckets[bucket] = relation;
+    return relation;
+}
+
+static int lm_trans_identifier_table_add_symbol(
+    LmTransIdentifierTable *table,
+    LmTransSymbol *symbol
+) {
+    LmTransIdentifierCard *card;
+    LmTransIdentifierRelation *relation;
+
+    if (table == 0 || symbol == 0 || symbol->name == 0) {
+        return 1;
+    }
+
+    card = lm_trans_identifier_table_get_card(table, *symbol->name);
+    if (card == 0) {
+        return 1;
+    }
+    relation = lm_trans_identifier_card_get_relation(card, symbol->class_name);
+    if (relation == 0) {
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(&card->symbols, symbol) != 0) {
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(&relation->symbols, symbol) != 0) {
+        lm_trans_ptr_stack_remove_pointer(&card->symbols, symbol);
+        return 1;
+    }
+    return 0;
+}
+
+static void lm_trans_identifier_table_remove_symbol(
+    LmTransIdentifierTable *table,
+    const LmTransSymbol *symbol
+) {
+    LmTransIdentifierCard *card;
+    LmTransIdentifierRelation *relation;
+
+    if (table == 0 || symbol == 0 || symbol->name == 0) {
+        return;
+    }
+
+    card = lm_trans_identifier_table_find_card(table, *symbol->name);
+    if (card == 0) {
+        return;
+    }
+    lm_trans_ptr_stack_remove_pointer(&card->symbols, symbol);
+    relation = lm_trans_identifier_card_get_relation(card, symbol->class_name);
+    if (relation != 0) {
+        lm_trans_ptr_stack_remove_pointer(&relation->symbols, symbol);
+    }
+}
+
+static LmTransSymbol *lm_trans_identifier_table_find_latest_symbol(
+    const LmTransIdentifierTable *table,
+    LmP0Text name
+) {
+    LmTransIdentifierCard *card;
+
+    card = lm_trans_identifier_table_find_card(table, name);
+    if (card == 0) {
+        return 0;
+    }
+    return (LmTransSymbol *)lm_own_ptr_stack_top(&card->symbols);
+}
+
+static LmTransSymbol *lm_trans_symbol_new(
+    LmP0Text name,
+    const char *kind,
+    unsigned depth
+) {
+    LmTransSymbol *symbol;
+
+    symbol = (LmTransSymbol *)lm_own_new_zero(sizeof(*symbol));
+    if (symbol == 0) {
+        return 0;
+    }
+
+    symbol->name = lm_trans_text_ref_new(name);
+    if (symbol->name == 0) {
+        lm_trans_symbol_destroy(symbol);
+        return 0;
+    }
+
+    lm_own_ptr_stack_init(&symbol->param_names, lm_trans_text_ref_delete_any);
+    symbol->class_name = kind;
+    symbol->depth = depth;
+    return symbol;
+}
+
+static int lm_trans_symbol_set_owned_name(LmTransSymbol *symbol, LmP0Text name) {
+    char *copy;
+
+    if (symbol == 0 || symbol->name == 0) {
+        return 1;
+    }
+
+    copy = (char *)malloc(name.length + 1U);
+    if (copy == 0) {
+        return 1;
+    }
+    memcpy(copy, name.data, name.length);
+    copy[name.length] = '\0';
+
+    free(symbol->name_storage);
+    symbol->name_storage = copy;
+    symbol->name->data = copy;
+    symbol->name->length = name.length;
+    return 0;
+}
+
+static int lm_trans_symbol_set_c_name(LmTransSymbol *symbol, LmP0Text c_name) {
+    char *copy;
+
+    if (symbol == 0) {
+        return 1;
+    }
+
+    copy = (char *)malloc(c_name.length + 1U);
+    if (copy == 0) {
+        return 1;
+    }
+    memcpy(copy, c_name.data, c_name.length);
+    copy[c_name.length] = '\0';
+
+    free(symbol->c_name_storage);
+    symbol->c_name_storage = copy;
+    symbol->c_name.data = copy;
+    symbol->c_name.length = c_name.length;
+    symbol->has_c_name = 1;
+    return 0;
+}
+
+static int lm_trans_symbol_set_env_arg(LmTransSymbol *symbol, LmP0Text env_arg) {
+    char *copy;
+
+    if (symbol == 0) {
+        return 1;
+    }
+
+    copy = (char *)malloc(env_arg.length + 1U);
+    if (copy == 0) {
+        return 1;
+    }
+    memcpy(copy, env_arg.data, env_arg.length);
+    copy[env_arg.length] = '\0';
+
+    free(symbol->env_arg_storage);
+    symbol->env_arg_storage = copy;
+    symbol->env_arg.data = copy;
+    symbol->env_arg.length = env_arg.length;
+    symbol->has_env_arg = 1;
+    return 0;
+}
+
+static int lm_trans_symbol_set_closure_call_name(LmTransSymbol *symbol, LmP0Text closure_call_name) {
+    char *copy;
+
+    if (symbol == 0) {
+        return 1;
+    }
+
+    copy = (char *)malloc(closure_call_name.length + 1U);
+    if (copy == 0) {
+        return 1;
+    }
+    memcpy(copy, closure_call_name.data, closure_call_name.length);
+    copy[closure_call_name.length] = '\0';
+
+    free(symbol->closure_call_name_storage);
+    symbol->closure_call_name_storage = copy;
+    symbol->closure_call_name.data = copy;
+    symbol->closure_call_name.length = closure_call_name.length;
+    symbol->has_closure_call_name = 1;
+    return 0;
+}
+
+static LmTransCapture *lm_trans_capture_new(
+    LmP0Text name,
+    LmP0Text type_head,
+    const LmP0Node *type_node,
+    size_t pointer_depth,
+    int type_is_head
+) {
+    LmTransCapture *capture;
+
+    capture = (LmTransCapture *)lm_own_new_zero(sizeof(*capture));
+    if (capture != 0) {
+        capture->name = name;
+        capture->type_head = type_head;
+        capture->type_node = type_node;
+        capture->pointer_depth = pointer_depth;
+        capture->type_is_head = type_is_head;
+    }
+    return capture;
+}
+
+static void lm_trans_capture_destroy(LmTransCapture *capture) {
+    lm_own_delete(capture, 0);
+}
+
+static void lm_trans_capture_delete_any(void *object) {
+    lm_trans_capture_destroy((LmTransCapture *)object);
+}
+
+static void lm_trans_hoisted_function_destroy(LmTransHoistedFunction *function) {
+    if (function != 0) {
+        lm_own_ptr_stack_destroy(&function->captures);
+        free(function->c_name_storage);
+        function->c_name_storage = 0;
+        free(function->env_type_storage);
+        function->env_type_storage = 0;
+        free(function->env_var_storage);
+        function->env_var_storage = 0;
+        free(function->closure_call_storage);
+        function->closure_call_storage = 0;
+    }
+    lm_own_delete(function, 0);
+}
+
+static void lm_trans_hoisted_function_delete_any(void *object) {
+    lm_trans_hoisted_function_destroy((LmTransHoistedFunction *)object);
+}
+
+static LmTransCleanup *lm_trans_cleanup_new(unsigned id) {
+    LmTransCleanup *cleanup;
+
+    cleanup = (LmTransCleanup *)lm_own_new_zero(sizeof(*cleanup));
+    if (cleanup != 0) {
+        cleanup->id = id;
+    }
+    return cleanup;
+}
+
+static void lm_trans_cleanup_destroy(LmTransCleanup *cleanup) {
+    lm_own_delete(cleanup, 0);
+}
+
+static void lm_trans_cleanup_delete_any(void *object) {
+    lm_trans_cleanup_destroy((LmTransCleanup *)object);
+}
+
+static LmTransLoop *lm_trans_loop_new(size_t cleanup_base) {
+    LmTransLoop *loop;
+
+    loop = (LmTransLoop *)lm_own_new_zero(sizeof(*loop));
+    if (loop != 0) {
+        loop->cleanup_base = cleanup_base;
+    }
+    return loop;
+}
+
+static void lm_trans_loop_destroy(LmTransLoop *loop) {
+    lm_own_delete(loop, 0);
+}
+
+static void lm_trans_loop_delete_any(void *object) {
+    lm_trans_loop_destroy((LmTransLoop *)object);
+}
+
+static LmTransNamespace *lm_trans_namespace_new(void) {
+    LmTransNamespace *namespace_;
+
+    namespace_ = (LmTransNamespace *)lm_own_new_zero(sizeof(LmTransNamespace));
+    if (namespace_ != 0) {
+        lm_own_ptr_stack_init(&namespace_->items, lm_trans_symbol_delete_any);
+        lm_trans_identifier_table_init(&namespace_->identifiers);
+        namespace_->registry_identifiers = &lm_trans_registry->identifiers;
+        lm_own_ptr_stack_init(&namespace_->cleanups, lm_trans_cleanup_delete_any);
+        lm_own_ptr_stack_init(&namespace_->loops, lm_trans_loop_delete_any);
+    }
+    return namespace_;
+}
+
+static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
+    if (namespace_ != 0) {
+        lm_trans_identifier_table_destroy(&namespace_->identifiers);
+        namespace_->registry_identifiers = 0;
+        lm_own_ptr_stack_destroy(&namespace_->items);
+        lm_own_ptr_stack_destroy(&namespace_->cleanups);
+        lm_own_ptr_stack_destroy(&namespace_->loops);
+        namespace_->depth = 0U;
+        namespace_->next_cleanup_id = 0U;
+        namespace_->return_type_node = 0;
+        namespace_->return_type_is_struct = 0;
+        lm_trans_text_ref_destroy(&namespace_->return_type_name);
+        namespace_->next_return_id = 0U;
+        namespace_->hoisted_functions = 0;
+    }
+}
+
+static void lm_trans_namespace_destroy_any(void *object) {
+    lm_trans_namespace_destroy((LmTransNamespace *)object);
+}
+
+static void lm_trans_namespace_delete(LmTransNamespace *namespace_) {
+    lm_own_delete(namespace_, lm_trans_namespace_destroy_any);
+}
+
+static void lm_trans_namespace_enter_scope(LmTransNamespace *namespace_) {
+    if (namespace_ != 0) {
+        ++namespace_->depth;
+    }
+}
+
+static void lm_trans_namespace_leave_scope(LmTransNamespace *namespace_) {
+    LmTransSymbol *symbol;
+
+    if (namespace_ == 0) {
+        return;
+    }
+
+    while (namespace_->items.count > 0U) {
+        symbol = (LmTransSymbol *)lm_own_ptr_stack_top(&namespace_->items);
+        if (symbol == 0 || symbol->depth != namespace_->depth) {
+            break;
+        }
+        symbol = (LmTransSymbol *)lm_own_ptr_stack_pop(&namespace_->items);
+        lm_trans_identifier_table_remove_symbol(&namespace_->identifiers, symbol);
+        lm_trans_symbol_destroy(symbol);
+    }
+
+    if (namespace_->depth > 0U) {
+        --namespace_->depth;
+    }
+}
+
+static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
+    LmTransCleanup *cleanup;
+
+    if (namespace_ == 0) {
+        return 1;
+    }
+
+    cleanup = lm_trans_cleanup_new(id);
+    if (cleanup == 0) {
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(&namespace_->cleanups, cleanup) != 0) {
+        lm_trans_cleanup_destroy(cleanup);
+        return 1;
+    }
+    return 0;
+}
+
+static void lm_trans_cleanup_pop(LmTransNamespace *namespace_) {
+    LmTransCleanup *cleanup;
+
+    if (namespace_ != 0) {
+        cleanup = (LmTransCleanup *)lm_own_ptr_stack_pop(&namespace_->cleanups);
+        lm_trans_cleanup_destroy(cleanup);
+    }
+}
+
+static int lm_trans_loop_push(LmTransNamespace *namespace_) {
+    LmTransLoop *loop;
+
+    if (namespace_ == 0) {
+        return 1;
+    }
+
+    loop = lm_trans_loop_new(namespace_->cleanups.count);
+    if (loop == 0) {
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(&namespace_->loops, loop) != 0) {
+        lm_trans_loop_destroy(loop);
+        return 1;
+    }
+    return 0;
+}
+
+static void lm_trans_loop_pop(LmTransNamespace *namespace_) {
+    LmTransLoop *loop;
+
+    if (namespace_ != 0) {
+        loop = (LmTransLoop *)lm_own_ptr_stack_pop(&namespace_->loops);
+        lm_trans_loop_destroy(loop);
+    }
+}
+
+static size_t lm_trans_loop_cleanup_base(const LmTransNamespace *namespace_) {
+    const LmTransLoop *loop;
+
+    if (namespace_ == 0 || namespace_->loops.count == 0U) {
+        return namespace_ != 0 ? namespace_->cleanups.count : 0U;
+    }
+
+    loop = (const LmTransLoop *)lm_own_ptr_stack_top(&namespace_->loops);
+    return loop != 0 ? loop->cleanup_base : namespace_->cleanups.count;
+}
+
+static int lm_trans_emit_sync_name(FILE *file, unsigned id) {
+    return fprintf(file, "lm_sync_%u", id) < 0 ? 1 : 0;
+}
+
+static int lm_trans_emit_return_name(FILE *file, unsigned id) {
+    return fprintf(file, "lm_return_%u", id) < 0 ? 1 : 0;
+}
+
+static const LmTransSymbol *lm_trans_namespace_find(
+    const LmTransNamespace *namespace_,
+    LmP0Text name
+) {
+    if (namespace_ == 0) {
+        return 0;
+    }
+
+    return lm_trans_identifier_table_find_latest_symbol(&namespace_->identifiers, name);
+}
+
+static LmTransSymbol *lm_trans_namespace_find_mutable(
+    LmTransNamespace *namespace_,
+    LmP0Text name
+) {
+    if (namespace_ == 0) {
+        return 0;
+    }
+
+    return lm_trans_identifier_table_find_latest_symbol(&namespace_->identifiers, name);
+}
+
+static int lm_trans_is_c_reference_name(LmP0Text name);
+
+static int lm_trans_is_reserved_head_name(LmP0Text name) {
+    const char *namespace_class;
+
+    namespace_class = lm_trans_registry_lookup_table_link_checked(name, "namespace", "receiver.type");
+    return namespace_class != 0;
+}
+
+static int lm_trans_head_binding_resolve(
+    const LmTransNamespace *namespace_,
+    LmP0Text head,
+    LmTransHeadBinding *out
+) {
+    LmTransBinding resolved;
+    int receiver_status;
+
+    if (out == 0) {
+        return 1;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->symbol = lm_trans_namespace_find(namespace_, head);
+    out->receiver_type = lm_trans_namespace_registry_lookup_table_link_checked(
+        namespace_,
+        head,
+        "namespace",
+        "receiver.type"
+    );
+
+    out->function_receiver_binding = lm_trans_namespace_registry_lookup(
+        namespace_,
+        head,
+        "receiver.function"
+    );
+    if (out->function_receiver_binding != 0) {
+        receiver_status = lm_trans_binding_resolve(out->function_receiver_binding, &resolved);
+        if (!receiver_status || resolved.function_receiver == 0) {
+            fprintf(
+                stderr,
+                "trans registry inconsistency: receiver.function[\"%.*s\"] has unknown function binding %s\n",
+                (int)head.length,
+                head.data,
+                out->function_receiver_binding
+            );
+            return 1;
+        }
+        out->function_receiver = resolved.function_receiver;
+    }
+
+    out->statement_receiver_binding = lm_trans_namespace_registry_lookup(
+        namespace_,
+        head,
+        "receiver.statement"
+    );
+    if (out->statement_receiver_binding != 0) {
+        if (
+            !lm_trans_binding_resolve(out->statement_receiver_binding, &resolved) ||
+            resolved.statement_frame == 0
+        ) {
+            fprintf(
+                stderr,
+                "trans registry inconsistency: receiver.statement[\"%.*s\"] has unknown statement binding %s\n",
+                (int)head.length,
+                head.data,
+                out->statement_receiver_binding
+            );
+            return 1;
+        }
+        out->statement_frame = resolved.statement_frame;
+    }
+
+    return 0;
+}
+
+static int lm_trans_namespace_declare_with_c_name(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    const char *kind,
+    const LmP0Text *c_name
+) {
+    LmTransSymbol *symbol;
+
+    if (namespace_ == 0) {
+        return 1;
+    }
+
+    if (lm_trans_is_c_reference_name(name)) {
+        fprintf(
+            stderr,
+            "trans L2 error: C-surface spelling \"%.*s\" cannot be declared as a Lingvamyxa name\n",
+            (int)name.length,
+            name.data
+        );
+        return 1;
+    }
+
+    symbol = lm_trans_symbol_new(name, kind, namespace_->depth);
+    if (symbol == 0) {
+        return 1;
+    }
+    if (c_name != 0 && lm_trans_symbol_set_c_name(symbol, *c_name) != 0) {
+        lm_trans_symbol_destroy(symbol);
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(&namespace_->items, symbol) != 0) {
+        lm_trans_symbol_destroy(symbol);
+        return 1;
+    }
+    if (lm_trans_identifier_table_add_symbol(&namespace_->identifiers, symbol) != 0) {
+        symbol = (LmTransSymbol *)lm_own_ptr_stack_pop(&namespace_->items);
+        lm_trans_symbol_destroy(symbol);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_namespace_declare(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    const char *kind
+) {
+    return lm_trans_namespace_declare_with_c_name(namespace_, name, kind, 0);
+}
+
+static int lm_trans_namespace_declare_generated(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    const char *kind
+) {
+    const LmTransSymbol *existing;
+    LmTransSymbol *symbol;
+
+    if (namespace_ == 0) {
+        return 1;
+    }
+
+    existing = lm_trans_namespace_find(namespace_, name);
+    if (existing != 0) {
+        if (lm_trans_symbol_is(existing, kind)) {
+            return 0;
+        }
+        fprintf(
+            stderr,
+            "trans L2 error: generated name \"%.*s\" is already visible as %s\n",
+            (int)name.length,
+            name.data,
+            lm_trans_symbol_class_name(existing->class_name)
+        );
+        return 1;
+    }
+
+    symbol = lm_trans_symbol_new(name, kind, namespace_->depth);
+    if (symbol == 0) {
+        return 1;
+    }
+    if (lm_trans_symbol_set_owned_name(symbol, name) != 0) {
+        lm_trans_symbol_destroy(symbol);
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(&namespace_->items, symbol) != 0) {
+        lm_trans_symbol_destroy(symbol);
+        return 1;
+    }
+    if (lm_trans_identifier_table_add_symbol(&namespace_->identifiers, symbol) != 0) {
+        symbol = (LmTransSymbol *)lm_own_ptr_stack_pop(&namespace_->items);
+        lm_trans_symbol_destroy(symbol);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_namespace_attach_registry(
+    LmTransNamespace *namespace_
+) {
+    if (namespace_ == 0) {
+        return 1;
+    }
+    namespace_->registry_identifiers = &lm_trans_registry->identifiers;
+    return 0;
+}
+
+static int lm_trans_namespace_declare_c_name(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    const char *kind,
+    LmP0Text c_name
+) {
+    return lm_trans_namespace_declare_with_c_name(namespace_, name, kind, &c_name);
+}
+
+static int lm_trans_namespace_set_env_arg(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    LmP0Text env_arg
+) {
+    LmTransSymbol *symbol;
+
+    symbol = lm_trans_namespace_find_mutable(namespace_, name);
+    if (symbol == 0) {
+        return 1;
+    }
+    return lm_trans_symbol_set_env_arg(symbol, env_arg);
+}
+
+static int lm_trans_namespace_set_closure_call_name(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    LmP0Text closure_call_name
+) {
+    LmTransSymbol *symbol;
+
+    symbol = lm_trans_namespace_find_mutable(namespace_, name);
+    if (symbol == 0) {
+        return 1;
+    }
+    return lm_trans_symbol_set_closure_call_name(symbol, closure_call_name);
+}
+
+static int lm_trans_symbol_copy_signature(
+    LmTransSymbol *target,
+    const LmTransSymbol *source
+) {
+    size_t i;
+    const LmP0Text *source_name;
+    LmP0Text *copy;
+
+    if (target == 0 || source == 0) {
+        return 1;
+    }
+
+    lm_own_ptr_stack_destroy(&target->param_names);
+    lm_own_ptr_stack_init(&target->param_names, lm_trans_text_ref_delete_any);
+    for (i = 0U; i < source->param_names.count; ++i) {
+        source_name = (const LmP0Text *)lm_own_ptr_stack_at(&source->param_names, i);
+        if (source_name == 0) {
+            return 1;
+        }
+        copy = lm_trans_text_ref_new(*source_name);
+        if (copy == 0) {
+            return 1;
+        }
+        if (lm_own_ptr_stack_push(&target->param_names, copy) != 0) {
+            lm_trans_text_ref_delete_any(copy);
+            return 1;
+        }
+    }
+    target->has_signature = source->has_signature;
+    target->callable_params_node = source->callable_params_node;
+    target->callable_return_node = source->callable_return_node;
+    target->has_callable_shape = source->has_callable_shape;
+    target->callable_returns_value = source->callable_returns_value;
+    target->callable_is_struct_return = source->callable_is_struct_return;
+    target->callable_is_external = source->callable_is_external;
+    return 0;
+}
+
+static int lm_trans_namespace_declare_compatible(
+    LmTransNamespace *namespace_,
+    LmP0Text name,
+    const char *kind
+) {
+    const LmTransSymbol *existing;
+
+    existing = lm_trans_namespace_find(namespace_, name);
+    if (existing != 0) {
+        if (lm_trans_symbol_is(existing, kind)) {
+            return 0;
+        }
+    }
+
+    return lm_trans_namespace_declare(namespace_, name, kind);
+}
+
+static const char *lm_trans_class_c_spelling(LmP0Text name) {
+    return lm_trans_registry_lookup(name, "class.spelling");
+}
+
+static int lm_trans_builtin_c_type_tail(LmP0Text name) {
+    return
+        lm_trans_class_c_spelling(name) != 0 ||
+        lm_trans_registry_has(name, "class.cTail");
+}
+
+static int lm_trans_builtin_c_type_name(LmP0Text name) {
+    LmP0Text tail;
+
+    if (lm_trans_text_starts_with(&name, "c.") && name.length > 2U) {
+        tail.data = name.data + 2U;
+        tail.length = name.length - 2U;
+        return lm_trans_builtin_c_type_tail(tail);
+    }
+
+    return lm_trans_builtin_c_type_tail(name);
+}
+
+static int lm_trans_emit_name(FILE *file, LmP0Text name) {
+    const char *spelling;
+    LmP0Text tail;
+
+    if (lm_trans_text_starts_with(&name, "c.")) {
+        tail.data = name.data + 2U;
+        tail.length = name.length - 2U;
+        spelling = lm_trans_class_c_spelling(tail);
+        if (spelling != 0) {
+            return lm_trans_put(file, spelling);
+        }
+        return lm_trans_write_text(file, &tail);
+    }
+
+    return lm_trans_emit_identifier(file, name);
+}
+
+static int lm_trans_emit_type_name(FILE *file, LmP0Text name) {
+    const char *spelling;
+    LmP0Text tail;
+
+    if (lm_trans_text_starts_with(&name, "c.") && name.length > 2U) {
+        tail.data = name.data + 2U;
+        tail.length = name.length - 2U;
+        spelling = lm_trans_class_c_spelling(tail);
+        if (spelling != 0) {
+            return lm_trans_put(file, spelling);
+        }
+        return lm_trans_write_text(file, &tail);
+    }
+
+    spelling = lm_trans_class_c_spelling(name);
+    if (spelling != 0) {
+        return lm_trans_put(file, spelling);
+    }
+    return lm_trans_emit_identifier(file, name);
+}
+
+static int lm_trans_is_c_reference_name(LmP0Text name) {
+    return lm_trans_text_starts_with(&name, "c.") && name.length > 2U;
+}
+
+static int lm_trans_c_reference_has_path_dot(LmP0Text name) {
+    size_t i;
+
+    if (!lm_trans_is_c_reference_name(name)) {
+        return 0;
+    }
+
+    i = 2U;
+    while (i < name.length) {
+        if (name.data[i] == '.') {
+            return 1;
+        }
+        ++i;
+    }
+
+    return 0;
+}
+
+static int lm_trans_node_is_c_reference_atom(const LmP0Node *node) {
+    return
+        node != 0 &&
+        node->kind == LM_P0_NODE_ATOM &&
+        lm_trans_is_c_reference_name(*node->as->atom);
+}
+
+===

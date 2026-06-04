@@ -1,0 +1,17 @@
+import: "lm2/own.lm2"
+
+fn: AddX (int: value) int
+
+fn: addBase (int: base; int: value) int
+    return: base + value
+end: addBase
+
+fn: callAdd (AddX: add) int
+    return: add(3)
+end: callAdd
+
+external:
+    fn: main () int
+        return: callAdd(addBase(4))
+    end: main
+end: external

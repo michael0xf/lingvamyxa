@@ -7475,6 +7475,54 @@ consume the next step. This is different from Haskell-style global laziness:
 Lingvamyxa does not make every argument and every data field lazy by default.
 That keeps effects, ownership, validation and message scheduling explicit.
 
+Lazy callable descriptor marker
+
+`lazy` is a descriptor declaration modifier. It is not an ordinary runtime call
+and does not execute the named callable. In the first L2 translator profile,
+`lazy` is accepted only as part of the quoted callable descriptor receiver head
+being materialized:
+
+    `lazy fn`: AddX (int: value) int
+
+The active profile records the marker in the registry while consuming that
+descriptor declaration. The effective lazy/eager state of the descriptor must be
+known before expressions are type-checked and lowered.
+
+The canonical set-style registry table for this marker is:
+
+    table:
+        name: `callable.lazy`
+        columns: class  (value serial)
+    end: `callable.lazy`
+
+For the first L2 translator profile, post-declaration marker operations are
+reserved but rejected:
+
+    lazy X
+    eager X
+
+That is, `lazy` may not be applied to an already-declared descriptor, and
+`eager` is not yet accepted as a source form. Future profiles may admit
+post-declaration set/override operations, but such operations are still
+compile-time or registry-materialization operations, not runtime switches.
+
+A lazy-marked callable descriptor admits call-shaped arguments as residual
+callables when the remaining unbound parameters match the expected descriptor.
+For example, if `AddX` is lazy-compatible, `addBase(4)` in an `AddX` argument
+position may bind `base = 4` and produce a residual callable instead of invoking
+`addBase` at the argument site.
+
+A descriptor without an effective `callable.lazy` marker does not admit this
+residual-callable interpretation through the first L2 translator profile. A
+compact call in that position must either be consumed by another explicitly
+declared descriptor/receiver protocol or be lowered as an ordinary
+value-producing call according to the expected argument type.
+
+Marking a descriptor lazy does not by itself make a bare C function pointer able
+to store an environment. A profile that represents a descriptor as a bare C
+function pointer must reject lazy partial binding for that descriptor unless an
+explicit adapter or closure representation is also selected.
+
 19.15.1. Iterator function
 
 Example:

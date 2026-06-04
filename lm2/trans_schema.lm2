@@ -1,0 +1,798 @@
+L4:
+    table:
+        name: `forward.backend`
+        columns: class                       (backend class)
+        rows:
+                 LmTransIdentifierRelation   c.struct
+                 LmTransIdentifierCard       c.struct
+                 LmTransNamespace            c.struct
+                 LmTransExprSegment          c.struct
+                 LmTransCallLowering         c.struct
+                 LmTransExprAtomLowering     c.struct
+                 LmTransExprLoweredRange     c.struct
+                 LmTransExprPiece            c.struct
+                 LmTransExprJob              c.struct
+                 LmTransExprStack            c.struct
+                 LmTransStatementStack       c.struct
+                 LmTransStatementJob         c.struct
+                 LmTransFunctionHeader       c.struct
+                 LmTransL4HeadBinding        c.struct
+                 LmTransL4AtomBinding        c.struct
+                 LmTransTopLevelItem         c.struct
+    end: `forward.backend`
+
+    table:
+        name: `alias.backend`
+        columns: class                  (backend class)
+        rows:
+                 LmTransRegistryColumn  c.typedef
+    end: `alias.backend`
+
+    table:
+        name: `alias.target`
+        columns: class                  (target class)
+        rows:
+                 LmTransRegistryColumn  LmL4Column
+    end: `alias.target`
+
+    table:
+        name: functionPointerType
+        columns: class                                (value serial)
+        rows:
+                 LmTransExprSegmentMaterializer       1
+                 LmTransCallLoweringHandler           1
+                 LmTransExprFrameHandler              1
+                 LmTransExprAtomEmitHandler           1
+                 LmTransExprAtomStateHandler          1
+                 LmTransExprPieceEmitHandler          1
+                 LmTransExprJobHandler                1
+                 LmTransExprJobDestroyHandler         1
+                 LmTransStatementJobHandler           1
+                 LmTransStatementFrameHandler         1
+                 LmTransAtomStatementHandler          1
+                 LmTransFunctionHeaderReceiver        1
+                 LmTransTypeEmitReceiver              1
+                 LmTransTypeStructureValueAllocReceiver 1
+                 LmTransTypeStructureValueFillReceiver 1
+                 LmTransTopLevelDeclareHandler        1
+                 LmTransTopLevelEmitHandler           1
+                 LmTransL4FrameHandler                1
+                 LmTransL4AtomHandler                 1
+                 LmTransL4PayloadFrameHandler         1
+    end: functionPointerType
+
+    fn: LmTransExprSegmentMaterializer (
+        @: FILE file
+        @: LmTransExprStack stack
+        const: @: LmTransExprSegment segment
+        const: @: LmTransNamespace namespace_
+        @: int out_consumed
+    ) int
+
+    fn: LmTransCallLoweringHandler (
+        LmP0Text: head
+        const: @: LmTransSymbol symbol
+        @: LmTransCallLowering out
+    ) int
+
+    fn: LmTransExprFrameHandler (
+        @: FILE file
+        @: LmTransExprStack stack
+        const: @: LmP0Frame frame
+        const: @: LmTransNamespace namespace_
+    ) int
+
+    fn: LmTransExprAtomEmitHandler (
+        @: FILE file
+        const: @: LmTransExprAtomLowering lowering
+        const: @: LmTransNamespace namespace_
+    ) int
+
+    fn: LmTransExprAtomStateHandler (
+        const: @: LmTransExprAtomLowering lowering
+        const: @: LmP0Node node
+        const: @@: LmP0Node previous_operand
+        @: int expect_field_name
+        @: int expect_c_field_name
+        @: int c_dot_path
+    ) int
+
+    fn: LmTransExprPieceEmitHandler (
+        @: FILE file
+        @: LmTransExprStack stack
+        @: LmTransExprLoweredRange lowered
+        const: @: LmTransExprPiece piece
+        const: @: LmTransNamespace namespace_
+        @: int out_suspend
+    ) int
+
+    fn: LmTransExprJobHandler (
+        @: FILE file
+        @: LmTransExprStack stack
+        @: LmTransExprJob job
+        const: @: LmTransNamespace namespace_
+    ) int
+
+    fn: LmTransExprJobDestroyHandler (@: LmTransExprJob job) void
+
+    fn: LmTransStatementJobHandler (
+        @: FILE file
+        @: LmTransStatementStack stack
+        @: LmTransStatementJob job
+        @: LmTransNamespace namespace_
+    ) int
+
+    fn: LmTransStatementFrameHandler (
+        @: FILE file
+        @: LmTransStatementStack stack
+        const: @: LmP0Frame frame
+        unsigned: indent
+        @: LmTransNamespace namespace_
+    ) int
+
+    fn: LmTransAtomStatementHandler (
+        @: FILE file
+        const: @: LmP0Node node
+        unsigned: indent
+        @: LmTransNamespace namespace_
+    ) int
+
+    fn: LmTransFunctionHeaderReceiver (
+        const: @: LmP0Frame frame
+        int: is_external
+        @: LmTransFunctionHeader out
+    ) int
+
+    fn: LmTransTypeEmitReceiver (
+        @: FILE file
+        const: @: LmP0Node type_node
+    ) int
+
+    fn: LmTransTypeStructureValueAllocReceiver (
+        @: FILE file
+        unsigned: indent
+        const: @: LmP0Node type_node
+        LmP0Text: target_name
+        const: @: LmP0Structure value
+        @: int out_consumed
+        @: int out_needs_null_check
+    ) int
+
+    fn: LmTransTypeStructureValueFillReceiver (
+        @: FILE file
+        unsigned: indent
+        const: @: LmP0Node type_node
+        LmP0Text: target_name
+        const: @: LmP0Structure value
+        const: @: LmTransNamespace namespace_
+        @: int out_consumed
+    ) int
+
+    fn: LmTransTopLevelDeclareHandler (
+        @: LmTransNamespace namespace_
+        const: @: LmTransTopLevelItem item
+    ) int
+
+    fn: LmTransTopLevelEmitHandler (
+        @: FILE file
+        @: LmTransNamespace namespace_
+        const: @: LmTransTopLevelItem item
+    ) int
+
+    fn: LmTransL4FrameHandler (
+        const: @: LmP0Frame frame
+        int: allow_node_cells
+    ) int
+
+    fn: LmTransL4AtomHandler (
+        LmP0Text: atom
+        int: allow_node_cells
+    ) int
+
+    fn: LmTransL4PayloadFrameHandler (
+        @: FILE output
+        const: @: LmP0Frame frame
+        @: LmTransNamespace namespace_
+    ) int
+
+    table:
+        name: `layout.backend`
+        columns: class                          (backend class)
+        rows:
+                 LmTransIdentifierRelation      c.struct
+                 LmTransIdentifierCard          c.struct
+                 LmTransIdentifierTable         c.struct
+                 LmTransRegistry                c.struct
+                 LmTransRegistryFact            c.struct
+                 LmTransLayoutField             c.struct
+                 LmTransCDeclarator             c.struct
+                 LmTransAbiParam                c.struct
+                 LmTransL4CallableType          c.struct
+                 LmTransSymbol                  c.struct
+                 LmTransCleanup                 c.struct
+                 LmTransLoop                    c.struct
+                 LmTransExprSegment             c.struct
+                 LmTransStructReturnFieldValue  c.struct
+                 LmTransCallLowering            c.struct
+                 LmTransExprLoweredRange        c.named-struct
+                 LmTransExprStack               c.named-struct
+                 LmTransExprRangeJob            c.struct
+                 LmTransExprCallArgsJob         c.struct
+                 LmTransExprAtomLowering        c.struct
+                 LmTransExprPiece               c.struct
+                 LmTransExprJob                 c.named-struct
+                 LmTransStatementListJob        c.struct
+                 LmTransStatementNodeJob        c.struct
+                 LmTransStatementFrameJob       c.struct
+                 LmTransStatementTextJob        c.struct
+                 LmTransStatementSyncLeaveJob   c.struct
+                 LmTransStatementStack          c.named-struct
+                 LmTransStatementJob            c.named-struct
+                 LmTransStatementLowering       c.struct
+                 LmTransFunctionState           c.struct
+                 LmTransFunctionHeader          c.struct
+                 LmTransCapture                 c.struct
+                 LmTransHoistedFunction         c.struct
+                 LmTransBinding                 c.struct
+                 LmTransHeadBinding             c.struct
+                 LmTransL4HeadBinding           c.struct
+                 LmTransL4AtomBinding           c.struct
+                 LmTransTopLevelItem            c.named-struct
+                 LmTransNamespace               c.named-struct
+                 LmTransL4LoadContext           c.struct
+    end: `layout.backend`
+
+    table:
+        name: LmTransIdentifierRelation
+        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 name     char                   0                       1                                1
+                 symbols  LmOwnPtrStack          1                       0                                0
+                 next     LmTransIdentifierRelation 2                    1                                0
+    end: LmTransIdentifierRelation
+
+    table:
+        name: LmTransIdentifierCard
+        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 name                  LmP0Text              0                       1
+                 name_storage          char                  1                       1
+                 hash                  ulong                 2                       0
+                 symbols               LmOwnPtrStack         3                       0
+                 relation_buckets      LmTransIdentifierRelation 4                  2
+                 relation_bucket_count size_t                5                       0
+                 next                  LmTransIdentifierCard 6                       1
+    end: LmTransIdentifierCard
+
+    table:
+        name: LmTransIdentifierTable
+        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 buckets       LmTransIdentifierCard 0                   2
+                 bucket_count  size_t                1                   0
+                 count         size_t                2                   0
+    end: LmTransIdentifierTable
+
+    table:
+        name: LmTransRegistry
+        columns: class              (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 identifiers        LmTransIdentifierTable 0             0
+                 value_arena        LmOwnArena            1              0
+                 loaded_paths       LmOwnPtrStack         2              0
+                 source_path        char                  3              1
+                 loaded_fact_count  size_t                4              0
+                 loaded             int                   5              0
+    end: LmTransRegistry
+
+    table:
+        name: LmTransRegistryFact
+        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 table         char                   0                       1                                0
+                 key           char                   1                       1                                0
+                 payload       char                   2                       1                                0
+                 payload_node  LmP0Node               3                       1                                1
+    end: LmTransRegistryFact
+
+    table:
+        name: LmTransLayoutField
+        columns: class              (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 name               char                   0                       1                                1
+                 class_name         char                   1                       1                                1
+                 union_layout_name  char                   2                       1                                1
+                 index              size_t                 3                       0                                0
+                 address_depth      size_t                 4                       0                                0
+                 array_count        size_t                 5                       0                                0
+                 is_const           int                    6                       0                                0
+                 has_array_count    int                    7                       0                                0
+                 is_union           int                    8                       0                                0
+    end: LmTransLayoutField
+
+    table:
+        name: LmTransCDeclarator
+        columns: class                     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 type_node                 LmP0Node               0                       1                                1
+                 expression_dimensions     LmP0Field              1                       1                                1
+                 type_head                 LmP0Text               2                       0                                0
+                 name                      LmP0Text               3                       0                                0
+                 array_head                LmP0Text               4                       0                                0
+                 pointer_depth             size_t                 5                       0                                0
+                 literal_dimensions        size_t                 6                       0                                0
+                 literal_dimension_count   size_t                 7                       0                                0
+                 type_is_head              int                    8                       0                                0
+    end: LmTransCDeclarator
+
+    table:
+        name: `LmTransCDeclarator.field.array-count`
+        columns: class               (count serial)
+        rows:
+                 literal_dimensions  8
+    end: `LmTransCDeclarator.field.array-count`
+
+    table:
+        name: LmTransAbiParam
+        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 name           char                   0                       1                                1
+                 class_name     char                   1                       1                                1
+                 index          size_t                 2                       0                                0
+                 address_depth  size_t                 3                       0                                0
+                 is_const       int                    4                       0                                0
+    end: LmTransAbiParam
+
+    table:
+        name: LmTransL4CallableType
+        columns: class          (`field.class` class)  (`field.index` serial)
+        rows:
+                 class_name     LmP0Text               0
+                 address_depth  size_t                 1
+                 is_const       int                    2
+    end: LmTransL4CallableType
+
+    table:
+        name: LmTransSymbol
+        columns: class                    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 name                     LmP0Text               0                       1                                0
+                 name_storage             char                   1                       1                                0
+                 class_name               char                   2                       1                                1
+                 c_name                   LmP0Text               3                       0                                0
+                 c_name_storage           char                   4                       1                                0
+                 has_c_name               int                    5                       0                                0
+                 env_arg                  LmP0Text               6                       0                                0
+                 env_arg_storage          char                   7                       1                                0
+                 has_env_arg              int                    8                       0                                0
+                 closure_call_name        LmP0Text               9                       0                                0
+                 closure_call_name_storage char                  10                      1                                0
+                 has_closure_call_name    int                    11                      0                                0
+                 depth                    unsigned               12                      0                                0
+                 param_names              LmOwnPtrStack          13                      0                                0
+                 has_signature            int                    14                      0                                0
+                 callable_params_node     LmP0Node               15                      1                                1
+                 callable_return_node     LmP0Node               16                      1                                1
+                 has_callable_shape       int                    17                      0                                0
+                 callable_returns_value   int                    18                      0                                0
+                 callable_is_struct_return int                   19                      0                                0
+                 callable_is_external     int                    20                      0                                0
+    end: LmTransSymbol
+
+    table:
+        name: LmTransCleanup
+        columns: class  (`field.class` class)  (`field.index` serial)
+        rows:
+                 id     unsigned               0
+    end: LmTransCleanup
+
+    table:
+        name: LmTransLoop
+        columns: class         (`field.class` class)  (`field.index` serial)
+        rows:
+                 cleanup_base  size_t                 0
+    end: LmTransLoop
+
+    table:
+        name: LmTransExprSegment
+        columns: class           (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 first           LmP0Field              0                       1                                1
+                 stop            LmP0Field              1                       1                                1
+                 expected_param  LmP0Node               2                       1                                1
+                 present         int                    3                       0                                0
+    end: LmTransExprSegment
+
+    table:
+        name: LmTransStructReturnFieldValue
+        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 first    LmP0Field              0                       1                                1
+                 stop     LmP0Field              1                       1                                1
+                 present  int                    2                       0                                0
+    end: LmTransStructReturnFieldValue
+
+    table:
+        name: LmTransCallLowering
+        columns: class      (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 name       LmP0Text               0                       0                                0
+                 signature  LmTransSymbol          1                       1                                1
+                 is_closure int                    2                       0                                0
+    end: LmTransCallLowering
+
+    table:
+        name: LmTransExprLoweredRange
+        columns: class   (`field.class` class)  (`field.index` serial)
+        rows:
+                 pieces  LmOwnValueStack        0
+                 index   size_t                 1
+    end: LmTransExprLoweredRange
+
+    table:
+        name: LmTransExprStack
+        columns: class  (`field.class` class)  (`field.index` serial)
+        rows:
+                 jobs   LmOwnValueStack        0
+    end: LmTransExprStack
+
+    table:
+        name: LmTransExprRangeJob
+        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 field                LmP0Field              0                       1                                1
+                 stop                 LmP0Field              1                       1                                1
+                 wrote                int                    2                       0                                0
+                 previous_operand     LmP0Node               3                       1                                1
+                 expect_field_name    int                    4                       0                                0
+                 expect_c_field_name  int                    5                       0                                0
+                 c_dot_path           int                    6                       0                                0
+    end: LmTransExprRangeJob
+
+    table:
+        name: LmTransExprCallArgsJob
+        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 body    LmP0Structure          0                       1                                1
+                 callee  LmTransSymbol          1                       1                                1
+    end: LmTransExprCallArgsJob
+
+    table:
+        name: LmTransExprAtomLowering
+        columns: class   (`field.class` class)  (`field.index` serial)
+        rows:
+                 emit    LmTransExprAtomEmitHandler   0
+                 update  LmTransExprAtomStateHandler  1
+                 text    LmP0Text                      2
+    end: LmTransExprAtomLowering
+
+    table:
+        name: LmTransExprPiece
+        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 emit           LmTransExprPieceEmitHandler 0                  0                                0
+                 leading_space  int                         1                  0                                0
+                 node           LmP0Node                    2                  1                                1
+                 atom           LmTransExprAtomLowering     3                  0                                0
+                 first          LmP0Field                   4                  1                                1
+                 stop           LmP0Field                   5                  1                                1
+    end: LmTransExprPiece
+
+    table:
+        name: LmTransExprJob
+        columns: class    (`field.class` class)  (`field.index` serial)
+        rows:
+                 run      LmTransExprJobHandler         0
+                 destroy  LmTransExprJobDestroyHandler  1
+    end: LmTransExprJob
+
+    table:
+        name: `LmTransExprJob.field.union`
+        columns: class  (union class)
+        rows:
+                 as     LmTransExprJobAs
+    end: `LmTransExprJob.field.union`
+
+    table:
+        name: `LmTransExprJob.field.index`
+        columns: class  (index serial)
+        rows:
+                 as     2
+    end: `LmTransExprJob.field.index`
+
+    table:
+        name: `LmTransExprJobAs.field.class`
+        columns: class          (field class)
+        rows:
+                 text           char
+                 name_text      LmP0Text
+                 node           LmP0Node
+                 frame          LmP0Frame
+                 range          LmTransExprRangeJob
+                 call_args      LmTransExprCallArgsJob
+                 lowered_range  LmTransExprLoweredRange
+    end: `LmTransExprJobAs.field.class`
+
+    table:
+        name: `LmTransExprJobAs.field.index`
+        columns: class          (index serial)
+        rows:
+                 text           0
+                 name_text      1
+                 node           2
+                 frame          3
+                 range          4
+                 call_args      5
+                 lowered_range  6
+    end: `LmTransExprJobAs.field.index`
+
+    table:
+        name: `LmTransExprJobAs.field.address-depth`
+        columns: class          (depth serial)
+        rows:
+                 text           1
+                 node           1
+                 frame          1
+                 lowered_range  1
+    end: `LmTransExprJobAs.field.address-depth`
+
+    table:
+        name: `LmTransExprJobAs.field.const`
+        columns: class  (value serial)
+        rows:
+                 text   1
+                 node   1
+                 frame  1
+    end: `LmTransExprJobAs.field.const`
+
+    table:
+        name: LmTransStatementListJob
+        columns: class                   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 field                   LmP0Field              0                       1                                1
+                 indent                  unsigned               1                       0                                0
+                 unwrap_single_structure int                    2                       0                                0
+                 repeat_frame            LmP0Frame              3                       1                                1
+    end: LmTransStatementListJob
+
+    table:
+        name: LmTransStatementNodeJob
+        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 node          LmP0Node               0                       1                                1
+                 indent        unsigned               1                       0                                0
+                 repeat_frame  LmP0Frame              2                       1                                1
+    end: LmTransStatementNodeJob
+
+    table:
+        name: LmTransStatementFrameJob
+        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 frame   LmP0Frame              0                       1                                1
+                 indent  unsigned               1                       0                                0
+    end: LmTransStatementFrameJob
+
+    table:
+        name: LmTransStatementTextJob
+        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 indent  unsigned               0                       0                                0
+                 text    char                   1                       1                                1
+    end: LmTransStatementTextJob
+
+    table:
+        name: LmTransStatementSyncLeaveJob
+        columns: class       (`field.class` class)  (`field.index` serial)
+        rows:
+                 indent      unsigned               0
+                 cleanup_id  unsigned               1
+    end: LmTransStatementSyncLeaveJob
+
+    table:
+        name: LmTransStatementStack
+        columns: class  (`field.class` class)  (`field.index` serial)
+        rows:
+                 jobs   LmOwnValueStack        0
+    end: LmTransStatementStack
+
+    table:
+        name: LmTransStatementJob
+        columns: class  (`field.class` class)  (`field.index` serial)
+        rows:
+                 run    LmTransStatementJobHandler  0
+    end: LmTransStatementJob
+
+    table:
+        name: `LmTransStatementJob.field.union`
+        columns: class  (union class)
+        rows:
+                 as     LmTransStatementJobAs
+    end: `LmTransStatementJob.field.union`
+
+    table:
+        name: `LmTransStatementJob.field.index`
+        columns: class  (index serial)
+        rows:
+                 as     1
+    end: `LmTransStatementJob.field.index`
+
+    table:
+        name: `LmTransStatementJobAs.field.class`
+        columns: class       (field class)
+        rows:
+                 list        LmTransStatementListJob
+                 node        LmTransStatementNodeJob
+                 frame       LmTransStatementFrameJob
+                 text        LmTransStatementTextJob
+                 sync_leave  LmTransStatementSyncLeaveJob
+    end: `LmTransStatementJobAs.field.class`
+
+    table:
+        name: `LmTransStatementJobAs.field.index`
+        columns: class       (index serial)
+        rows:
+                 list        0
+                 node        1
+                 frame       2
+                 text        3
+                 sync_leave  4
+    end: `LmTransStatementJobAs.field.index`
+
+    table:
+        name: LmTransStatementLowering
+        columns: class  (`field.class` class)  (`field.index` serial)
+        rows:
+                 emit   LmTransStatementFrameHandler  0
+    end: LmTransStatementLowering
+
+    table:
+        name: LmTransFunctionState
+        columns: class                       (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 previous_return_type_node   LmP0Node               0                       1                                1
+                 previous_return_type_is_struct int                 1                       0                                0
+                 previous_return_type_name   LmP0Text               2                       1                                0
+                 current_return_type_name    LmP0Text               3                       1                                0
+                 previous_next_return_id     unsigned               4                       0                                0
+                 previous_hoisted_functions  LmOwnPtrStack          5                       1                                1
+                 previous_cleanups           LmOwnPtrStack          6                       0                                0
+                 previous_loops              LmOwnPtrStack          7                       0                                0
+                 has_previous_control_stacks int                    8                       0                                0
+    end: LmTransFunctionState
+
+    table:
+        name: LmTransFunctionHeader
+        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 frame                 LmP0Frame              0                       1                                1
+                 name                  LmP0Text               1                       0                                0
+                 c_name                LmP0Text               2                       0                                0
+                 env_type_name         LmP0Text               3                       0                                0
+                 params_node           LmP0Node               4                       1                                1
+                 return_node           LmP0Node               5                       1                                1
+                 body_start            LmP0Field              6                       1                                1
+                 captures              LmOwnPtrStack          7                       1                                1
+                 symbol_class          char                   8                       1                                1
+                 is_sub                int                    9                       0                                0
+                 is_struct_return      int                    10                      0                                0
+                 is_external           int                    11                      0                                0
+                 is_descriptor_only    int                    12                      0                                0
+                 declare_self_alias    int                    13                      0                                0
+                 has_env               int                    14                      0                                0
+                 is_lazy_descriptor    int                    15                      0                                0
+    end: LmTransFunctionHeader
+
+    table:
+        name: LmTransCapture
+        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 name           LmP0Text               0                       0                                0
+                 type_head      LmP0Text               1                       0                                0
+                 type_node      LmP0Node               2                       1                                1
+                 pointer_depth  size_t                 3                       0                                0
+                 type_is_head   int                    4                       0                                0
+    end: LmTransCapture
+
+    table:
+        name: LmTransHoistedFunction
+        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 function              LmTransFunctionHeader  0                       0                                0
+                 captures              LmOwnPtrStack          1                       0                                0
+                 c_name_storage        char                   2                       1                                0
+                 env_type_storage      char                   3                       1                                0
+                 env_var_storage       char                   4                       1                                0
+                 closure_call_storage  char                   5                       1                                0
+                 env_var_name          LmP0Text               6                       0                                0
+                 closure_call_name     LmP0Text               7                       0                                0
+    end: LmTransHoistedFunction
+
+    table:
+        name: LmTransBinding
+        columns: class                       (`field.class` class)  (`field.index` serial)
+        rows:
+                 call_lowering               LmTransCallLoweringHandler              0
+                 expr_frame                  LmTransExprFrameHandler                 1
+                 expr_emit                   LmTransExprAtomEmitHandler              2
+                 expr_state                  LmTransExprAtomStateHandler             3
+                 statement_frame             LmTransStatementFrameHandler            4
+                 function_receiver           LmTransFunctionHeaderReceiver           5
+                 type_emit                   LmTransTypeEmitReceiver                 6
+                 type_structure_value_alloc  LmTransTypeStructureValueAllocReceiver  7
+                 type_structure_value_fill   LmTransTypeStructureValueFillReceiver   8
+                 expr_segment_materializer   LmTransExprSegmentMaterializer          9
+                 l4_frame                    LmTransL4FrameHandler                   10
+                 l4_atom                     LmTransL4AtomHandler                    11
+                 l4_payload_frame            LmTransL4PayloadFrameHandler            12
+    end: LmTransBinding
+
+    table:
+        name: LmTransHeadBinding
+        columns: class                      (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 symbol                     LmTransSymbol          0                       1                                1
+                 receiver_type              char                   1                       1                                1
+                 function_receiver_binding  char                   2                       1                                1
+                 statement_receiver_binding char                   3                       1                                1
+                 function_receiver          LmTransFunctionHeaderReceiver 4                 0                                0
+                 statement_frame            LmTransStatementFrameHandler  5                 0                                0
+    end: LmTransHeadBinding
+
+    table:
+        name: LmTransL4HeadBinding
+        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 receiver_type        char                   0                       1                                1
+                 receiver_binding     char                   1                       1                                1
+                 frame                LmTransL4FrameHandler  2                       0                                0
+    end: LmTransL4HeadBinding
+
+    table:
+        name: LmTransL4AtomBinding
+        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 receiver_type        char                   0                       1                                1
+                 receiver_binding     char                   1                       1                                1
+                 atom                 LmTransL4AtomHandler   2                       0                                0
+    end: LmTransL4AtomBinding
+
+    table:
+        name: LmTransTopLevelItem
+        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 declare               LmTransTopLevelDeclareHandler 0                 0                                0
+                 emit_before_functions LmTransTopLevelEmitHandler    1                 0                                0
+                 emit_function         LmTransTopLevelEmitHandler    2                 0                                0
+                 emits_top_level       int                           3                 0                                0
+                 node                  LmP0Node                      4                 1                                1
+                 frame                 LmP0Frame                     5                 1                                1
+                 function              LmTransFunctionHeader         6                 0                                0
+                 emit_prototype        LmTransTopLevelEmitHandler    7                 0                                0
+                 emit_after_prototypes LmTransTopLevelEmitHandler    8                 0                                0
+    end: LmTransTopLevelItem
+
+    table:
+        name: LmTransNamespace
+        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 items                LmOwnPtrStack          0                       0                                0
+                 identifiers          LmTransIdentifierTable 1                       0                                0
+                 registry_identifiers LmTransIdentifierTable 2                       1                                1
+                 depth                unsigned               3                       0                                0
+                 cleanups             LmOwnPtrStack          4                       0                                0
+                 loops                LmOwnPtrStack          5                       0                                0
+                 next_cleanup_id      unsigned               6                       0                                0
+                 return_type_node     LmP0Node               7                       1                                1
+                 return_type_is_struct int                   8                       0                                0
+                 return_type_name     LmP0Text               9                       1                                0
+                 next_return_id       unsigned               10                      0                                0
+                 hoisted_functions    LmOwnPtrStack          11                      1                                1
+    end: LmTransNamespace
+
+    table:
+        name: LmTransL4LoadContext
+        columns: class             (`field.class` class)  (`field.index` serial)
+        rows:
+                 allow_node_cells  int                    0
+    end: LmTransL4LoadContext
+end: L4
