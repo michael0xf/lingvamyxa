@@ -316,9 +316,9 @@ L4:
         rows:
                  type_node                 LmP0Node               0                       1                                1
                  expression_dimensions     LmP0Field              1                       1                                1
-                 type_head                 LmP0Text               2                       0                                0
-                 name                      LmP0Text               3                       0                                0
-                 array_head                LmP0Text               4                       0                                0
+                 type_head                 LmP0Text               2                       1                                0
+                 name                      LmP0Text               3                       1                                0
+                 array_head                LmP0Text               4                       1                                0
                  pointer_depth             size_t                 5                       0                                0
                  literal_dimensions        size_t                 6                       0                                0
                  literal_dimension_count   size_t                 7                       0                                0
@@ -425,7 +425,7 @@ L4:
         name: LmTransExprLoweredRange
         columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 pieces  LmOwnValueStack        0                       1
+                 pieces  LmOwnPtrStack          0                       1
                  index   size_t                 1                       0
     end: LmTransExprLoweredRange
 
@@ -433,7 +433,7 @@ L4:
         name: LmTransExprStack
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 jobs   LmOwnValueStack        0                       1
+                 jobs   LmOwnPtrStack          0                       1
     end: LmTransExprStack
 
     table:
@@ -473,7 +473,7 @@ L4:
                  emit           LmTransExprPieceEmitHandler 0                  0                                0
                  leading_space  int                         1                  0                                0
                  node           LmP0Node                    2                  1                                1
-                 atom           LmTransExprAtomLowering     3                  0                                0
+                 atom           LmTransExprAtomLowering     3                  1                                0
                  first          LmP0Field                   4                  1                                1
                  stop           LmP0Field                   5                  1                                1
     end: LmTransExprPiece
@@ -592,7 +592,7 @@ L4:
         name: LmTransStatementStack
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
-                 jobs   LmOwnValueStack        0                       1
+                 jobs   LmOwnPtrStack          0                       1
     end: LmTransStatementStack
 
     table:
@@ -665,9 +665,9 @@ L4:
         columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
                  frame                 LmP0Frame              0                       1                                1
-                 name                  LmP0Text               1                       0                                0
-                 c_name                LmP0Text               2                       0                                0
-                 env_type_name         LmP0Text               3                       0                                0
+                 name                  LmP0Text               1                       1                                0
+                 c_name                LmP0Text               2                       1                                0
+                 env_type_name         LmP0Text               3                       1                                0
                  params_node           LmP0Node               4                       1                                1
                  return_node           LmP0Node               5                       1                                1
                  body_start            LmP0Field              6                       1                                1
@@ -697,7 +697,7 @@ L4:
         name: LmTransHoistedFunction
         columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 function              LmTransFunctionHeader  0                       0                                0
+                 function              LmTransFunctionHeader  0                       1                                0
                  captures              LmOwnPtrStack          1                       1                                0
                  c_name_storage        char                   2                       1                                0
                  env_type_storage      char                   3                       1                                0
@@ -763,7 +763,7 @@ L4:
                  emits_top_level       int                           3                 0                                0
                  node                  LmP0Node                      4                 1                                1
                  frame                 LmP0Frame                     5                 1                                1
-                 function              LmTransFunctionHeader         6                 0                                0
+                 function              LmTransFunctionHeader         6                 1                                0
                  emit_prototype        LmTransTopLevelEmitHandler    7                 0                                0
                  emit_after_prototypes LmTransTopLevelEmitHandler    8                 0                                0
     end: LmTransTopLevelItem

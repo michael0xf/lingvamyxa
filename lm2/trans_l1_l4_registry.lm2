@@ -349,12 +349,12 @@ static int lm_trans_emit_layout_field(
             return 1;
         }
     } else {
-        declarator = (LmTransCDeclarator *)lm_own_new_zero(sizeof(*declarator));
+        declarator = lm_trans_statement_c_declarator_new();
         if (declarator == 0) {
             return 1;
         }
-        lm_trans_text_assign_cstr(&declarator->type_head, field->class_name);
-        lm_trans_text_assign_cstr(&declarator->name, field->name);
+        lm_trans_text_assign_cstr(declarator->type_head, field->class_name);
+        lm_trans_text_assign_cstr(declarator->name, field->name);
         declarator->pointer_depth = field->address_depth;
         declarator->type_is_head = 1;
         if (field->has_array_count) {
@@ -366,10 +366,10 @@ static int lm_trans_emit_layout_field(
             (field->is_const && lm_trans_put(file, "const ") != 0) ||
             lm_trans_emit_c_declarator(file, declarator, namespace_, "layout array dimension") != 0
         ) {
-            lm_own_delete(declarator, 0);
+            lm_trans_statement_c_declarator_destroy(declarator);
             return 1;
         }
-        lm_own_delete(declarator, 0);
+        lm_trans_statement_c_declarator_destroy(declarator);
         declarator = 0;
     }
 
@@ -1710,15 +1710,15 @@ static int lm_trans_declare_l4_fn_descriptor(
     if (lm_trans_l4_is_function_pointer_type(namespace_, name)) {
         return 0;
     }
-    function = (LmTransFunctionHeader *)lm_own_new_zero(sizeof(*function));
+    function = lm_trans_function_header_new();
     name_text = lm_trans_l4_text_view_new(name);
     if (function == 0 || name_text == 0) {
-        lm_own_delete(function, 0);
+        lm_trans_function_header_destroy(function);
         lm_trans_l4_text_view_delete(&name_text);
         return 1;
     }
     if (lm_trans_namespace_find(namespace_, name_text) != 0) {
-        lm_own_delete(function, 0);
+        lm_trans_function_header_destroy(function);
         lm_trans_l4_text_view_delete(&name_text);
         return 0;
     }
@@ -1727,14 +1727,14 @@ static int lm_trans_declare_l4_fn_descriptor(
     return_node = lm_trans_registry_synthetic_return_node(namespace_, name);
     frame_node = lm_trans_registry_synthetic_fn_frame_node(name, params_node, return_node);
     if (params_node == 0 || return_node == 0 || frame_node == 0) {
-        lm_own_delete(function, 0);
+        lm_trans_function_header_destroy(function);
         lm_trans_l4_text_view_delete(&name_text);
         return 1;
     }
 
     function->frame = frame_node->as->frame;
-    function->name = *frame_node->as->frame->body->first_field->value->as->atom;
-    function->c_name = function->name;
+    *function->name = *frame_node->as->frame->body->first_field->value->as->atom;
+    *function->c_name = *function->name;
     function->params_node = params_node;
     function->return_node = return_node;
     function->symbol_class = "function";
@@ -1743,14 +1743,14 @@ static int lm_trans_declare_l4_fn_descriptor(
     status = (
         lm_trans_namespace_declare_c_name(
             namespace_,
-            &function->name,
+            function->name,
             function->symbol_class,
-            &function->c_name
+            function->c_name
         ) != 0 ||
         lm_trans_namespace_set_callable_shape(namespace_, function) != 0
     );
 
-    lm_own_delete(function, 0);
+    lm_trans_function_header_destroy(function);
     lm_trans_l4_text_view_delete(&name_text);
     return status;
 }
@@ -2402,7 +2402,7 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
         return 1;
     }
 
-    function = (LmTransFunctionHeader *)lm_own_new_zero(sizeof(*function));
+    function = lm_trans_function_header_new();
     return_type = (LmTransL4CallableType *)lm_own_new_zero(sizeof(*return_type));
     function_name = lm_trans_l4_text_view_new("");
     receiver_name = lm_trans_l4_text_view_new("");
@@ -2431,7 +2431,7 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
         status = 1;
         goto cleanup;
     }
-    if (!lm_trans_registry_identifier_value(&function->name, function_name)) {
+    if (!lm_trans_registry_identifier_value(function->name, function_name)) {
         status = 1;
         goto cleanup;
     }
@@ -2506,7 +2506,7 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
     status = 0;
 
 cleanup:
-    lm_own_delete(function, 0);
+    lm_trans_function_header_destroy(function);
     lm_own_delete(return_type, 0);
     lm_trans_l4_text_view_delete(&function_name);
     lm_trans_l4_text_view_delete(&receiver_name);

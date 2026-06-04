@@ -182,7 +182,7 @@ struct LmP0Document {
     char *source;
     size_t source_length;
     LmP0Node *root;
-    LmP0Diagnostic diagnostic;
+    LmP0Diagnostic *diagnostic;
     LmOwnArena *source_owner;
     LmOwnArena *token_arena;
     LmOwnArena *tree_arena;
@@ -1528,16 +1528,16 @@ static void lm_p0_set_diagnostic(
 ) {
     va_list args;
 
-    if (document->diagnostic.code != 0) {
+    if (document == 0 || document->diagnostic == 0 || document->diagnostic->code != 0) {
         return;
     }
 
-    document->diagnostic.code = code;
-    document->diagnostic.line = line;
-    document->diagnostic.column = column;
+    document->diagnostic->code = code;
+    document->diagnostic->line = line;
+    document->diagnostic->column = column;
 
     va_start(args, format);
-    vsnprintf(document->diagnostic.message, sizeof(document->diagnostic.message), format, args);
+    vsnprintf(document->diagnostic->message, sizeof(document->diagnostic->message), format, args);
     va_end(args);
 }
 
@@ -2706,16 +2706,22 @@ static void lm_p0_copy_payload_diagnostic(
 ) {
     size_t local_offset;
 
-    if (document == 0 || payload_document == 0 || payload_document->diagnostic.code == 0) {
+    if (
+        document == 0 ||
+        document->diagnostic == 0 ||
+        payload_document == 0 ||
+        payload_document->diagnostic == 0 ||
+        payload_document->diagnostic->code == 0
+    ) {
         return;
     }
 
-    document->diagnostic = payload_document->diagnostic;
+    *document->diagnostic = *payload_document->diagnostic;
     local_offset = lm_p0_offset_from_line_column(
         payload_document->source,
         payload_document->source_length,
-        payload_document->diagnostic.line,
-        payload_document->diagnostic.column
+        payload_document->diagnostic->line,
+        payload_document->diagnostic->column
     );
     lm_p0_position_in_slice(
         document->source,
@@ -2723,8 +2729,8 @@ static void lm_p0_copy_payload_diagnostic(
         payload_offset + local_offset,
         1U,
         1U,
-        &document->diagnostic.line,
-        &document->diagnostic.column
+        &document->diagnostic->line,
+        &document->diagnostic->column
     );
 }
 
@@ -4305,7 +4311,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 i = next_offset;
                 continue;
             }
-            if (document->diagnostic.code != 0) {
+            if (document->diagnostic->code != 0) {
                 return 0;
             }
             block_event = lm_p0_stream_event_new();
@@ -4347,7 +4353,7 @@ static int lm_p0_parse_fields_until_with_layout(
                 continue;
             }
             lm_p0_stream_event_delete(block_event);
-            if (document->diagnostic.code != 0) {
+            if (document->diagnostic->code != 0) {
                 return 0;
             }
         }
@@ -5987,7 +5993,7 @@ static int lm_p0_disabled_scan_next_event(
             )) {
             continue;
         }
-        if (document->diagnostic.code != 0) {
+        if (document->diagnostic->code != 0) {
             return 0;
         }
 
@@ -6005,7 +6011,7 @@ static int lm_p0_disabled_scan_next_event(
             *has_event = 1;
             return 1;
         }
-        if (document->diagnostic.code != 0) {
+        if (document->diagnostic->code != 0) {
             return 0;
         }
 
@@ -6328,7 +6334,7 @@ static int lm_p0_validate_disabled_block(
     lm_p0_indent_stack_delete(local_indent);
     *out_offset = offset;
     *out_line = line;
-    return status && document->diagnostic.code == 0;
+    return status && document->diagnostic->code == 0;
 }
 
 static int lm_p0_parse_stream(LmP0Document *document) {
@@ -6421,7 +6427,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             )) {
             continue;
         }
-        if (document->diagnostic.code != 0) {
+        if (document->diagnostic->code != 0) {
             status = 0;
             break;
         }
@@ -6447,7 +6453,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
             }
             continue;
         }
-        if (document->diagnostic.code != 0) {
+        if (document->diagnostic->code != 0) {
             status = 0;
             break;
         }
@@ -6763,7 +6769,7 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     lm_p0_stack_delete(stack);
     lm_p0_pending_delimiter_delete(pending);
     lm_p0_pending_mix_delete(pending_mix);
-    return status && document->diagnostic.code == 0;
+    return status && document->diagnostic->code == 0;
 }
 
 static int lm_p0_validate_nonempty_colon_frames_in_structure(
@@ -7010,7 +7016,7 @@ int lm_p0_parse_bytes(
         }
     }
 
-    if (document->diagnostic.code == 0) {
+    if (document->diagnostic->code == 0) {
         if (lm_own_tree_cut(document->tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while promoting parser lazy text edges");
         } else {
@@ -7018,7 +7024,7 @@ int lm_p0_parse_bytes(
         }
     }
     *out_document = document;
-    return document->diagnostic.code == 0 ? 0 : document->diagnostic.code;
+    return document->diagnostic->code == 0 ? 0 : document->diagnostic->code;
 }
 
 int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
@@ -7570,10 +7576,10 @@ const LmP0Node *lm_p0_document_root(const LmP0Document *document) {
 }
 
 const LmP0Diagnostic *lm_p0_document_diagnostic(const LmP0Document *document) {
-    if (document == 0 || document->diagnostic.code == 0) {
+    if (document == 0 || document->diagnostic == 0 || document->diagnostic->code == 0) {
         return 0;
     }
-    return &document->diagnostic;
+    return document->diagnostic;
 }
 
 void lm_p0_free(void *ptr) {
@@ -7961,6 +7967,11 @@ static int lm_p0_document_init_owners(LmP0Document *document) {
         lm_p0_document_destroy_owners(document);
         return 1;
     }
+    document->diagnostic = lm_own_arena_new_zero(document -> diagnostic_arena, sizeof(document -> diagnostic[0]));
+    if (document -> diagnostic == 0) {
+        lm_p0_document_destroy_owners(document);
+        return 1;
+    }
     return 0;
 }
 
@@ -7978,6 +7989,7 @@ static void lm_p0_document_destroy_owners(LmP0Document *document) {
         document->tree_arena = 0;
         document->token_arena = 0;
         document->source_owner = 0;
+        document->diagnostic = 0;
         document->owners_initialized = 0;
         document->frozen = 0;
     }

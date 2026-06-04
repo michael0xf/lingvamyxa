@@ -28,6 +28,13 @@ static int lm_trans_emit_function(
     LmTransNamespace *namespace_
 );
 
+static void lm_trans_top_level_item_destroy(LmTransTopLevelItem *item) {
+    if (item != 0) {
+        lm_trans_function_header_destroy(item->function);
+        item->function = 0;
+    }
+}
+
 static int lm_trans_top_level_declare_function(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
@@ -35,17 +42,21 @@ static int lm_trans_top_level_declare_function(
     char *return_type_name_storage;
     LmP0Text *return_type_name;
 
-    if (lm_trans_registry_note_class_kind(&item->function.name, item->function.symbol_class) != 0) {
+    if (item == 0 || item->function == 0) {
         return 1;
     }
-    if (lm_trans_namespace_declare(namespace_, &item->function.name, item->function.symbol_class) != 0) {
+
+    if (lm_trans_registry_note_class_kind(item->function->name, item->function->symbol_class) != 0) {
         return 1;
     }
-    if (lm_trans_namespace_set_callable_shape(namespace_, &item->function) != 0) {
+    if (lm_trans_namespace_declare(namespace_, item->function->name, item->function->symbol_class) != 0) {
         return 1;
     }
-    if (item->function.is_struct_return) {
-        return_type_name_storage = lm_trans_function_return_struct_type_name_new(item->function.c_name);
+    if (lm_trans_namespace_set_callable_shape(namespace_, item->function) != 0) {
+        return 1;
+    }
+    if (item->function->is_struct_return) {
+        return_type_name_storage = lm_trans_function_return_struct_type_name_new(*item->function->c_name);
         if (return_type_name_storage == 0) {
             return 1;
         }
@@ -72,17 +83,21 @@ static int lm_trans_top_level_declare_function_compatible(
     char *return_type_name_storage;
     LmP0Text *return_type_name;
 
-    if (lm_trans_registry_note_class_kind(&item->function.name, item->function.symbol_class) != 0) {
+    if (item == 0 || item->function == 0) {
         return 1;
     }
-    if (lm_trans_namespace_declare_compatible(namespace_, &item->function.name, item->function.symbol_class) != 0) {
+
+    if (lm_trans_registry_note_class_kind(item->function->name, item->function->symbol_class) != 0) {
         return 1;
     }
-    if (lm_trans_namespace_set_callable_shape(namespace_, &item->function) != 0) {
+    if (lm_trans_namespace_declare_compatible(namespace_, item->function->name, item->function->symbol_class) != 0) {
         return 1;
     }
-    if (item->function.is_struct_return) {
-        return_type_name_storage = lm_trans_function_return_struct_type_name_new(item->function.c_name);
+    if (lm_trans_namespace_set_callable_shape(namespace_, item->function) != 0) {
+        return 1;
+    }
+    if (item->function->is_struct_return) {
+        return_type_name_storage = lm_trans_function_return_struct_type_name_new(*item->function->c_name);
         if (return_type_name_storage == 0) {
             return 1;
         }
@@ -507,31 +522,31 @@ static int lm_trans_emit_callable_descriptor(
     if (lm_trans_put(file, "typedef struct ") != 0) {
         return 1;
     }
-    if (lm_trans_write_text(file, &function->c_name) != 0) {
+    if (lm_trans_write_text(file, function->c_name) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "Closure ") != 0) {
         return 1;
     }
-    if (lm_trans_write_text(file, &function->c_name) != 0) {
+    if (lm_trans_write_text(file, function->c_name) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "Closure;\ntypedef ") != 0) {
         return 1;
     }
-    if (lm_trans_write_text(file, &function->c_name) != 0) {
+    if (lm_trans_write_text(file, function->c_name) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "Closure *") != 0) {
         return 1;
     }
-    if (lm_trans_write_text(file, &function->c_name) != 0) {
+    if (lm_trans_write_text(file, function->c_name) != 0) {
         return 1;
     }
     if (lm_trans_put(file, ";\nstruct ") != 0) {
         return 1;
     }
-    if (lm_trans_write_text(file, &function->c_name) != 0) {
+    if (lm_trans_write_text(file, function->c_name) != 0) {
         return 1;
     }
     if (lm_trans_put(file, "Closure {\n    ") != 0) {
@@ -565,8 +580,9 @@ static int lm_trans_top_level_emit_callable_descriptor(
     if (
         item == 0 ||
         item->frame == 0 ||
+        item->function == 0 ||
         descriptor_name == 0 ||
-        !lm_trans_registry_identifier_value(&item->function.name, descriptor_name)
+        !lm_trans_registry_identifier_value(item->function->name, descriptor_name)
     ) {
         lm_trans_text_ref_destroy(&descriptor_name);
         return 1;
@@ -591,14 +607,14 @@ static int lm_trans_top_level_emit_callable_descriptor(
             "functionPointerType"
         );
     } else {
-        status = lm_trans_emit_callable_descriptor(file, &item->function, namespace_);
+        status = lm_trans_emit_callable_descriptor(file, item->function, namespace_);
     }
     lm_own_delete(descriptor_name_storage, 0);
     if (status != 0) {
         return 1;
     }
     if (
-        item->function.is_external &&
+        item->function->is_external &&
         lm_trans_validate_end_trailer(item->frame) != 0
     ) {
         return 1;
@@ -630,7 +646,7 @@ static int lm_trans_emit_function_prototype(
         }
         if (
             function->is_struct_return &&
-            lm_trans_emit_function_return_structure_once(file, function->c_name, function->return_node) != 0
+            lm_trans_emit_function_return_structure_once(file, *function->c_name, function->return_node) != 0
         ) {
             return 1;
         }
@@ -639,7 +655,7 @@ static int lm_trans_emit_function_prototype(
         }
         if (function->is_struct_return) {
             if (
-                lm_trans_emit_function_return_struct_type_name(file, function->c_name) != 0 ||
+                lm_trans_emit_function_return_struct_type_name(file, *function->c_name) != 0 ||
                 lm_trans_put(file, " ") != 0
             ) {
                 return 1;
@@ -658,7 +674,7 @@ static int lm_trans_emit_function_prototype(
     }
 
     if (
-        lm_trans_write_text(file, &function->c_name) != 0 ||
+        lm_trans_write_text(file, function->c_name) != 0 ||
         lm_trans_put(file, "(") != 0
     ) {
         return 1;
@@ -679,10 +695,10 @@ static int lm_trans_top_level_emit_function_prototype(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
 ) {
-    if (item == 0) {
+    if (item == 0 || item->function == 0) {
         return 1;
     }
-    return lm_trans_emit_function_prototype(file, &item->function, namespace_);
+    return lm_trans_emit_function_prototype(file, item->function, namespace_);
 }
 
 static int lm_trans_top_level_emit_function(
@@ -692,12 +708,16 @@ static int lm_trans_top_level_emit_function(
 ) {
     int status;
 
-    status = lm_trans_emit_function(file, &item->function, namespace_);
+    if (item == 0 || item->function == 0) {
+        return 1;
+    }
+
+    status = lm_trans_emit_function(file, item->function, namespace_);
     if (status != 0) {
         return 1;
     }
     if (
-        item->function.is_external &&
+        item->function->is_external &&
         lm_trans_validate_end_trailer(item->frame) != 0
     ) {
         return 1;
@@ -898,13 +918,19 @@ static int lm_trans_lower_top_level_item(
 
     out->frame = node->as->frame;
 
-    function_status = lm_trans_top_level_function_header(out->frame, &out->function);
+    out->function = lm_trans_function_header_new();
+    if (out->function == 0) {
+        return 1;
+    }
+    function_status = lm_trans_top_level_function_header(out->frame, out->function);
     if (function_status < 0) {
+        lm_trans_function_header_destroy(out->function);
+        out->function = 0;
         return 1;
     }
     if (function_status > 0) {
         out->declare = lm_trans_top_level_declare_function;
-        if (out->function.is_descriptor_only) {
+        if (out->function->is_descriptor_only) {
             out->emit_before_functions = lm_trans_top_level_emit_callable_descriptor;
             out->emits_top_level = 1;
         } else {
@@ -913,6 +939,8 @@ static int lm_trans_lower_top_level_item(
         }
         return 0;
     }
+    lm_trans_function_header_destroy(out->function);
+    out->function = 0;
 
     if (lm_trans_head_binding_resolve(0, out->frame->head, &binding) != 0) {
         return 1;
@@ -1000,7 +1028,7 @@ static int lm_trans_emit_function(
     if (
         lm_trans_collect_hoisted_functions_from_fields(
             hoisted_functions,
-            function->c_name,
+            *function->c_name,
             capture_candidates,
             namespace_,
             function->body_start
@@ -1018,7 +1046,7 @@ static int lm_trans_emit_function(
             lm_trans_ptr_stack_delete(&hoisted_functions);
             return 1;
         }
-        if (lm_trans_emit_function(file, &hoisted->function, namespace_) != 0) {
+        if (lm_trans_emit_function(file, hoisted->function, namespace_) != 0) {
             lm_trans_ptr_stack_delete(&hoisted_functions);
             return 1;
         }
@@ -1054,7 +1082,7 @@ static int lm_trans_emit_function(
         }
     } else {
         if (function->is_struct_return) {
-            if (lm_trans_emit_function_return_structure_once(file, function->c_name, function->return_node) != 0) {
+            if (lm_trans_emit_function_return_structure_once(file, *function->c_name, function->return_node) != 0) {
                 lm_trans_ptr_stack_delete(&hoisted_functions);
                 return 1;
             }
@@ -1072,7 +1100,7 @@ static int lm_trans_emit_function(
             }
         }
         if (function->is_struct_return) {
-            if (lm_trans_emit_function_return_struct_type_name(file, function->c_name) != 0) {
+            if (lm_trans_emit_function_return_struct_type_name(file, *function->c_name) != 0) {
                 lm_trans_ptr_stack_delete(&hoisted_functions);
                 return 1;
             }
@@ -1088,7 +1116,7 @@ static int lm_trans_emit_function(
         }
     }
 
-    if (lm_trans_write_text(file, &function->c_name) != 0) {
+    if (lm_trans_write_text(file, function->c_name) != 0) {
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
     }
@@ -1101,9 +1129,9 @@ static int lm_trans_emit_function(
         if (
             lm_trans_namespace_declare_c_name(
                 namespace_,
-                &function->name,
+                function->name,
                 function->symbol_class,
-                &function->c_name
+                function->c_name
             ) != 0 ||
             lm_trans_namespace_set_callable_shape(namespace_, function) != 0
         ) {
@@ -1121,7 +1149,7 @@ static int lm_trans_emit_function(
             if (
                 lm_trans_namespace_set_env_arg(
                     namespace_,
-                    &function->name,
+                    function->name,
                     env_text
                 ) != 0
             ) {
@@ -1196,7 +1224,7 @@ static int lm_trans_emit_function(
     }
 
     if (function->is_struct_return) {
-        state->current_return_type_name = lm_trans_text_ref_new(&function->c_name);
+        state->current_return_type_name = lm_trans_text_ref_new(function->c_name);
         if (state->current_return_type_name == 0) {
             lm_trans_function_state_delete(state);
             lm_trans_namespace_leave_scope(namespace_);
@@ -1344,8 +1372,10 @@ static int lm_trans_emit_l2_structure_with_namespace(
             }
 
             if (item.declare != 0 && item.declare(namespace_, &item) != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
+            lm_trans_top_level_item_destroy(&item);
 
             field = field->next;
         }
@@ -1388,6 +1418,7 @@ static int lm_trans_emit_l2_structure_prelude(
 
         if (item.emit_before_functions != 0) {
             if (emitted_prelude && lm_trans_put(file, "\n") != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
             status = item.emit_before_functions(file, namespace_, &item);
@@ -1396,11 +1427,13 @@ static int lm_trans_emit_l2_structure_prelude(
         }
 
         if (status != 0) {
+            lm_trans_top_level_item_destroy(&item);
             return 1;
         }
         if (item.emits_top_level) {
             emitted_prelude = 1;
         }
+        lm_trans_top_level_item_destroy(&item);
         field = field->next;
     }
 
@@ -1433,10 +1466,12 @@ static int lm_trans_emit_l2_structure_prototypes(
         if (item.emit_prototype != 0) {
             status = item.emit_prototype(file, namespace_, &item);
             if (status != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
             emitted_prototype = 1;
         }
+        lm_trans_top_level_item_destroy(&item);
         field = field->next;
     }
 
@@ -1468,6 +1503,7 @@ static int lm_trans_emit_l2_structure_after_prototypes(
 
         if (item.emit_after_prototypes != 0) {
             if (emitted_prelude && lm_trans_put(file, "\n") != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
             status = item.emit_after_prototypes(file, namespace_, &item);
@@ -1476,11 +1512,13 @@ static int lm_trans_emit_l2_structure_after_prototypes(
         }
 
         if (status != 0) {
+            lm_trans_top_level_item_destroy(&item);
             return 1;
         }
         if (item.emits_top_level && item.emit_after_prototypes != 0) {
             emitted_prelude = 1;
         }
+        lm_trans_top_level_item_destroy(&item);
         field = field->next;
     }
 
@@ -1512,14 +1550,17 @@ static int lm_trans_emit_l2_structure_functions(
 
         if (item.emit_function != 0) {
             if (emitted_function && lm_trans_put(file, "\n") != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
             status = item.emit_function(file, namespace_, &item);
             if (status != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
             emitted_function = 1;
         }
+        lm_trans_top_level_item_destroy(&item);
         field = field->next;
     }
 
@@ -1740,8 +1781,10 @@ static int lm_trans_declare_l2_import_root(
                     return 1;
                 }
                 if (item.declare != 0 && item.declare(namespace_, &item) != 0) {
+                    lm_trans_top_level_item_destroy(&item);
                     return 1;
                 }
+                lm_trans_top_level_item_destroy(&item);
             }
         }
         field = field->next;
@@ -1786,6 +1829,7 @@ static int lm_trans_emit_l2_import_root_prelude(
                 }
                 if (item.emit_before_functions != 0) {
                     if (emitted && lm_trans_put(file, "\n") != 0) {
+                        lm_trans_top_level_item_destroy(&item);
                         return 1;
                     }
                     status = item.emit_before_functions(file, namespace_, &item);
@@ -1795,6 +1839,7 @@ static int lm_trans_emit_l2_import_root_prelude(
                 if (item.emits_top_level) {
                     emitted = 1;
                 }
+                lm_trans_top_level_item_destroy(&item);
             }
             if (status != 0) {
                 return 1;
@@ -1841,6 +1886,7 @@ static int lm_trans_emit_l2_import_root_prototypes(
                 status = item.emit_prototype != 0
                     ? item.emit_prototype(file, namespace_, &item)
                     : 0;
+                lm_trans_top_level_item_destroy(&item);
             }
             if (status != 0) {
                 return 1;
@@ -1888,6 +1934,7 @@ static int lm_trans_emit_l2_import_root_after_prototypes(
                 }
                 if (item.emit_after_prototypes != 0) {
                     if (emitted && lm_trans_put(file, "\n") != 0) {
+                        lm_trans_top_level_item_destroy(&item);
                         return 1;
                     }
                     status = item.emit_after_prototypes(file, namespace_, &item);
@@ -1895,6 +1942,7 @@ static int lm_trans_emit_l2_import_root_after_prototypes(
                 } else {
                     status = 0;
                 }
+                lm_trans_top_level_item_destroy(&item);
             }
             if (status != 0) {
                 return 1;
@@ -1949,6 +1997,7 @@ static int lm_trans_emit_l2_import_root_functions(
                 }
                 if (item.emit_function != 0) {
                     if (emitted && lm_trans_put(file, "\n") != 0) {
+                        lm_trans_top_level_item_destroy(&item);
                         return 1;
                     }
                     status = item.emit_function(file, namespace_, &item);
@@ -1956,6 +2005,7 @@ static int lm_trans_emit_l2_import_root_functions(
                 } else {
                     status = 0;
                 }
+                lm_trans_top_level_item_destroy(&item);
             }
             if (status != 0) {
                 return 1;
@@ -2549,15 +2599,18 @@ static int lm_trans_declare_l2_structure_import(
             return 1;
         }
 
-        if (item.function.frame != 0) {
+        if (item.function != 0 && item.function->frame != 0) {
             if (lm_trans_top_level_declare_function_compatible(namespace_, &item) != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
         } else if (item.declare != 0) {
             if (item.declare(namespace_, &item) != 0) {
+                lm_trans_top_level_item_destroy(&item);
                 return 1;
             }
         }
+        lm_trans_top_level_item_destroy(&item);
 
         field = field->next;
     }
