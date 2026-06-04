@@ -63,6 +63,13 @@ L4:
     end: LmRegistryControlRenameDescriptorFrame
 
     table:
+        name: LmRegistryControlRenameStructureFrame
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 field  LmP0Field              0                       1                                1
+    end: LmRegistryControlRenameStructureFrame
+
+    table:
         name: LmRegistryControlError
         columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
@@ -88,6 +95,7 @@ L4:
                  LmRegistryControlColumnSpellingFrame c.struct
                  LmRegistryControlNodeLmxFrame c.struct
                  LmRegistryControlRenameDescriptorFrame c.struct
+                 LmRegistryControlRenameStructureFrame c.struct
                  LmRegistryControlError   c.struct
                  LmRegistryControlRename  c.struct
     end: `layout.backend`
@@ -1119,28 +1127,79 @@ fn: lm_registry_control_rename_table_column_descriptors (@: LmP0Frame table_fram
     return: 0
 end: lm_registry_control_rename_table_column_descriptors
 
+fn: lm_registry_control_rename_structure_frame_new (const: @(LmP0Field field)) @: LmRegistryControlRenameStructureFrame
+    @: LmRegistryControlRenameStructureFrame frame
+
+    frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlRenameStructureFrame))
+    if: frame = 0
+        return: 0
+    frame\field: field
+    return: frame
+end: lm_registry_control_rename_structure_frame_new
+
 fn: lm_registry_control_rename_structure_tables (@: LmP0Structure structure; @: LmRegistryControlRename rename) int
-    @: LmP0Field field
+    @: LmOwnPtrStack stack
+    @: LmRegistryControlRenameStructureFrame frame
     @: LmP0Node node
+    int: done
     int: is_table
+    int: status
 
     if: structure = 0 || rename = 0
         return: 0
 
-    field: structure\first_field
-    while: field != 0
-        node: field\value
+    stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+    if: stack = 0
+        return: 0
+    lm_own_ptr_stack_init(stack, c.lm_own_delete_plain)
+
+    frame: lm_registry_control_rename_structure_frame_new(structure\first_field)
+    if: frame = 0
+        lm_own_ptr_stack_destroy(stack)
+        lm_own_delete(stack, 0)
+        return: 0
+    if: lm_own_ptr_stack_push(stack, frame) != 0
+        lm_own_delete(frame, 0)
+        lm_own_ptr_stack_destroy(stack)
+        lm_own_delete(stack, 0)
+        return: 0
+
+    done: 0
+    status: 1
+    while: status != 0 && done = 0
+        frame: lm_own_ptr_stack_top(stack)
+        if: frame = 0
+            done: 1
+            continue
+
+        if: frame\field = 0
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            continue
+
+        node: frame\field\value
+        frame\field: frame\field\next
+
         if: lm_registry_control_node_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME
             is_table: lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "table")
             if: is_table
                 lm_registry_control_rename_table_column_descriptors(node\as\frame, rename)
             if: is_table = 0
                 if: lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "L4") || lm_registry_control_text_equals(node\as\frame\head\data, node\as\frame\head\length, "registry")
-                    lm_registry_control_rename_structure_tables(node\as\frame\body, rename)
+                    frame: lm_registry_control_rename_structure_frame_new(node\as\frame\body\first_field)
+                    if: frame = 0
+                        status: 0
+                        continue
+                    if: lm_own_ptr_stack_push(stack, frame) != 0
+                        lm_own_delete(frame, 0)
+                        status: 0
+                        continue
+                    ---
                 ---
             ---
-        field: field\next
+        continue
 
+    lm_own_ptr_stack_destroy(stack)
+    lm_own_delete(stack, 0)
     return: 0
 end: lm_registry_control_rename_structure_tables
 
