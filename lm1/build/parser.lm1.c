@@ -7683,9 +7683,11 @@ static void lm_p0_dump_indent(LmP0Dump *dump, size_t indent) {
     }
 }
 
-static void lm_p0_dump_text(LmP0Dump *dump, LmP0Text text) {
+static void lm_p0_dump_text(LmP0Dump *dump, const LmP0Text *text) {
     lm_p0_dump_append_cstr(dump, "\"");
-    lm_p0_dump_append(dump, text.data, text.length);
+    if (text != 0) {
+        lm_p0_dump_append(dump, text->data, text->length);
+    }
     lm_p0_dump_append_cstr(dump, "\"");
 }
 
@@ -7702,7 +7704,7 @@ static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_
     } else {
         lm_p0_dump_append_cstr(dump, "Trailer spelling=");
     }
-    lm_p0_dump_text(dump, *trailer->spelling);
+    lm_p0_dump_text(dump, trailer->spelling);
     lm_p0_dump_append_field_count_line(dump, trailer->body->field_count);
     lm_p0_dump_structure(dump, trailer->body, indent + 1U);
 }
@@ -7733,7 +7735,7 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
     } else if (node->kind == LM_P0_NODE_FRAME) {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_append_cstr(dump, " head=");
-        lm_p0_dump_text(dump, *node->as->frame->head);
+        lm_p0_dump_text(dump, node->as->frame->head);
         lm_p0_dump_append_cstr(dump, " body=");
         lm_p0_dump_append_cstr(dump, structure_name);
         lm_p0_dump_append_field_count_line(dump, node->as->frame->body->field_count);
@@ -7742,12 +7744,12 @@ static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent)
     } else if (node->kind == LM_P0_NODE_ATOM) {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_append_cstr(dump, " ");
-        lm_p0_dump_text(dump, *node->as->atom);
+        lm_p0_dump_text(dump, node->as->atom);
         lm_p0_dump_append_cstr(dump, "\n");
     } else if (node->kind == LM_P0_NODE_DISABLED) {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
         lm_p0_dump_append_cstr(dump, " ");
-        lm_p0_dump_text(dump, *node->as->atom);
+        lm_p0_dump_text(dump, node->as->atom);
         lm_p0_dump_append_cstr(dump, "\n");
     } else {
         lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
