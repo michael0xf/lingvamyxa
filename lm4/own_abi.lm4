@@ -207,8 +207,8 @@ table:
     columns: class                   (field class)
     rows:
              allocations             LmOwnPtrStack
-             allocation_descriptors  LmOwnValueStack
-             lazy_edges              LmOwnValueStack
+             allocation_descriptors  LmOwnPtrStack
+             lazy_edges              LmOwnPtrStack
              frozen                  int
 end: `LmOwnArena.field.class`
 
