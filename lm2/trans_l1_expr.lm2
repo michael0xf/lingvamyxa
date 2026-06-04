@@ -587,6 +587,26 @@ static void lm_trans_expr_job_destroy_lowered_range(LmTransExprJob *job) {
     }
 }
 
+static void lm_trans_expr_job_destroy_name_text(LmTransExprJob *job) {
+    if (job != 0) {
+        lm_trans_text_ref_destroy(&job->as.name_text);
+    }
+}
+
+static void lm_trans_expr_job_destroy_range(LmTransExprJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.range, 0);
+        job->as.range = 0;
+    }
+}
+
+static void lm_trans_expr_job_destroy_call_args(LmTransExprJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.call_args, 0);
+        job->as.call_args = 0;
+    }
+}
+
 static void lm_trans_expr_job_destroy(LmTransExprJob *job) {
     if (job != 0 && job->destroy != 0) {
         job->destroy(job);
@@ -653,8 +673,12 @@ static int lm_trans_expr_stack_push_name_text(LmTransExprStack *stack, LmP0Text 
         return 1;
     }
     job->run = lm_trans_expr_job_emit_name_text;
-    job->destroy = 0;
-    job->as.name_text = name;
+    job->destroy = lm_trans_expr_job_destroy_name_text;
+    job->as.name_text = lm_trans_text_ref_new(&name);
+    if (job->as.name_text == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
     status = lm_trans_expr_stack_push(stack, job);
     if (status != 0) {
         lm_trans_expr_job_delete(job);
@@ -707,12 +731,17 @@ static int lm_trans_expr_stack_push_range_state(
 
     job = lm_trans_expr_job_new();
     if (job == 0 || range == 0) {
-        lm_own_delete(job, 0);
+        lm_trans_expr_job_delete(job);
         return 1;
     }
     job->run = lm_trans_expr_job_emit_range;
-    job->destroy = 0;
-    job->as.range = *range;
+    job->destroy = lm_trans_expr_job_destroy_range;
+    job->as.range = lm_trans_expr_range_job_new();
+    if (job->as.range == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    *job->as.range = *range;
     status = lm_trans_expr_stack_push(stack, job);
     if (status != 0) {
         lm_trans_expr_job_delete(job);
@@ -757,9 +786,14 @@ static int lm_trans_expr_stack_push_call_args(
         return 1;
     }
     job->run = lm_trans_expr_job_schedule_call_args;
-    job->destroy = 0;
-    job->as.call_args.body = body;
-    job->as.call_args.callee = callee;
+    job->destroy = lm_trans_expr_job_destroy_call_args;
+    job->as.call_args = (LmTransExprCallArgsJob *)lm_own_new_zero(sizeof(*job->as.call_args));
+    if (job->as.call_args == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    job->as.call_args->body = body;
+    job->as.call_args->callee = callee;
     status = lm_trans_expr_stack_push(stack, job);
     if (status != 0) {
         lm_trans_expr_job_delete(job);
@@ -4462,16 +4496,20 @@ static int lm_trans_expr_stack_emit_lowered_range(
 static int lm_trans_expr_stack_emit_range(
     FILE *file,
     LmTransExprStack *stack,
-    LmTransExprRangeJob range,
+    const LmTransExprRangeJob *range,
     const LmTransNamespace *namespace_
 ) {
     LmTransExprLoweredRange *lowered;
+
+    if (range == 0) {
+        return 1;
+    }
 
     lowered = lm_trans_expr_lowered_range_new();
     if (lowered == 0) {
         return 1;
     }
-    if (lm_trans_expr_lowered_range_build(lowered, range) != 0) {
+    if (lm_trans_expr_lowered_range_build(lowered, *range) != 0) {
         lm_trans_expr_lowered_range_delete(lowered);
         return 1;
     }
@@ -4497,7 +4535,7 @@ static int lm_trans_expr_job_emit_name_text(
 ) {
     (void)stack;
     (void)namespace_;
-    return lm_trans_emit_name(file, &job->as.name_text);
+    return lm_trans_emit_name(file, job->as.name_text);
 }
 
 static int lm_trans_expr_job_emit_node(
@@ -4533,11 +4571,14 @@ static int lm_trans_expr_job_schedule_call_args(
     LmTransExprJob *job,
     const LmTransNamespace *namespace_
 ) {
+    if (job->as.call_args == 0) {
+        return 1;
+    }
     return lm_trans_expr_stack_schedule_call_args(
         file,
         stack,
-        job->as.call_args.body,
-        job->as.call_args.callee,
+        job->as.call_args->body,
+        job->as.call_args->callee,
         namespace_
     );
 }
@@ -4620,9 +4661,14 @@ static int lm_trans_emit_call_args(
         return 1;
     }
     job->run = lm_trans_expr_job_schedule_call_args;
-    job->destroy = 0;
-    job->as.call_args.body = body;
-    job->as.call_args.callee = callee;
+    job->destroy = lm_trans_expr_job_destroy_call_args;
+    job->as.call_args = (LmTransExprCallArgsJob *)lm_own_new_zero(sizeof(*job->as.call_args));
+    if (job->as.call_args == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    job->as.call_args->body = body;
+    job->as.call_args->callee = callee;
     status = lm_trans_emit_expr_stack_run(file, job, namespace_);
     return status;
 }
@@ -4686,14 +4732,19 @@ static int lm_trans_emit_expr_range(
         return 1;
     }
     job->run = lm_trans_expr_job_emit_range;
-    job->destroy = 0;
-    job->as.range.field = first;
-    job->as.range.stop = stop;
-    job->as.range.wrote = 0;
-    job->as.range.previous_operand = 0;
-    job->as.range.expect_field_name = 0;
-    job->as.range.expect_c_field_name = 0;
-    job->as.range.c_dot_path = 0;
+    job->destroy = lm_trans_expr_job_destroy_range;
+    job->as.range = lm_trans_expr_range_job_new();
+    if (job->as.range == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    job->as.range->field = first;
+    job->as.range->stop = stop;
+    job->as.range->wrote = 0;
+    job->as.range->previous_operand = 0;
+    job->as.range->expect_field_name = 0;
+    job->as.range->expect_c_field_name = 0;
+    job->as.range->c_dot_path = 0;
     status = lm_trans_emit_expr_stack_run(file, job, namespace_);
     return status;
 }

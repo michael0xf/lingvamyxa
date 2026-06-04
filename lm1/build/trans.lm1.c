@@ -310,11 +310,11 @@ struct LmTransExprJob {
     void (*destroy)(LmTransExprJob *job);
     union {
         const char *text;
-        LmP0Text name_text;
+        LmP0Text *name_text;
         const LmP0Node *node;
         const LmP0Frame *frame;
-        LmTransExprRangeJob range;
-        LmTransExprCallArgsJob call_args;
+        LmTransExprRangeJob *range;
+        LmTransExprCallArgsJob *call_args;
         LmTransExprLoweredRange *lowered_range;
     } as;
 };
@@ -346,12 +346,13 @@ struct LmTransStatementStack {
 };
 struct LmTransStatementJob {
     int (*run)(FILE *file, LmTransStatementStack *stack, LmTransStatementJob *job, LmTransNamespace *namespace_);
+    void (*destroy)(LmTransStatementJob *job);
     union {
-        LmTransStatementListJob list;
-        LmTransStatementNodeJob node;
-        LmTransStatementFrameJob frame;
-        LmTransStatementTextJob text;
-        LmTransStatementSyncLeaveJob sync_leave;
+        LmTransStatementListJob *list;
+        LmTransStatementNodeJob *node;
+        LmTransStatementFrameJob *frame;
+        LmTransStatementTextJob *text;
+        LmTransStatementSyncLeaveJob *sync_leave;
     } as;
 };
 typedef struct LmTransStatementLowering {
@@ -478,6 +479,7 @@ typedef int (*LmTransExprPieceEmitHandler)(FILE *file, LmTransExprStack *stack, 
 typedef int (*LmTransExprJobHandler)(FILE *file, LmTransExprStack *stack, LmTransExprJob *job, const LmTransNamespace *namespace_);
 typedef void (*LmTransExprJobDestroyHandler)(LmTransExprJob *job);
 typedef int (*LmTransStatementJobHandler)(FILE *file, LmTransStatementStack *stack, LmTransStatementJob *job, LmTransNamespace *namespace_);
+typedef void (*LmTransStatementJobDestroyHandler)(LmTransStatementJob *job);
 typedef int (*LmTransStatementFrameHandler)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 typedef int (*LmTransAtomStatementHandler)(FILE *file, const LmP0Node *node, unsigned indent, LmTransNamespace *namespace_);
 typedef int (*LmTransFunctionHeaderReceiver)(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
@@ -4670,6 +4672,26 @@ static void lm_trans_expr_job_destroy_lowered_range(LmTransExprJob *job) {
     }
 }
 
+static void lm_trans_expr_job_destroy_name_text(LmTransExprJob *job) {
+    if (job != 0) {
+        lm_trans_text_ref_destroy(&job->as.name_text);
+    }
+}
+
+static void lm_trans_expr_job_destroy_range(LmTransExprJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.range, 0);
+        job->as.range = 0;
+    }
+}
+
+static void lm_trans_expr_job_destroy_call_args(LmTransExprJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.call_args, 0);
+        job->as.call_args = 0;
+    }
+}
+
 static void lm_trans_expr_job_destroy(LmTransExprJob *job) {
     if (job != 0 && job->destroy != 0) {
         job->destroy(job);
@@ -4736,8 +4758,12 @@ static int lm_trans_expr_stack_push_name_text(LmTransExprStack *stack, LmP0Text 
         return 1;
     }
     job->run = lm_trans_expr_job_emit_name_text;
-    job->destroy = 0;
-    job->as.name_text = name;
+    job->destroy = lm_trans_expr_job_destroy_name_text;
+    job->as.name_text = lm_trans_text_ref_new(&name);
+    if (job->as.name_text == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
     status = lm_trans_expr_stack_push(stack, job);
     if (status != 0) {
         lm_trans_expr_job_delete(job);
@@ -4790,12 +4816,17 @@ static int lm_trans_expr_stack_push_range_state(
 
     job = lm_trans_expr_job_new();
     if (job == 0 || range == 0) {
-        lm_own_delete(job, 0);
+        lm_trans_expr_job_delete(job);
         return 1;
     }
     job->run = lm_trans_expr_job_emit_range;
-    job->destroy = 0;
-    job->as.range = *range;
+    job->destroy = lm_trans_expr_job_destroy_range;
+    job->as.range = lm_trans_expr_range_job_new();
+    if (job->as.range == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    *job->as.range = *range;
     status = lm_trans_expr_stack_push(stack, job);
     if (status != 0) {
         lm_trans_expr_job_delete(job);
@@ -4840,9 +4871,14 @@ static int lm_trans_expr_stack_push_call_args(
         return 1;
     }
     job->run = lm_trans_expr_job_schedule_call_args;
-    job->destroy = 0;
-    job->as.call_args.body = body;
-    job->as.call_args.callee = callee;
+    job->destroy = lm_trans_expr_job_destroy_call_args;
+    job->as.call_args = (LmTransExprCallArgsJob *)lm_own_new_zero(sizeof(*job->as.call_args));
+    if (job->as.call_args == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    job->as.call_args->body = body;
+    job->as.call_args->callee = callee;
     status = lm_trans_expr_stack_push(stack, job);
     if (status != 0) {
         lm_trans_expr_job_delete(job);
@@ -8545,16 +8581,20 @@ static int lm_trans_expr_stack_emit_lowered_range(
 static int lm_trans_expr_stack_emit_range(
     FILE *file,
     LmTransExprStack *stack,
-    LmTransExprRangeJob range,
+    const LmTransExprRangeJob *range,
     const LmTransNamespace *namespace_
 ) {
     LmTransExprLoweredRange *lowered;
+
+    if (range == 0) {
+        return 1;
+    }
 
     lowered = lm_trans_expr_lowered_range_new();
     if (lowered == 0) {
         return 1;
     }
-    if (lm_trans_expr_lowered_range_build(lowered, range) != 0) {
+    if (lm_trans_expr_lowered_range_build(lowered, *range) != 0) {
         lm_trans_expr_lowered_range_delete(lowered);
         return 1;
     }
@@ -8580,7 +8620,7 @@ static int lm_trans_expr_job_emit_name_text(
 ) {
     (void)stack;
     (void)namespace_;
-    return lm_trans_emit_name(file, &job->as.name_text);
+    return lm_trans_emit_name(file, job->as.name_text);
 }
 
 static int lm_trans_expr_job_emit_node(
@@ -8616,11 +8656,14 @@ static int lm_trans_expr_job_schedule_call_args(
     LmTransExprJob *job,
     const LmTransNamespace *namespace_
 ) {
+    if (job->as.call_args == 0) {
+        return 1;
+    }
     return lm_trans_expr_stack_schedule_call_args(
         file,
         stack,
-        job->as.call_args.body,
-        job->as.call_args.callee,
+        job->as.call_args->body,
+        job->as.call_args->callee,
         namespace_
     );
 }
@@ -8703,9 +8746,14 @@ static int lm_trans_emit_call_args(
         return 1;
     }
     job->run = lm_trans_expr_job_schedule_call_args;
-    job->destroy = 0;
-    job->as.call_args.body = body;
-    job->as.call_args.callee = callee;
+    job->destroy = lm_trans_expr_job_destroy_call_args;
+    job->as.call_args = (LmTransExprCallArgsJob *)lm_own_new_zero(sizeof(*job->as.call_args));
+    if (job->as.call_args == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    job->as.call_args->body = body;
+    job->as.call_args->callee = callee;
     status = lm_trans_emit_expr_stack_run(file, job, namespace_);
     return status;
 }
@@ -8769,14 +8817,19 @@ static int lm_trans_emit_expr_range(
         return 1;
     }
     job->run = lm_trans_expr_job_emit_range;
-    job->destroy = 0;
-    job->as.range.field = first;
-    job->as.range.stop = stop;
-    job->as.range.wrote = 0;
-    job->as.range.previous_operand = 0;
-    job->as.range.expect_field_name = 0;
-    job->as.range.expect_c_field_name = 0;
-    job->as.range.c_dot_path = 0;
+    job->destroy = lm_trans_expr_job_destroy_range;
+    job->as.range = lm_trans_expr_range_job_new();
+    if (job->as.range == 0) {
+        lm_trans_expr_job_delete(job);
+        return 1;
+    }
+    job->as.range->field = first;
+    job->as.range->stop = stop;
+    job->as.range->wrote = 0;
+    job->as.range->previous_operand = 0;
+    job->as.range->expect_field_name = 0;
+    job->as.range->expect_c_field_name = 0;
+    job->as.range->c_dot_path = 0;
     status = lm_trans_emit_expr_stack_run(file, job, namespace_);
     return status;
 }
@@ -9687,8 +9740,55 @@ static LmTransStatementJob *lm_trans_statement_job_new(void) {
     return (LmTransStatementJob *)lm_own_new_zero(sizeof(LmTransStatementJob));
 }
 
+static void lm_trans_statement_job_destroy_list(LmTransStatementJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.list, 0);
+        job->as.list = 0;
+    }
+}
+
+static void lm_trans_statement_job_destroy_node(LmTransStatementJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.node, 0);
+        job->as.node = 0;
+    }
+}
+
+static void lm_trans_statement_job_destroy_frame(LmTransStatementJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.frame, 0);
+        job->as.frame = 0;
+    }
+}
+
+static void lm_trans_statement_job_destroy_text(LmTransStatementJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.text, 0);
+        job->as.text = 0;
+    }
+}
+
+static void lm_trans_statement_job_destroy_sync_leave(LmTransStatementJob *job) {
+    if (job != 0) {
+        lm_own_delete(job->as.sync_leave, 0);
+        job->as.sync_leave = 0;
+    }
+}
+
+static void lm_trans_statement_job_destroy(LmTransStatementJob *job) {
+    if (job != 0 && job->destroy != 0) {
+        job->destroy(job);
+        job->destroy = 0;
+    }
+}
+
+static void lm_trans_statement_job_delete(LmTransStatementJob *job) {
+    lm_trans_statement_job_destroy(job);
+    lm_own_delete(job, 0);
+}
+
 static void lm_trans_statement_job_delete_any(void *object) {
-    lm_own_delete(object, 0);
+    lm_trans_statement_job_delete((LmTransStatementJob *)object);
 }
 
 static LmTransStatementStack *lm_trans_statement_stack_new(void) {
@@ -12923,13 +13023,19 @@ static int lm_trans_statement_stack_push_list(
         return 1;
     }
     job->run = lm_trans_statement_job_emit_list;
-    job->as.list.field = field;
-    job->as.list.indent = indent;
-    job->as.list.unwrap_single_structure = unwrap_single_structure;
-    job->as.list.repeat_frame = repeat_frame;
+    job->destroy = lm_trans_statement_job_destroy_list;
+    job->as.list = (LmTransStatementListJob *)lm_own_new_zero(sizeof(*job->as.list));
+    if (job->as.list == 0) {
+        lm_trans_statement_job_delete(job);
+        return 1;
+    }
+    job->as.list->field = field;
+    job->as.list->indent = indent;
+    job->as.list->unwrap_single_structure = unwrap_single_structure;
+    job->as.list->repeat_frame = repeat_frame;
     status = lm_trans_statement_stack_push(stack, job);
     if (status != 0) {
-        lm_own_delete(job, 0);
+        lm_trans_statement_job_delete(job);
     }
     return status;
 }
@@ -12948,12 +13054,18 @@ static int lm_trans_statement_stack_push_node(
         return 1;
     }
     job->run = lm_trans_statement_job_emit_node;
-    job->as.node.node = node;
-    job->as.node.indent = indent;
-    job->as.node.repeat_frame = repeat_frame;
+    job->destroy = lm_trans_statement_job_destroy_node;
+    job->as.node = (LmTransStatementNodeJob *)lm_own_new_zero(sizeof(*job->as.node));
+    if (job->as.node == 0) {
+        lm_trans_statement_job_delete(job);
+        return 1;
+    }
+    job->as.node->node = node;
+    job->as.node->indent = indent;
+    job->as.node->repeat_frame = repeat_frame;
     status = lm_trans_statement_stack_push(stack, job);
     if (status != 0) {
-        lm_own_delete(job, 0);
+        lm_trans_statement_job_delete(job);
     }
     return status;
 }
@@ -12972,11 +13084,17 @@ static int lm_trans_statement_stack_push_frame_job(
         return 1;
     }
     job->run = handler;
-    job->as.frame.frame = frame;
-    job->as.frame.indent = indent;
+    job->destroy = lm_trans_statement_job_destroy_frame;
+    job->as.frame = (LmTransStatementFrameJob *)lm_own_new_zero(sizeof(*job->as.frame));
+    if (job->as.frame == 0) {
+        lm_trans_statement_job_delete(job);
+        return 1;
+    }
+    job->as.frame->frame = frame;
+    job->as.frame->indent = indent;
     status = lm_trans_statement_stack_push(stack, job);
     if (status != 0) {
-        lm_own_delete(job, 0);
+        lm_trans_statement_job_delete(job);
     }
     return status;
 }
@@ -12995,7 +13113,7 @@ static int lm_trans_statement_stack_push_simple(
     job->run = handler;
     status = lm_trans_statement_stack_push(stack, job);
     if (status != 0) {
-        lm_own_delete(job, 0);
+        lm_trans_statement_job_delete(job);
     }
     return status;
 }
@@ -13013,11 +13131,17 @@ static int lm_trans_statement_stack_push_indent_text(
         return 1;
     }
     job->run = lm_trans_statement_job_emit_indent_text;
-    job->as.text.indent = indent;
-    job->as.text.text = text;
+    job->destroy = lm_trans_statement_job_destroy_text;
+    job->as.text = (LmTransStatementTextJob *)lm_own_new_zero(sizeof(*job->as.text));
+    if (job->as.text == 0) {
+        lm_trans_statement_job_delete(job);
+        return 1;
+    }
+    job->as.text->indent = indent;
+    job->as.text->text = text;
     status = lm_trans_statement_stack_push(stack, job);
     if (status != 0) {
-        lm_own_delete(job, 0);
+        lm_trans_statement_job_delete(job);
     }
     return status;
 }
@@ -13035,11 +13159,17 @@ static int lm_trans_statement_stack_push_sync_leave(
         return 1;
     }
     job->run = lm_trans_statement_job_emit_sync_leave;
-    job->as.sync_leave.indent = indent;
-    job->as.sync_leave.cleanup_id = cleanup_id;
+    job->destroy = lm_trans_statement_job_destroy_sync_leave;
+    job->as.sync_leave = (LmTransStatementSyncLeaveJob *)lm_own_new_zero(sizeof(*job->as.sync_leave));
+    if (job->as.sync_leave == 0) {
+        lm_trans_statement_job_delete(job);
+        return 1;
+    }
+    job->as.sync_leave->indent = indent;
+    job->as.sync_leave->cleanup_id = cleanup_id;
     status = lm_trans_statement_stack_push(stack, job);
     if (status != 0) {
-        lm_own_delete(job, 0);
+        lm_trans_statement_job_delete(job);
     }
     return status;
 }
@@ -14646,9 +14776,12 @@ static int lm_trans_statement_job_emit_list(
     int status;
 
     (void)file;
+    if (job->as.list == 0) {
+        return 1;
+    }
     field = lm_trans_statement_list_first_field(
-        job->as.list.field,
-        job->as.list.unwrap_single_structure
+        job->as.list->field,
+        job->as.list->unwrap_single_structure
     );
     if (field == 0) {
         return 0;
@@ -14656,10 +14789,10 @@ static int lm_trans_statement_job_emit_list(
 
     node = field->value;
     current_repeat_frame =
-        job->as.list.repeat_frame != 0 &&
+        job->as.list->repeat_frame != 0 &&
         node != 0 &&
         node->kind == LM_P0_NODE_STRUCTURE
-        ? job->as.list.repeat_frame
+        ? job->as.list->repeat_frame
         : 0;
 
     next_repeat_frame = 0;
@@ -14678,7 +14811,7 @@ static int lm_trans_statement_job_emit_list(
         status = lm_trans_statement_stack_push_list(
             stack,
             field->next,
-            job->as.list.indent,
+            job->as.list->indent,
             0,
             next_repeat_frame
         );
@@ -14687,7 +14820,7 @@ static int lm_trans_statement_job_emit_list(
         status = lm_trans_statement_stack_push_node(
             stack,
             field->value,
-            job->as.list.indent,
+            job->as.list->indent,
             current_repeat_frame
         );
     }
@@ -14700,12 +14833,15 @@ static int lm_trans_statement_job_emit_node(
     LmTransStatementJob *job,
     LmTransNamespace *namespace_
 ) {
+    if (job->as.node == 0) {
+        return 1;
+    }
     return lm_trans_statement_stack_emit_node(
         file,
         stack,
-        job->as.node.node,
-        job->as.node.indent,
-        job->as.node.repeat_frame,
+        job->as.node->node,
+        job->as.node->indent,
+        job->as.node->repeat_frame,
         namespace_
     );
 }
@@ -14719,7 +14855,10 @@ static int lm_trans_statement_job_validate_end(
     (void)file;
     (void)stack;
     (void)namespace_;
-    return lm_trans_validate_end_trailer(job->as.frame.frame);
+    if (job->as.frame == 0) {
+        return 1;
+    }
+    return lm_trans_validate_end_trailer(job->as.frame->frame);
 }
 
 static int lm_trans_statement_job_emit_trailer(
@@ -14729,10 +14868,13 @@ static int lm_trans_statement_job_emit_trailer(
     LmTransNamespace *namespace_
 ) {
     (void)stack;
+    if (job->as.frame == 0 || job->as.frame->frame == 0) {
+        return 1;
+    }
     return lm_trans_emit_trailer_statement(
         file,
-        job->as.frame.frame->trailer,
-        job->as.frame.indent,
+        job->as.frame->frame->trailer,
+        job->as.frame->indent,
         namespace_
     );
 }
@@ -14784,10 +14926,13 @@ static int lm_trans_statement_job_emit_indent_text(
 ) {
     (void)stack;
     (void)namespace_;
-    if (lm_trans_emit_indent(file, job->as.text.indent) != 0) {
+    if (job->as.text == 0) {
         return 1;
     }
-    return lm_trans_put(file, job->as.text.text);
+    if (lm_trans_emit_indent(file, job->as.text->indent) != 0) {
+        return 1;
+    }
+    return lm_trans_put(file, job->as.text->text);
 }
 
 static int lm_trans_statement_job_emit_sync_leave(
@@ -14798,10 +14943,13 @@ static int lm_trans_statement_job_emit_sync_leave(
 ) {
     (void)stack;
     (void)namespace_;
+    if (job->as.sync_leave == 0) {
+        return 1;
+    }
     return lm_trans_statement_stack_emit_sync_leave(
         file,
-        job->as.sync_leave.indent,
-        job->as.sync_leave.cleanup_id
+        job->as.sync_leave->indent,
+        job->as.sync_leave->cleanup_id
     );
 }
 
@@ -14838,7 +14986,7 @@ static int lm_trans_emit_statement_list(
         } else {
             status = job->run(file, stack, job, namespace_);
         }
-        lm_own_delete(job, 0);
+        lm_trans_statement_job_delete(job);
     }
 
     lm_trans_statement_stack_destroy(stack);
