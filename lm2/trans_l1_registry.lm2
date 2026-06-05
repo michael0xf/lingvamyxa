@@ -462,6 +462,201 @@ static int lm_trans_registry_push_row_node_values(
     return 0;
 }
 
+static int lm_trans_registry_merge_relation_matches(
+    const char *relation_name,
+    const LmP0Text *source_name,
+    const char **out_suffix
+) {
+    size_t relation_length;
+
+    if (relation_name == 0 || source_name == 0 || source_name->data == 0 || out_suffix == 0) {
+        return 0;
+    }
+    relation_length = strlen(relation_name);
+    if (
+        relation_length == source_name->length &&
+        memcmp(relation_name, source_name->data, source_name->length) == 0
+    ) {
+        *out_suffix = "";
+        return 1;
+    }
+    if (
+        relation_length > source_name->length + 1U &&
+        memcmp(relation_name, source_name->data, source_name->length) == 0 &&
+        relation_name[source_name->length] == '.'
+    ) {
+        *out_suffix = relation_name + source_name->length;
+        return 1;
+    }
+    return 0;
+}
+
+static char *lm_trans_registry_merge_target_relation_new(
+    const LmP0Text *target_name,
+    const char *suffix
+) {
+    size_t suffix_length;
+    size_t length;
+    char *relation_name;
+
+    if (target_name == 0 || target_name->data == 0 || suffix == 0) {
+        return 0;
+    }
+    suffix_length = strlen(suffix);
+    length = target_name->length + suffix_length;
+    relation_name = (char *)lm_own_new_zero(length + 1U);
+    if (relation_name == 0) {
+        return 0;
+    }
+    if (target_name->length != 0U) {
+        memcpy(relation_name, target_name->data, target_name->length);
+    }
+    if (suffix_length != 0U) {
+        memcpy(relation_name + target_name->length, suffix, suffix_length);
+    }
+    relation_name[length] = '\0';
+    return relation_name;
+}
+
+static int lm_trans_registry_merge_copy_row(
+    const LmTransRegistryFact *row,
+    const LmP0Text *source_name,
+    const LmP0Text *target_name,
+    size_t *copied
+) {
+    const char *suffix;
+    char *target_relation;
+    LmP0Text *target_relation_text;
+    LmP0Text *key_text;
+    LmP0Text *payload_text;
+    int status;
+
+    if (row == 0 || row->table == 0 || row->key == 0 || (row->payload_node == 0 && row->payload == 0)) {
+        return 0;
+    }
+    if (copied == 0 || !lm_trans_registry_merge_relation_matches(row->table, source_name, &suffix)) {
+        return 0;
+    }
+
+    target_relation = lm_trans_registry_merge_target_relation_new(target_name, suffix);
+    if (target_relation == 0) {
+        return 1;
+    }
+    target_relation_text = lm_trans_text_from_cstr(target_relation);
+    key_text = lm_trans_text_from_cstr(row->key);
+    payload_text = row->payload != 0 ? lm_trans_text_from_cstr(row->payload) : 0;
+    status = 1;
+    if (target_relation_text != 0 && key_text != 0) {
+        if (row->payload_node != 0) {
+            status = lm_trans_registry_push_row_node_values(target_relation_text, key_text, row->payload_node) != 0;
+        } else if (payload_text != 0) {
+            status = lm_trans_registry_push_row_values(target_relation_text, key_text, payload_text) != 0;
+        }
+    }
+    lm_trans_text_ref_destroy(&payload_text);
+    lm_trans_text_ref_destroy(&key_text);
+    lm_trans_text_ref_destroy(&target_relation_text);
+    lm_own_delete(target_relation, 0);
+    if (status != 0) {
+        return 1;
+    }
+    ++*copied;
+    return 0;
+}
+
+static int lm_trans_registry_merge_table(
+    const LmP0Text *source_table,
+    const LmP0Text *target_table
+) {
+    LmP0Text *source_name;
+    LmP0Text *target_name;
+    LmTransIdentifierTable *identifiers;
+    LmTransIdentifierCard *card;
+    LmTransIdentifierRelation *relation;
+    LmTransRegistryFact *row;
+    const char *relation_suffix;
+    size_t bucket_index;
+    size_t relation_bucket_index;
+    size_t symbol_index;
+    size_t symbol_count;
+    size_t copied;
+    int status;
+
+    if (lm_trans_registry == 0 || source_table == 0 || target_table == 0) {
+        return 1;
+    }
+
+    source_name = lm_trans_text_ref_new_cstr("");
+    target_name = lm_trans_text_ref_new_cstr("");
+    if (source_name == 0 || target_name == 0) {
+        lm_trans_text_ref_destroy(&source_name);
+        lm_trans_text_ref_destroy(&target_name);
+        return 1;
+    }
+    if (
+        !lm_trans_registry_identifier_value(source_table, source_name) ||
+        !lm_trans_registry_identifier_value(target_table, target_name)
+    ) {
+        lm_trans_text_ref_destroy(&source_name);
+        lm_trans_text_ref_destroy(&target_name);
+        return 1;
+    }
+
+    identifiers = lm_trans_registry->identifiers;
+    copied = 0U;
+    status = 0;
+    if (identifiers != 0 && identifiers->buckets != 0) {
+        for (bucket_index = 0U; status == 0 && bucket_index < identifiers->bucket_count; ++bucket_index) {
+            card = identifiers->buckets[bucket_index];
+            while (status == 0 && card != 0) {
+                if (card->relation_buckets != 0) {
+                    for (
+                        relation_bucket_index = 0U;
+                        status == 0 && relation_bucket_index < card->relation_bucket_count;
+                        ++relation_bucket_index
+                    ) {
+                        relation = card->relation_buckets[relation_bucket_index];
+                        while (status == 0 && relation != 0) {
+                            relation_suffix = 0;
+                            if (
+                                relation->symbols != 0 &&
+                                lm_trans_registry_merge_relation_matches(relation->name, source_name, &relation_suffix)
+                            ) {
+                                symbol_count = relation->symbols->count;
+                                for (symbol_index = 0U; status == 0 && symbol_index < symbol_count; ++symbol_index) {
+                                    row = (LmTransRegistryFact *)lm_own_ptr_stack_at(relation->symbols, symbol_index);
+                                    status = lm_trans_registry_merge_copy_row(
+                                        row,
+                                        source_name,
+                                        target_name,
+                                        &copied
+                                    );
+                                }
+                            }
+                            relation = relation->next;
+                        }
+                    }
+                }
+                card = card->next;
+            }
+        }
+    }
+
+    if (status == 0 && copied == 0U) {
+        fprintf(
+            stderr,
+            "trans registry error: merge source table \"%.*s\" has no rows\n",
+            (int)source_name->length,
+            source_name->data
+        );
+        status = 1;
+    }
+
+    lm_trans_text_ref_destroy(&source_name);
+    lm_trans_text_ref_destroy(&target_name);
+    return status;
+}
+
 static int lm_trans_registry_push_row_atoms(
     const LmP0Text *table_atom,
     const LmP0Text *key_atom,

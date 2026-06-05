@@ -160,6 +160,7 @@ struct LmL4Loader {
     int (*push_cell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
     int (*note_key)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
     int (*push_column_metadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
+    int (*merge_table)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
     int (*dispatch_frame)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 };
 typedef struct LmP0StreamEvent {
@@ -235,6 +236,7 @@ typedef int (*LmL4PushRow)(void *context, const LmP0Text *table_atom, const LmP0
 typedef int (*LmL4PushCell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
 typedef int (*LmL4NoteKey)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
 typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
+typedef int (*LmL4MergeTable)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
 typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 
 void * lm_own_new_zero(size_t size);
@@ -323,7 +325,13 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
 static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_seen_table_add(LmOwnPtrStack *seen, const LmP0Text *table_name);
 static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
+static const LmP0Field * lm_l4_next_present_field(const LmP0Field *field);
+static int lm_l4_merge_header(const LmP0Frame *frame, const LmP0Structure **out_sources, const LmP0Text **out_target, const LmP0Structure **out_body);
+static int lm_l4_merge_sources_into_target(const LmL4Loader *loader, void *context, const LmP0Structure *sources, const LmP0Text *target_name);
+static int lm_l4_merge_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_check_merge_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_receiver_merge(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
@@ -950,6 +958,222 @@ static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Fr
     return 0;
 }
 
+static const LmP0Field * lm_l4_next_present_field(const LmP0Field *field) {
+    while (field != 0 && (field -> value == 0 || lm_l4_node_is_ignored(field -> value) != 0)) {
+        field = field -> next;
+    }
+    return field;
+}
+
+static int lm_l4_merge_header(const LmP0Frame *frame, const LmP0Structure **out_sources, const LmP0Text **out_target, const LmP0Structure **out_body) {
+    const LmP0Field *field;
+    const LmP0Structure *sources;
+    const LmP0Text *target;
+    const LmP0Structure *body;
+    if (frame == 0 || out_sources == 0 || out_target == 0 || out_body == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "merge") == 0) {
+        return 0;
+    }
+    *(out_sources) = 0;
+    *(out_target) = 0;
+    *(out_body) = 0;
+    field = lm_l4_next_present_field(lm_l4_frame_body(frame) -> first_field);
+    if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_STRUCTURE) {
+        return - 1;
+    }
+    sources = lm_l4_node_structure(field -> value);
+    if (sources == 0 || lm_l4_next_present_field(sources -> first_field) == 0) {
+        return - 1;
+    }
+    field = lm_l4_next_present_field(field -> next);
+    if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
+        return - 1;
+    }
+    target = lm_l4_node_atom(field -> value);
+    if (target == 0) {
+        return - 1;
+    }
+    field = lm_l4_next_present_field(field -> next);
+    if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_STRUCTURE) {
+        return - 1;
+    }
+    body = lm_l4_node_structure(field -> value);
+    if (body == 0) {
+        return - 1;
+    }
+    *(out_sources) = sources;
+    *(out_target) = target;
+    *(out_body) = body;
+    return 1;
+}
+
+static int lm_l4_merge_sources_into_target(const LmL4Loader *loader, void *context, const LmP0Structure *sources, const LmP0Text *target_name) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Text *source_name;
+    if (loader == 0 || loader -> merge_table == 0) {
+        lm_l4_error(loader, "merge consumer is not configured");
+        return - 1;
+    }
+    if (sources == 0 || target_name == 0) {
+        return - 1;
+    }
+    field = sources -> first_field;
+    while (field != 0) {
+        node = field -> value;
+        if (node != 0 && lm_l4_node_is_ignored(node) == 0) {
+            if (node -> kind != LM_P0_NODE_ATOM) {
+                lm_l4_error(loader, "merge source list currently expects table name atoms");
+                return - 1;
+            }
+            source_name = lm_l4_node_atom(node);
+            if (source_name == 0 || loader->merge_table(context, source_name, target_name) != 0) {
+                return - 1;
+            }
+        }
+        field = field -> next;
+    }
+    return 0;
+}
+
+static int lm_l4_merge_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
+    const LmP0Field *field;
+    const LmP0Node *node;
+    const LmP0Frame *node_frame;
+    const LmP0Structure *sources;
+    const LmP0Structure *body;
+    LmL4Column **columns;
+    const LmP0Text *target_name;
+    const LmP0Frame *rows_frame;
+    size_t column_count;
+    int have_columns;
+    int have_rows;
+    int status;
+    if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "merge") == 0) {
+        return 0;
+    }
+    sources = 0;
+    body = 0;
+    target_name = 0;
+    field = 0;
+    status = lm_l4_merge_header(frame, &sources, &target_name, &body);
+    if (status <= 0) {
+        if (status == 0) {
+            return 0;
+        }
+        lm_l4_error(loader, "merge expects (sourceTables...) targetName and a table fragment body");
+        return - 1;
+    }
+    columns = lm_own_new_zero(128U * sizeof(columns[0]));
+    if (columns == 0) {
+        lm_l4_error(loader, "out of memory while reading merge columns");
+        return - 1;
+    }
+    have_columns = 0;
+    have_rows = 0;
+    rows_frame = 0;
+    column_count = 0U;
+    field = lm_l4_next_present_field(body -> first_field);
+    while (field != 0) {
+        node = field -> value;
+        if (node != 0 && lm_l4_node_is_ignored(node) == 0) {
+            if (node -> kind != LM_P0_NODE_FRAME) {
+                lm_l4_error(loader, "merge body expects columns/rows frames");
+                lm_l4_columns_destroy(columns, column_count);
+                return - 1;
+            }
+            node_frame = lm_l4_node_frame(node);
+            if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "columns") != 0) {
+                if (have_columns != 0) {
+                    lm_l4_error(loader, "merge expects one columns frame");
+                    lm_l4_columns_destroy(columns, column_count);
+                    return - 1;
+                }
+                status = lm_l4_columns_from_frame(loader, node_frame, columns, 128U, &column_count);
+                if (status <= 0) {
+                    lm_l4_columns_destroy(columns, column_count);
+                    return - 1;
+                }
+                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(context, target_name, columns, column_count) != 0) {
+                    lm_l4_error(loader, "cannot store merge target column metadata");
+                    lm_l4_columns_destroy(columns, column_count);
+                    return - 1;
+                }
+                have_columns = 1;
+                field = lm_l4_next_present_field(field -> next);
+                continue;
+            }
+            if (lm_l4_text_equals(lm_l4_frame_head(node_frame), "rows") != 0) {
+                if (have_rows != 0) {
+                    lm_l4_error(loader, "merge expects at most one rows frame");
+                    lm_l4_columns_destroy(columns, column_count);
+                    return - 1;
+                }
+                rows_frame = node_frame;
+                have_rows = 1;
+                field = lm_l4_next_present_field(field -> next);
+                continue;
+            }
+            lm_l4_error(loader, "merge body expects columns/rows frames");
+            lm_l4_columns_destroy(columns, column_count);
+            return - 1;
+        }
+        field = lm_l4_next_present_field(field -> next);
+    }
+    if (have_columns == 0) {
+        lm_l4_error(loader, "merge requires target columns");
+        lm_l4_columns_destroy(columns, column_count);
+        return - 1;
+    }
+    if (lm_l4_merge_sources_into_target(loader, context, sources, target_name) != 0) {
+        lm_l4_columns_destroy(columns, column_count);
+        return - 1;
+    }
+    if (have_rows != 0) {
+        status = lm_l4_rows_from_frame(loader, context, rows_frame, target_name, columns, column_count);
+        if (status <= 0) {
+            lm_l4_columns_destroy(columns, column_count);
+            return - 1;
+        }
+    }
+    if (lm_l4_validate_named_trailer(loader, frame, target_name) != 0) {
+        lm_l4_columns_destroy(columns, column_count);
+        return - 1;
+    }
+    lm_l4_columns_destroy(columns, column_count);
+    return 1;
+}
+
+static int lm_l4_check_merge_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen) {
+    const LmP0Structure *sources;
+    const LmP0Structure *body;
+    const LmP0Text *target_name;
+    int status;
+    if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "merge") == 0) {
+        return 0;
+    }
+    sources = 0;
+    body = 0;
+    target_name = 0;
+    status = lm_l4_merge_header(frame, &sources, &target_name, &body);
+    if (status <= 0) {
+        if (status < 0) {
+            lm_l4_error(loader, "merge expects (sourceTables...) targetName and a table fragment body");
+            return - 1;
+        }
+        return 0;
+    }
+    status = lm_l4_seen_table_add(seen, target_name);
+    if (status < 0) {
+        lm_l4_error(loader, "cannot record merge target name");
+        return - 1;
+    }
+    if (status > 0) {
+        lm_l4_error(loader, "duplicate table in one L4 schema");
+        return - 1;
+    }
+    return 0;
+}
+
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     LmOwnPtrStack *seen;
     int status;
@@ -961,6 +1185,23 @@ static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const L
     if (status <= 0) {
         if (status == 0) {
             lm_l4_error(loader, "table receiver expects table frame");
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_l4_receiver_merge(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
+    LmOwnPtrStack *seen;
+    int status;
+    seen = lm_l4_seen_tables_get();
+    if (seen != 0 && lm_l4_check_merge_frame_unique(loader, frame, seen) != 0) {
+        return 1;
+    }
+    status = lm_l4_merge_from_frame(loader, context, frame);
+    if (status <= 0) {
+        if (status == 0) {
+            lm_l4_error(loader, "merge receiver expects merge frame");
         }
         return 1;
     }
@@ -7674,9 +7915,149 @@ static int lm_p0_registry_l4_push_column_metadata(
     return lm_p0_registry_push_column_metadata(table_name, columns, column_count);
 }
 
+static int lm_p0_registry_merge_relation_matches(
+    const char *relation_name,
+    const LmP0Text *source_name,
+    const char **out_suffix
+) {
+    size_t relation_length;
+
+    if (relation_name == 0 || source_name == 0 || source_name->data == 0 || out_suffix == 0) {
+        return 0;
+    }
+    relation_length = strlen(relation_name);
+    if (
+        relation_length == source_name->length &&
+        memcmp(relation_name, source_name->data, source_name->length) == 0
+    ) {
+        *out_suffix = "";
+        return 1;
+    }
+    if (
+        relation_length > source_name->length + 1U &&
+        memcmp(relation_name, source_name->data, source_name->length) == 0 &&
+        relation_name[source_name->length] == '.'
+    ) {
+        *out_suffix = relation_name + source_name->length;
+        return 1;
+    }
+    return 0;
+}
+
+static char *lm_p0_registry_merge_target_relation_new(
+    const LmP0Text *target_name,
+    const char *suffix
+) {
+    size_t suffix_length;
+    size_t length;
+    char *relation_name;
+
+    if (target_name == 0 || target_name->data == 0 || suffix == 0) {
+        return 0;
+    }
+    suffix_length = strlen(suffix);
+    length = target_name->length + suffix_length;
+    relation_name = (char *)lm_own_new_zero(length + 1U);
+    if (relation_name == 0) {
+        return 0;
+    }
+    if (target_name->length != 0U) {
+        memcpy(relation_name, target_name->data, target_name->length);
+    }
+    if (suffix_length != 0U) {
+        memcpy(relation_name + target_name->length, suffix, suffix_length);
+    }
+    relation_name[length] = '\0';
+    return relation_name;
+}
+
+static int lm_p0_registry_l4_merge_table(
+    void *context,
+    const LmP0Text *source_table,
+    const LmP0Text *target_table
+) {
+    LmP0Text *source_name;
+    LmP0Text *target_name;
+    LmP0RegistryRow *row;
+    const char *suffix;
+    char *target_relation;
+    size_t initial_count;
+    size_t i;
+    size_t copied;
+    int status;
+
+    (void)context;
+    if (lm_p0_registry == 0 || lm_p0_registry->rows == 0 || source_table == 0 || target_table == 0) {
+        return -1;
+    }
+
+    source_name = lm_p0_text_ref_new_empty();
+    target_name = lm_p0_text_ref_new_empty();
+    if (source_name == 0 || target_name == 0) {
+        lm_p0_text_ref_delete(source_name);
+        lm_p0_text_ref_delete(target_name);
+        return -1;
+    }
+    if (
+        !lm_p0_registry_identifier_value(source_table, source_name) ||
+        !lm_p0_registry_identifier_value(target_table, target_name)
+    ) {
+        lm_p0_text_ref_delete(source_name);
+        lm_p0_text_ref_delete(target_name);
+        return -1;
+    }
+
+    initial_count = lm_p0_registry->rows->count;
+    copied = 0U;
+    status = 0;
+    for (i = 0U; i < initial_count; ++i) {
+        row = (LmP0RegistryRow *)lm_own_ptr_stack_at(lm_p0_registry->rows, i);
+        if (row == 0 || row->table == 0 || row->key == 0 || row->payload == 0) {
+            continue;
+        }
+        suffix = 0;
+        if (!lm_p0_registry_merge_relation_matches(row->table, source_name, &suffix)) {
+            continue;
+        }
+        target_relation = lm_p0_registry_merge_target_relation_new(target_name, suffix);
+        if (target_relation == 0) {
+            status = -1;
+            break;
+        }
+        if (
+            lm_p0_registry_push_row_values(
+                lm_p0_text_from_cstr(target_relation),
+                lm_p0_text_from_cstr(row->key),
+                lm_p0_text_from_cstr(row->payload)
+            ) != 0
+        ) {
+            lm_own_delete(target_relation, 0);
+            status = -1;
+            break;
+        }
+        lm_own_delete(target_relation, 0);
+        ++copied;
+    }
+
+    if (status == 0 && copied == 0U) {
+        fprintf(
+            stderr,
+            "parser registry error: merge source table \"%.*s\" has no rows\n",
+            (int)source_name->length,
+            source_name->data
+        );
+        status = -1;
+    }
+
+    lm_p0_text_ref_delete(source_name);
+    lm_p0_text_ref_delete(target_name);
+    return status;
+}
+
 static int lm_p0_registry_seed_l4_receivers(void) {
     return
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "table", "l4.frame") != 0 ||
+        lm_p0_registry_push_generated_row_cstr("namespace.l4", "merge", "l4.frame") != 0 ||
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "row", "l4.frame") != 0 ||
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "fn", "l4.frame") != 0 ||
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "lazy fn", "l4.frame") != 0;
@@ -7705,6 +8086,9 @@ static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(
     }
     if (lm_p0_text_equals(head, "table")) {
         return lm_l4_receiver_table;
+    }
+    if (lm_p0_text_equals(head, "merge")) {
+        return lm_l4_receiver_merge;
     }
     if (lm_p0_text_equals(head, "row")) {
         return lm_l4_receiver_row;
@@ -7756,6 +8140,7 @@ static LmL4Loader *lm_p0_registry_l4_loader_new(void) {
     loader->push_cell = lm_p0_registry_l4_push_cell;
     loader->note_key = 0;
     loader->push_column_metadata = lm_p0_registry_l4_push_column_metadata;
+    loader->merge_table = lm_p0_registry_l4_merge_table;
     loader->dispatch_frame = lm_p0_registry_l4_dispatch_frame;
     return loader;
 }

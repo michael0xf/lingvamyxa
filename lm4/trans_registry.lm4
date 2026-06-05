@@ -217,6 +217,7 @@ table:
     columns: class  (L4 binding marker)
     rows:
              table  `l4.frame`
+             merge  `l4.frame`
              row    `l4.frame`
              fn     `l4.frame`
              `lazy fn` `l4.frame`

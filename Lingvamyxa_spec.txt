@@ -6687,7 +6687,7 @@ Semantic outline:
     operator                   receiver that registers receivers/operators
     if                         registered receiver, semantics depend on level
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
-    merge                      registered structural receiver; ordered merge of Structure-producing parts
+    merge                      registered L2/L3/L4 structural receiver; ordered merge of Structure/table-producing parts
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
     ()                         head receiver spelling for Structure-like variable/aggregate forms
@@ -6808,10 +6808,12 @@ The language does not define C slot counting, hidden runtime addresses, hidden o
 19.0. Scope of This Section
 
 This section defines the shared L2/L3 source-level receiver/operator set for
-executable and descriptor bodies. Most entries are control-flow receivers;
-`merge` is a structural receiver. A minimal bootstrap L2 profile may expose only
-the subset listed in section 20.5, while richer L2 profiles and ordinary L3
-profiles may admit the full set or profile-specific extensions.
+executable and descriptor bodies. Most entries are control-flow receivers.
+`merge` is the intentionally broader structural receiver in this list: the same
+surface syntax is admitted in L2, L3 and L4, while each level supplies its own
+receiver semantics. A minimal bootstrap L2 profile may expose only the subset
+listed in section 20.5, while richer L2 profiles and ordinary L3 profiles may
+admit the full set or profile-specific extensions.
 
 This shared list does not mean that L3 contains all L2 operators. L2 has an
 additional unsafe low-level operator/parser-form surface in section 20. L3 is
@@ -6849,7 +6851,7 @@ Operator summary:
     13. redo                                              L2/L3 loop frame
     14. yield                                             L2/L3 iterator-profile fn
     15. labelled break / labelled continue                L2/L3 labelled loop frame
-    16. merge                                             L2/L3 structural merge receiver
+    16. merge                                             L2/L3/L4 structural merge receiver
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
@@ -7794,7 +7796,7 @@ The exact grammar rule for attaching labels to frames is not specified beyond th
 
 19.17. `merge`
 
-`merge` is an L2/L3 structural receiver/operator. It is not parser syntax, not a
+`merge` is an L2/L3/L4 structural receiver/operator. It is not parser syntax, not a
 preprocessor include and not runtime mutation of its source operands. The parser
 builds an ordinary `merge:` Frame; the active receiver/operator namespace gives
 that Frame structural-merge semantics.
@@ -7853,6 +7855,66 @@ The vertical body of a `merge:` Frame is part of the same argument Structure as
 its short tail. Therefore a trailing body naturally contributes trailing merge
 parts. A receiver that uses `merge` to build a class/layout/import field list may
 evaluate the `merge` result before validating the final descriptor.
+
+L4 table profile:
+
+In an L4 registry/table profile, the same receiver spelling may materialize a
+new table descriptor from several table-producing sources:
+
+    merge: (sourceTable0 sourceTable1 ... sourceTableN) targetName
+        tableFragment
+    end: targetName
+
+The bounded first argument is the ordered source-table list. Each source item is
+consumed in a table-producing context: it may name a table descriptor visible in
+the active registry view, be a table literal/fragment, or be a receiver/call
+whose declared result is compatible with an L4 table descriptor. The second
+argument is the target table name. The L4 `merge` receiver normalizes that
+argument as its `name`, so the canonical explicit close is `end: targetName`;
+`end: merge` remains the admitted receiver/head close alternative.
+
+The vertical body is an optional target table fragment. It may be written
+directly as table body fields such as `columns:` and `rows:`, or as an explicit
+nested `table:` descriptor. If an explicit nested `table:` contains `name:`, that
+name must match `targetName` after registry key normalization.
+
+Default L4 table merge is ordered:
+
+    1. Resolve source tables from left to right in the active registry view.
+    2. Determine the target table schema from the explicit body `columns:` when
+       present, otherwise from the first source table.
+    3. Validate that every source row is compatible with the target schema.
+    4. Append source rows in source-list order.
+    5. Append body rows after source rows.
+    6. Preserve duplicate row keys and duplicate relation facts.
+
+`merge` does not silently override, remove or deduplicate registry rows. If the
+active registry lookup later uses last-visible-row, first-visible-row, relation
+set, or overlay semantics, that is the consuming registry policy, not a hidden
+side effect of `merge`.
+
+Example:
+
+L4:
+    merge: (`Base.field.class` `Audit.field.class`) `Entity.field.class`
+        columns: class  (field class)
+        rows:
+                 flags  u32
+    end: `Entity.field.class`
+end: L4
+
+Conceptual materialized descriptor:
+
+L4:
+    table:
+        name: `Entity.field.class`
+        columns: class  (field class)
+        rows:
+                 # rows from `Base.field.class`
+                 # rows from `Audit.field.class`
+                 flags  u32
+    end: `Entity.field.class`
+end: L4
 
 20. L2 Primitive, Address and Parser Operators
 
@@ -8273,6 +8335,19 @@ that alignment is not semantic.
 A bootstrap implementation may still lower these table Structures to a flat
 `row: table key payload` internal representation. That is a temporary storage
 shape over the same class/key spelling rule, not a different semantic model.
+
+An L4 table profile may also materialize a table descriptor through the
+structural `merge` receiver described in section 19.17:
+
+    merge: (BaseTable OverlayTable) TargetTable
+        columns: class  (value char)
+        rows:
+                 local  value
+    end: TargetTable
+
+This is not an import directive and not parser syntax. It is ordinary L4
+receiver consumption that produces the same kind of table descriptor as
+`table:`.
 
 L2 `fn` and `sub` definitions lower to `static` ANSI C functions by default.
 This keeps ordinary L2 helper procedures local to the generated translation
