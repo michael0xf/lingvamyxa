@@ -14,6 +14,7 @@ L4:
                  LmTransExprPiece            c.struct
                  LmTransExprJob              c.struct
                  LmTransExprStack            c.struct
+                 LmTransArrayStructureValueFillFrame c.struct
                  LmTransStatementStack       c.struct
                  LmTransStatementJob         c.struct
                  LmTransFunctionHeader       c.struct
@@ -232,6 +233,7 @@ L4:
                  LmTransCallLowering            c.struct
                  LmTransExprLoweredRange        c.named-struct
                  LmTransExprStack               c.named-struct
+                 LmTransArrayStructureValueFillFrame c.struct
                  LmTransExprRangeJob            c.struct
                  LmTransExprCallArgsJob         c.struct
                  LmTransExprAtomLowering        c.struct
@@ -572,6 +574,15 @@ L4:
         rows:
                  jobs   LmOwnPtrStack          0                       1
     end: LmTransStatementStack
+
+    table:
+        name: LmTransArrayStructureValueFillFrame
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 field  LmP0Field              0                       1                                1
+                 depth  size_t                 1                       0                                0
+                 index  size_t                 2                       0                                0
+    end: LmTransArrayStructureValueFillFrame
 
     table:
         name: LmTransStatementJob
