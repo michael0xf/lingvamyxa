@@ -65,24 +65,6 @@ static int lm_trans_callable_type_reset(LmTransL4CallableType *type) {
     return 0;
 }
 
-static int lm_trans_callable_type_copy(
-    LmTransL4CallableType *target,
-    const LmTransL4CallableType *source
-) {
-    if (target == 0 || source == 0 || lm_trans_callable_type_init_fields(target) != 0) {
-        return 1;
-    }
-    if (source->class_name != 0) {
-        *target->class_name = *source->class_name;
-    } else {
-        target->class_name->data = "";
-        target->class_name->length = 0U;
-    }
-    target->address_depth = source->address_depth;
-    target->is_const = source->is_const;
-    return 0;
-}
-
 static LmTransL4CallableType *lm_trans_expr_callable_type_new(void) {
     LmTransL4CallableType *type;
 
