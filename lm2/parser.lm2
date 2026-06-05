@@ -2522,6 +2522,12 @@ static LmP0Node *lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
         return 0;
     }
 
+    node->span = (LmP0Span *)lm_own_arena_new_zero(document->tree_arena, sizeof(*node->span));
+    if (node->span == 0) {
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node span");
+        return 0;
+    }
+
     node->as = (LmP0NodeAs *)lm_own_arena_new_zero(document->tree_arena, sizeof(*node->as));
     if (node->as == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node payload");
@@ -2553,7 +2559,7 @@ static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, 
 
     field = (LmP0Field *)lm_own_arena_new_zero(document->tree_arena, sizeof(*field));
     if (field == 0) {
-        lm_p0_set_diagnostic(document, 1, node != 0 ? node->span.line : 0U, node != 0 ? node->span.column : 0U, "out of memory while allocating parser field");
+        lm_p0_set_diagnostic(document, 1, node != 0 ? node->span->line : 0U, node != 0 ? node->span->column : 0U, "out of memory while allocating parser field");
         return 0;
     }
 
@@ -2674,15 +2680,15 @@ static void lm_p0_adjust_node_span_to_document(
         return;
     }
 
-    node->span.offset += base_offset;
+    node->span->offset += base_offset;
     lm_p0_position_in_slice(
         document->source,
         document->source_length,
-        node->span.offset,
+        node->span->offset,
         1U,
         1U,
-        &node->span.line,
-        &node->span.column
+        &node->span->line,
+        &node->span->column
     );
 
     if (node->kind == LM_P0_NODE_STRUCTURE) {
@@ -2742,11 +2748,11 @@ static int lm_p0_record_mix_mark(
 
     node->flags |= LM_P0_NODE_MIX;
     lm_p0_position_in_slice(text, length, start, line, column, &span_line, &span_column);
-    node->span.line = span_line;
-    node->span.column = span_column;
-    node->span.length = end - start;
+    node->span->line = span_line;
+    node->span->column = span_column;
+    node->span->length = end - start;
     if (lm_p0_pointer_source_offset(document, text + start, &absolute_offset)) {
-        node->span.offset = absolute_offset;
+        node->span->offset = absolute_offset;
     }
 
     if (!lm_p0_append_field(document, structure, node)) {
@@ -2754,7 +2760,7 @@ static int lm_p0_record_mix_mark(
         return 0;
     }
 
-    payload_offset = node->span.offset + 1U;
+    payload_offset = node->span->offset + 1U;
     payload_length = end > start + 2U ? end - start - 2U : 0U;
     if (payload_length > 0U) {
         payload_document = (LmP0Document *)lm_own_new_zero(sizeof(*payload_document));
@@ -3292,17 +3298,17 @@ static int lm_p0_append_atom_slice(
     }
     node->as->atom->data = text + start;
     node->as->atom->length = end - start;
-    node->span.line = line;
-    lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-    node->span.offset = offset + start;
-    node->span.length = end - start;
+    node->span->line = line;
+    lm_p0_position_in_slice(text, length, start, line, column, &node->span->line, &node->span->column);
+    node->span->offset = offset + start;
+    node->span->length = end - start;
     if (!lm_p0_document_register_lazy_text(
             document,
             node->as->atom->data,
             node->as->atom->length,
             &node->as->atom->data,
-            node->span.line,
-            node->span.column
+            node->span->line,
+            node->span->column
         )) {
         return 0;
     }
@@ -3329,10 +3335,10 @@ static int lm_p0_append_positional_skip(
     node->flags |= LM_P0_NODE_POSITIONAL_SKIP;
     node->as->atom->data = "";
     node->as->atom->length = 0U;
-    node->span.line = line;
-    lm_p0_position_in_slice(text, length, index, line, column, &node->span.line, &node->span.column);
-    node->span.offset = offset + index;
-    node->span.length = 0U;
+    node->span->line = line;
+    lm_p0_position_in_slice(text, length, index, line, column, &node->span->line, &node->span->column);
+    node->span->offset = offset + index;
+    node->span->length = 0U;
 
     return lm_p0_append_field(document, structure, node);
 }
@@ -4445,17 +4451,17 @@ parse_context:
                 }
                 node->as->atom->data = block_event->text;
                 node->as->atom->length = block_event->text_length;
-                node->span.line = field_line;
-                node->span.column = field_column;
-                node->span.offset = offset + i;
-                node->span.length = next_offset - i;
+                node->span->line = field_line;
+                node->span->column = field_column;
+                node->span->offset = offset + i;
+                node->span->length = next_offset - i;
                 if (!lm_p0_document_register_lazy_text(
                         document,
                         node->as->atom->data,
                         node->as->atom->length,
                         &node->as->atom->data,
-                        node->span.line,
-                        node->span.column
+                        node->span->line,
+                        node->span->column
                 )) {
                     lm_p0_stream_event_delete(block_event);
                     return lm_p0_field_parse_fail(&parse_stack, &indent_stack, &indent_stack_owned);
@@ -4922,17 +4928,17 @@ parse_context:
                 }
                 node->as->atom->data = text + start;
                 node->as->atom->length = head_end - start;
-                node->span.line = line;
-                lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-                node->span.offset = offset + start;
-                node->span.length = head_end - start;
+                node->span->line = line;
+                lm_p0_position_in_slice(text, length, start, line, column, &node->span->line, &node->span->column);
+                node->span->offset = offset + start;
+                node->span->length = head_end - start;
                 if (!lm_p0_document_register_lazy_text(
                         document,
                         node->as->atom->data,
                         node->as->atom->length,
                         &node->as->atom->data,
-                        node->span.line,
-                        node->span.column
+                        node->span->line,
+                        node->span->column
                     )) {
                     return lm_p0_field_parse_fail(&parse_stack, &indent_stack, &indent_stack_owned);
                 }
@@ -4991,10 +4997,10 @@ parse_context:
             lm_p0_free_node(node);
             headless_group_after_separator = 0;
         } else {
-            node->span.line = line;
-            lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-            node->span.offset = offset + start;
-            node->span.length = child_index - start;
+            node->span->line = line;
+            lm_p0_position_in_slice(text, length, start, line, column, &node->span->line, &node->span->column);
+            node->span->offset = offset + start;
+            node->span->length = child_index - start;
             if (!lm_p0_append_field(document, structure, node)) {
                 lm_p0_free_node(node);
                 lm_own_delete(frame, 0);
@@ -5015,17 +5021,17 @@ parse_context:
         if (child_index > 0U && lm_p0_is_short_form_separator(text[child_index - 1U])) {
             node->as->frame->flags |= LM_P0_FRAME_SEPARATOR_CLOSED;
         }
-        node->span.line = line;
-        lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-        node->span.offset = offset + start;
-        node->span.length = child_index - start;
+        node->span->line = line;
+        lm_p0_position_in_slice(text, length, start, line, column, &node->span->line, &node->span->column);
+        node->span->offset = offset + start;
+        node->span->length = child_index - start;
         if (!lm_p0_document_register_lazy_text(
                 document,
                 node->as->frame->head->data,
                 node->as->frame->head->length,
                 &node->as->frame->head->data,
-                node->span.line,
-                node->span.column
+                node->span->line,
+                node->span->column
             )) {
             lm_own_delete(frame, 0);
             return lm_p0_field_parse_fail(&parse_stack, &indent_stack, &indent_stack_owned);
@@ -5049,10 +5055,10 @@ parse_context:
 
     if (frame->continuation == LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE) {
         (void)child_index;
-        node->span.line = line;
-        lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-        node->span.offset = offset + start;
-        node->span.length = close_index - start + 1U;
+        node->span->line = line;
+        lm_p0_position_in_slice(text, length, start, line, column, &node->span->line, &node->span->column);
+        node->span->offset = offset + start;
+        node->span->length = close_index - start + 1U;
         i = close_index + 1U;
         if (!lm_p0_parse_append_node_and_update(
                 document,
@@ -5072,17 +5078,17 @@ parse_context:
 
     if (frame->continuation == LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY) {
         (void)child_index;
-        node->span.line = line;
-        lm_p0_position_in_slice(text, length, start, line, column, &node->span.line, &node->span.column);
-        node->span.offset = offset + start;
-        node->span.length = close_index - start + 1U;
+        node->span->line = line;
+        lm_p0_position_in_slice(text, length, start, line, column, &node->span->line, &node->span->column);
+        node->span->offset = offset + start;
+        node->span->length = close_index - start + 1U;
         if (!lm_p0_document_register_lazy_text(
                 document,
                 node->as->frame->head->data,
                 node->as->frame->head->length,
                 &node->as->frame->head->data,
-                node->span.line,
-                node->span.column
+                node->span->line,
+                node->span->column
             )) {
             lm_own_delete(frame, 0);
             return lm_p0_field_parse_fail(&parse_stack, &indent_stack, &indent_stack_owned);
@@ -5623,10 +5629,10 @@ static int lm_p0_stack_open_implicit_anonymous(
     if (anonymous_node == 0) {
         return 0;
     }
-    anonymous_node->span.line = line;
-    anonymous_node->span.column = column;
-    anonymous_node->span.offset = offset;
-    anonymous_node->span.length = 0U;
+    anonymous_node->span->line = line;
+    anonymous_node->span->column = column;
+    anonymous_node->span->offset = offset;
+    anonymous_node->span->length = 0U;
 
     if (!lm_p0_append_field(document, parent, anonymous_node)) {
         lm_p0_free_node(anonymous_node);
@@ -5826,10 +5832,10 @@ static int lm_p0_stream_resolve_pending_delimiter(
         if (anonymous_node == 0) {
             return 0;
         }
-        anonymous_node->span.line = event->line;
-        anonymous_node->span.column = event->column;
-        anonymous_node->span.offset = event->offset;
-        anonymous_node->span.length = event->text_length;
+        anonymous_node->span->line = event->line;
+        anonymous_node->span->column = event->column;
+        anonymous_node->span->offset = event->offset;
+        anonymous_node->span->length = event->text_length;
 
         if (!lm_p0_append_field(document, parent, anonymous_node)) {
             lm_p0_free_node(anonymous_node);
@@ -6002,17 +6008,17 @@ static int lm_p0_stream_apply_item_event(
         }
         node->as->atom->data = event->text;
         node->as->atom->length = event->text_length;
-        node->span.line = event->line;
-        node->span.column = event->column;
-        node->span.offset = event->offset;
-        node->span.length = event->text_length;
+        node->span->line = event->line;
+        node->span->column = event->column;
+        node->span->offset = event->offset;
+        node->span->length = event->text_length;
         if (!lm_p0_document_register_lazy_text(
                 document,
                 node->as->atom->data,
                 node->as->atom->length,
                 &node->as->atom->data,
-                node->span.line,
-                node->span.column
+                node->span->line,
+                node->span->column
             )) {
             return 0;
         }
@@ -6023,17 +6029,17 @@ static int lm_p0_stream_apply_item_event(
         }
         node->as->atom->data = event->text;
         node->as->atom->length = event->text_length;
-        node->span.line = event->line;
-        node->span.column = event->column;
-        node->span.offset = event->offset;
-        node->span.length = event->text_length;
+        node->span->line = event->line;
+        node->span->column = event->column;
+        node->span->offset = event->offset;
+        node->span->length = event->text_length;
         if (!lm_p0_document_register_lazy_text(
                 document,
                 node->as->atom->data,
                 node->as->atom->length,
                 &node->as->atom->data,
-                node->span.line,
-                node->span.column
+                node->span->line,
+                node->span->column
             )) {
             return 0;
         }
@@ -6701,8 +6707,8 @@ static int lm_p0_parse_stream(LmP0Document *document) {
     if (document->root == 0) {
         return 0;
     }
-    document->root->span.offset = 0U;
-    document->root->span.length = document->source_length;
+    document->root->span->offset = 0U;
+    document->root->span->length = document->source_length;
 
     indent_stack = lm_p0_indent_stack_new(document);
     stack = lm_p0_stack_new();
@@ -7155,8 +7161,8 @@ static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
             !lm_p0_wrap_fields_from_line(
                 document,
                 node->as->frame->body,
-                node->span.line,
-                node->span.offset + node->span.length
+                node->span->line,
+                node->span->offset + node->span->length
             )) {
             return 0;
         }
@@ -7189,8 +7195,8 @@ static int lm_p0_wrap_fields_from_line(
     field = structure->first_field;
     while (field != 0) {
         if (field->value != 0 &&
-            field->value->span.line != head_line &&
-            field->value->span.offset >= inline_event_end_offset) {
+            field->value->span->line != head_line &&
+            field->value->span->offset >= inline_event_end_offset) {
             break;
         }
         previous = field;
@@ -7206,7 +7212,7 @@ static int lm_p0_wrap_fields_from_line(
     if (group_node == 0) {
         return 0;
     }
-    group_node->span = group_first->value->span;
+    *group_node->span = *group_first->value->span;
 
     move = group_first;
     while (move != 0) {

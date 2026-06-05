@@ -465,7 +465,9 @@ static int lm_trans_nodes_touch(const LmP0Node *left, const LmP0Node *right) {
     return
         left != 0 &&
         right != 0 &&
-        left->span.offset + left->span.length == right->span.offset;
+        left->span != 0 &&
+        right->span != 0 &&
+        left->span->offset + left->span->length == right->span->offset;
 }
 
 static int lm_trans_atom_is_infix_expr_operator(

@@ -236,7 +236,16 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
 
     copy->kind = source->kind;
     copy->flags = source->flags;
-    copy->span = source->span;
+    copy->span = (LmP0Span *)lm_own_arena_new_zero(
+        lm_trans_registry->value_arena,
+        sizeof(*copy->span)
+    );
+    if (copy->span == 0) {
+        return 0;
+    }
+    if (source->span != 0) {
+        *copy->span = *source->span;
+    }
     copy->as = (LmP0NodeAs *)lm_own_arena_new_zero(
         lm_trans_registry->value_arena,
         sizeof(*copy->as)

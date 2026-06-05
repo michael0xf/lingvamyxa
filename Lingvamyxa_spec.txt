@@ -8148,6 +8148,15 @@ C projection it may be printed as `typedef struct LmSlice { void *ptr; size_t
 length; } LmSlice;`. A profile may introduce additional unsigned length aliases
 such as `uint`, but the bootstrap C ABI uses `size_t` for object and byte counts.
 
+The hosted C layout projection follows the bootstrap storage invariant:
+inside a projected `struct`, a field is either a primitive/scalar value or an
+address. If a field's class is itself a layout class and no greater address
+depth is requested, the C projection stores that field as a pointer to the
+layout class. This keeps LMX structure ownership explicit and avoids silently
+embedding non-primitive value records inside other records. Arrays remain a
+profile-specific projection of repeated primitive slots or repeated addresses;
+they do not reintroduce by-value layout nesting.
+
 Likewise, `const` is not a global variable/class-table category. In the L2
 bootstrap profile it is a local declaration/type-position modifier consumed by
 procedural lowering. Persistent model facts that happen not to change are still

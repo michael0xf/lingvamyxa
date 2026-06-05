@@ -138,7 +138,7 @@ typedef struct LmP0NodeAs {
 struct LmP0Node {
     LmP0NodeKind kind;
     unsigned flags;
-    LmP0Span span;
+    LmP0Span *span;
     LmP0NodeAs *as;
 };
 struct LmP0Field {
@@ -1857,7 +1857,16 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
 
     copy->kind = source->kind;
     copy->flags = source->flags;
-    copy->span = source->span;
+    copy->span = (LmP0Span *)lm_own_arena_new_zero(
+        lm_trans_registry->value_arena,
+        sizeof(*copy->span)
+    );
+    if (copy->span == 0) {
+        return 0;
+    }
+    if (source->span != 0) {
+        *copy->span = *source->span;
+    }
     copy->as = (LmP0NodeAs *)lm_own_arena_new_zero(
         lm_trans_registry->value_arena,
         sizeof(*copy->as)
@@ -5018,7 +5027,9 @@ static int lm_trans_nodes_touch(const LmP0Node *left, const LmP0Node *right) {
     return
         left != 0 &&
         right != 0 &&
-        left->span.offset + left->span.length == right->span.offset;
+        left->span != 0 &&
+        right->span != 0 &&
+        left->span->offset + left->span->length == right->span->offset;
 }
 
 static int lm_trans_atom_is_infix_expr_operator(
@@ -14484,16 +14495,177 @@ static char *lm_trans_l2_structure_member_name_new(const LmP0Node *node, size_t 
     return lm_trans_l2_c_identifier_new("field_", base, suffix);
 }
 
+static char *lm_trans_l2_object_suffix_name_new(
+    const char *object_name,
+    const char *suffix
+) {
+    size_t object_length;
+    size_t suffix_length;
+    char *name;
+
+    if (object_name == 0 || suffix == 0) {
+        return 0;
+    }
+
+    object_length = strlen(object_name);
+    suffix_length = strlen(suffix);
+    name = (char *)lm_own_new_zero(object_length + suffix_length + 1U);
+    if (name == 0) {
+        return 0;
+    }
+    memcpy(name, object_name, object_length);
+    memcpy(name + object_length, suffix, suffix_length + 1U);
+    return name;
+}
+
+static char *lm_trans_l2_child_object_name_new(
+    const char *object_name,
+    const char *member_name
+) {
+    size_t object_length;
+    size_t member_length;
+    char *name;
+
+    if (object_name == 0 || member_name == 0) {
+        return 0;
+    }
+
+    object_length = strlen(object_name);
+    member_length = strlen(member_name);
+    name = (char *)lm_own_new_zero(object_length + member_length + 2U);
+    if (name == 0) {
+        return 0;
+    }
+    memcpy(name, object_name, object_length);
+    name[object_length] = '_';
+    memcpy(name + object_length + 1U, member_name, member_length + 1U);
+    return name;
+}
+
+static char *lm_trans_l2_object_type_name_new(const char *object_name) {
+    return lm_trans_l2_object_suffix_name_new(object_name, "_type");
+}
+
+static char *lm_trans_l2_object_storage_name_new(const char *object_name) {
+    return lm_trans_l2_object_suffix_name_new(object_name, "_storage");
+}
+
+static int lm_trans_emit_l2_structure_node_definition(
+    FILE *file,
+    const LmP0Node *node,
+    const char *object_name,
+    unsigned indent
+);
+
+static int lm_trans_emit_l2_structure_node_initializer(
+    FILE *file,
+    const LmP0Node *node,
+    const char *object_name
+);
+
+static int lm_trans_emit_l2_structure_fields_children(
+    FILE *file,
+    const LmP0Structure *structure,
+    const char *object_name,
+    unsigned indent
+) {
+    const LmP0Field *field;
+    char *member_name;
+    char *child_object_name;
+    size_t index;
+
+    field = lm_trans_l2_structure_first_present_field(structure);
+    index = 0U;
+    while (field != 0) {
+        if (
+            field->value != 0 &&
+            (
+                field->value->kind == LM_P0_NODE_STRUCTURE ||
+                field->value->kind == LM_P0_NODE_FRAME
+            )
+        ) {
+            member_name = lm_trans_l2_structure_member_name_new(field->value, index);
+            if (member_name == 0) {
+                return 1;
+            }
+            child_object_name = lm_trans_l2_child_object_name_new(object_name, member_name);
+            if (child_object_name == 0) {
+                lm_own_delete(member_name, 0);
+                return 1;
+            }
+            if (
+                lm_trans_emit_l2_structure_node_definition(
+                    file,
+                    field->value,
+                    child_object_name,
+                    indent
+                ) != 0
+            ) {
+                lm_own_delete(child_object_name, 0);
+                lm_own_delete(member_name, 0);
+                return 1;
+            }
+            lm_own_delete(child_object_name, 0);
+            lm_own_delete(member_name, 0);
+        }
+        ++index;
+        field = lm_trans_l2_structure_next_present_field(field);
+    }
+    return 0;
+}
+
 static int lm_trans_emit_l2_structure_node_type(
     FILE *file,
     const LmP0Node *node,
+    const char *object_name,
     const char *member_name,
     unsigned indent
-);
+) {
+    char *child_object_name;
+    char *child_type_name;
+    int status;
+
+    if (file == 0 || node == 0 || object_name == 0 || member_name == 0) {
+        return 1;
+    }
+
+    if (node->kind == LM_P0_NODE_ATOM) {
+        return
+            lm_trans_emit_indent(file, indent) != 0 ||
+            lm_trans_put(file, "const char *") != 0 ||
+            lm_trans_put(file, member_name) != 0 ||
+            lm_trans_put(file, ";\n") != 0;
+    }
+
+    if (node->kind == LM_P0_NODE_STRUCTURE || node->kind == LM_P0_NODE_FRAME) {
+        child_object_name = lm_trans_l2_child_object_name_new(object_name, member_name);
+        if (child_object_name == 0) {
+            return 1;
+        }
+        child_type_name = lm_trans_l2_object_type_name_new(child_object_name);
+        if (child_type_name == 0) {
+            lm_own_delete(child_object_name, 0);
+            return 1;
+        }
+        status =
+            lm_trans_emit_indent(file, indent) != 0 ||
+            lm_trans_put(file, "const ") != 0 ||
+            lm_trans_put(file, child_type_name) != 0 ||
+            lm_trans_put(file, " *") != 0 ||
+            lm_trans_put(file, member_name) != 0 ||
+            lm_trans_put(file, ";\n") != 0;
+        lm_own_delete(child_type_name, 0);
+        lm_own_delete(child_object_name, 0);
+        return status;
+    }
+
+    return 1;
+}
 
 static int lm_trans_emit_l2_structure_fields_type(
     FILE *file,
     const LmP0Structure *structure,
+    const char *object_name,
     unsigned indent
 ) {
     const LmP0Field *field;
@@ -14513,7 +14685,15 @@ static int lm_trans_emit_l2_structure_fields_type(
         if (member_name == 0) {
             return 1;
         }
-        if (lm_trans_emit_l2_structure_node_type(file, field->value, member_name, indent) != 0) {
+        if (
+            lm_trans_emit_l2_structure_node_type(
+                file,
+                field->value,
+                object_name,
+                member_name,
+                indent
+            ) != 0
+        ) {
             lm_own_delete(member_name, 0);
             return 1;
         }
@@ -14524,61 +14704,53 @@ static int lm_trans_emit_l2_structure_fields_type(
     return 0;
 }
 
-static int lm_trans_emit_l2_structure_node_type(
+static int lm_trans_emit_l2_structure_field_initializer(
     FILE *file,
     const LmP0Node *node,
-    const char *member_name,
-    unsigned indent
+    const char *object_name,
+    const char *member_name
 ) {
-    if (file == 0 || node == 0 || member_name == 0) {
+    char *child_object_name;
+    char *child_storage_name;
+    int status;
+
+    if (file == 0 || node == 0 || object_name == 0 || member_name == 0) {
         return 1;
     }
 
     if (node->kind == LM_P0_NODE_ATOM) {
-        return
-            lm_trans_emit_indent(file, indent) != 0 ||
-            lm_trans_put(file, "const char *") != 0 ||
-            lm_trans_put(file, member_name) != 0 ||
-            lm_trans_put(file, ";\n") != 0;
+        return lm_trans_emit_c_string_literal_atom(file, node->as->atom);
     }
 
     if (node->kind == LM_P0_NODE_STRUCTURE || node->kind == LM_P0_NODE_FRAME) {
-        if (
-            lm_trans_emit_indent(file, indent) != 0 ||
-            lm_trans_put(file, "struct {\n") != 0
-        ) {
+        child_object_name = lm_trans_l2_child_object_name_new(object_name, member_name);
+        if (child_object_name == 0) {
             return 1;
         }
-        if (node->kind == LM_P0_NODE_FRAME) {
-            if (
-                lm_trans_emit_indent(file, indent + 1U) != 0 ||
-                lm_trans_put(file, "const char *head;\n") != 0
-            ) {
-                return 1;
-            }
-            if (lm_trans_emit_l2_structure_fields_type(file, node->as->frame->body, indent + 1U) != 0) {
-                return 1;
-            }
-        } else if (lm_trans_emit_l2_structure_fields_type(file, node->as->structure, indent + 1U) != 0) {
+        child_storage_name = lm_trans_l2_object_storage_name_new(child_object_name);
+        if (child_storage_name == 0) {
+            lm_own_delete(child_object_name, 0);
             return 1;
         }
-        return
-            lm_trans_emit_indent(file, indent) != 0 ||
-            lm_trans_put(file, "} ") != 0 ||
-            lm_trans_put(file, member_name) != 0 ||
-            lm_trans_put(file, ";\n") != 0;
+        status =
+            lm_trans_put(file, "&") != 0 ||
+            lm_trans_put(file, child_storage_name) != 0;
+        lm_own_delete(child_storage_name, 0);
+        lm_own_delete(child_object_name, 0);
+        return status;
     }
 
     return 1;
 }
 
-static int lm_trans_emit_l2_structure_node_initializer(FILE *file, const LmP0Node *node);
-
 static int lm_trans_emit_l2_structure_fields_initializer(
     FILE *file,
-    const LmP0Structure *structure
+    const LmP0Structure *structure,
+    const char *object_name
 ) {
     const LmP0Field *field;
+    char *member_name;
+    size_t index;
     int wrote;
 
     field = lm_trans_l2_structure_first_present_field(structure);
@@ -14587,21 +14759,40 @@ static int lm_trans_emit_l2_structure_fields_initializer(
     }
 
     wrote = 0;
+    index = 0U;
     while (field != 0) {
         if (wrote && lm_trans_put(file, ", ") != 0) {
             return 1;
         }
-        if (lm_trans_emit_l2_structure_node_initializer(file, field->value) != 0) {
+        member_name = lm_trans_l2_structure_member_name_new(field->value, index);
+        if (member_name == 0) {
             return 1;
         }
+        if (
+            lm_trans_emit_l2_structure_field_initializer(
+                file,
+                field->value,
+                object_name,
+                member_name
+            ) != 0
+        ) {
+            lm_own_delete(member_name, 0);
+            return 1;
+        }
+        lm_own_delete(member_name, 0);
         wrote = 1;
+        ++index;
         field = lm_trans_l2_structure_next_present_field(field);
     }
     return 0;
 }
 
-static int lm_trans_emit_l2_structure_node_initializer(FILE *file, const LmP0Node *node) {
-    if (file == 0 || node == 0) {
+static int lm_trans_emit_l2_structure_node_initializer(
+    FILE *file,
+    const LmP0Node *node,
+    const char *object_name
+) {
+    if (file == 0 || node == 0 || object_name == 0) {
         return 1;
     }
 
@@ -14612,7 +14803,7 @@ static int lm_trans_emit_l2_structure_node_initializer(FILE *file, const LmP0Nod
     if (node->kind == LM_P0_NODE_STRUCTURE) {
         return
             lm_trans_put(file, "{") != 0 ||
-            lm_trans_emit_l2_structure_fields_initializer(file, node->as->structure) != 0 ||
+            lm_trans_emit_l2_structure_fields_initializer(file, node->as->structure, object_name) != 0 ||
             lm_trans_put(file, "}") != 0;
     }
 
@@ -14627,7 +14818,7 @@ static int lm_trans_emit_l2_structure_node_initializer(FILE *file, const LmP0Nod
             lm_trans_l2_structure_has_present_fields(node->as->frame->body) &&
             (
                 lm_trans_put(file, ", ") != 0 ||
-                lm_trans_emit_l2_structure_fields_initializer(file, node->as->frame->body) != 0
+                lm_trans_emit_l2_structure_fields_initializer(file, node->as->frame->body, object_name) != 0
             )
         ) {
             return 1;
@@ -14636,6 +14827,97 @@ static int lm_trans_emit_l2_structure_node_initializer(FILE *file, const LmP0Nod
     }
 
     return 1;
+}
+
+static int lm_trans_emit_l2_structure_node_definition(
+    FILE *file,
+    const LmP0Node *node,
+    const char *object_name,
+    unsigned indent
+) {
+    char *type_name;
+    char *storage_name;
+
+    if (file == 0 || node == 0 || object_name == 0) {
+        return 1;
+    }
+    if (node->kind != LM_P0_NODE_STRUCTURE && node->kind != LM_P0_NODE_FRAME) {
+        return 0;
+    }
+
+    if (
+        node->kind == LM_P0_NODE_FRAME &&
+        lm_trans_emit_l2_structure_fields_children(file, node->as->frame->body, object_name, indent) != 0
+    ) {
+        return 1;
+    }
+    if (
+        node->kind == LM_P0_NODE_STRUCTURE &&
+        lm_trans_emit_l2_structure_fields_children(file, node->as->structure, object_name, indent) != 0
+    ) {
+        return 1;
+    }
+
+    type_name = lm_trans_l2_object_type_name_new(object_name);
+    storage_name = lm_trans_l2_object_storage_name_new(object_name);
+    if (type_name == 0 || storage_name == 0) {
+        lm_own_delete(type_name, 0);
+        lm_own_delete(storage_name, 0);
+        return 1;
+    }
+
+    if (
+        lm_trans_emit_indent(file, indent) != 0 ||
+        lm_trans_put(file, "typedef struct ") != 0 ||
+        lm_trans_put(file, type_name) != 0 ||
+        lm_trans_put(file, " {\n") != 0
+    ) {
+        lm_own_delete(type_name, 0);
+        lm_own_delete(storage_name, 0);
+        return 1;
+    }
+    if (
+        node->kind == LM_P0_NODE_FRAME &&
+        (
+            lm_trans_emit_indent(file, indent + 1U) != 0 ||
+            lm_trans_put(file, "const char *head;\n") != 0 ||
+            lm_trans_emit_l2_structure_fields_type(file, node->as->frame->body, object_name, indent + 1U) != 0
+        )
+    ) {
+        lm_own_delete(type_name, 0);
+        lm_own_delete(storage_name, 0);
+        return 1;
+    }
+    if (
+        node->kind == LM_P0_NODE_STRUCTURE &&
+        lm_trans_emit_l2_structure_fields_type(file, node->as->structure, object_name, indent + 1U) != 0
+    ) {
+        lm_own_delete(type_name, 0);
+        lm_own_delete(storage_name, 0);
+        return 1;
+    }
+    if (
+        lm_trans_emit_indent(file, indent) != 0 ||
+        lm_trans_put(file, "} ") != 0 ||
+        lm_trans_put(file, type_name) != 0 ||
+        lm_trans_put(file, ";\n") != 0 ||
+        lm_trans_emit_indent(file, indent) != 0 ||
+        lm_trans_put(file, "static const ") != 0 ||
+        lm_trans_put(file, type_name) != 0 ||
+        lm_trans_put(file, " ") != 0 ||
+        lm_trans_put(file, storage_name) != 0 ||
+        lm_trans_put(file, " = ") != 0 ||
+        lm_trans_emit_l2_structure_node_initializer(file, node, object_name) != 0 ||
+        lm_trans_put(file, ";\n") != 0
+    ) {
+        lm_own_delete(type_name, 0);
+        lm_own_delete(storage_name, 0);
+        return 1;
+    }
+
+    lm_own_delete(type_name, 0);
+    lm_own_delete(storage_name, 0);
+    return 0;
 }
 
 static const LmP0Text *lm_trans_l2_table_name_atom(const LmP0Frame *frame) {
@@ -14683,7 +14965,6 @@ static int lm_trans_emit_l2_structure_frame_storage(
     char *object_name;
     char *type_name;
     char *storage_name;
-    size_t object_name_length;
     LmP0Node node;
     LmP0NodeAs node_as;
 
@@ -14701,19 +14982,14 @@ static int lm_trans_emit_l2_structure_frame_storage(
     if (object_name == 0) {
         return 1;
     }
-    object_name_length = strlen(object_name);
-    type_name = (char *)lm_own_new_zero(object_name_length + 6U);
-    storage_name = (char *)lm_own_new_zero(object_name_length + 9U);
+    type_name = lm_trans_l2_object_type_name_new(object_name);
+    storage_name = lm_trans_l2_object_storage_name_new(object_name);
     if (type_name == 0 || storage_name == 0) {
         lm_own_delete(type_name, 0);
         lm_own_delete(storage_name, 0);
         lm_own_delete(object_name, 0);
         return 1;
     }
-    memcpy(type_name, object_name, object_name_length);
-    memcpy(type_name + object_name_length, "_type", 6U);
-    memcpy(storage_name, object_name, object_name_length);
-    memcpy(storage_name + object_name_length, "_storage", 9U);
 
     memset(&node, 0, sizeof(node));
     memset(&node_as, 0, sizeof(node_as));
@@ -14722,25 +14998,7 @@ static int lm_trans_emit_l2_structure_frame_storage(
     node.as->frame = (LmP0Frame *)frame;
 
     if (
-        lm_trans_emit_indent(file, indent) != 0 ||
-        lm_trans_put(file, "typedef struct ") != 0 ||
-        lm_trans_put(file, type_name) != 0 ||
-        lm_trans_put(file, " {\n") != 0 ||
-        lm_trans_emit_indent(file, indent + 1U) != 0 ||
-        lm_trans_put(file, "const char *head;\n") != 0 ||
-        lm_trans_emit_l2_structure_fields_type(file, frame->body, indent + 1U) != 0 ||
-        lm_trans_emit_indent(file, indent) != 0 ||
-        lm_trans_put(file, "} ") != 0 ||
-        lm_trans_put(file, type_name) != 0 ||
-        lm_trans_put(file, ";\n") != 0 ||
-        lm_trans_emit_indent(file, indent) != 0 ||
-        lm_trans_put(file, "static const ") != 0 ||
-        lm_trans_put(file, type_name) != 0 ||
-        lm_trans_put(file, " ") != 0 ||
-        lm_trans_put(file, storage_name) != 0 ||
-        lm_trans_put(file, " = ") != 0 ||
-        lm_trans_emit_l2_structure_node_initializer(file, &node) != 0 ||
-        lm_trans_put(file, ";\n") != 0 ||
+        lm_trans_emit_l2_structure_node_definition(file, &node, object_name, indent) != 0 ||
         lm_trans_emit_indent(file, indent) != 0 ||
         lm_trans_put(file, "static const ") != 0 ||
         lm_trans_put(file, type_name) != 0 ||
@@ -24266,6 +24524,41 @@ static void lm_trans_l4_text_view_delete(LmP0Text **view) {
     lm_trans_text_ref_destroy(view);
 }
 
+static int lm_trans_layout_class_requires_pointer_field(
+    const LmTransNamespace *namespace_,
+    const char *class_name
+) {
+    LmP0Text *class_text;
+    const char *backend;
+    int result;
+
+    if (namespace_ == 0 || class_name == 0) {
+        return 0;
+    }
+
+    class_text = lm_trans_l4_text_view_new(class_name);
+    if (class_text == 0) {
+        return 0;
+    }
+    backend = lm_trans_namespace_registry_lookup(namespace_, class_text, "layout.backend");
+    result = lm_trans_layout_backend_is_supported(backend);
+    lm_trans_l4_text_view_delete(&class_text);
+    return result;
+}
+
+static size_t lm_trans_layout_field_effective_address_depth(
+    const LmTransLayoutField *field,
+    const LmTransNamespace *namespace_
+) {
+    if (field == 0 || field->is_union || field->address_depth != 0U) {
+        return field != 0 ? field->address_depth : 0U;
+    }
+    if (lm_trans_layout_class_requires_pointer_field(namespace_, field->class_name)) {
+        return 1U;
+    }
+    return 0U;
+}
+
 static LmTransAbiParam **lm_trans_l4_abi_params_new(size_t capacity) {
     LmTransAbiParam **params;
     size_t i;
@@ -24533,7 +24826,11 @@ static int lm_trans_collect_layout_fields(
                     return 1;
                 }
                 field->class_name = row->payload;
-                if (field->is_const && field->address_depth == 0U && !field->has_array_count) {
+                if (
+                    field->is_const &&
+                    lm_trans_layout_field_effective_address_depth(field, namespace_) == 0U &&
+                    !field->has_array_count
+                ) {
                     fprintf(stderr, "trans L4 layout error: field %s.%s const value fields are not supported yet\n", layout_name, row->key);
                     lm_trans_l4_text_view_delete(&layout_text);
                     return 1;
@@ -24628,11 +24925,13 @@ static int lm_trans_emit_layout_field(
     unsigned indent
 ) {
     LmTransCDeclarator *declarator;
+    size_t effective_address_depth;
 
     if (file == 0 || field == 0) {
         return 1;
     }
     declarator = 0;
+    effective_address_depth = lm_trans_layout_field_effective_address_depth(field, namespace_);
 
     if (field->is_union) {
         if (
@@ -24647,7 +24946,7 @@ static int lm_trans_emit_layout_field(
             return 1;
         }
     } else if (lm_trans_l4_is_function_pointer_type(namespace_, field->class_name)) {
-        if (field->is_const || field->address_depth != 0U || field->has_array_count) {
+        if (field->is_const || effective_address_depth != 0U || field->has_array_count) {
             fprintf(stderr, "trans L4 layout error: function pointer field %s cannot use const, pointer-depth, or array-count\n", field->name);
             return 1;
         }
@@ -24664,7 +24963,7 @@ static int lm_trans_emit_layout_field(
         }
         lm_trans_text_assign_cstr(declarator->type_head, field->class_name);
         lm_trans_text_assign_cstr(declarator->name, field->name);
-        declarator->pointer_depth = field->address_depth;
+        declarator->pointer_depth = effective_address_depth;
         declarator->type_is_head = 1;
         if (field->has_array_count) {
             declarator->literal_dimensions[0] = field->array_count;
