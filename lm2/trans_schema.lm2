@@ -71,7 +71,7 @@ L4:
     ) int
 
     fn: LmTransCallLoweringHandler (
-        LmP0Text: head
+        const: @: LmP0Text head
         const: @: LmTransSymbol symbol
         @: LmTransCallLowering out
     ) int
@@ -155,7 +155,7 @@ L4:
         @: FILE file
         unsigned: indent
         const: @: LmP0Node type_node
-        LmP0Text: target_name
+        const: @: LmP0Text target_name
         const: @: LmP0Structure value
         @: int out_consumed
         @: int out_needs_null_check
@@ -165,7 +165,7 @@ L4:
         @: FILE file
         unsigned: indent
         const: @: LmP0Node type_node
-        LmP0Text: target_name
+        const: @: LmP0Text target_name
         const: @: LmP0Structure value
         const: @: LmTransNamespace namespace_
         @: int out_consumed

@@ -604,13 +604,13 @@ static int lm_trans_emit_array_pointer_type(
 
 static int lm_trans_emit_array_target_path(
     FILE *file,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const size_t *indices,
     size_t depth
 ) {
     size_t i;
 
-    if (lm_trans_emit_identifier(file, &target_name) != 0) {
+    if (target_name == 0 || lm_trans_emit_identifier(file, target_name) != 0) {
         return 1;
     }
     for (i = 0U; i < depth; ++i) {
@@ -630,7 +630,7 @@ static int lm_trans_emit_array_target_path(
 static int lm_trans_emit_array_structure_value_alloc_assignment(
     FILE *file,
     unsigned indent,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const size_t *indices,
     size_t depth,
     const LmP0Node *element_type,
@@ -684,7 +684,7 @@ static int lm_trans_emit_array_structure_value_alloc_assignment(
 static int lm_trans_emit_array_null_return_check(
     FILE *file,
     unsigned indent,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const size_t *indices,
     size_t depth,
     const LmTransNamespace *namespace_
@@ -731,7 +731,7 @@ static LmTransArrayStructureValueFillFrame *lm_trans_array_structure_value_fill_
 static int lm_trans_emit_array_structure_value_fill_iterative(
     FILE *file,
     unsigned indent,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const LmP0Node *element_type,
     size_t rank,
     size_t depth,
@@ -867,7 +867,7 @@ static int lm_trans_emit_array_structure_value_fill_iterative(
 static int lm_trans_emit_array_structure_value_fill(
     FILE *file,
     unsigned indent,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const LmP0Node *element_type,
     size_t rank,
     const LmP0Structure *value,
@@ -902,7 +902,7 @@ static int lm_trans_type_receiver_array_structure_value_alloc(
     FILE *file,
     unsigned indent,
     const LmP0Node *type_node,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const LmP0Structure *value,
     int *out_consumed,
     int *out_needs_null_check
@@ -918,7 +918,7 @@ static int lm_trans_type_receiver_array_structure_value_alloc(
     if (out_needs_null_check != 0) {
         *out_needs_null_check = 0;
     }
-    if (out_consumed == 0 || out_needs_null_check == 0 || value == 0) {
+    if (out_consumed == 0 || out_needs_null_check == 0 || target_name == 0 || value == 0) {
         return 0;
     }
 
@@ -989,7 +989,7 @@ static int lm_trans_type_receiver_array_structure_value_fill(
     FILE *file,
     unsigned indent,
     const LmP0Node *type_node,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const LmP0Structure *value,
     const LmTransNamespace *namespace_,
     int *out_consumed
@@ -1001,7 +1001,7 @@ static int lm_trans_type_receiver_array_structure_value_fill(
     if (out_consumed != 0) {
         *out_consumed = 0;
     }
-    if (out_consumed == 0 || value == 0) {
+    if (out_consumed == 0 || target_name == 0 || value == 0) {
         return 0;
     }
 
@@ -1021,7 +1021,7 @@ static int lm_trans_emit_type_receiver_structure_value_alloc(
     FILE *file,
     unsigned indent,
     const LmP0Node *type_node,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const LmP0Structure *value,
     int *out_consumed,
     int *out_needs_null_check
@@ -1036,7 +1036,7 @@ static int lm_trans_emit_type_receiver_structure_value_alloc(
     if (out_needs_null_check != 0) {
         *out_needs_null_check = 0;
     }
-    if (out_consumed == 0 || out_needs_null_check == 0 || value == 0) {
+    if (out_consumed == 0 || out_needs_null_check == 0 || target_name == 0 || value == 0) {
         return 0;
     }
 
@@ -1072,7 +1072,7 @@ static int lm_trans_emit_type_receiver_structure_value_fill(
     FILE *file,
     unsigned indent,
     const LmP0Node *type_node,
-    LmP0Text target_name,
+    const LmP0Text *target_name,
     const LmP0Structure *value,
     const LmTransNamespace *namespace_,
     int *out_consumed
@@ -1084,7 +1084,7 @@ static int lm_trans_emit_type_receiver_structure_value_fill(
     if (out_consumed != 0) {
         *out_consumed = 0;
     }
-    if (out_consumed == 0 || value == 0) {
+    if (out_consumed == 0 || target_name == 0 || value == 0) {
         return 0;
     }
 
@@ -1214,7 +1214,7 @@ static int lm_trans_emit_array_value_helper(
         lm_trans_emit_array_structure_value_alloc_assignment(
             prelude_file,
             1U,
-            *target_name,
+            target_name,
             0,
             0U,
             element_type,
@@ -1244,7 +1244,7 @@ static int lm_trans_emit_array_value_helper(
         lm_trans_emit_array_structure_value_fill(
             prelude_file,
             1U,
-            *target_name,
+            target_name,
             element_type,
             rank,
             value,
@@ -1419,7 +1419,7 @@ static int lm_trans_emit_typed_value_return_statement(
             file,
             indent + 1U,
             namespace_->return_type_node,
-            *return_name,
+            return_name,
             structure_value,
             out_consumed,
             &needs_null_check
@@ -1460,7 +1460,7 @@ static int lm_trans_emit_typed_value_return_statement(
             file,
             indent + 1U,
             namespace_->return_type_node,
-            *return_name,
+            return_name,
             structure_value,
             namespace_,
             &filled
