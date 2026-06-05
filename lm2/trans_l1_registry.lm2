@@ -84,423 +84,285 @@ static void lm_trans_symbol_destroy(LmTransSymbol *symbol);
 static void lm_trans_symbol_delete_any(void *object);
 static void lm_trans_free_any(void *object);
 
-static void lm_trans_import_document_delete(void *document) {
-    lm_p0_document_destroy((LmP0Document *)document);
-}
+===
 
-#define LM_TRANS_REGISTRY_CLONE_STRUCTURE 1
-#define LM_TRANS_REGISTRY_CLONE_TRAILER 2
+sub: lm_trans_import_document_delete (@: void document)
+    lm_p0_document_destroy(cast: (@: LmP0Document) document)
+end: lm_trans_import_document_delete
 
-typedef struct LmTransRegistryCloneFrame {
-    int phase;
-    const LmP0Structure *source_structure;
-    LmP0Structure *copy_structure;
-    const LmP0Trailer *source_trailer;
-    LmP0Trailer **copy_trailer_slot;
-} LmTransRegistryCloneFrame;
+fn: lm_trans_registry_new_text () @: LmP0Text
+    @: LmP0Text text
 
-static LmP0Text *lm_trans_registry_new_text(void) {
-    LmP0Text *text;
+    text: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(text[0]))
+    if: text != 0
+        text\data: ""
+        text\length: 0U
+return: text
 
-    text = (LmP0Text *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*text));
-    if (text != 0) {
-        text->data = "";
-        text->length = 0U;
-    }
-    return text;
-}
+fn: lm_trans_registry_new_structure () @: LmP0Structure
+return: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(c.LmP0Structure))
 
-static LmP0Structure *lm_trans_registry_new_structure(void) {
-    return (LmP0Structure *)lm_own_arena_new_zero(
-        lm_trans_registry->value_arena,
-        sizeof(LmP0Structure)
-    );
-}
+fn: lm_trans_registry_new_frame () @: LmP0Frame
+    @: LmP0Frame frame
 
-static LmP0Frame *lm_trans_registry_new_frame(void) {
-    LmP0Frame *frame;
+    frame: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(frame[0]))
+    if: frame = 0
+        return: 0
+    frame\head: lm_trans_registry_new_text()
+    frame\body: lm_trans_registry_new_structure()
+    if: frame\head = 0 || frame\body = 0
+        return: 0
+return: frame
 
-    frame = (LmP0Frame *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*frame));
-    if (frame == 0) {
-        return 0;
-    }
-    frame->head = lm_trans_registry_new_text();
-    frame->body = lm_trans_registry_new_structure();
-    if (frame->head == 0 || frame->body == 0) {
-        return 0;
-    }
-    return frame;
-}
+fn: lm_trans_registry_new_trailer () @: LmP0Trailer
+    @: LmP0Trailer trailer
 
-static LmP0Trailer *lm_trans_registry_new_trailer(void) {
-    LmP0Trailer *trailer;
+    trailer: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(trailer[0]))
+    if: trailer = 0
+        return: 0
+    trailer\spelling: lm_trans_registry_new_text()
+    trailer\body: lm_trans_registry_new_structure()
+    if: trailer\spelling = 0 || trailer\body = 0
+        return: 0
+return: trailer
 
-    trailer = (LmP0Trailer *)lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(*trailer));
-    if (trailer == 0) {
-        return 0;
-    }
-    trailer->spelling = lm_trans_registry_new_text();
-    trailer->body = lm_trans_registry_new_structure();
-    if (trailer->spelling == 0 || trailer->body == 0) {
-        return 0;
-    }
-    return trailer;
-}
+fn: lm_trans_registry_clone_frame_new_structure (const: @(LmP0Structure source); @: LmP0Structure copy) @: LmTransRegistryCloneFrame
+    @: LmTransRegistryCloneFrame frame
 
-static LmTransRegistryCloneFrame *lm_trans_registry_clone_frame_new_structure(
-    const LmP0Structure *source,
-    LmP0Structure *copy
-) {
-    LmTransRegistryCloneFrame *frame;
+    frame: lm_own_new_zero(c.sizeof(frame[0]))
+    if: frame = 0
+        return: 0
+    frame\phase: c.LM_TRANS_REGISTRY_CLONE_STRUCTURE
+    frame\source_structure: source
+    frame\copy_structure: copy
+return: frame
 
-    frame = (LmTransRegistryCloneFrame *)lm_own_new_zero(sizeof(*frame));
-    if (frame == 0) {
-        return 0;
-    }
-    frame->phase = LM_TRANS_REGISTRY_CLONE_STRUCTURE;
-    frame->source_structure = source;
-    frame->copy_structure = copy;
-    return frame;
-}
+fn: lm_trans_registry_clone_frame_new_trailer (const: @(LmP0Trailer source); @@(LmP0Trailer copy_slot)) @: LmTransRegistryCloneFrame
+    @: LmTransRegistryCloneFrame frame
 
-static LmTransRegistryCloneFrame *lm_trans_registry_clone_frame_new_trailer(
-    const LmP0Trailer *source,
-    LmP0Trailer **copy_slot
-) {
-    LmTransRegistryCloneFrame *frame;
+    frame: lm_own_new_zero(c.sizeof(frame[0]))
+    if: frame = 0
+        return: 0
+    frame\phase: c.LM_TRANS_REGISTRY_CLONE_TRAILER
+    frame\source_trailer: source
+    frame\copy_trailer_slot: copy_slot
+return: frame
 
-    frame = (LmTransRegistryCloneFrame *)lm_own_new_zero(sizeof(*frame));
-    if (frame == 0) {
-        return 0;
-    }
-    frame->phase = LM_TRANS_REGISTRY_CLONE_TRAILER;
-    frame->source_trailer = source;
-    frame->copy_trailer_slot = copy_slot;
-    return frame;
-}
+fn: lm_trans_registry_clone_push_frame (@: LmOwnPtrStack stack; @: LmTransRegistryCloneFrame frame) int
+    if: stack = 0 || frame = 0
+        lm_own_delete(frame, 0)
+        return: 1
+    if: lm_own_ptr_stack_push(stack, frame) != 0
+        lm_own_delete(frame, 0)
+        return: 1
+return: 0
 
-static int lm_trans_registry_clone_push_frame(
-    LmOwnPtrStack *stack,
-    LmTransRegistryCloneFrame *frame
-) {
-    if (stack == 0 || frame == 0) {
-        lm_own_delete(frame, 0);
-        return 1;
-    }
-    if (lm_own_ptr_stack_push(stack, frame) != 0) {
-        lm_own_delete(frame, 0);
-        return 1;
-    }
-    return 0;
-}
+fn: lm_trans_registry_clone_push_structure (@: LmOwnPtrStack stack; const: @(LmP0Structure source); @: LmP0Structure copy) int
+return: lm_trans_registry_clone_push_frame(stack, lm_trans_registry_clone_frame_new_structure(source, copy))
 
-static int lm_trans_registry_clone_push_structure(
-    LmOwnPtrStack *stack,
-    const LmP0Structure *source,
-    LmP0Structure *copy
-) {
-    return lm_trans_registry_clone_push_frame(
-        stack,
-        lm_trans_registry_clone_frame_new_structure(source, copy)
-    );
-}
+fn: lm_trans_registry_clone_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer source); @@(LmP0Trailer copy_slot)) int
+    if: copy_slot = 0
+        return: 1
+    \copy_slot: 0
+    if: source = 0
+        return: 0
+return: lm_trans_registry_clone_push_frame(stack, lm_trans_registry_clone_frame_new_trailer(source, copy_slot))
 
-static int lm_trans_registry_clone_push_trailer(
-    LmOwnPtrStack *stack,
-    const LmP0Trailer *source,
-    LmP0Trailer **copy_slot
-) {
-    if (copy_slot == 0) {
-        return 1;
-    }
-    *copy_slot = 0;
-    if (source == 0) {
-        return 0;
-    }
-    return lm_trans_registry_clone_push_frame(
-        stack,
-        lm_trans_registry_clone_frame_new_trailer(source, copy_slot)
-    );
-}
+fn: lm_trans_registry_clone_process_structure (const: @(LmP0Structure source); @: LmP0Structure copy; @: LmOwnPtrStack stack) int
+    const: @: LmP0Field source_field
+    @: LmP0Field copy_field
+    @: LmP0Field previous_field
 
-static LmP0Node *lm_trans_registry_clone_node_shallow(
-    const LmP0Node *source,
-    LmOwnPtrStack *stack
-);
+    if: copy = 0
+        return: 1
 
-static int lm_trans_registry_clone_process_structure(
-    const LmP0Structure *source,
-    LmP0Structure *copy,
-    LmOwnPtrStack *stack
-) {
-    const LmP0Field *source_field;
-    LmP0Field *copy_field;
-    LmP0Field *previous_field;
+    c.memset(copy, 0, c.sizeof(copy[0]))
+    if: source = 0
+        return: 0
 
-    if (copy == 0) {
-        return 1;
-    }
+    previous_field: 0
+    source_field: source\first_field
+    while: source_field != 0
+        copy_field: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(copy_field[0]))
+        if: copy_field = 0
+            return: 1
+        copy_field\value: lm_trans_registry_clone_node_shallow(source_field\value, stack)
+        if: source_field\value != 0 && copy_field\value = 0
+            return: 1
 
-    memset(copy, 0, sizeof(*copy));
-    if (source == 0) {
-        return 0;
-    }
+        if: previous_field = 0
+            copy\first_field: copy_field
+        else:
+            previous_field\next: copy_field
+        previous_field: copy_field
+        copy\last_field: copy_field
+        copy\field_count: copy\field_count + 1U
 
-    previous_field = 0;
-    source_field = source->first_field;
-    while (source_field != 0) {
-        copy_field = (LmP0Field *)lm_own_arena_new_zero(
-            lm_trans_registry->value_arena,
-            sizeof(*copy_field)
-        );
-        if (copy_field == 0) {
-            return 1;
-        }
-        copy_field->value = lm_trans_registry_clone_node_shallow(source_field->value, stack);
-        if (source_field->value != 0 && copy_field->value == 0) {
-            return 1;
-        }
+        source_field: source_field\next
 
-        if (previous_field == 0) {
-            copy->first_field = copy_field;
-        } else {
-            previous_field->next = copy_field;
-        }
-        previous_field = copy_field;
-        copy->last_field = copy_field;
-        ++copy->field_count;
+    if: lm_trans_registry_clone_push_trailer(stack, source\trailer, @ copy\trailer) != 0
+        return: 1
+return: 0
 
-        source_field = source_field->next;
-    }
+fn: lm_trans_registry_clone_process_trailer (const: @(LmP0Trailer source); @@(LmP0Trailer copy_slot); @: LmOwnPtrStack stack) int
+    @: LmP0Trailer copy
 
-    if (lm_trans_registry_clone_push_trailer(stack, source->trailer, &copy->trailer) != 0) {
-        return 1;
-    }
+    if: copy_slot = 0
+        return: 1
+    \copy_slot: 0
+    if: source = 0
+        return: 0
 
-    return 0;
-}
+    copy: lm_trans_registry_new_trailer()
+    if: copy = 0
+        return: 1
 
-static int lm_trans_registry_clone_process_trailer(
-    const LmP0Trailer *source,
-    LmP0Trailer **copy_slot,
-    LmOwnPtrStack *stack
-) {
-    LmP0Trailer *copy;
+    \copy_slot: copy
+    copy\flags: source\flags
+    if: lm_trans_registry_clone_text(source\spelling, copy\spelling) != 0
+        return: 1
+return: lm_trans_registry_clone_push_structure(stack, source\body, copy\body)
 
-    if (copy_slot == 0) {
-        return 1;
-    }
-    *copy_slot = 0;
-    if (source == 0) {
-        return 0;
-    }
+fn: lm_trans_registry_clone_node_shallow (const: @(LmP0Node source); @: LmOwnPtrStack stack) @: LmP0Node
+    @: LmP0Node copy
 
-    copy = lm_trans_registry_new_trailer();
-    if (copy == 0) {
-        return 1;
-    }
+    if: source = 0
+        return: 0
 
-    *copy_slot = copy;
-    copy->flags = source->flags;
-    if (lm_trans_registry_clone_text(source->spelling, copy->spelling) != 0) {
-        return 1;
-    }
-    return lm_trans_registry_clone_push_structure(stack, source->body, copy->body);
-}
+    copy: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(copy[0]))
+    if: copy = 0
+        return: 0
 
-static LmP0Node *lm_trans_registry_clone_node_shallow(
-    const LmP0Node *source,
-    LmOwnPtrStack *stack
-) {
-    LmP0Node *copy;
+    copy\kind: source\kind
+    copy\flags: source\flags
+    copy\span: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(copy\span[0]))
+    if: copy\span = 0
+        return: 0
+    if: source\span != 0
+        c.memcpy(copy\span, source\span, c.sizeof(copy\span[0]))
+    copy\as: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(copy\as[0]))
+    if: copy\as = 0
+        return: 0
 
-    if (source == 0) {
-        return 0;
-    }
+    if: source\kind = c.LM_P0_NODE_ATOM || source\kind = c.LM_P0_NODE_DISABLED
+        copy\as\atom: lm_trans_registry_new_text()
+        if: copy\as\atom = 0 || lm_trans_registry_clone_text(source\as\atom, copy\as\atom) != 0
+            return: 0
+        return: copy
 
-    copy = (LmP0Node *)lm_own_arena_new_zero(
-        lm_trans_registry->value_arena,
-        sizeof(*copy)
-    );
-    if (copy == 0) {
-        return 0;
-    }
+    if: source\kind = c.LM_P0_NODE_FRAME
+        copy\as\frame: lm_trans_registry_new_frame()
+        if: copy\as\frame = 0
+            return: 0
+        copy\as\frame\flags: source\as\frame\flags
+        if: lm_trans_registry_clone_text(source\as\frame\head, copy\as\frame\head) != 0 || lm_trans_registry_clone_push_structure(stack, source\as\frame\body, copy\as\frame\body) != 0 || lm_trans_registry_clone_push_trailer(stack, source\as\frame\trailer, @ copy\as\frame\trailer) != 0
+            return: 0
+        return: copy
 
-    copy->kind = source->kind;
-    copy->flags = source->flags;
-    copy->span = (LmP0Span *)lm_own_arena_new_zero(
-        lm_trans_registry->value_arena,
-        sizeof(*copy->span)
-    );
-    if (copy->span == 0) {
-        return 0;
-    }
-    if (source->span != 0) {
-        *copy->span = *source->span;
-    }
-    copy->as = (LmP0NodeAs *)lm_own_arena_new_zero(
-        lm_trans_registry->value_arena,
-        sizeof(*copy->as)
-    );
-    if (copy->as == 0) {
-        return 0;
-    }
+    if: source\kind = c.LM_P0_NODE_STRUCTURE
+        copy\as\structure: lm_trans_registry_new_structure()
+        if: copy\as\structure = 0
+            return: 0
+        if: lm_trans_registry_clone_push_structure(stack, source\as\structure, copy\as\structure) != 0
+            return: 0
+        return: copy
 
-    if (source->kind == LM_P0_NODE_ATOM || source->kind == LM_P0_NODE_DISABLED) {
-        copy->as->atom = lm_trans_registry_new_text();
-        if (copy->as->atom == 0 || lm_trans_registry_clone_text(source->as->atom, copy->as->atom) != 0) {
-            return 0;
-        }
-    } else if (source->kind == LM_P0_NODE_FRAME) {
-        copy->as->frame = lm_trans_registry_new_frame();
-        if (copy->as->frame == 0) {
-            return 0;
-        }
-        copy->as->frame->flags = source->as->frame->flags;
-        if (
-            lm_trans_registry_clone_text(source->as->frame->head, copy->as->frame->head) != 0 ||
-            lm_trans_registry_clone_push_structure(stack, source->as->frame->body, copy->as->frame->body) != 0 ||
-            lm_trans_registry_clone_push_trailer(stack, source->as->frame->trailer, &copy->as->frame->trailer) != 0
-        ) {
-            return 0;
-        }
-    } else if (source->kind == LM_P0_NODE_STRUCTURE) {
-        copy->as->structure = lm_trans_registry_new_structure();
-        if (copy->as->structure == 0) {
-            return 0;
-        }
-        if (lm_trans_registry_clone_push_structure(stack, source->as->structure, copy->as->structure) != 0) {
-            return 0;
-        }
-    } else {
-        return 0;
-    }
+return: 0
 
-    return copy;
-}
+fn: lm_trans_registry_clone_run (@: LmOwnPtrStack stack) int
+    @: LmTransRegistryCloneFrame frame
+    int: status
+    int: handled
 
-static int lm_trans_registry_clone_run(LmOwnPtrStack *stack) {
-    LmTransRegistryCloneFrame *frame;
-    int status;
+    status: 0
+    while: status = 0 && stack != 0 && stack\count != 0U
+        frame: lm_own_ptr_stack_pop(stack)
+        if: frame = 0
+            status: 1
+            break
 
-    status = 0;
-    while (status == 0 && stack != 0 && stack->count != 0U) {
-        frame = (LmTransRegistryCloneFrame *)lm_own_ptr_stack_pop(stack);
-        if (frame == 0) {
-            status = 1;
-            break;
-        }
+        handled: 0
+        if: frame\phase = c.LM_TRANS_REGISTRY_CLONE_STRUCTURE
+            status: lm_trans_registry_clone_process_structure(frame\source_structure, frame\copy_structure, stack)
+            handled: 1
+        if: handled = 0 && frame\phase = c.LM_TRANS_REGISTRY_CLONE_TRAILER
+            status: lm_trans_registry_clone_process_trailer(frame\source_trailer, frame\copy_trailer_slot, stack)
+            handled: 1
+        if: handled = 0
+            status: 1
 
-        if (frame->phase == LM_TRANS_REGISTRY_CLONE_STRUCTURE) {
-            status = lm_trans_registry_clone_process_structure(
-                frame->source_structure,
-                frame->copy_structure,
-                stack
-            );
-        } else if (frame->phase == LM_TRANS_REGISTRY_CLONE_TRAILER) {
-            status = lm_trans_registry_clone_process_trailer(
-                frame->source_trailer,
-                frame->copy_trailer_slot,
-                stack
-            );
-        } else {
-            status = 1;
-        }
+        lm_own_delete(frame, 0)
 
-        lm_own_delete(frame, 0);
-    }
+return: status
 
-    return status;
-}
+fn: lm_trans_registry_clone_stack_new () @: LmOwnPtrStack
+    @: LmOwnPtrStack stack
 
-static LmOwnPtrStack *lm_trans_registry_clone_stack_new(void) {
-    LmOwnPtrStack *stack;
+    stack: lm_own_new_zero(c.sizeof(stack[0]))
+    if: stack = 0
+        return: 0
+    lm_own_ptr_stack_init(stack, c.lm_own_delete_plain)
+return: stack
 
-    stack = (LmOwnPtrStack *)lm_own_new_zero(sizeof(*stack));
-    if (stack == 0) {
-        return 0;
-    }
-    lm_own_ptr_stack_init(stack, lm_own_delete_plain);
-    return stack;
-}
+sub: lm_trans_registry_clone_stack_delete (@@(LmOwnPtrStack stack))
+    if: stack != 0 && \stack != 0
+        lm_own_ptr_stack_destroy(\stack)
+        lm_own_delete(\stack, 0)
+        \stack: 0
+end: lm_trans_registry_clone_stack_delete
 
-static void lm_trans_registry_clone_stack_delete(LmOwnPtrStack **stack) {
-    if (stack != 0 && *stack != 0) {
-        lm_own_ptr_stack_destroy(*stack);
-        lm_own_delete(*stack, 0);
-        *stack = 0;
-    }
-}
+fn: lm_trans_registry_clone_trailer (const: @(LmP0Trailer source)) @: LmP0Trailer
+    @: LmOwnPtrStack stack
+    @: LmP0Trailer copy
 
-static LmP0Trailer *lm_trans_registry_clone_trailer(
-    const LmP0Trailer *source
-) {
-    LmOwnPtrStack *stack;
-    LmP0Trailer *copy;
+    if: source = 0
+        return: 0
 
-    if (source == 0) {
-        return 0;
-    }
+    stack: lm_trans_registry_clone_stack_new()
+    if: stack = 0
+        return: 0
 
-    stack = lm_trans_registry_clone_stack_new();
-    if (stack == 0) {
-        return 0;
-    }
+    copy: 0
+    if: lm_trans_registry_clone_push_trailer(stack, source, @ copy) != 0 || lm_trans_registry_clone_run(stack) != 0
+        lm_trans_registry_clone_stack_delete(@ stack)
+        return: 0
 
-    copy = 0;
-    if (
-        lm_trans_registry_clone_push_trailer(stack, source, &copy) != 0 ||
-        lm_trans_registry_clone_run(stack) != 0
-    ) {
-        lm_trans_registry_clone_stack_delete(&stack);
-        return 0;
-    }
+    lm_trans_registry_clone_stack_delete(@ stack)
+return: copy
 
-    lm_trans_registry_clone_stack_delete(&stack);
-    return copy;
-}
+fn: lm_trans_registry_clone_structure (const: @(LmP0Structure source); @: LmP0Structure out_structure) int
+    @: LmOwnPtrStack stack
+    int: status
 
-static int lm_trans_registry_clone_structure(
-    const LmP0Structure *source,
-    LmP0Structure *out_structure
-) {
-    LmOwnPtrStack *stack;
-    int status;
+    stack: lm_trans_registry_clone_stack_new()
+    if: stack = 0
+        return: 1
 
-    stack = lm_trans_registry_clone_stack_new();
-    if (stack == 0) {
-        return 1;
-    }
+    status: lm_trans_registry_clone_push_structure(stack, source, out_structure) || lm_trans_registry_clone_run(stack)
+    lm_trans_registry_clone_stack_delete(@ stack)
+return: status
 
-    status =
-        lm_trans_registry_clone_push_structure(stack, source, out_structure) ||
-        lm_trans_registry_clone_run(stack);
-    lm_trans_registry_clone_stack_delete(&stack);
-    return status;
-}
+fn: lm_trans_registry_clone_node (const: @(LmP0Node source)) @: LmP0Node
+    @: LmOwnPtrStack stack
+    @: LmP0Node copy
 
-static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
-    LmOwnPtrStack *stack;
-    LmP0Node *copy;
+    if: source = 0
+        return: 0
 
-    if (source == 0) {
-        return 0;
-    }
+    stack: lm_trans_registry_clone_stack_new()
+    if: stack = 0
+        return: 0
 
-    stack = lm_trans_registry_clone_stack_new();
-    if (stack == 0) {
-        return 0;
-    }
+    copy: lm_trans_registry_clone_node_shallow(source, stack)
+    if: copy = 0 || lm_trans_registry_clone_run(stack) != 0
+        lm_trans_registry_clone_stack_delete(@ stack)
+        return: 0
 
-    copy = lm_trans_registry_clone_node_shallow(source, stack);
-    if (copy == 0 || lm_trans_registry_clone_run(stack) != 0) {
-        lm_trans_registry_clone_stack_delete(&stack);
-        return 0;
-    }
+    lm_trans_registry_clone_stack_delete(@ stack)
+return: copy
 
-    lm_trans_registry_clone_stack_delete(&stack);
-    return copy;
-}
+L1:
+===
 
 static LmTransIdentifierCard *lm_trans_identifier_table_find_card(
     const LmTransIdentifierTable *table,
@@ -519,226 +381,170 @@ static LmTransIdentifierRelation *lm_trans_identifier_card_get_relation(
     const char *relation_name
 );
 
-static int lm_trans_registry_index_row_relation(
-    const LmP0Text *card_name,
-    const char *relation_name,
-    LmTransRegistryFact *row
-) {
-    LmTransIdentifierCard *card;
-    LmTransIdentifierRelation *relation;
+===
 
-    if (row == 0 || relation_name == 0) {
-        return 1;
-    }
+fn: lm_trans_registry_index_row_relation (const: @(LmP0Text card_name); const: @(char relation_name); @: LmTransRegistryFact row) int
+    @: LmTransRegistry registry
+    @: LmTransIdentifierCard card
+    @: LmTransIdentifierRelation relation
 
-    card = lm_trans_identifier_table_get_card(lm_trans_registry->identifiers, card_name);
-    if (card == 0) {
-        return 1;
-    }
+    if: row = 0 || relation_name = 0
+        return: 1
 
-    relation = lm_trans_identifier_card_get_relation(card, relation_name);
-    if (relation == 0) {
-        return 1;
-    }
+    registry: c.lm_trans_registry
+    card: lm_trans_identifier_table_get_card(registry\identifiers, card_name)
+    if: card = 0
+        return: 1
 
-    return lm_own_ptr_stack_push(relation->symbols, row);
-}
+    relation: lm_trans_identifier_card_get_relation(card, relation_name)
+    if: relation = 0
+        return: 1
+return: lm_own_ptr_stack_push(relation\symbols, row)
 
-static int lm_trans_registry_index_row_table_view(LmTransRegistryFact *row) {
-    const char *dot;
-    LmP0Text *table_name;
-    const char *relation_name;
-    int status;
+fn: lm_trans_registry_index_row_table_view (@: LmTransRegistryFact row) int
+    const: @: char dot
+    @: LmP0Text table_name
+    const: @: char relation_name
+    int: status
 
-    if (row == 0 || row->table == 0) {
-        return 1;
-    }
+    if: row = 0 || row\table = 0
+        return: 1
 
-    table_name = lm_trans_text_ref_new_cstr("");
-    if (table_name == 0) {
-        return 1;
-    }
+    table_name: lm_trans_text_ref_new_cstr("")
+    if: table_name = 0
+        return: 1
 
-    dot = strchr(row->table, '.');
-    if (dot != 0 && dot != row->table && dot[1] != '\0') {
-        table_name->data = row->table;
-        table_name->length = (size_t)(dot - row->table);
-        relation_name = dot + 1;
-    } else {
-        table_name->data = row->table;
-        table_name->length = strlen(row->table);
-        relation_name = "row";
-    }
+    dot: c.strchr(row\table, '.')
+    if: dot != 0 && dot != row\table && dot[1] != '\0'
+        table_name\data: row\table
+        table_name\length: dot - row\table
+        relation_name: dot + 1U
+    else:
+        table_name\data: row\table
+        table_name\length: c.strlen(row\table)
+        relation_name: "row"
 
-    status = lm_trans_registry_index_row_relation(table_name, relation_name, row);
-    lm_trans_text_ref_destroy(&table_name);
-    return status;
-}
+    status: lm_trans_registry_index_row_relation(table_name, relation_name, row)
+    lm_trans_text_ref_destroy(@ table_name)
+return: status
 
-static int lm_trans_registry_index_row(LmTransRegistryFact *row) {
-    LmTransIdentifierCard *card;
-    LmTransIdentifierRelation *relation;
-    LmP0Text *key_name;
-    int status;
+fn: lm_trans_registry_index_row (@: LmTransRegistryFact row) int
+    @: LmTransRegistry registry
+    @: LmTransIdentifierCard card
+    @: LmTransIdentifierRelation relation
+    @: LmP0Text key_name
+    int: status
 
-    if (row == 0 || row->table == 0 || row->key == 0) {
-        return 1;
-    }
+    if: row = 0 || row\table = 0 || row\key = 0
+        return: 1
 
-    key_name = lm_trans_text_from_cstr(row->key);
-    if (key_name == 0) {
-        return 1;
-    }
-    card = lm_trans_identifier_table_get_card(
-        lm_trans_registry->identifiers,
-        key_name
-    );
-    if (card == 0) {
-        lm_trans_text_ref_destroy(&key_name);
-        return 1;
-    }
+    key_name: lm_trans_text_from_cstr(row\key)
+    if: key_name = 0
+        return: 1
+    registry: c.lm_trans_registry
+    card: lm_trans_identifier_table_get_card(registry\identifiers, key_name)
+    if: card = 0
+        lm_trans_text_ref_destroy(@ key_name)
+        return: 1
 
-    relation = lm_trans_identifier_card_get_relation(card, row->table);
-    if (relation == 0) {
-        lm_trans_text_ref_destroy(&key_name);
-        return 1;
-    }
+    relation: lm_trans_identifier_card_get_relation(card, row\table)
+    if: relation = 0
+        lm_trans_text_ref_destroy(@ key_name)
+        return: 1
 
-    if (lm_own_ptr_stack_push(relation->symbols, row) != 0) {
-        lm_trans_text_ref_destroy(&key_name);
-        return 1;
-    }
+    if: lm_own_ptr_stack_push(relation\symbols, row) != 0
+        lm_trans_text_ref_destroy(@ key_name)
+        return: 1
 
-    status = lm_trans_registry_index_row_table_view(row);
-    lm_trans_text_ref_destroy(&key_name);
-    return status;
-}
+    status: lm_trans_registry_index_row_table_view(row)
+    lm_trans_text_ref_destroy(@ key_name)
+return: status
 
-static int lm_trans_registry_push_row_values(
-    const LmP0Text *table_value,
-    const LmP0Text *key_value,
-    const LmP0Text *payload_value
-) {
-    LmTransRegistryFact *row;
+fn: lm_trans_registry_push_row_values (const: @(LmP0Text table_value); const: @(LmP0Text key_value); const: @(LmP0Text payload_value)) int
+    @: LmTransRegistry registry
+    @: LmTransRegistryFact row
 
-    row = (LmTransRegistryFact *)lm_own_arena_new_zero(
-        lm_trans_registry->value_arena,
-        sizeof(*row)
-    );
-    if (row == 0) {
-        return -1;
-    }
+    registry: c.lm_trans_registry
+    row: lm_own_arena_new_zero(registry\value_arena, c.sizeof(row[0]))
+    if: row = 0
+        return: -1
 
-    row->table = lm_trans_registry_value_copy_cstr(table_value);
-    row->key = lm_trans_registry_value_copy_cstr(key_value);
-    row->payload = lm_trans_registry_value_copy_cstr(payload_value);
-    if (row->table == 0 || row->key == 0 || row->payload == 0) {
-        return -1;
-    }
+    row\table: lm_trans_registry_value_copy_cstr(table_value)
+    row\key: lm_trans_registry_value_copy_cstr(key_value)
+    row\payload: lm_trans_registry_value_copy_cstr(payload_value)
+    if: row\table = 0 || row\key = 0 || row\payload = 0
+        return: -1
 
-    if (lm_trans_registry_index_row(row) != 0) {
-        return -1;
-    }
+    if: lm_trans_registry_index_row(row) != 0
+        return: -1
 
-    ++lm_trans_registry->loaded_fact_count;
-    return 0;
-}
+    registry\loaded_fact_count: registry\loaded_fact_count + 1U
+return: 0
 
-static int lm_trans_registry_push_row_node_values(
-    const LmP0Text *table_value,
-    const LmP0Text *key_value,
-    const LmP0Node *payload_node
-) {
-    LmTransRegistryFact *row;
-    LmP0Node *payload_copy;
+fn: lm_trans_registry_push_row_node_values (const: @(LmP0Text table_value); const: @(LmP0Text key_value); const: @(LmP0Node payload_node)) int
+    @: LmTransRegistry registry
+    @: LmTransRegistryFact row
+    @: LmP0Node payload_copy
 
-    if (payload_node == 0) {
-        return -1;
-    }
+    if: payload_node = 0
+        return: -1
 
-    row = (LmTransRegistryFact *)lm_own_arena_new_zero(
-        lm_trans_registry->value_arena,
-        sizeof(*row)
-    );
-    if (row == 0) {
-        return -1;
-    }
+    registry: c.lm_trans_registry
+    row: lm_own_arena_new_zero(registry\value_arena, c.sizeof(row[0]))
+    if: row = 0
+        return: -1
 
-    payload_copy = lm_trans_registry_clone_node(payload_node);
-    if (payload_copy == 0) {
-        return -1;
-    }
+    payload_copy: lm_trans_registry_clone_node(payload_node)
+    if: payload_copy = 0
+        return: -1
 
-    row->table = lm_trans_registry_value_copy_cstr(table_value);
-    row->key = lm_trans_registry_value_copy_cstr(key_value);
-    row->payload_node = payload_copy;
-    if (row->table == 0 || row->key == 0) {
-        return -1;
-    }
+    row\table: lm_trans_registry_value_copy_cstr(table_value)
+    row\key: lm_trans_registry_value_copy_cstr(key_value)
+    row\payload_node: payload_copy
+    if: row\table = 0 || row\key = 0
+        return: -1
 
-    if (lm_trans_registry_index_row(row) != 0) {
-        return -1;
-    }
+    if: lm_trans_registry_index_row(row) != 0
+        return: -1
 
-    ++lm_trans_registry->loaded_fact_count;
-    return 0;
-}
+    registry\loaded_fact_count: registry\loaded_fact_count + 1U
+return: 0
 
-static int lm_trans_registry_join_relation_matches(
-    const char *relation_name,
-    const LmP0Text *source_name,
-    const char **out_suffix
-) {
-    size_t relation_length;
+fn: lm_trans_registry_join_relation_matches (const: @(char relation_name); const: @(LmP0Text source_name); const: @@(char out_suffix)) int
+    size_t: relation_length
 
-    if (relation_name == 0 || source_name == 0 || source_name->data == 0 || out_suffix == 0) {
-        return 0;
-    }
-    relation_length = strlen(relation_name);
-    if (
-        relation_length == source_name->length &&
-        memcmp(relation_name, source_name->data, source_name->length) == 0
-    ) {
-        *out_suffix = "";
-        return 1;
-    }
-    if (
-        relation_length > source_name->length + 1U &&
-        memcmp(relation_name, source_name->data, source_name->length) == 0 &&
-        relation_name[source_name->length] == '.'
-    ) {
-        *out_suffix = relation_name + source_name->length;
-        return 1;
-    }
-    return 0;
-}
+    if: relation_name = 0 || source_name = 0 || source_name\data = 0 || out_suffix = 0
+        return: 0
+    relation_length: c.strlen(relation_name)
+    if: relation_length = source_name\length && c.memcmp(relation_name, source_name\data, source_name\length) = 0
+        \out_suffix: ""
+        return: 1
+    if: relation_length > source_name\length + 1U && c.memcmp(relation_name, source_name\data, source_name\length) = 0 && relation_name[source_name\length] = '.'
+        \out_suffix: relation_name + source_name\length
+        return: 1
+return: 0
 
-static char *lm_trans_registry_join_target_relation_new(
-    const LmP0Text *target_name,
-    const char *suffix
-) {
-    size_t suffix_length;
-    size_t length;
-    char *relation_name;
+fn: lm_trans_registry_join_target_relation_new (const: @(LmP0Text target_name); const: @(char suffix)) @: char
+    size_t: suffix_length
+    size_t: length
+    @: char relation_name
 
-    if (target_name == 0 || target_name->data == 0 || suffix == 0) {
-        return 0;
-    }
-    suffix_length = strlen(suffix);
-    length = target_name->length + suffix_length;
-    relation_name = (char *)lm_own_new_zero(length + 1U);
-    if (relation_name == 0) {
-        return 0;
-    }
-    if (target_name->length != 0U) {
-        memcpy(relation_name, target_name->data, target_name->length);
-    }
-    if (suffix_length != 0U) {
-        memcpy(relation_name + target_name->length, suffix, suffix_length);
-    }
-    relation_name[length] = '\0';
-    return relation_name;
-}
+    if: target_name = 0 || target_name\data = 0 || suffix = 0
+        return: 0
+    suffix_length: c.strlen(suffix)
+    length: target_name\length + suffix_length
+    relation_name: lm_own_new_zero(length + 1U)
+    if: relation_name = 0
+        return: 0
+    if: target_name\length != 0U
+        c.memcpy(relation_name, target_name\data, target_name\length)
+    if: suffix_length != 0U
+        c.memcpy(relation_name + target_name\length, suffix, suffix_length)
+    relation_name[length]: '\0'
+return: relation_name
+
+L1:
+===
 
 static int lm_trans_registry_join_copy_row(
     const LmTransRegistryFact *row,

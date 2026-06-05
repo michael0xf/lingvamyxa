@@ -6007,6 +6007,10 @@ static int lm_trans_emit_l4_constant_defines(
     FILE *file,
     const LmTransNamespace *namespace_
 );
+static int lm_trans_emit_l4_define_table(
+    FILE *file,
+    const LmTransNamespace *namespace_
+);
 static int lm_trans_emit_l4_alias_typedefs(
     FILE *file,
     const LmTransNamespace *namespace_
@@ -6735,6 +6739,17 @@ static int lm_trans_atom_statement_emit_constant_prelude(
     (void)node;
     (void)indent;
     return lm_trans_emit_l4_constant_defines(lm_trans_prelude_file(file), namespace_);
+}
+
+static int lm_trans_atom_statement_emit_define_prelude(
+    FILE *file,
+    const LmP0Node *node,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)node;
+    (void)indent;
+    return lm_trans_emit_l4_define_table(lm_trans_prelude_file(file), namespace_);
 }
 
 static int lm_trans_atom_statement_emit_alias_prelude(
@@ -8098,6 +8113,9 @@ static int lm_trans_function_header_common(
         } else {
             out->body_start = params_field->next;
         }
+        if (out->body_start == 0) {
+            out->is_descriptor_only = 1;
+        }
         return 1;
     }
 
@@ -8445,6 +8463,7 @@ static int lm_trans_pointer_bindings_init(void) {
         lm_trans_pointer_binding_push_materializer("lm_trans_materialize_callable_descriptor_value", lm_trans_materialize_callable_descriptor_value) != 0 ||
         lm_trans_pointer_binding_push_materializer("lm_trans_materialize_array_value", lm_trans_materialize_array_value) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_include_prelude", lm_trans_atom_statement_emit_include_prelude) != 0 ||
+        lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_define_prelude", lm_trans_atom_statement_emit_define_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_os_prelude", lm_trans_atom_statement_emit_os_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_layout_prelude", lm_trans_atom_statement_emit_layout_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_constant_prelude", lm_trans_atom_statement_emit_constant_prelude) != 0 ||

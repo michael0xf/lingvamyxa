@@ -6,6 +6,7 @@ L4:
                  LmTransIdentifierRelation   c.struct
                  LmTransIdentifierCard       c.struct
                  LmTransNamespace            c.struct
+                 LmTransRegistryCloneFrame   c.struct
                  LmTransExprSegment          c.struct
                  LmTransCallLowering         c.struct
                  LmTransExprAtomLowering     c.struct
@@ -61,6 +62,14 @@ L4:
                  LmTransL4AtomHandler                 1
                  LmTransL4PayloadFrameHandler         1
     end: functionPointerType
+
+    table:
+        name: `define.value`
+        columns: class                         (value char)
+        rows:
+                 LM_TRANS_REGISTRY_CLONE_STRUCTURE 1
+                 LM_TRANS_REGISTRY_CLONE_TRAILER   2
+    end: `define.value`
 
     fn: LmTransExprSegmentMaterializer (
         @: FILE file
@@ -198,6 +207,103 @@ L4:
         @: LmTransNamespace namespace_
     ) int
 
+    fn: lm_trans_identifier_table_find_card (
+        const: @: LmTransIdentifierTable table
+        const: @: LmP0Text name
+    ) @: LmTransIdentifierCard
+
+    fn: lm_trans_identifier_table_get_card (
+        @: LmTransIdentifierTable table
+        const: @: LmP0Text name
+    ) @: LmTransIdentifierCard
+
+    fn: lm_trans_identifier_card_find_relation (
+        const: @: LmTransIdentifierCard card
+        const: @: char relation_name
+    ) @: LmTransIdentifierRelation
+
+    fn: lm_trans_identifier_card_get_relation (
+        @: LmTransIdentifierCard card
+        const: @: char relation_name
+    ) @: LmTransIdentifierRelation
+
+    fn: lm_trans_text_equals (
+        const: @: LmP0Text text
+        const: @: char value
+    ) int
+
+    fn: lm_trans_text_same (
+        const: @: LmP0Text left
+        const: @: LmP0Text right
+    ) int
+
+    fn: lm_trans_text_starts_with (
+        const: @: LmP0Text text
+        const: @: char prefix
+    ) int
+
+    fn: lm_trans_identifier_payload (
+        const: @: LmP0Text atom
+        @: LmP0Text out_payload
+    ) int
+
+    fn: lm_trans_identifier_same (
+        const: @: LmP0Text left
+        const: @: LmP0Text right
+    ) int
+
+    fn: lm_trans_registry_identifier_value (
+        const: @: LmP0Text atom
+        @: LmP0Text out_payload
+    ) int
+
+    fn: lm_trans_registry_literal_value (
+        const: @: LmP0Text atom
+        @: LmP0Text out_payload
+    ) int
+
+    fn: lm_trans_registry_payload_is_null (
+        const: @: LmP0Text atom
+    ) int
+
+    fn: lm_trans_text_copy_cstr (
+        const: @: LmP0Text text
+    ) @: char
+
+    fn: lm_trans_text_copy_cstr_from_cstr (
+        const: @: char text
+    ) @: char
+
+    fn: lm_trans_registry_value_copy_cstr (
+        const: @: LmP0Text value
+    ) @: char
+
+    fn: lm_trans_registry_clone_text (
+        const: @: LmP0Text source
+        @: LmP0Text out_text
+    ) int
+
+    fn: lm_trans_text_ref_new (
+        const: @: LmP0Text text
+    ) @: LmP0Text
+
+    fn: lm_trans_text_ref_new_cstr (
+        const: @: char text
+    ) @: LmP0Text
+
+    fn: lm_trans_text_ref_destroy (
+        @@: LmP0Text text
+    ) void
+
+    fn: lm_trans_text_from_cstr (
+        const: @: char text
+    ) @: LmP0Text
+
+    fn: lm_trans_text_assign_cstr (
+        @: LmP0Text out_text
+        const: @: char text
+    ) int
+
     table:
         name: `layout.backend`
         columns: class                          (backend class)
@@ -207,6 +313,7 @@ L4:
                  LmTransIdentifierTable         c.struct
                  LmTransRegistry                c.struct
                  LmTransRegistryFact            c.struct
+                 LmTransRegistryCloneFrame      c.struct
                  LmTransLayoutField             c.struct
                  LmTransCDeclarator             c.struct
                  LmTransAbiParam                c.struct
@@ -303,6 +410,17 @@ L4:
                  payload       char                   2                       1                                0
                  payload_node  LmP0Node               3                       1                                1
     end: LmTransRegistryFact
+
+    table:
+        name: LmTransRegistryCloneFrame
+        columns: class            (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 phase            int                    0                       0                                0
+                 source_structure LmP0Structure          1                       1                                1
+                 copy_structure   LmP0Structure          2                       1                                0
+                 source_trailer   LmP0Trailer            3                       1                                1
+                 copy_trailer_slot LmP0Trailer           4                       2                                0
+    end: LmTransRegistryCloneFrame
 
     table:
         name: LmTransLayoutField

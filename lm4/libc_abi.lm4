@@ -7,6 +7,26 @@ table:
              libc_string "<string.h>"
 end: include
 
+table:
+    name: `fn.external`
+    columns: class  (value serial)
+    rows:
+             getenv  1
+             strlen  1
+             strchr  1
+             memcpy  1
+             strcpy  1
+             strcat  1
+             system  1
+             remove  1
+             fopen   1
+             fclose  1
+             fread   1
+             fwrite  1
+             ferror  1
+             strcmp  1
+end: `fn.external`
+
 fn: getenv (const: @(char name)) @: char
 fn: strlen (const: @(char text)) size_t
 fn: strchr (const: @(char text); int: value) @: char

@@ -38,6 +38,7 @@ table:
              `layout.backend`           relation
              `constant.backend`         relation
              `constant.value`           relation
+             `define.value`             relation
              `class.present`            relation
              `fn.descriptor`            relation
 
@@ -77,6 +78,7 @@ table:
              continue                   descriptor
              synchronized               descriptor
              const                      descriptor
+             define                     descriptor
              external                   descriptor
              import                     descriptor
              `end`                      descriptor

@@ -775,6 +775,58 @@ static int lm_trans_emit_l4_constant_defines(
     return 0;
 }
 
+static int lm_trans_emit_l4_define_table(
+    FILE *file,
+    const LmTransNamespace *namespace_
+) {
+    const LmOwnPtrStack *rows;
+    LmTransRegistryFact *row;
+    size_t i;
+    int emitted;
+
+    rows = lm_trans_namespace_registry_relation_stack(
+        namespace_,
+        lm_trans_text_from_cstr("define"),
+        "value"
+    );
+    if (rows == 0) {
+        return 0;
+    }
+
+    emitted = 0;
+    for (i = 0U; i < rows->count; ++i) {
+        row = (LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i);
+        if (row == 0 || row->key == 0) {
+            continue;
+        }
+        if (
+            lm_trans_put(file, "#define ") != 0 ||
+            lm_trans_emit_identifier(file, lm_trans_text_from_cstr(row->key)) != 0
+        ) {
+            return 1;
+        }
+        if (
+            row->payload != 0 &&
+            row->payload[0] != '\0' &&
+            (
+                lm_trans_put(file, " ") != 0 ||
+                lm_trans_put(file, row->payload) != 0
+            )
+        ) {
+            return 1;
+        }
+        if (lm_trans_put(file, "\n") != 0) {
+            return 1;
+        }
+        emitted = 1;
+    }
+
+    if (emitted && lm_trans_put(file, "\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_registry_collect_backend_names(
     LmOwnPtrStack *names,
     const LmTransNamespace *namespace_,
@@ -1388,11 +1440,16 @@ static int lm_trans_emit_l4_prototype_name(
     LmTransAbiParam **params;
     size_t param_capacity;
     size_t param_count;
+    const char *class_kind;
+    int is_sub;
     int status;
 
     if (name == 0 || error_name == 0) {
         return 1;
     }
+
+    class_kind = lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "class.kind");
+    is_sub = class_kind != 0 && strcmp(class_kind, "procedure") == 0;
 
     param_capacity = 256U;
     params = lm_trans_l4_abi_params_new(param_capacity);
@@ -1401,7 +1458,15 @@ static int lm_trans_emit_l4_prototype_name(
     }
     status =
         lm_trans_collect_abi_params(params, param_capacity, &param_count, namespace_, name, error_name) != 0 ||
-        lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 ||
+        (
+            lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "fn.external") == 0 &&
+            lm_trans_put(file, "static ") != 0
+        ) ||
+        (
+            is_sub
+                ? lm_trans_put(file, "void")
+                : lm_trans_emit_abi_return_type(file, namespace_, name, error_name)
+        ) != 0 ||
         lm_trans_put(file, " ") != 0 ||
         lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 ||
         lm_trans_put(file, "(") != 0 ||
@@ -1793,6 +1858,94 @@ static LmP0Node *lm_trans_registry_synthetic_fn_frame_node(
     return frame_node;
 }
 
+static LmP0Node *lm_trans_registry_synthetic_sub_frame_node(
+    const char *name,
+    LmP0Node *params_node
+) {
+    LmP0Node *frame_node;
+
+    if (name == 0 || params_node == 0) {
+        return 0;
+    }
+
+    frame_node = lm_trans_registry_synthetic_frame_node_cstr("sub");
+    if (
+        frame_node == 0 ||
+        lm_trans_registry_synthetic_append_node(
+            frame_node->as->frame->body,
+            lm_trans_registry_synthetic_atom_node_cstr(name)
+        ) == 0 ||
+        lm_trans_registry_synthetic_append_node(
+            frame_node->as->frame->body,
+            params_node
+        ) == 0
+    ) {
+        return 0;
+    }
+
+    return frame_node;
+}
+
+static int lm_trans_declare_l4_sub_descriptor(
+    LmTransNamespace *namespace_,
+    const char *name
+) {
+    LmP0Node *params_node;
+    LmP0Node *frame_node;
+    LmTransFunctionHeader *function;
+    LmP0Text *name_text;
+    int status;
+
+    if (namespace_ == 0 || name == 0) {
+        return 1;
+    }
+
+    function = lm_trans_function_header_new();
+    name_text = lm_trans_l4_text_view_new(name);
+    if (function == 0 || name_text == 0) {
+        lm_trans_function_header_destroy(function);
+        lm_trans_l4_text_view_delete(&name_text);
+        return 1;
+    }
+    if (lm_trans_namespace_find(namespace_, name_text) != 0) {
+        lm_trans_function_header_destroy(function);
+        lm_trans_l4_text_view_delete(&name_text);
+        return 0;
+    }
+
+    params_node = lm_trans_registry_synthetic_params_node(namespace_, name);
+    frame_node = lm_trans_registry_synthetic_sub_frame_node(name, params_node);
+    if (params_node == 0 || frame_node == 0) {
+        lm_trans_function_header_destroy(function);
+        lm_trans_l4_text_view_delete(&name_text);
+        return 1;
+    }
+
+    function->frame = frame_node->as->frame;
+    *function->name = *frame_node->as->frame->body->first_field->value->as->atom;
+    *function->c_name = *function->name;
+    function->params_node = params_node;
+    function->return_node = 0;
+    function->symbol_class = "procedure";
+    function->is_sub = 1;
+    function->is_descriptor_only = 1;
+    function->is_external = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0;
+
+    status = (
+        lm_trans_namespace_declare_c_name(
+            namespace_,
+            function->name,
+            function->symbol_class,
+            function->c_name
+        ) != 0 ||
+        lm_trans_namespace_set_callable_shape(namespace_, function) != 0
+    );
+
+    lm_trans_function_header_destroy(function);
+    lm_trans_l4_text_view_delete(&name_text);
+    return status;
+}
+
 static int lm_trans_declare_l4_fn_descriptor(
     LmTransNamespace *namespace_,
     const char *name
@@ -1802,6 +1955,7 @@ static int lm_trans_declare_l4_fn_descriptor(
     LmP0Node *frame_node;
     LmTransFunctionHeader *function;
     LmP0Text *name_text;
+    const char *receiver_name;
     int status;
 
     if (namespace_ == 0 || name == 0) {
@@ -1822,6 +1976,12 @@ static int lm_trans_declare_l4_fn_descriptor(
         lm_trans_l4_text_view_delete(&name_text);
         return 0;
     }
+    receiver_name = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.receiver");
+    if (receiver_name != 0 && strcmp(receiver_name, "sub") == 0) {
+        lm_trans_function_header_destroy(function);
+        lm_trans_l4_text_view_delete(&name_text);
+        return lm_trans_declare_l4_sub_descriptor(namespace_, name);
+    }
 
     params_node = lm_trans_registry_synthetic_params_node(namespace_, name);
     return_node = lm_trans_registry_synthetic_return_node(namespace_, name);
@@ -1838,7 +1998,7 @@ static int lm_trans_declare_l4_fn_descriptor(
     function->params_node = params_node;
     function->return_node = return_node;
     function->symbol_class = "function";
-    function->is_external = 1;
+    function->is_external = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0;
 
     status = (
         lm_trans_namespace_declare_c_name(
@@ -2540,6 +2700,11 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
             function_name,
             lm_trans_text_from_cstr("callableDescriptor")
         ) != 0 ||
+        lm_trans_registry_push_row_values(
+            lm_trans_text_from_cstr("fn.receiver"),
+            function_name,
+            receiver_name
+        ) != 0 ||
         lm_trans_registry_push_owner_relation_text(function_name, ".return.class", lm_trans_text_from_cstr("return"), return_type->class_name) != 0
     ) {
         status = 1;
@@ -2599,6 +2764,95 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
 cleanup:
     lm_trans_function_header_destroy(function);
     lm_trans_expr_callable_type_delete(return_type);
+    lm_trans_l4_text_view_delete(&function_name);
+    lm_trans_l4_text_view_delete(&receiver_name);
+    return status;
+}
+
+static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *frame) {
+    LmTransFunctionHeader *function;
+    const LmP0Field *field;
+    size_t index;
+    LmP0Text *function_name;
+    LmP0Text *receiver_name;
+    int status;
+
+    if (frame == 0) {
+        return 1;
+    }
+
+    function = lm_trans_function_header_new();
+    function_name = lm_trans_l4_text_view_new("");
+    receiver_name = lm_trans_l4_text_view_new("");
+    if (function == 0 || function_name == 0 || receiver_name == 0) {
+        status = 1;
+        goto cleanup;
+    }
+    if (!lm_trans_identifier_payload(frame->head, receiver_name)) {
+        status = 1;
+        goto cleanup;
+    }
+
+    if (lm_trans_receiver_sub(frame, 0, function) <= 0) {
+        fprintf(stderr, "trans sub descriptor error: malformed descriptor-only sub\n");
+        status = 1;
+        goto cleanup;
+    }
+    if (!function->is_descriptor_only) {
+        fprintf(stderr, "trans sub descriptor error: descriptor-only sub must not have a body\n");
+        status = 1;
+        goto cleanup;
+    }
+    if (!lm_trans_registry_identifier_value(function->name, function_name)) {
+        status = 1;
+        goto cleanup;
+    }
+
+    if (
+        lm_trans_registry_note_class_present(function_name) != 0 ||
+        lm_trans_registry_note_class_kind(function_name, "procedure") != 0 ||
+        lm_trans_registry_push_row_values(
+            lm_trans_text_from_cstr("fn.descriptor"),
+            function_name,
+            lm_trans_text_from_cstr("procedure")
+        ) != 0 ||
+        lm_trans_registry_push_row_values(
+            lm_trans_text_from_cstr("fn.receiver"),
+            function_name,
+            receiver_name
+        ) != 0
+    ) {
+        status = 1;
+        goto cleanup;
+    }
+
+    if (function->params_node == 0 || function->params_node->kind != LM_P0_NODE_STRUCTURE) {
+        fprintf(stderr, "trans sub descriptor error: parameters must be a Structure\n");
+        status = 1;
+        goto cleanup;
+    }
+
+    index = 0U;
+    field = function->params_node->as->structure->first_field;
+    while (field != 0) {
+        if (
+            field->value != 0 &&
+            !lm_trans_node_is_ignored(field->value) &&
+            lm_trans_registry_materialize_fn_descriptor_param(function_name, field->value, index) != 0
+        ) {
+            status = 1;
+            goto cleanup;
+        }
+        if (field->value != 0 && !lm_trans_node_is_ignored(field->value)) {
+            ++index;
+        }
+        field = field->next;
+    }
+
+    status = 0;
+
+cleanup:
+    lm_trans_function_header_destroy(function);
     lm_trans_l4_text_view_delete(&function_name);
     lm_trans_l4_text_view_delete(&receiver_name);
     return status;
@@ -2686,6 +2940,11 @@ static int lm_trans_l4_receiver_row(const LmP0Frame *frame, int allow_node_cells
 static int lm_trans_l4_receiver_fn_descriptor(const LmP0Frame *frame, int allow_node_cells) {
     (void)allow_node_cells;
     return lm_trans_registry_materialize_fn_descriptor_frame(frame);
+}
+
+static int lm_trans_l4_receiver_sub_descriptor(const LmP0Frame *frame, int allow_node_cells) {
+    (void)allow_node_cells;
+    return lm_trans_registry_materialize_sub_descriptor_frame(frame);
 }
 
 static int lm_trans_l4_atom_receiver_prelude_sequence(const LmP0Text *atom, int allow_node_cells) {
@@ -2812,6 +3071,7 @@ static int lm_trans_l4_pointer_bindings_init(void) {
         lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 ||
         lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 ||
         lm_trans_l4_frame_pointer_binding_push(frame_bindings, "lazy fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 ||
+        lm_trans_l4_frame_pointer_binding_push(frame_bindings, "sub", "l4.frame", lm_trans_l4_receiver_sub_descriptor) != 0 ||
         lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "L4", "l4.root", lm_trans_l4_root_receiver_registry) != 0 ||
         lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "registry", "l4.root", lm_trans_l4_root_receiver_registry) != 0 ||
         lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0
@@ -4011,6 +4271,11 @@ static int lm_trans_registry_seed_l4_receivers(void) {
         lm_trans_registry_push_row_values(
             lm_trans_text_from_cstr("namespace.l4"),
             lm_trans_text_from_cstr("lazy fn"),
+            lm_trans_text_from_cstr("l4.frame")
+        ) != 0 ||
+        lm_trans_registry_push_row_values(
+            lm_trans_text_from_cstr("namespace.l4"),
+            lm_trans_text_from_cstr("sub"),
             lm_trans_text_from_cstr("l4.frame")
         ) != 0 ||
         lm_trans_registry_push_row_values(

@@ -35,6 +35,9 @@ table:
              `receiver.modifier`        relation
              `receiver.trailer`         relation
              `receiver.formal-param.unwrap` relation
+             `fn.receiver`             relation
+             `fn.external`             relation
+             `define.value`             relation
              `namespace.l4`             relation
              `namespace.l4.root`        relation
              `namespace.l4.atom`        relation
@@ -225,6 +228,7 @@ table:
              row    `l4.frame`
              fn     `l4.frame`
              `lazy fn` `l4.frame`
+             sub    `l4.frame`
 end: `namespace.l4`
 
 table:
@@ -255,6 +259,7 @@ table:
     columns: class           (receiver binding)
     rows:
              include          lm_trans_atom_statement_emit_include_prelude
+             define           lm_trans_atom_statement_emit_define_prelude
              os               lm_trans_atom_statement_emit_os_prelude
              fn               lm_trans_atom_statement_emit_fn_prelude
              layout           lm_trans_atom_statement_emit_layout_prelude
@@ -272,13 +277,14 @@ table:
     columns: class      (index serial)
     rows:
              include    0
-             forward    1
-             alias      2
-             constant   3
-             layout     4
-             fn         5
-             prototype  6
-             unit       7
+             define     1
+             forward    2
+             alias      3
+             constant   4
+             layout     5
+             fn         6
+             prototype  7
+             unit       8
 end: `loadHeaders.item`
 
 table:
@@ -351,42 +357,139 @@ table:
     rows:
              char                     1
              uchar                    1
+             short                    1
              int                      1
+             signed                   1
              unsigned                 1
              long                     1
              ulong                    1
+             float                    1
+             double                   1
              size_t                   1
+             FILE                     1
+             u8                       1
+             u16                      1
+             u32                      1
+             u64                      1
+             i8                       1
+             i16                      1
+             i32                      1
+             i64                      1
              void                     1
              LmOwnAllocationDescriptor 1
+             LmOwnArena               1
+             LmOwnDelete              1
+             LmOwnDestroyFields       1
+             LmOwnLazyEdge            1
+             LmOwnPtrStack            1
+             LmOwnValueStack          1
+             LmL4Column               1
+             LmL4FrameReceiver        1
+             LmL4Loader               1
+             LmP0DashFenceStatus      1
+             LmP0Diagnostic           1
              LmP0DisabledState        1
              LmP0Document             1
              LmP0Dump                 1
+             LmP0DumpFrame            1
              LmP0Field                1
+             LmP0FieldParseFlags      1
+             LmP0FieldParseLoopContinuation 1
+             LmP0FieldParseLoopFrame  1
+             LmP0FrameFlags           1
              LmP0Frame                1
+             LmP0IndentStack          1
              LmP0Node                 1
+             LmP0NodeAs               1
+             LmP0NodeFlags            1
+             LmP0NodeKind             1
              LmP0PendingDelimiter     1
              LmP0PendingMix           1
+             LmP0PostprocessFrame     1
+             LmP0Registry             1
+             LmP0RegistryColumn       1
              LmP0RegistryRow          1
+             LmP0Span                 1
              LmP0Stack                1
              LmP0StreamEvent          1
+             LmP0StreamEventKind      1
              LmP0Structure            1
              LmP0Text                 1
              LmP0Trailer              1
+             LmP0TrailerFlags         1
+             LmP0TrailerRole          1
+             LmTransAbiParam          1
+             LmTransArrayStructureValueFillFrame 1
+             LmTransAtomStatementHandler 1
+             LmTransBinding           1
+             LmTransCallLowering      1
+             LmTransCallLoweringHandler 1
              LmTransCapture           1
+             LmTransCDeclarator       1
              LmTransCleanup           1
+             LmTransExprAtomEmitHandler 1
              LmTransExprLoweredRange  1
+             LmTransExprAtomLowering  1
+             LmTransExprAtomStateHandler 1
+             LmTransExprCallArgsJob   1
+             LmTransExprFrameHandler  1
+             LmTransExprJob           1
+             LmTransExprJobDestroyHandler 1
+             LmTransExprJobHandler    1
              LmTransExprPiece         1
+             LmTransExprPieceEmitHandler 1
+             LmTransExprRangeJob      1
              LmTransExprSegment       1
+             LmTransExprSegmentMaterializer 1
+             LmTransExprStack         1
+             LmTransFunctionEmitFrame 1
+             LmTransFunctionHeader    1
+             LmTransFunctionHeaderReceiver 1
              LmTransFunctionState     1
+             LmTransHeadBinding       1
              LmTransHoistedFunction   1
              LmTransIdentifierCard    1
              LmTransIdentifierRelation 1
+             LmTransIdentifierTable   1
+             LmTransL4AtomBinding     1
+             LmTransL4AtomHandler     1
+             LmTransL4AtomPointerBinding 1
+             LmTransL4CallableType    1
+             LmTransL4FrameHandler    1
+             LmTransL4FramePointerBinding 1
+             LmTransL4HeadBinding     1
              LmTransL4LoadContext     1
+             LmTransL4PayloadFrameHandler 1
+             LmTransL4PayloadPointerBinding 1
+             LmTransLayoutField       1
              LmTransLoop              1
              LmTransNamespace         1
+             LmTransPointerBinding    1
+             LmTransRegistry          1
+             LmTransRegistryCloneFrame 1
+             LmTransRegistryColumn    1
              LmTransRegistryFact      1
+             LmTransRegistryImportFrame 1
+             LmTransStatementFrameHandler 1
+             LmTransStatementFrameJob 1
+             LmTransStatementJob      1
+             LmTransStatementJobDestroyHandler 1
+             LmTransStatementJobHandler 1
+             LmTransStatementListJob  1
+             LmTransStatementLowering 1
+             LmTransStatementNodeJob  1
+             LmTransStatementStack    1
+             LmTransStatementSyncLeaveJob 1
+             LmTransStatementTextJob  1
              LmTransSymbol            1
              LmTransStructReturnFieldValue 1
+             LmTransTopLevelDeclareHandler 1
+             LmTransTopLevelEmitHandler 1
+             LmTransTopLevelItem      1
+             LmTransTypeEmitReceiver  1
+             LmTransTypePointerSuffix 1
+             LmTransTypeStructureValueAllocReceiver 1
+             LmTransTypeStructureValueFillReceiver 1
 end: `cast.target`
 
 table:

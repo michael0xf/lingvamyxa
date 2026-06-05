@@ -326,6 +326,31 @@ table:
              next   1
 end: `LmP0Field.field.address-depth`
 
+table:
+    name: `fn.external`
+    columns: class                     (value serial)
+    rows:
+             lm_p0_parse_string        1
+             lm_p0_parse_bytes         1
+             lm_p0_parse_file          1
+             lm_p0_document_destroy    1
+             lm_p0_document_root       1
+             lm_p0_document_mutable_root 1
+             lm_p0_document_diagnostic 1
+             lm_p0_node_structure      1
+             lm_p0_node_frame          1
+             lm_p0_node_atom           1
+             lm_p0_structure_trailer   1
+             lm_p0_frame_head          1
+             lm_p0_frame_body          1
+             lm_p0_frame_trailer       1
+             lm_p0_trailer_spelling    1
+             lm_p0_trailer_body        1
+             lm_p0_node_kind_class_name 1
+             lm_p0_dump_alloc          1
+             lm_p0_free                1
+end: `fn.external`
+
 fn: lm_p0_parse_string (const: @(char source); @@: LmP0Document out_document) int
 fn: lm_p0_parse_bytes (const: @(char source); size_t: source_length; @@: LmP0Document out_document) int
 fn: lm_p0_parse_file (const: @(char path); @@: LmP0Document out_document) int

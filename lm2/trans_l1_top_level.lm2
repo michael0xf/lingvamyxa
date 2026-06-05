@@ -24,6 +24,10 @@ static int lm_trans_emit_l2_ifdef_frame(
     const LmP0Frame *frame,
     LmTransNamespace *namespace_
 );
+static int lm_trans_emit_l4_define_table(
+    FILE *file,
+    const LmTransNamespace *namespace_
+);
 static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_top_level_declare_os(
     LmTransNamespace *namespace_,
@@ -332,6 +336,15 @@ static int lm_trans_top_level_emit_atom_constant(
     return lm_trans_emit_l4_constant_defines(file, namespace_);
 }
 
+static int lm_trans_top_level_emit_atom_define(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    (void)item;
+    return lm_trans_emit_l4_define_table(file, namespace_);
+}
+
 static int lm_trans_top_level_emit_atom_alias(
     FILE *file,
     LmTransNamespace *namespace_,
@@ -453,6 +466,11 @@ static int lm_trans_top_level_atom_binding(
     }
     if (handler == lm_trans_atom_statement_emit_constant_prelude) {
         out->emit_before_functions = lm_trans_top_level_emit_atom_constant;
+        out->emits_top_level = 1;
+        return 1;
+    }
+    if (handler == lm_trans_atom_statement_emit_define_prelude) {
+        out->emit_before_functions = lm_trans_top_level_emit_atom_define;
         out->emits_top_level = 1;
         return 1;
     }
@@ -1384,8 +1402,10 @@ static int lm_trans_lower_top_level_item(
     if (function_status > 0) {
         out->declare = lm_trans_top_level_declare_function;
         if (out->function->is_descriptor_only) {
-            out->emit_before_functions = lm_trans_top_level_emit_callable_descriptor;
-            out->emits_top_level = 1;
+            if (!out->function->is_sub) {
+                out->emit_before_functions = lm_trans_top_level_emit_callable_descriptor;
+                out->emits_top_level = 1;
+            }
         } else {
             out->emit_prototype = lm_trans_top_level_emit_function_prototype;
             out->emit_function = lm_trans_top_level_emit_function;
