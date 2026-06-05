@@ -38,6 +38,11 @@ fn: lm_trans_text_starts_with (
     const: @: char prefix
 ) int
 
+fn: lm_trans_text_contains_char (
+    const: @: LmP0Text text
+    char: ch
+) int
+
 fn: lm_trans_identifier_payload (
     const: @: LmP0Text atom
     @: LmP0Text out_payload
@@ -68,6 +73,10 @@ fn: lm_trans_text_copy_cstr (
 
 fn: lm_trans_text_copy_cstr_from_cstr (
     const: @: char text
+) @: char
+
+fn: lm_trans_function_return_struct_type_name_new (
+    const: @: LmP0Text function_name
 ) @: char
 
 fn: lm_trans_registry_value_copy_cstr (
@@ -143,6 +152,16 @@ fn: lm_trans_receiver_sub (
     const: @: LmP0Frame frame
     int: is_external
     @: LmTransFunctionHeader out
+) int
+
+fn: lm_trans_top_level_function_header (
+    const: @: LmP0Frame frame
+    @: LmTransFunctionHeader out
+) int
+
+fn: lm_trans_l4_root_head_binding_resolve (
+    const: @: LmP0Text head
+    @: LmTransL4HeadBinding out
 ) int
 
 table:
@@ -274,6 +293,15 @@ fn: lm_trans_emit_abi_return_type (
     const: @: char error_name
 ) int
 
+fn: lm_trans_expr_abi_params_new (
+    size_t: capacity
+) @@: LmTransAbiParam
+
+sub: lm_trans_expr_abi_params_delete (
+    @@: LmTransAbiParam params
+    size_t: capacity
+)
+
 fn: lm_trans_emit_type_name (
     @: FILE file
     const: @: LmP0Text name
@@ -282,6 +310,97 @@ fn: lm_trans_emit_type_name (
 fn: lm_trans_emit_type_node (
     @: FILE file
     const: @: LmP0Node type_node
+) int
+
+fn: lm_trans_head_can_declare_storage (
+    const: @: LmP0Text head
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_frame_looks_storage_declaration (
+    const: @: LmP0Frame frame
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_namespace_declare_storage_binding (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Text name
+    const: @: LmP0Text type_head
+) int
+
+fn: lm_trans_namespace_declare_node_storage_binding (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Text name
+    const: @: LmP0Node type_node
+) int
+
+fn: lm_trans_emit_declaration_with_qualifier (
+    @: FILE file
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_emit_pointer_declaration_with_qualifier (
+    @: FILE file
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_emit_array_declaration_with_qualifier (
+    @: FILE file
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_frame_looks_named_structure_layout_declaration (
+    const: @: LmP0Frame frame
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_declare_named_structure_layout (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_named_structure_typedef (
+    @: FILE file
+    const: @: LmP0Frame frame
+    unsigned: indent
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_named_structure_storage (
+    @: FILE file
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_declare_merge_named_structure_layout (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_merge_named_structure_typedef (
+    @: FILE file
+    const: @: LmP0Frame frame
+    unsigned: indent
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_merge_named_structure_storage (
+    @: FILE file
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+    const: @: char qualifier
 ) int
 
 fn: lm_trans_registry_latest_size_payload (
@@ -361,6 +480,12 @@ fn: lm_trans_symbol_is_value_callable (
     const: @: LmTransSymbol symbol
 ) int
 
+fn: lm_trans_symbol_new (
+    const: @: LmP0Text name
+    const: @: char kind
+    unsigned: depth
+) @: LmTransSymbol
+
 sub: lm_trans_symbol_destroy_fields (
     @: LmTransSymbol symbol
 )
@@ -414,6 +539,113 @@ fn: lm_trans_l4_is_function_pointer_type (
     const: @: char name
 ) int
 
+fn: lm_trans_registry_is_function_pointer_type_name (
+    const: @: LmTransNamespace namespace_
+    const: @: LmP0Text name
+) int
+
+fn: lm_trans_callable_descriptor_is_lazy (
+    const: @: LmTransNamespace namespace_
+    const: @: LmP0Text name
+) int
+
+fn: lm_trans_callable_descriptor_is_raw_function_reference (
+    const: @: LmTransNamespace namespace_
+    const: @: LmP0Text name
+) int
+
+fn: lm_trans_node_callable_descriptor_name (
+    const: @: LmP0Node node
+    const: @: LmTransNamespace namespace_
+    @: LmP0Text out_name
+) int
+
+fn: lm_trans_params_has_any (
+    const: @: LmP0Node params
+) int
+
+fn: lm_trans_emit_callable_descriptor_param_type (
+    @: FILE file
+    const: @: LmP0Node param
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_function_return_struct_type_name (
+    @: FILE file
+    const: @: LmP0Text function_name
+) int
+
+fn: lm_trans_emit_function_return_structure_once (
+    @: FILE file
+    const: @: LmP0Text function_name
+    const: @: LmP0Node return_node
+) int
+
+fn: lm_trans_emit_function_params (
+    @: FILE file
+    const: @: LmTransFunctionHeader function
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_function (
+    @: FILE file
+    const: @: LmTransFunctionHeader function
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_env_type (
+    @: FILE file
+    const: @: LmTransFunctionHeader function
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_statement_list (
+    @: FILE file
+    const: @: LmP0Field first
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_trailer_statement (
+    @: FILE file
+    const: @: LmP0Trailer trailer
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_captured_expr_new (
+    const: @: LmP0Text name
+) @: char
+
+fn: lm_trans_capture_candidates_add_captures (
+    @: LmOwnPtrStack candidates
+    const: @: LmOwnPtrStack captures
+) int
+
+fn: lm_trans_capture_candidates_add_params (
+    @: LmOwnPtrStack candidates
+    const: @: LmP0Node params
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_collect_hoisted_functions_from_fields (
+    @: LmOwnPtrStack hoisted_functions
+    const: @: LmP0Text parent_c_name
+    @: LmOwnPtrStack candidates
+    const: @: LmTransNamespace namespace_
+    const: @: LmP0Field field
+) int
+
+fn: lm_trans_emit_closure_call_wrapper (
+    @: FILE file
+    const: @: LmTransHoistedFunction hoisted
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_validate_end_trailer (
+    const: @: LmP0Frame frame
+) int
+
 fn: lm_trans_emit_l4_function_pointer_type_field (
     @: FILE file
     const: @: LmTransNamespace namespace_
@@ -421,6 +653,28 @@ fn: lm_trans_emit_l4_function_pointer_type_field (
     const: @: char field_name
     const: @: char error_name
 ) int
+
+fn: lm_trans_emit_l4_function_pointer_type_name (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+    const: @: char name
+    const: @: char error_name
+) int
+
+fn: lm_trans_registry_synthetic_params_node (
+    const: @: LmTransNamespace namespace_
+    const: @: char name
+) @: LmP0Node
+
+fn: lm_trans_registry_synthetic_return_node (
+    const: @: LmTransNamespace namespace_
+    const: @: char name
+) @: LmP0Node
+
+fn: lm_trans_registry_relation_name_new (
+    const: @: LmP0Text owner
+    const: @: char suffix
+) @: char
 
 fn: lm_trans_namespace_set_callable_shape (
     @: LmTransNamespace namespace_
@@ -462,6 +716,243 @@ fn: lm_trans_emit_configured_prelude_sequences (
     @: FILE file
     @: LmTransNamespace namespace_
     @: int out_emitted
+) int
+
+fn: lm_trans_emit_l1_frame (
+    @: FILE output
+    const: @: LmP0Frame l1
+) int
+
+fn: lm_trans_emit_l2_frame (
+    @: FILE file
+    const: @: LmP0Frame l2
+) int
+
+fn: lm_trans_emit_l1_os_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_l1_ifdef_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_l1_include_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_l2_os_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l2_define_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l2_ifndef_default_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l2_ifdef_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_declare_l2_guard_frame (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_l2_guard_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_declare_l2_extern_c_frame (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_l2_extern_c_frame (
+    @: FILE output
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_declare_l2_import_frame (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_emit_l2_import_prelude (
+    @: FILE file
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l2_import_functions (
+    @: FILE file
+    const: @: LmP0Frame frame
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_emit_table (
+    @: FILE file
+    @: LmTransStatementStack stack
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_emit_join (
+    @: FILE file
+    @: LmTransStatementStack stack
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_declare_l2_registry_os_table (
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_declare_l2_registry_ifdef_table (
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l2_registry_os_table (
+    @: FILE output
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l2_registry_ifdef_table (
+    @: FILE output
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_registry_include_table (
+    @: FILE output
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_layout_typedefs (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_constant_defines (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_define_table (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_alias_typedefs (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_forward_typedefs (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_prototypes (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_fn_descriptors (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_guard_markers (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_extern_c_markers (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_l4_units (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_emit_atom_statement_sequence (
+    @: FILE file
+    const: @: LmP0Text atom
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_top_level_declare_os (
+    @: LmTransNamespace namespace_
+    const: @: LmTransTopLevelItem item
+) int
+
+fn: lm_trans_top_level_declare_ifdef (
+    @: LmTransNamespace namespace_
+    const: @: LmTransTopLevelItem item
+) int
+
+fn: lm_trans_top_level_declare_merge_named_structure (
+    @: LmTransNamespace namespace_
+    const: @: LmTransTopLevelItem item
+) int
+
+fn: lm_trans_top_level_emit_merge_named_structure_typedef (
+    @: FILE file
+    @: LmTransNamespace namespace_
+    const: @: LmTransTopLevelItem item
+) int
+
+fn: lm_trans_top_level_emit_merge_named_structure_storage (
+    @: FILE file
+    @: LmTransNamespace namespace_
+    const: @: LmTransTopLevelItem item
+) int
+
+fn: lm_trans_import_frame_has_code_path (
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_first_active_field (
+    const: @: LmP0Structure body
+) const: @: LmP0Field
+
+fn: lm_trans_path_has_extension (
+    const: @: char path
+    const: @: char extension
+) int
+
+fn: lm_trans_root_has_explicit_l2_frame (
+    const: @: LmP0Structure root
+) int
+
+fn: lm_trans_declare_l2_structure_import (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Structure body
+) int
+
+fn: lm_trans_declare_l4_fn_descriptors (
+    @: LmTransNamespace namespace_
 ) int
 
 fn: lm_trans_emit_root_sequence (

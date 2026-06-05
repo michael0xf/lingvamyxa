@@ -1,0 +1,30 @@
+L4:
+    table:
+        name: include
+        columns: class  (target char)
+        rows:
+                 stdio  "<stdio.h>"
+    end: include
+
+    table:
+        name: ifdef
+        columns: class              (body node)
+        rows:
+                 `defined(_WIN32)`
+                 L2:
+                     define: LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE 7
+                 end: L2
+                 default
+                 L2:
+                     define: LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE 3
+                 end: L2
+    end: ifdef
+end: L4
+
+L4: loadHeaders
+
+external:
+    fn: main () int
+        return: c.LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE != 7 && c.LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE != 3
+    end: main
+end: external

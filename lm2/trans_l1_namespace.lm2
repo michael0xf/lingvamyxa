@@ -550,6 +550,21 @@ fn: lm_trans_identifier_table_add_symbol (@: LmTransIdentifierTable table; @: Lm
         return: 1
 return: 0
 
+fn: lm_trans_identifier_table_add_relation_symbol (@: LmTransIdentifierTable table; @: LmTransSymbol symbol) int
+    @: LmTransIdentifierCard card
+    @: LmTransIdentifierRelation relation
+
+    if: table = 0 || symbol = 0 || symbol\name = 0
+        return: 1
+
+    card: lm_trans_identifier_table_get_card(table, symbol\name)
+    if: card = 0
+        return: 1
+    relation: lm_trans_identifier_card_get_relation(card, symbol\class_name)
+    if: relation = 0
+        return: 1
+return: lm_own_ptr_stack_push(relation\symbols, symbol)
+
 sub: lm_trans_identifier_table_remove_symbol (@: LmTransIdentifierTable table; const: @(LmTransSymbol symbol))
     @: LmTransIdentifierCard card
     @: LmTransIdentifierRelation relation
@@ -927,6 +942,35 @@ fn: lm_trans_namespace_find_mutable (@: LmTransNamespace namespace_; const: @(Lm
         return: 0
 return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
 
+fn: lm_trans_namespace_relation_symbol_latest (const: @(LmTransNamespace namespace_); const: @(LmP0Text name); const: @(char relation_name)) const: @: LmTransSymbol
+    @: LmTransIdentifierCard card
+    @: LmTransIdentifierRelation relation
+
+    if: namespace_ = 0 || namespace_\identifiers = 0 || name = 0 || relation_name = 0
+        return: 0
+    card: lm_trans_identifier_table_find_card(namespace_\identifiers, name)
+    if: card = 0
+        return: 0
+    relation: lm_trans_identifier_card_find_relation(card, relation_name)
+    if: relation = 0
+        return: 0
+return: lm_own_ptr_stack_top(relation\symbols)
+
+fn: lm_trans_namespace_relation_text_latest (const: @(LmTransNamespace namespace_); const: @(LmP0Text name); const: @(char relation_name); @: LmP0Text out_text) int
+    const: @: LmTransSymbol symbol
+
+    if: out_text != 0
+        out_text\data: ""
+        out_text\length: 0U
+    if: out_text = 0
+        return: 0
+
+    symbol: lm_trans_namespace_relation_symbol_latest(namespace_, name, relation_name)
+    if: symbol = 0 || symbol\has_c_name = 0 || symbol\c_name = 0
+        return: 0
+    out_text[0]: symbol\c_name[0]
+return: 1
+
 fn: lm_trans_is_c_reference_name (const: @(LmP0Text name)) int
 return: name != 0 && lm_trans_text_starts_with(name, "c.") && name\length > 2U
 
@@ -1037,6 +1081,27 @@ return: 0
 
 fn: lm_trans_namespace_declare_c_name (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char kind); const: @(LmP0Text c_name)) int
 return: lm_trans_namespace_declare_with_c_name(namespace_, name, kind, c_name)
+
+fn: lm_trans_namespace_declare_relation_text (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char relation_name); const: @(LmP0Text payload)) int
+    @: LmTransSymbol symbol
+
+    if: namespace_ = 0 || name = 0 || relation_name = 0 || payload = 0
+        return: 1
+
+    symbol: lm_trans_symbol_new(name, relation_name, namespace_\depth)
+    if: symbol = 0
+        return: 1
+    if: lm_trans_symbol_set_c_name(symbol, payload) != 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: namespace_\items = 0 || lm_own_ptr_stack_push(namespace_\items, symbol) != 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: lm_trans_identifier_table_add_relation_symbol(namespace_\identifiers, symbol) != 0
+        symbol: lm_own_ptr_stack_pop(namespace_\items)
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+return: 0
 
 fn: lm_trans_namespace_set_env_arg (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(LmP0Text env_arg)) int
     @: LmTransSymbol symbol

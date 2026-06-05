@@ -19,7 +19,10 @@ L4:
                  LmTransFunctionHeader       c.struct
                  LmTransL4HeadBinding        c.struct
                  LmTransL4AtomBinding        c.struct
+                 LmTransL4PayloadPointerBinding c.struct
                  LmTransTopLevelItem         c.struct
+                 LmTransFunctionEmitFrame    c.struct
+                 LmTransTypePointerSuffix    c.struct
     end: `forward.backend`
 
     table:
@@ -250,7 +253,10 @@ L4:
                  LmTransHeadBinding             c.struct
                  LmTransL4HeadBinding           c.struct
                  LmTransL4AtomBinding           c.struct
+                 LmTransL4PayloadPointerBinding c.named-struct
                  LmTransTopLevelItem            c.named-struct
+                 LmTransFunctionEmitFrame       c.named-struct
+                 LmTransTypePointerSuffix       c.named-struct
                  LmTransNamespace               c.named-struct
                  LmTransL4LoadContext           c.struct
     end: `layout.backend`
@@ -485,6 +491,7 @@ L4:
         rows:
                  body    LmP0Structure          0                       1                                1
                  callee  LmTransSymbol          1                       1                                1
+                 owned_callee LmTransSymbol     2                       1                                0
     end: LmTransExprCallArgsJob
 
     table:
@@ -703,6 +710,15 @@ L4:
     end: LmTransL4AtomBinding
 
     table:
+        name: LmTransL4PayloadPointerBinding
+        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 head                 char                   0                       1                                1
+                 receiver_type        char                   1                       1                                1
+                 handler              LmTransL4PayloadFrameHandler 2                 0                                0
+    end: LmTransL4PayloadPointerBinding
+
+    table:
         name: LmTransTopLevelItem
         columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
@@ -716,6 +732,23 @@ L4:
                  emit_prototype        LmTransTopLevelEmitHandler    7                 0                                0
                  emit_after_prototypes LmTransTopLevelEmitHandler    8                 0                                0
     end: LmTransTopLevelItem
+
+    table:
+        name: LmTransFunctionEmitFrame
+        columns: class             (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 function          LmTransFunctionHeader 0                 1                                1
+                 hoisted_functions LmOwnPtrStack        1                 1                                0
+                 hoisted_index     size_t               2                 0                                0
+                 phase             int                  3                 0                                0
+    end: LmTransFunctionEmitFrame
+
+    table:
+        name: LmTransTypePointerSuffix
+        columns: class             (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 depth             size_t               0                 0                                0
+    end: LmTransTypePointerSuffix
 
     table:
         name: LmTransNamespace

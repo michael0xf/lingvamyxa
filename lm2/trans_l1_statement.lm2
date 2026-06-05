@@ -2345,6 +2345,7 @@ static int lm_trans_namespace_declare_storage_binding(
 ) {
     LmTransSymbol *symbol;
     const LmTransSymbol *type_symbol;
+    int status;
 
     type_symbol = lm_trans_namespace_find(namespace_, type_head);
     if (lm_trans_symbol_is(type_symbol, "callableDescriptor")) {
@@ -2360,9 +2361,28 @@ static int lm_trans_namespace_declare_storage_binding(
             return 1;
         }
         symbol = lm_trans_namespace_find_mutable(namespace_, name);
-        return lm_trans_symbol_copy_signature(symbol, type_symbol);
+        status = lm_trans_symbol_copy_signature(symbol, type_symbol);
+        if (status == 0) {
+            status = lm_trans_namespace_declare_relation_text(namespace_, name, "variable.type", type_head);
+        }
+        return status;
     }
 
+    status = lm_trans_namespace_declare(namespace_, name, "variable");
+    if (status == 0) {
+        status = lm_trans_namespace_declare_relation_text(namespace_, name, "variable.type", type_head);
+    }
+    return status;
+}
+
+static int lm_trans_namespace_declare_node_storage_binding(
+    LmTransNamespace *namespace_,
+    const LmP0Text *name,
+    const LmP0Node *type_node
+) {
+    if (type_node != 0 && type_node->kind == LM_P0_NODE_ATOM) {
+        return lm_trans_namespace_declare_storage_binding(namespace_, name, type_node->as->atom);
+    }
     return lm_trans_namespace_declare(namespace_, name, "variable");
 }
 
@@ -2491,7 +2511,7 @@ static int lm_trans_emit_pointer_declaration_with_qualifier(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
+    return lm_trans_namespace_declare_node_storage_binding(namespace_, name_node->as->atom, type_field->value);
 }
 
 static int lm_trans_emit_pointer_declaration(
@@ -2737,7 +2757,9 @@ static int lm_trans_emit_array_declaration_with_qualifier(
         status = 1;
         goto cleanup;
     }
-    status = lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
+    status = type_is_head
+        ? lm_trans_namespace_declare_storage_binding(namespace_, name_node->as->atom, type_head)
+        : lm_trans_namespace_declare_node_storage_binding(namespace_, name_node->as->atom, type_node);
 
 cleanup:
     lm_trans_statement_c_declarator_destroy(declarator);
@@ -2828,7 +2850,7 @@ static int lm_trans_emit_pointer_declaration_repeat_with_qualifier(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
+    return lm_trans_namespace_declare_node_storage_binding(namespace_, name_node->as->atom, type_node);
 }
 
 static int lm_trans_emit_array_declaration_repeat_with_qualifier(
@@ -2990,7 +3012,9 @@ static int lm_trans_emit_array_declaration_repeat_with_qualifier(
         status = 1;
         goto cleanup;
     }
-    status = lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
+    status = type_is_head
+        ? lm_trans_namespace_declare_storage_binding(namespace_, name_node->as->atom, type_head)
+        : lm_trans_namespace_declare_node_storage_binding(namespace_, name_node->as->atom, type_node);
 
 cleanup:
     lm_trans_statement_c_declarator_destroy(declarator);
@@ -3055,7 +3079,7 @@ static int lm_trans_emit_c_tagged_declaration(
     if (lm_trans_put(file, ";\n") != 0) {
         return 1;
     }
-    return lm_trans_namespace_declare(namespace_, name_node->as->atom, "variable");
+    return lm_trans_namespace_declare_node_storage_binding(namespace_, name_node->as->atom, type_node);
 }
 
 static int lm_trans_emit_const_statement(
@@ -6719,6 +6743,17 @@ static int lm_trans_atom_statement_emit_os_prelude(
     return lm_trans_emit_l2_registry_os_table(lm_trans_prelude_file(file), namespace_);
 }
 
+static int lm_trans_atom_statement_emit_ifdef_prelude(
+    FILE *file,
+    const LmP0Node *node,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)node;
+    (void)indent;
+    return lm_trans_emit_l2_registry_ifdef_table(lm_trans_prelude_file(file), namespace_);
+}
+
 static int lm_trans_atom_statement_emit_layout_prelude(
     FILE *file,
     const LmP0Node *node,
@@ -8465,6 +8500,7 @@ static int lm_trans_pointer_bindings_init(void) {
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_include_prelude", lm_trans_atom_statement_emit_include_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_define_prelude", lm_trans_atom_statement_emit_define_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_os_prelude", lm_trans_atom_statement_emit_os_prelude) != 0 ||
+        lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_ifdef_prelude", lm_trans_atom_statement_emit_ifdef_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_layout_prelude", lm_trans_atom_statement_emit_layout_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_constant_prelude", lm_trans_atom_statement_emit_constant_prelude) != 0 ||
         lm_trans_pointer_binding_push_atom_statement("lm_trans_atom_statement_emit_alias_prelude", lm_trans_atom_statement_emit_alias_prelude) != 0 ||

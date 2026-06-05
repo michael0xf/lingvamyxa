@@ -115,8 +115,7 @@ fn: lm_trans_registry_collect_layout_names (@: LmOwnPtrStack names; const: @(LmT
 
     rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend")
     if: rows = 0
-        c.fprintf(c.stderr, "trans L4 layout error: layout receiver expects layout.backend facts\n")
-        return: 1
+        return: 0
     key_text: lm_trans_l4_text_view_new("")
     if: key_text = 0
         return: 1
@@ -482,8 +481,7 @@ fn: lm_trans_registry_collect_constant_define_names (@: LmOwnPtrStack names; con
 
     rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("constant"), "backend")
     if: rows = 0
-        c.fprintf(c.stderr, "trans L4 constant error: constant receiver expects constant.backend facts\n")
-        return: 1
+        return: 0
     key_text: lm_trans_l4_text_view_new("")
     if: key_text = 0
         return: 1
@@ -590,8 +588,7 @@ fn: lm_trans_registry_collect_backend_names (@: LmOwnPtrStack names; const: @(Lm
 
     rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr(receiver_name), "backend")
     if: rows = 0
-        c.fprintf(c.stderr, "trans L4 %s error: %s receiver expects %s.backend facts\n", error_name, receiver_name, receiver_name)
-        return: 1
+        return: 0
     key_text: lm_trans_l4_text_view_new("")
     if: key_text = 0
         return: 1
@@ -2230,7 +2227,7 @@ fn: lm_trans_registry_load_l4_frame (const: @(LmP0Frame frame); int: allow_node_
     if: binding\frame = 0
         lm_own_delete(binding, 0)
         return: 0
-    status: c.binding->frame(frame, allow_node_cells)
+    status: binding\frame(frame, allow_node_cells)
     lm_own_delete(binding, 0)
     if: status != 0
         return: 1
@@ -2253,7 +2250,7 @@ fn: lm_trans_registry_load_l4_atom (const: @(LmP0Text atom); int: allow_node_cel
     if: binding\atom = 0
         lm_own_delete(binding, 0)
         return: 0
-    status: c.binding->atom(atom, allow_node_cells)
+    status: binding\atom(atom, allow_node_cells)
     lm_own_delete(binding, 0)
     if: status != 0
         return: 1
@@ -2321,7 +2318,7 @@ fn: lm_trans_registry_load_l4_root_frame (const: @(LmP0Frame frame); int: allow_
     if: binding\frame = 0
         lm_own_delete(binding, 0)
         return: 0
-    status: c.binding->frame(frame, allow_node_cells)
+    status: binding\frame(frame, allow_node_cells)
     lm_own_delete(binding, 0)
     if: status != 0
         return: 1
@@ -2447,7 +2444,7 @@ fn: lm_trans_registry_l4_dispatch_frame (const: @(LmL4Loader loader); @: void co
             "trans registry error: registry body expects registered L4 receiver frames, got \"%.*s\"\n"
             head_length head_data
         return: 1
-return: c.receiver(loader, context, frame)
+return: receiver(loader, context, frame)
 
 fn: lm_trans_registry_l4_loader_new () @: LmL4Loader
     @: LmL4Loader loader

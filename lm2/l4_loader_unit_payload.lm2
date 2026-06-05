@@ -558,6 +558,7 @@ L2:
         const: @@(LmP0Structure out_body)
     ) int
         const: @: LmP0Field field
+        const: @: LmP0Structure frame_body
         const: @: LmP0Structure sources
         const: @: LmP0Text target
         const: @: LmP0Structure body
@@ -569,7 +570,10 @@ L2:
         \out_target: 0
         \out_body: 0
 
-        field: lm_l4_next_present_field(lm_l4_frame_body(frame)\first_field)
+        frame_body: lm_l4_frame_body(frame)
+        if: frame_body = 0
+            return: -1
+        field: lm_l4_next_present_field(frame_body\first_field)
         if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_STRUCTURE
             return: -1
         sources: lm_l4_node_structure(field\value)

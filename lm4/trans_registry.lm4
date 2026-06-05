@@ -261,6 +261,7 @@ table:
              include          lm_trans_atom_statement_emit_include_prelude
              define           lm_trans_atom_statement_emit_define_prelude
              os               lm_trans_atom_statement_emit_os_prelude
+             ifdef            lm_trans_atom_statement_emit_ifdef_prelude
              fn               lm_trans_atom_statement_emit_fn_prelude
              layout           lm_trans_atom_statement_emit_layout_prelude
              constant         lm_trans_atom_statement_emit_constant_prelude
@@ -278,13 +279,15 @@ table:
     rows:
              include    0
              define     1
-             forward    2
-             alias      3
-             constant   4
-             layout     5
-             fn         6
-             prototype  7
-             unit       8
+             os         2
+             ifdef      3
+             forward    4
+             alias      5
+             constant   6
+             layout     7
+             fn         8
+             prototype  9
+             unit       10
 end: `loadHeaders.item`
 
 table:
