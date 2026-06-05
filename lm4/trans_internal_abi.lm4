@@ -1,0 +1,242 @@
+fn: lm_trans_identifier_table_find_card (
+    const: @: LmTransIdentifierTable table
+    const: @: LmP0Text name
+) @: LmTransIdentifierCard
+
+fn: lm_trans_identifier_table_get_card (
+    @: LmTransIdentifierTable table
+    const: @: LmP0Text name
+) @: LmTransIdentifierCard
+
+fn: lm_trans_identifier_card_find_relation (
+    const: @: LmTransIdentifierCard card
+    const: @: char relation_name
+) @: LmTransIdentifierRelation
+
+fn: lm_trans_identifier_card_get_relation (
+    @: LmTransIdentifierCard card
+    const: @: char relation_name
+) @: LmTransIdentifierRelation
+
+fn: lm_trans_binding_resolve (
+    const: @: char binding
+    @: LmTransBinding out
+) int
+
+fn: lm_trans_text_equals (
+    const: @: LmP0Text text
+    const: @: char value
+) int
+
+fn: lm_trans_text_same (
+    const: @: LmP0Text left
+    const: @: LmP0Text right
+) int
+
+fn: lm_trans_text_starts_with (
+    const: @: LmP0Text text
+    const: @: char prefix
+) int
+
+fn: lm_trans_identifier_payload (
+    const: @: LmP0Text atom
+    @: LmP0Text out_payload
+) int
+
+fn: lm_trans_identifier_same (
+    const: @: LmP0Text left
+    const: @: LmP0Text right
+) int
+
+fn: lm_trans_registry_identifier_value (
+    const: @: LmP0Text atom
+    @: LmP0Text out_payload
+) int
+
+fn: lm_trans_registry_literal_value (
+    const: @: LmP0Text atom
+    @: LmP0Text out_payload
+) int
+
+fn: lm_trans_registry_payload_is_null (
+    const: @: LmP0Text atom
+) int
+
+fn: lm_trans_text_copy_cstr (
+    const: @: LmP0Text text
+) @: char
+
+fn: lm_trans_text_copy_cstr_from_cstr (
+    const: @: char text
+) @: char
+
+fn: lm_trans_registry_value_copy_cstr (
+    const: @: LmP0Text value
+) @: char
+
+fn: lm_trans_registry_clone_text (
+    const: @: LmP0Text source
+    @: LmP0Text out_text
+) int
+
+fn: lm_trans_text_ref_new (
+    const: @: LmP0Text text
+) @: LmP0Text
+
+fn: lm_trans_text_ref_new_cstr (
+    const: @: char text
+) @: LmP0Text
+
+fn: lm_trans_text_ref_destroy (
+    @@: LmP0Text text
+) void
+
+fn: lm_trans_text_from_cstr (
+    const: @: char text
+) @: LmP0Text
+
+fn: lm_trans_text_assign_cstr (
+    @: LmP0Text out_text
+    const: @: char text
+) int
+
+fn: lm_trans_registry_init () int
+
+fn: lm_trans_emit_identifier (
+    @: FILE file
+    const: @: LmP0Text name
+) int
+
+fn: lm_trans_l4_callable_type_from_node (
+    const: @: LmP0Node node
+    @: LmTransL4CallableType out
+) int
+
+fn: lm_trans_collect_abi_params (
+    @@: LmTransAbiParam params
+    size_t: capacity
+    @: size_t out_count
+    const: @: LmTransNamespace namespace_
+    const: @: char owner_name
+    const: @: char error_name
+) int
+
+fn: lm_trans_emit_abi_params (
+    @: FILE file
+    @@: LmTransAbiParam params
+    size_t: count
+) int
+
+fn: lm_trans_emit_abi_return_type (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+    const: @: char owner_name
+    const: @: char error_name
+) int
+
+fn: lm_trans_emit_type_name (
+    @: FILE file
+    const: @: LmP0Text name
+) int
+
+fn: lm_trans_emit_type_node (
+    @: FILE file
+    const: @: LmP0Node type_node
+) int
+
+fn: lm_trans_registry_latest_size_payload (
+    const: @: LmOwnPtrStack stack
+    const: @: LmP0Text key
+    size_t: default_value
+    @: size_t out_value
+) int
+
+fn: lm_trans_text_all_char (
+    const: @: LmP0Text text
+    char: ch
+) int
+
+fn: lm_trans_write_all (
+    @: FILE file
+    const: @: char data
+    size_t: length
+) int
+
+fn: lm_trans_put (
+    @: FILE file
+    const: @: char text
+) int
+
+fn: lm_trans_prelude_file (
+    @: FILE fallback
+) @: FILE
+
+fn: lm_trans_write_text (
+    @: FILE file
+    const: @: LmP0Text text
+) int
+
+fn: lm_trans_emit_indent (
+    @: FILE file
+    unsigned: indent
+) int
+
+fn: lm_trans_nth_field (
+    const: @: LmP0Structure structure
+    size_t: index
+) const: @: LmP0Field
+
+fn: lm_trans_node_is_ignored (
+    const: @: LmP0Node node
+) int
+
+fn: lm_trans_node_is_positional_skip (
+    const: @: LmP0Node node
+) int
+
+fn: lm_trans_trailer_single_atom (
+    const: @: LmP0Trailer trailer
+    @: LmP0Text out_text
+) int
+
+fn: lm_trans_symbol_class_name (
+    const: @: char class_name
+) const: @: char
+
+fn: lm_trans_symbol_class_is (
+    const: @: char class_name
+    const: @: char expected
+) int
+
+fn: lm_trans_symbol_is (
+    const: @: LmTransSymbol symbol
+    const: @: char class_name
+) int
+
+fn: lm_trans_symbol_is_executable_callable (
+    const: @: LmTransSymbol symbol
+) int
+
+fn: lm_trans_symbol_is_value_callable (
+    const: @: LmTransSymbol symbol
+) int
+
+sub: lm_trans_symbol_destroy_fields (
+    @: LmTransSymbol symbol
+)
+
+sub: lm_trans_symbol_destroy_fields_any (
+    @: void object
+)
+
+sub: lm_trans_symbol_destroy (
+    @: LmTransSymbol symbol
+)
+
+sub: lm_trans_symbol_delete_any (
+    @: void object
+)
+
+sub: lm_trans_free_any (
+    @: void object
+)

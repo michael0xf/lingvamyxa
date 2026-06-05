@@ -1,90 +1,18 @@
-L1:
-===
-static FILE *lm_trans_prelude_output;
-static const char *lm_trans_current_source_path;
-static LmOwnPtrStack *lm_trans_declared_import_paths;
-static LmOwnPtrStack *lm_trans_declared_import_documents;
-static LmOwnPtrStack *lm_trans_emitted_import_prelude_paths;
-static LmOwnPtrStack *lm_trans_emitted_import_function_paths;
-static LmOwnPtrStack *lm_trans_emitted_callable_adapters;
-static LmOwnPtrStack *lm_trans_emitted_callable_binders;
-static LmOwnPtrStack *lm_trans_emitted_array_value_helpers;
-static LmOwnPtrStack *lm_trans_emitted_function_return_structs;
-static unsigned lm_trans_next_callable_adapter_id;
-static unsigned lm_trans_next_array_value_helper_id;
-static unsigned lm_trans_next_l2_structure_object_id;
+@: FILE lm_trans_prelude_output
+const: @: char lm_trans_current_source_path
+@: LmOwnPtrStack lm_trans_declared_import_paths
+@: LmOwnPtrStack lm_trans_declared_import_documents
+@: LmOwnPtrStack lm_trans_emitted_import_prelude_paths
+@: LmOwnPtrStack lm_trans_emitted_import_function_paths
+@: LmOwnPtrStack lm_trans_emitted_callable_adapters
+@: LmOwnPtrStack lm_trans_emitted_callable_binders
+@: LmOwnPtrStack lm_trans_emitted_array_value_helpers
+@: LmOwnPtrStack lm_trans_emitted_function_return_structs
+unsigned: lm_trans_next_callable_adapter_id
+unsigned: lm_trans_next_array_value_helper_id
+unsigned: lm_trans_next_l2_structure_object_id
 
-static LmTransRegistry *lm_trans_registry;
-
-static int lm_trans_registry_init(void);
-static int lm_trans_text_equals(const LmP0Text *text, const char *value);
-static int lm_trans_text_same(const LmP0Text *left, const LmP0Text *right);
-static int lm_trans_text_starts_with(const LmP0Text *text, const char *prefix);
-static int lm_trans_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
-static int lm_trans_identifier_same(const LmP0Text *left, const LmP0Text *right);
-static int lm_trans_emit_identifier(FILE *file, const LmP0Text *name);
-static int lm_trans_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
-static int lm_trans_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payload);
-static int lm_trans_registry_payload_is_null(const LmP0Text *atom);
-static char *lm_trans_text_copy_cstr(const LmP0Text *text);
-static char *lm_trans_text_copy_cstr_from_cstr(const char *text);
-static char *lm_trans_registry_value_copy_cstr(const LmP0Text *value);
-static int lm_trans_registry_clone_text(const LmP0Text *source, LmP0Text *out_text);
-static LmP0Text *lm_trans_text_ref_new(const LmP0Text *text);
-static LmP0Text *lm_trans_text_ref_new_cstr(const char *text);
-static void lm_trans_text_ref_destroy(LmP0Text **text);
-static LmP0Text *lm_trans_text_from_cstr(const char *text);
-static int lm_trans_text_assign_cstr(LmP0Text *out_text, const char *text);
-static int lm_trans_l4_callable_type_from_node(const LmP0Node *node, LmTransL4CallableType *out);
-static int lm_trans_collect_abi_params(
-    LmTransAbiParam **params,
-    size_t capacity,
-    size_t *out_count,
-    const LmTransNamespace *namespace_,
-    const char *owner_name,
-    const char *error_name
-);
-static int lm_trans_emit_abi_params(
-    FILE *file,
-    LmTransAbiParam **params,
-    size_t count
-);
-static int lm_trans_emit_abi_return_type(
-    FILE *file,
-    const LmTransNamespace *namespace_,
-    const char *owner_name,
-    const char *error_name
-);
-static int lm_trans_emit_type_name(FILE *file, const LmP0Text *name);
-static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node);
-static int lm_trans_registry_latest_size_payload(
-    const LmOwnPtrStack *stack,
-    const LmP0Text *key,
-    size_t default_value,
-    size_t *out_value
-);
-static int lm_trans_text_all_char(const LmP0Text *text, char ch);
-static int lm_trans_write_all(FILE *file, const char *data, size_t length);
-static int lm_trans_put(FILE *file, const char *text);
-static FILE *lm_trans_prelude_file(FILE *fallback);
-static int lm_trans_write_text(FILE *file, const LmP0Text *text);
-static int lm_trans_emit_indent(FILE *file, unsigned indent);
-static const LmP0Field *lm_trans_nth_field(const LmP0Structure *structure, size_t index);
-static int lm_trans_node_is_ignored(const LmP0Node *node);
-static int lm_trans_node_is_positional_skip(const LmP0Node *node);
-static int lm_trans_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *out_text);
-static const char *lm_trans_symbol_class_name(const char *class_name);
-static int lm_trans_symbol_class_is(const char *class_name, const char *expected);
-static int lm_trans_symbol_is(const LmTransSymbol *symbol, const char *class_name);
-static int lm_trans_symbol_is_executable_callable(const LmTransSymbol *symbol);
-static int lm_trans_symbol_is_value_callable(const LmTransSymbol *symbol);
-static void lm_trans_symbol_destroy_fields(LmTransSymbol *symbol);
-static void lm_trans_symbol_destroy_fields_any(void *object);
-static void lm_trans_symbol_destroy(LmTransSymbol *symbol);
-static void lm_trans_symbol_delete_any(void *object);
-static void lm_trans_free_any(void *object);
-
-===
+@: LmTransRegistry lm_trans_registry
 
 sub: lm_trans_import_document_delete (@: void document)
     lm_p0_document_destroy(cast: (@: LmP0Document) document)
@@ -361,28 +289,6 @@ fn: lm_trans_registry_clone_node (const: @(LmP0Node source)) @: LmP0Node
     lm_trans_registry_clone_stack_delete(@ stack)
 return: copy
 
-L1:
-===
-
-static LmTransIdentifierCard *lm_trans_identifier_table_find_card(
-    const LmTransIdentifierTable *table,
-    const LmP0Text *name
-);
-static LmTransIdentifierCard *lm_trans_identifier_table_get_card(
-    LmTransIdentifierTable *table,
-    const LmP0Text *name
-);
-static LmTransIdentifierRelation *lm_trans_identifier_card_find_relation(
-    const LmTransIdentifierCard *card,
-    const char *relation_name
-);
-static LmTransIdentifierRelation *lm_trans_identifier_card_get_relation(
-    LmTransIdentifierCard *card,
-    const char *relation_name
-);
-
-===
-
 fn: lm_trans_registry_index_row_relation (const: @(LmP0Text card_name); const: @(char relation_name); @: LmTransRegistryFact row) int
     @: LmTransRegistry registry
     @: LmTransIdentifierCard card
@@ -543,814 +449,628 @@ fn: lm_trans_registry_join_target_relation_new (const: @(LmP0Text target_name); 
     relation_name[length]: '\0'
 return: relation_name
 
-L1:
-===
-
-static int lm_trans_registry_join_copy_row(
-    const LmTransRegistryFact *row,
-    const LmP0Text *source_name,
-    const LmP0Text *target_name,
-    size_t *copied
-) {
-    const char *suffix;
-    char *target_relation;
-    LmP0Text *target_relation_text;
-    LmP0Text *key_text;
-    LmP0Text *payload_text;
-    int status;
-
-    if (row == 0 || row->table == 0 || row->key == 0 || (row->payload_node == 0 && row->payload == 0)) {
-        return 0;
-    }
-    if (copied == 0 || !lm_trans_registry_join_relation_matches(row->table, source_name, &suffix)) {
-        return 0;
-    }
-
-    target_relation = lm_trans_registry_join_target_relation_new(target_name, suffix);
-    if (target_relation == 0) {
-        return 1;
-    }
-    target_relation_text = lm_trans_text_from_cstr(target_relation);
-    key_text = lm_trans_text_from_cstr(row->key);
-    payload_text = row->payload != 0 ? lm_trans_text_from_cstr(row->payload) : 0;
-    status = 1;
-    if (target_relation_text != 0 && key_text != 0) {
-        if (row->payload_node != 0) {
-            status = lm_trans_registry_push_row_node_values(target_relation_text, key_text, row->payload_node) != 0;
-        } else if (payload_text != 0) {
-            status = lm_trans_registry_push_row_values(target_relation_text, key_text, payload_text) != 0;
-        }
-    }
-    lm_trans_text_ref_destroy(&payload_text);
-    lm_trans_text_ref_destroy(&key_text);
-    lm_trans_text_ref_destroy(&target_relation_text);
-    lm_own_delete(target_relation, 0);
-    if (status != 0) {
-        return 1;
-    }
-    ++*copied;
-    return 0;
-}
-
-static int lm_trans_registry_join_table(
-    const LmP0Text *source_table,
-    const LmP0Text *target_table
-) {
-    LmP0Text *source_name;
-    LmP0Text *target_name;
-    LmTransIdentifierTable *identifiers;
-    LmTransIdentifierCard *card;
-    LmTransIdentifierRelation *relation;
-    LmTransRegistryFact *row;
-    const char *relation_suffix;
-    size_t bucket_index;
-    size_t relation_bucket_index;
-    size_t symbol_index;
-    size_t symbol_count;
-    size_t copied;
-    int status;
-
-    if (lm_trans_registry == 0 || source_table == 0 || target_table == 0) {
-        return 1;
-    }
-
-    source_name = lm_trans_text_ref_new_cstr("");
-    target_name = lm_trans_text_ref_new_cstr("");
-    if (source_name == 0 || target_name == 0) {
-        lm_trans_text_ref_destroy(&source_name);
-        lm_trans_text_ref_destroy(&target_name);
-        return 1;
-    }
-    if (
-        !lm_trans_registry_identifier_value(source_table, source_name) ||
-        !lm_trans_registry_identifier_value(target_table, target_name)
-    ) {
-        lm_trans_text_ref_destroy(&source_name);
-        lm_trans_text_ref_destroy(&target_name);
-        return 1;
-    }
-
-    identifiers = lm_trans_registry->identifiers;
-    copied = 0U;
-    status = 0;
-    if (identifiers != 0 && identifiers->buckets != 0) {
-        for (bucket_index = 0U; status == 0 && bucket_index < identifiers->bucket_count; ++bucket_index) {
-            card = identifiers->buckets[bucket_index];
-            while (status == 0 && card != 0) {
-                if (card->relation_buckets != 0) {
-                    for (
-                        relation_bucket_index = 0U;
-                        status == 0 && relation_bucket_index < card->relation_bucket_count;
-                        ++relation_bucket_index
-                    ) {
-                        relation = card->relation_buckets[relation_bucket_index];
-                        while (status == 0 && relation != 0) {
-                            relation_suffix = 0;
-                            if (
-                                relation->symbols != 0 &&
-                                lm_trans_registry_join_relation_matches(relation->name, source_name, &relation_suffix)
-                            ) {
-                                symbol_count = relation->symbols->count;
-                                for (symbol_index = 0U; status == 0 && symbol_index < symbol_count; ++symbol_index) {
-                                    row = (LmTransRegistryFact *)lm_own_ptr_stack_at(relation->symbols, symbol_index);
-                                    status = lm_trans_registry_join_copy_row(
-                                        row,
-                                        source_name,
-                                        target_name,
-                                        &copied
-                                    );
-                                }
-                            }
-                            relation = relation->next;
-                        }
-                    }
-                }
-                card = card->next;
-            }
-        }
-    }
-
-    if (status == 0 && copied == 0U) {
-        fprintf(
-            stderr,
-            "trans registry error: join source table \"%.*s\" has no rows\n",
-            (int)source_name->length,
-            source_name->data
-        );
-        status = 1;
-    }
-
-    lm_trans_text_ref_destroy(&source_name);
-    lm_trans_text_ref_destroy(&target_name);
-    return status;
-}
-
-static int lm_trans_registry_push_row_atoms(
-    const LmP0Text *table_atom,
-    const LmP0Text *key_atom,
-    const LmP0Text *payload_atom
-) {
-    LmP0Text *table_value;
-    LmP0Text *key_value;
-    LmP0Text *payload_value;
-    int status;
-
-    if (lm_trans_registry_payload_is_null(payload_atom)) {
-        return 0;
-    }
-    table_value = lm_trans_text_ref_new_cstr("");
-    key_value = lm_trans_text_ref_new_cstr("");
-    payload_value = lm_trans_text_ref_new_cstr("");
-    if (table_value == 0 || key_value == 0 || payload_value == 0) {
-        lm_trans_text_ref_destroy(&table_value);
-        lm_trans_text_ref_destroy(&key_value);
-        lm_trans_text_ref_destroy(&payload_value);
-        return -1;
-    }
-    status = -1;
-    if (
-        !lm_trans_registry_identifier_value(table_atom, table_value) ||
-        !lm_trans_registry_identifier_value(key_atom, key_value) ||
-        !lm_trans_registry_literal_value(payload_atom, payload_value)
-    ) {
-        goto cleanup;
-    }
-    status = lm_trans_registry_push_row_values(table_value, key_value, payload_value);
-
-cleanup:
-    lm_trans_text_ref_destroy(&table_value);
-    lm_trans_text_ref_destroy(&key_value);
-    lm_trans_text_ref_destroy(&payload_value);
-    return status;
-}
-
-static int lm_trans_registry_column_has_descriptor(
-    const LmTransRegistryColumn *column,
-    const char *descriptor
-) {
-    size_t i;
-    LmP0Text *payload;
-
-    if (column == 0 || descriptor == 0) {
-        return 0;
-    }
-
-    payload = lm_trans_text_ref_new_cstr("");
-    if (payload == 0) {
-        return 0;
-    }
-    for (i = 0U; i < column->descriptor_count; ++i) {
-        if (
-            column->descriptors[i] != 0 &&
-            lm_trans_registry_identifier_value(column->descriptors[i], payload) &&
-            lm_trans_text_equals(payload, descriptor)
-        ) {
-            lm_trans_text_ref_destroy(&payload);
-            return 1;
-        }
-    }
-    lm_trans_text_ref_destroy(&payload);
-    return 0;
-}
-
-static int lm_trans_registry_column_is_class_typed(
-    const LmTransRegistryColumn *column
-) {
-    LmP0Text *payload;
-    int is_class;
-
-    if (column == 0) {
-        return 0;
-    }
-    payload = lm_trans_text_ref_new_cstr("");
-    if (payload == 0) {
-        return 0;
-    }
-    is_class = 0;
-    if (
-        column->name != 0 &&
-        lm_trans_registry_identifier_value(column->name, payload) &&
-        lm_trans_text_equals(payload, "class")
-    ) {
-        is_class = 1;
-    }
-    lm_trans_text_ref_destroy(&payload);
-    return is_class || lm_trans_registry_column_has_descriptor(column, "class");
-}
-
-static int lm_trans_registry_cell_value(
-    const LmP0Text *atom,
-    const LmTransRegistryColumn *column,
-    LmP0Text *out_value
-) {
-    if (lm_trans_registry_payload_is_null(atom)) {
-        return 0;
-    }
-    if (lm_trans_registry_column_has_descriptor(column, "char")) {
-        return lm_trans_registry_literal_value(atom, out_value) ? 1 : -1;
-    }
-    return lm_trans_registry_identifier_value(atom, out_value) ? 1 : -1;
-}
-
-static int lm_trans_registry_push_table_cell(
-    const LmP0Text *table_name,
-    const LmTransRegistryColumn *column,
-    int split_by_column,
-    const LmP0Text *key_atom,
-    const LmP0Node *payload_node,
-    int allow_node_cells
-) {
-    LmP0Text *table_payload;
-    LmP0Text *column_payload;
-    LmP0Text *key_payload;
-    LmP0Text *payload_value;
-    LmP0Text *relation_table;
-    char *relation_name;
-    size_t relation_length;
-    int status;
-    int cell_status;
-    int wants_node;
-
-    if (payload_node == 0 || column == 0) {
-        return -1;
-    }
-
-    table_payload = lm_trans_text_ref_new_cstr("");
-    column_payload = lm_trans_text_ref_new_cstr("");
-    key_payload = lm_trans_text_ref_new_cstr("");
-    payload_value = lm_trans_text_ref_new_cstr("");
-    relation_table = 0;
-    relation_name = 0;
-    status = -1;
-    if (table_payload == 0 || column_payload == 0 || key_payload == 0 || payload_value == 0) {
-        goto cleanup;
-    }
-
-    wants_node = lm_trans_registry_column_has_descriptor(column, "node");
-
-    if (!wants_node) {
-        if (payload_node->kind != LM_P0_NODE_ATOM) {
-            fprintf(stderr, "trans registry error: non-atom table cell requires a node-typed column\n");
-            goto cleanup;
-        }
-        cell_status = lm_trans_registry_cell_value(payload_node->as->atom, column, payload_value);
-        if (cell_status == 0) {
-            status = 0;
-            goto cleanup;
-        }
-        if (cell_status < 0) {
-            goto cleanup;
-        }
-    } else if (!allow_node_cells) {
-        fprintf(stderr, "trans registry error: node table cells are allowed only in inline L4 for now\n");
-        goto cleanup;
-    } else if (
-        payload_node->kind == LM_P0_NODE_ATOM &&
-        lm_trans_registry_payload_is_null(payload_node->as->atom)
-    ) {
-        status = 0;
-        goto cleanup;
-    }
-
-    if (!lm_trans_registry_identifier_value(table_name, table_payload)) {
-        goto cleanup;
-    }
-
-    if (!lm_trans_registry_identifier_value(key_atom, key_payload)) {
-        goto cleanup;
-    }
-
-    if (!split_by_column) {
-        if (wants_node) {
-            status = lm_trans_registry_push_row_node_values(table_payload, key_payload, payload_node);
-            goto cleanup;
-        }
-        status = lm_trans_registry_push_row_values(table_payload, key_payload, payload_value);
-        goto cleanup;
-    }
-
-    if (column->name == 0 || !lm_trans_registry_identifier_value(column->name, column_payload)) {
-        goto cleanup;
-    }
-
-    relation_length = table_payload->length + 1U + column_payload->length;
-    relation_name = (char *)lm_own_new_zero(relation_length + 1U);
-    if (relation_name == 0) {
-        goto cleanup;
-    }
-    memcpy(relation_name, table_payload->data, table_payload->length);
-    relation_name[table_payload->length] = '.';
-    memcpy(relation_name + table_payload->length + 1U, column_payload->data, column_payload->length);
-    relation_name[relation_length] = '\0';
-
-    relation_table = lm_trans_text_from_cstr(relation_name);
-    if (relation_table == 0) {
-        goto cleanup;
-    }
-    if (wants_node) {
-        status = lm_trans_registry_push_row_node_values(relation_table, key_payload, payload_node);
-    } else {
-        status = lm_trans_registry_push_row_values(relation_table, key_payload, payload_value);
-    }
-
-cleanup:
-    lm_own_delete(relation_name, 0);
-    lm_trans_text_ref_destroy(&relation_table);
-    lm_trans_text_ref_destroy(&table_payload);
-    lm_trans_text_ref_destroy(&column_payload);
-    lm_trans_text_ref_destroy(&key_payload);
-    lm_trans_text_ref_destroy(&payload_value);
-    return status;
-}
-
-static int lm_trans_registry_note_class_kind(const LmP0Text *name, const char *kind) {
-    LmP0Text *table;
-    LmP0Text *payload;
-    int status;
-
-    if (kind == 0) {
-        return 0;
-    }
-
-    table = lm_trans_text_from_cstr("class.kind");
-    payload = lm_trans_text_from_cstr(kind);
-    if (table == 0 || payload == 0) {
-        lm_trans_text_ref_destroy(&table);
-        lm_trans_text_ref_destroy(&payload);
-        return 1;
-    }
-    status = lm_trans_registry_push_row_atoms(table, name, payload) != 0;
-    lm_trans_text_ref_destroy(&table);
-    lm_trans_text_ref_destroy(&payload);
-    return status;
-}
-
-static int lm_trans_registry_note_class_present(const LmP0Text *name) {
-    LmP0Text *table;
-    LmP0Text *payload;
-    LmP0Text *class_text;
-    int status;
-
-    payload = lm_trans_text_ref_new_cstr("");
-    if (payload == 0) {
-        return 1;
-    }
-    if (!lm_trans_registry_identifier_value(name, payload)) {
-        lm_trans_text_ref_destroy(&payload);
-        return 0;
-    }
-
-    table = lm_trans_text_from_cstr("class.present");
-    class_text = lm_trans_text_from_cstr("class");
-    if (table == 0 || class_text == 0) {
-        lm_trans_text_ref_destroy(&payload);
-        lm_trans_text_ref_destroy(&table);
-        lm_trans_text_ref_destroy(&class_text);
-        return 1;
-    }
-    status = lm_trans_registry_push_row_values(table, payload, class_text) != 0;
-    lm_trans_text_ref_destroy(&payload);
-    lm_trans_text_ref_destroy(&table);
-    lm_trans_text_ref_destroy(&class_text);
-    return status;
-}
-
-static LmTransRegistryFact *lm_trans_registry_lookup_row_in_identifiers(
-    const LmTransIdentifierTable *identifiers,
-    const LmP0Text *key,
-    const char *table
-) {
-    LmTransIdentifierCard *card;
-    LmTransIdentifierRelation *relation;
-
-    if (table == 0) {
-        return 0;
-    }
-
-    card = lm_trans_identifier_table_find_card(identifiers, key);
-    if (card == 0) {
-        return 0;
-    }
-    relation = lm_trans_identifier_card_find_relation(card, table);
-    if (relation == 0) {
-        return 0;
-    }
-    return (LmTransRegistryFact *)lm_own_ptr_stack_top(relation->symbols);
-}
-
-static const LmOwnPtrStack *lm_trans_registry_relation_stack_in_identifiers(
-    const LmTransIdentifierTable *identifiers,
-    const LmP0Text *key,
-    const char *relation_name
-) {
-    LmTransIdentifierCard *card;
-    LmTransIdentifierRelation *relation;
-
-    if (relation_name == 0) {
-        return 0;
-    }
-
-    card = lm_trans_identifier_table_find_card(identifiers, key);
-    if (card == 0) {
-        return 0;
-    }
-
-    relation = lm_trans_identifier_card_find_relation(card, relation_name);
-    return relation != 0 ? relation->symbols : 0;
-}
-
-static const LmOwnPtrStack *lm_trans_registry_relation_stack(
-    const LmP0Text *key,
-    const char *relation_name
-) {
-    return lm_trans_registry_relation_stack_in_identifiers(
-        lm_trans_registry->identifiers,
-        key,
-        relation_name
-    );
-}
-
-static const LmOwnPtrStack *lm_trans_namespace_registry_relation_stack(
-    const LmTransNamespace *namespace_,
-    const LmP0Text *key,
-    const char *relation_name
-) {
-    const LmOwnPtrStack *stack;
-
-    if (namespace_ != 0 && namespace_->registry_identifiers != 0) {
-        stack = lm_trans_registry_relation_stack_in_identifiers(
-            namespace_->registry_identifiers,
-            key,
-            relation_name
-        );
-        if (stack != 0) {
-            return stack;
-        }
-    }
-
-    return lm_trans_registry_relation_stack(key, relation_name);
-}
-
-static const LmOwnPtrStack *lm_trans_registry_relation_stack_for_table(
-    const char *table
-) {
-    const char *dot;
-    LmP0Text *table_name;
-    const char *relation_name;
-    const LmOwnPtrStack *stack;
-
-    if (table == 0) {
-        return 0;
-    }
-
-    table_name = lm_trans_text_ref_new_cstr("");
-    if (table_name == 0) {
-        return 0;
-    }
-
-    dot = strchr(table, '.');
-    if (dot != 0 && dot != table && dot[1] != '\0') {
-        table_name->data = table;
-        table_name->length = (size_t)(dot - table);
-        relation_name = dot + 1;
-    } else {
-        table_name->data = table;
-        table_name->length = strlen(table);
-        relation_name = "row";
-    }
-
-    stack = lm_trans_registry_relation_stack(table_name, relation_name);
-    lm_trans_text_ref_destroy(&table_name);
-    return stack;
-}
-
-static LmTransRegistryFact *lm_trans_registry_relation_stack_latest_row(
-    const LmOwnPtrStack *stack,
-    const LmP0Text *key
-) {
-    size_t i;
-    LmTransRegistryFact *row;
-    LmP0Text *key_payload;
-
-    key_payload = lm_trans_text_ref_new_cstr("");
-    if (stack == 0 || key_payload == 0 || !lm_trans_identifier_payload(key, key_payload)) {
-        lm_trans_text_ref_destroy(&key_payload);
-        return 0;
-    }
-
-    i = stack->count;
-    while (i > 0U) {
-        --i;
-        row = (LmTransRegistryFact *)lm_own_ptr_stack_at(stack, i);
-        if (row != 0 && row->key != 0 && lm_trans_text_equals(key_payload, row->key)) {
-            lm_trans_text_ref_destroy(&key_payload);
-            return row;
-        }
-    }
-
-    lm_trans_text_ref_destroy(&key_payload);
-    return 0;
-}
-
-static const char *lm_trans_registry_lookup(const LmP0Text *key, const char *table) {
-    LmTransRegistryFact *row;
-
-    row = lm_trans_registry_lookup_row_in_identifiers(
-        lm_trans_registry->identifiers,
-        key,
-        table
-    );
-    if (row != 0) {
-        return row->payload;
-    }
-
-    return 0;
-}
-
-static int lm_trans_registry_has(const LmP0Text *key, const char *table) {
-    return lm_trans_registry_lookup(key, table) != 0;
-}
-
-static int lm_trans_registry_table_has_rows(const char *table) {
-    const LmOwnPtrStack *stack;
-
-    if (table == 0) {
-        return 0;
-    }
-
-    stack = lm_trans_registry_relation_stack_for_table(table);
-    return stack != 0 && stack->count != 0U;
-}
-
-static int lm_trans_registry_assert_selected_table_link(
-    const char *source_table,
-    const LmP0Text *key,
-    const char *target_class_table,
-    const char *target_table
-) {
-    LmP0Text *target_key;
-    int target_has_class_row;
-
-    if (source_table == 0 || target_table == 0) {
-        return 1;
-    }
-
-    target_has_class_row = 1;
-    target_key = 0;
-    if (target_class_table != 0) {
-        target_key = lm_trans_text_from_cstr(target_table);
-        target_has_class_row = target_key != 0 && lm_trans_registry_has(target_key, target_class_table);
-        lm_trans_text_ref_destroy(&target_key);
-    }
-    if (!target_has_class_row) {
-        fprintf(
-            stderr,
-            "trans registry inconsistency: %s[\"%.*s\"] points to %s, but %s has no class row for that target\n",
-            source_table,
-            (int)key->length,
-            key->data,
-            target_table,
-            target_class_table
-        );
-        return 1;
-    }
-    if (!lm_trans_registry_has(key, target_table)) {
-        fprintf(
-            stderr,
-            "trans registry inconsistency: %s[\"%.*s\"] points to %s, but %s has no matching row for that key\n",
-            source_table,
-            (int)key->length,
-            key->data,
-            target_table,
-            target_table
-        );
-        return 1;
-    }
-    return 0;
-}
-
-static int lm_trans_registry_assert_payload_table_exists(
-    const char *source_table,
-    const LmP0Text *key,
-    const char *target_table
-) {
-    if (source_table == 0 || target_table == 0) {
-        return 1;
-    }
-    if (!lm_trans_registry_table_has_rows(target_table)) {
-        fprintf(
-            stderr,
-            "trans registry inconsistency: %s[\"%.*s\"] points to %s, but that table has no rows\n",
-            source_table,
-            (int)key->length,
-            key->data,
-            target_table
-        );
-        return 1;
-    }
-    return 0;
-}
-
-static const char *lm_trans_registry_lookup_table_link_checked(
-    const LmP0Text *key,
-    const char *source_table,
-    const char *target_class_table
-) {
-    const char *target_table;
-
-    target_table = lm_trans_registry_lookup(key, source_table);
-    if (
-        target_table != 0 &&
-        lm_trans_registry_assert_selected_table_link(source_table, key, target_class_table, target_table) != 0
-    ) {
-        exit(2);
-    }
-    return target_table;
-}
-
-static const char *lm_trans_namespace_registry_lookup(
-    const LmTransNamespace *namespace_,
-    const LmP0Text *key,
-    const char *table
-) {
-    LmTransRegistryFact *row;
-
-    if (namespace_ != 0 && namespace_->registry_identifiers != 0) {
-        row = lm_trans_registry_lookup_row_in_identifiers(
-            namespace_->registry_identifiers,
-            key,
-            table
-        );
-        if (row != 0) {
-            return row->payload;
-        }
-    }
-
-    return lm_trans_registry_lookup(key, table);
-}
-
-static const char *lm_trans_namespace_registry_lookup_table_link_checked(
-    const LmTransNamespace *namespace_,
-    const LmP0Text *key,
-    const char *source_table,
-    const char *target_class_table
-) {
-    const char *target_table;
-
-    target_table = lm_trans_namespace_registry_lookup(namespace_, key, source_table);
-    if (
-        target_table != 0 &&
-        lm_trans_registry_assert_selected_table_link(source_table, key, target_class_table, target_table) != 0
-    ) {
-        exit(2);
-    }
-    return target_table;
-}
-
-static int lm_trans_binding_resolve(const char *binding, LmTransBinding *out);
-
-static int lm_trans_array_head_find_close(const LmP0Text *text, size_t open_index, size_t *out_close_index) {
-    size_t i;
-    size_t depth;
-
-    if (text == 0 || out_close_index == 0 || open_index >= text->length || text->data[open_index] != '[') {
-        return 0;
-    }
-
-    i = open_index;
-    depth = 0U;
-    while (i < text->length) {
-        if (text->data[i] == '"' || text->data[i] == '`') {
-            char quote;
-
-            quote = text->data[i++];
-            while (i < text->length) {
-                if (quote == '"' && text->data[i] == '\\') {
-                    i += 2U;
-                    continue;
-                }
-                if (quote == '`' && text->data[i] == '`' && i + 1U < text->length && text->data[i + 1U] == '`') {
-                    i += 2U;
-                    continue;
-                }
-                if (text->data[i++] == quote) {
-                    break;
-                }
-            }
-            continue;
-        }
-        if (text->data[i] == '\'') {
-            ++i;
-            while (i < text->length) {
-                if (text->data[i] == '\\') {
-                    i += 2U;
-                    continue;
-                }
-                if (text->data[i++] == '\'') {
-                    break;
-                }
-            }
-            continue;
-        }
-        if (text->data[i] == '[') {
-            ++depth;
-        } else if (text->data[i] == ']') {
-            --depth;
-            if (depth == 0U) {
-                *out_close_index = i;
-                return 1;
-            }
-        }
-        ++i;
-    }
-
-    return 0;
-}
-
-static int lm_trans_array_head_next_dimension(
-    const LmP0Text *head,
-    size_t *index,
-    LmP0Text *out_dimension
-) {
-    size_t close_index;
-
-    if (head == 0 || index == 0 || out_dimension == 0 || *index >= head->length || head->data[*index] != '[') {
-        return 0;
-    }
-    if (!lm_trans_array_head_find_close(head, *index, &close_index)) {
-        return 0;
-    }
-
-    out_dimension->data = head->data + *index + 1U;
-    out_dimension->length = close_index - *index - 1U;
-    *index = close_index + 1U;
-    return 1;
-}
-
-static int lm_trans_text_is_array_receiver_head(const LmP0Text *head) {
-    size_t index;
-    size_t count;
-    LmP0Text *dimension;
-
-    index = 0U;
-    count = 0U;
-    if (head == 0) {
-        return 0;
-    }
-    dimension = lm_trans_text_ref_new_cstr("");
-    if (dimension == 0) {
-        return 0;
-    }
-    while (index < head->length) {
-        if (!lm_trans_array_head_next_dimension(head, &index, dimension)) {
-            lm_trans_text_ref_destroy(&dimension);
-            return 0;
-        }
-        ++count;
-    }
-
-    lm_trans_text_ref_destroy(&dimension);
-    return count > 0U;
-}
-
-===
+fn: lm_trans_registry_join_copy_row (const: @(LmTransRegistryFact row); const: @(LmP0Text source_name); const: @(LmP0Text target_name); @: size_t copied) int
+    const: @: char suffix
+    @: char target_relation
+    @: LmP0Text target_relation_text
+    @: LmP0Text key_text
+    @: LmP0Text payload_text
+    int: status
+
+    if: row = 0 || row\table = 0 || row\key = 0 || (row\payload_node = 0 && row\payload = 0)
+        return: 0
+    if: copied = 0 || lm_trans_registry_join_relation_matches(row\table, source_name, @ suffix) = 0
+        return: 0
+
+    target_relation: lm_trans_registry_join_target_relation_new(target_name, suffix)
+    if: target_relation = 0
+        return: 1
+    target_relation_text: lm_trans_text_from_cstr(target_relation)
+    key_text: lm_trans_text_from_cstr(row\key)
+    payload_text: 0
+    if: row\payload != 0
+        payload_text: lm_trans_text_from_cstr(row\payload)
+    status: 1
+    if: target_relation_text != 0 && key_text != 0
+        if: row\payload_node != 0
+            status: lm_trans_registry_push_row_node_values(target_relation_text, key_text, row\payload_node) != 0
+        else:
+            if: payload_text != 0
+                status: lm_trans_registry_push_row_values(target_relation_text, key_text, payload_text) != 0
+    ---
+    lm_trans_text_ref_destroy(@ payload_text)
+    lm_trans_text_ref_destroy(@ key_text)
+    lm_trans_text_ref_destroy(@ target_relation_text)
+    lm_own_delete(target_relation, 0)
+    if: status != 0
+        return: 1
+    copied[0]: copied[0] + 1U
+return: 0
+
+fn: lm_trans_registry_join_table (const: @(LmP0Text source_table); const: @(LmP0Text target_table)) int
+    @: LmP0Text source_name
+    @: LmP0Text target_name
+    @: LmTransIdentifierTable identifiers
+    @: LmTransIdentifierCard card
+    @: LmTransIdentifierRelation relation
+    @: LmTransRegistryFact row
+    const: @: char relation_suffix
+    size_t: bucket_index
+    size_t: relation_bucket_index
+    size_t: symbol_index
+    size_t: symbol_count
+    size_t: copied
+    int: status
+
+    if: c.lm_trans_registry = 0 || source_table = 0 || target_table = 0
+        return: 1
+
+    source_name: lm_trans_text_ref_new_cstr("")
+    target_name: lm_trans_text_ref_new_cstr("")
+    if: source_name = 0 || target_name = 0
+        lm_trans_text_ref_destroy(@ source_name)
+        lm_trans_text_ref_destroy(@ target_name)
+        return: 1
+    if: lm_trans_registry_identifier_value(source_table, source_name) = 0 || lm_trans_registry_identifier_value(target_table, target_name) = 0
+        lm_trans_text_ref_destroy(@ source_name)
+        lm_trans_text_ref_destroy(@ target_name)
+        return: 1
+
+    identifiers: c.lm_trans_registry->identifiers
+    copied: 0U
+    status: 0
+    if: identifiers != 0 && identifiers\buckets != 0
+        bucket_index: 0U
+        while: status = 0 && bucket_index < identifiers\bucket_count
+            card: identifiers\buckets[bucket_index]
+            while: status = 0 && card != 0
+                if: card\relation_buckets != 0
+                    relation_bucket_index: 0U
+                    while: status = 0 && relation_bucket_index < card\relation_bucket_count
+                        relation: card\relation_buckets[relation_bucket_index]
+                        while: status = 0 && relation != 0
+                            relation_suffix: 0
+                            if: relation\symbols != 0 && lm_trans_registry_join_relation_matches(relation\name, source_name, @ relation_suffix) != 0
+                                symbol_count: relation\symbols\count
+                                symbol_index: 0U
+                                while: status = 0 && symbol_index < symbol_count
+                                    row: lm_own_ptr_stack_at(relation\symbols, symbol_index)
+                                    status: lm_trans_registry_join_copy_row(row, source_name, target_name, @ copied)
+                                    symbol_index: symbol_index + 1U
+                            ---
+                            relation: relation\next
+                        relation_bucket_index: relation_bucket_index + 1U
+            ---
+                card: card\next
+            bucket_index: bucket_index + 1U
+
+    ---
+    if: status = 0 && copied = 0U
+        c.fprintf(c.stderr, "trans registry error: join source table \"%.*s\" has no rows\n", (cast: int source_name\length), source_name\data)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ source_name)
+    lm_trans_text_ref_destroy(@ target_name)
+return: status
+
+fn: lm_trans_registry_push_row_atoms (const: @(LmP0Text table_atom); const: @(LmP0Text key_atom); const: @(LmP0Text payload_atom)) int
+    @: LmP0Text table_value
+    @: LmP0Text key_value
+    @: LmP0Text payload_value
+    int: status
+
+    if: lm_trans_registry_payload_is_null(payload_atom) != 0
+        return: 0
+    table_value: lm_trans_text_ref_new_cstr("")
+    key_value: lm_trans_text_ref_new_cstr("")
+    payload_value: lm_trans_text_ref_new_cstr("")
+    if: table_value = 0 || key_value = 0 || payload_value = 0
+        lm_trans_text_ref_destroy(@ table_value)
+        lm_trans_text_ref_destroy(@ key_value)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: -1
+    status: -1
+    if: lm_trans_registry_identifier_value(table_atom, table_value) != 0 && lm_trans_registry_identifier_value(key_atom, key_value) != 0 && lm_trans_registry_literal_value(payload_atom, payload_value) != 0
+        status: lm_trans_registry_push_row_values(table_value, key_value, payload_value)
+    lm_trans_text_ref_destroy(@ table_value)
+    lm_trans_text_ref_destroy(@ key_value)
+    lm_trans_text_ref_destroy(@ payload_value)
+return: status
+
+fn: lm_trans_registry_column_has_descriptor (const: @(LmTransRegistryColumn column); const: @(char descriptor)) int
+    size_t: i
+    @: LmP0Text payload
+
+    if: column = 0 || descriptor = 0
+        return: 0
+
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    i: 0U
+    while: i < column\descriptor_count
+        if: column\descriptors[i] != 0 && lm_trans_registry_identifier_value(column\descriptors[i], payload) != 0 && lm_trans_text_equals(payload, descriptor) != 0
+            lm_trans_text_ref_destroy(@ payload)
+            return: 1
+        i: i + 1U
+    lm_trans_text_ref_destroy(@ payload)
+return: 0
+
+fn: lm_trans_registry_column_is_class_typed (const: @(LmTransRegistryColumn column)) int
+    @: LmP0Text payload
+    int: is_class
+
+    if: column = 0
+        return: 0
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    is_class: 0
+    if: column\name != 0 && lm_trans_registry_identifier_value(column\name, payload) != 0 && lm_trans_text_equals(payload, "class") != 0
+        is_class: 1
+    lm_trans_text_ref_destroy(@ payload)
+return: is_class || lm_trans_registry_column_has_descriptor(column, "class")
+
+fn: lm_trans_registry_cell_value (const: @(LmP0Text atom); const: @(LmTransRegistryColumn column); @: LmP0Text out_value) int
+    if: lm_trans_registry_payload_is_null(atom) != 0
+        return: 0
+    if: lm_trans_registry_column_has_descriptor(column, "char") != 0
+        if: lm_trans_registry_literal_value(atom, out_value) != 0
+            return: 1
+        return: -1
+    if: lm_trans_registry_identifier_value(atom, out_value) != 0
+        return: 1
+return: -1
+
+fn: lm_trans_registry_push_table_cell (const: @(LmP0Text table_name); const: @(LmTransRegistryColumn column); int: split_by_column; const: @(LmP0Text key_atom); const: @(LmP0Node payload_node); int: allow_node_cells) int
+    @: LmP0Text table_payload
+    @: LmP0Text column_payload
+    @: LmP0Text key_payload
+    @: LmP0Text payload_value
+    @: LmP0Text relation_table
+    @: char relation_name
+    size_t: relation_length
+    int: status
+    int: cell_status
+    int: wants_node
+
+    if: payload_node = 0 || column = 0
+        return: -1
+
+    table_payload: lm_trans_text_ref_new_cstr("")
+    column_payload: lm_trans_text_ref_new_cstr("")
+    key_payload: lm_trans_text_ref_new_cstr("")
+    payload_value: lm_trans_text_ref_new_cstr("")
+    relation_table: 0
+    relation_name: 0
+    status: -1
+    if: table_payload = 0 || column_payload = 0 || key_payload = 0 || payload_value = 0
+        lm_own_delete(relation_name, 0)
+        lm_trans_text_ref_destroy(@ relation_table)
+        lm_trans_text_ref_destroy(@ table_payload)
+        lm_trans_text_ref_destroy(@ column_payload)
+        lm_trans_text_ref_destroy(@ key_payload)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: status
+
+    wants_node: lm_trans_registry_column_has_descriptor(column, "node")
+
+    if: wants_node = 0
+        if: payload_node\kind != c.LM_P0_NODE_ATOM
+            c.fprintf(c.stderr, "trans registry error: non-atom table cell requires a node-typed column\n")
+            lm_own_delete(relation_name, 0)
+            lm_trans_text_ref_destroy(@ relation_table)
+            lm_trans_text_ref_destroy(@ table_payload)
+            lm_trans_text_ref_destroy(@ column_payload)
+            lm_trans_text_ref_destroy(@ key_payload)
+            lm_trans_text_ref_destroy(@ payload_value)
+            return: status
+        cell_status: lm_trans_registry_cell_value(payload_node\as\atom, column, payload_value)
+        if: cell_status = 0
+            status: 0
+            lm_own_delete(relation_name, 0)
+            lm_trans_text_ref_destroy(@ relation_table)
+            lm_trans_text_ref_destroy(@ table_payload)
+            lm_trans_text_ref_destroy(@ column_payload)
+            lm_trans_text_ref_destroy(@ key_payload)
+            lm_trans_text_ref_destroy(@ payload_value)
+            return: status
+        if: cell_status < 0
+            lm_own_delete(relation_name, 0)
+            lm_trans_text_ref_destroy(@ relation_table)
+            lm_trans_text_ref_destroy(@ table_payload)
+            lm_trans_text_ref_destroy(@ column_payload)
+            lm_trans_text_ref_destroy(@ key_payload)
+            lm_trans_text_ref_destroy(@ payload_value)
+            return: status
+    ---
+    else:
+        if: allow_node_cells = 0
+            c.fprintf(c.stderr, "trans registry error: node table cells are allowed only in inline L4 for now\n")
+            lm_own_delete(relation_name, 0)
+            lm_trans_text_ref_destroy(@ relation_table)
+            lm_trans_text_ref_destroy(@ table_payload)
+            lm_trans_text_ref_destroy(@ column_payload)
+            lm_trans_text_ref_destroy(@ key_payload)
+            lm_trans_text_ref_destroy(@ payload_value)
+            return: status
+        if: payload_node\kind = c.LM_P0_NODE_ATOM && lm_trans_registry_payload_is_null(payload_node\as\atom) != 0
+            status: 0
+            lm_own_delete(relation_name, 0)
+            lm_trans_text_ref_destroy(@ relation_table)
+            lm_trans_text_ref_destroy(@ table_payload)
+            lm_trans_text_ref_destroy(@ column_payload)
+            lm_trans_text_ref_destroy(@ key_payload)
+            lm_trans_text_ref_destroy(@ payload_value)
+            return: status
+
+    ---
+    if: lm_trans_registry_identifier_value(table_name, table_payload) = 0 || lm_trans_registry_identifier_value(key_atom, key_payload) = 0
+        lm_own_delete(relation_name, 0)
+        lm_trans_text_ref_destroy(@ relation_table)
+        lm_trans_text_ref_destroy(@ table_payload)
+        lm_trans_text_ref_destroy(@ column_payload)
+        lm_trans_text_ref_destroy(@ key_payload)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: status
+
+    if: split_by_column = 0
+        if: wants_node != 0
+            status: lm_trans_registry_push_row_node_values(table_payload, key_payload, payload_node)
+        else:
+            status: lm_trans_registry_push_row_values(table_payload, key_payload, payload_value)
+        lm_own_delete(relation_name, 0)
+        lm_trans_text_ref_destroy(@ relation_table)
+        lm_trans_text_ref_destroy(@ table_payload)
+        lm_trans_text_ref_destroy(@ column_payload)
+        lm_trans_text_ref_destroy(@ key_payload)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: status
+
+    ---
+    if: column\name = 0 || lm_trans_registry_identifier_value(column\name, column_payload) = 0
+        lm_own_delete(relation_name, 0)
+        lm_trans_text_ref_destroy(@ relation_table)
+        lm_trans_text_ref_destroy(@ table_payload)
+        lm_trans_text_ref_destroy(@ column_payload)
+        lm_trans_text_ref_destroy(@ key_payload)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: status
+
+    relation_length: table_payload\length + 1U + column_payload\length
+    relation_name: lm_own_new_zero(relation_length + 1U)
+    if: relation_name = 0
+        lm_own_delete(relation_name, 0)
+        lm_trans_text_ref_destroy(@ relation_table)
+        lm_trans_text_ref_destroy(@ table_payload)
+        lm_trans_text_ref_destroy(@ column_payload)
+        lm_trans_text_ref_destroy(@ key_payload)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: status
+    c.memcpy(relation_name, table_payload\data, table_payload\length)
+    relation_name[table_payload\length]: '.'
+    c.memcpy(relation_name + table_payload\length + 1U, column_payload\data, column_payload\length)
+    relation_name[relation_length]: '\0'
+
+    relation_table: lm_trans_text_from_cstr(relation_name)
+    if: relation_table = 0
+        lm_own_delete(relation_name, 0)
+        lm_trans_text_ref_destroy(@ relation_table)
+        lm_trans_text_ref_destroy(@ table_payload)
+        lm_trans_text_ref_destroy(@ column_payload)
+        lm_trans_text_ref_destroy(@ key_payload)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: status
+    if: wants_node != 0
+        status: lm_trans_registry_push_row_node_values(relation_table, key_payload, payload_node)
+    else:
+        status: lm_trans_registry_push_row_values(relation_table, key_payload, payload_value)
+
+    ---
+    lm_own_delete(relation_name, 0)
+    lm_trans_text_ref_destroy(@ relation_table)
+    lm_trans_text_ref_destroy(@ table_payload)
+    lm_trans_text_ref_destroy(@ column_payload)
+    lm_trans_text_ref_destroy(@ key_payload)
+    lm_trans_text_ref_destroy(@ payload_value)
+return: status
+
+fn: lm_trans_registry_note_class_kind (const: @(LmP0Text name); const: @(char kind)) int
+    @: LmP0Text table
+    @: LmP0Text payload
+    int: status
+
+    if: kind = 0
+        return: 0
+
+    table: lm_trans_text_from_cstr("class.kind")
+    payload: lm_trans_text_from_cstr(kind)
+    if: table = 0 || payload = 0
+        lm_trans_text_ref_destroy(@ table)
+        lm_trans_text_ref_destroy(@ payload)
+        return: 1
+    status: lm_trans_registry_push_row_atoms(table, name, payload) != 0
+    lm_trans_text_ref_destroy(@ table)
+    lm_trans_text_ref_destroy(@ payload)
+return: status
+
+fn: lm_trans_registry_note_class_present (const: @(LmP0Text name)) int
+    @: LmP0Text table
+    @: LmP0Text payload
+    @: LmP0Text class_text
+    int: status
+
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 1
+    if: lm_trans_registry_identifier_value(name, payload) = 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+
+    table: lm_trans_text_from_cstr("class.present")
+    class_text: lm_trans_text_from_cstr("class")
+    if: table = 0 || class_text = 0
+        lm_trans_text_ref_destroy(@ payload)
+        lm_trans_text_ref_destroy(@ table)
+        lm_trans_text_ref_destroy(@ class_text)
+        return: 1
+    status: lm_trans_registry_push_row_values(table, payload, class_text) != 0
+    lm_trans_text_ref_destroy(@ payload)
+    lm_trans_text_ref_destroy(@ table)
+    lm_trans_text_ref_destroy(@ class_text)
+return: status
+
+fn: lm_trans_registry_lookup_row_in_identifiers (const: @(LmTransIdentifierTable identifiers); const: @(LmP0Text key); const: @(char table)) @: LmTransRegistryFact
+    @: LmTransIdentifierCard card
+    @: LmTransIdentifierRelation relation
+
+    if: table = 0
+        return: 0
+
+    card: lm_trans_identifier_table_find_card(identifiers, key)
+    if: card = 0
+        return: 0
+    relation: lm_trans_identifier_card_find_relation(card, table)
+    if: relation = 0
+        return: 0
+return: lm_own_ptr_stack_top(relation\symbols)
+
+fn: lm_trans_registry_relation_stack_in_identifiers (const: @(LmTransIdentifierTable identifiers); const: @(LmP0Text key); const: @(char relation_name)) const: @: LmOwnPtrStack
+    @: LmTransIdentifierCard card
+    @: LmTransIdentifierRelation relation
+
+    if: relation_name = 0
+        return: 0
+
+    card: lm_trans_identifier_table_find_card(identifiers, key)
+    if: card = 0
+        return: 0
+
+    relation: lm_trans_identifier_card_find_relation(card, relation_name)
+    if: relation != 0
+        return: relation\symbols
+return: 0
+
+fn: lm_trans_registry_relation_stack (const: @(LmP0Text key); const: @(char relation_name)) const: @: LmOwnPtrStack
+return: lm_trans_registry_relation_stack_in_identifiers(c.lm_trans_registry->identifiers, key, relation_name)
+
+fn: lm_trans_namespace_registry_relation_stack (const: @(LmTransNamespace namespace_); const: @(LmP0Text key); const: @(char relation_name)) const: @: LmOwnPtrStack
+    const: @: LmOwnPtrStack stack
+
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0
+        stack: lm_trans_registry_relation_stack_in_identifiers(namespace_\registry_identifiers, key, relation_name)
+        if: stack != 0
+            return: stack
+
+    ---
+return: lm_trans_registry_relation_stack(key, relation_name)
+
+fn: lm_trans_registry_relation_stack_for_table (const: @(char table)) const: @: LmOwnPtrStack
+    const: @: char dot
+    @: LmP0Text table_name
+    const: @: char relation_name
+    const: @: LmOwnPtrStack stack
+
+    if: table = 0
+        return: 0
+
+    table_name: lm_trans_text_ref_new_cstr("")
+    if: table_name = 0
+        return: 0
+
+    dot: c.strchr(table, '.')
+    if: dot != 0 && dot != table && dot[1] != '\0'
+        table_name\data: table
+        table_name\length: (cast: size_t (dot - table))
+        relation_name: dot + 1
+    else:
+        table_name\data: table
+        table_name\length: c.strlen(table)
+        relation_name: "row"
+
+    ---
+    stack: lm_trans_registry_relation_stack(table_name, relation_name)
+    lm_trans_text_ref_destroy(@ table_name)
+return: stack
+
+fn: lm_trans_registry_relation_stack_latest_row (const: @(LmOwnPtrStack stack); const: @(LmP0Text key)) @: LmTransRegistryFact
+    size_t: i
+    @: LmTransRegistryFact row
+    @: LmP0Text key_payload
+
+    key_payload: lm_trans_text_ref_new_cstr("")
+    if: stack = 0 || key_payload = 0 || lm_trans_identifier_payload(key, key_payload) = 0
+        lm_trans_text_ref_destroy(@ key_payload)
+        return: 0
+
+    i: stack\count
+    while: i > 0U
+        i: i - 1U
+        row: lm_own_ptr_stack_at(stack, i)
+        if: row != 0 && row\key != 0 && lm_trans_text_equals(key_payload, row\key) != 0
+            lm_trans_text_ref_destroy(@ key_payload)
+            return: row
+
+    ---
+    lm_trans_text_ref_destroy(@ key_payload)
+return: 0
+
+fn: lm_trans_registry_lookup (const: @(LmP0Text key); const: @(char table)) const: @: char
+    @: LmTransRegistryFact row
+
+    row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, key, table)
+    if: row != 0
+        return: row\payload
+
+return: 0
+
+fn: lm_trans_registry_has (const: @(LmP0Text key); const: @(char table)) int
+return: lm_trans_registry_lookup(key, table) != 0
+
+fn: lm_trans_registry_table_has_rows (const: @(char table)) int
+    const: @: LmOwnPtrStack stack
+
+    if: table = 0
+        return: 0
+
+    stack: lm_trans_registry_relation_stack_for_table(table)
+return: stack != 0 && stack\count != 0U
+
+fn: lm_trans_registry_assert_selected_table_link (const: @(char source_table); const: @(LmP0Text key); const: @(char target_class_table); const: @(char target_table)) int
+    @: LmP0Text target_key
+    int: target_has_class_row
+
+    if: source_table = 0 || target_table = 0
+        return: 1
+
+    target_has_class_row: 1
+    target_key: 0
+    if: target_class_table != 0
+        target_key: lm_trans_text_from_cstr(target_table)
+        target_has_class_row: target_key != 0 && lm_trans_registry_has(target_key, target_class_table) != 0
+        lm_trans_text_ref_destroy(@ target_key)
+    if: target_has_class_row = 0
+        c.fprintf(c.stderr, "trans registry inconsistency: %s[\"%.*s\"] points to %s, but %s has no class row for that target\n", source_table, (cast: int key\length), key\data, target_table, target_class_table)
+        return: 1
+    if: lm_trans_registry_has(key, target_table) = 0
+        c.fprintf(c.stderr, "trans registry inconsistency: %s[\"%.*s\"] points to %s, but %s has no matching row for that key\n", source_table, (cast: int key\length), key\data, target_table, target_table)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_assert_payload_table_exists (const: @(char source_table); const: @(LmP0Text key); const: @(char target_table)) int
+    if: source_table = 0 || target_table = 0
+        return: 1
+    if: lm_trans_registry_table_has_rows(target_table) = 0
+        c.fprintf(c.stderr, "trans registry inconsistency: %s[\"%.*s\"] points to %s, but that table has no rows\n", source_table, (cast: int key\length), key\data, target_table)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_lookup_table_link_checked (const: @(LmP0Text key); const: @(char source_table); const: @(char target_class_table)) const: @: char
+    const: @: char target_table
+
+    target_table: lm_trans_registry_lookup(key, source_table)
+    if: target_table != 0 && lm_trans_registry_assert_selected_table_link(source_table, key, target_class_table, target_table) != 0
+        c.exit(2)
+return: target_table
+
+fn: lm_trans_namespace_registry_lookup (const: @(LmTransNamespace namespace_); const: @(LmP0Text key); const: @(char table)) const: @: char
+    @: LmTransRegistryFact row
+
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0
+        row: lm_trans_registry_lookup_row_in_identifiers(namespace_\registry_identifiers, key, table)
+        if: row != 0
+            return: row\payload
+
+    ---
+return: lm_trans_registry_lookup(key, table)
+
+fn: lm_trans_namespace_registry_lookup_table_link_checked (const: @(LmTransNamespace namespace_); const: @(LmP0Text key); const: @(char source_table); const: @(char target_class_table)) const: @: char
+    const: @: char target_table
+
+    target_table: lm_trans_namespace_registry_lookup(namespace_, key, source_table)
+    if: target_table != 0 && lm_trans_registry_assert_selected_table_link(source_table, key, target_class_table, target_table) != 0
+        c.exit(2)
+return: target_table
+
+fn: lm_trans_array_head_find_close (const: @(LmP0Text text); size_t: open_index; @: size_t out_close_index) int
+    size_t: i
+    size_t: depth
+    char: quote
+
+    if: text = 0 || out_close_index = 0 || open_index >= text\length || text\data[open_index] != '['
+        return: 0
+
+    i: open_index
+    depth: 0U
+    while: i < text\length
+        if: text\data[i] = '"' || text\data[i] = '`'
+            quote: text\data[i]
+            i: i + 1U
+            while: i < text\length
+                if: quote = '"' && text\data[i] = '\\'
+                    i: i + 2U
+                    continue
+                if: quote = '`' && text\data[i] = '`' && i + 1U < text\length && text\data[i + 1U] = '`'
+                    i: i + 2U
+                    continue
+                if: text\data[i] = quote
+                    i: i + 1U
+                    break
+                i: i + 1U
+            continue
+        if: text\data[i] = '\''
+            i: i + 1U
+            while: i < text\length
+                if: text\data[i] = '\\'
+                    i: i + 2U
+                    continue
+                if: text\data[i] = '\''
+                    i: i + 1U
+                    break
+                i: i + 1U
+            continue
+        if: text\data[i] = '['
+            depth: depth + 1U
+        else:
+            if: text\data[i] = ']'
+                depth: depth - 1U
+                if: depth = 0U
+                    out_close_index[0]: i
+                    return: 1
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_array_head_next_dimension (const: @(LmP0Text head); @: size_t index; @: LmP0Text out_dimension) int
+    size_t: close_index
+
+    if: head = 0 || index = 0 || out_dimension = 0 || index[0] >= head\length || head\data[index[0]] != '['
+        return: 0
+    if: lm_trans_array_head_find_close(head, index[0], @ close_index) = 0
+        return: 0
+
+    out_dimension\data: head\data + index[0] + 1U
+    out_dimension\length: close_index - index[0] - 1U
+    index[0]: close_index + 1U
+return: 1
+
+fn: lm_trans_text_is_array_receiver_head (const: @(LmP0Text head)) int
+    size_t: index
+    size_t: count
+    @: LmP0Text dimension
+
+    index: 0U
+    count: 0U
+    if: head = 0
+        return: 0
+    dimension: lm_trans_text_ref_new_cstr("")
+    if: dimension = 0
+        return: 0
+    while: index < head\length
+        if: lm_trans_array_head_next_dimension(head, @ index, dimension) = 0
+            lm_trans_text_ref_destroy(@ dimension)
+            return: 0
+        count: count + 1U
+
+    lm_trans_text_ref_destroy(@ dimension)
+return: count > 0U
