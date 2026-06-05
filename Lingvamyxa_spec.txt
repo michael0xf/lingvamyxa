@@ -713,11 +713,27 @@ This document does not specify the L1 target language, physical calling conventi
 
 L2 is the low-level unsafe Lingvamyxa level. It is the low-level systems layer. It may expose memory, typed addresses, handles, layout-based storage and explicit low-level operations. Selected low-level L2 Thread primitives may be introduced later for operations over shared memory arrays or other implementation-facing data, but ordinary interactive, concurrent, UI and service programming belongs to the L5 Thread model.
 
-L2 is compiled. It is not executed as a casual script.
+L2 is compiled. It is not interpreted as ordinary Lingvamyxa runtime code and
+is not executed as a casual script. An implementation may simulate or inspect L2
+for tooling, diagnostics or verification, but the source-semantic contract of
+L2 is lowering/compilation against an explicit low-level memory/layout model.
 
 1.4. L3
 
 L3 is the algorithmic and computational Lingvamyxa level. It supports safe top-level actions, computations and calls. L3 code may be interpreted by the core runtime or compiled through the lowering pipeline.
+
+L3 is not a monotonic superset of L2. It is smaller in the low-level direction:
+ordinary L3 does not expose L2 raw storage/address/parser operators such as
+address-depth declarations, raw loads, address-producing forms or layout-storage
+allocation unless a profile explicitly imports such unsafe capabilities. L2 may
+also use the algorithmic/control receivers listed in section 19, but L2 keeps
+the additional low-level operator surface described in section 20.
+
+Ordinary L3 has no raw pointer/address semantics. Arrays, text, objects and
+other aggregates are Structures or handles/references with metadata. Operations
+such as indexing must validate their semantic preconditions, including bounds
+checks for arrays and array-like containers, unless the source explicitly enters
+an unsafe lower-level profile.
 
 1.5. L4
 
@@ -2582,7 +2598,11 @@ Named nested rows may be written with nested `[]` frames:
 . . 3 4
 end: matrix
 
-The close target is `matrix`, the visible entity name introduced by the frame. The close form is not `end: [] matrix`.
+The canonical close target is `matrix`, the visible entity name introduced by
+the frame. `end: []` is also a valid receiver/head close for the same frame when
+the active receiver exposes `[]` as its head key. The close form is not
+`end: [] matrix`: `end:` consumes one close target, not the whole opening
+signature.
 
 4.6. `end:` Close Receiver and Nameless Close
 
@@ -2602,11 +2622,16 @@ not:
 
     end: [] matrix
 
-The close target is not blindly the receiver/head spelling. A receiver defines
+The close target is not only the receiver/head spelling. A receiver defines
 which visible target it introduces. The privileged spelling is the ordinary
 argument name `name`: if a receiver consumes a valid `name` argument, that
-argument value becomes the visible close target. This is why `[]: matrix` closes
-as `end: matrix`, and why `fn: square ...` closes as `end: square`. If an
+argument value becomes the canonical visible close target. This is why `[]:
+matrix` canonically closes as `end: matrix`, and why `fn: square ...`
+canonically closes as `end: square`. The receiver/head key remains an admitted
+alternative close target even when a valid `name` argument exists: `fn: square
+...` may also close as `end: fn`, and a table frame named `Users` may also close
+as `end: table`. This is useful when a visible name collides with another head
+spelling in surrounding source and the receiver name is the clearer close. If an
 opening receiver has no valid `name` argument, the general named-close default
 is its own head spelling, so `if: ...` closes as `end: if` and `Label: ...`
 closes as `end: Label`. A receiver may explicitly define a nameless/anonymous
@@ -3216,11 +3241,12 @@ matrix[0]
 
 may produce the first row as a rank-1 array view.
 
-Bounds checking is profile-dependent.
+Bounds checking is level/profile dependent.
 
-L2 may allow unchecked raw pointer indexing.
-L3 and higher should use checked indexing unless the operation is explicitly
-marked unsafe.
+L2 may allow unchecked raw pointer indexing under its explicit low-level memory
+model. Ordinary L3 and higher must use checked indexing for arrays and
+array-like containers unless the source explicitly enters an unsafe lower-level
+profile.
 
 6.5.2. Views and Copies
 
@@ -4788,22 +4814,24 @@ The source-level closing form is:
 
 The bare form `end` and the old-looking form `end <target>` are not valid Lingvamyxa source syntax.
 
-`end:` validates `<target>` against a visible open close target: a frame/entity
-name introduced by the active receiver, a labelled block or another
-receiver-defined visible target. The target is not necessarily the receiver/head
-spelling. The privileged source spelling is the ordinary argument name `name`:
-when a receiver consumes a valid `name` argument, that value is the close target.
-If the receiver has no valid `name` argument, the default close target is the
-receiver's own head spelling. Multi-word target names may be written as exact
-quoted identifiers or as string close targets, depending on what the receiver
-accepted into its close-name table.
+`end:` validates `<target>` against the admitted close targets of a visible open
+frame/entity/label block. An opening frame admits at least its receiver/head key
+as a close target unless the receiver explicitly defines an anonymous/nameless
+close policy. A receiver may also expose a more specific visible name. The
+privileged source spelling for such a visible name is the ordinary argument name
+`name`: when a receiver consumes a valid `name` argument, that value is the
+canonical close target. The receiver/head key remains a valid alternative close
+target even when such a canonical name exists. Multi-word target names may be
+written as exact quoted identifiers or as string close targets, depending on
+what the receiver accepted into its close-name table.
 
 The `<target>` operand of `end:` is outside the ordinary namespace expression
 rules. It is a literal close target consumed by the structural validation layer,
 not a variable, function call, computed value or user-level receiver argument.
 Therefore `end: someName` never means "evaluate `someName` and close whatever it
-returns"; it means "close the currently visible target whose source name is
-exactly `someName`". In this sense `end:` has broader structural authority than
+returns"; it means "close the currently visible target whose admitted source
+close target is exactly `someName`". In this sense `end:` has broader
+structural authority than
 ordinary function receivers: it may cut an admitted open tail, while ordinary
 calls can only consume and produce runtime values inside already-open structure.
 
@@ -4815,8 +4843,10 @@ validation layer must reject it unless an explicit profile defines another
 non-runtime meaning for that receiver.
 
 For `fn`, the canonical explicit close target is the function name consumed by
-the `fn` receiver. Therefore `fn: myFunc ...` closes as `end: myFunc`, and an
-expanded form with `name: myFunc` also closes as `end: myFunc`.
+the `fn` receiver. Therefore `fn: myFunc ...` canonically closes as `end:
+myFunc`, and an expanded form with `name: myFunc` also canonically closes as
+`end: myFunc`. The receiver/head alternative is also admitted, so the same
+function may close as `end: fn` when that is clearer in context.
 
 The closing line has its own source level. It may close several currently open implicit vertical levels at once if the named target is visible at or above that level. This allows a long tail of nested blocks to be cut with one named close. A parser must reject `end: <target>` if the target is ambiguous, not visible or not valid for closing from that position.
 
@@ -4835,7 +4865,8 @@ fn: myFunc (int(i)) (int(r))
     return: i
 end: myFunc
 
-Here `fn` exposes the function name `myFunc` as the close target.
+Here `fn` exposes the function name `myFunc` as the canonical close target.
+`end: fn` would also be a valid close of this frame by receiver/head key.
 
 fn:
     name: myFunc
@@ -4849,7 +4880,8 @@ fn:
         return: i
 end: myFunc
 
-Here `fn` exposes the explicit `name: myFunc` field as the close target.
+Here `fn` exposes the explicit `name: myFunc` field as the canonical close
+target. `end: fn` remains valid as the receiver/head close target.
 
 fn:
     args:
@@ -4867,8 +4899,8 @@ This is also valid because close-target validation uses the normalized valid
 `name` argument, not the physical position of the `name:` field.
 
 The same rule applies to any receiver that consumes a valid `name` argument as
-its visible name. In this example the receiver/head is `hello`, but the visible
-close target is `world`:
+its visible name. In this example the receiver/head is `hello`, while the
+canonical visible close target is `world`:
 
 hello: name: world
 . "!"
@@ -4898,19 +4930,22 @@ hello: name: world  # world #1
 . end: world  # closes world #2
 end: world    # closes world #1
 
-All core examples above close by the receiver-exposed visible target. For
-receivers with a valid `name` argument, that argument value is the close target.
-For receivers without a valid `name` argument, the ordinary default is the
-receiver/head spelling. A receiver that wants no named close target must define
-that explicitly.
+All core examples above close by one of the receiver-admitted targets. For
+receivers with a valid `name` argument, that argument value is the canonical
+close target, and the receiver/head spelling remains an admitted alternative.
+For receivers without a valid `name` argument, the ordinary admitted target is
+the receiver/head spelling. A receiver that wants no named close target must
+define that explicitly.
 
 The argument name `name` is privileged for readable structural closing, not for
 ordinary execution semantics. Tools may highlight it specially, the normalized
 Structure exposes its value as the introduced visible close name, and
-`end: <target>` validation uses it as the only valid named close target for that
-opened Structure. If the `name` argument value fails the close-name table check,
-the receiver behaves for named close as though no such argument was supplied and
-therefore falls back to the head target.
+`end: <target>` validation uses it as the canonical named close target for that
+opened Structure. The receiver/head key remains admitted as a structural close
+target unless the receiver explicitly disables that policy. If the `name`
+argument value fails the close-name table check, the receiver behaves for named
+close as though no such argument was supplied and therefore admits only the
+receiver/head target.
 
 A translator may implement vertical closure by internal closing handlers. Those handlers are implementation mechanisms. Source semantics only requires that the correct Structure is closed and that invalid closing tokens are rejected according to the active closing policy.
 
@@ -6143,10 +6178,10 @@ Tail-cutter transitions:
     semantic processing.
 
     `end: name` is a visible structural close form. Its argument is not
-    evaluated as a runtime expression. It is compared with the visible close
-    target supplied by the receiver being closed: normally the privileged
-    `name` argument of that receiver, or the receiver head when no such valid
-    close name exists.
+    evaluated as a runtime expression. It is compared with the admitted close
+    targets supplied by the receiver being closed: normally the privileged
+    `name` argument as the canonical close target, and the receiver/head key
+    as an admitted structural alternative.
 
     `return`, `return: value`, `until` and dash-fence delimiter forms are
     members of the same tail-cutter family, but each is admitted only in the
@@ -6652,6 +6687,7 @@ Semantic outline:
     operator                   receiver that registers receivers/operators
     if                         registered receiver, semantics depend on level
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
+    merge                      registered structural receiver; ordered merge of Structure-producing parts
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
     ()                         head receiver spelling for Structure-like variable/aggregate forms
@@ -6767,35 +6803,53 @@ L3+ indexing lowers to checked access through array metadata such as `len`.
 The language does not define C slot counting, hidden runtime addresses, hidden output addresses or C storage ownership rules. Those are translator/runtime design choices.
 ---ANSI C---
 
-19. L3 Control Operators
+19. L2 & L3 Operators
 
 19.0. Scope of This Section
 
-This section defines the normative L3 control-flow receiver set for executable bodies.
+This section defines the shared L2/L3 source-level receiver/operator set for
+executable and descriptor bodies. Most entries are control-flow receivers;
+`merge` is a structural receiver. A minimal bootstrap L2 profile may expose only
+the subset listed in section 20.5, while richer L2 profiles and ordinary L3
+profiles may admit the full set or profile-specific extensions.
 
-The operators in this section are source-level control receivers. They are not raw low-level jumps. A translator may lower them to branches, labels, hidden control-result Structures, cleanup-stack operations or other implementation artifacts.
+This shared list does not mean that L3 contains all L2 operators. L2 has an
+additional unsafe low-level operator/parser-form surface in section 20. L3 is
+smaller than L2 in that direction unless an explicit profile imports selected
+L2 capabilities.
 
-Unless stated otherwise, these operators are L3 operators. Some of them may also be exposed in L2 by an implementation profile, but this section specifies the L3 semantics.
+The control operators in this section are not raw low-level jumps. A translator
+may lower them to branches, labels, hidden control-result Structures,
+cleanup-stack operations or other implementation artifacts. Structural
+operators such as `merge` may lower to compile-time Structure construction,
+descriptor normalization or runtime Structure construction depending on the
+active profile.
+
+Unless stated otherwise, these operators have the same source semantics in L2
+and L3 when the active profile admits them. Differences belong to profile
+constraints, available value types, memory model and lowering policy, not to a
+separate parser syntax.
 
 Operator summary:
 
-    0.  if / then / else                                  L3
-    1.  match / default-pattern receivers                            L3
-    2.  while                                             L3
-    3.  until                                             L3
-    4.  for                                               L3
-    5.  each                                              L3
-    6.  return                                            L3 executable body; terminal executable close at definition level
-    7.  break                                             L3 loop frame
-    8.  continue                                          L3 loop frame
-    9.  finally                                           L3 executable/scope frame cleanup
-    10. guard / fail / throws / failure labels / handlers  L3 recoverable failure flow
-    11. retry / retryable                                 L3 retry frame
-    12. assert                                            L3 diagnostic failure flow
-    12a. log / error                                      L3 observation receivers
-    13. redo                                              L3 loop frame
-    14. yield                                             L3 iterator-profile fn
-    15. labelled break / labelled continue                L3 labelled loop frame
+    0.  if / then / else                                  L2/L3
+    1.  match / default-pattern receivers                 L2/L3
+    2.  while                                             L2/L3
+    3.  until                                             L2/L3
+    4.  for                                               L2/L3
+    5.  each                                              L2/L3
+    6.  return                                            L2/L3 executable body; terminal executable close at definition level
+    7.  break                                             L2/L3 loop frame
+    8.  continue                                          L2/L3 loop frame
+    9.  finally                                           L2/L3 executable/scope frame cleanup
+    10. guard / fail / throws / failure labels / handlers L2/L3 recoverable failure flow
+    11. retry / retryable                                 L2/L3 retry frame
+    12. assert                                            L2/L3 diagnostic failure flow
+    12a. log / error                                      L2/L3 observation receivers
+    13. redo                                              L2/L3 loop frame
+    14. yield                                             L2/L3 iterator-profile fn
+    15. labelled break / labelled continue                L2/L3 labelled loop frame
+    16. merge                                             L2/L3 structural merge receiver
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
@@ -7121,7 +7175,7 @@ while: running
     step
 
 
-`break` is valid only inside a loop frame unless a labelled form is used as described in section 19.15.
+`break` is valid only inside a loop frame unless a labelled form is used as described in section 19.16.
 
 Before control leaves the exited loop body scopes, all affected `finally` cleanups are executed in reverse registration order.
 
@@ -7738,6 +7792,68 @@ It is a compile-time error for `continue: labelName` to target a non-loop frame.
 The exact grammar rule for attaching labels to frames is not specified beyond the form `labelName:` before a frame. A final grammar must define whether labels can attach to retryable frames, blocks, handlers, iterator frames and arbitrary Structures.
 ?
 
+19.17. `merge`
+
+`merge` is an L2/L3 structural receiver/operator. It is not parser syntax, not a
+preprocessor include and not runtime mutation of its source operands. The parser
+builds an ordinary `merge:` Frame; the active receiver/operator namespace gives
+that Frame structural-merge semantics.
+
+Semantic form:
+
+    merge(part0, part1, ..., partN)
+
+Each part is consumed in a Structure-producing context. A part may be a visible
+Structure/layout/class descriptor, a bounded or vertical Structure literal, or a
+call/receiver result whose declared result is compatible with Structure. If a
+named Frame in the argument stream is not resolved as a callable receiver in the
+active namespace, a tolerant structural profile may keep that Frame as an
+ordinary named field of the merge result.
+
+The default merge is ordered and append-only:
+
+    1. Normalize each part to a field sequence.
+    2. Append the field sequences from left to right.
+    3. Preserve duplicate field names and duplicate receiver heads.
+    4. Do not silently override, delete, rename or deduplicate fields.
+
+Conflict interpretation is left to the consumer of the merged Structure. A
+layout receiver may reject duplicate field names, a table receiver may accept
+repeated rows, and another profile may define first-wins, last-wins or explicit
+override rules. Those policies are receiver semantics above `merge`; the core
+`merge` result is the ordered field stream.
+
+Example:
+
+BaseFields:
+    int: id
+    @: char name
+end: BaseFields
+
+AuditFields:
+    u64: createdAt
+    u64: updatedAt
+end: AuditFields
+
+merge: BaseFields AuditFields
+    u32: flags
+end: merge
+
+Conceptual result:
+
+    (
+        int: id
+        @: char name
+        u64: createdAt
+        u64: updatedAt
+        u32: flags
+    )
+
+The vertical body of a `merge:` Frame is part of the same argument Structure as
+its short tail. Therefore a trailing body naturally contributes trailing merge
+parts. A receiver that uses `merge` to build a class/layout/import field list may
+evaluate the `merge` result before validating the final descriptor.
+
 20. L2 Primitive, Address and Parser Operators
 
 20.0. Scope of This Section
@@ -7752,7 +7868,10 @@ values are storage/layout objects and are normally reached by address. This
 keeps `u32: x` simple while preventing an embedded record from silently becoming
 a copyable whole-Structure expression.
 
-This section is deliberately smaller than the L3 control set in section 19. L2 is low-level and unsafe, but it does not need every L3 convenience operator by default.
+This section is the L2-specific low-level operator/parser-form surface. It is
+not part of ordinary L3. In this sense L3 is smaller than L2: L3 keeps the safe
+algorithmic/control surface admitted by its profile, but does not inherit raw
+storage, address, layout-storage or parser forms from L2 by default.
 
 20.1. Pointer and Field Syntax Exclusions
 
@@ -8446,7 +8565,8 @@ runtime/translator cleanup rules.
 
 20.6. Outside the Minimal L2 Set
 
-The following section 19 operators are not part of the minimal L2 control set unless an L2 profile explicitly enables or redefines them:
+The following section 19 operators are not part of the minimal L2 control set
+unless an L2 profile explicitly enables or redefines them:
 
     match / default-pattern receivers
     each
@@ -8458,7 +8578,13 @@ The following section 19 operators are not part of the minimal L2 control set un
     yield
     labelled break / labelled continue
 
-They may still exist in L3 or higher levels, or in a richer L2 profile.
+They may still exist in ordinary L3 profiles, higher levels or a richer L2
+profile.
+
+This subsection describes the first/minimal L2 bootstrap control subset, not a
+level-order rule where L3 is wider than L2. L2 remains the wider low-level level
+because it also owns the unsafe forms in sections 20.1 through 20.4; ordinary L3
+does not expose those forms by default.
 
 21. Structural Operation on a Local Copy of Namespace-Structure
 

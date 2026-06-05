@@ -320,7 +320,7 @@ L2:
         if: lm_l4_trailer_single_atom(frame\trailer, @ actual) = 0
             lm_l4_error(loader, "end trailer expects exactly one target name")
             return: 1
-        if: lm_l4_identifier_same(actual, expected_name) = 0
+        if: lm_l4_identifier_same(actual, expected_name) = 0 && lm_l4_identifier_same(actual, lm_l4_frame_head(frame)) = 0
             lm_l4_error(loader, "end trailer target does not match head/name")
             return: 1
 

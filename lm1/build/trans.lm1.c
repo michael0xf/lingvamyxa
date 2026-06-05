@@ -922,7 +922,7 @@ static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Fram
         lm_l4_error(loader, "end trailer expects exactly one target name");
         return 1;
     }
-    if (lm_l4_identifier_same(actual, expected_name) == 0) {
+    if (lm_l4_identifier_same(actual, expected_name) == 0 && lm_l4_identifier_same(actual, lm_l4_frame_head(frame)) == 0) {
         lm_l4_error(loader, "end trailer target does not match head/name");
         return 1;
     }
@@ -10601,7 +10601,8 @@ static int lm_trans_frame_close_target(const LmP0Frame *frame, LmP0Text *out_tar
 
 static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
     LmP0Text *actual;
-    LmP0Text *expected;
+    LmP0Text *expected_name;
+    LmP0Text *expected_head;
     int status;
 
     if (frame == 0 || frame->trailer == 0) {
@@ -10613,10 +10614,12 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
     }
 
     actual = lm_trans_statement_text_new();
-    expected = lm_trans_statement_text_new();
-    if (actual == 0 || expected == 0) {
+    expected_name = lm_trans_statement_text_new();
+    expected_head = lm_trans_statement_text_new();
+    if (actual == 0 || expected_name == 0 || expected_head == 0) {
         lm_trans_text_ref_destroy(&actual);
-        lm_trans_text_ref_destroy(&expected);
+        lm_trans_text_ref_destroy(&expected_name);
+        lm_trans_text_ref_destroy(&expected_head);
         return 1;
     }
     status = 0;
@@ -10627,7 +10630,7 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
         goto cleanup;
     }
 
-    if (!lm_trans_frame_close_target(frame, expected)) {
+    if (!lm_trans_frame_close_target(frame, expected_name)) {
         fprintf(
             stderr,
             "trans error: head \"%.*s\" does not expose a named close target\n",
@@ -10638,14 +10641,30 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
         goto cleanup;
     }
 
-    if (!lm_trans_identifier_same(actual, expected)) {
+    if (!lm_trans_frame_receiver_key(frame, expected_head)) {
         fprintf(
             stderr,
-            "trans error: end target \"%.*s\" does not match close target \"%.*s\"\n",
+            "trans error: head \"%.*s\" does not expose a receiver close target\n",
+            (int)frame->head->length,
+            frame->head->data
+        );
+        status = 1;
+        goto cleanup;
+    }
+
+    if (
+        !lm_trans_identifier_same(actual, expected_name) &&
+        !lm_trans_identifier_same(actual, expected_head)
+    ) {
+        fprintf(
+            stderr,
+            "trans error: end target \"%.*s\" does not match close target \"%.*s\" or receiver head \"%.*s\"\n",
             (int)actual->length,
             actual->data,
-            (int)expected->length,
-            expected->data
+            (int)expected_name->length,
+            expected_name->data,
+            (int)expected_head->length,
+            expected_head->data
         );
         status = 1;
         goto cleanup;
@@ -10653,7 +10672,8 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame) {
 
 cleanup:
     lm_trans_text_ref_destroy(&actual);
-    lm_trans_text_ref_destroy(&expected);
+    lm_trans_text_ref_destroy(&expected_name);
+    lm_trans_text_ref_destroy(&expected_head);
     return status;
 }
 
@@ -15276,6 +15296,16 @@ static int lm_trans_emit_l2_os_frame(
     const LmP0Frame *frame,
     LmTransNamespace *namespace_
 );
+static int lm_trans_emit_l2_define_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+);
+static int lm_trans_emit_l2_ifndef_default_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+);
 static int lm_trans_emit_l2_ifdef_frame(
     FILE *output,
     const LmP0Frame *frame,
@@ -15400,6 +15430,30 @@ static int lm_trans_statement_emit_os_prelude(
     (void)stack;
     (void)indent;
     return lm_trans_emit_l2_os_frame(lm_trans_prelude_file(file), frame, namespace_);
+}
+
+static int lm_trans_statement_emit_define_prelude(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)stack;
+    (void)indent;
+    return lm_trans_emit_l2_define_frame(lm_trans_prelude_file(file), frame, namespace_);
+}
+
+static int lm_trans_statement_emit_ifndef_default_prelude(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)stack;
+    (void)indent;
+    return lm_trans_emit_l2_ifndef_default_frame(lm_trans_prelude_file(file), frame, namespace_);
 }
 
 static int lm_trans_statement_emit_ifdef_prelude(
@@ -17488,6 +17542,8 @@ static int lm_trans_pointer_bindings_init(void) {
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", lm_trans_statement_emit_synchronized) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", lm_trans_statement_emit_loop_jump) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", lm_trans_statement_emit_include_prelude) != 0 ||
+        lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", lm_trans_statement_emit_define_prelude) != 0 ||
+        lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", lm_trans_statement_emit_ifndef_default_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", lm_trans_statement_emit_os_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", lm_trans_statement_emit_ifdef_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", lm_trans_statement_emit_guard_prelude) != 0 ||
@@ -18613,6 +18669,16 @@ static int lm_trans_emit_l2_os_frame(
     const LmP0Frame *frame,
     LmTransNamespace *namespace_
 );
+static int lm_trans_emit_l2_define_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+);
+static int lm_trans_emit_l2_ifndef_default_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+);
 static int lm_trans_emit_l2_ifdef_frame(
     FILE *output,
     const LmP0Frame *frame,
@@ -18646,6 +18712,7 @@ static int lm_trans_emit_function(
     const LmTransFunctionHeader *function,
     LmTransNamespace *namespace_
 );
+static const LmP0Field *lm_trans_first_active_field(const LmP0Structure *structure);
 
 static void lm_trans_top_level_item_destroy(LmTransTopLevelItem *item) {
     if (item != 0) {
@@ -18866,6 +18933,22 @@ static int lm_trans_top_level_emit_atom_include(
     return lm_trans_emit_registry_include_table(file, namespace_);
 }
 
+static int lm_trans_top_level_emit_define(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    return lm_trans_emit_l2_define_frame(file, item != 0 ? item->frame : 0, namespace_);
+}
+
+static int lm_trans_top_level_emit_ifndef_default(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    return lm_trans_emit_l2_ifndef_default_frame(file, item != 0 ? item->frame : 0, namespace_);
+}
+
 static int lm_trans_top_level_emit_atom_os(
     FILE *file,
     LmTransNamespace *namespace_,
@@ -19079,6 +19162,16 @@ static int lm_trans_top_level_statement_binding(
 
     if (receiver == lm_trans_statement_emit_include_prelude) {
         out->emit_before_functions = lm_trans_top_level_emit_include;
+        out->emits_top_level = 1;
+        return 1;
+    }
+    if (receiver == lm_trans_statement_emit_define_prelude) {
+        out->emit_before_functions = lm_trans_top_level_emit_define;
+        out->emits_top_level = 1;
+        return 1;
+    }
+    if (receiver == lm_trans_statement_emit_ifndef_default_prelude) {
+        out->emit_before_functions = lm_trans_top_level_emit_ifndef_default;
         out->emits_top_level = 1;
         return 1;
     }
@@ -21429,6 +21522,122 @@ static int lm_trans_ifdef_condition_payload(
         return 1;
     }
     return 0;
+}
+
+static int lm_trans_emit_preprocessor_atom_token(
+    FILE *output,
+    const LmP0Node *node,
+    const char *receiver_name
+) {
+    LmP0Text payload;
+
+    if (node == 0 || node->kind != LM_P0_NODE_ATOM) {
+        fprintf(
+            stderr,
+            "trans preprocessor error: %s receiver expects atom tokens\n",
+            receiver_name != 0 ? receiver_name : "preprocessor"
+        );
+        return 1;
+    }
+    if (!lm_trans_identifier_payload(node->as->atom, &payload)) {
+        fprintf(
+            stderr,
+            "trans preprocessor error: %s receiver cannot read atom token\n",
+            receiver_name != 0 ? receiver_name : "preprocessor"
+        );
+        return 1;
+    }
+    return lm_trans_write_text(output, &payload);
+}
+
+static int lm_trans_emit_preprocessor_define_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    int ifndef_default,
+    const char *receiver_name
+) {
+    const LmP0Field *field;
+    LmP0Text name;
+
+    if (output == 0 || frame == 0 || frame->body == 0) {
+        return 1;
+    }
+
+    field = lm_trans_first_active_field(frame->body);
+    if (field == 0 || field->value == 0 || field->value->kind != LM_P0_NODE_ATOM) {
+        fprintf(
+            stderr,
+            "trans preprocessor error: %s receiver expects macro name as first atom\n",
+            receiver_name != 0 ? receiver_name : "define"
+        );
+        return 1;
+    }
+    if (!lm_trans_registry_identifier_value(field->value->as->atom, &name) || name.length == 0U) {
+        fprintf(
+            stderr,
+            "trans preprocessor error: %s receiver expects macro name as identifier atom\n",
+            receiver_name != 0 ? receiver_name : "define"
+        );
+        return 1;
+    }
+
+    if (ifndef_default) {
+        if (
+            lm_trans_put(output, "#ifndef ") != 0 ||
+            lm_trans_write_text(output, &name) != 0 ||
+            lm_trans_put(output, "\n") != 0
+        ) {
+            return 1;
+        }
+    }
+
+    if (
+        lm_trans_put(output, "#define ") != 0 ||
+        lm_trans_write_text(output, &name) != 0
+    ) {
+        return 1;
+    }
+
+    field = field->next;
+    while (field != 0) {
+        if (!lm_trans_node_is_ignored(field->value)) {
+            if (
+                lm_trans_put(output, " ") != 0 ||
+                lm_trans_emit_preprocessor_atom_token(output, field->value, receiver_name) != 0
+            ) {
+                return 1;
+            }
+        }
+        field = field->next;
+    }
+
+    if (lm_trans_put(output, "\n") != 0) {
+        return 1;
+    }
+
+    if (ifndef_default && lm_trans_put(output, "#endif\n") != 0) {
+        return 1;
+    }
+
+    return lm_trans_validate_end_trailer(frame);
+}
+
+static int lm_trans_emit_l2_define_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+) {
+    (void)namespace_;
+    return lm_trans_emit_preprocessor_define_frame(output, frame, 0, "define");
+}
+
+static int lm_trans_emit_l2_ifndef_default_frame(
+    FILE *output,
+    const LmP0Frame *frame,
+    LmTransNamespace *namespace_
+) {
+    (void)namespace_;
+    return lm_trans_emit_preprocessor_define_frame(output, frame, 1, "ifndef-default");
 }
 
 static int lm_trans_os_branch_looks_l2(const LmP0Structure *body) {

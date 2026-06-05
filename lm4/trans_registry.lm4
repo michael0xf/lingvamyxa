@@ -139,6 +139,8 @@ table:
              continue      `receiver.statement`
              synchronized  `receiver.statement`
              include       `receiver.statement`
+             define        `receiver.statement`
+             `ifndef-default` `receiver.statement`
              import        `receiver.statement`
              merge         `receiver.statement`
              os            `receiver.statement`
@@ -187,6 +189,8 @@ table:
              continue      lm_trans_statement_emit_loop_jump
              synchronized  lm_trans_statement_emit_synchronized
              include       lm_trans_statement_emit_include_prelude
+             define        lm_trans_statement_emit_define_prelude
+             `ifndef-default` lm_trans_statement_emit_ifndef_default_prelude
              import        lm_trans_statement_emit_import
              merge         lm_trans_statement_emit_merge_named_structure
              os            lm_trans_statement_emit_os_prelude
