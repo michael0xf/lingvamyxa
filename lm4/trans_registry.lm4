@@ -140,6 +140,7 @@ table:
              synchronized  `receiver.statement`
              include       `receiver.statement`
              import        `receiver.statement`
+             merge         `receiver.statement`
              os            `receiver.statement`
              ifdef         `receiver.statement`
              guard         `receiver.statement`
@@ -187,6 +188,7 @@ table:
              synchronized  lm_trans_statement_emit_synchronized
              include       lm_trans_statement_emit_include_prelude
              import        lm_trans_statement_emit_import
+             merge         lm_trans_statement_emit_merge_named_structure
              os            lm_trans_statement_emit_os_prelude
              ifdef         lm_trans_statement_emit_ifdef_prelude
              guard         lm_trans_statement_emit_guard_prelude

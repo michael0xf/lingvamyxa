@@ -3570,6 +3570,82 @@ static int lm_trans_call_args_layout(
     return lm_trans_expr_segments_parse_fields(segments, field);
 }
 
+static int lm_trans_call_frame_result_type(
+    const LmP0Frame *frame,
+    const LmTransNamespace *namespace_,
+    LmTransL4CallableType *out
+) {
+    LmTransCallLowering *call;
+    LmOwnPtrStack *segments;
+    int status;
+
+    if (frame == 0 || out == 0) {
+        return 0;
+    }
+
+    call = lm_trans_expr_call_lowering_new();
+    segments = lm_trans_expr_segment_stack_new();
+    if (call == 0 || segments == 0) {
+        lm_trans_expr_call_lowering_delete(call);
+        lm_trans_expr_segment_stack_delete(&segments);
+        return -1;
+    }
+
+    status = lm_trans_lower_call(*frame->head, namespace_, "function", call);
+    if (status != 0) {
+        lm_trans_expr_call_lowering_delete(call);
+        lm_trans_expr_segment_stack_delete(&segments);
+        return -1;
+    }
+    if (call->signature == 0) {
+        fprintf(stderr, "trans L2 type error: C-surface call has no Lingvamyxa result type\n");
+        lm_trans_expr_call_lowering_delete(call);
+        lm_trans_expr_segment_stack_delete(&segments);
+        return -1;
+    }
+    if (lm_trans_call_args_layout(segments, frame->body, call->signature) != 0) {
+        lm_trans_expr_call_lowering_delete(call);
+        lm_trans_expr_segment_stack_delete(&segments);
+        return -1;
+    }
+
+    status = lm_trans_callable_return_type_from_node(call->signature->callable_return_node, out) ? 1 : 0;
+    lm_trans_expr_call_lowering_delete(call);
+    lm_trans_expr_segment_stack_delete(&segments);
+    return status;
+}
+
+static int lm_trans_node_result_type(
+    const LmP0Node *node,
+    const LmTransNamespace *namespace_,
+    LmTransL4CallableType *out
+) {
+    const LmP0Node *current;
+    const LmP0Field *field;
+
+    if (out == 0) {
+        return -1;
+    }
+    if (lm_trans_callable_type_reset(out) != 0) {
+        return -1;
+    }
+
+    current = node;
+    while (current != 0 && current->kind == LM_P0_NODE_STRUCTURE) {
+        field = current->as->structure->first_field;
+        if (field == 0 || field->next != 0 || field->value == 0) {
+            return 0;
+        }
+        current = field->value;
+    }
+
+    if (current != 0 && current->kind == LM_P0_NODE_FRAME) {
+        return lm_trans_call_frame_result_type(current->as->frame, namespace_, out);
+    }
+
+    return 0;
+}
+
 static int lm_trans_expr_stack_schedule_call_args(
     FILE *file,
     LmTransExprStack *stack,

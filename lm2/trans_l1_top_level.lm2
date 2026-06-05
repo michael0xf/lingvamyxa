@@ -1,6 +1,7 @@
 L1:
 ===
 static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
+static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2);
 static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_l1_ifdef_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_l2_os_frame(
@@ -19,6 +20,20 @@ static int lm_trans_top_level_declare_os(
     const LmTransTopLevelItem *item
 );
 static int lm_trans_top_level_declare_ifdef(
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+);
+static int lm_trans_top_level_declare_merge_named_structure(
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+);
+static int lm_trans_top_level_emit_merge_named_structure_typedef(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+);
+static int lm_trans_top_level_emit_merge_named_structure_storage(
+    FILE *file,
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
 );
@@ -141,6 +156,15 @@ static int lm_trans_top_level_emit_l1(
 ) {
     (void)namespace_;
     return lm_trans_emit_l1_frame(file, item->frame);
+}
+
+static int lm_trans_top_level_emit_l2(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    (void)namespace_;
+    return lm_trans_emit_l2_frame(file, item->frame);
 }
 
 static int lm_trans_top_level_emit_os(
@@ -471,8 +495,50 @@ static int lm_trans_top_level_statement_binding(
         }
         return 1;
     }
+    if (strcmp(receiver, "lm_trans_statement_emit_merge_named_structure") == 0) {
+        out->declare = lm_trans_top_level_declare_merge_named_structure;
+        out->emit_before_functions = lm_trans_top_level_emit_merge_named_structure_typedef;
+        out->emit_after_prototypes = lm_trans_top_level_emit_merge_named_structure_storage;
+        out->emits_top_level = 1;
+        return 1;
+    }
 
     return 0;
+}
+
+static int lm_trans_top_level_level_binding(
+    const LmTransHeadBinding *binding,
+    LmTransTopLevelItem *out
+) {
+    const char *receiver;
+
+    if (
+        binding == 0 ||
+        out == 0 ||
+        binding->receiver_type == 0 ||
+        strcmp(binding->receiver_type, "receiver.level") != 0
+    ) {
+        return 0;
+    }
+
+    receiver = lm_trans_registry_lookup(out->frame->head, "receiver.level");
+    if (receiver == 0) {
+        fprintf(stderr, "trans registry error: receiver.level has no binding for top-level frame\n");
+        return -1;
+    }
+    if (strcmp(receiver, "lm_trans_emit_l1_frame") == 0) {
+        out->emit_after_prototypes = lm_trans_top_level_emit_l1;
+        out->emits_top_level = 1;
+        return 1;
+    }
+    if (strcmp(receiver, "lm_trans_emit_l2_frame") == 0) {
+        out->emit_after_prototypes = lm_trans_top_level_emit_l2;
+        out->emits_top_level = 1;
+        return 1;
+    }
+
+    fprintf(stderr, "trans registry error: unknown receiver.level binding %s\n", receiver);
+    return -1;
 }
 
 static int lm_trans_top_level_emit_registry(
@@ -927,6 +993,38 @@ static int lm_trans_top_level_emit_named_structure_storage(
     return lm_trans_emit_named_structure_storage(file, item->frame, 0U, namespace_, "static ");
 }
 
+static int lm_trans_top_level_declare_merge_named_structure(
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    if (item == 0 || item->frame == 0) {
+        return 1;
+    }
+    return lm_trans_declare_merge_named_structure_layout(namespace_, item->frame);
+}
+
+static int lm_trans_top_level_emit_merge_named_structure_typedef(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    if (item == 0 || item->frame == 0) {
+        return 1;
+    }
+    return lm_trans_emit_merge_named_structure_typedef(file, item->frame, 0U, namespace_);
+}
+
+static int lm_trans_top_level_emit_merge_named_structure_storage(
+    FILE *file,
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    if (item == 0 || item->frame == 0) {
+        return 1;
+    }
+    return lm_trans_emit_merge_named_structure_storage(file, item->frame, 0U, namespace_, "static ");
+}
+
 static int lm_trans_lower_top_level_item(
     const LmP0Node *node,
     LmTransTopLevelItem *out
@@ -935,6 +1033,7 @@ static int lm_trans_lower_top_level_item(
     LmTransL4HeadBinding *l4_root_binding;
     int function_status;
     int statement_status;
+    int level_status;
 
     if (out == 0) {
         return 1;
@@ -1000,14 +1099,16 @@ static int lm_trans_lower_top_level_item(
         return 1;
     }
     statement_status = lm_trans_top_level_statement_binding(binding, out);
-    lm_own_delete(binding, 0);
-    if (statement_status != 0) {
-        return 0;
+    if (statement_status == 0) {
+        level_status = lm_trans_top_level_level_binding(binding, out);
+    } else {
+        level_status = 0;
     }
-
-    if (lm_trans_text_equals(out->frame->head, "L1")) {
-        out->emit_after_prototypes = lm_trans_top_level_emit_l1;
-        out->emits_top_level = 1;
+    lm_own_delete(binding, 0);
+    if (statement_status < 0 || level_status < 0) {
+        return 1;
+    }
+    if (statement_status != 0 || level_status != 0) {
         return 0;
     }
 
@@ -1041,7 +1142,7 @@ static int lm_trans_lower_top_level_item(
         return 0;
     }
 
-    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, L1, or registered L4 root receiver data\n");
+    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, registered level receiver, or registered L4 root receiver data\n");
     return 1;
 }
 
