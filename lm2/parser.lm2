@@ -887,7 +887,6 @@ sub: lm_p0_position_in_slice (const: @(char text); size_t: length; size_t: index
             continue
         column: column + 1U
         i: i + 1U
-    ---
 
     out_line[0]: line
     out_column[0]: column
@@ -1099,7 +1098,6 @@ fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: s
             run_length: 1U
             while: i + run_length < length && text[i + run_length] = quote
                 run_length: run_length + 1U
-            ---
 
             if: run_length = 3U
                 out_end[0]: i + 3U
@@ -1107,7 +1105,6 @@ fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: s
             i: i + run_length
             continue
         i: i + 1U
-    ---
 
     out_end[0]: length
 return: 0
@@ -1132,7 +1129,6 @@ sub: lm_p0_scan_layout_prefix (const: @(char source); size_t: length; size_t: st
         while: p < length && lm_p0_is_horizontal_space(source[p]) != 0
             p: p + 1U
         ---
-    ---
 
     out_offset[0]: p
     out_indent_column[0]: indent_column
@@ -1153,7 +1149,6 @@ fn: lm_p0_dash_fence_status (const: @(char text); size_t: length; @: size_t out_
     dash_count: 0U
     while: dash_count < length && text[dash_count] = '-'
         dash_count: dash_count + 1U
-    ---
 
     if: out_dash_count != 0
         out_dash_count[0]: dash_count
@@ -1203,7 +1198,6 @@ fn: lm_p0_match_block_string_fence_line (const: @(char source); size_t: line_sta
         if: source[line_start + i] != '='
             return: 0
         i: i + 1U
-    ---
 
     if: line_start + eq_count < line_end && source[line_start + eq_count] = '='
         return: 0
@@ -1228,7 +1222,6 @@ fn: lm_p0_match_raw_comment_fence_line (const: @(char source); size_t: line_star
         if: source[line_start + i] != '*'
             return: 0
         i: i + 1U
-    ---
 
     if: line_start + star_count < line_end && source[line_start + star_count] = '*'
         return: 0
@@ -1241,14 +1234,12 @@ sub: lm_p0_dump_append_size (@: LmP0Dump dump; size_t: value)
     if: value = 0U
         c.lm_p0_dump_append_cstr(dump, "0")
         return
-    ---
 
     index: c.sizeof(buffer)
     while: value > 0U
         index: index - 1U
         buffer[index]: '0' + value % 10U
         value: value / 10U
-    ---
 
     c.lm_p0_dump_append(dump, buffer + index, c.sizeof(buffer) - index)
 end: lm_p0_dump_append_size
@@ -1266,29 +1257,24 @@ end: lm_p0_dump_append_field_count_line
 fn: lm_p0_registry_init () int
     if: (lm_p0_registry != 0)
         return: 0
-    ---
     lm_p0_registry: (cast: (@: LmP0Registry) lm_own_new_zero(c.sizeof(lm_p0_registry[0])))
     if: (lm_p0_registry = 0)
         return: 1
-    ---
     lm_p0_registry\l4_loader: lm_p0_registry_l4_loader_new()
     if: (lm_p0_registry\l4_loader = 0)
         lm_own_delete(lm_p0_registry, 0)
         lm_p0_registry: 0
         return: 1
-    ---
     return: 0
 end: lm_p0_registry_init
 
 sub: lm_p0_registry_destroy ()
     if: (lm_p0_registry = 0)
         return
-    ---
     if: (lm_p0_registry\rows != 0)
         lm_own_ptr_stack_destroy(lm_p0_registry\rows)
         lm_own_delete(lm_p0_registry\rows, 0)
         lm_p0_registry\rows: 0
-    ---
     lm_own_delete(lm_p0_registry\l4_loader, 0)
     lm_p0_registry\l4_loader: 0
     lm_p0_registry\loaded: 0
@@ -1308,17 +1294,13 @@ end: lm_p0_text_ref_delete
 fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
     if: (patch_slot = 0)
         return: 0
-    ---
     if: (length = 0U)
         patch_slot[0]: ""
         return: 1
-    ---
-    if: (((document = 0) || (document\owners_initialized = 0)) || (lm_own_arena_add_lazy_edge(document\tree_arena, document\source_owner, source, length, (cast: (@@: void) patch_slot)) != 0))
+    if: (((document = 0) || (document\owners_initialized = 0)) || (lm_own_arena_add_lazy_edge(document\tree_arena, document\source_owner, source, length, (cast: (const: @@: void) patch_slot)) != 0))
         if: (document != 0)
             lm_p0_set_diagnostic(document, 1, line, column, "out of memory while registering parser lazy text edge")
-        ---
         return: 0
-    ---
     return: 1
 end: lm_p0_document_register_lazy_text
 
@@ -1328,20 +1310,16 @@ fn: lm_p0_new_text (@: LmP0Document document; const: @(char source); size_t: len
     if: (text = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser text")
         return: 0
-    ---
     if: (source != 0)
         text\data: source
     else:
         text\data: ""
-    ---
     if: (source != 0)
         text\length: length
     else:
         text\length: 0U
-    ---
     if: (lm_p0_document_register_lazy_text(document, text\data, text\length, @ text\data, line, column) = 0)
         return: 0
-    ---
     return: text
 end: lm_p0_new_text
 
@@ -1351,7 +1329,6 @@ fn: lm_p0_new_structure (@: LmP0Document document; size_t: line; size_t: column)
     if: (structure = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser structure")
         return: 0
-    ---
     return: structure
 end: lm_p0_new_structure
 
@@ -1361,15 +1338,12 @@ fn: lm_p0_new_frame (@: LmP0Document document; size_t: line; size_t: column) @: 
     if: (frame = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser frame")
         return: 0
-    ---
     frame\head: lm_p0_new_text(document, "", 0U, line, column)
     if: (frame\head = 0)
         return: 0
-    ---
     frame\body: lm_p0_new_structure(document, line, column)
     if: (frame\body = 0)
         return: 0
-    ---
     return: frame
 end: lm_p0_new_frame
 
@@ -1379,15 +1353,12 @@ fn: lm_p0_new_trailer (@: LmP0Document document; const: @(char spelling); size_t
     if: (trailer = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer")
         return: 0
-    ---
     trailer\spelling: lm_p0_new_text(document, spelling, spelling_length, line, column)
     if: (trailer\spelling = 0)
         return: 0
-    ---
     trailer\body: lm_p0_new_structure(document, line, column)
     if: (trailer\body = 0)
         return: 0
-    ---
     return: trailer
 end: lm_p0_new_trailer
 
@@ -1407,18 +1378,15 @@ fn: lm_p0_registry_push_row_values (const: @(LmP0Text table_value); const: @(LmP
     row: (cast: (@: LmP0RegistryRow) lm_own_new_zero(c.sizeof(row[0])))
     if: (row = 0)
         return: -1
-    ---
     row\table: lm_p0_registry_value_copy_cstr(table_value)
     row\key: lm_p0_registry_value_copy_cstr(key_value)
     row\payload: lm_p0_registry_value_copy_cstr(payload_value)
     if: (((row\table = 0) || (row\key = 0)) || (row\payload = 0))
         lm_p0_registry_row_destroy_any(row)
         return: -1
-    ---
     if: (((lm_p0_registry = 0) || (lm_p0_registry\rows = 0)) || (lm_own_ptr_stack_push(lm_p0_registry\rows, row) != 0))
         lm_p0_registry_row_destroy_any(row)
         return: -1
-    ---
     return: 0
 end: lm_p0_registry_push_row_values
 
@@ -1443,7 +1411,6 @@ fn: lm_p0_registry_push_row_atoms (const: @(LmP0Text table_atom); const: @(LmP0T
     status: -1
     if: lm_p0_registry_identifier_value(table_atom, table_value) != 0 && lm_p0_registry_identifier_value(key_atom, key_value) != 0 && lm_p0_registry_literal_value(payload_atom, payload_value) != 0
         status: lm_p0_registry_push_row_values(table_value, key_value, payload_value)
-    ---
 
     lm_p0_text_ref_delete(table_value)
     lm_p0_text_ref_delete(key_value)
@@ -1455,20 +1422,16 @@ fn: lm_p0_registry_column_has_descriptor (const: @(LmP0RegistryColumn column); c
     int: result
     if: ((column = 0) || (descriptor = 0))
         return: 0
-    ---
     payload: lm_p0_text_ref_new_empty()
     if: (payload = 0)
         return: 0
-    ---
     result: 0
     i: 0U
     while: (i < column\descriptor_count)
         if: (((column\descriptors[i] != 0) && lm_p0_registry_identifier_value(column\descriptors[i], payload)) && lm_p0_text_equals(payload, descriptor))
             result: 1
             break
-        ---
         i: i + 1U
-    ---
     lm_p0_text_ref_delete(payload)
     return: result
 end: lm_p0_registry_column_has_descriptor
@@ -1476,12 +1439,10 @@ end: lm_p0_registry_column_has_descriptor
 fn: lm_p0_registry_cell_value (const: @(LmP0Text atom); const: @(LmP0RegistryColumn column); @: LmP0Text out_value) int
     if: lm_p0_registry_payload_is_null(atom)
         return: 0
-    ---
     if: lm_p0_registry_column_has_descriptor(column, "char")
         if: lm_p0_registry_literal_value(atom, out_value)
             return: 1
         return: -1
-    ---
     if: lm_p0_registry_identifier_value(atom, out_value)
         return: 1
     return: -1
@@ -1547,25 +1508,21 @@ sub: lm_p0_registry_compare_fail (const: @(char table); const: @(char key); cons
         lm_p0_tmp_1: table
     else:
         lm_p0_tmp_1: "<none>"
-    ---
     const: @: char lm_p0_tmp_2
     if: (key != 0)
         lm_p0_tmp_2: key
     else:
         lm_p0_tmp_2: "<none>"
-    ---
     const: @: char lm_p0_tmp_3
     if: (registry_payload != 0)
         lm_p0_tmp_3: registry_payload
     else:
         lm_p0_tmp_3: "<none>"
-    ---
     const: @: char lm_p0_tmp_4
     if: (legacy_payload != 0)
         lm_p0_tmp_4: legacy_payload
     else:
         lm_p0_tmp_4: "<none>"
-    ---
     c.fprintf(c.stderr, "parser registry mismatch: table=%s key=\"%s\" registry=%s legacy=%s\n", lm_p0_tmp_1, lm_p0_tmp_2, lm_p0_tmp_3, lm_p0_tmp_4)
     c.exit(2)
 end: lm_p0_registry_compare_fail
@@ -1585,16 +1542,13 @@ sub: lm_p0_trim_trailing_line_comment (const: @@(char text); @: size_t length)
         if: lm_p0_starts_python_string(text[0], length[0], i)
             i: lm_p0_skip_python_string_unchecked(text[0], length[0], i)
             continue
-        ---
         prefixed_end: lm_p0_scan_c_prefixed_quote_token(text[0], length[0], i)
         if: (prefixed_end > i)
             i: prefixed_end
             continue
-        ---
         if: ((text[0][i] = '\'') && (lm_p0_starts_python_string(text[0], length[0], i) = 0))
             i: lm_p0_scan_c_char_token(text[0], length[0], i)
             continue
-        ---
         if: ((text[0][i] = '"') || (text[0][i] = '`'))
             char: quote
             char: lm_p0_tmp_5
@@ -1607,34 +1561,26 @@ sub: lm_p0_trim_trailing_line_comment (const: @@(char text); @: size_t length)
                         i: i + 2U
                     else:
                         i: i + 1U
-                    ---
                     continue
-                ---
                 if: ((((quote = '`') && (text[0][i] = '`')) && ((i + 1U) < length[0])) && (text[0][(i + 1U)] = '`'))
                     i: i + 2U
                     continue
-                ---
                 char: lm_p0_tmp_6
                 lm_p0_tmp_6: text[0][i]
                 i: i + 1U
                 if: (lm_p0_tmp_6 = quote)
                     break
                 ---
-            ---
             continue
-        ---
         if: (text[0][i] = '#')
             size_t: end_index
             end_index: (i + 1U)
             while: ((end_index < length[0]) && (lm_p0_is_line_break(text[0][end_index]) = 0))
                 end_index: end_index + 1U
-            ---
             if: (end_index = length[0])
                 length[0]: i
                 lm_p0_trim_right(text, length)
-            ---
             return
-        ---
         i: i + 1U
     ---
 end: lm_p0_trim_trailing_line_comment
@@ -1645,21 +1591,16 @@ fn: lm_p0_indent_level_from_column (@: LmP0Document document; @: LmP0IndentStack
     if: (column = top)
         out_level[0]: (stack\count - 1U)
         return: 1
-    ---
     if: (column > top)
         if: (lm_p0_indent_stack_push(document, stack, column, line, source_column) = 0)
             return: 0
-        ---
         out_level[0]: (stack\count - 1U)
         return: 1
-    ---
     while: ((stack\count > 0U) && (stack\columns[(stack\count - 1U)] > column))
         stack\count: stack\count - 1U
-    ---
     if: ((stack\count = 0U) || (stack\columns[(stack\count - 1U)] != column))
         lm_p0_set_diagnostic(document, 17, line, source_column, "unindent does not match any outer indentation level")
         return: 0
-    ---
     out_level[0]: (stack\count - 1U)
     return: 1
 end: lm_p0_indent_level_from_column
@@ -1672,10 +1613,8 @@ fn: lm_p0_skip_fence_block_unchecked (const: @(char text); size_t: length; size_
     fence_count: 0U
     while: (((start + fence_count) < line_end) && (text[(start + fence_count)] = fence_char))
         fence_count: fence_count + 1U
-    ---
     if: ((fence_count < 3U) || (fence_count > c.LM_P0_MAX_FENCE_LENGTH))
         return: start
-    ---
     if: (fence_char = '=')
         if: (lm_p0_match_block_string_fence_line(text, start, line_end, fence_count) = 0)
             return: start
@@ -1688,11 +1627,9 @@ fn: lm_p0_skip_fence_block_unchecked (const: @(char text); size_t: length; size_
         else:
             return: start
         ---
-    ---
     scan_start: line_end
     if: (scan_start < length)
         scan_start: scan_start + lm_p0_line_break_width_at(text, length, scan_start)
-    ---
     while: (scan_start <= length)
         size_t: current_end
         current_end: lm_p0_find_physical_line_end(text, length, scan_start)
@@ -1702,23 +1639,17 @@ fn: lm_p0_skip_fence_block_unchecked (const: @(char text); size_t: length; size_
                 lm_p0_tmp_7: lm_p0_line_break_width_at(text, length, current_end)
             else:
                 lm_p0_tmp_7: 0U
-            ---
             return: (current_end + lm_p0_tmp_7)
-        ---
         if: ((fence_char = '*') && lm_p0_match_raw_comment_fence_line(text, scan_start, current_end, fence_count))
             size_t: lm_p0_tmp_8
             if: (current_end < length)
                 lm_p0_tmp_8: lm_p0_line_break_width_at(text, length, current_end)
             else:
                 lm_p0_tmp_8: 0U
-            ---
             return: (current_end + lm_p0_tmp_8)
-        ---
         if: (current_end = length)
             break
-        ---
         scan_start: (current_end + lm_p0_line_break_width_at(text, length, current_end))
-    ---
     return: length
 end: lm_p0_skip_fence_block_unchecked
 
@@ -1745,7 +1676,6 @@ fn: lm_p0_find_layout_line_end (const: @(char source); size_t: length; size_t: s
                     line_break_width: lm_p0_line_break_width_at(source, length, (i + 1U))
                 else:
                     line_break_width: 0U
-                ---
                 if: (line_break_width > 0U)
                     i: i + (1U + line_break_width)
                 else:
@@ -1754,44 +1684,33 @@ fn: lm_p0_find_layout_line_end (const: @(char source); size_t: length; size_t: s
                     else:
                         i: i + 1U
                     ---
-                ---
                 continue
-            ---
             if: ((((quote = '`') && (source[i] = '`')) && ((i + 1U) < length)) && (source[(i + 1U)] = '`'))
                 i: i + 2U
                 continue
-            ---
             if: (source[i] = quote)
                 quote: '\0'
-            ---
             i: i + 1U
             continue
-        ---
         if: lm_p0_starts_python_string(source, length, i)
             i: lm_p0_skip_python_string_unchecked(source, length, i)
             continue
-        ---
         if: (lm_p0_scan_c_prefixed_quote_token(source, length, i) > i)
             i: lm_p0_scan_c_prefixed_quote_token(source, length, i)
             continue
-        ---
         if: ((source[i] = '\'') && (lm_p0_starts_python_string(source, length, i) = 0))
             i: lm_p0_scan_c_char_token(source, length, i)
             continue
-        ---
         if: ((source[i] = '"') || (source[i] = '`'))
             char: lm_p0_tmp_9
             lm_p0_tmp_9: source[i]
             i: i + 1U
             quote: lm_p0_tmp_9
             continue
-        ---
         if: (source[i] = '#')
             while: ((i < length) && (lm_p0_is_line_break(source[i]) = 0))
                 i: i + 1U
-            ---
             continue
-        ---
         if: (source[i] = '{')
             int: closed
             size_t: brace_end
@@ -1800,7 +1719,6 @@ fn: lm_p0_find_layout_line_end (const: @(char source); size_t: length; size_t: s
                 i: brace_end
                 continue
             ---
-        ---
         if: lm_p0_is_line_break(source[i])
             size_t: line_break_width
             size_t: next_line_start
@@ -1812,7 +1730,6 @@ fn: lm_p0_find_layout_line_end (const: @(char source); size_t: length; size_t: s
             int: next_line_starts_with_matching_close
             if: (depth = 0U)
                 break
-            ---
             line_break_width: lm_p0_line_break_width_at(source, length, i)
             next_line_start: (i + line_break_width)
             lm_p0_scan_layout_prefix(source, length, next_line_start, @ next_content_offset, @ next_line_indent, @ next_line_dot_level)
@@ -1821,33 +1738,27 @@ fn: lm_p0_find_layout_line_end (const: @(char source); size_t: length; size_t: s
                 char: top_delimiter
                 top_delimiter: delimiter_stack[(depth - 1U)]
                 next_line_starts_with_matching_close: (((top_delimiter = '(') && (source[next_content_offset] = ')')) || ((top_delimiter = '[') && (source[next_content_offset] = ']')))
-            ---
             if: (depth <= c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT)
                 base_indent: delimiter_indent_stack[(depth - 1U)]
                 base_dot_level: delimiter_dot_stack[(depth - 1U)]
                 if: ((next_line_starts_with_matching_close = 0) && (lm_p0_layout_prefix_is_deeper(next_line_indent, next_line_dot_level, base_indent, base_dot_level) = 0))
                     break
                 ---
-            ---
             current_line_indent: next_line_indent
             current_line_dot_level: next_line_dot_level
             i: next_line_start
             continue
-        ---
         if: ((source[i] = '(') || (source[i] = '['))
             if: (depth < c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT)
                 delimiter_indent_stack[depth]: current_line_indent
                 delimiter_dot_stack[depth]: current_line_dot_level
                 delimiter_stack[depth]: source[i]
-            ---
             depth: depth + 1U
         else:
             if: (((source[i] = ')') || (source[i] = ']')) && (depth > 0U))
                 depth: depth - 1U
             ---
-        ---
         i: i + 1U
-    ---
     return: i
 end: lm_p0_find_layout_line_end
 
@@ -1866,20 +1777,16 @@ fn: lm_p0_scan_brace_mark_unchecked (const: @(char text); size_t: length; size_t
                 i: fence_end
                 continue
             ---
-        ---
         if: lm_p0_starts_python_string(text, length, i)
             i: lm_p0_skip_python_string_unchecked(text, length, i)
             continue
-        ---
         prefixed_end: lm_p0_scan_c_prefixed_quote_token(text, length, i)
         if: (prefixed_end > i)
             i: prefixed_end
             continue
-        ---
         if: ((text[i] = '\'') && (lm_p0_starts_python_string(text, length, i) = 0))
             i: lm_p0_scan_c_char_token(text, length, i)
             continue
-        ---
         if: ((text[i] = '"') || (text[i] = '`'))
             char: quote
             char: lm_p0_tmp_10
@@ -1893,7 +1800,6 @@ fn: lm_p0_scan_brace_mark_unchecked (const: @(char text); size_t: length; size_t
                         line_break_width: lm_p0_line_break_width_at(text, length, (i + 1U))
                     else:
                         line_break_width: 0U
-                    ---
                     if: (line_break_width > 0U)
                         i: i + (1U + line_break_width)
                     else:
@@ -1902,33 +1808,25 @@ fn: lm_p0_scan_brace_mark_unchecked (const: @(char text); size_t: length; size_t
                         else:
                             i: i + 1U
                         ---
-                    ---
                     continue
-                ---
                 if: ((((quote = '`') && (text[i] = '`')) && ((i + 1U) < length)) && (text[(i + 1U)] = '`'))
                     i: i + 2U
                     continue
-                ---
                 char: lm_p0_tmp_11
                 lm_p0_tmp_11: text[i]
                 i: i + 1U
                 if: (lm_p0_tmp_11 = quote)
                     break
                 ---
-            ---
             continue
-        ---
         if: (text[i] = '#')
             while: ((i < length) && (lm_p0_is_line_break(text[i]) = 0))
                 i: i + 1U
-            ---
             continue
-        ---
         if: (text[i] = '{')
             depth: depth + 1U
             i: i + 1U
             continue
-        ---
         if: (text[i] = '}')
             i: i + 1U
             if: (depth > 0U)
@@ -1937,11 +1835,8 @@ fn: lm_p0_scan_brace_mark_unchecked (const: @(char text); size_t: length; size_t
                     closed[0]: 1
                     return: i
                 ---
-            ---
             continue
-        ---
         i: i + 1U
-    ---
     return: i
 end: lm_p0_scan_brace_mark_unchecked
 
@@ -1951,7 +1846,6 @@ fn: lm_p0_skip_brace_mark_ex (@: LmP0Document document; @: LmP0Structure structu
     int: closed
     if: ((index[0] >= length) || (text[index[0]] != '{'))
         return: 1
-    ---
     start: index[0]
     end_index: lm_p0_scan_brace_mark_unchecked(text, length, start, @ closed)
     index[0]: end_index
@@ -1961,10 +1855,8 @@ fn: lm_p0_skip_brace_mark_ex (@: LmP0Document document; @: LmP0Structure structu
         lm_p0_position_in_slice(text, length, start, line, column, @ diagnostic_line, @ diagnostic_column)
         lm_p0_set_diagnostic(document, 31, diagnostic_line, diagnostic_column, "unterminated brace mark")
         return: 0
-    ---
     if: (record && (lm_p0_record_mix_mark(document, structure, text, length, start, end_index, line, column) = 0))
         return: 0
-    ---
     return: 1
 end: lm_p0_skip_brace_mark_ex
 
@@ -1980,14 +1872,11 @@ fn: lm_p0_skip_leading_brace_marks_ex (@: LmP0Document document; const: @(char t
     while: (index[0] < length)
         while: ((index[0] < length) && lm_p0_is_horizontal_space(text[index[0]]))
             index[0]: index[0] + 1U
-        ---
         if: ((index[0] >= length) || (text[index[0]] != '{'))
             return: 1
-        ---
         if: (lm_p0_skip_brace_mark_ex(document, 0, text, length, index, line, column, record) = 0)
             return: 0
         ---
-    ---
     return: 1
 end: lm_p0_skip_leading_brace_marks_ex
 
@@ -2004,21 +1893,15 @@ fn: lm_p0_line_is_standalone_mix_run (@: LmP0Document document; const: @(char te
     while: (i < length)
         while: ((i < length) && lm_p0_is_horizontal_space(text[i]))
             i: i + 1U
-        ---
         if: (i >= length)
             break
-        ---
         if: (text[i] = '#')
             break
-        ---
         if: (text[i] != '{')
             return: 1
-        ---
         if: (lm_p0_skip_brace_mark(document, text, length, @ i, line, column) = 0)
             return: 0
-        ---
         saw_mix: 1
-    ---
     out_is_mix[0]: saw_mix
     return: 1
 end: lm_p0_line_is_standalone_mix_run
@@ -2031,32 +1914,24 @@ fn: lm_p0_scan_leading_mix_prefix (@: LmP0Document document; const: @(char text)
     i: 0U
     while: ((i < length) && lm_p0_is_horizontal_space(text[i]))
         i: i + 1U
-    ---
     if: ((i >= length) || (text[i] != '{'))
         return: 1
-    ---
     prefix_start: i
     prefix_end: i
     saw_mix: 0
     while: (i < length)
         while: ((i < length) && lm_p0_is_horizontal_space(text[i]))
             i: i + 1U
-        ---
         if: ((i >= length) || (text[i] != '{'))
             break
-        ---
         if: (lm_p0_skip_brace_mark(document, text, length, @ i, line, column) = 0)
             return: 0
-        ---
         prefix_end: i
         saw_mix: 1
-    ---
     while: ((i < length) && lm_p0_is_horizontal_space(text[i]))
         i: i + 1U
-    ---
     if: (((saw_mix = 0) || (i >= length)) || (text[i] = '#'))
         return: 1
-    ---
     out_prefix_start[0]: prefix_start
     out_prefix_end[0]: prefix_end
     out_anchor[0]: i
@@ -2079,27 +1954,21 @@ fn: lm_p0_scan_raw_comment_block (@: LmP0Document document; const: @(char source
     size_t: scan_line
     if: ((line_start >= length) || (source[line_start] != '*'))
         return: 0
-    ---
     line_end: lm_p0_find_physical_line_end(source, length, line_start)
     star_count: 0U
     while: (((line_start + star_count) < line_end) && (source[(line_start + star_count)] = '*'))
         star_count: star_count + 1U
-    ---
     if: (star_count < 3U)
         return: 0
-    ---
     if: (star_count > c.LM_P0_MAX_FENCE_LENGTH)
         lm_p0_set_diagnostic(document, 23, line, 1U, "raw comment fence length exceeds 80 characters")
         return: 0
-    ---
     if: (lm_p0_match_raw_comment_fence_line(source, line_start, line_end, star_count) = 0)
         lm_p0_set_diagnostic(document, 27, line, 1U, "raw comment fence line must contain only the star fence and whitespace")
         return: 0
-    ---
     scan_start: line_end
     if: (scan_start < length)
         scan_start: scan_start + lm_p0_line_break_width_at(source, length, scan_start)
-    ---
     scan_line: (line + 1U)
     while: (scan_start <= length)
         size_t: current_end
@@ -2110,23 +1979,18 @@ fn: lm_p0_scan_raw_comment_block (@: LmP0Document document; const: @(char source
                 break_width: lm_p0_line_break_width_at(source, length, current_end)
             else:
                 break_width: 0U
-            ---
             next_offset[0]: (current_end + break_width)
             size_t: lm_p0_tmp_12
             if: (break_width > 0U)
                 lm_p0_tmp_12: 1U
             else:
                 lm_p0_tmp_12: 0U
-            ---
             next_line[0]: (scan_line + lm_p0_tmp_12)
             return: 1
-        ---
         if: (current_end = length)
             break
-        ---
         scan_start: (current_end + lm_p0_line_break_width_at(source, length, current_end))
         scan_line: scan_line + 1U
-    ---
     lm_p0_set_diagnostic(document, 24, line, 1U, "unterminated raw comment block")
     return: 0
 end: lm_p0_scan_raw_comment_block
@@ -2140,27 +2004,21 @@ fn: lm_p0_scan_block_string_event (@: LmP0Document document; const: @(char sourc
     size_t: scan_line
     if: ((line_start >= length) || (source[line_start] != '='))
         return: 0
-    ---
     line_end: lm_p0_find_physical_line_end(source, length, line_start)
     eq_count: 0U
     while: (((line_start + eq_count) < line_end) && (source[(line_start + eq_count)] = '='))
         eq_count: eq_count + 1U
-    ---
     if: (eq_count < 3U)
         return: 0
-    ---
     if: (eq_count > c.LM_P0_MAX_FENCE_LENGTH)
         lm_p0_set_diagnostic(document, 23, line, 1U, "block string fence length exceeds 80 characters")
         return: 0
-    ---
     if: (lm_p0_match_block_string_fence_line(source, line_start, line_end, eq_count) = 0)
         lm_p0_set_diagnostic(document, 29, line, 1U, "block string fence line must contain only the equals fence and whitespace")
         return: 0
-    ---
     scan_start: line_end
     if: (scan_start < length)
         scan_start: scan_start + lm_p0_line_break_width_at(source, length, scan_start)
-    ---
     content_start: scan_start
     content_end: content_start
     scan_line: (line + 1U)
@@ -2173,7 +2031,6 @@ fn: lm_p0_scan_block_string_event (@: LmP0Document document; const: @(char sourc
                 break_width: lm_p0_line_break_width_at(source, length, current_end)
             else:
                 break_width: 0U
-            ---
             c.memset(event, 0, c.sizeof(event[0]))
             event\kind: c.LM_P0_STREAM_EVENT_BLOCK_STRING
             event\text: (source + content_start)
@@ -2187,17 +2044,13 @@ fn: lm_p0_scan_block_string_event (@: LmP0Document document; const: @(char sourc
                 lm_p0_tmp_13: 1U
             else:
                 lm_p0_tmp_13: 0U
-            ---
             next_line[0]: (scan_line + lm_p0_tmp_13)
             return: 1
-        ---
         if: (current_end = length)
             break
-        ---
         content_end: current_end
         scan_start: (current_end + lm_p0_line_break_width_at(source, length, current_end))
         scan_line: scan_line + 1U
-    ---
     lm_p0_set_diagnostic(document, 20, line, 1U, "unterminated block string literal")
     return: 0
 end: lm_p0_scan_block_string_event
@@ -2208,17 +2061,14 @@ fn: lm_p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
     if: (node = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node")
         return: 0
-    ---
     node\span: (cast: (@: LmP0Span) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node\span[0])))
     if: (node\span = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node span")
         return: 0
-    ---
     node\as: (cast: (@: LmP0NodeAs) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node\as[0])))
     if: (node\as = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node payload")
         return: 0
-    ---
     node\kind: kind
     if: (kind = c.LM_P0_NODE_STRUCTURE)
         node\as\structure: lm_p0_new_structure(document, 0U, 0U)
@@ -2239,7 +2089,6 @@ fn: lm_p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
                 ---
             ---
         ---
-    ---
     return: node
 end: lm_p0_new_node
 
@@ -2252,22 +2101,18 @@ fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @:
             lm_p0_tmp_14: node\span\line
         else:
             lm_p0_tmp_14: 0U
-        ---
         size_t: lm_p0_tmp_15
         if: (node != 0)
             lm_p0_tmp_15: node\span\column
         else:
             lm_p0_tmp_15: 0U
-        ---
         lm_p0_set_diagnostic(document, 1, lm_p0_tmp_14, lm_p0_tmp_15, "out of memory while allocating parser field")
         return: 0
-    ---
     field\value: node
     if: (structure\last_field = 0)
         structure\first_field: field
     else:
         structure\last_field\next: field
-    ---
     structure\last_field: field
     structure\field_count: structure\field_count + 1U
     return: 1
@@ -2278,12 +2123,10 @@ fn: lm_p0_pointer_source_offset (const: @(LmP0Document document); const: @(char 
     const: @: char end_index
     if: (((document = 0) || (document\source = 0)) || (pointer = 0))
         return: 0
-    ---
     begin: document\source
     end_index: (document\source + document\source_length)
     if: ((pointer < begin) || (pointer > end_index))
         return: 0
-    ---
     out_offset[0]: (cast: size_t (pointer - begin))
     return: 1
 end: lm_p0_pointer_source_offset
@@ -2298,7 +2141,6 @@ fn: lm_p0_offset_from_line_column (const: @(char text); size_t: length; size_t: 
     while: (i < length)
         if: ((current_line = line) && (current_column = column))
             return: i
-        ---
         if: (text[i] = '\r')
             current_line: current_line + 1U
             current_column: 1U
@@ -2312,9 +2154,7 @@ fn: lm_p0_offset_from_line_column (const: @(char text); size_t: length; size_t: 
             else:
                 current_column: current_column + 1U
             ---
-        ---
         i: i + 1U
-    ---
     return: i
 end: lm_p0_offset_from_line_column
 
@@ -2322,7 +2162,6 @@ sub: lm_p0_copy_payload_diagnostic (@: LmP0Document document; const: @(LmP0Docum
     size_t: local_offset
     if: (((((document = 0) || (document\diagnostic = 0)) || (payload_document = 0)) || (payload_document\diagnostic = 0)) || (payload_document\diagnostic\code = 0))
         return
-    ---
     document\diagnostic[0]: payload_document\diagnostic[0]
     local_offset: lm_p0_offset_from_line_column(payload_document\source, payload_document\source_length, payload_document\diagnostic\line, payload_document\diagnostic\column)
     lm_p0_position_in_slice(document\source, document\source_length, (payload_offset + local_offset), 1U, 1U, @ document\diagnostic\line, @ document\diagnostic\column)
@@ -2331,7 +2170,6 @@ end: lm_p0_copy_payload_diagnostic
 sub: lm_p0_adjust_node_span_to_document (@: LmP0Document document; @: LmP0Node node; size_t: base_offset)
     if: (node = 0)
         return
-    ---
     node\span\offset: node\span\offset + base_offset
     lm_p0_position_in_slice(document\source, document\source_length, node\span\offset, 1U, 1U, @ node\span\line, @ node\span\column)
     if: (node\kind = c.LM_P0_NODE_STRUCTURE)
@@ -2457,21 +2295,18 @@ fn: lm_p0_scan_number_token (const: @(char text); size_t: end_index; size_t: sta
         while: ((i < end_index) && lm_p0_is_hex_digit(text[i]))
             saw_digit: 1
             i: i + 1U
-        ---
         if: ((i < end_index) && (text[i] = '.'))
             i: i + 1U
             while: ((i < end_index) && lm_p0_is_hex_digit(text[i]))
                 saw_digit: 1
                 i: i + 1U
             ---
-        ---
         if: ((saw_digit && (i < end_index)) && ((text[i] = 'p') || (text[i] = 'P')))
             size_t: exponent_start
             exponent_start: i
             i: i + 1U
             if: ((i < end_index) && ((text[i] = '+') || (text[i] = '-')))
                 i: i + 1U
-            ---
             if: ((i < end_index) && lm_p0_is_decimal_digit(text[i]))
                 while: ((i < end_index) && lm_p0_is_decimal_digit(text[i]))
                     i: i + 1U
@@ -2479,35 +2314,28 @@ fn: lm_p0_scan_number_token (const: @(char text); size_t: end_index; size_t: sta
             else:
                 i: exponent_start
             ---
-        ---
         while: ((i < end_index) && lm_p0_is_bare_identifier_rest(text[i]))
             i: i + 1U
-        ---
         if: saw_digit
             out_end[0]: i
         else:
             out_end[0]: (start + 1U)
-        ---
         return: 1
-    ---
     while: ((i < end_index) && lm_p0_is_decimal_digit(text[i]))
         saw_digit: 1
         i: i + 1U
-    ---
     if: ((i < end_index) && (text[i] = '.'))
         i: i + 1U
         while: ((i < end_index) && lm_p0_is_decimal_digit(text[i]))
             saw_digit: 1
             i: i + 1U
         ---
-    ---
     if: ((saw_digit && (i < end_index)) && ((text[i] = 'e') || (text[i] = 'E')))
         size_t: exponent_start
         exponent_start: i
         i: i + 1U
         if: ((i < end_index) && ((text[i] = '+') || (text[i] = '-')))
             i: i + 1U
-        ---
         if: ((i < end_index) && lm_p0_is_decimal_digit(text[i]))
             while: ((i < end_index) && lm_p0_is_decimal_digit(text[i]))
                 i: i + 1U
@@ -2515,15 +2343,12 @@ fn: lm_p0_scan_number_token (const: @(char text); size_t: end_index; size_t: sta
         else:
             i: exponent_start
         ---
-    ---
     while: ((i < end_index) && lm_p0_is_bare_identifier_rest(text[i]))
         i: i + 1U
-    ---
     if: saw_digit
         out_end[0]: i
     else:
         out_end[0]: start
-    ---
     return: saw_digit
 end: lm_p0_scan_number_token
 
@@ -2532,7 +2357,6 @@ fn: lm_p0_scan_c_quoted_token (const: @(char text); size_t: end_index; size_t: q
     char: quote
     if: ((quote_index >= end_index) || ((text[quote_index] != '\'') && (text[quote_index] != '"')))
         return: quote_index
-    ---
     quote: text[quote_index]
     i: (quote_index + 1U)
     while: (i < end_index)
@@ -2543,17 +2367,12 @@ fn: lm_p0_scan_c_quoted_token (const: @(char text); size_t: end_index; size_t: q
                 i: i + (1U + line_break_width)
             else:
                 i: i + 2U
-            ---
             continue
-        ---
         if: (text[i] = quote)
             return: (i + 1U)
-        ---
         if: lm_p0_is_line_break(text[i])
             return: (quote_index + 1U)
-        ---
         i: i + 1U
-    ---
     return: (quote_index + 1U)
 end: lm_p0_scan_c_quoted_token
 
@@ -2564,7 +2383,6 @@ end: lm_p0_starts_c_prefixed_quote
 fn: lm_p0_scan_c_char_token (const: @(char text); size_t: end_index; size_t: start) size_t
     if: ((start >= end_index) || (text[start] != '\''))
         return: start
-    ---
     return: lm_p0_scan_c_quoted_token(text, end_index, start)
 end: lm_p0_scan_c_char_token
 
@@ -2572,7 +2390,6 @@ fn: lm_p0_scan_c_prefixed_quote_token (const: @(char text); size_t: end_index; s
     size_t: quoted_end
     if: (lm_p0_starts_c_prefixed_quote(text, end_index, start) = 0)
         return: start
-    ---
     quoted_end: lm_p0_scan_c_quoted_token(text, end_index, (start + 1U))
     if: (quoted_end > (start + 2U))
         return: quoted_end
@@ -2594,13 +2411,11 @@ fn: lm_p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; si
     int: raw_safe
     if: ((((start + 8U) >= end_index) || (c.memcmp((text + start), "c.sizeof", 8U) != 0)) || (text[(start + 8U)] != '('))
         return: start
-    ---
     i: (start + 9U)
     depth: 1U
     while: (i < end_index)
         if: lm_p0_is_line_break(text[i])
             return: start
-        ---
         if: lm_p0_starts_c_prefixed_quote(text, end_index, i)
             size_t: quoted_end
             quoted_end: lm_p0_scan_c_prefixed_quote_token(text, end_index, i)
@@ -2608,7 +2423,6 @@ fn: lm_p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; si
                 i: quoted_end
                 continue
             ---
-        ---
         if: ((text[i] = '\'') || (text[i] = '"'))
             size_t: quoted_end
             quoted_end: lm_p0_scan_c_quoted_token(text, end_index, i)
@@ -2616,7 +2430,6 @@ fn: lm_p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; si
                 i: quoted_end
                 continue
             ---
-        ---
         if: (text[i] = '(')
             depth: depth + 1U
         else:
@@ -2626,12 +2439,9 @@ fn: lm_p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; si
                     break
                 ---
             ---
-        ---
         i: i + 1U
-    ---
     if: ((i >= end_index) || (text[i] != ')'))
         return: start
-    ---
     close_index: i
     raw_safe: 1
     i: (start + 9U)
@@ -2639,9 +2449,7 @@ fn: lm_p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; si
         if: (((text[i] = '\\') || (text[i] = '@')) || ((((i + 1U) < close_index) && (text[i] = 'c')) && (text[(i + 1U)] = '.')))
             raw_safe: 0
             break
-        ---
         i: i + 1U
-    ---
     if: raw_safe
         return: (close_index + 1U)
     return: start
@@ -2653,29 +2461,23 @@ fn: lm_p0_scan_c_surface_atom (const: @(char text); size_t: end_index; size_t: s
     size_t: bracket_depth
     if: (lm_p0_starts_c_surface_atom(text, end_index, start) = 0)
         return: start
-    ---
     sizeof_end: lm_p0_scan_c_sizeof_surface_atom(text, end_index, start)
     if: (sizeof_end > start)
         return: sizeof_end
-    ---
     i: (start + 2U)
     bracket_depth: 0U
     while: (i < end_index)
         if: lm_p0_is_line_break(text[i])
             break
-        ---
         if: ((bracket_depth = 0U) && lm_p0_is_c_surface_top_boundary(text[i]))
             break
-        ---
         if: (text[i] = '[')
             bracket_depth: bracket_depth + 1U
         else:
             if: ((text[i] = ']') && (bracket_depth > 0U))
                 bracket_depth: bracket_depth - 1U
             ---
-        ---
         i: i + 1U
-    ---
     return: i
 end: lm_p0_scan_c_surface_atom
 
@@ -2688,7 +2490,6 @@ fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: le
         lm_p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
         lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated C character literal")
         return: 0
-    ---
     index[0]: end_index
     return: 1
 end: lm_p0_scan_c_char
@@ -2702,7 +2503,6 @@ fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); 
         lm_p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
         lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated C prefixed literal")
         return: 0
-    ---
     index[0]: end_index
     return: 1
 end: lm_p0_scan_c_prefixed_quote
@@ -2716,7 +2516,6 @@ fn: lm_p0_scan_builtin_compact_atom_piece (const: @(char text); size_t: end_inde
         if: (((((((((first = '!') && (second = '=')) || ((first = '<') && (second = '='))) || ((first = '>') && (second = '='))) || ((first = '&') && (second = '&'))) || ((first = '|') && (second = '|'))) || ((first = '+') && (second = '+'))) || ((first = '-') && (second = '-'))) || ((first = '[') && (second = ']')))
             return: (start + 2U)
         ---
-    ---
     return: (start + 1U)
 end: lm_p0_scan_builtin_compact_atom_piece
 
@@ -2727,12 +2526,10 @@ fn: lm_p0_scan_registry_compact_atom_piece (const: @(char text); size_t: end_ind
     @: LmP0RegistryRow row
     if: (lm_p0_registry_table_has_rows_loaded_or_loading("p0.compact-token") = 0)
         return: lm_p0_scan_builtin_compact_atom_piece(text, end_index, start)
-    ---
     best_length: 0U
     i: 0U
     if: ((lm_p0_registry = 0) || (lm_p0_registry\rows = 0))
         return: lm_p0_scan_builtin_compact_atom_piece(text, end_index, start)
-    ---
     while: (i < lm_p0_registry\rows\count)
         row: (cast: (@: LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
         if: ((((row != 0) && (row\table != 0)) && (row\key != 0)) && (c.strcmp(row\table, "p0.compact-token") = 0))
@@ -2740,12 +2537,9 @@ fn: lm_p0_scan_registry_compact_atom_piece (const: @(char text); size_t: end_ind
             if: (((token_length > best_length) && ((start + token_length) <= end_index)) && (c.memcmp((text + start), row\key, token_length) = 0))
                 best_length: token_length
             ---
-        ---
         i: i + 1U
-    ---
     if: (best_length > 0U)
         return: (start + best_length)
-    ---
     return: (start + 1U)
 end: lm_p0_scan_registry_compact_atom_piece
 
@@ -2753,35 +2547,27 @@ fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_
     size_t: i
     if: (start >= end_index)
         return: start
-    ---
     if: lm_p0_starts_c_prefixed_quote(text, end_index, start)
         return: lm_p0_scan_c_prefixed_quote_token(text, end_index, start)
-    ---
     if: lm_p0_starts_c_surface_atom(text, end_index, start)
         return: lm_p0_scan_c_surface_atom(text, end_index, start)
-    ---
     if: lm_p0_is_bare_identifier_start(text[start])
         i: (start + 1U)
         while: ((i < end_index) && lm_p0_is_bare_identifier_rest(text[i]))
             i: i + 1U
-        ---
         if: (((((i = (start + 1U)) && (text[start] = 'c')) && ((i + 1U) < end_index)) && (text[i] = '.')) && lm_p0_is_bare_identifier_start(text[(i + 1U)]))
             i: i + 2U
             while: ((i < end_index) && lm_p0_is_bare_identifier_rest(text[i]))
                 i: i + 1U
             ---
-        ---
         return: i
-    ---
     if: lm_p0_is_decimal_digit(text[start])
         size_t: number_end
         if: lm_p0_scan_number_token(text, end_index, start, @ number_end)
             return: number_end
         ---
-    ---
     if: ((text[start] = '\'') && (lm_p0_starts_python_string(text, end_index, start) = 0))
         return: lm_p0_scan_c_char_token(text, end_index, start)
-    ---
     if: ((start + 1U) < end_index)
         char: first
         char: second
@@ -2792,10 +2578,8 @@ fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_
             at_end: (start + 2U)
             while: ((at_end < end_index) && (text[at_end] = '@'))
                 at_end: at_end + 1U
-            ---
             return: at_end
         ---
-    ---
     return: lm_p0_scan_registry_compact_atom_piece(text, end_index, start)
 end: lm_p0_scan_compact_atom_piece
 
@@ -2804,7 +2588,6 @@ fn: lm_p0_append_atom_slice (@: LmP0Document document; @: LmP0Structure structur
     node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
     if: (node = 0)
         return: 0
-    ---
     node\as\atom\data: (text + start)
     node\as\atom\length: (end_index - start)
     node\span\line: line
@@ -2813,7 +2596,6 @@ fn: lm_p0_append_atom_slice (@: LmP0Document document; @: LmP0Structure structur
     node\span\length: (end_index - start)
     if: (lm_p0_document_register_lazy_text(document, node\as\atom\data, node\as\atom\length, @ node\as\atom\data, node\span\line, node\span\column) = 0)
         return: 0
-    ---
     return: lm_p0_append_field(document, structure, node)
 end: lm_p0_append_atom_slice
 
@@ -2822,7 +2604,6 @@ fn: lm_p0_append_positional_skip (@: LmP0Document document; @: LmP0Structure str
     node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
     if: (node = 0)
         return: 0
-    ---
     node\flags: node\flags | c.LM_P0_NODE_POSITIONAL_SKIP
     node\as\atom\data: ""
     node\as\atom\length: 0U
@@ -2841,35 +2622,26 @@ fn: lm_p0_append_compact_atom_pieces (@: LmP0Document document; @: LmP0Structure
         if: lm_p0_is_field_space(text[i])
             i: i + 1U
             continue
-        ---
         if: (text[i] = '[')
             size_t: close_index
             size_t: inner_index
             if: (lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, i, (i + 1U)) = 0)
                 return: 0
-            ---
             if: (lm_p0_find_matching_bracket(document, text, end_index, i, line, column, @ close_index) = 0)
                 return: 0
-            ---
             inner_index: 0U
             if: (lm_p0_parse_fields_until(document, structure, ((text + i) + 1U), ((close_index - i) - 1U), line, ((column + i) + 1U), ((offset + i) + 1U), 0U, 0U, 0U, @ inner_index) = 0)
                 return: 0
-            ---
             if: (lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, close_index, (close_index + 1U)) = 0)
                 return: 0
-            ---
             i: (close_index + 1U)
             continue
-        ---
         piece_end: lm_p0_scan_compact_atom_piece(text, end_index, i)
         if: (piece_end <= i)
             piece_end: (i + 1U)
-        ---
         if: (lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, i, piece_end) = 0)
             return: 0
-        ---
         i: piece_end
-    ---
     return: 1
 end: lm_p0_append_compact_atom_pieces
 
@@ -2885,47 +2657,35 @@ fn: lm_p0_relaxed_level_from_column (@: LmP0Document document; @: LmP0IndentStac
             out_level[0]: 0U
         else:
             out_level[0]: 1U
-        ---
         return: 1
-    ---
     if: (base_level = 0U)
         parent_level: 0U
     else:
         parent_level: (base_level - 1U)
-    ---
     if: (stack\count = 0U)
         if: (lm_p0_indent_stack_push(document, stack, column, line, source_column) = 0)
             return: 0
-        ---
         out_level[0]: base_level
         return: 1
-    ---
     if: (column > stack\columns[(stack\count - 1U)])
         if: (lm_p0_indent_stack_push(document, stack, column, line, source_column) = 0)
             return: 0
-        ---
         out_level[0]: ((base_level + stack\count) - 1U)
         return: 1
-    ---
     if: (column < stack\columns[0])
         out_level[0]: parent_level
         return: 1
-    ---
     while: ((stack\count > 0U) && (stack\columns[(stack\count - 1U)] > column))
         stack\count: stack\count - 1U
-    ---
     if: (stack\count = 0U)
         out_level[0]: parent_level
         return: 1
-    ---
     i: 0U
     while: (i < stack\count)
         if: (stack\columns[i] = column)
             out_level[0]: (base_level + i)
             return: 1
-        ---
         i: i + 1U
-    ---
     lm_p0_set_diagnostic(document, 17, line, source_column, "unindent does not match any outer indentation level")
     return: 0
 end: lm_p0_relaxed_level_from_column
@@ -2941,16 +2701,13 @@ fn: lm_p0_source_level_after_line_break (@: LmP0Document document; @: LmP0Indent
         if: ((p < length) && lm_p0_is_line_break(text[p]))
             p: p + 1U
         ---
-    ---
     indent_column: 0U
     while: ((p < length) && lm_p0_is_horizontal_space(text[p]))
         if: (text[p] = '\t')
             indent_column: lm_p0_indent_tab_column(indent_column)
         else:
             indent_column: indent_column + 1U
-        ---
         p: p + 1U
-    ---
     dot_level: 0U
     while: ((p < length) && (text[p] = '.'))
         dot_level: dot_level + 1U
@@ -2958,12 +2715,10 @@ fn: lm_p0_source_level_after_line_break (@: LmP0Document document; @: LmP0Indent
         while: ((p < length) && lm_p0_is_horizontal_space(text[p]))
             p: p + 1U
         ---
-    ---
     content_index[0]: p
     if: (dot_level > 0U)
         out_level[0]: dot_level
         return: 1
-    ---
     size_t: diagnostic_line
     size_t: diagnostic_column
     lm_p0_position_in_slice(text, length, p, line, column, @ diagnostic_line, @ diagnostic_column)
@@ -2976,42 +2731,32 @@ fn: lm_p0_skip_field_space (@: LmP0Document document; @: LmP0IndentStack indent_
         if: lm_p0_is_horizontal_space(text[index[0]])
             index[0]: index[0] + 1U
             continue
-        ---
         if: (text[index[0]] = '#')
             while: ((index[0] < length) && (lm_p0_is_line_break(text[index[0]]) = 0))
                 index[0]: index[0] + 1U
-            ---
             continue
-        ---
         if: (text[index[0]] = '{')
             if: (lm_p0_consume_brace_mark(document, structure, text, length, index, line, column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: lm_p0_is_line_break(text[index[0]])
             size_t: content_index
             size_t: next_level
             if: (lm_p0_source_level_after_line_break(document, indent_stack, text, length, index[0], line, column, layout_base_level, @ content_index, @ next_level) = 0)
                 return: 0
-            ---
             if: ((((((flags & c.LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL) != 0U) && (next_level < short_source_level)) && (content_index < length)) && (text[content_index] != ')')) && (text[content_index] != ']'))
                 size_t: diagnostic_line
                 size_t: diagnostic_column
                 lm_p0_position_in_slice(text, length, content_index, line, column, @ diagnostic_line, @ diagnostic_column)
                 lm_p0_set_diagnostic(document, 13, diagnostic_line, diagnostic_column, "bounded form continuation must stay inside the form")
                 return: 0
-            ---
             if: (((flags & c.LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL) != 0U) && (next_level <= short_source_level))
                 stopped_by_source_level[0]: 1
                 return: 1
-            ---
             current_source_level[0]: next_level
             index[0]: content_index
             continue
-        ---
         break
-    ---
     return: 1
 end: lm_p0_skip_field_space
 
@@ -3023,7 +2768,6 @@ fn: lm_p0_scan_python_string (@: LmP0Document document; const: @(char text); siz
         lm_p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
         lm_p0_set_diagnostic(document, 4, diagnostic_line, diagnostic_column, "unterminated python-like string literal")
         return: 0
-    ---
     index[0]: end_index
     return: 1
 end: lm_p0_scan_python_string
@@ -3032,7 +2776,6 @@ fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: le
     size_t: i
     if: lm_p0_starts_python_string(text, length, index[0])
         return: lm_p0_scan_python_string(document, text, length, index, line, base_column)
-    ---
     i: (index[0] + 1U)
     while: (i < length)
         if: (quote = '"')
@@ -3042,18 +2785,14 @@ fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: le
                     line_break_width: lm_p0_line_break_width_at(text, length, (i + 1U))
                 else:
                     line_break_width: 0U
-                ---
                 if: (line_break_width > 0U)
                     i: i + (1U + line_break_width)
                     continue
-                ---
                 if: ((i + 1U) < length)
                     i: i + 2U
                 else:
                     i: i + 1U
-                ---
                 continue
-            ---
             if: lm_p0_is_line_break(text[i])
                 size_t: diagnostic_line
                 size_t: diagnostic_column
@@ -3061,24 +2800,19 @@ fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: le
                 lm_p0_set_diagnostic(document, 19, diagnostic_line, diagnostic_column, "unescaped newline in string literal")
                 return: 0
             ---
-        ---
         if: ((quote = '`') && (text[i] = '\0'))
             size_t: diagnostic_line
             size_t: diagnostic_column
             lm_p0_position_in_slice(text, length, i, line, base_column, @ diagnostic_line, @ diagnostic_column)
             lm_p0_set_diagnostic(document, 30, diagnostic_line, diagnostic_column, "NUL byte in exact quoted identifier")
             return: 0
-        ---
         if: ((((quote = '`') && (text[i] = '`')) && ((i + 1U) < length)) && (text[(i + 1U)] = '`'))
             i: i + 2U
             continue
-        ---
         if: (text[i] = quote)
             index[0]: (i + 1U)
             return: 1
-        ---
         i: i + 1U
-    ---
     size_t: diagnostic_line
     size_t: diagnostic_column
     lm_p0_position_in_slice(text, length, index[0], line, base_column, @ diagnostic_line, @ diagnostic_column)
@@ -3091,7 +2825,6 @@ fn: lm_p0_require_quoted_token_boundary (@: LmP0Document document; const: @(char
     size_t: diagnostic_column
     if: ((index >= length) || lm_p0_is_quoted_token_boundary(text[index]))
         return: 1
-    ---
     lm_p0_position_in_slice(text, length, index, line, column, @ diagnostic_line, @ diagnostic_column)
     lm_p0_set_diagnostic(document, 18, diagnostic_line, diagnostic_column, "missing separator after quoted token")
     return: 0
@@ -3106,33 +2839,23 @@ fn: lm_p0_find_matching_paren (@: LmP0Document document; const: @(char text); si
         if: (text[i] = '#')
             while: ((i < length) && (lm_p0_is_line_break(text[i]) = 0))
                 i: i + 1U
-            ---
             continue
-        ---
         if: lm_p0_starts_python_string(text, length, i)
             if: (lm_p0_scan_python_string(document, text, length, @ i, line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: lm_p0_starts_c_prefixed_quote(text, length, i)
             if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: ((text[i] = '\'') && (lm_p0_starts_python_string(text, length, i) = 0))
             if: (lm_p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: ((text[i] = '"') || (text[i] = '`'))
             if: (lm_p0_scan_quoted(document, text, length, @ i, text[i], line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: (text[i] = '(')
             depth: depth + 1U
         else:
@@ -3143,9 +2866,7 @@ fn: lm_p0_find_matching_paren (@: LmP0Document document; const: @(char text); si
                     return: 1
                 ---
             ---
-        ---
         i: i + 1U
-    ---
     size_t: diagnostic_line
     size_t: diagnostic_column
     lm_p0_position_in_slice(text, length, open_index, line, base_column, @ diagnostic_line, @ diagnostic_column)
@@ -3164,39 +2885,27 @@ fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); 
         if: (text[i] = '{')
             if: (lm_p0_skip_brace_mark(document, text, length, @ i, line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: (text[i] = '#')
             while: ((i < length) && (lm_p0_is_line_break(text[i]) = 0))
                 i: i + 1U
-            ---
             continue
-        ---
         if: lm_p0_starts_python_string(text, length, i)
             if: (lm_p0_scan_python_string(document, text, length, @ i, line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: lm_p0_starts_c_prefixed_quote(text, length, i)
             if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: ((text[i] = '\'') && (lm_p0_starts_python_string(text, length, i) = 0))
             if: (lm_p0_scan_c_char(document, text, length, @ i, line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: ((text[i] = '"') || (text[i] = '`'))
             if: (lm_p0_scan_quoted(document, text, length, @ i, text[i], line, base_column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: (text[i] = '(')
             paren_depth: paren_depth + 1U
         else:
@@ -3209,7 +2918,6 @@ fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); 
                     if: (text[i] = ']')
                         if: (bracket_depth = 0U)
                             break
-                        ---
                         bracket_depth: bracket_depth - 1U
                         if: ((bracket_depth = 0U) && (paren_depth = 0U))
                             close_index[0]: i
@@ -3218,9 +2926,7 @@ fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); 
                     ---
                 ---
             ---
-        ---
         i: i + 1U
-    ---
     size_t: diagnostic_line
     size_t: diagnostic_column
     lm_p0_position_in_slice(text, length, open_index, line, base_column, @ diagnostic_line, @ diagnostic_column)
@@ -3237,35 +2943,25 @@ fn: lm_p0_find_colon (@: LmP0Document document; const: @(char text); size_t: len
         if: (text[i] = '{')
             if: (lm_p0_skip_brace_mark(document, text, length, @ i, line, column) = 0)
                 return: -1
-            ---
             continue
-        ---
         if: (text[i] = '#')
             while: ((i < length) && (lm_p0_is_line_break(text[i]) = 0))
                 i: i + 1U
-            ---
             continue
-        ---
         if: lm_p0_starts_c_surface_atom(text, length, i)
             i: lm_p0_scan_c_surface_atom(text, length, i)
             continue
-        ---
         if: lm_p0_starts_python_string(text, length, i)
             i: lm_p0_skip_python_string_unchecked(text, length, i)
             continue
-        ---
         if: lm_p0_starts_c_prefixed_quote(text, length, i)
             if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, column) = 0)
                 return: -1
-            ---
             continue
-        ---
         if: ((text[i] = '\'') && (lm_p0_starts_python_string(text, length, i) = 0))
             if: (lm_p0_scan_c_char(document, text, length, @ i, line, column) = 0)
                 return: -1
-            ---
             continue
-        ---
         if: ((text[i] = '"') || (text[i] = '`'))
             char: quote
             char: lm_p0_tmp_16
@@ -3276,27 +2972,22 @@ fn: lm_p0_find_colon (@: LmP0Document document; const: @(char text); size_t: len
                 if: ((quote = '"') && (text[i] = '\\'))
                     i: i + 2U
                     continue
-                ---
                 if: ((((quote = '`') && (text[i] = '`')) && ((i + 1U) < length)) && (text[(i + 1U)] = '`'))
                     i: i + 2U
                     continue
-                ---
                 if: ((quote = '`') && (text[i] = '\0'))
                     size_t: diagnostic_line
                     size_t: diagnostic_column
                     lm_p0_position_in_slice(text, length, i, line, column, @ diagnostic_line, @ diagnostic_column)
                     lm_p0_set_diagnostic(document, 30, diagnostic_line, diagnostic_column, "NUL byte in exact quoted identifier")
                     return: -1
-                ---
                 char: lm_p0_tmp_17
                 lm_p0_tmp_17: text[i]
                 i: i + 1U
                 if: (lm_p0_tmp_17 = quote)
                     break
                 ---
-            ---
             continue
-        ---
         if: ((text[i] = '(') || (text[i] = '['))
             depth: depth + 1U
         else:
@@ -3308,9 +2999,7 @@ fn: lm_p0_find_colon (@: LmP0Document document; const: @(char text); size_t: len
                     return: 1
                 ---
             ---
-        ---
         i: i + 1U
-    ---
     return: 0
 end: lm_p0_find_colon
 
@@ -3320,14 +3009,11 @@ fn: lm_p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(c
     size_t: close_index
     if: (index >= length)
         return: 0
-    ---
     i: index
     if: (text[i] = '(')
         if: (lm_p0_find_matching_paren(document, text, length, i, line, column, @ close_index) = 0)
             return: 0
-        ---
         return: (((close_index + 1U) < length) && (text[(close_index + 1U)] = ':'))
-    ---
     if: lm_p0_starts_c_surface_atom(text, length, i)
         i: lm_p0_scan_c_surface_atom(text, length, i)
         head_end: i
@@ -3335,19 +3021,16 @@ fn: lm_p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(c
         if: lm_p0_starts_c_prefixed_quote(text, length, i)
             if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, column) = 0)
                 return: 0
-            ---
             head_end: i
         else:
             if: ((lm_p0_starts_python_string(text, length, i) || (text[i] = '"')) || (text[i] = '`'))
                 if: (lm_p0_scan_quoted(document, text, length, @ i, text[i], line, column) = 0)
                     return: 0
-                ---
                 head_end: i
             else:
                 if: (text[i] = '\'')
                     if: (lm_p0_scan_c_char(document, text, length, @ i, line, column) = 0)
                         return: 0
-                    ---
                     head_end: i
                 else:
                     while: ((((((((i < length) && (lm_p0_is_field_space(text[i]) = 0)) && (lm_p0_is_field_separator(text[i]) = 0)) && (text[i] != '(')) && (text[i] != ')')) && (text[i] != '#')) && (text[i] != '{')) && (text[i] != ':'))
@@ -3355,20 +3038,15 @@ fn: lm_p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(c
                             size_t: bracket_close_index
                             if: (lm_p0_find_matching_bracket(document, text, length, i, line, column, @ bracket_close_index) = 0)
                                 return: 0
-                            ---
                             i: (bracket_close_index + 1U)
                             continue
-                        ---
                         if: (text[i] = ']')
                             break
-                        ---
                         i: i + 1U
-                    ---
                     head_end: i
                 ---
             ---
         ---
-    ---
     return: (((head_end > index) && (i < length)) && ((text[i] = ':') || (text[i] = '(')))
 end: lm_p0_field_start_looks_explicit_frame
 
@@ -3377,10 +3055,8 @@ sub: lm_p0_field_parse_loop_frame_delete_any (@: void object)
     frame: (cast: (@: LmP0FieldParseLoopFrame) object)
     if: (frame = 0)
         return
-    ---
     if: frame\indent_stack_owned
         lm_p0_indent_stack_delete(frame\indent_stack)
-    ---
     lm_own_delete(frame, 0)
 end: lm_p0_field_parse_loop_frame_delete_any
 
@@ -3390,7 +3066,6 @@ fn: lm_p0_field_parse_loop_stack_new (@: LmP0Document document; size_t: line; si
     if: (stack = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating parser field stack")
         return: 0
-    ---
     lm_own_ptr_stack_init(stack, lm_p0_field_parse_loop_frame_delete_any)
     return: stack
 end: lm_p0_field_parse_loop_stack_new
@@ -3398,7 +3073,6 @@ end: lm_p0_field_parse_loop_stack_new
 sub: lm_p0_field_parse_loop_stack_delete (@: LmOwnPtrStack stack)
     if: (stack = 0)
         return
-    ---
     lm_own_ptr_stack_destroy(stack)
     lm_own_delete(stack, 0)
 end: lm_p0_field_parse_loop_stack_delete
@@ -3409,7 +3083,6 @@ fn: lm_p0_field_parse_loop_push (@: LmP0Document document; @: LmOwnPtrStack stac
     if: (frame = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack")
         return: 0
-    ---
     frame\indent_stack: indent_stack
     frame\structure: structure
     frame\text: text
@@ -3434,7 +3107,6 @@ fn: lm_p0_field_parse_loop_push (@: LmP0Document document; @: LmOwnPtrStack stac
         lm_p0_field_parse_loop_frame_delete_any(frame)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack")
         return: 0
-    ---
     return: 1
 end: lm_p0_field_parse_loop_push
 
@@ -3443,25 +3115,20 @@ fn: lm_p0_field_parse_fail (@@: LmOwnPtrStack parse_stack; @@: LmP0IndentStack i
         lm_p0_indent_stack_delete(indent_stack[0])
         indent_stack[0]: 0
         indent_stack_owned[0]: 0
-    ---
     if: (parse_stack != 0)
         lm_p0_field_parse_loop_stack_delete(parse_stack[0])
         parse_stack[0]: 0
-    ---
     return: 0
 end: lm_p0_field_parse_fail
 
 fn: lm_p0_parse_append_node_and_update (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node node; unsigned: flags; int: allow_empty_fields; @: int expect_field; @: int headless_group_after_separator) int
     if: (lm_p0_append_field(document, structure, node) = 0)
         return: 0
-    ---
     expect_field[0]: 0
     if: ((allow_empty_fields && (node\kind = c.LM_P0_NODE_FRAME)) && ((node\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) != 0U))
         expect_field[0]: 1
-    ---
     if: ((((flags & c.LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U) && (node\kind = c.LM_P0_NODE_FRAME)) && ((node\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) != 0U))
         headless_group_after_separator[0]: 1
-    ---
     return: 1
 end: lm_p0_parse_append_node_and_update
 
@@ -3484,7 +3151,6 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
     parse_stack: lm_p0_field_parse_loop_stack_new(document, line, column)
     if: (parse_stack = 0)
         return: 0
-    ---
     i: index[0]
     current_source_level: initial_source_level
     allow_empty_fields: ((flags & c.LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS) != 0U)
@@ -3498,23 +3164,18 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
             int: stopped_by_source_level
             if: (lm_p0_skip_field_space(document, indent_stack, structure, text, length, @ i, line, column, flags, short_source_level, layout_base_level, @ current_source_level, @ stopped_by_source_level) = 0)
                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-            ---
             if: stopped_by_source_level
                 break
-            ---
             if: (i >= length)
                 break
-            ---
             if: (((((headless_group_after_separator && (text[i] != '(')) && (text[i] != ')')) && (text[i] != '#')) && (lm_p0_is_field_separator(text[i]) = 0)) && (lm_p0_field_start_looks_explicit_frame(document, text, length, i, line, column) = 0))
                 @: LmP0Node group_node
                 group_node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
                 if: (group_node = 0)
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                ---
                 if: (lm_p0_field_parse_loop_push(document, parse_stack, indent_stack, indent_stack_owned, structure, text, length, line, column, offset, flags, short_source_level, layout_base_level, i, current_source_level, allow_empty_fields, expect_field, headless_group_after_separator, c.LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP, group_node, i, 0U) = 0)
                     lm_p0_free_node(group_node)
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                ---
                 structure: group_node\as\structure
                 flags: ((c.LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON | c.LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL) | c.LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS)
                 short_source_level: current_source_level
@@ -3529,7 +3190,6 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                 if: (headless_group_after_separator && (lm_p0_is_field_separator(text[i]) = 0))
                     headless_group_after_separator: 0
                 ---
-            ---
             if: lm_p0_index_is_line_start(text, i)
                 size_t: field_line
                 size_t: field_column
@@ -3540,21 +3200,17 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                 if: lm_p0_scan_raw_comment_block(document, text, length, i, field_line, @ next_offset, @ next_line)
                     i: next_offset
                     continue
-                ---
                 if: (document\diagnostic\code != 0)
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                ---
                 block_event: lm_p0_stream_event_new()
                 if: (block_event = 0)
                     lm_p0_set_diagnostic(document, 1, field_line, field_column, "out of memory while creating block string event")
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                ---
                 if: lm_p0_scan_block_string_event(document, text, length, i, field_line, block_event, @ next_offset, @ next_line)
                     node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
                     if: (node = 0)
                         lm_p0_stream_event_delete(block_event)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     node\as\atom\data: block_event\text
                     node\as\atom\length: block_event\text_length
                     node\span\line: field_line
@@ -3564,22 +3220,18 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                     if: (lm_p0_document_register_lazy_text(document, node\as\atom\data, node\as\atom\length, @ node\as\atom\data, node\span\line, node\span\column) = 0)
                         lm_p0_stream_event_delete(block_event)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     if: (lm_p0_append_field(document, structure, node) = 0)
                         lm_p0_free_node(node)
                         lm_p0_stream_event_delete(block_event)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     lm_p0_stream_event_delete(block_event)
                     expect_field: 0
                     i: next_offset
                     continue
-                ---
                 lm_p0_stream_event_delete(block_event)
                 if: (document\diagnostic\code != 0)
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
                 ---
-            ---
             if: lm_p0_is_field_separator(text[i])
                 char: separator
                 size_t: separator_index
@@ -3590,25 +3242,20 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                 separator: lm_p0_tmp_18
                 if: (lm_p0_is_short_form_separator(separator) && ((flags & c.LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON) != 0U))
                     break
-                ---
                 if: (allow_empty_fields && expect_field)
                     if: (lm_p0_append_positional_skip(document, structure, text, length, line, column, offset, separator_index) = 0)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
                     ---
-                ---
                 expect_field: allow_empty_fields
                 continue
-            ---
             if: (text[i] = ')')
                 break
-            ---
             start: i
             head_end: i
             node: 0
             if: (text[i] = '(')
                 if: (lm_p0_find_matching_paren(document, text, length, i, line, column, @ close_index) = 0)
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                ---
                 if: (((close_index = (i + 1U)) && ((close_index + 1U) < length)) && (text[(close_index + 1U)] = ':'))
                     size_t: body_index
                     unsigned: body_flags
@@ -3616,23 +3263,19 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                     node: lm_p0_new_node(document, c.LM_P0_NODE_FRAME)
                     if: (node = 0)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     node\as\frame\head\data: (text + start)
                     node\as\frame\head\length: ((close_index - start) + 1U)
                     node\as\frame\flags: c.LM_P0_FRAME_COLON
                     i: (close_index + 2U)
                     while: ((i < length) && lm_p0_is_horizontal_space(text[i]))
                         i: i + 1U
-                    ---
                     body_index: i
                     has_inline_body: (((((i < length) && (lm_p0_is_line_break(text[i]) = 0)) && (lm_p0_is_field_separator(text[i]) = 0)) && (text[i] != ')')) && (text[i] != '#'))
                     if: has_inline_body
                         node\as\frame\flags: node\as\frame\flags | c.LM_P0_FRAME_INLINE_BODY
-                    ---
                     body_flags: ((c.LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON | c.LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL) | c.LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS)
                     if: (lm_p0_field_parse_loop_push(document, parse_stack, indent_stack, indent_stack_owned, structure, text, length, line, column, offset, flags, short_source_level, layout_base_level, i, current_source_level, allow_empty_fields, expect_field, headless_group_after_separator, c.LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY, node, start, close_index) = 0)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     structure: node\as\frame\body
                     flags: body_flags
                     short_source_level: current_source_level
@@ -3648,16 +3291,13 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                     node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
                     if: (node = 0)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     child_indent_stack: lm_p0_indent_stack_new_empty()
                     if: (child_indent_stack = 0)
                         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack")
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     if: (lm_p0_field_parse_loop_push(document, parse_stack, indent_stack, indent_stack_owned, structure, text, length, line, column, offset, flags, short_source_level, layout_base_level, i, current_source_level, allow_empty_fields, expect_field, headless_group_after_separator, c.LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE, node, start, close_index) = 0)
                         lm_p0_indent_stack_delete(child_indent_stack)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     structure: node\as\structure
                     text: ((text + i) + 1U)
                     length: ((close_index - i) - 1U)
@@ -3680,20 +3320,16 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                 if: ((text[i] = '[') && (lm_p0_field_start_looks_explicit_frame(document, text, length, i, line, column) = 0))
                     if: (lm_p0_find_matching_bracket(document, text, length, i, line, column, @ close_index) = 0)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
                     if: (node = 0)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     child_indent_stack: lm_p0_indent_stack_new_empty()
                     if: (child_indent_stack = 0)
                         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack")
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     if: (lm_p0_field_parse_loop_push(document, parse_stack, indent_stack, indent_stack_owned, structure, text, length, line, column, offset, flags, short_source_level, layout_base_level, i, current_source_level, allow_empty_fields, expect_field, headless_group_after_separator, c.LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE, node, start, close_index) = 0)
                         lm_p0_indent_stack_delete(child_indent_stack)
                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                    ---
                     structure: node\as\structure
                     text: ((text + i) + 1U)
                     length: ((close_index - i) - 1U)
@@ -3721,21 +3357,18 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                         if: lm_p0_starts_c_prefixed_quote(text, length, i)
                             if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, column) = 0)
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             head_end: i
                             quoted_head: 1
                         else:
                             if: ((lm_p0_starts_python_string(text, length, i) || (text[i] = '"')) || (text[i] = '`'))
                                 if: (lm_p0_scan_quoted(document, text, length, @ i, text[i], line, column) = 0)
                                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                                ---
                                 head_end: i
                                 quoted_head: 1
                             else:
                                 if: (text[i] = '\'')
                                     if: (lm_p0_scan_c_char(document, text, length, @ i, line, column) = 0)
                                         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                                    ---
                                     head_end: i
                                     quoted_head: 1
                                 else:
@@ -3744,27 +3377,21 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                                             size_t: bracket_close_index
                                             if: (lm_p0_find_matching_bracket(document, text, length, i, line, column, @ bracket_close_index) = 0)
                                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                                            ---
                                             i: (bracket_close_index + 1U)
                                             continue
-                                        ---
                                         if: (text[i] = ']')
                                             break
-                                        ---
                                         if: ((((lm_p0_starts_c_prefixed_quote(text, length, i) || lm_p0_starts_python_string(text, length, i)) || (text[i] = '"')) || (text[i] = '`')) || (text[i] = '\''))
                                             size_t: diagnostic_line
                                             size_t: diagnostic_column
                                             lm_p0_position_in_slice(text, length, i, line, column, @ diagnostic_line, @ diagnostic_column)
                                             lm_p0_set_diagnostic(document, 18, diagnostic_line, diagnostic_column, "missing separator before quoted token")
                                             return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                                        ---
                                         i: i + 1U
-                                    ---
                                     head_end: i
                                 ---
                             ---
                         ---
-                    ---
                     if: (((i < length) && (text[i] = ':')) && (head_end > start))
                         size_t: body_index
                         unsigned: body_flags
@@ -3772,23 +3399,19 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                         node: lm_p0_new_node(document, c.LM_P0_NODE_FRAME)
                         if: (node = 0)
                             return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                        ---
                         node\as\frame\head\data: (text + start)
                         node\as\frame\head\length: (head_end - start)
                         node\as\frame\flags: c.LM_P0_FRAME_COLON
                         i: i + 1U
                         while: ((i < length) && lm_p0_is_horizontal_space(text[i]))
                             i: i + 1U
-                        ---
                         body_index: i
                         has_inline_body: (((((i < length) && (lm_p0_is_line_break(text[i]) = 0)) && (lm_p0_is_field_separator(text[i]) = 0)) && (text[i] != ')')) && (text[i] != '#'))
                         if: has_inline_body
                             node\as\frame\flags: node\as\frame\flags | c.LM_P0_FRAME_INLINE_BODY
-                        ---
                         body_flags: ((c.LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON | c.LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL) | c.LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS)
                         if: (lm_p0_field_parse_loop_push(document, parse_stack, indent_stack, indent_stack_owned, structure, text, length, line, column, offset, flags, short_source_level, layout_base_level, i, current_source_level, allow_empty_fields, expect_field, headless_group_after_separator, c.LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY, node, start, 0U) = 0)
                             return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                        ---
                         structure: node\as\frame\body
                         flags: body_flags
                         short_source_level: current_source_level
@@ -3805,22 +3428,18 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                             node: lm_p0_new_node(document, c.LM_P0_NODE_FRAME)
                             if: (node = 0)
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             node\as\frame\head\data: (text + start)
                             node\as\frame\head\length: (head_end - start)
                             node\as\frame\flags: c.LM_P0_FRAME_COMPACT
                             if: (lm_p0_find_matching_paren(document, text, length, i, line, column, @ close_index) = 0)
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             child_indent_stack: lm_p0_indent_stack_new_empty()
                             if: (child_indent_stack = 0)
                                 lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack")
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             if: (lm_p0_field_parse_loop_push(document, parse_stack, indent_stack, indent_stack_owned, structure, text, length, line, column, offset, flags, short_source_level, layout_base_level, i, current_source_level, allow_empty_fields, expect_field, headless_group_after_separator, c.LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY, node, start, close_index) = 0)
                                 lm_p0_indent_stack_delete(child_indent_stack)
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             structure: node\as\frame\body
                             text: ((text + i) + 1U)
                             length: ((close_index - i) - 1U)
@@ -3845,22 +3464,17 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                                 lm_p0_position_in_slice(text, length, start, line, column, @ diagnostic_line, @ diagnostic_column)
                                 lm_p0_set_diagnostic(document, 6, diagnostic_line, diagnostic_column, "unexpected character in field list")
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             if: (quoted_head && (lm_p0_require_quoted_token_boundary(document, text, length, head_end, line, column) = 0))
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             if: (quoted_head = 0)
                                 i: head_end
                                 if: (lm_p0_append_compact_atom_pieces(document, structure, text, length, line, column, offset, start, head_end) = 0)
                                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                                ---
                                 expect_field: 0
                                 continue
-                            ---
                             node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
                             if: (node = 0)
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             node\as\atom\data: (text + start)
                             node\as\atom\length: (head_end - start)
                             node\span\line: line
@@ -3869,31 +3483,25 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                             node\span\length: (head_end - start)
                             if: (lm_p0_document_register_lazy_text(document, node\as\atom\data, node\as\atom\length, @ node\as\atom\data, node\span\line, node\span\column) = 0)
                                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                            ---
                             i: head_end
                         ---
                     ---
                 ---
-            ---
             if: (lm_p0_parse_append_node_and_update(document, structure, node, flags, allow_empty_fields, @ expect_field, @ headless_group_after_separator) = 0)
                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
             ---
-        ---
         if: restart_parse_context
             continue
-        ---
         child_index: i
         if: indent_stack_owned
             lm_p0_indent_stack_delete(indent_stack)
             indent_stack: 0
             indent_stack_owned: 0
-        ---
         frame: (cast: (@: LmP0FieldParseLoopFrame) lm_own_ptr_stack_pop(parse_stack))
         if: (frame = 0)
             index[0]: child_index
             lm_p0_field_parse_loop_stack_delete(parse_stack)
             return: 1
-        ---
         indent_stack: frame\indent_stack
         structure: frame\structure
         text: frame\text
@@ -3926,19 +3534,15 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                     lm_p0_free_node(node)
                     lm_own_delete(frame, 0)
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-                ---
                 expect_field: 0
                 headless_group_after_separator: ((((flags & c.LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR) != 0U) && (child_index > 0U)) && lm_p0_is_short_form_separator(text[(child_index - 1U)]))
                 i: child_index
-            ---
             lm_own_delete(frame, 0)
             restart_parse_context: 1
             continue
-        ---
         if: (frame\continuation = c.LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY)
             if: ((child_index > 0U) && lm_p0_is_short_form_separator(text[(child_index - 1U)]))
                 node\as\frame\flags: node\as\frame\flags | c.LM_P0_FRAME_SEPARATOR_CLOSED
-            ---
             node\span\line: line
             lm_p0_position_in_slice(text, length, start, line, column, @ node\span\line, @ node\span\column)
             node\span\offset: (offset + start)
@@ -3946,16 +3550,13 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
             if: (lm_p0_document_register_lazy_text(document, node\as\frame\head\data, node\as\frame\head\length, @ node\as\frame\head\data, node\span\line, node\span\column) = 0)
                 lm_own_delete(frame, 0)
                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-            ---
             i: child_index
             if: (lm_p0_parse_append_node_and_update(document, structure, node, flags, allow_empty_fields, @ expect_field, @ headless_group_after_separator) = 0)
                 lm_own_delete(frame, 0)
                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-            ---
             lm_own_delete(frame, 0)
             restart_parse_context: 1
             continue
-        ---
         if: (frame\continuation = c.LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE)
             child_index: child_index
             node\span\line: line
@@ -3966,11 +3567,9 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
             if: (lm_p0_parse_append_node_and_update(document, structure, node, flags, allow_empty_fields, @ expect_field, @ headless_group_after_separator) = 0)
                 lm_own_delete(frame, 0)
                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-            ---
             lm_own_delete(frame, 0)
             restart_parse_context: 1
             continue
-        ---
         if: (frame\continuation = c.LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY)
             child_index: child_index
             node\span\line: line
@@ -3980,20 +3579,16 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
             if: (lm_p0_document_register_lazy_text(document, node\as\frame\head\data, node\as\frame\head\length, @ node\as\frame\head\data, node\span\line, node\span\column) = 0)
                 lm_own_delete(frame, 0)
                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-            ---
             i: (close_index + 1U)
             if: (lm_p0_parse_append_node_and_update(document, structure, node, flags, allow_empty_fields, @ expect_field, @ headless_group_after_separator) = 0)
                 lm_own_delete(frame, 0)
                 return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-            ---
             lm_own_delete(frame, 0)
             restart_parse_context: 1
             continue
-        ---
         lm_own_delete(frame, 0)
         lm_p0_set_diagnostic(document, 1, line, column, "internal parser field stack continuation error")
         return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
-    ---
     return: 0
 end: lm_p0_parse_fields_until_with_layout
 
@@ -4004,7 +3599,6 @@ fn: lm_p0_parse_fields_until (@: LmP0Document document; @: LmP0Structure structu
     if: (indent_stack = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating indentation stack")
         return: 0
-    ---
     status: lm_p0_parse_fields_until_with_layout(document, indent_stack, structure, text, length, line, column, offset, flags, short_source_level, initial_source_level, initial_source_level, index)
     lm_p0_indent_stack_delete(indent_stack)
     return: status
@@ -4025,34 +3619,28 @@ fn: lm_p0_stack_ensure (@: LmP0Document document; @: LmP0Stack stack; size_t: le
     size_t: i
     if: (level < stack\capacity)
         return: 1
-    ---
     old_capacity: stack\capacity
     if: (old_capacity = 0U)
         new_capacity: 8U
     else:
         new_capacity: old_capacity
-    ---
     while: (new_capacity <= level)
         new_capacity: new_capacity * 2U
-    ---
     parents: (cast: (@@: LmP0Structure) lm_own_resize(stack\parents, (new_capacity * c.sizeof(parents[0]))))
     if: (parents = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
         return: 0
-    ---
     owners: (cast: (@@: LmP0Node) lm_own_resize(stack\owners, (new_capacity * c.sizeof(owners[0]))))
     if: (owners = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
         stack\parents: parents
         return: 0
-    ---
     hard: (cast: (@: uchar) lm_own_resize(stack\hard, (new_capacity * c.sizeof(hard[0]))))
     if: (hard = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
         stack\parents: parents
         stack\owners: owners
         return: 0
-    ---
     stack\parents: parents
     stack\owners: owners
     stack\hard: hard
@@ -4063,7 +3651,6 @@ fn: lm_p0_stack_ensure (@: LmP0Document document; @: LmP0Stack stack; size_t: le
         stack\owners[i]: 0
         stack\hard[i]: 0U
         i: i + 1U
-    ---
     return: 1
 end: lm_p0_stack_ensure
 
@@ -4071,7 +3658,6 @@ sub: lm_p0_stack_truncate_deeper (@: LmP0Stack stack; size_t: level)
     size_t: i
     if: (stack\capacity <= (level + 1U))
         return
-    ---
     i: (level + 1U)
     while: (i < stack\capacity)
         stack\parents[i]: 0
@@ -4089,7 +3675,6 @@ fn: lm_p0_stack_top_level (const: @(LmP0Stack stack)) size_t
         if: (stack\parents[i] != 0)
             return: i
         ---
-    ---
     return: 0U
 end: lm_p0_stack_top_level
 
@@ -4097,17 +3682,13 @@ fn: lm_p0_stack_level_is_trailer_body (const: @(LmP0Stack stack); size_t: level)
     @: LmP0Node owner
     if: ((level >= stack\capacity) || (stack\parents[level] = 0))
         return: 0
-    ---
     owner: stack\owners[level]
     if: (owner = 0)
         return: 0
-    ---
     if: (((owner\kind = c.LM_P0_NODE_FRAME) && (owner\as\frame\trailer != 0)) && (stack\parents[level] = owner\as\frame\trailer\body))
         return: 1
-    ---
     if: (((owner\kind = c.LM_P0_NODE_STRUCTURE) && (owner\as\structure\trailer != 0)) && (stack\parents[level] = owner\as\structure\trailer\body))
         return: 1
-    ---
     return: 0
 end: lm_p0_stack_level_is_trailer_body
 
@@ -4117,7 +3698,6 @@ fn: lm_p0_stack_collapse_soft_to_event (@: LmP0Stack stack; size_t: event_level)
     while: (((top_level > 0U) && (event_level < top_level)) && (stack\hard[top_level] = 0U))
         lm_p0_stack_truncate_deeper(stack, (top_level - 1U))
         top_level: lm_p0_stack_top_level(stack)
-    ---
     return: top_level
 end: lm_p0_stack_collapse_soft_to_event
 
@@ -4127,10 +3707,8 @@ fn: lm_p0_registry_trailer_role (const: @(char text); size_t: length) LmP0Traile
     const: @: char role_payload
     if: (lm_p0_registry_table_has_rows("trailer.role") = 0)
         return: c.LM_P0_TRAILER_ROLE_NONE
-    ---
     if: ((lm_p0_registry = 0) || (lm_p0_registry\rows = 0))
         return: c.LM_P0_TRAILER_ROLE_NONE
-    ---
     i: lm_p0_registry\rows\count
     while: (i > 0U)
         i: i - 1U
@@ -4141,7 +3719,6 @@ fn: lm_p0_registry_trailer_role (const: @(char text); size_t: length) LmP0Traile
                 return: lm_p0_trailer_role_from_payload(role_payload)
             ---
         ---
-    ---
     return: c.LM_P0_TRAILER_ROLE_NONE
 end: lm_p0_registry_trailer_role
 
@@ -4150,17 +3727,14 @@ fn: lm_p0_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
     LmP0TrailerRole: registry_role
     if: (lm_p0_dash_fence_status_after_comment_trim(text, length, 0) = c.LM_P0_DASH_FENCE_VALID)
         return: c.LM_P0_TRAILER_ROLE_DASH_CUTTER
-    ---
     legacy_role: lm_p0_legacy_trailer_role(text, length)
     if: (lm_p0_registry_table_has_rows("trailer.role") = 0)
         return: legacy_role
-    ---
     registry_role: lm_p0_registry_trailer_role(text, length)
     if: (lm_p0_registry_compare_enabled() && (registry_role != legacy_role))
         @: char key
         key: lm_p0_copy_bytes(text, length)
         lm_p0_registry_compare_fail("trailer.role", key, lm_p0_trailer_role_payload(registry_role), lm_p0_trailer_role_payload(legacy_role))
-    ---
     return: registry_role
 end: lm_p0_trailer_role
 
@@ -4198,11 +3772,9 @@ fn: lm_p0_stream_event_new_copy (const: @(LmP0StreamEvent event)) @: LmP0StreamE
     @: LmP0StreamEvent copy
     if: (event = 0)
         return: 0
-    ---
     copy: (cast: (@: LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(copy[0]))))
     if: (copy != 0)
         copy[0]: event[0]
-    ---
     return: copy
 end: lm_p0_stream_event_new_copy
 
@@ -4221,7 +3793,6 @@ end: lm_p0_pending_delimiter_clear
 fn: lm_p0_pending_delimiter_set (@: LmP0Document document; @: LmP0PendingDelimiter pending; const: @(LmP0StreamEvent event)) int
     if: (pending = 0)
         return: 0
-    ---
     lm_p0_pending_delimiter_clear(pending)
     pending\event: lm_p0_stream_event_new_copy(event)
     if: (pending\event = 0)
@@ -4230,16 +3801,13 @@ fn: lm_p0_pending_delimiter_set (@: LmP0Document document; @: LmP0PendingDelimit
             lm_p0_tmp_19: event\line
         else:
             lm_p0_tmp_19: 0U
-        ---
         size_t: lm_p0_tmp_20
         if: (event != 0)
             lm_p0_tmp_20: event\column
         else:
             lm_p0_tmp_20: 0U
-        ---
         lm_p0_set_diagnostic(document, 1, lm_p0_tmp_19, lm_p0_tmp_20, "out of memory while storing pending delimiter")
         return: 0
-    ---
     pending\active: 1
     return: 1
 end: lm_p0_pending_delimiter_set
@@ -4277,21 +3845,17 @@ fn: lm_p0_pending_mix_push (@: LmP0Document document; @: LmP0PendingMix pending;
     @: LmP0StreamEvent events
     if: ((pending = 0) || (event = 0))
         return: 0
-    ---
     if: (pending\count = pending\capacity)
         if: (pending\capacity = 0U)
             new_capacity: 4U
         else:
             new_capacity: (pending\capacity * 2U)
-        ---
         events: (cast: (@: LmP0StreamEvent) lm_own_resize(pending\events, (new_capacity * c.sizeof(events[0]))))
         if: (events = 0)
             lm_p0_set_diagnostic(document, 1, event\line, event\column, "out of memory while storing pending MIX marks")
             return: 0
-        ---
         pending\events: events
         pending\capacity: new_capacity
-    ---
     pending\events[pending\count]: event[0]
     pending\count: pending\count + 1U
     return: 1
@@ -4305,7 +3869,6 @@ fn: lm_p0_disabled_state_new (size_t: base_level) @: LmP0DisabledState
         state\top_level: base_level
         state\pending_item: 1
         state\pending_level: base_level
-    ---
     return: state
 end: lm_p0_disabled_state_new
 
@@ -4316,17 +3879,14 @@ end: lm_p0_disabled_state_delete
 fn: lm_p0_node_keeps_source_child_level (@: LmP0Node node) int
     if: (node\kind = c.LM_P0_NODE_FRAME)
         return: (((node\as\frame\flags & c.LM_P0_FRAME_COLON) != 0U) && ((node\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) = 0U))
-    ---
     return: 0
 end: lm_p0_node_keeps_source_child_level
 
 fn: lm_p0_node_child_structure (@: LmP0Node node) @: LmP0Structure
     if: (node\kind = c.LM_P0_NODE_FRAME)
         return: node\as\frame\body
-    ---
     if: (node\kind = c.LM_P0_NODE_STRUCTURE)
         return: node\as\structure
-    ---
     return: 0
 end: lm_p0_node_child_structure
 
@@ -4334,11 +3894,9 @@ fn: lm_p0_structure_last_colon_frame (@: LmP0Structure structure) @: LmP0Node
     @: LmP0Node node
     if: ((structure\last_field = 0) || (structure\last_field\value = 0))
         return: 0
-    ---
     node: structure\last_field\value
     if: (((node\kind = c.LM_P0_NODE_FRAME) && ((node\as\frame\flags & c.LM_P0_FRAME_COLON) != 0U)) && ((node\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) = 0U))
         return: node
-    ---
     return: 0
 end: lm_p0_structure_last_colon_frame
 
@@ -4348,13 +3906,11 @@ fn: lm_p0_stack_install_node_lineage (@: LmP0Document document; @: LmP0Stack sta
     if: (lm_p0_node_keeps_source_child_level(node) = 0)
         if: (lm_p0_stack_ensure(document, stack, (base_level + 1U)) = 0)
             return: 0
-        ---
         stack\parents[(base_level + 1U)]: 0
         stack\owners[(base_level + 1U)]: 0
         stack\hard[(base_level + 1U)]: 0U
         lm_p0_stack_truncate_deeper(stack, (base_level + 1U))
         return: 1
-    ---
     owner: node
     level: (base_level + 1U)
     while: lm_p0_node_keeps_source_child_level(owner)
@@ -4362,7 +3918,6 @@ fn: lm_p0_stack_install_node_lineage (@: LmP0Document document; @: LmP0Stack sta
         @: LmP0Node next_owner
         if: (lm_p0_stack_ensure(document, stack, level) = 0)
             return: 0
-        ---
         body: lm_p0_node_child_structure(owner)
         stack\parents[level]: body
         stack\owners[level]: owner
@@ -4370,14 +3925,11 @@ fn: lm_p0_stack_install_node_lineage (@: LmP0Document document; @: LmP0Stack sta
             stack\hard[level]: 1U
         else:
             stack\hard[level]: 0U
-        ---
         next_owner: lm_p0_structure_last_colon_frame(body)
         if: (next_owner = 0)
             break
-        ---
         owner: next_owner
         level: level + 1U
-    ---
     lm_p0_stack_truncate_deeper(stack, level)
     return: 1
 end: lm_p0_stack_install_node_lineage
@@ -4385,10 +3937,8 @@ end: lm_p0_stack_install_node_lineage
 fn: lm_p0_stack_ensure_root_level_alias (@: LmP0Document document; @: LmP0Stack stack; size_t: level) int
     if: ((level != 1U) || (stack\parents[1] != 0))
         return: 1
-    ---
     if: (lm_p0_stack_ensure(document, stack, 1U) = 0)
         return: 0
-    ---
     stack\parents[1]: stack\parents[0]
     stack\owners[1]: stack\owners[0]
     stack\hard[1]: 1U
@@ -4402,11 +3952,9 @@ fn: lm_p0_stack_open_implicit_anonymous (@: LmP0Document document; @: LmP0Stack 
     if: (parent = 0)
         lm_p0_set_diagnostic(document, 8, line, column, "source level has no open parent structure")
         return: 0
-    ---
     anonymous_node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
     if: (anonymous_node = 0)
         return: 0
-    ---
     anonymous_node\span\line: line
     anonymous_node\span\column: column
     anonymous_node\span\offset: offset
@@ -4414,10 +3962,8 @@ fn: lm_p0_stack_open_implicit_anonymous (@: LmP0Document document; @: LmP0Stack 
     if: (lm_p0_append_field(document, parent, anonymous_node) = 0)
         lm_p0_free_node(anonymous_node)
         return: 0
-    ---
     if: (lm_p0_stack_ensure(document, stack, (parent_level + 1U)) = 0)
         return: 0
-    ---
     stack\parents[(parent_level + 1U)]: anonymous_node\as\structure
     stack\owners[(parent_level + 1U)]: anonymous_node
     stack\hard[(parent_level + 1U)]: 1U
@@ -4428,10 +3974,8 @@ end: lm_p0_stack_open_implicit_anonymous
 fn: lm_p0_node_trailer_slot (@: LmP0Node node) @@: LmP0Trailer
     if: (node\kind = c.LM_P0_NODE_FRAME)
         return: @ node\as\frame\trailer
-    ---
     if: (node\kind = c.LM_P0_NODE_STRUCTURE)
         return: @ node\as\structure\trailer
-    ---
     return: 0
 end: lm_p0_node_trailer_slot
 
@@ -4442,15 +3986,12 @@ fn: lm_p0_attach_trailer (@: LmP0Document document; @: LmP0Node node; const: @(c
     if: (slot = 0)
         lm_p0_set_diagnostic(document, 10, line, column, "this parser node cannot receive a trailer")
         return: 0
-    ---
     if: (slot[0] != 0)
         lm_p0_set_diagnostic(document, 11, line, column, "parser node already has a trailer")
         return: 0
-    ---
     trailer: lm_p0_new_trailer(document, spelling, spelling_length, line, column)
     if: (trailer = 0)
         return: 0
-    ---
     trailer\flags: flags
     slot[0]: trailer
     return: trailer
@@ -4466,15 +4007,12 @@ fn: lm_p0_parse_trailer_item (@: LmP0Document document; @: LmP0Node target; cons
     colon_status: lm_p0_find_colon(document, text, length, line, column, @ colon_index)
     if: (colon_status < 0)
         return: 0
-    ---
     if: (colon_status = 0)
         colon_index: length
-    ---
     if: (colon_index < length)
         spelling_length: colon_index
         while: ((spelling_length > 0U) && lm_p0_is_horizontal_space(text[(spelling_length - 1U)]))
             spelling_length: spelling_length - 1U
-        ---
         body_start: (colon_index + 1U)
         while: ((body_start < length) && lm_p0_is_horizontal_space(text[body_start]))
             body_start: body_start + 1U
@@ -4484,43 +4022,34 @@ fn: lm_p0_parse_trailer_item (@: LmP0Document document; @: LmP0Node target; cons
         if: ((body_start < length) && lm_p0_starts_c_prefixed_quote(text, length, body_start))
             if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ body_start, line, column) = 0)
                 return: 0
-            ---
             spelling_length: body_start
         else:
             if: ((body_start < length) && (text[body_start] = '\''))
                 if: (lm_p0_scan_c_char(document, text, length, @ body_start, line, column) = 0)
                     return: 0
-                ---
                 spelling_length: body_start
             else:
                 if: ((body_start < length) && ((lm_p0_starts_python_string(text, length, body_start) || (text[body_start] = '"')) || (text[body_start] = '`')))
                     if: (lm_p0_scan_quoted(document, text, length, @ body_start, text[body_start], line, column) = 0)
                         return: 0
-                    ---
                     spelling_length: body_start
                 else:
                     while: ((((body_start < length) && (lm_p0_is_horizontal_space(text[body_start]) = 0)) && (lm_p0_is_field_separator(text[body_start]) = 0)) && (text[body_start] != '#'))
                         body_start: body_start + 1U
-                    ---
                     spelling_length: body_start
                 ---
             ---
-        ---
         while: ((body_start < length) && lm_p0_is_horizontal_space(text[body_start]))
             body_start: body_start + 1U
         ---
-    ---
     if: (spelling_length = 0U)
         lm_p0_set_diagnostic(document, 12, line, column, "trailer spelling is empty")
         return: 0
-    ---
     trailer: lm_p0_attach_trailer(document, target, text, spelling_length, flags, line, column)
     if: (trailer = 0)
         return: 0
-    ---
     if: (lm_p0_parse_fields_into(document, trailer\body, (text + body_start), (length - body_start), line, (column + body_start), (offset + body_start)) = 0)
         return: 0
-    ---
     out_body[0]: trailer\body
     return: 1
 end: lm_p0_parse_trailer_item
@@ -4531,33 +4060,26 @@ fn: lm_p0_stream_resolve_pending_delimiter (@: LmP0Document document; @: LmP0Sta
     @: LmP0Structure parent
     if: ((pending\active = 0) || (pending\event = 0))
         return: 1
-    ---
     event: pending\event
     if: (lm_p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
         return: 0
-    ---
     top_level: lm_p0_stack_collapse_soft_to_event(stack, event\level)
     if: ((event\level = top_level) && (stack\hard[top_level] = 0U))
         stack\hard[top_level]: 1U
-    ---
     if: (event\level < top_level)
         lm_p0_stack_truncate_deeper(stack, event\level)
         top_level: lm_p0_stack_top_level(stack)
-    ---
     parent: stack\parents[event\level]
     if: ((parent = 0) && (event\level = 1U))
         parent: stack\parents[0]
-    ---
     if: (parent = 0)
         lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
         return: 0
-    ---
     if: (next_level = (event\level + 1U))
         @: LmP0Node anonymous_node
         anonymous_node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
         if: (anonymous_node = 0)
             return: 0
-        ---
         anonymous_node\span\line: event\line
         anonymous_node\span\column: event\column
         anonymous_node\span\offset: event\offset
@@ -4565,14 +4087,12 @@ fn: lm_p0_stream_resolve_pending_delimiter (@: LmP0Document document; @: LmP0Sta
         if: (lm_p0_append_field(document, parent, anonymous_node) = 0)
             lm_p0_free_node(anonymous_node)
             return: 0
-        ---
         stack\parents[(event\level + 1U)]: anonymous_node\as\structure
         stack\owners[(event\level + 1U)]: anonymous_node
         stack\hard[(event\level + 1U)]: 1U
         lm_p0_stack_truncate_deeper(stack, (event\level + 1U))
     else:
         lm_p0_stack_truncate_deeper(stack, event\level)
-    ---
     lm_p0_pending_delimiter_clear(pending)
     return: 1
 end: lm_p0_stream_resolve_pending_delimiter
@@ -4586,15 +4106,12 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
     int: trailer_target_accepted
     if: (lm_p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
         return: 0
-    ---
     if: ((event\kind = c.LM_P0_STREAM_EVENT_ITEM) && (lm_p0_validate_dash_fence_line(document, event\text, event\text_length, event\line, event\column) = 0))
         return: 0
-    ---
     if: (event\kind = c.LM_P0_STREAM_EVENT_ITEM)
         trailer_role: lm_p0_trailer_role(event\text, event\text_length)
     else:
         trailer_role: c.LM_P0_TRAILER_ROLE_NONE
-    ---
     top_level: lm_p0_stack_top_level(stack)
     trailer_target_available: ((lm_p0_trailer_role_is_tail_cutter(trailer_role) && ((event\level + 1U) <= top_level)) && (stack\owners[(event\level + 1U)] != 0))
     trailer_target_accepted: (trailer_target_available && lm_p0_trailer_role_accepts_target(trailer_role, stack\owners[(event\level + 1U)]))
@@ -4602,14 +4119,11 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
         top_level: lm_p0_stack_collapse_soft_to_event(stack, event\level)
         if: ((event\level = top_level) && (stack\hard[top_level] = 0U))
             stack\hard[top_level]: 1U
-        ---
         trailer_target_available: ((lm_p0_trailer_role_is_tail_cutter(trailer_role) && ((event\level + 1U) <= top_level)) && (stack\owners[(event\level + 1U)] != 0))
         trailer_target_accepted: (trailer_target_available && lm_p0_trailer_role_accepts_target(trailer_role, stack\owners[(event\level + 1U)]))
-    ---
     if: ((lm_p0_trailer_role_is_tail_cutter(trailer_role) && ((event\level + 1U) < top_level)) && (trailer_target_accepted = 0))
         lm_p0_set_diagnostic(document, 13, event\line, event\column, "tail-cutter target is not valid for this receiver")
         return: 0
-    ---
     if: (lm_p0_trailer_role_is_tail_cutter(trailer_role) && trailer_target_accepted)
         @: LmP0Structure trailer_body
         @: LmP0Node target
@@ -4619,65 +4133,50 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
         lm_p0_stack_truncate_deeper(stack, target_level)
         if: (lm_p0_parse_trailer_item(document, target, event\text, event\text_length, event\line, event\column, event\offset, c.LM_P0_TRAILER_TAIL_CUTTER, @ trailer_body) = 0)
             return: 0
-        ---
         stack\parents[target_level]: trailer_body
         stack\owners[target_level]: target
         stack\hard[target_level]: 0U
         if: (target_level > 0U)
             stack\hard[(target_level - 1U)]: 0U
-        ---
         lm_p0_stack_truncate_deeper(stack, target_level)
         return: 1
-    ---
     if: (event\level < top_level)
         lm_p0_stack_truncate_deeper(stack, event\level)
         top_level: lm_p0_stack_top_level(stack)
-    ---
     if: ((stack\parents[event\level] = 0) && (event\level > top_level))
         if: (event\level != (top_level + 1U))
             lm_p0_set_diagnostic(document, 13, event\line, event\column, "source level jumps too deep")
             return: 0
-        ---
         if: (lm_p0_stack_open_implicit_anonymous(document, stack, top_level, event\line, event\column, event\offset) = 0)
             return: 0
         ---
-    ---
     if: (lm_p0_stack_ensure_root_level_alias(document, stack, event\level) = 0)
         return: 0
-    ---
     parent: stack\parents[event\level]
     if: (parent = 0)
         lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
         return: 0
-    ---
     if: (event\kind = c.LM_P0_STREAM_EVENT_ITEM)
         @: LmP0Field previous_last
         @: LmP0Field field
         previous_last: parent\last_field
         if: (lm_p0_parse_fields_into(document, parent, event\text, event\text_length, event\line, event\column, event\offset) = 0)
             return: 0
-        ---
         if: (previous_last != 0)
             field: previous_last\next
         else:
             field: parent\first_field
-        ---
         while: (field != 0)
             if: (field\value != 0)
                 field\value\flags: field\value\flags | event\node_flags
-            ---
             field: field\next
-        ---
         if: ((parent\last_field = previous_last) || (parent\last_field = 0))
             return: 1
-        ---
         return: lm_p0_stack_install_node_lineage(document, stack, event\level, parent\last_field\value)
-    ---
     if: (event\kind = c.LM_P0_STREAM_EVENT_DISABLED_BLOCK)
         node: lm_p0_new_node(document, c.LM_P0_NODE_DISABLED)
         if: (node = 0)
             return: 0
-        ---
         node\as\atom\data: event\text
         node\as\atom\length: event\text_length
         node\span\line: event\line
@@ -4692,7 +4191,6 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
             node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
             if: (node = 0)
                 return: 0
-            ---
             node\as\atom\data: event\text
             node\as\atom\length: event\text_length
             node\span\line: event\line
@@ -4703,15 +4201,12 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
                 return: 0
             ---
         ---
-    ---
     node\flags: node\flags | event\node_flags
     if: (lm_p0_append_field(document, parent, node) = 0)
         lm_p0_free_node(node)
         return: 0
-    ---
     if: (lm_p0_stack_install_node_lineage(document, stack, event\level, node) = 0)
         return: 0
-    ---
     return: 1
 end: lm_p0_stream_apply_item_event
 
@@ -4722,47 +4217,36 @@ fn: lm_p0_stream_apply_mix_event (@: LmP0Document document; @: LmP0Stack stack; 
     @: LmP0Field field
     if: (lm_p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
         return: 0
-    ---
     top_level: lm_p0_stack_collapse_soft_to_event(stack, event\level)
     if: ((event\level = top_level) && (stack\hard[top_level] = 0U))
         stack\hard[top_level]: 1U
-    ---
     if: (event\level < top_level)
         lm_p0_stack_truncate_deeper(stack, event\level)
         top_level: lm_p0_stack_top_level(stack)
-    ---
     if: ((stack\parents[event\level] = 0) && (event\level > top_level))
         if: (event\level != (top_level + 1U))
             lm_p0_set_diagnostic(document, 13, event\line, event\column, "source level jumps too deep")
             return: 0
-        ---
         if: (lm_p0_stack_open_implicit_anonymous(document, stack, top_level, event\line, event\column, event\offset) = 0)
             return: 0
         ---
-    ---
     if: (lm_p0_stack_ensure_root_level_alias(document, stack, event\level) = 0)
         return: 0
-    ---
     parent: stack\parents[event\level]
     if: (parent = 0)
         lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
         return: 0
-    ---
     previous_last: parent\last_field
     if: (lm_p0_parse_fields_into(document, parent, event\text, event\text_length, event\line, event\column, event\offset) = 0)
         return: 0
-    ---
     if: (previous_last != 0)
         field: previous_last\next
     else:
         field: parent\first_field
-    ---
     while: (field != 0)
         if: (field\value != 0)
             field\value\flags: field\value\flags | event\node_flags
-        ---
         field: field\next
-    ---
     return: 1
 end: lm_p0_stream_apply_mix_event
 
@@ -4770,22 +4254,16 @@ fn: lm_p0_stream_apply_event (@: LmP0Document document; @: LmP0Stack stack; @: L
     if: (event\kind = c.LM_P0_STREAM_EVENT_DELIM)
         if: (lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event\level) = 0)
             return: 0
-        ---
         return: lm_p0_pending_delimiter_set(document, pending, event)
-    ---
     if: (lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event\level) = 0)
         return: 0
-    ---
     if: (event\kind = c.LM_P0_STREAM_EVENT_MIX)
         return: lm_p0_stream_apply_mix_event(document, stack, event)
-    ---
     if: ((event\kind = c.LM_P0_STREAM_EVENT_ITEM) && (lm_p0_dash_fence_status_after_comment_trim(event\text, event\text_length, 0) = c.LM_P0_DASH_FENCE_VALID))
         if: (lm_p0_pending_delimiter_set(document, pending, event) = 0)
             return: 0
-        ---
         pending\event\kind: c.LM_P0_STREAM_EVENT_DELIM
         return: 1
-    ---
     return: lm_p0_stream_apply_item_event(document, stack, event)
 end: lm_p0_stream_apply_event
 
@@ -4793,7 +4271,6 @@ fn: lm_p0_pending_mix_flush (@: LmP0Document document; @: LmP0Stack stack; @: Lm
     size_t: i
     if: ((pending_mix = 0) || (pending_mix\count = 0U))
         return: 1
-    ---
     i: 0U
     while: (i < pending_mix\count)
         @: LmP0StreamEvent event
@@ -4801,16 +4278,13 @@ fn: lm_p0_pending_mix_flush (@: LmP0Document document; @: LmP0Stack stack; @: Lm
         if: (event = 0)
             lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while flushing pending MIX event")
             return: 0
-        ---
         event[0]: pending_mix\events[i]
         event\level: level
         if: (lm_p0_stream_apply_event(document, stack, pending_delimiter, event) = 0)
             lm_p0_stream_event_delete(event)
             return: 0
-        ---
         lm_p0_stream_event_delete(event)
         i: i + 1U
-    ---
     pending_mix\count: 0U
     return: 1
 end: lm_p0_pending_mix_flush
@@ -4819,14 +4293,11 @@ fn: lm_p0_stream_block_string_level (const: @(LmP0Stack stack); const: @(LmP0Pen
     size_t: level
     if: (pending\active && (pending\event != 0))
         return: (pending\event\level + 1U)
-    ---
     level: lm_p0_stack_top_level(stack)
     while: (level > 0U)
         if: ((stack\parents[level] != 0) && (lm_p0_stack_level_is_trailer_body(stack, level) = 0))
             return: level
-        ---
         level: level - 1U
-    ---
     return: 0U
 end: lm_p0_stream_block_string_level
 
@@ -4835,61 +4306,44 @@ fn: lm_p0_validate_disabled_item_text (@: LmP0Document document; const: @(char t
     i: 0U
     if: (lm_p0_validate_dash_fence_line(document, text, length, line, column) = 0)
         return: 0
-    ---
     while: (i < length)
         if: (text[i] = '{')
             if: (lm_p0_skip_brace_mark(document, text, length, @ i, line, column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: (text[i] = '#')
             while: ((i < length) && (lm_p0_is_line_break(text[i]) = 0))
                 i: i + 1U
-            ---
             continue
-        ---
         if: lm_p0_starts_python_string(text, length, i)
             if: (lm_p0_scan_python_string(document, text, length, @ i, line, column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: lm_p0_starts_c_prefixed_quote(text, length, i)
             if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ i, line, column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: ((text[i] = '\'') && (lm_p0_starts_python_string(text, length, i) = 0))
             if: (lm_p0_scan_c_char(document, text, length, @ i, line, column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: ((text[i] = '"') || (text[i] = '`'))
             if: (lm_p0_scan_quoted(document, text, length, @ i, text[i], line, column) = 0)
                 return: 0
-            ---
             continue
-        ---
         if: (text[i] = '(')
             size_t: close_index
             if: (lm_p0_find_matching_paren(document, text, length, i, line, column, @ close_index) = 0)
                 return: 0
-            ---
             i: (close_index + 1U)
             continue
-        ---
         if: (text[i] = ')')
             size_t: diagnostic_line
             size_t: diagnostic_column
             lm_p0_position_in_slice(text, length, i, line, column, @ diagnostic_line, @ diagnostic_column)
             lm_p0_set_diagnostic(document, 6, diagnostic_line, diagnostic_column, "unmatched closing parenthesis")
             return: 0
-        ---
         i: i + 1U
-    ---
     return: 1
 end: lm_p0_validate_disabled_item_text
 
@@ -4911,36 +4365,28 @@ fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack
         line_start: offset[0]
         if: (line_start >= length)
             return: 1
-        ---
         if: lm_p0_scan_raw_comment_block(document, source, length, line_start, line[0], offset, line)
             continue
-        ---
         if: (document\diagnostic\code != 0)
             return: 0
-        ---
         if: lm_p0_scan_block_string_event(document, source, length, line_start, line[0], event, offset, line)
             event\level: (cast: size_t -1)
             has_event[0]: 1
             return: 1
-        ---
         if: (document\diagnostic\code != 0)
             return: 0
-        ---
         line_end: lm_p0_find_layout_line_end(source, length, line_start)
         raw_length: (line_end - line_start)
         if: ((raw_length > 0U) && (source[((line_start + raw_length) - 1U)] = '\r'))
             raw_length: raw_length - 1U
-        ---
         if: (raw_length = 0U)
             lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line)
             continue
-        ---
         p: line_start
         level: 0U
         dotted_level: 0
         if: (((((line[0] = 1U) && (raw_length >= 3U)) && ((cast: uchar source[p]) = 0xEFU)) && ((cast: uchar source[(p + 1U)]) = 0xBBU)) && ((cast: uchar source[(p + 2U)]) = 0xBFU))
             p: p + 3U
-        ---
         if: ((p < (line_start + raw_length)) && (source[p] = '.'))
             dotted_level: 1
             while: ((p < (line_start + raw_length)) && (source[p] = '.'))
@@ -4960,7 +4406,6 @@ fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack
             mark_skip: 0U
             if: (lm_p0_skip_leading_brace_marks(document, text, text_length, line[0], ((cast: size_t (text - (source + line_start))) + 1U), @ mark_skip) = 0)
                 return: 0
-            ---
             p: p + mark_skip
             text: (source + p)
             text_length: ((line_start + raw_length) - p)
@@ -4968,11 +4413,9 @@ fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack
             if: ((text_length = 0U) || (text[0] = '#'))
                 lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line)
                 continue
-            ---
             if: (lm_p0_indent_level_from_column(document, indent_stack, indent_column, line[0], ((cast: size_t (text - (source + line_start))) + 1U), @ level) = 0)
                 return: 0
             ---
-        ---
         text: (source + p)
         text_length: ((line_start + raw_length) - p)
         lm_p0_trim_right(@ text, @ text_length)
@@ -4980,7 +4423,6 @@ fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack
         mark_skip: 0U
         if: (lm_p0_skip_leading_brace_marks(document, text, text_length, line[0], ((cast: size_t (text - (source + line_start))) + 1U), @ mark_skip) = 0)
             return: 0
-        ---
         p: p + mark_skip
         text: (source + p)
         text_length: ((line_start + raw_length) - p)
@@ -4992,7 +4434,6 @@ fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack
                 lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line)
                 continue
             ---
-        ---
         c.memset(event, 0, c.sizeof(event[0]))
         event\level: level
         event\text: text
@@ -5004,18 +4445,15 @@ fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack
             event\kind: c.LM_P0_STREAM_EVENT_DELIM
         else:
             event\kind: c.LM_P0_STREAM_EVENT_ITEM
-        ---
         lm_p0_advance_layout_line(source, length, line_start, line_end, offset, line)
         has_event[0]: 1
         return: 1
-    ---
     return: 1
 end: lm_p0_disabled_scan_next_event
 
 fn: lm_p0_disabled_event_is_tail_cutter (const: @(LmP0StreamEvent event)) int
     if: (event\kind = c.LM_P0_STREAM_EVENT_DELIM)
         return: 1
-    ---
     return: lm_p0_stream_event_is_tail_cutter(event)
 end: lm_p0_disabled_event_is_tail_cutter
 
@@ -5029,10 +4467,8 @@ fn: lm_p0_disabled_state_accept_event (@: LmP0Document document; @: LmP0Disabled
         else:
             event\level: state\top_level
         ---
-    ---
     if: ((event\kind = c.LM_P0_STREAM_EVENT_ITEM) && (lm_p0_validate_disabled_item_text(document, event\text, event\text_length, event\line, event\column) = 0))
         return: 0
-    ---
     if: state\pending_item
         if: (event\level = (state\pending_level + 1U))
             state\body_started: 1
@@ -5046,46 +4482,35 @@ fn: lm_p0_disabled_state_accept_event (@: LmP0Document document; @: LmP0Disabled
                 state\pending_item: 0
             ---
         ---
-    ---
     is_tail_cutter: lm_p0_disabled_event_is_tail_cutter(event)
     if: (state\body_started = 0)
         if: ((event\level = state\base_level) && is_tail_cutter)
             done_after_event[0]: 1
             return: 1
-        ---
         if: (event\level <= state\base_level)
             done_before_event[0]: 1
             return: 1
-        ---
         lm_p0_set_diagnostic(document, 8, event\line, event\column, "disabled block source level has no open parent")
         return: 0
-    ---
     if: ((is_tail_cutter && (event\level >= state\base_level)) && ((event\level + 1U) <= state\top_level))
         state\top_level: event\level
         state\pending_item: 0
         if: (event\level = state\base_level)
             done_after_event[0]: 1
-        ---
         return: 1
-    ---
     if: ((event\level + 1U) < state\top_level)
         lm_p0_set_diagnostic(document, 13, event\line, event\column, "disabled block source level decrease must be one step unless a tail cutter is used")
         return: 0
-    ---
     if: (event\level <= state\base_level)
         done_before_event[0]: 1
         return: 1
-    ---
     if: (event\level < state\top_level)
         state\top_level: event\level
-    ---
     if: (event\level > (state\top_level + 1U))
         lm_p0_set_diagnostic(document, 8, event\line, event\column, "disabled block source level has no open parent")
         return: 0
-    ---
     if: (event\level = (state\top_level + 1U))
         state\top_level: event\level
-    ---
     state\pending_item: 1
     state\pending_level: event\level
     return: 1
@@ -5100,24 +4525,20 @@ fn: lm_p0_validate_disabled_block (@: LmP0Document document; const: @(LmP0Indent
     int: status
     if: (lm_p0_validate_disabled_item_text(document, header_text, header_length, header_line, header_column) = 0)
         return: 0
-    ---
     local_indent: lm_p0_indent_stack_clone(document, indent_stack, header_line, header_column)
     if: (local_indent = 0)
         return: 0
-    ---
     state: lm_p0_disabled_state_new(base_level)
     if: (state = 0)
         lm_p0_set_diagnostic(document, 1, header_line, header_column, "out of memory while creating disabled block state")
         lm_p0_indent_stack_delete(local_indent)
         return: 0
-    ---
     event: lm_p0_stream_event_new()
     if: (event = 0)
         lm_p0_set_diagnostic(document, 1, header_line, header_column, "out of memory while creating disabled block event")
         lm_p0_disabled_state_delete(state)
         lm_p0_indent_stack_delete(local_indent)
         return: 0
-    ---
     offset: first_next_offset
     line: first_next_line
     status: 1
@@ -5133,27 +4554,21 @@ fn: lm_p0_validate_disabled_block (@: LmP0Document document; const: @(LmP0Indent
         if: (lm_p0_disabled_scan_next_event(document, local_indent, @ offset, @ line, event, @ has_event) = 0)
             status: 0
             break
-        ---
         if: (has_event = 0)
             if: (state\body_started && (state\top_level > state\base_level))
                 lm_p0_set_diagnostic(document, 22, header_line, header_column, "unterminated disabled block")
                 status: 0
-            ---
             break
-        ---
         if: (lm_p0_disabled_state_accept_event(document, state, event, @ done_after_event, @ done_before_event) = 0)
             status: 0
             break
-        ---
         if: done_before_event
             offset: event_offset
             line: event_line
             break
-        ---
         if: done_after_event
             break
         ---
-    ---
     lm_p0_stream_event_delete(event)
     lm_p0_disabled_state_delete(state)
     lm_p0_indent_stack_delete(local_indent)
@@ -5190,7 +4605,6 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
     document\root: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
     if: (document\root = 0)
         return: 0
-    ---
     document\root\span\offset: 0U
     document\root\span\length: document\source_length
     indent_stack: lm_p0_indent_stack_new(document)
@@ -5200,13 +4614,11 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
     if: (((((indent_stack = 0) || (stack = 0)) || (pending = 0)) || (pending_mix = 0)) || (lm_p0_stack_ensure(document, stack, 0U) = 0))
         if: ((pending = 0) || (pending_mix = 0))
             lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating pending stream state")
-        ---
         lm_p0_indent_stack_delete(indent_stack)
         lm_p0_stack_delete(stack)
         lm_p0_pending_delimiter_delete(pending)
         lm_p0_pending_mix_delete(pending_mix)
         return: 0
-    ---
     stack\parents[0]: document\root\as\structure
     stack\owners[0]: document\root
     event: lm_p0_stream_event_new()
@@ -5217,7 +4629,6 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
         lm_p0_pending_delimiter_delete(pending)
         lm_p0_pending_mix_delete(pending_mix)
         return: 0
-    ---
     while: (offset <= length)
         size_t: line_start
         size_t: line_end
@@ -5234,39 +4645,30 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
         line_start: offset
         if: lm_p0_scan_raw_comment_block(document, source, length, line_start, line, @ offset, @ line)
             continue
-        ---
         if: (document\diagnostic\code != 0)
             status: 0
             break
-        ---
         if: lm_p0_scan_block_string_event(document, source, length, line_start, line, event, @ offset, @ line)
             event\level: lm_p0_stream_block_string_level(stack, pending)
             if: (lm_p0_pending_mix_flush(document, stack, pending, pending_mix, event\level) = 0)
                 status: 0
                 break
-            ---
             if: (lm_p0_stream_apply_event(document, stack, pending, event) = 0)
                 status: 0
                 break
-            ---
             continue
-        ---
         if: (document\diagnostic\code != 0)
             status: 0
             break
-        ---
         line_end: lm_p0_find_layout_line_end(source, length, offset)
         raw_length: (line_end - line_start)
         if: ((raw_length > 0U) && (source[((line_start + raw_length) - 1U)] = '\r'))
             raw_length: raw_length - 1U
-        ---
         if: (raw_length = 0U)
             if: (line_end = length)
                 break
-            ---
             lm_p0_advance_layout_line(source, length, line_start, line_end, @ offset, @ line)
             continue
-        ---
         p: line_start
         level: 0U
         dotted_level: 0
@@ -5275,14 +4677,12 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
         mix_prefix_end: 0U
         if: (((((line = 1U) && (raw_length >= 3U)) && ((cast: uchar source[p]) = 0xEFU)) && ((cast: uchar source[(p + 1U)]) = 0xBBU)) && ((cast: uchar source[(p + 2U)]) = 0xBFU))
             p: p + 3U
-        ---
         if: (((p = line_start) && (raw_length > 0U)) && (source[p] = '{'))
             int: standalone_mix
             standalone_mix: 0
             if: (lm_p0_line_is_standalone_mix_run(document, (source + p), ((line_start + raw_length) - p), line, ((cast: size_t (p - line_start)) + 1U), @ standalone_mix) = 0)
                 status: 0
                 break
-            ---
             if: standalone_mix
                 c.memset(event, 0, c.sizeof(event[0]))
                 event\kind: c.LM_P0_STREAM_EVENT_MIX
@@ -5294,14 +4694,11 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
                 if: (lm_p0_pending_mix_push(document, pending_mix, event) = 0)
                     status: 0
                     break
-                ---
                 if: (line_end = length)
                     break
-                ---
                 lm_p0_advance_layout_line(source, length, line_start, line_end, @ offset, @ line)
                 continue
             ---
-        ---
         size_t: prefix_start
         size_t: prefix_end
         size_t: prefix_anchor
@@ -5311,13 +4708,11 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
         if: (lm_p0_scan_leading_mix_prefix(document, (source + p), ((line_start + raw_length) - p), line, ((cast: size_t (p - line_start)) + 1U), @ prefix_start, @ prefix_end, @ prefix_anchor) = 0)
             status: 0
             break
-        ---
         if: (prefix_end > prefix_start)
             has_leading_mix_prefix: 1
             mix_prefix_start: (p + prefix_start)
             mix_prefix_end: (p + prefix_end)
             p: p + prefix_anchor
-        ---
         if: ((p < (line_start + raw_length)) && (source[p] = '.'))
             dotted_level: 1
             while: ((p < (line_start + raw_length)) && (source[p] = '.'))
@@ -5333,22 +4728,18 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
                 indent_column: lm_p0_visual_column_between(source, line_start, p)
             else:
                 lm_p0_scan_indent_column(source, p, (line_start + raw_length), @ p, @ indent_column)
-            ---
             text: (source + p)
             text_length: ((line_start + raw_length) - p)
             lm_p0_trim_right(@ text, @ text_length)
             if: ((text_length = 0U) || (text[0] = '#'))
                 if: (line_end = length)
                     break
-                ---
                 lm_p0_advance_layout_line(source, length, line_start, line_end, @ offset, @ line)
                 continue
-            ---
             if: (lm_p0_indent_level_from_column(document, indent_stack, indent_column, line, ((cast: size_t (text - (source + line_start))) + 1U), @ level) = 0)
                 status: 0
                 break
             ---
-        ---
         text: (source + p)
         text_length: ((line_start + raw_length) - p)
         lm_p0_trim_right(@ text, @ text_length)
@@ -5356,21 +4747,17 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
         if: ((text_length = 0U) && (level = 0U))
             if: (line_end = length)
                 break
-            ---
             lm_p0_advance_layout_line(source, length, line_start, line_end, @ offset, @ line)
             continue
-        ---
         if: ((text_length > 0U) && (text[0] = '#'))
             if: (dotted_level && (level > 0U))
                 text_length: 0U
             else:
                 if: (line_end = length)
                     break
-                ---
                 lm_p0_advance_layout_line(source, length, line_start, line_end, @ offset, @ line)
                 continue
             ---
-        ---
         if: ((text_length > 0U) && (text[0] = '%'))
             size_t: marker_column
             size_t: header_column
@@ -5384,7 +4771,6 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
             skip: 1U
             while: ((skip < text_length) && lm_p0_is_horizontal_space(text[skip]))
                 skip: skip + 1U
-            ---
             text: text + skip
             text_length: text_length - skip
             lm_p0_trim_trailing_line_comment(@ text, @ text_length)
@@ -5392,7 +4778,6 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
                 lm_p0_set_diagnostic(document, 21, line, marker_column, "disabled marker must be followed by a source item")
                 status: 0
                 break
-            ---
             header_column: ((cast: size_t (text - (source + line_start))) + 1U)
             next_offset: line_start
             next_line: line
@@ -5400,7 +4785,6 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
             if: (lm_p0_validate_disabled_block(document, indent_stack, next_offset, next_line, level, text, text_length, line, header_column, @ disabled_next_offset, @ disabled_next_line) = 0)
                 status: 0
                 break
-            ---
             c.memset(event, 0, c.sizeof(event[0]))
             event\kind: c.LM_P0_STREAM_EVENT_DISABLED_BLOCK
             event\level: level
@@ -5413,11 +4797,9 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
             if: (lm_p0_stream_apply_event(document, stack, pending, event) = 0)
                 status: 0
                 break
-            ---
             offset: disabled_next_offset
             line: disabled_next_line
             continue
-        ---
         c.memset(event, 0, c.sizeof(event[0]))
         event\level: level
         event\node_flags: node_flags
@@ -5430,23 +4812,19 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
             event\kind: c.LM_P0_STREAM_EVENT_DELIM
         else:
             event\kind: c.LM_P0_STREAM_EVENT_ITEM
-        ---
         if: has_last_physical_level
             if: (level > (last_physical_level + 1U))
                 lm_p0_set_diagnostic(document, 13, line, event\column, "source level increase must be one step")
                 status: 0
                 break
-            ---
             if: (((level + 1U) < last_physical_level) && (lm_p0_stream_event_is_tail_cutter(event) = 0))
                 lm_p0_set_diagnostic(document, 13, line, event\column, "source level decrease must be one step unless a tail cutter is used")
                 status: 0
                 break
             ---
-        ---
         if: (lm_p0_pending_mix_flush(document, stack, pending, pending_mix, level) = 0)
             status: 0
             break
-        ---
         if: has_leading_mix_prefix
             @: LmP0StreamEvent mix_event
             mix_event: lm_p0_stream_event_new()
@@ -5454,7 +4832,6 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
                 lm_p0_set_diagnostic(document, 1, line, ((cast: size_t (mix_prefix_start - line_start)) + 1U), "out of memory while creating leading MIX event")
                 status: 0
                 break
-            ---
             mix_event\kind: c.LM_P0_STREAM_EVENT_MIX
             mix_event\level: level
             mix_event\text: (source + mix_prefix_start)
@@ -5466,26 +4843,19 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
                 lm_p0_stream_event_delete(mix_event)
                 status: 0
                 break
-            ---
             lm_p0_stream_event_delete(mix_event)
-        ---
         if: (lm_p0_stream_apply_event(document, stack, pending, event) = 0)
             status: 0
             break
-        ---
         has_last_physical_level: 1
         last_physical_level: level
         if: (line_end = length)
             break
-        ---
         lm_p0_advance_layout_line(source, length, line_start, line_end, @ offset, @ line)
-    ---
     if: (status && (lm_p0_pending_mix_flush(document, stack, pending, pending_mix, lm_p0_stream_block_string_level(stack, pending)) = 0))
         status: 0
-    ---
     if: (status && (lm_p0_stream_resolve_pending_delimiter(document, stack, pending, (cast: size_t -1)) = 0))
         status: 0
-    ---
     lm_p0_stream_event_delete(event)
     lm_p0_indent_stack_delete(indent_stack)
     lm_p0_stack_delete(stack)
@@ -5511,7 +4881,6 @@ fn: lm_p0_postprocess_frame_new (int: phase) @: LmP0PostprocessFrame
     frame: (cast: (@: LmP0PostprocessFrame) lm_own_new_zero(c.sizeof(frame[0])))
     if: (frame != 0)
         frame\phase: phase
-    ---
     return: frame
 end: lm_p0_postprocess_frame_new
 
@@ -5519,11 +4888,9 @@ fn: lm_p0_postprocess_push_frame (@: LmOwnPtrStack stack; @: LmP0PostprocessFram
     if: ((stack = 0) || (frame = 0))
         lm_own_delete(frame, 0)
         return: 1
-    ---
     if: (lm_own_ptr_stack_push(stack, frame) != 0)
         lm_own_delete(frame, 0)
         return: 1
-    ---
     return: 0
 end: lm_p0_postprocess_push_frame
 
@@ -5531,11 +4898,9 @@ fn: lm_p0_postprocess_push_node (@: LmOwnPtrStack stack; @: LmP0Node node) int
     @: LmP0PostprocessFrame frame
     if: (node = 0)
         return: 0
-    ---
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_NODE)
     if: (frame != 0)
         frame\node: node
-    ---
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_node
 
@@ -5543,12 +4908,10 @@ fn: lm_p0_postprocess_push_structure (@: LmOwnPtrStack stack; @: LmP0Structure s
     @: LmP0PostprocessFrame frame
     if: (structure = 0)
         return: 1
-    ---
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_STRUCTURE)
     if: (frame != 0)
         frame\structure: structure
         frame\field: structure\first_field
-    ---
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_structure
 
@@ -5556,11 +4919,9 @@ fn: lm_p0_postprocess_push_trailer (@: LmOwnPtrStack stack; @: LmP0Trailer trail
     @: LmP0PostprocessFrame frame
     if: (trailer = 0)
         return: 0
-    ---
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_TRAILER)
     if: (frame != 0)
         frame\trailer: trailer
-    ---
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_trailer
 
@@ -5568,11 +4929,9 @@ fn: lm_p0_postprocess_push_frame_wrap (@: LmOwnPtrStack stack; @: LmP0Node node)
     @: LmP0PostprocessFrame frame
     if: (node = 0)
         return: 1
-    ---
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_FRAME_WRAP)
     if: (frame != 0)
         frame\node: node
-    ---
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_frame_wrap
 
@@ -5581,7 +4940,6 @@ fn: lm_p0_postprocess_stack_new () @: LmOwnPtrStack
     stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
     if: (stack != 0)
         lm_own_ptr_stack_init(stack, lm_own_delete_plain)
-    ---
     return: stack
 end: lm_p0_postprocess_stack_new
 
@@ -5604,56 +4962,44 @@ fn: lm_p0_postprocess_run (@: LmP0Document document; @: LmOwnPtrStack stack) int
         if: (frame = 0)
             status: 0
             break
-        ---
         if: (frame\phase = c.LM_P0_POSTPROCESS_NODE)
             node: frame\node
             lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
             if: (node = 0)
                 continue
-            ---
             if: (node\kind = c.LM_P0_NODE_FRAME)
                 status: (((lm_p0_postprocess_push_trailer(stack, node\as\frame\trailer) = 0) && (lm_p0_postprocess_push_frame_wrap(stack, node) = 0)) && (lm_p0_postprocess_push_structure(stack, node\as\frame\body) = 0))
             else:
                 if: (node\kind = c.LM_P0_NODE_STRUCTURE)
                     status: ((lm_p0_postprocess_push_trailer(stack, node\as\structure\trailer) = 0) && (lm_p0_postprocess_push_structure(stack, node\as\structure) = 0))
                 ---
-            ---
             continue
-        ---
         if: (frame\phase = c.LM_P0_POSTPROCESS_STRUCTURE)
             while: ((frame\field != 0) && (frame\field\value = 0))
                 frame\field: frame\field\next
-            ---
             if: (frame\field = 0)
                 lm_p0_structure_recount(frame\structure)
                 lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
                 continue
-            ---
             node: frame\field\value
             frame\field: frame\field\next
             status: (lm_p0_postprocess_push_node(stack, node) = 0)
             continue
-        ---
         if: (frame\phase = c.LM_P0_POSTPROCESS_TRAILER)
             if: (frame\trailer = 0)
                 lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
                 continue
-            ---
             structure: frame\trailer\body
             lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
             status: (lm_p0_postprocess_push_structure(stack, structure) = 0)
             continue
-        ---
         if: (frame\phase = c.LM_P0_POSTPROCESS_FRAME_WRAP)
             node: frame\node
             lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
             if: (((node != 0) && ((node\as\frame\flags & c.LM_P0_FRAME_INLINE_BODY) != 0U)) && (lm_p0_wrap_fields_from_line(document, node\as\frame\body, node\span\line, (node\span\offset + node\span\length)) = 0))
                 status: 0
-            ---
             continue
-        ---
         status: 0
-    ---
     return: status
 end: lm_p0_postprocess_run
 
@@ -5662,11 +5008,9 @@ fn: lm_p0_postprocess_node (@: LmP0Document document; @: LmP0Node node) int
     int: status
     if: (node = 0)
         return: 1
-    ---
     stack: lm_p0_postprocess_stack_new()
     if: (stack = 0)
         return: 0
-    ---
     status: ((lm_p0_postprocess_push_node(stack, node) = 0) && lm_p0_postprocess_run(document, stack))
     lm_p0_postprocess_stack_delete(@ stack)
     return: status
@@ -5683,18 +5027,14 @@ fn: lm_p0_wrap_fields_from_line (@: LmP0Document document; @: LmP0Structure stru
     while: (field != 0)
         if: (((field\value != 0) && (field\value\span\line != head_line)) && (field\value\span\offset >= inline_event_end_offset))
             break
-        ---
         previous: field
         field: field\next
-    ---
     if: (field = 0)
         return: 1
-    ---
     group_first: field
     group_node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
     if: (group_node = 0)
         return: 0
-    ---
     group_node\span[0]: group_first\value\span[0]
     move: group_first
     while: (move != 0)
@@ -5706,16 +5046,13 @@ fn: lm_p0_wrap_fields_from_line (@: LmP0Document document; @: LmP0Structure stru
         if: (lm_p0_append_field(document, group_node\as\structure, value) = 0)
             lm_p0_free_node(group_node)
             return: 0
-        ---
         move: next_move
-    ---
     group_first\value: group_node
     group_first\next: 0
     if: (previous = 0)
         structure\first_field: group_first
     else:
         previous\next: group_first
-    ---
     lm_p0_structure_recount(structure)
     return: 1
 end: lm_p0_wrap_fields_from_line
@@ -5723,26 +5060,20 @@ end: lm_p0_wrap_fields_from_line
 fn: lm_p0_validate_nonempty_colon_frames_in_trailer (@: LmP0Document document; const: @(LmP0Trailer trailer)) int
     if: (trailer = 0)
         return: 1
-    ---
     return: lm_p0_validate_nonempty_colon_frames_in_structure(document, trailer\body)
 end: lm_p0_validate_nonempty_colon_frames_in_trailer
 
 fn: lm_p0_validate_nonempty_colon_frames_in_node (@: LmP0Document document; const: @(LmP0Node node)) int
     if: (node = 0)
         return: 1
-    ---
     if: (node\kind = c.LM_P0_NODE_FRAME)
         if: (lm_p0_validate_nonempty_colon_frames_in_structure(document, node\as\frame\body) = 0)
             return: 0
-        ---
         return: lm_p0_validate_nonempty_colon_frames_in_trailer(document, node\as\frame\trailer)
-    ---
     if: (node\kind = c.LM_P0_NODE_STRUCTURE)
         if: (lm_p0_validate_nonempty_colon_frames_in_structure(document, node\as\structure) = 0)
             return: 0
-        ---
         return: lm_p0_validate_nonempty_colon_frames_in_trailer(document, node\as\structure\trailer)
-    ---
     return: 1
 end: lm_p0_validate_nonempty_colon_frames_in_node
 
@@ -5752,9 +5083,7 @@ fn: lm_p0_validate_nonempty_colon_frames_in_structure (@: LmP0Document document;
     while: (field != 0)
         if: (lm_p0_validate_nonempty_colon_frames_in_node(document, field\value) = 0)
             return: 0
-        ---
         field: field\next
-    ---
     return: 1
 end: lm_p0_validate_nonempty_colon_frames_in_structure
 
@@ -5763,44 +5092,36 @@ external:
         @: LmP0Document document
         if: (out_document = 0)
             return: 1
-        ---
         out_document[0]: 0
         document: (cast: (@: LmP0Document) lm_own_new_zero(c.sizeof(document[0])))
         if: (document = 0)
             return: 1
-        ---
         if: (lm_p0_document_init_owners(document) != 0)
             lm_own_delete(document, 0)
             return: 1
-        ---
         if: (source = 0)
             source: ""
             source_length: 0U
-        ---
         if: (lm_p0_registry_load_default() != 0)
             lm_p0_document_destroy_owners(document)
             lm_own_delete(document, 0)
             return: 1
-        ---
         document\source_length: source_length
         document\source: lm_own_arena_copy_bytes(document\source_owner, source, document\source_length)
         if: (document\source = 0)
             lm_p0_document_destroy_owners(document)
             lm_own_delete(document, 0)
             return: 1
-        ---
         if: lm_p0_parse_stream(document)
             if: lm_p0_postprocess_node(document, document\root)
                 lm_p0_validate_nonempty_colon_frames_in_node(document, document\root)
             ---
-        ---
         if: (document\diagnostic\code = 0)
             if: (lm_own_tree_cut(document\tree_arena) != 0)
                 lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while promoting parser lazy text edges")
             else:
                 lm_p0_document_freeze_tree(document)
             ---
-        ---
         out_document[0]: document
         if: (document\diagnostic\code = 0)
             return: 0
@@ -5812,7 +5133,6 @@ external:
     fn: lm_p0_parse_string (const: @(char source); @@: LmP0Document out_document) int
         if: (source = 0)
             source: ""
-        ---
         return: lm_p0_parse_bytes(source, c.strlen(source), out_document)
     end: lm_p0_parse_string
 end: external
@@ -5826,36 +5146,29 @@ external:
         int: status
         if: (out_document = 0)
             return: 1
-        ---
         out_document[0]: 0
         file: c.fopen(path, "rb")
         if: (file = 0)
             return: 1
-        ---
         if: (c.fseek(file, 0L, c.SEEK_END) != 0)
             c.fclose(file)
             return: 1
-        ---
         size: c.ftell(file)
         if: (size < 0L)
             c.fclose(file)
             return: 1
-        ---
         if: (c.fseek(file, 0L, c.SEEK_SET) != 0)
             c.fclose(file)
             return: 1
-        ---
         buffer: (cast: (@: char) lm_own_new_zero(((cast: size_t size) + 1U)))
         if: (buffer = 0)
             c.fclose(file)
             return: 1
-        ---
         read_size: c.fread(buffer, 1U, (cast: size_t size), file)
         c.fclose(file)
         if: (read_size != (cast: size_t size))
             lm_own_delete(buffer, 0)
             return: 1
-        ---
         buffer[read_size]: '\0'
         status: lm_p0_parse_bytes(buffer, read_size, out_document)
         lm_own_delete(buffer, 0)
@@ -5869,13 +5182,11 @@ fn: lm_p0_registry_join_text3 (const: @(LmP0Text first); const: @(char separator
     @: char result
     if: (((first = 0) || (second = 0)) || (separator = 0))
         return: 0
-    ---
     separator_length: c.strlen(separator)
     length: ((first\length + separator_length) + second\length)
     result: (cast: (@: char) lm_own_new_zero((length + 1U)))
     if: (result = 0)
         return: 0
-    ---
     c.memcpy(result, first\data, first\length)
     c.memcpy((result + first\length), separator, separator_length)
     c.memcpy(((result + first\length) + separator_length), second\data, second\length)
@@ -5944,7 +5255,6 @@ fn: lm_p0_registry_push_column_metadata (const: @(LmP0Text table_name); @@: LmP0
                 lm_own_delete(column_key, 0)
         ---
         index: index + 1U
-    ---
 
     lm_p0_text_ref_delete(table_payload)
     lm_p0_text_ref_delete(column_payload)
@@ -5954,7 +5264,6 @@ fn: lm_p0_registry_l4_push_row (@: void context; const: @(LmP0Text table_atom); 
     if: ((((table_atom = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
         c.fprintf(c.stderr, "parser registry error: row expects exactly three atom fields\n")
         return: -1
-    ---
     return: lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node\as\atom)
 end: lm_p0_registry_l4_push_row
 
@@ -5963,7 +5272,6 @@ fn: lm_p0_registry_l4_push_cell (@: void context; const: @(LmP0Text table_name);
     if: ((((table_name = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
         c.fprintf(c.stderr, "parser registry error: table rows currently expect atom cells\n")
         return: -1
-    ---
     return: lm_p0_registry_push_table_cell(table_name, column, split_by_column, key_atom, payload_node\as\atom)
 end: lm_p0_registry_l4_push_cell
 
@@ -5971,7 +5279,6 @@ fn: lm_p0_registry_l4_push_column_metadata (@: void context; const: @(LmP0Text t
     context: context
     if: (table_name = 0)
         return: -1
-    ---
     return: lm_p0_registry_push_column_metadata(table_name, columns, column_count)
 end: lm_p0_registry_l4_push_column_metadata
 
@@ -5979,16 +5286,13 @@ fn: lm_p0_registry_join_relation_matches (const: @(char relation_name); const: @
     size_t: relation_length
     if: ((((relation_name = 0) || (source_name = 0)) || (source_name\data = 0)) || (out_suffix = 0))
         return: 0
-    ---
     relation_length: c.strlen(relation_name)
     if: ((relation_length = source_name\length) && (c.memcmp(relation_name, source_name\data, source_name\length) = 0))
         out_suffix[0]: ""
         return: 1
-    ---
     if: (((relation_length > (source_name\length + 1U)) && (c.memcmp(relation_name, source_name\data, source_name\length) = 0)) && (relation_name[source_name\length] = '.'))
         out_suffix[0]: (relation_name + source_name\length)
         return: 1
-    ---
     return: 0
 end: lm_p0_registry_join_relation_matches
 
@@ -5998,19 +5302,15 @@ fn: lm_p0_registry_join_target_relation_new (const: @(LmP0Text target_name); con
     @: char relation_name
     if: (((target_name = 0) || (target_name\data = 0)) || (suffix = 0))
         return: 0
-    ---
     suffix_length: c.strlen(suffix)
     length: (target_name\length + suffix_length)
     relation_name: (cast: (@: char) lm_own_new_zero((length + 1U)))
     if: (relation_name = 0)
         return: 0
-    ---
     if: (target_name\length != 0U)
         c.memcpy(relation_name, target_name\data, target_name\length)
-    ---
     if: (suffix_length != 0U)
         c.memcpy((relation_name + target_name\length), suffix, suffix_length)
-    ---
     relation_name[length]: '\0'
     return: relation_name
 end: lm_p0_registry_join_target_relation_new
@@ -6028,19 +5328,16 @@ fn: lm_p0_registry_l4_join_table (@: void context; const: @(LmP0Text source_tabl
     context: context
     if: ((((lm_p0_registry = 0) || (lm_p0_registry\rows = 0)) || (source_table = 0)) || (target_table = 0))
         return: -1
-    ---
     source_name: lm_p0_text_ref_new_empty()
     target_name: lm_p0_text_ref_new_empty()
     if: ((source_name = 0) || (target_name = 0))
         lm_p0_text_ref_delete(source_name)
         lm_p0_text_ref_delete(target_name)
         return: -1
-    ---
     if: ((lm_p0_registry_identifier_value(source_table, source_name) = 0) || (lm_p0_registry_identifier_value(target_table, target_name) = 0))
         lm_p0_text_ref_delete(source_name)
         lm_p0_text_ref_delete(target_name)
         return: -1
-    ---
     initial_count: lm_p0_registry\rows\count
     copied: 0U
     status: 0
@@ -6049,29 +5346,23 @@ fn: lm_p0_registry_l4_join_table (@: void context; const: @(LmP0Text source_tabl
         row: (cast: (@: LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
         if: ((((row = 0) || (row\table = 0)) || (row\key = 0)) || (row\payload = 0))
             continue
-        ---
         suffix: 0
         if: (lm_p0_registry_join_relation_matches(row\table, source_name, @ suffix) = 0)
             continue
-        ---
         target_relation: lm_p0_registry_join_target_relation_new(target_name, suffix)
         if: (target_relation = 0)
             status: -1
             break
-        ---
         if: (lm_p0_registry_push_row_values(lm_p0_text_from_cstr(target_relation), lm_p0_text_from_cstr(row\key), lm_p0_text_from_cstr(row\payload)) != 0)
             lm_own_delete(target_relation, 0)
             status: -1
             break
-        ---
         lm_own_delete(target_relation, 0)
         copied: copied + 1U
         i: i + 1U
-    ---
     if: ((status = 0) && (copied = 0U))
         c.fprintf(c.stderr, "parser registry error: join source table \"%.*s\" has no rows\n", (cast: int source_name\length), source_name\data)
         status: -1
-    ---
     lm_p0_text_ref_delete(source_name)
     lm_p0_text_ref_delete(target_name)
     return: status
@@ -6087,47 +5378,37 @@ fn: lm_p0_registry_l4_resolve_frame (const: @(LmL4Loader loader); const: @(LmP0T
     receiver_type: lm_p0_registry_lookup(head, "namespace.l4")
     if: (receiver_type = 0)
         return: 0
-    ---
     if: (c.strcmp(receiver_type, "l4.frame") != 0)
         int: lm_p0_tmp_22
         if: (head != 0)
             lm_p0_tmp_22: (cast: int head\length)
         else:
             lm_p0_tmp_22: 0
-        ---
         const: @: char lm_p0_tmp_23
         if: (head != 0)
             lm_p0_tmp_23: head\data
         else:
             lm_p0_tmp_23: ""
-        ---
         c.fprintf(c.stderr, "parser registry inconsistency: namespace.l4[\"%.*s\"] has receiver marker %s, expected l4.frame\n", lm_p0_tmp_22, lm_p0_tmp_23, receiver_type)
         return: 0
-    ---
     if: lm_p0_text_equals(head, "table")
         return: @ lm_l4_receiver_table
-    ---
     if: lm_p0_text_equals(head, "join")
         return: @ lm_l4_receiver_join
-    ---
     if: lm_p0_text_equals(head, "row")
         return: @ lm_l4_receiver_row
-    ---
     if: (lm_p0_text_equals(head, "fn") || lm_p0_text_equals(head, "lazy fn"))
         return: @ lm_l4_receiver_ignore
-    ---
     int: lm_p0_tmp_24
     if: (head != 0)
         lm_p0_tmp_24: (cast: int head\length)
     else:
         lm_p0_tmp_24: 0
-    ---
     const: @: char lm_p0_tmp_25
     if: (head != 0)
         lm_p0_tmp_25: head\data
     else:
         lm_p0_tmp_25: ""
-    ---
     c.fprintf(c.stderr, "parser registry inconsistency: namespace.l4[\"%.*s\"] has no direct frame receiver binding\n", lm_p0_tmp_24, lm_p0_tmp_25)
     return: 0
 end: lm_p0_registry_l4_resolve_frame
@@ -6136,7 +5417,6 @@ fn: lm_p0_registry_l4_dispatch_frame (const: @(LmL4Loader loader); @: void conte
     LmL4FrameReceiver: receiver
     if: (frame = 0)
         return: 1
-    ---
     receiver: lm_p0_registry_l4_resolve_frame(loader, frame\head)
     if: (receiver = 0)
         int: lm_p0_tmp_26
@@ -6144,16 +5424,13 @@ fn: lm_p0_registry_l4_dispatch_frame (const: @(LmL4Loader loader); @: void conte
             lm_p0_tmp_26: (cast: int frame\head\length)
         else:
             lm_p0_tmp_26: 0
-        ---
         const: @: char lm_p0_tmp_27
         if: (frame\head != 0)
             lm_p0_tmp_27: frame\head\data
         else:
             lm_p0_tmp_27: ""
-        ---
         c.fprintf(c.stderr, "parser registry error: registry body expects registered L4 receiver frames, got \"%.*s\"\n", lm_p0_tmp_26, lm_p0_tmp_27)
         return: 1
-    ---
     return: receiver(loader, context, frame)
 end: lm_p0_registry_l4_dispatch_frame
 
@@ -6162,7 +5439,6 @@ fn: lm_p0_registry_l4_loader_new () @: LmL4Loader
     loader: (cast: (@: LmL4Loader) lm_own_new_zero(c.sizeof(loader[0])))
     if: (loader = 0)
         return: 0
-    ---
     loader\error_prefix: "parser"
     loader\push_row: @ lm_p0_registry_l4_push_row
     loader\push_cell: @ lm_p0_registry_l4_push_cell
@@ -6187,27 +5463,21 @@ fn: lm_p0_path_has_extension (const: @(char path); const: @(char extension)) int
     char: right
     if: ((path = 0) || (extension = 0))
         return: 0
-    ---
     path_length: c.strlen(path)
     extension_length: c.strlen(extension)
     if: (path_length < extension_length)
         return: 0
-    ---
     i: 0U
     while: (i < extension_length)
         left: path[((path_length - extension_length) + i)]
         right: extension[i]
         if: ((left >= 'A') && (left <= 'Z'))
             left: (cast: char ((left - 'A') + 'a'))
-        ---
         if: ((right >= 'A') && (right <= 'Z'))
             right: (cast: char ((right - 'A') + 'a'))
-        ---
         if: (left != right)
             return: 0
-        ---
         i: i + 1U
-    ---
     return: 1
 end: lm_p0_path_has_extension
 
@@ -6220,12 +5490,10 @@ fn: lm_p0_registry_parse_unsigned_payload (const: @(char payload); @: unsigned o
     ulong: value
     if: ((payload = 0) || (out_value = 0))
         return: 1
-    ---
     end_index: 0
     value: c.strtoul(payload, @ end_index, 10)
     if: ((((end_index = payload) || (end_index = 0)) || (end_index[0] != '\0')) || (value > (cast: ulong c.UINT_MAX)))
         return: 1
-    ---
     out_value[0]: (cast: unsigned value)
     return: 0
 end: lm_p0_registry_parse_unsigned_payload
@@ -6236,10 +5504,8 @@ fn: lm_p0_registry_lookup_key_by_unsigned_payload (const: @(char table); unsigne
     unsigned: actual
     if: (((table = 0) || (lm_p0_registry = 0)) || (lm_p0_registry\loaded = 0))
         return: 0
-    ---
     if: (lm_p0_registry\rows = 0)
         return: 0
-    ---
     i: lm_p0_registry\rows\count
     while: (i > 0U)
         i: i - 1U
@@ -6247,7 +5513,6 @@ fn: lm_p0_registry_lookup_key_by_unsigned_payload (const: @(char table); unsigne
         if: (((((((row != 0) && (row\table != 0)) && (row\key != 0)) && (row\payload != 0)) && (c.strcmp(row\table, table) = 0)) && (lm_p0_registry_parse_unsigned_payload(row\payload, @ actual) = 0)) && (actual = value))
             return: row\key
         ---
-    ---
     return: 0
 end: lm_p0_registry_lookup_key_by_unsigned_payload
 
@@ -6256,20 +5521,16 @@ fn: lm_p0_registry_validate_abi_constant (const: @(char table); const: @(char ke
     unsigned: actual
     if: (lm_p0_registry_table_has_rows(table) = 0)
         return: 0
-    ---
     payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(key), table)
     if: (payload = 0)
         c.fprintf(c.stderr, "parser registry error: missing ABI constant %s[%s]\n", table, key)
         return: 1
-    ---
     if: (lm_p0_registry_parse_unsigned_payload(payload, @ actual) != 0)
         c.fprintf(c.stderr, "parser registry error: ABI constant %s[%s] expects unsigned integer payload\n", table, key)
         return: 1
-    ---
     if: (actual != expected)
         c.fprintf(c.stderr, "parser registry mismatch: ABI constant %s[%s] registry=%lu C=%lu\n", table, key, (cast: ulong actual), (cast: ulong expected))
         return: 1
-    ---
     return: 0
 end: lm_p0_registry_validate_abi_constant
 
@@ -6283,29 +5544,23 @@ external:
         registry_name: 0
         if: ((kind >= 0) && (lm_p0_registry_load_default() = 0))
             registry_name: lm_p0_registry_lookup_key_by_unsigned_payload("node.kind", (cast: unsigned kind))
-        ---
         if: (registry_name != 0)
             return: registry_name
-        ---
         if: (kind = c.LM_P0_NODE_STRUCTURE)
             return: "structure"
-        ---
         if: (kind = c.LM_P0_NODE_FRAME)
             return: "frame"
-        ---
         if: (kind = c.LM_P0_NODE_ATOM)
             return: "atom"
-        ---
         if: (kind = c.LM_P0_NODE_DISABLED)
             return: "disabled"
-        ---
         return: "unknown"
     end: lm_p0_node_kind_class_name
 end: external
 
 fn: lm_p0_registry_load_default () int
     const: @: char override_path
-    [10]: @: char candidates
+    const: [10]: @: char candidates
     const: @: char registry_path
     @: LmP0Document document
     const: @: LmP0Diagnostic diagnostic
@@ -6314,28 +5569,23 @@ fn: lm_p0_registry_load_default () int
     size_t: i
     if: ((lm_p0_registry != 0) && (lm_p0_registry\loaded || lm_p0_registry\loading))
         return: 0
-    ---
     if: (lm_p0_registry_init() != 0)
         return: 1
-    ---
     lm_p0_registry\rows: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(lm_p0_registry\rows[0])))
     if: (lm_p0_registry\rows = 0)
         lm_p0_registry_destroy()
         return: 1
-    ---
     lm_p0_registry\loading: 1
     lm_own_ptr_stack_init(lm_p0_registry\rows, lm_p0_registry_row_destroy_any)
     if: (lm_p0_registry_seed_l4_receivers() != 0)
         lm_p0_registry_destroy()
         return: 1
-    ---
     override_path: c.getenv("LM_P0_REGISTRY")
     override_enabled: ((override_path != 0) && (override_path[0] != '\0'))
     if: override_enabled
         candidates[0]: override_path
     else:
         candidates[0]: "lm4/parser_registry.lm4"
-    ---
     candidates[1]: "../lm4/parser_registry.lm4"
     candidates[2]: "../../lm4/parser_registry.lm4"
     candidates[3]: "lm2/parser_registry.lm4"
@@ -6353,40 +5603,33 @@ fn: lm_p0_registry_load_default () int
         status: lm_p0_parse_file(registry_path, @ document)
         if: (status = 0)
             break
-        ---
         diagnostic: lm_p0_document_diagnostic(document)
         if: (diagnostic != 0)
             c.fprintf(c.stderr, "parser registry parse error %d at %lu:%lu in %s: %s\n", diagnostic\code, (cast: ulong diagnostic\line), (cast: ulong diagnostic\column), registry_path, diagnostic\message)
             lm_p0_document_destroy(document)
             lm_p0_registry_destroy()
             return: 1
-        ---
         lm_p0_document_destroy(document)
         document: 0
         if: override_enabled
             c.fprintf(c.stderr, "parser registry error: cannot read %s\n", registry_path)
             lm_p0_registry_destroy()
             return: 1
-        ---
         i: i + 1U
-    ---
     if: (document = 0)
         lm_p0_registry\loaded: 1
         lm_p0_registry\loading: 0
         return: 0
-    ---
     status: lm_p0_registry_load_root(lm_p0_document_root(document), lm_p0_path_has_extension(registry_path, ".lm4"))
     lm_p0_document_destroy(document)
     if: (status != 0)
         lm_p0_registry_destroy()
         return: 1
-    ---
     lm_p0_registry\loaded: 1
     lm_p0_registry\loading: 0
     if: (lm_p0_registry_validate_abi_constants() != 0)
         lm_p0_registry_destroy()
         return: 1
-    ---
     return: 0
 end: lm_p0_registry_load_default
 
@@ -6394,7 +5637,6 @@ external:
     sub: lm_p0_document_destroy (@: LmP0Document document)
         if: (document = 0)
             return
-        ---
         lm_p0_document_destroy_owners(document)
         lm_own_delete(document, 0)
     end: lm_p0_document_destroy
@@ -6420,7 +5662,6 @@ external:
     fn: lm_p0_document_diagnostic (const: @(LmP0Document document)) const: @: LmP0Diagnostic
         if: (((document = 0) || (document\diagnostic = 0)) || (document\diagnostic\code = 0))
             return: 0
-        ---
         return: document\diagnostic
     end: lm_p0_document_diagnostic
 end: external
@@ -6436,23 +5677,18 @@ fn: lm_p0_dump_reserve (@: LmP0Dump dump; size_t: extra) int
     size_t: new_capacity
     if: dump\failed
         return: 0
-    ---
     if: (((dump\length + extra) + 1U) <= dump\capacity)
         return: 1
-    ---
     if: (dump\capacity = 0U)
         new_capacity: 256U
     else:
         new_capacity: dump\capacity
-    ---
     while: (new_capacity < ((dump\length + extra) + 1U))
         new_capacity: new_capacity * 2U
-    ---
     data: (cast: (@: char) lm_own_resize(dump\data, new_capacity))
     if: (data = 0)
         dump\failed: 1
         return: 0
-    ---
     dump\data: data
     dump\capacity: new_capacity
     return: 1
@@ -6461,7 +5697,6 @@ end: lm_p0_dump_reserve
 sub: lm_p0_dump_append (@: LmP0Dump dump; const: @(char text); size_t: length)
     if: (lm_p0_dump_reserve(dump, length) = 0)
         return
-    ---
     c.memcpy((dump\data + dump\length), text, length)
     dump\length: dump\length + length
     dump\data[dump\length]: '\0'
@@ -6484,7 +5719,6 @@ sub: lm_p0_dump_text (@: LmP0Dump dump; const: @(LmP0Text text))
     lm_p0_dump_append_cstr(dump, "\"")
     if: (text != 0)
         lm_p0_dump_append(dump, text\data, text\length)
-    ---
     lm_p0_dump_append_cstr(dump, "\"")
 end: lm_p0_dump_text
 
@@ -6494,7 +5728,6 @@ fn: lm_p0_dump_frame_new (int: phase; size_t: indent) @: LmP0DumpFrame
     if: (frame != 0)
         frame\phase: phase
         frame\indent: indent
-    ---
     return: frame
 end: lm_p0_dump_frame_new
 
@@ -6502,11 +5735,9 @@ fn: lm_p0_dump_push_frame (@: LmOwnPtrStack stack; @: LmP0DumpFrame frame) int
     if: ((stack = 0) || (frame = 0))
         lm_own_delete(frame, 0)
         return: 1
-    ---
     if: (lm_own_ptr_stack_push(stack, frame) != 0)
         lm_own_delete(frame, 0)
         return: 1
-    ---
     return: 0
 end: lm_p0_dump_push_frame
 
@@ -6514,11 +5745,9 @@ fn: lm_p0_dump_push_node (@: LmOwnPtrStack stack; const: @(LmP0Node node); size_
     @: LmP0DumpFrame frame
     if: (node = 0)
         return: 0
-    ---
     frame: lm_p0_dump_frame_new(c.LM_P0_DUMP_NODE, indent)
     if: (frame != 0)
         frame\node: node
-    ---
     return: lm_p0_dump_push_frame(stack, frame)
 end: lm_p0_dump_push_node
 
@@ -6526,12 +5755,10 @@ fn: lm_p0_dump_push_structure (@: LmOwnPtrStack stack; const: @(LmP0Structure st
     @: LmP0DumpFrame frame
     if: (structure = 0)
         return: 0
-    ---
     frame: lm_p0_dump_frame_new(c.LM_P0_DUMP_STRUCTURE, indent)
     if: (frame != 0)
         frame\structure: structure
         frame\field: structure\first_field
-    ---
     return: lm_p0_dump_push_frame(stack, frame)
 end: lm_p0_dump_push_structure
 
@@ -6539,11 +5766,9 @@ fn: lm_p0_dump_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer traile
     @: LmP0DumpFrame frame
     if: (trailer = 0)
         return: 0
-    ---
     frame: lm_p0_dump_frame_new(c.LM_P0_DUMP_TRAILER, indent)
     if: (frame != 0)
         frame\trailer: trailer
-    ---
     return: lm_p0_dump_push_frame(stack, frame)
 end: lm_p0_dump_push_trailer
 
@@ -6552,7 +5777,6 @@ fn: lm_p0_dump_stack_new () @: LmOwnPtrStack
     stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
     if: (stack != 0)
         lm_own_ptr_stack_init(stack, lm_own_delete_plain)
-    ---
     return: stack
 end: lm_p0_dump_stack_new
 
@@ -6576,25 +5800,20 @@ sub: lm_p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
         if: (frame = 0)
             dump\failed: 1
             return
-        ---
         if: (frame\phase = c.LM_P0_DUMP_NODE)
             node: frame\node
             indent: frame\indent
             lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
             if: (node = 0)
                 continue
-            ---
             structure_name: lm_p0_node_kind_class_name(c.LM_P0_NODE_STRUCTURE)
             lm_p0_dump_indent(dump, indent)
             if: ((node\flags & c.LM_P0_NODE_INACTIVE) != 0U)
                 lm_p0_dump_append_cstr(dump, "Inactive ")
-            ---
             if: ((node\flags & c.LM_P0_NODE_MIX) != 0U)
                 lm_p0_dump_append_cstr(dump, "MIX ")
-            ---
             if: ((node\flags & c.LM_P0_NODE_POSITIONAL_SKIP) != 0U)
                 lm_p0_dump_append_cstr(dump, "PositionalSkip ")
-            ---
             if: (node\kind = c.LM_P0_NODE_STRUCTURE)
                 lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node\kind))
                 lm_p0_dump_append_field_count_line(dump, node\as\structure\field_count)
@@ -6632,24 +5851,18 @@ sub: lm_p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
                         ---
                     ---
                 ---
-            ---
             continue
-        ---
         if: (frame\phase = c.LM_P0_DUMP_STRUCTURE)
             while: ((frame\field != 0) && (frame\field\value = 0))
                 frame\field: frame\field\next
-            ---
             if: (frame\field = 0)
                 lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
                 continue
-            ---
             node: frame\field\value
             frame\field: frame\field\next
             if: (lm_p0_dump_push_node(stack, node, frame\indent) != 0)
                 dump\failed: 1
-            ---
             continue
-        ---
         if: (frame\phase = c.LM_P0_DUMP_TRAILER)
             trailer: frame\trailer
             indent: frame\indent
@@ -6657,24 +5870,19 @@ sub: lm_p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
                 structure: trailer\body
             else:
                 structure: 0
-            ---
             lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
             if: (trailer = 0)
                 continue
-            ---
             lm_p0_dump_indent(dump, indent)
             if: ((trailer\flags & c.LM_P0_TRAILER_TAIL_CUTTER) != 0U)
                 lm_p0_dump_append_cstr(dump, "Tail cutter trailer spelling=")
             else:
                 lm_p0_dump_append_cstr(dump, "Trailer spelling=")
-            ---
             lm_p0_dump_text(dump, trailer\spelling)
             lm_p0_dump_append_field_count_line(dump, trailer\body\field_count)
             if: (lm_p0_dump_push_structure(stack, structure, (indent + 1U)) != 0)
                 dump\failed: 1
-            ---
             continue
-        ---
         dump\failed: 1
     ---
 end: lm_p0_dump_run
@@ -6683,17 +5891,14 @@ sub: lm_p0_dump_node (@: LmP0Dump dump; const: @(LmP0Node node); size_t: indent)
     @: LmOwnPtrStack stack
     if: (node = 0)
         return
-    ---
     stack: lm_p0_dump_stack_new()
     if: (stack = 0)
         dump\failed: 1
         return
-    ---
     if: (lm_p0_dump_push_node(stack, node, indent) != 0)
         dump\failed: 1
     else:
         lm_p0_dump_run(dump, stack)
-    ---
     lm_p0_dump_stack_delete(@ stack)
 end: lm_p0_dump_node
 
@@ -6705,7 +5910,6 @@ fn: lm_p0_dump_take_data (@: LmP0Dump dump) @: char
     @: char data
     if: (dump = 0)
         return: 0
-    ---
     data: dump\data
     dump\data: 0
     dump\length: 0U
@@ -6727,18 +5931,15 @@ external:
         dump: lm_p0_dump_new()
         if: (dump = 0)
             return: 0
-        ---
         if: ((document = 0) || (document\root = 0))
             lm_p0_dump_append_cstr(dump, "")
             data: lm_p0_dump_take_data(dump)
             lm_p0_dump_delete(dump)
             return: data
-        ---
         lm_p0_dump_node(dump, document\root, 0U)
         if: dump\failed
             lm_p0_dump_delete(dump)
             return: 0
-        ---
         data: lm_p0_dump_take_data(dump)
         lm_p0_dump_delete(dump)
         return: data

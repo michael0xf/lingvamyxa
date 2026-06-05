@@ -2675,7 +2675,7 @@ static int lm_p0_document_register_lazy_text(LmP0Document *document, const char 
         patch_slot[0] = "";
         return 1;
     }
-    if ((((document == 0) || (document -> owners_initialized == 0)) || (lm_own_arena_add_lazy_edge(document -> tree_arena, document -> source_owner, source, length, (((void **)patch_slot))) != 0))) {
+    if ((((document == 0) || (document -> owners_initialized == 0)) || (lm_own_arena_add_lazy_edge(document -> tree_arena, document -> source_owner, source, length, (((const void **)patch_slot))) != 0))) {
         if ((document != 0)) {
             lm_p0_set_diagnostic(document, 1, line, column, "out of memory while registering parser lazy text edge");
         }
@@ -7790,7 +7790,7 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind) {
 
 static int lm_p0_registry_load_default(void) {
     const char *override_path;
-    char *candidates[10];
+    const char *candidates[10];
     const char *registry_path;
     LmP0Document *document;
     const LmP0Diagnostic *diagnostic;
