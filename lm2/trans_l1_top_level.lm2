@@ -1021,21 +1021,19 @@ static LmTransTopLevelItem *lm_trans_top_level_item_lowered_new(
     return item;
 }
 
-static int lm_trans_emit_function(
+static int lm_trans_emit_function_with_hoisted(
     FILE *file,
     const LmTransFunctionHeader *function,
-    LmTransNamespace *namespace_
+    LmTransNamespace *namespace_,
+    LmOwnPtrStack *hoisted_functions
 ) {
     const LmP0Frame *frame;
     LmTransFunctionState *state;
-    LmOwnPtrStack *hoisted_functions;
-    LmOwnPtrStack *capture_candidates;
-    LmTransHoistedFunction *hoisted;
-    size_t hoisted_index;
     int status;
     LmP0Text *env_text;
 
-    if (function == 0 || function->frame == 0) {
+    if (function == 0 || function->frame == 0 || hoisted_functions == 0) {
+        lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
     }
 
@@ -1044,63 +1042,8 @@ static int lm_trans_emit_function(
 
     if (function->is_descriptor_only) {
         fprintf(stderr, "trans L2 error: descriptor-only fn does not have an executable body\n");
-        return 1;
-    }
-
-    hoisted_functions = lm_trans_ptr_stack_new(lm_trans_hoisted_function_delete_any);
-    if (hoisted_functions == 0) {
-        return 1;
-    }
-    capture_candidates = lm_trans_ptr_stack_new(lm_trans_capture_delete_any);
-    if (capture_candidates == 0) {
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
-    }
-    if (
-        lm_trans_capture_candidates_add_captures(capture_candidates, function->captures) != 0 ||
-        lm_trans_capture_candidates_add_params(capture_candidates, function->params_node, namespace_) != 0
-    ) {
-        lm_trans_ptr_stack_delete(&capture_candidates);
-        lm_trans_ptr_stack_delete(&hoisted_functions);
-        return 1;
-    }
-    if (
-        lm_trans_collect_hoisted_functions_from_fields(
-            hoisted_functions,
-            *function->c_name,
-            capture_candidates,
-            namespace_,
-            function->body_start
-        ) != 0
-    ) {
-        lm_trans_ptr_stack_delete(&capture_candidates);
-        lm_trans_ptr_stack_delete(&hoisted_functions);
-        return 1;
-    }
-    lm_trans_ptr_stack_delete(&capture_candidates);
-
-    for (hoisted_index = 0U; hoisted_index < hoisted_functions->count; ++hoisted_index) {
-        hoisted = (LmTransHoistedFunction *)lm_own_ptr_stack_at(hoisted_functions, hoisted_index);
-        if (hoisted == 0) {
-            lm_trans_ptr_stack_delete(&hoisted_functions);
-            return 1;
-        }
-        if (lm_trans_emit_function(file, hoisted->function, namespace_) != 0) {
-            lm_trans_ptr_stack_delete(&hoisted_functions);
-            return 1;
-        }
-        if (lm_trans_put(file, "\n") != 0) {
-            lm_trans_ptr_stack_delete(&hoisted_functions);
-            return 1;
-        }
-        if (lm_trans_emit_closure_call_wrapper(file, hoisted, namespace_) != 0) {
-            lm_trans_ptr_stack_delete(&hoisted_functions);
-            return 1;
-        }
-        if (lm_trans_put(file, "\n") != 0) {
-            lm_trans_ptr_stack_delete(&hoisted_functions);
-            return 1;
-        }
     }
 
     if (lm_trans_emit_env_type(file, function, namespace_) != 0) {
@@ -1327,6 +1270,172 @@ static int lm_trans_emit_function(
     lm_trans_function_state_delete(state);
     lm_trans_namespace_leave_scope(namespace_);
     lm_trans_ptr_stack_delete(&hoisted_functions);
+    return status;
+}
+
+typedef struct LmTransFunctionEmitFrame {
+    const LmTransFunctionHeader *function;
+    LmOwnPtrStack *hoisted_functions;
+    size_t hoisted_index;
+    int phase;
+} LmTransFunctionEmitFrame;
+
+static void lm_trans_function_emit_frame_delete_any(void *item) {
+    LmTransFunctionEmitFrame *frame;
+
+    frame = (LmTransFunctionEmitFrame *)item;
+    if (frame != 0) {
+        lm_trans_ptr_stack_delete(&frame->hoisted_functions);
+    }
+    lm_own_delete(frame, 0);
+}
+
+static LmTransFunctionEmitFrame *lm_trans_function_emit_frame_new(
+    const LmTransFunctionHeader *function,
+    LmTransNamespace *namespace_
+) {
+    LmTransFunctionEmitFrame *frame;
+    LmOwnPtrStack *capture_candidates;
+
+    if (function == 0 || function->frame == 0) {
+        return 0;
+    }
+    if (function->is_descriptor_only) {
+        fprintf(stderr, "trans L2 error: descriptor-only fn does not have an executable body\n");
+        return 0;
+    }
+
+    frame = (LmTransFunctionEmitFrame *)lm_own_new_zero(sizeof(*frame));
+    if (frame == 0) {
+        return 0;
+    }
+    frame->function = function;
+    frame->phase = 0;
+
+    frame->hoisted_functions = lm_trans_ptr_stack_new(lm_trans_hoisted_function_delete_any);
+    if (frame->hoisted_functions == 0) {
+        lm_trans_function_emit_frame_delete_any(frame);
+        return 0;
+    }
+    capture_candidates = lm_trans_ptr_stack_new(lm_trans_capture_delete_any);
+    if (capture_candidates == 0) {
+        lm_trans_function_emit_frame_delete_any(frame);
+        return 0;
+    }
+    if (
+        lm_trans_capture_candidates_add_captures(capture_candidates, function->captures) != 0 ||
+        lm_trans_capture_candidates_add_params(capture_candidates, function->params_node, namespace_) != 0
+    ) {
+        lm_trans_ptr_stack_delete(&capture_candidates);
+        lm_trans_function_emit_frame_delete_any(frame);
+        return 0;
+    }
+    if (
+        lm_trans_collect_hoisted_functions_from_fields(
+            frame->hoisted_functions,
+            *function->c_name,
+            capture_candidates,
+            namespace_,
+            function->body_start
+        ) != 0
+    ) {
+        lm_trans_ptr_stack_delete(&capture_candidates);
+        lm_trans_function_emit_frame_delete_any(frame);
+        return 0;
+    }
+    lm_trans_ptr_stack_delete(&capture_candidates);
+    return frame;
+}
+
+static int lm_trans_emit_function(
+    FILE *file,
+    const LmTransFunctionHeader *function,
+    LmTransNamespace *namespace_
+) {
+    LmOwnPtrStack *stack;
+    LmTransFunctionEmitFrame *frame;
+    LmTransFunctionEmitFrame *child;
+    LmTransHoistedFunction *hoisted;
+    LmOwnPtrStack *hoisted_functions;
+    int status;
+
+    stack = lm_trans_ptr_stack_new(lm_trans_function_emit_frame_delete_any);
+    if (stack == 0) {
+        return 1;
+    }
+    frame = lm_trans_function_emit_frame_new(function, namespace_);
+    if (frame == 0) {
+        lm_trans_ptr_stack_delete(&stack);
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(stack, frame) != 0) {
+        lm_trans_function_emit_frame_delete_any(frame);
+        lm_trans_ptr_stack_delete(&stack);
+        return 1;
+    }
+
+    status = 0;
+    while (status == 0 && stack->count != 0U) {
+        frame = (LmTransFunctionEmitFrame *)lm_own_ptr_stack_top(stack);
+        if (frame == 0) {
+            status = 1;
+            break;
+        }
+
+        if (frame->phase == 0) {
+            if (frame->hoisted_index < frame->hoisted_functions->count) {
+                hoisted = (LmTransHoistedFunction *)lm_own_ptr_stack_at(frame->hoisted_functions, frame->hoisted_index);
+                if (hoisted == 0 || hoisted->function == 0) {
+                    status = 1;
+                    break;
+                }
+                child = lm_trans_function_emit_frame_new(hoisted->function, namespace_);
+                if (child == 0) {
+                    status = 1;
+                    break;
+                }
+                frame->phase = 1;
+                if (lm_own_ptr_stack_push(stack, child) != 0) {
+                    lm_trans_function_emit_frame_delete_any(child);
+                    status = 1;
+                    break;
+                }
+                continue;
+            }
+            frame->phase = 2;
+        }
+
+        if (frame->phase == 1) {
+            hoisted = (LmTransHoistedFunction *)lm_own_ptr_stack_at(frame->hoisted_functions, frame->hoisted_index);
+            if (hoisted == 0) {
+                status = 1;
+                break;
+            }
+            if (
+                lm_trans_put(file, "\n") != 0 ||
+                lm_trans_emit_closure_call_wrapper(file, hoisted, namespace_) != 0 ||
+                lm_trans_put(file, "\n") != 0
+            ) {
+                status = 1;
+                break;
+            }
+            ++frame->hoisted_index;
+            frame->phase = 0;
+            continue;
+        }
+
+        if (frame->phase == 2) {
+            hoisted_functions = frame->hoisted_functions;
+            frame->hoisted_functions = 0;
+            status = lm_trans_emit_function_with_hoisted(file, frame->function, namespace_, hoisted_functions);
+            lm_trans_function_emit_frame_delete_any(lm_own_ptr_stack_pop(stack));
+            continue;
+        }
+
+        status = 1;
+    }
+
+    lm_trans_ptr_stack_delete(&stack);
     return status;
 }
 
