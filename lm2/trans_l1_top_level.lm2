@@ -844,17 +844,20 @@ static int lm_trans_top_level_emit_callable_descriptor(
     }
 
     descriptor_name_storage = lm_trans_text_copy_cstr(descriptor_name);
-    lm_trans_text_ref_destroy(&descriptor_name);
     if (descriptor_name_storage == 0) {
+        lm_trans_text_ref_destroy(&descriptor_name);
         return 1;
     }
 
     if (lm_trans_registry_materialize_fn_descriptor_frame(item->frame) != 0) {
+        lm_trans_text_ref_destroy(&descriptor_name);
         lm_own_delete(descriptor_name_storage, 0);
         return 1;
     }
 
-    if (lm_trans_l4_is_function_pointer_type(namespace_, descriptor_name_storage)) {
+    if (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name)) {
+        status = lm_trans_emit_callable_descriptor(file, item->function, namespace_);
+    } else if (lm_trans_l4_is_function_pointer_type(namespace_, descriptor_name_storage)) {
         status = lm_trans_emit_l4_function_pointer_type_name(
             file,
             namespace_,
@@ -862,8 +865,9 @@ static int lm_trans_top_level_emit_callable_descriptor(
             "functionPointerType"
         );
     } else {
-        status = lm_trans_emit_callable_descriptor(file, item->function, namespace_);
+        status = 0;
     }
+    lm_trans_text_ref_destroy(&descriptor_name);
     lm_own_delete(descriptor_name_storage, 0);
     if (status != 0) {
         return 1;
@@ -877,35 +881,149 @@ static int lm_trans_top_level_emit_callable_descriptor(
     return 0;
 }
 
+static int lm_trans_function_raw_return_descriptor_name(
+    const LmTransFunctionHeader *function,
+    const LmTransNamespace *namespace_,
+    LmP0Text *out_descriptor_name
+) {
+    if (
+        function == 0 ||
+        function->is_sub ||
+        function->is_struct_return ||
+        function->return_node == 0 ||
+        function->return_node->kind == LM_P0_NODE_STRUCTURE ||
+        out_descriptor_name == 0 ||
+        !lm_trans_node_callable_descriptor_name(function->return_node, namespace_, out_descriptor_name) ||
+        lm_trans_registry_is_function_pointer_type_name(namespace_, out_descriptor_name) ||
+        !lm_trans_callable_descriptor_is_raw_function_reference(namespace_, out_descriptor_name)
+    ) {
+        return 0;
+    }
+    return 1;
+}
+
+static int lm_trans_emit_raw_callable_return_prefix(
+    FILE *file,
+    const LmTransNamespace *namespace_,
+    const LmP0Text *descriptor_name
+) {
+    char *descriptor_cstr;
+    int status;
+
+    if (file == 0 || descriptor_name == 0) {
+        return 1;
+    }
+
+    descriptor_cstr = lm_trans_text_copy_cstr(descriptor_name);
+    if (descriptor_cstr == 0) {
+        return 1;
+    }
+    status =
+        lm_trans_emit_abi_return_type(
+            file,
+            namespace_,
+            descriptor_cstr,
+            "callable return descriptor"
+        ) != 0 ||
+        lm_trans_put(file, " (*") != 0;
+    lm_own_delete(descriptor_cstr, 0);
+    return status;
+}
+
+static int lm_trans_emit_raw_callable_return_suffix(
+    FILE *file,
+    const LmTransNamespace *namespace_,
+    const LmP0Text *descriptor_name
+) {
+    LmTransAbiParam **params;
+    size_t param_capacity;
+    size_t param_count;
+    char *descriptor_cstr;
+    int status;
+
+    if (file == 0 || descriptor_name == 0) {
+        return 1;
+    }
+
+    descriptor_cstr = lm_trans_text_copy_cstr(descriptor_name);
+    if (descriptor_cstr == 0) {
+        return 1;
+    }
+    param_capacity = 256U;
+    params = lm_trans_expr_abi_params_new(param_capacity);
+    if (params == 0) {
+        lm_own_delete(descriptor_cstr, 0);
+        return 1;
+    }
+
+    status =
+        lm_trans_collect_abi_params(
+            params,
+            param_capacity,
+            &param_count,
+            namespace_,
+            descriptor_cstr,
+            "callable return descriptor"
+        ) != 0 ||
+        lm_trans_put(file, "))(") != 0 ||
+        (
+            param_count == 0U
+                ? lm_trans_put(file, "void")
+                : lm_trans_emit_abi_params(file, params, param_count)
+        ) != 0 ||
+        lm_trans_put(file, ")") != 0;
+
+    lm_trans_expr_abi_params_delete(params, param_capacity);
+    lm_own_delete(descriptor_cstr, 0);
+    return status;
+}
+
 static int lm_trans_emit_function_prototype(
     FILE *file,
     const LmTransFunctionHeader *function,
     LmTransNamespace *namespace_
 ) {
     int status;
+    int raw_return;
+    LmP0Text *raw_return_descriptor_name;
 
     if (function == 0 || function->is_descriptor_only) {
         return 0;
     }
 
+    raw_return_descriptor_name = lm_trans_text_ref_new_cstr("");
+    if (raw_return_descriptor_name == 0) {
+        return 1;
+    }
+    raw_return = lm_trans_function_raw_return_descriptor_name(
+        function,
+        namespace_,
+        raw_return_descriptor_name
+    );
+
     if (function->is_sub) {
         if (!function->is_external && lm_trans_put(file, "static ") != 0) {
+            lm_trans_text_ref_destroy(&raw_return_descriptor_name);
             return 1;
         }
         if (lm_trans_put(file, "void ") != 0) {
+            lm_trans_text_ref_destroy(&raw_return_descriptor_name);
             return 1;
         }
     } else {
         if (function->return_node == 0) {
+            lm_trans_text_ref_destroy(&raw_return_descriptor_name);
             return 0;
         }
         if (
             function->is_struct_return &&
             lm_trans_emit_function_return_structure_once(file, function->c_name, function->return_node) != 0
         ) {
+            lm_trans_text_ref_destroy(&raw_return_descriptor_name);
             return 1;
         }
         if (!function->is_external && lm_trans_put(file, "static ") != 0) {
+            lm_trans_text_ref_destroy(&raw_return_descriptor_name);
             return 1;
         }
         if (function->is_struct_return) {
@@ -913,16 +1031,24 @@ static int lm_trans_emit_function_prototype(
                 lm_trans_emit_function_return_struct_type_name(file, function->c_name) != 0 ||
                 lm_trans_put(file, " ") != 0
             ) {
+                lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+                return 1;
+            }
+        } else if (raw_return) {
+            if (lm_trans_emit_raw_callable_return_prefix(file, namespace_, raw_return_descriptor_name) != 0) {
+                lm_trans_text_ref_destroy(&raw_return_descriptor_name);
                 return 1;
             }
         } else {
             if (function->return_node->kind == LM_P0_NODE_STRUCTURE) {
+                lm_trans_text_ref_destroy(&raw_return_descriptor_name);
                 return 0;
             }
             if (
                 lm_trans_emit_type_node(file, function->return_node) != 0 ||
                 lm_trans_put(file, " ") != 0
             ) {
+                lm_trans_text_ref_destroy(&raw_return_descriptor_name);
                 return 1;
             }
         }
@@ -932,6 +1058,7 @@ static int lm_trans_emit_function_prototype(
         lm_trans_write_text(file, function->c_name) != 0 ||
         lm_trans_put(file, "(") != 0
     ) {
+        lm_trans_text_ref_destroy(&raw_return_descriptor_name);
         return 1;
     }
 
@@ -939,10 +1066,16 @@ static int lm_trans_emit_function_prototype(
     status = lm_trans_emit_function_params(file, function, namespace_);
     lm_trans_namespace_leave_scope(namespace_);
     if (status != 0) {
+        lm_trans_text_ref_destroy(&raw_return_descriptor_name);
         return 1;
     }
 
-    return lm_trans_put(file, ");\n");
+    if (raw_return && lm_trans_emit_raw_callable_return_suffix(file, namespace_, raw_return_descriptor_name) != 0) {
+        lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+        return 1;
+    }
+    lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+    return lm_trans_put(file, raw_return ? ";\n" : ");\n");
 }
 
 static int lm_trans_top_level_emit_function_prototype(
@@ -1344,6 +1477,8 @@ static int lm_trans_emit_function_with_hoisted(
     LmTransFunctionState *state;
     int status;
     LmP0Text *env_text;
+    int raw_return;
+    LmP0Text *raw_return_descriptor_name;
 
     if (function == 0 || function->frame == 0 || hoisted_functions == 0) {
         lm_trans_ptr_stack_delete(&hoisted_functions);
@@ -1352,6 +1487,8 @@ static int lm_trans_emit_function_with_hoisted(
 
     frame = function->frame;
     state = 0;
+    raw_return = 0;
+    raw_return_descriptor_name = 0;
 
     if (function->is_descriptor_only) {
         fprintf(stderr, "trans L2 error: descriptor-only fn does not have an executable body\n");
@@ -1400,12 +1537,28 @@ static int lm_trans_emit_function_with_hoisted(
                 return 1;
             }
         } else {
-            if (lm_trans_emit_type_node(file, function->return_node) != 0) {
+            raw_return_descriptor_name = lm_trans_text_ref_new_cstr("");
+            if (raw_return_descriptor_name == 0) {
                 lm_trans_ptr_stack_delete(&hoisted_functions);
                 return 1;
             }
+            raw_return = lm_trans_function_raw_return_descriptor_name(
+                function,
+                namespace_,
+                raw_return_descriptor_name
+            );
+            if (
+                raw_return
+                    ? lm_trans_emit_raw_callable_return_prefix(file, namespace_, raw_return_descriptor_name)
+                    : lm_trans_emit_type_node(file, function->return_node)
+            ) {
+                lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+                lm_trans_ptr_stack_delete(&hoisted_functions);
+                return 1;
+            }
+            lm_trans_text_ref_destroy(&raw_return_descriptor_name);
         }
-        if (lm_trans_put(file, " ") != 0) {
+        if (!raw_return && lm_trans_put(file, " ") != 0) {
             lm_trans_ptr_stack_delete(&hoisted_functions);
             return 1;
         }
@@ -1505,7 +1658,29 @@ static int lm_trans_emit_function_with_hoisted(
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
     }
-    if (lm_trans_put(file, ") {\n") != 0) {
+    if (raw_return) {
+        raw_return_descriptor_name = lm_trans_text_ref_new_cstr("");
+        if (raw_return_descriptor_name == 0) {
+            lm_trans_namespace_leave_scope(namespace_);
+            lm_trans_ptr_stack_delete(&hoisted_functions);
+            return 1;
+        }
+        if (
+            !lm_trans_function_raw_return_descriptor_name(
+                function,
+                namespace_,
+                raw_return_descriptor_name
+            ) ||
+            lm_trans_emit_raw_callable_return_suffix(file, namespace_, raw_return_descriptor_name) != 0
+        ) {
+            lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+            lm_trans_namespace_leave_scope(namespace_);
+            lm_trans_ptr_stack_delete(&hoisted_functions);
+            return 1;
+        }
+        lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+    }
+    if (lm_trans_put(file, raw_return ? " {\n" : ") {\n") != 0) {
         lm_trans_namespace_leave_scope(namespace_);
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;

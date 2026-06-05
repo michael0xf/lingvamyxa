@@ -4627,7 +4627,7 @@ If a compact call appears in a callable-descriptor argument position, the active
 L2 profile may consume it as a lazy binding/residual callable when the remaining
 unbound parameters match the expected descriptor:
 
-    fn: AddX (int: value) int
+    `lazy fn`: AddX (int: value) int
 
     fn: addBase (int: base; int: value) int
         return: base + value
@@ -4642,6 +4642,67 @@ unbound parameters match the expected descriptor:
 Here `addBase(4)` is not executed at the argument site. The argument site binds
 `base = 4` and produces a residual callable compatible with `AddX`; later
 `callAdd` calls that residual callable with `value = 3`.
+
+Informative line-count comparison:
+
+The same residual callable idea is commonly expressible in other languages, but
+each surface form hides a different part of the meaning. Haskell is very short
+and relies on global partial-application intuition. JavaScript is explicit about
+the lambda but not about the callable type. Python makes `partial` visible as a
+library operation. Java requires a target functional-interface type and method
+call syntax. Lingvamyxa spends more lines in a complete executable example, but
+the callable descriptor and the typed consumption site are both source-visible.
+
+Haskell:
+
+    addBase base value = base + value
+    add4 = addBase 4
+    add4 3 -- 7
+
+JavaScript:
+
+    const addBase = (base, value) => base + value;
+    const add4 = value => addBase(4, value);
+    add4(3); // 7
+
+Python:
+
+    from functools import partial
+
+    def add_base(base, value):
+        return base + value
+
+    add4 = partial(add_base, 4)
+    add4(3) # 7
+
+Java:
+
+    var addBase = (IntBinaryOperator) ((base, value) -> base + value);
+    var add4 = (IntUnaryOperator) (value -> addBase.applyAsInt(4, value));
+    System.out.println(add4.applyAsInt(3)); // 7
+
+Lingvamyxa / LMX:
+
+    `lazy fn`: AddX (int: value) int
+
+    fn: addBase (int: base; int: value) int
+        return: base + value
+    end: addBase
+
+    fn: callAdd (AddX: add) int
+        return: add(3)
+    end: callAdd
+
+    external:
+        fn: main () int
+            return: callAdd(addBase(4))
+        end: main
+    end: external
+
+In the LMX example, `AddX` is visible in the signature of `callAdd`, and
+`` `lazy fn` `` marks the descriptor as able to carry the residual environment.
+The expression `callAdd(addBase(4))` returns `7`; an executable test that uses C
+process exit status would normally write `return: callAdd(addBase(4)) != 7`.
 
 The same rule may use declared default argument values while forming the
 residual callable:

@@ -7451,11 +7451,6 @@ static void lm_p0_structure_recount(LmP0Structure *structure) {
     }
 }
 
-static int lm_p0_postprocess_structure(
-    LmP0Document *document,
-    LmP0Structure *structure
-);
-
 static int lm_p0_wrap_fields_from_line(
     LmP0Document *document,
     LmP0Structure *structure,
@@ -7463,42 +7458,217 @@ static int lm_p0_wrap_fields_from_line(
     size_t inline_event_end_offset
 );
 
-static int lm_p0_postprocess_trailer(LmP0Document *document, LmP0Trailer *trailer) {
-    if (trailer == 0) {
-        return 1;
+#define LM_P0_POSTPROCESS_NODE 1
+#define LM_P0_POSTPROCESS_STRUCTURE 2
+#define LM_P0_POSTPROCESS_TRAILER 3
+#define LM_P0_POSTPROCESS_FRAME_WRAP 4
+
+typedef struct LmP0PostprocessFrame {
+    int phase;
+    LmP0Node *node;
+    LmP0Structure *structure;
+    LmP0Trailer *trailer;
+    LmP0Field *field;
+} LmP0PostprocessFrame;
+
+static LmP0PostprocessFrame *lm_p0_postprocess_frame_new(int phase) {
+    LmP0PostprocessFrame *frame;
+
+    frame = (LmP0PostprocessFrame *)lm_own_new_zero(sizeof(*frame));
+    if (frame != 0) {
+        frame->phase = phase;
     }
-    return lm_p0_postprocess_structure(document, trailer->body);
+    return frame;
 }
 
-static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
+static int lm_p0_postprocess_push_frame(
+    LmOwnPtrStack *stack,
+    LmP0PostprocessFrame *frame
+) {
+    if (stack == 0 || frame == 0) {
+        lm_own_delete(frame, 0);
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(stack, frame) != 0) {
+        lm_own_delete(frame, 0);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_p0_postprocess_push_node(LmOwnPtrStack *stack, LmP0Node *node) {
+    LmP0PostprocessFrame *frame;
+
+    if (node == 0) {
+        return 0;
+    }
+    frame = lm_p0_postprocess_frame_new(LM_P0_POSTPROCESS_NODE);
+    if (frame != 0) {
+        frame->node = node;
+    }
+    return lm_p0_postprocess_push_frame(stack, frame);
+}
+
+static int lm_p0_postprocess_push_structure(
+    LmOwnPtrStack *stack,
+    LmP0Structure *structure
+) {
+    LmP0PostprocessFrame *frame;
+
+    if (structure == 0) {
+        return 1;
+    }
+    frame = lm_p0_postprocess_frame_new(LM_P0_POSTPROCESS_STRUCTURE);
+    if (frame != 0) {
+        frame->structure = structure;
+        frame->field = structure->first_field;
+    }
+    return lm_p0_postprocess_push_frame(stack, frame);
+}
+
+static int lm_p0_postprocess_push_trailer(LmOwnPtrStack *stack, LmP0Trailer *trailer) {
+    LmP0PostprocessFrame *frame;
+
+    if (trailer == 0) {
+        return 0;
+    }
+    frame = lm_p0_postprocess_frame_new(LM_P0_POSTPROCESS_TRAILER);
+    if (frame != 0) {
+        frame->trailer = trailer;
+    }
+    return lm_p0_postprocess_push_frame(stack, frame);
+}
+
+static int lm_p0_postprocess_push_frame_wrap(LmOwnPtrStack *stack, LmP0Node *node) {
+    LmP0PostprocessFrame *frame;
+
     if (node == 0) {
         return 1;
     }
+    frame = lm_p0_postprocess_frame_new(LM_P0_POSTPROCESS_FRAME_WRAP);
+    if (frame != 0) {
+        frame->node = node;
+    }
+    return lm_p0_postprocess_push_frame(stack, frame);
+}
 
-    if (node->kind == LM_P0_NODE_FRAME) {
-        if (!lm_p0_postprocess_structure(document, node->as->frame->body)) {
-            return 0;
+static LmOwnPtrStack *lm_p0_postprocess_stack_new(void) {
+    LmOwnPtrStack *stack;
+
+    stack = (LmOwnPtrStack *)lm_own_new_zero(sizeof(*stack));
+    if (stack != 0) {
+        lm_own_ptr_stack_init(stack, lm_own_delete_plain);
+    }
+    return stack;
+}
+
+static void lm_p0_postprocess_stack_delete(LmOwnPtrStack **stack) {
+    if (stack != 0 && *stack != 0) {
+        lm_own_ptr_stack_destroy(*stack);
+        lm_own_delete(*stack, 0);
+        *stack = 0;
+    }
+}
+
+static int lm_p0_postprocess_run(LmP0Document *document, LmOwnPtrStack *stack) {
+    LmP0PostprocessFrame *frame;
+    LmP0Node *node;
+    LmP0Structure *structure;
+    int status;
+
+    status = 1;
+    while (status != 0 && stack != 0 && stack->count != 0U) {
+        frame = (LmP0PostprocessFrame *)lm_own_ptr_stack_top(stack);
+        if (frame == 0) {
+            status = 0;
+            break;
         }
-        if ((node->as->frame->flags & LM_P0_FRAME_INLINE_BODY) != 0U &&
-            !lm_p0_wrap_fields_from_line(
-                document,
-                node->as->frame->body,
-                node->span->line,
-                node->span->offset + node->span->length
-            )) {
-            return 0;
+
+        if (frame->phase == LM_P0_POSTPROCESS_NODE) {
+            node = frame->node;
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+            if (node == 0) {
+                continue;
+            }
+            if (node->kind == LM_P0_NODE_FRAME) {
+                status =
+                    lm_p0_postprocess_push_trailer(stack, node->as->frame->trailer) == 0 &&
+                    lm_p0_postprocess_push_frame_wrap(stack, node) == 0 &&
+                    lm_p0_postprocess_push_structure(stack, node->as->frame->body) == 0;
+            } else if (node->kind == LM_P0_NODE_STRUCTURE) {
+                status =
+                    lm_p0_postprocess_push_trailer(stack, node->as->structure->trailer) == 0 &&
+                    lm_p0_postprocess_push_structure(stack, node->as->structure) == 0;
+            }
+            continue;
         }
-        return lm_p0_postprocess_trailer(document, node->as->frame->trailer);
+
+        if (frame->phase == LM_P0_POSTPROCESS_STRUCTURE) {
+            while (frame->field != 0 && frame->field->value == 0) {
+                frame->field = frame->field->next;
+            }
+            if (frame->field == 0) {
+                lm_p0_structure_recount(frame->structure);
+                lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+                continue;
+            }
+            node = frame->field->value;
+            frame->field = frame->field->next;
+            status = lm_p0_postprocess_push_node(stack, node) == 0;
+            continue;
+        }
+
+        if (frame->phase == LM_P0_POSTPROCESS_TRAILER) {
+            if (frame->trailer == 0) {
+                lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+                continue;
+            }
+            structure = frame->trailer->body;
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+            status = lm_p0_postprocess_push_structure(stack, structure) == 0;
+            continue;
+        }
+
+        if (frame->phase == LM_P0_POSTPROCESS_FRAME_WRAP) {
+            node = frame->node;
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+            if (
+                node != 0 &&
+                (node->as->frame->flags & LM_P0_FRAME_INLINE_BODY) != 0U &&
+                !lm_p0_wrap_fields_from_line(
+                    document,
+                    node->as->frame->body,
+                    node->span->line,
+                    node->span->offset + node->span->length
+                )
+            ) {
+                status = 0;
+            }
+            continue;
+        }
+
+        status = 0;
     }
 
-    if (node->kind == LM_P0_NODE_STRUCTURE) {
-        if (!lm_p0_postprocess_structure(document, node->as->structure)) {
-            return 0;
-        }
-        return lm_p0_postprocess_trailer(document, node->as->structure->trailer);
-    }
+    return status;
+}
 
-    return 1;
+static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
+    LmOwnPtrStack *stack;
+    int status;
+
+    if (node == 0) {
+        return 1;
+    }
+    stack = lm_p0_postprocess_stack_new();
+    if (stack == 0) {
+        return 0;
+    }
+    status =
+        lm_p0_postprocess_push_node(stack, node) == 0 &&
+        lm_p0_postprocess_run(document, stack);
+    lm_p0_postprocess_stack_delete(&stack);
+    return status;
 }
 
 static int lm_p0_wrap_fields_from_line(
@@ -7557,25 +7727,6 @@ static int lm_p0_wrap_fields_from_line(
         structure->first_field = group_first;
     } else {
         previous->next = group_first;
-    }
-
-    lm_p0_structure_recount(structure);
-    return 1;
-}
-
-static int lm_p0_postprocess_structure(
-    LmP0Document *document,
-    LmP0Structure *structure
-) {
-    LmP0Field *field;
-
-    field = structure->first_field;
-    while (field != 0) {
-        if (field->value != 0 && !lm_p0_postprocess_node(document, field->value)) {
-            return 0;
-        }
-
-        field = field->next;
     }
 
     lm_p0_structure_recount(structure);
@@ -8533,82 +8684,247 @@ static void lm_p0_dump_text(LmP0Dump *dump, const LmP0Text *text) {
     lm_p0_dump_append_cstr(dump, "\"");
 }
 
-static void lm_p0_dump_structure(LmP0Dump *dump, const LmP0Structure *structure, size_t indent);
+#define LM_P0_DUMP_NODE 1
+#define LM_P0_DUMP_STRUCTURE 2
+#define LM_P0_DUMP_TRAILER 3
 
-static void lm_p0_dump_trailer(LmP0Dump *dump, const LmP0Trailer *trailer, size_t indent) {
+typedef struct LmP0DumpFrame {
+    int phase;
+    const LmP0Node *node;
+    const LmP0Structure *structure;
+    const LmP0Trailer *trailer;
+    const LmP0Field *field;
+    size_t indent;
+} LmP0DumpFrame;
+
+static LmP0DumpFrame *lm_p0_dump_frame_new(int phase, size_t indent) {
+    LmP0DumpFrame *frame;
+
+    frame = (LmP0DumpFrame *)lm_own_new_zero(sizeof(*frame));
+    if (frame != 0) {
+        frame->phase = phase;
+        frame->indent = indent;
+    }
+    return frame;
+}
+
+static int lm_p0_dump_push_frame(LmOwnPtrStack *stack, LmP0DumpFrame *frame) {
+    if (stack == 0 || frame == 0) {
+        lm_own_delete(frame, 0);
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(stack, frame) != 0) {
+        lm_own_delete(frame, 0);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_p0_dump_push_node(
+    LmOwnPtrStack *stack,
+    const LmP0Node *node,
+    size_t indent
+) {
+    LmP0DumpFrame *frame;
+
+    if (node == 0) {
+        return 0;
+    }
+    frame = lm_p0_dump_frame_new(LM_P0_DUMP_NODE, indent);
+    if (frame != 0) {
+        frame->node = node;
+    }
+    return lm_p0_dump_push_frame(stack, frame);
+}
+
+static int lm_p0_dump_push_structure(
+    LmOwnPtrStack *stack,
+    const LmP0Structure *structure,
+    size_t indent
+) {
+    LmP0DumpFrame *frame;
+
+    if (structure == 0) {
+        return 0;
+    }
+    frame = lm_p0_dump_frame_new(LM_P0_DUMP_STRUCTURE, indent);
+    if (frame != 0) {
+        frame->structure = structure;
+        frame->field = structure->first_field;
+    }
+    return lm_p0_dump_push_frame(stack, frame);
+}
+
+static int lm_p0_dump_push_trailer(
+    LmOwnPtrStack *stack,
+    const LmP0Trailer *trailer,
+    size_t indent
+) {
+    LmP0DumpFrame *frame;
+
     if (trailer == 0) {
-        return;
+        return 0;
     }
+    frame = lm_p0_dump_frame_new(LM_P0_DUMP_TRAILER, indent);
+    if (frame != 0) {
+        frame->trailer = trailer;
+    }
+    return lm_p0_dump_push_frame(stack, frame);
+}
 
-    lm_p0_dump_indent(dump, indent);
-    if ((trailer->flags & LM_P0_TRAILER_TAIL_CUTTER) != 0U) {
-        lm_p0_dump_append_cstr(dump, "Tail cutter trailer spelling=");
-    } else {
-        lm_p0_dump_append_cstr(dump, "Trailer spelling=");
+static LmOwnPtrStack *lm_p0_dump_stack_new(void) {
+    LmOwnPtrStack *stack;
+
+    stack = (LmOwnPtrStack *)lm_own_new_zero(sizeof(*stack));
+    if (stack != 0) {
+        lm_own_ptr_stack_init(stack, lm_own_delete_plain);
     }
-    lm_p0_dump_text(dump, trailer->spelling);
-    lm_p0_dump_append_field_count_line(dump, trailer->body->field_count);
-    lm_p0_dump_structure(dump, trailer->body, indent + 1U);
+    return stack;
+}
+
+static void lm_p0_dump_stack_delete(LmOwnPtrStack **stack) {
+    if (stack != 0 && *stack != 0) {
+        lm_own_ptr_stack_destroy(*stack);
+        lm_own_delete(*stack, 0);
+        *stack = 0;
+    }
+}
+
+static void lm_p0_dump_run(LmP0Dump *dump, LmOwnPtrStack *stack) {
+    LmP0DumpFrame *frame;
+    const LmP0Node *node;
+    const LmP0Structure *structure;
+    const LmP0Trailer *trailer;
+    const char *structure_name;
+    size_t indent;
+
+    while (dump != 0 && dump->failed == 0 && stack != 0 && stack->count != 0U) {
+        frame = (LmP0DumpFrame *)lm_own_ptr_stack_top(stack);
+        if (frame == 0) {
+            dump->failed = 1;
+            return;
+        }
+
+        if (frame->phase == LM_P0_DUMP_NODE) {
+            node = frame->node;
+            indent = frame->indent;
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+            if (node == 0) {
+                continue;
+            }
+
+            structure_name = lm_p0_node_kind_class_name(LM_P0_NODE_STRUCTURE);
+            lm_p0_dump_indent(dump, indent);
+            if ((node->flags & LM_P0_NODE_INACTIVE) != 0U) {
+                lm_p0_dump_append_cstr(dump, "Inactive ");
+            }
+            if ((node->flags & LM_P0_NODE_MIX) != 0U) {
+                lm_p0_dump_append_cstr(dump, "MIX ");
+            }
+            if ((node->flags & LM_P0_NODE_POSITIONAL_SKIP) != 0U) {
+                lm_p0_dump_append_cstr(dump, "PositionalSkip ");
+            }
+            if (node->kind == LM_P0_NODE_STRUCTURE) {
+                lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+                lm_p0_dump_append_field_count_line(dump, node->as->structure->field_count);
+                if (
+                    lm_p0_dump_push_trailer(stack, node->as->structure->trailer, indent + 1U) != 0 ||
+                    lm_p0_dump_push_structure(stack, node->as->structure, indent + 1U) != 0
+                ) {
+                    dump->failed = 1;
+                }
+            } else if (node->kind == LM_P0_NODE_FRAME) {
+                lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+                lm_p0_dump_append_cstr(dump, " head=");
+                lm_p0_dump_text(dump, node->as->frame->head);
+                lm_p0_dump_append_cstr(dump, " body=");
+                lm_p0_dump_append_cstr(dump, structure_name);
+                lm_p0_dump_append_field_count_line(dump, node->as->frame->body->field_count);
+                if (
+                    lm_p0_dump_push_trailer(stack, node->as->frame->trailer, indent + 1U) != 0 ||
+                    lm_p0_dump_push_structure(stack, node->as->frame->body, indent + 1U) != 0
+                ) {
+                    dump->failed = 1;
+                }
+            } else if (node->kind == LM_P0_NODE_ATOM) {
+                lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+                lm_p0_dump_append_cstr(dump, " ");
+                lm_p0_dump_text(dump, node->as->atom);
+                lm_p0_dump_append_cstr(dump, "\n");
+            } else if (node->kind == LM_P0_NODE_DISABLED) {
+                lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+                lm_p0_dump_append_cstr(dump, " ");
+                lm_p0_dump_text(dump, node->as->atom);
+                lm_p0_dump_append_cstr(dump, "\n");
+            } else {
+                lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
+                lm_p0_dump_append_cstr(dump, " kind=");
+                lm_p0_dump_append_size(dump, (size_t)node->kind);
+                lm_p0_dump_append_cstr(dump, "\n");
+            }
+            continue;
+        }
+
+        if (frame->phase == LM_P0_DUMP_STRUCTURE) {
+            while (frame->field != 0 && frame->field->value == 0) {
+                frame->field = frame->field->next;
+            }
+            if (frame->field == 0) {
+                lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+                continue;
+            }
+            node = frame->field->value;
+            frame->field = frame->field->next;
+            if (lm_p0_dump_push_node(stack, node, frame->indent) != 0) {
+                dump->failed = 1;
+            }
+            continue;
+        }
+
+        if (frame->phase == LM_P0_DUMP_TRAILER) {
+            trailer = frame->trailer;
+            indent = frame->indent;
+            structure = trailer != 0 ? trailer->body : 0;
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0);
+            if (trailer == 0) {
+                continue;
+            }
+
+            lm_p0_dump_indent(dump, indent);
+            if ((trailer->flags & LM_P0_TRAILER_TAIL_CUTTER) != 0U) {
+                lm_p0_dump_append_cstr(dump, "Tail cutter trailer spelling=");
+            } else {
+                lm_p0_dump_append_cstr(dump, "Trailer spelling=");
+            }
+            lm_p0_dump_text(dump, trailer->spelling);
+            lm_p0_dump_append_field_count_line(dump, trailer->body->field_count);
+            if (lm_p0_dump_push_structure(stack, structure, indent + 1U) != 0) {
+                dump->failed = 1;
+            }
+            continue;
+        }
+
+        dump->failed = 1;
+    }
 }
 
 static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent) {
-    const char *structure_name;
+    LmOwnPtrStack *stack;
 
     if (node == 0) {
         return;
     }
-
-    structure_name = lm_p0_node_kind_class_name(LM_P0_NODE_STRUCTURE);
-    lm_p0_dump_indent(dump, indent);
-    if ((node->flags & LM_P0_NODE_INACTIVE) != 0U) {
-        lm_p0_dump_append_cstr(dump, "Inactive ");
+    stack = lm_p0_dump_stack_new();
+    if (stack == 0) {
+        dump->failed = 1;
+        return;
     }
-    if ((node->flags & LM_P0_NODE_MIX) != 0U) {
-        lm_p0_dump_append_cstr(dump, "MIX ");
-    }
-    if ((node->flags & LM_P0_NODE_POSITIONAL_SKIP) != 0U) {
-        lm_p0_dump_append_cstr(dump, "PositionalSkip ");
-    }
-    if (node->kind == LM_P0_NODE_STRUCTURE) {
-        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
-        lm_p0_dump_append_field_count_line(dump, node->as->structure->field_count);
-        lm_p0_dump_structure(dump, node->as->structure, indent + 1U);
-        lm_p0_dump_trailer(dump, node->as->structure->trailer, indent + 1U);
-    } else if (node->kind == LM_P0_NODE_FRAME) {
-        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
-        lm_p0_dump_append_cstr(dump, " head=");
-        lm_p0_dump_text(dump, node->as->frame->head);
-        lm_p0_dump_append_cstr(dump, " body=");
-        lm_p0_dump_append_cstr(dump, structure_name);
-        lm_p0_dump_append_field_count_line(dump, node->as->frame->body->field_count);
-        lm_p0_dump_structure(dump, node->as->frame->body, indent + 1U);
-        lm_p0_dump_trailer(dump, node->as->frame->trailer, indent + 1U);
-    } else if (node->kind == LM_P0_NODE_ATOM) {
-        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
-        lm_p0_dump_append_cstr(dump, " ");
-        lm_p0_dump_text(dump, node->as->atom);
-        lm_p0_dump_append_cstr(dump, "\n");
-    } else if (node->kind == LM_P0_NODE_DISABLED) {
-        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
-        lm_p0_dump_append_cstr(dump, " ");
-        lm_p0_dump_text(dump, node->as->atom);
-        lm_p0_dump_append_cstr(dump, "\n");
+    if (lm_p0_dump_push_node(stack, node, indent) != 0) {
+        dump->failed = 1;
     } else {
-        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node->kind));
-        lm_p0_dump_append_cstr(dump, " kind=");
-        lm_p0_dump_append_size(dump, (size_t)node->kind);
-        lm_p0_dump_append_cstr(dump, "\n");
+        lm_p0_dump_run(dump, stack);
     }
-}
-
-static void lm_p0_dump_structure(LmP0Dump *dump, const LmP0Structure *structure, size_t indent) {
-    const LmP0Field *field;
-
-    field = structure->first_field;
-    while (field != 0) {
-        lm_p0_dump_node(dump, field->value, indent);
-        field = field->next;
-    }
+    lm_p0_dump_stack_delete(&stack);
 }
 
 static LmP0Dump *lm_p0_dump_new(void) {

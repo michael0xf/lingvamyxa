@@ -7,7 +7,7 @@ fn
 layout
 prototype
 
-fn: AddX (int: value) int
+`lazy fn`: AddX (int: value) int
 
 fn: makeAdder (int: base) AddX
     int: extra 5

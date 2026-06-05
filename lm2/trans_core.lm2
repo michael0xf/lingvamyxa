@@ -31,7 +31,7 @@ fn: lm_trans_symbol_is (const: @(LmTransSymbol symbol); const: @(char class_name
 return: symbol != 0 && lm_trans_symbol_class_is(symbol\class_name, class_name) != 0
 
 fn: lm_trans_symbol_is_executable_callable (const: @(LmTransSymbol symbol)) int
-return: symbol != 0 && symbol\has_callable_shape != 0 && (lm_trans_symbol_is(symbol, "function") != 0 || lm_trans_symbol_is(symbol, "procedure") != 0 || lm_trans_symbol_is(symbol, "closure") != 0)
+return: symbol != 0 && symbol\has_callable_shape != 0 && (lm_trans_symbol_is(symbol, "function") != 0 || lm_trans_symbol_is(symbol, "procedure") != 0 || lm_trans_symbol_is(symbol, "closure") != 0 || lm_trans_symbol_is(symbol, "functionPointer") != 0)
 
 fn: lm_trans_symbol_is_value_callable (const: @(LmTransSymbol symbol)) int
 return: lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol\callable_returns_value != 0

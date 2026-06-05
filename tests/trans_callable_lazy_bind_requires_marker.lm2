@@ -1,6 +1,6 @@
 import: "lm2/own.lm2"
 
-fn: AddX (int: value) int
+`lazy fn`: AddX (int: value) int
 
 fn: addBase (int: base; int: value) int
     return: base + value
@@ -12,6 +12,6 @@ end: callAdd
 
 external:
     fn: main () int
-        return: callAdd(addBase(4))
+        return: callAdd(addBase(4)) != 7
     end: main
 end: external

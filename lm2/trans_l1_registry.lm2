@@ -10,6 +10,7 @@ static LmOwnPtrStack *lm_trans_emitted_callable_adapters;
 static LmOwnPtrStack *lm_trans_emitted_callable_binders;
 static LmOwnPtrStack *lm_trans_emitted_array_value_helpers;
 static LmOwnPtrStack *lm_trans_emitted_function_return_structs;
+static unsigned lm_trans_next_callable_adapter_id;
 static unsigned lm_trans_next_array_value_helper_id;
 static unsigned lm_trans_next_l2_structure_object_id;
 
@@ -87,12 +88,16 @@ static void lm_trans_import_document_delete(void *document) {
     lm_p0_document_destroy((LmP0Document *)document);
 }
 
-static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source);
+#define LM_TRANS_REGISTRY_CLONE_STRUCTURE 1
+#define LM_TRANS_REGISTRY_CLONE_TRAILER 2
 
-static int lm_trans_registry_clone_structure(
-    const LmP0Structure *source,
-    LmP0Structure *out_structure
-);
+typedef struct LmTransRegistryCloneFrame {
+    int phase;
+    const LmP0Structure *source_structure;
+    LmP0Structure *copy_structure;
+    const LmP0Trailer *source_trailer;
+    LmP0Trailer **copy_trailer_slot;
+} LmTransRegistryCloneFrame;
 
 static LmP0Text *lm_trans_registry_new_text(void) {
     LmP0Text *text;
@@ -142,44 +147,101 @@ static LmP0Trailer *lm_trans_registry_new_trailer(void) {
     return trailer;
 }
 
-static LmP0Trailer *lm_trans_registry_clone_trailer(
-    const LmP0Trailer *source
+static LmTransRegistryCloneFrame *lm_trans_registry_clone_frame_new_structure(
+    const LmP0Structure *source,
+    LmP0Structure *copy
 ) {
-    LmP0Trailer *copy;
+    LmTransRegistryCloneFrame *frame;
 
+    frame = (LmTransRegistryCloneFrame *)lm_own_new_zero(sizeof(*frame));
+    if (frame == 0) {
+        return 0;
+    }
+    frame->phase = LM_TRANS_REGISTRY_CLONE_STRUCTURE;
+    frame->source_structure = source;
+    frame->copy_structure = copy;
+    return frame;
+}
+
+static LmTransRegistryCloneFrame *lm_trans_registry_clone_frame_new_trailer(
+    const LmP0Trailer *source,
+    LmP0Trailer **copy_slot
+) {
+    LmTransRegistryCloneFrame *frame;
+
+    frame = (LmTransRegistryCloneFrame *)lm_own_new_zero(sizeof(*frame));
+    if (frame == 0) {
+        return 0;
+    }
+    frame->phase = LM_TRANS_REGISTRY_CLONE_TRAILER;
+    frame->source_trailer = source;
+    frame->copy_trailer_slot = copy_slot;
+    return frame;
+}
+
+static int lm_trans_registry_clone_push_frame(
+    LmOwnPtrStack *stack,
+    LmTransRegistryCloneFrame *frame
+) {
+    if (stack == 0 || frame == 0) {
+        lm_own_delete(frame, 0);
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(stack, frame) != 0) {
+        lm_own_delete(frame, 0);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_registry_clone_push_structure(
+    LmOwnPtrStack *stack,
+    const LmP0Structure *source,
+    LmP0Structure *copy
+) {
+    return lm_trans_registry_clone_push_frame(
+        stack,
+        lm_trans_registry_clone_frame_new_structure(source, copy)
+    );
+}
+
+static int lm_trans_registry_clone_push_trailer(
+    LmOwnPtrStack *stack,
+    const LmP0Trailer *source,
+    LmP0Trailer **copy_slot
+) {
+    if (copy_slot == 0) {
+        return 1;
+    }
+    *copy_slot = 0;
     if (source == 0) {
         return 0;
     }
-
-    copy = lm_trans_registry_new_trailer();
-    if (copy == 0) {
-        return 0;
-    }
-
-    copy->flags = source->flags;
-    if (
-        lm_trans_registry_clone_text(source->spelling, copy->spelling) != 0 ||
-        lm_trans_registry_clone_structure(source->body, copy->body) != 0
-    ) {
-        return 0;
-    }
-
-    return copy;
+    return lm_trans_registry_clone_push_frame(
+        stack,
+        lm_trans_registry_clone_frame_new_trailer(source, copy_slot)
+    );
 }
 
-static int lm_trans_registry_clone_structure(
+static LmP0Node *lm_trans_registry_clone_node_shallow(
+    const LmP0Node *source,
+    LmOwnPtrStack *stack
+);
+
+static int lm_trans_registry_clone_process_structure(
     const LmP0Structure *source,
-    LmP0Structure *out_structure
+    LmP0Structure *copy,
+    LmOwnPtrStack *stack
 ) {
     const LmP0Field *source_field;
     LmP0Field *copy_field;
     LmP0Field *previous_field;
 
-    if (out_structure == 0) {
+    if (copy == 0) {
         return 1;
     }
 
-    memset(out_structure, 0, sizeof(*out_structure));
+    memset(copy, 0, sizeof(*copy));
     if (source == 0) {
         return 0;
     }
@@ -194,32 +256,62 @@ static int lm_trans_registry_clone_structure(
         if (copy_field == 0) {
             return 1;
         }
-        copy_field->value = lm_trans_registry_clone_node(source_field->value);
+        copy_field->value = lm_trans_registry_clone_node_shallow(source_field->value, stack);
         if (source_field->value != 0 && copy_field->value == 0) {
             return 1;
         }
 
         if (previous_field == 0) {
-            out_structure->first_field = copy_field;
+            copy->first_field = copy_field;
         } else {
             previous_field->next = copy_field;
         }
         previous_field = copy_field;
-        out_structure->last_field = copy_field;
-        ++out_structure->field_count;
+        copy->last_field = copy_field;
+        ++copy->field_count;
 
         source_field = source_field->next;
     }
 
-    out_structure->trailer = lm_trans_registry_clone_trailer(source->trailer);
-    if (source->trailer != 0 && out_structure->trailer == 0) {
+    if (lm_trans_registry_clone_push_trailer(stack, source->trailer, &copy->trailer) != 0) {
         return 1;
     }
 
     return 0;
 }
 
-static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
+static int lm_trans_registry_clone_process_trailer(
+    const LmP0Trailer *source,
+    LmP0Trailer **copy_slot,
+    LmOwnPtrStack *stack
+) {
+    LmP0Trailer *copy;
+
+    if (copy_slot == 0) {
+        return 1;
+    }
+    *copy_slot = 0;
+    if (source == 0) {
+        return 0;
+    }
+
+    copy = lm_trans_registry_new_trailer();
+    if (copy == 0) {
+        return 1;
+    }
+
+    *copy_slot = copy;
+    copy->flags = source->flags;
+    if (lm_trans_registry_clone_text(source->spelling, copy->spelling) != 0) {
+        return 1;
+    }
+    return lm_trans_registry_clone_push_structure(stack, source->body, copy->body);
+}
+
+static LmP0Node *lm_trans_registry_clone_node_shallow(
+    const LmP0Node *source,
+    LmOwnPtrStack *stack
+) {
     LmP0Node *copy;
 
     if (source == 0) {
@@ -267,12 +359,9 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
         copy->as->frame->flags = source->as->frame->flags;
         if (
             lm_trans_registry_clone_text(source->as->frame->head, copy->as->frame->head) != 0 ||
-            lm_trans_registry_clone_structure(source->as->frame->body, copy->as->frame->body) != 0
+            lm_trans_registry_clone_push_structure(stack, source->as->frame->body, copy->as->frame->body) != 0 ||
+            lm_trans_registry_clone_push_trailer(stack, source->as->frame->trailer, &copy->as->frame->trailer) != 0
         ) {
-            return 0;
-        }
-        copy->as->frame->trailer = lm_trans_registry_clone_trailer(source->as->frame->trailer);
-        if (source->as->frame->trailer != 0 && copy->as->frame->trailer == 0) {
             return 0;
         }
     } else if (source->kind == LM_P0_NODE_STRUCTURE) {
@@ -280,13 +369,136 @@ static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
         if (copy->as->structure == 0) {
             return 0;
         }
-        if (lm_trans_registry_clone_structure(source->as->structure, copy->as->structure) != 0) {
+        if (lm_trans_registry_clone_push_structure(stack, source->as->structure, copy->as->structure) != 0) {
             return 0;
         }
     } else {
         return 0;
     }
 
+    return copy;
+}
+
+static int lm_trans_registry_clone_run(LmOwnPtrStack *stack) {
+    LmTransRegistryCloneFrame *frame;
+    int status;
+
+    status = 0;
+    while (status == 0 && stack != 0 && stack->count != 0U) {
+        frame = (LmTransRegistryCloneFrame *)lm_own_ptr_stack_pop(stack);
+        if (frame == 0) {
+            status = 1;
+            break;
+        }
+
+        if (frame->phase == LM_TRANS_REGISTRY_CLONE_STRUCTURE) {
+            status = lm_trans_registry_clone_process_structure(
+                frame->source_structure,
+                frame->copy_structure,
+                stack
+            );
+        } else if (frame->phase == LM_TRANS_REGISTRY_CLONE_TRAILER) {
+            status = lm_trans_registry_clone_process_trailer(
+                frame->source_trailer,
+                frame->copy_trailer_slot,
+                stack
+            );
+        } else {
+            status = 1;
+        }
+
+        lm_own_delete(frame, 0);
+    }
+
+    return status;
+}
+
+static LmOwnPtrStack *lm_trans_registry_clone_stack_new(void) {
+    LmOwnPtrStack *stack;
+
+    stack = (LmOwnPtrStack *)lm_own_new_zero(sizeof(*stack));
+    if (stack == 0) {
+        return 0;
+    }
+    lm_own_ptr_stack_init(stack, lm_own_delete_plain);
+    return stack;
+}
+
+static void lm_trans_registry_clone_stack_delete(LmOwnPtrStack **stack) {
+    if (stack != 0 && *stack != 0) {
+        lm_own_ptr_stack_destroy(*stack);
+        lm_own_delete(*stack, 0);
+        *stack = 0;
+    }
+}
+
+static LmP0Trailer *lm_trans_registry_clone_trailer(
+    const LmP0Trailer *source
+) {
+    LmOwnPtrStack *stack;
+    LmP0Trailer *copy;
+
+    if (source == 0) {
+        return 0;
+    }
+
+    stack = lm_trans_registry_clone_stack_new();
+    if (stack == 0) {
+        return 0;
+    }
+
+    copy = 0;
+    if (
+        lm_trans_registry_clone_push_trailer(stack, source, &copy) != 0 ||
+        lm_trans_registry_clone_run(stack) != 0
+    ) {
+        lm_trans_registry_clone_stack_delete(&stack);
+        return 0;
+    }
+
+    lm_trans_registry_clone_stack_delete(&stack);
+    return copy;
+}
+
+static int lm_trans_registry_clone_structure(
+    const LmP0Structure *source,
+    LmP0Structure *out_structure
+) {
+    LmOwnPtrStack *stack;
+    int status;
+
+    stack = lm_trans_registry_clone_stack_new();
+    if (stack == 0) {
+        return 1;
+    }
+
+    status =
+        lm_trans_registry_clone_push_structure(stack, source, out_structure) ||
+        lm_trans_registry_clone_run(stack);
+    lm_trans_registry_clone_stack_delete(&stack);
+    return status;
+}
+
+static LmP0Node *lm_trans_registry_clone_node(const LmP0Node *source) {
+    LmOwnPtrStack *stack;
+    LmP0Node *copy;
+
+    if (source == 0) {
+        return 0;
+    }
+
+    stack = lm_trans_registry_clone_stack_new();
+    if (stack == 0) {
+        return 0;
+    }
+
+    copy = lm_trans_registry_clone_node_shallow(source, stack);
+    if (copy == 0 || lm_trans_registry_clone_run(stack) != 0) {
+        lm_trans_registry_clone_stack_delete(&stack);
+        return 0;
+    }
+
+    lm_trans_registry_clone_stack_delete(&stack);
     return copy;
 }
 
