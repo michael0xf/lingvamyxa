@@ -79,8 +79,7 @@ fn: lm_table_text_equals (const: @(char data); size_t: text_length; const: @: ch
     size_t: length
 
     length: c.strlen(value)
-    return: text_length = length && c.memcmp(data, value, length) = 0
-end: lm_table_text_equals
+return: text_length = length && c.memcmp(data, value, length) = 0
 
 sub: lm_table_error_set (@: LmTableError error; const: @: char message)
     if: error = 0 || error\message != 0
@@ -120,8 +119,7 @@ fn: lm_table_buffer_reserve (@: LmTableBuffer buffer; size_t: extra) int
 
     buffer\data: new_data
     buffer\capacity: new_capacity
-    return: 1
-end: lm_table_buffer_reserve
+return: 1
 
 sub: lm_table_buffer_append (@: LmTableBuffer buffer; const: @(char data); size_t: length)
     if: lm_table_buffer_reserve(buffer, length) = 0
@@ -160,8 +158,7 @@ fn: lm_table_buffer_take (@: LmTableBuffer buffer) @: char
     buffer\data: 0
     buffer\length: 0U
     buffer\capacity: 0U
-    return: result
-end: lm_table_buffer_take
+return: result
 
 sub: lm_table_buffer_destroy (@: LmTableBuffer buffer)
     if: buffer != 0
@@ -173,8 +170,7 @@ sub: lm_table_buffer_destroy (@: LmTableBuffer buffer)
 end: lm_table_buffer_destroy
 
 fn: lm_table_buffer_new () @: LmTableBuffer
-    return: lm_own_new_zero(1U * c.sizeof(c.LmTableBuffer))
-end: lm_table_buffer_new
+return: lm_own_new_zero(1U * c.sizeof(c.LmTableBuffer))
 
 sub: lm_table_buffer_delete (@: LmTableBuffer buffer)
     if: buffer != 0
@@ -183,16 +179,14 @@ sub: lm_table_buffer_delete (@: LmTableBuffer buffer)
 end: lm_table_buffer_delete
 
 fn: lm_table_error_new () @: LmTableError
-    return: lm_own_new_zero(1U * c.sizeof(c.LmTableError))
-end: lm_table_error_new
+return: lm_own_new_zero(1U * c.sizeof(c.LmTableError))
 
 sub: lm_table_error_delete (@: LmTableError error)
     lm_own_delete(error, 0)
 end: lm_table_error_delete
 
 fn: lm_table_node_ignored (const: @: LmP0Node node) int
-    return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
-end: lm_table_node_ignored
+return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
 
 fn: lm_table_visible_field_count (const: @: LmP0Structure structure) size_t
     const: @: LmP0Field field
@@ -208,8 +202,7 @@ fn: lm_table_visible_field_count (const: @: LmP0Structure structure) size_t
             count: count + 1U
         field: field\next
 
-    return: count
-end: lm_table_visible_field_count
+return: count
 
 fn: lm_table_nth_visible_field (const: @(LmP0Structure structure); size_t: index) const: @: LmP0Node
     const: @: LmP0Field field
@@ -229,8 +222,7 @@ fn: lm_table_nth_visible_field (const: @(LmP0Structure structure); size_t: index
         visible_index: visible_index + 1U
         field: field\next
 
-    return: 0
-end: lm_table_nth_visible_field
+return: 0
 
 fn: lm_table_find_child_frame (const: @(LmP0Frame frame); const: @: char head) const: @: LmP0Frame
     const: @: LmP0Field field
@@ -246,14 +238,12 @@ fn: lm_table_find_child_frame (const: @(LmP0Frame frame); const: @: char head) c
             return: node\as\frame
         field: field\next
 
-    return: 0
-end: lm_table_find_child_frame
+return: 0
 
 fn: lm_table_single_body_node (const: @: LmP0Frame frame) const: @: LmP0Node
     if: frame = 0 || lm_table_visible_field_count(frame\body) != 1U
         return: 0
-    return: lm_table_nth_visible_field(frame\body, 0U)
-end: lm_table_single_body_node
+return: lm_table_nth_visible_field(frame\body, 0U)
 
 fn: lm_table_name_from_frame (const: @(LmP0Frame table_frame); const: @@(char out_name_data); @: size_t out_name_length; @: LmTableError error) int
     const: @: LmP0Frame name_frame
@@ -267,8 +257,7 @@ fn: lm_table_name_from_frame (const: @(LmP0Frame table_frame); const: @@(char ou
 
     out_name_data[0]: name_node\as\atom\data
     out_name_length[0]: name_node\as\atom\length
-    return: 1
-end: lm_table_name_from_frame
+return: 1
 
 fn: lm_table_column_spelling_frame_new (const: @(LmP0Field field); int: phase; int: first) @: LmTableColumnSpellingFrame
     @: LmTableColumnSpellingFrame frame
@@ -279,8 +268,7 @@ fn: lm_table_column_spelling_frame_new (const: @(LmP0Field field); int: phase; i
     frame\field: field
     frame\phase: phase
     frame\first: first
-    return: frame
-end: lm_table_column_spelling_frame_new
+return: frame
 
 fn: lm_table_column_spelling_append_node (@: LmTableBuffer buffer; const: @: LmP0Node node) int
     @: LmTableColumnSpellingFrame frame
@@ -396,8 +384,7 @@ fn: lm_table_column_spelling_append_node (@: LmTableBuffer buffer; const: @: LmP
 
     lm_own_ptr_stack_destroy(stack)
     lm_own_delete(stack, 0)
-    return: status != 0 && buffer\failed = 0
-end: lm_table_column_spelling_append_node
+return: status != 0 && buffer\failed = 0
 
 fn: lm_table_column_spelling_alloc (const: @(LmP0Node node); @: LmTableError error) @: char
     @: LmTableBuffer buffer
@@ -417,8 +404,7 @@ fn: lm_table_column_spelling_alloc (const: @(LmP0Node node); @: LmTableError err
     lm_table_buffer_delete(buffer)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting column")
-    return: result
-end: lm_table_column_spelling_alloc
+return: result
 
 sub: lm_table_columns_destroy (@@: LmTableColumn columns; size_t: count)
     size_t: index
@@ -479,8 +465,7 @@ fn: lm_table_columns_from_frame (
 
     out_columns[0]: columns
     out_count[0]: count
-    return: 1
-end: lm_table_columns_from_frame
+return: 1
 
 fn: lm_table_rows_frame_from_table (const: @(LmP0Frame table_frame); @: LmTableError error) const: @: LmP0Frame
     const: @: LmP0Frame rows_frame
@@ -490,8 +475,7 @@ fn: lm_table_rows_frame_from_table (const: @(LmP0Frame table_frame); @: LmTableE
         lm_table_error_set(error, "table must contain rows:")
         return: 0
 
-    return: rows_frame
-end: lm_table_rows_frame_from_table
+return: rows_frame
 
 L1:
 ===
@@ -503,8 +487,7 @@ static int lm_table_trailer_lmx_append_inline(LmTableBuffer *buffer, const LmP0T
 
 fn: lm_table_atom_lmx_append_inline (@: LmTableBuffer buffer; const: @(LmP0Text atom)) int
     lm_table_buffer_append_text(buffer, atom\data, atom\length)
-    return: buffer\failed = 0
-end: lm_table_atom_lmx_append_inline
+return: buffer\failed = 0
 
 fn: lm_table_structure_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Structure structure) int
     const: @: LmP0Field field
@@ -525,8 +508,7 @@ fn: lm_table_structure_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP
             first: 0
         field: field\next
     lm_table_buffer_append_cstr(buffer, ")")
-    return: buffer\failed = 0
-end: lm_table_structure_lmx_append_inline
+return: buffer\failed = 0
 
 fn: lm_table_trailer_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Trailer trailer) int
     const: @: LmP0Field field
@@ -545,8 +527,7 @@ fn: lm_table_trailer_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0T
                 return: 0
             ---
         field: field\next
-    return: buffer\failed = 0
-end: lm_table_trailer_lmx_append_inline
+return: buffer\failed = 0
 
 fn: lm_table_frame_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Frame frame) int
     const: @: LmP0Field field
@@ -567,8 +548,7 @@ fn: lm_table_frame_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Fra
 
     if: lm_table_trailer_lmx_append_inline(buffer, frame\trailer) = 0
         return: 0
-    return: buffer\failed = 0
-end: lm_table_frame_lmx_append_inline
+return: buffer\failed = 0
 
 fn: lm_table_node_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Node node) int
     if: node = 0
@@ -583,8 +563,7 @@ fn: lm_table_node_lmx_append_inline (@: LmTableBuffer buffer; const: @: LmP0Node
     if: node\kind = c.LM_P0_NODE_FRAME
         return: lm_table_frame_lmx_append_inline(buffer, node\as\frame)
 
-    return: 0
-end: lm_table_node_lmx_append_inline
+return: 0
 
 fn: lm_table_node_lmx_alloc (const: @(LmP0Node node); @: LmTableError error) @: char
     @: LmTableBuffer buffer
@@ -604,8 +583,7 @@ fn: lm_table_node_lmx_alloc (const: @(LmP0Node node); @: LmTableError error) @: 
     lm_table_buffer_delete(buffer)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting cell")
-    return: result
-end: lm_table_node_lmx_alloc
+return: result
 
 fn: lm_table_measure_rows (
     const: @: LmP0Frame rows_frame
@@ -648,8 +626,7 @@ fn: lm_table_measure_rows (
         index: index + 1U
 
     out_row_count[0]: cell_count / column_count
-    return: 1
-end: lm_table_measure_rows
+return: 1
 
 fn: lm_table_emit_columns (@: LmTableBuffer buffer; @@: LmTableColumn columns; size_t: column_count) int
     size_t: index
@@ -665,8 +642,7 @@ fn: lm_table_emit_columns (@: LmTableBuffer buffer; @@: LmTableColumn columns; s
         index: index + 1U
 
     lm_table_buffer_append_cstr(buffer, "\n")
-    return: buffer\failed = 0
-end: lm_table_emit_columns
+return: buffer\failed = 0
 
 fn: lm_table_emit_rows (
     @: LmTableBuffer buffer
@@ -703,8 +679,7 @@ fn: lm_table_emit_rows (
         lm_table_buffer_append_cstr(buffer, "\n")
         row_index: row_index + 1U
 
-    return: buffer\failed = 0
-end: lm_table_emit_rows
+return: buffer\failed = 0
 
 sub: lm_table_end_name (
     const: @: LmP0Frame table_frame
@@ -782,8 +757,7 @@ fn: lm_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: LmTableError erro
     lm_table_buffer_delete(buffer)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting table")
-    return: result
-end: lm_table_to_lmx_alloc
+return: result
 
 fn: lm_table_emit_tables_frame_new (const: @(LmP0Field field)) @: LmTableEmitTablesFrame
     @: LmTableEmitTablesFrame frame
@@ -792,8 +766,7 @@ fn: lm_table_emit_tables_frame_new (const: @(LmP0Field field)) @: LmTableEmitTab
     if: frame = 0
         return: 0
     frame\field: field
-    return: frame
-end: lm_table_emit_tables_frame_new
+return: frame
 
 fn: lm_table_emit_one_table_frame (
     @: LmTableBuffer output
@@ -811,8 +784,7 @@ fn: lm_table_emit_one_table_frame (
     lm_table_buffer_append_cstr(output, table_text)
     lm_own_delete(table_text, 0)
     emitted[0]: 1
-    return: output\failed = 0
-end: lm_table_emit_one_table_frame
+return: output\failed = 0
 
 fn: lm_table_emit_tables_from_node (
     @: LmTableBuffer output
@@ -912,8 +884,7 @@ fn: lm_table_emit_tables_from_node (
 
     lm_own_ptr_stack_destroy(stack)
     lm_own_delete(stack, 0)
-    return: status != 0 && output\failed = 0
-end: lm_table_emit_tables_from_node
+return: status != 0 && output\failed = 0
 
 fn: lm_table_document_tables_to_lmx_alloc (const: @(LmP0Document document); @: LmTableError error) @: char
     const: @: LmP0Node root
@@ -936,8 +907,7 @@ fn: lm_table_document_tables_to_lmx_alloc (const: @(LmP0Document document); @: L
     lm_table_buffer_delete(output)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting document tables")
-    return: result
-end: lm_table_document_tables_to_lmx_alloc
+return: result
 
 external:
     fn: main (int: argc; @@: char argv) int
@@ -990,6 +960,5 @@ external:
         lm_own_delete(text, 0)
         c.lm_p0_document_destroy(document)
         lm_table_error_delete(error)
-        return: 0
-    end: main
+    return: 0
 end: external

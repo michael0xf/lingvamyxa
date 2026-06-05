@@ -1,10 +1,8 @@
 fn: lm_trans_node_is_ignored (const: @(LmP0Node node)) int
-    return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
-end: lm_trans_node_is_ignored
+return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
 
 fn: lm_trans_node_is_positional_skip (const: @(LmP0Node node)) int
-    return: node != 0 && (node\flags & c.LM_P0_NODE_POSITIONAL_SKIP) != 0U
-end: lm_trans_node_is_positional_skip
+return: node != 0 && (node\flags & c.LM_P0_NODE_POSITIONAL_SKIP) != 0U
 
 fn: lm_trans_trailer_single_atom (const: @(LmP0Trailer trailer); @: LmP0Text out_text) int
     const: @: LmP0Text atom
@@ -19,30 +17,24 @@ fn: lm_trans_trailer_single_atom (const: @(LmP0Trailer trailer); @: LmP0Text out
 
     atom: field\value\as\atom
     out_text[0]: c.*atom
-    return: 1
-end: lm_trans_trailer_single_atom
+return: 1
 
 fn: lm_trans_symbol_class_name (const: @(char class_name)) const: @: char
     if: class_name != 0
         return: class_name
-    return: "symbol"
-end: lm_trans_symbol_class_name
+return: "symbol"
 
 fn: lm_trans_symbol_class_is (const: @(char class_name); const: @(char expected)) int
-    return: class_name != 0 && expected != 0 && c.strcmp(class_name, expected) = 0
-end: lm_trans_symbol_class_is
+return: class_name != 0 && expected != 0 && c.strcmp(class_name, expected) = 0
 
 fn: lm_trans_symbol_is (const: @(LmTransSymbol symbol); const: @(char class_name)) int
-    return: symbol != 0 && lm_trans_symbol_class_is(symbol\class_name, class_name) != 0
-end: lm_trans_symbol_is
+return: symbol != 0 && lm_trans_symbol_class_is(symbol\class_name, class_name) != 0
 
 fn: lm_trans_symbol_is_executable_callable (const: @(LmTransSymbol symbol)) int
-    return: symbol != 0 && symbol\has_callable_shape != 0 && (lm_trans_symbol_is(symbol, "function") != 0 || lm_trans_symbol_is(symbol, "procedure") != 0 || lm_trans_symbol_is(symbol, "closure") != 0)
-end: lm_trans_symbol_is_executable_callable
+return: symbol != 0 && symbol\has_callable_shape != 0 && (lm_trans_symbol_is(symbol, "function") != 0 || lm_trans_symbol_is(symbol, "procedure") != 0 || lm_trans_symbol_is(symbol, "closure") != 0)
 
 fn: lm_trans_symbol_is_value_callable (const: @(LmTransSymbol symbol)) int
-    return: lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol\callable_returns_value != 0
-end: lm_trans_symbol_is_value_callable
+return: lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol\callable_returns_value != 0
 
 sub: lm_trans_symbol_destroy_fields (@: LmTransSymbol symbol)
     if: symbol != 0

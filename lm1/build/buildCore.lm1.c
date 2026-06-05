@@ -14,6 +14,10 @@ typedef int LmOwnEdgeKind;
 
 #include <stddef.h>
 
+typedef struct LmSlice {
+    void *ptr;
+    size_t length;
+} LmSlice;
 struct LmOwnPtrStack {
     void **items;
     size_t count;
@@ -45,8 +49,8 @@ struct LmOwnLazyEdge {
 };
 struct LmOwnArena {
     LmOwnPtrStack *allocations;
-    LmOwnValueStack *allocation_descriptors;
-    LmOwnValueStack *lazy_edges;
+    LmOwnPtrStack *allocation_descriptors;
+    LmOwnPtrStack *lazy_edges;
     int frozen;
 };
 typedef struct LmBuildOptions {
@@ -57,9 +61,12 @@ typedef void (*LmOwnDestroyFields)(void *object);
 typedef void (*LmOwnDelete)(void *object);
 
 void * lm_own_new_zero(size_t size);
+void * lm_own_resize(void *object, size_t size);
+char * lm_own_copy_bytes(const char *source, size_t length);
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
 const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
+void lm_own_delete_plain(void *object);
 void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item);
 void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item);
 void lm_own_ptr_stack_destroy(LmOwnPtrStack *stack);

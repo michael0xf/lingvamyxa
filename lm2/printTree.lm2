@@ -43,6 +43,5 @@ external:
         c.fflush(c.stdout)
         lm_p0_free(dump)
         lm_p0_document_destroy(document)
-        return: 0
-    end: main
+    return: 0
 end: external

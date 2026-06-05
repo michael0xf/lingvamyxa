@@ -20,52 +20,41 @@ end: os
 os:
     win:
         fn: lm_finalize_platform_getcwd (@: char buffer; size_t: size) @: char
-            return: c._getcwd(buffer, size)
-        end: lm_finalize_platform_getcwd
+        return: c._getcwd(buffer, size)
 
         fn: lm_finalize_platform_chdir (const: @: char path) int
-            return: c._chdir(path)
-        end: lm_finalize_platform_chdir
+        return: c._chdir(path)
 
         fn: lm_finalize_platform_exe_suffix () const: @: char
-            return: ".exe"
-        end: lm_finalize_platform_exe_suffix
+        return: ".exe"
 
         fn: lm_finalize_platform_path_sep () const: @: char
-            return: "\\"
-        end: lm_finalize_platform_path_sep
+        return: "\\"
 
         fn: lm_finalize_platform_is_drive_absolute (const: @: char path) int
-            return: path[0] != '\0' && path[1] = ':'
-        end: lm_finalize_platform_is_drive_absolute
+        return: path[0] != '\0' && path[1] = ':'
 
         sub: lm_finalize_platform_sleep_retry ()
             c.Sleep: 250U
         end: lm_finalize_platform_sleep_retry
 
         fn: lm_finalize_platform_defer_command_format () const: @: char
-            return: "cd /d \"%s\" && start \"\" /B \"%s\" --copy"
-        end: lm_finalize_platform_defer_command_format
+        return: "cd /d \"%s\" && start \"\" /B \"%s\" --copy"
     default:
         fn: lm_finalize_platform_getcwd (@: char buffer; size_t: size) @: char
-            return: c.getcwd(buffer, size)
-        end: lm_finalize_platform_getcwd
+        return: c.getcwd(buffer, size)
 
         fn: lm_finalize_platform_chdir (const: @: char path) int
-            return: c.chdir(path)
-        end: lm_finalize_platform_chdir
+        return: c.chdir(path)
 
         fn: lm_finalize_platform_exe_suffix () const: @: char
-            return: ""
-        end: lm_finalize_platform_exe_suffix
+        return: ""
 
         fn: lm_finalize_platform_path_sep () const: @: char
-            return: "/"
-        end: lm_finalize_platform_path_sep
+        return: "/"
 
         fn: lm_finalize_platform_is_drive_absolute (const: @: char path) int
-            return: path != 0 && 0
-        end: lm_finalize_platform_is_drive_absolute
+        return: path != 0 && 0
 
         sub: lm_finalize_platform_sleep_retry ()
             c.struct: c.timespec request
@@ -75,13 +64,11 @@ os:
         end: lm_finalize_platform_sleep_retry
 
         fn: lm_finalize_platform_defer_command_format () const: @: char
-            return: "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &"
-        end: lm_finalize_platform_defer_command_format
+        return: "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &"
 end: os
 
 fn: lm_finalize_is_path_separator (char: value) int
-    return: value = '/' || value = '\\'
-end: lm_finalize_is_path_separator
+return: value = '/' || value = '\\'
 
 fn: lm_finalize_is_absolute_path (@: char path) int
     if: path = 0 || path[0] = '\0'
@@ -90,8 +77,7 @@ fn: lm_finalize_is_absolute_path (@: char path) int
         return: 1
     if: lm_finalize_platform_is_drive_absolute(path)
         return: 1
-    return: 0
-end: lm_finalize_is_absolute_path
+return: 0
 
 fn: lm_finalize_trim_last_path_part (@: char path) int
     size_t: length
@@ -109,8 +95,7 @@ fn: lm_finalize_trim_last_path_part (@: char path) int
     ---
 
     path[0]: '\0'
-    return: 0
-end: lm_finalize_trim_last_path_part
+return: 0
 
 fn: lm_finalize_enter_project_root (@: char program_path) int
     []: char root_path 1024
@@ -133,8 +118,7 @@ fn: lm_finalize_enter_project_root (@: char program_path) int
         c.fprintf: c.stderr "finalize.lm0: cannot enter project root %s\n" root_path
         return: 1
 
-    return: 0
-end: lm_finalize_enter_project_root
+return: 0
 
 sub: lm_finalize_log (@: char message)
     @: FILE log_file
@@ -197,8 +181,7 @@ fn: lm_finalize_copy_once (@: char source_path; @: char output_path; int: quiet)
             c.fprintf: c.stderr "finalize.lm0: cannot copy %s to %s\n" source_path output_path
         return: 1
 
-    return: 0
-end: lm_finalize_copy_once
+return: 0
 
 fn: lm_finalize_copy_with_retry (@: char source_path; @: char output_path) int
     int: attempt 0
@@ -214,8 +197,7 @@ fn: lm_finalize_copy_with_retry (@: char source_path; @: char output_path) int
         return: 1
 
     c.printf: "finalize.lm0: copied %s to %s\n" source_path output_path
-    return: 0
-end: lm_finalize_copy_with_retry
+return: 0
 
 fn: lm_finalize_install_next_tool (@: char tool_name) int
     []: char source_path 256
@@ -233,8 +215,7 @@ fn: lm_finalize_install_next_tool (@: char tool_name) int
         lm_finalize_log("remove failed")
         return: 1
 
-    return: 0
-end: lm_finalize_install_next_tool
+return: 0
 
 fn: lm_finalize_defer () int
     []: char root_path 1024
@@ -264,8 +245,7 @@ fn: lm_finalize_defer () int
 
     lm_finalize_log("defer scheduled")
     c.printf: "finalize.lm0: scheduled deferred buildCore install\n"
-    return: 0
-end: lm_finalize_defer
+return: 0
 
 external:
     fn: main (int: argc; @@: char argv) int
@@ -288,6 +268,5 @@ external:
             return: 1
 
         lm_finalize_log("copy completed")
-        return: 0
-    end: main
+    return: 0
 end: external

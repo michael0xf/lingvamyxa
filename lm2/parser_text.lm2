@@ -6,8 +6,7 @@ fn: lm_p0_text_equals (const: @(LmP0Text text); const: @(char value)) int
     if: text = 0 || value = 0
         return: 0
     value_length: c.strlen(value)
-    return: text\length = value_length && c.memcmp(text\data, value, value_length) = 0
-end: lm_p0_text_equals
+return: text\length = value_length && c.memcmp(text\data, value, value_length) = 0
 
 fn: lm_p0_identifier_payload (const: @(LmP0Text atom); @: LmP0Text out_payload) int
     if: atom = 0 || out_payload = 0 || atom\data = 0
@@ -19,16 +18,14 @@ fn: lm_p0_identifier_payload (const: @(LmP0Text atom); @: LmP0Text out_payload) 
         out_payload\data: atom\data + 1U
         out_payload\length: atom\length - 2U
 
-    return: 1
-end: lm_p0_identifier_payload
+return: 1
 
 fn: lm_p0_registry_identifier_value (const: @(LmP0Text atom); @: LmP0Text out_payload) int
     if: atom = 0 || out_payload = 0
         return: 0
     if: atom\length > 0U && (atom\data[0] = '"' || atom\data[0] = '\'')
         return: 0
-    return: lm_p0_identifier_payload(atom, out_payload)
-end: lm_p0_registry_identifier_value
+return: lm_p0_identifier_payload(atom, out_payload)
 
 fn: lm_p0_registry_literal_value (const: @(LmP0Text atom); @: LmP0Text out_payload) int
     char: quote
@@ -47,8 +44,7 @@ fn: lm_p0_registry_literal_value (const: @(LmP0Text atom); @: LmP0Text out_paylo
         out_payload\length: atom\length - 2U
         return: 1
 
-    return: lm_p0_identifier_payload(atom, out_payload)
-end: lm_p0_registry_literal_value
+return: lm_p0_identifier_payload(atom, out_payload)
 
 fn: lm_p0_registry_payload_is_null (const: @(LmP0Text atom)) int
     @: LmP0Text payload
@@ -62,16 +58,13 @@ fn: lm_p0_registry_payload_is_null (const: @(LmP0Text atom)) int
         return: 0
     is_null: payload\length = 4U && c.memcmp(payload\data, "NULL", 4U) = 0
     lm_p0_text_view_delete(payload)
-    return: is_null
-end: lm_p0_registry_payload_is_null
+return: is_null
 
 fn: lm_p0_is_horizontal_space (char: value) int
-    return: value = ' ' || value = '\t'
-end: lm_p0_is_horizontal_space
+return: value = ' ' || value = '\t'
 
 fn: lm_p0_is_line_break (char: value) int
-    return: value = '\n' || value = '\r'
-end: lm_p0_is_line_break
+return: value = '\n' || value = '\r'
 
 fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
     if: index >= length
@@ -82,24 +75,19 @@ fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: in
         return: 1U
     if: source[index] = '\n'
         return: 1U
-    return: 0U
-end: lm_p0_line_break_width_at
+return: 0U
 
 fn: lm_p0_is_field_space (char: value) int
-    return: lm_p0_is_horizontal_space(value) || lm_p0_is_line_break(value)
-end: lm_p0_is_field_space
+return: lm_p0_is_horizontal_space(value) || lm_p0_is_line_break(value)
 
 fn: lm_p0_is_field_separator (char: value) int
-    return: value = ',' || value = ';'
-end: lm_p0_is_field_separator
+return: value = ',' || value = ';'
 
 fn: lm_p0_is_short_form_separator (char: value) int
-    return: value = ';'
-end: lm_p0_is_short_form_separator
+return: value = ';'
 
 fn: lm_p0_is_quoted_token_boundary (char: value) int
-    return: lm_p0_is_field_space(value) || lm_p0_is_field_separator(value) || value = '(' || value = ')' || value = '#'
-end: lm_p0_is_quoted_token_boundary
+return: lm_p0_is_field_space(value) || lm_p0_is_field_separator(value) || value = '(' || value = ')' || value = '#'
 
 fn: lm_p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
     char: quote
@@ -109,16 +97,13 @@ fn: lm_p0_starts_python_string (const: @(char text); size_t: length; size_t: ind
     quote: text[index]
     if: quote != '"' && quote != '\''
         return: 0
-    return: text[index + 1U] = quote && text[index + 2U] = quote
-end: lm_p0_starts_python_string
+return: text[index + 1U] = quote && text[index + 2U] = quote
 
 fn: lm_p0_is_decimal_digit (char: value) int
-    return: value >= '0' && value <= '9'
-end: lm_p0_is_decimal_digit
+return: value >= '0' && value <= '9'
 
 fn: lm_p0_copy_bytes (const: @(char source); size_t: length) @: char
-    return: lm_own_copy_bytes(source, length)
-end: lm_p0_copy_bytes
+return: lm_own_copy_bytes(source, length)
 
 fn: lm_p0_text_view_new_cstr (const: @(char text)) @: LmP0Text
     @: LmP0Text result
@@ -131,16 +116,14 @@ fn: lm_p0_text_view_new_cstr (const: @(char text)) @: LmP0Text
     if: text = 0
         result\data: ""
     result\length: c.strlen(result\data)
-    return: result
-end: lm_p0_text_view_new_cstr
+return: result
 
 sub: lm_p0_text_view_delete (@: LmP0Text text)
     lm_own_delete(text, 0)
 end: lm_p0_text_view_delete
 
 fn: lm_p0_text_from_cstr (const: @(char text)) @: LmP0Text
-    return: lm_p0_text_view_new_cstr(text)
-end: lm_p0_text_from_cstr
+return: lm_p0_text_view_new_cstr(text)
 
 fn: lm_p0_text_assign_cstr (@: LmP0Text out_text; const: @(char text)) int
     if: out_text = 0
@@ -149,15 +132,12 @@ fn: lm_p0_text_assign_cstr (@: LmP0Text out_text; const: @(char text)) int
         text: ""
     out_text\data: text
     out_text\length: c.strlen(text)
-    return: 1
-end: lm_p0_text_assign_cstr
+return: 1
 
 fn: lm_p0_text_copy_cstr (const: @(LmP0Text text)) @: char
     if: text = 0
         return: 0
-    return: lm_p0_copy_bytes(text\data, text\length)
-end: lm_p0_text_copy_cstr
+return: lm_p0_copy_bytes(text\data, text\length)
 
 fn: lm_p0_registry_value_copy_cstr (const: @(LmP0Text value)) @: char
-    return: lm_p0_text_copy_cstr(value)
-end: lm_p0_registry_value_copy_cstr
+return: lm_p0_text_copy_cstr(value)

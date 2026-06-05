@@ -6,8 +6,7 @@ include: "<stdlib.h>" "<string.h>"
 
 external:
     fn: lm_own_new_zero (size_t: size) @: void
-        return: c.calloc(1U, size)
-    end: lm_own_new_zero
+    return: c.calloc(1U, size)
 end: external
 
 external:
@@ -15,8 +14,7 @@ external:
         if: size = 0U
             c.free(object)
             return: 0
-        return: c.realloc(object, size)
-    end: lm_own_resize
+    return: c.realloc(object, size)
 end: external
 
 external:
@@ -31,8 +29,7 @@ external:
         if: source != 0 && length > 0U
             c.memcpy(copy, source, length)
         copy[length]: '\0'
-        return: copy
-    end: lm_own_copy_bytes
+    return: copy
 end: external
 
 external:
@@ -111,8 +108,7 @@ external:
 
         stack\items[stack\count]: item
         stack\count: stack\count + 1U
-        return: 0
-    end: lm_own_ptr_stack_push
+    return: 0
 end: external
 
 external:
@@ -125,8 +121,7 @@ external:
         stack\count: stack\count - 1U
         item: stack\items[stack\count]
         stack\items[stack\count]: 0
-        return: item
-    end: lm_own_ptr_stack_pop
+    return: item
 end: external
 
 external:
@@ -134,8 +129,7 @@ external:
         if: stack = 0 || index >= stack\count
             return: 0
 
-        return: stack\items[index]
-    end: lm_own_ptr_stack_at
+    return: stack\items[index]
 end: external
 
 external:
@@ -143,8 +137,7 @@ external:
         if: stack = 0 || stack\count = 0U
             return: 0
 
-        return: stack\items[stack\count - 1U]
-    end: lm_own_ptr_stack_top
+    return: stack\items[stack\count - 1U]
 end: external
 
 external:
@@ -215,8 +208,7 @@ external:
         lm_own_ptr_stack_init(arena\allocation_descriptors, c.lm_own_delete_plain)
         lm_own_ptr_stack_init(arena\lazy_edges, c.lm_own_delete_plain)
         arena\frozen: 0
-        return: 0
-    end: lm_own_arena_init
+    return: 0
 end: external
 
 external:
@@ -244,20 +236,17 @@ end: external
 
 external:
     fn: lm_own_arena_is_frozen (const: @(LmOwnArena arena)) int
-        return: arena != 0 && arena\frozen
-    end: lm_own_arena_is_frozen
+    return: arena != 0 && arena\frozen
 end: external
 
 external:
     fn: lm_own_tree_cut (@: LmOwnArena arena) int
-        return: lm_own_tree_cut_promote_lazy_edges(arena)
-    end: lm_own_tree_cut
+    return: lm_own_tree_cut_promote_lazy_edges(arena)
 end: external
 
 external:
     fn: lm_own_tree_cut_promote_lazy_edges (@: LmOwnArena arena) int
-        return: lm_own_arena_promote_lazy_edges(arena)
-    end: lm_own_tree_cut_promote_lazy_edges
+    return: lm_own_arena_promote_lazy_edges(arena)
 end: external
 
 external:
@@ -284,8 +273,7 @@ external:
         target: (cast: (@: uchar) stack\items) + stack\count * stack\item_size
         c.memcpy(target, item, stack\item_size)
         stack\count: stack\count + 1U
-        return: 0
-    end: lm_own_value_stack_push
+    return: 0
 end: external
 
 external:
@@ -318,8 +306,7 @@ external:
             target: (cast: (@: uchar) stack\items) + previous_count * stack\item_size
             c.memset(target, 0, (count - previous_count) * stack\item_size)
         stack\count: count
-        return: 0
-    end: lm_own_value_stack_resize_zero
+    return: 0
 end: external
 
 external:
@@ -333,8 +320,7 @@ external:
         source: (cast: (@: uchar) stack\items) + stack\count * stack\item_size
         if: out_item != 0
             c.memcpy(out_item, source, stack\item_size)
-        return: 0
-    end: lm_own_value_stack_pop
+    return: 0
 end: external
 
 external:
@@ -345,8 +331,7 @@ external:
             return: 0
 
         item: (cast: (@: uchar) stack\items) + index * stack\item_size
-        return: item
-    end: lm_own_value_stack_at
+    return: item
 end: external
 
 external:
@@ -357,8 +342,7 @@ external:
             return: 0
 
         item: (cast: (@: uchar) stack\items) + (stack\count - 1U) * stack\item_size
-        return: item
-    end: lm_own_value_stack_top
+    return: item
 end: external
 
 @: LmOwnPtrStack lm_own_global_allocation_descriptors
@@ -370,8 +354,7 @@ fn: lm_own_size_multiply (size_t: left; size_t: right; @: size_t out) int
     if: left != 0U && right > (cast: size_t -1) / left
         return: 1
     out[0]: left * right
-    return: 0
-end: lm_own_size_multiply
+return: 0
 
 fn: lm_own_global_allocation_descriptors_init () int
     if: lm_own_global_allocation_descriptors_ready = 0
@@ -380,8 +363,7 @@ fn: lm_own_global_allocation_descriptors_init () int
             return: 1
         lm_own_ptr_stack_init(lm_own_global_allocation_descriptors, c.lm_own_delete_plain)
         lm_own_global_allocation_descriptors_ready: 1
-    return: 0
-end: lm_own_global_allocation_descriptors_init
+return: 0
 
 fn: lm_own_allocation_descriptor_find (const: @(LmOwnPtrStack descriptors); const: @(void address)) const: @: LmOwnAllocationDescriptor
     const: @: LmOwnAllocationDescriptor descriptor
@@ -398,8 +380,7 @@ fn: lm_own_allocation_descriptor_find (const: @(LmOwnPtrStack descriptors); cons
             return: descriptor
     ---
 
-    return: 0
-end: lm_own_allocation_descriptor_find
+return: 0
 
 fn: lm_own_allocation_descriptor_push (@: LmOwnPtrStack descriptors; @: void address; @: LmOwnArena owner; size_t: bytes; size_t: element_size; size_t: count; size_t: rank; size_t: level) int
     @: LmOwnAllocationDescriptor descriptor
@@ -421,8 +402,7 @@ fn: lm_own_allocation_descriptor_push (@: LmOwnPtrStack descriptors; @: void add
     status: lm_own_ptr_stack_push(descriptors, descriptor)
     if: status != 0
         lm_own_delete(descriptor, 0)
-    return: status
-end: lm_own_allocation_descriptor_push
+return: status
 
 external:
     fn: lm_own_array_new_zero (size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
@@ -443,16 +423,14 @@ external:
             c.free(object)
             return: 0
 
-        return: object
-    end: lm_own_array_new_zero
+    return: object
 end: external
 
 external:
     fn: lm_own_allocation_descriptor (const: @(void address)) const: @: LmOwnAllocationDescriptor
         if: lm_own_global_allocation_descriptors_ready = 0
             return: 0
-        return: lm_own_allocation_descriptor_find(lm_own_global_allocation_descriptors, address)
-    end: lm_own_allocation_descriptor
+    return: lm_own_allocation_descriptor_find(lm_own_global_allocation_descriptors, address)
 end: external
 
 external:
@@ -472,8 +450,7 @@ external:
             lm_own_ptr_stack_pop(arena\allocations)
             c.free(object)
             return: 0
-        return: object
-    end: lm_own_arena_new_zero
+    return: object
 end: external
 
 external:
@@ -499,16 +476,14 @@ external:
             c.free(object)
             return: 0
 
-        return: object
-    end: lm_own_arena_array_new_zero
+    return: object
 end: external
 
 external:
     fn: lm_own_arena_allocation_descriptor (const: @(LmOwnArena arena); const: @(void address)) const: @: LmOwnAllocationDescriptor
         if: arena = 0 || arena\allocation_descriptors = 0
             return: 0
-        return: lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
-    end: lm_own_arena_allocation_descriptor
+    return: lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
 end: external
 
 external:
@@ -521,8 +496,7 @@ external:
         if: source != 0 && length > 0U
             c.memcpy(copy, source, length)
         copy[length]: '\0'
-        return: copy
-    end: lm_own_arena_copy_bytes
+    return: copy
 end: external
 
 external:
@@ -549,8 +523,7 @@ external:
         status: lm_own_ptr_stack_push(target\lazy_edges, edge)
         if: status != 0
             lm_own_delete(edge, 0)
-        return: status
-    end: lm_own_arena_add_lazy_edge
+    return: status
 end: external
 
 external:
@@ -582,8 +555,7 @@ external:
             edge\kind: c.LM_OWN_EDGE_OWNED
             i: i + 1U
 
-        return: 0
-    end: lm_own_arena_promote_lazy_edges
+    return: 0
 end: external
 
 external:
@@ -683,6 +655,5 @@ external:
             source\lazy_edges\count: 0U
             source\lazy_edges\capacity: 0U
 
-        return: 0
-    end: lm_own_arena_absorb
+    return: 0
 end: external

@@ -35,141 +35,108 @@ end: os
 os:
     win:
         fn: lm_vcpkg_platform_getcwd (@: char buffer; size_t: size) @: char
-            return: c._getcwd(buffer, size)
-        end: lm_vcpkg_platform_getcwd
+        return: c._getcwd(buffer, size)
 
         fn: lm_vcpkg_platform_chdir (@: char path) int
-            return: c._chdir(path)
-        end: lm_vcpkg_platform_chdir
+        return: c._chdir(path)
 
         fn: lm_vcpkg_platform_path_sep () @: char
-            return: "\\"
-        end: lm_vcpkg_platform_path_sep
+        return: "\\"
 
         fn: lm_vcpkg_platform_tool_file () @: char
-            return: "vcpkg.exe"
-        end: lm_vcpkg_platform_tool_file
+        return: "vcpkg.exe"
 
         fn: lm_vcpkg_platform_default_triplet () @: char
-            return: "x64-mingw-dynamic"
-        end: lm_vcpkg_platform_default_triplet
+        return: "x64-mingw-dynamic"
 
         fn: lm_vcpkg_platform_is_drive_absolute (@: char path) int
-            return: path[0] != '\0' && path[1] = ':' && (path[2] = '/' || path[2] = '\\')
-        end: lm_vcpkg_platform_is_drive_absolute
+        return: path[0] != '\0' && path[1] = ':' && (path[2] = '/' || path[2] = '\\')
 
         fn: lm_vcpkg_platform_has_default_tool () int
-            return: 1
-        end: lm_vcpkg_platform_has_default_tool
+        return: 1
 
         fn: lm_vcpkg_platform_default_tool () @: char
-            return: "C:/vcpkg/vcpkg.exe"
-        end: lm_vcpkg_platform_default_tool
+        return: "C:/vcpkg/vcpkg.exe"
 
         fn: lm_vcpkg_platform_default_root () @: char
-            return: "C:/vcpkg"
-        end: lm_vcpkg_platform_default_root
+        return: "C:/vcpkg"
 
         fn: lm_vcpkg_platform_wrap_command () int
-            return: 1
-        end: lm_vcpkg_platform_wrap_command
+        return: 1
     mac:
         fn: lm_vcpkg_platform_getcwd (@: char buffer; size_t: size) @: char
-            return: c.getcwd(buffer, size)
-        end: lm_vcpkg_platform_getcwd
+        return: c.getcwd(buffer, size)
 
         fn: lm_vcpkg_platform_chdir (@: char path) int
-            return: c.chdir(path)
-        end: lm_vcpkg_platform_chdir
+        return: c.chdir(path)
 
         fn: lm_vcpkg_platform_path_sep () @: char
-            return: "/"
-        end: lm_vcpkg_platform_path_sep
+        return: "/"
 
         fn: lm_vcpkg_platform_tool_file () @: char
-            return: "vcpkg"
-        end: lm_vcpkg_platform_tool_file
+        return: "vcpkg"
 
         fn: lm_vcpkg_platform_default_triplet () @: char
-            return: "x64-osx"
-        end: lm_vcpkg_platform_default_triplet
+        return: "x64-osx"
 
         fn: lm_vcpkg_platform_is_drive_absolute (@: char path) int
-            return: path != 0 && 0
-        end: lm_vcpkg_platform_is_drive_absolute
+        return: path != 0 && 0
 
         fn: lm_vcpkg_platform_has_default_tool () int
-            return: 0
-        end: lm_vcpkg_platform_has_default_tool
+        return: 0
 
         fn: lm_vcpkg_platform_default_tool () @: char
-            return: ""
-        end: lm_vcpkg_platform_default_tool
+        return: ""
 
         fn: lm_vcpkg_platform_default_root () @: char
-            return: ""
-        end: lm_vcpkg_platform_default_root
+        return: ""
 
         fn: lm_vcpkg_platform_wrap_command () int
-            return: 0
-        end: lm_vcpkg_platform_wrap_command
+        return: 0
     default:
         fn: lm_vcpkg_platform_getcwd (@: char buffer; size_t: size) @: char
-            return: c.getcwd(buffer, size)
-        end: lm_vcpkg_platform_getcwd
+        return: c.getcwd(buffer, size)
 
         fn: lm_vcpkg_platform_chdir (@: char path) int
-            return: c.chdir(path)
-        end: lm_vcpkg_platform_chdir
+        return: c.chdir(path)
 
         fn: lm_vcpkg_platform_path_sep () @: char
-            return: "/"
-        end: lm_vcpkg_platform_path_sep
+        return: "/"
 
         fn: lm_vcpkg_platform_tool_file () @: char
-            return: "vcpkg"
-        end: lm_vcpkg_platform_tool_file
+        return: "vcpkg"
 
         fn: lm_vcpkg_platform_default_triplet () @: char
-            return: "x64-linux"
-        end: lm_vcpkg_platform_default_triplet
+        return: "x64-linux"
 
         fn: lm_vcpkg_platform_is_drive_absolute (@: char path) int
-            return: path != 0 && 0
-        end: lm_vcpkg_platform_is_drive_absolute
+        return: path != 0 && 0
 
         fn: lm_vcpkg_platform_has_default_tool () int
-            return: 0
-        end: lm_vcpkg_platform_has_default_tool
+        return: 0
 
         fn: lm_vcpkg_platform_default_tool () @: char
-            return: ""
-        end: lm_vcpkg_platform_default_tool
+        return: ""
 
         fn: lm_vcpkg_platform_default_root () @: char
-            return: ""
-        end: lm_vcpkg_platform_default_root
+        return: ""
 
         fn: lm_vcpkg_platform_wrap_command () int
-            return: 0
-        end: lm_vcpkg_platform_wrap_command
+        return: 0
 end: os
 
 fn: lm_vcpkg_options_new () @: LmVcpkgOptions
-    return: lm_own_new_zero(c.sizeof(c.LmVcpkgOptions))
-end: lm_vcpkg_options_new
+return: lm_own_new_zero(c.sizeof(c.LmVcpkgOptions))
 
 sub: lm_vcpkg_options_delete (@: LmVcpkgOptions options)
     lm_own_delete(options, 0)
 end: lm_vcpkg_options_delete
 
 fn: lm_vcpkg_is_path_separator (char: value) int
-    return: value = '/' || value = '\\'
-end: lm_vcpkg_is_path_separator
+return: value = '/' || value = '\\'
 
 fn: lm_vcpkg_has_path_separator (@: char path) int
-    return: strchr(path, '/') != 0 || strchr(path, '\\') != 0
-end: lm_vcpkg_has_path_separator
+return: strchr(path, '/') != 0 || strchr(path, '\\') != 0
 
 fn: lm_vcpkg_is_absolute_path (@: char path) int
     if: path = 0 || path[0] = '\0'
@@ -178,8 +145,7 @@ fn: lm_vcpkg_is_absolute_path (@: char path) int
         return: 1
     if: lm_vcpkg_platform_is_drive_absolute(path)
         return: 1
-    return: 0
-end: lm_vcpkg_is_absolute_path
+return: 0
 
 fn: lm_vcpkg_join_path (@: char buffer; size_t: size; @: char base; @: char tail) int
     size_t: base_length
@@ -202,8 +168,7 @@ fn: lm_vcpkg_join_path (@: char buffer; size_t: size; @: char base; @: char tail
         used: used + separator_length
 
     memcpy(buffer + used, tail, tail_length + 1U)
-    return: 0
-end: lm_vcpkg_join_path
+return: 0
 
 fn: lm_vcpkg_trim_last_path_part (@: char path) int
     size_t: length
@@ -221,8 +186,7 @@ fn: lm_vcpkg_trim_last_path_part (@: char path) int
     ---
 
     path[0]: '\0'
-    return: 0
-end: lm_vcpkg_trim_last_path_part
+return: 0
 
 fn: lm_vcpkg_file_exists (@: char path) int
     @: FILE file
@@ -232,8 +196,7 @@ fn: lm_vcpkg_file_exists (@: char path) int
         return: 0
 
     fclose: file
-    return: 1
-end: lm_vcpkg_file_exists
+return: 1
 
 fn: lm_vcpkg_has_project_marker (@: char path) int
     []: char marker_path 2048
@@ -241,8 +204,7 @@ fn: lm_vcpkg_has_project_marker (@: char path) int
     if: lm_vcpkg_join_path(marker_path, c.sizeof(marker_path), path, "cmake/vcpkg-sources/vcpkg.json") != 0
         return: 0
 
-    return: lm_vcpkg_file_exists(marker_path)
-end: lm_vcpkg_has_project_marker
+return: lm_vcpkg_file_exists(marker_path)
 
 fn: lm_vcpkg_enter_project_root (@: char program_path) int
     []: char search_path 1024
@@ -283,8 +245,7 @@ fn: lm_vcpkg_enter_project_root (@: char program_path) int
         depth: depth + 1
 
     c.fprintf: c.stderr "vcpkgFetch.lm0: cannot locate project root from %s\n" cwd
-    return: 1
-end: lm_vcpkg_enter_project_root
+return: 1
 
 fn: lm_vcpkg_env_or_default (@: char name; @: char fallback) @: char
     @: char value
@@ -293,8 +254,7 @@ fn: lm_vcpkg_env_or_default (@: char name; @: char fallback) @: char
     if: value = 0 || value[0] = '\0'
         return: fallback
 
-    return: value
-end: lm_vcpkg_env_or_default
+return: value
 
 fn: lm_vcpkg_append (@: char buffer; size_t: size; size_t: used; @: char text) size_t
     size_t: length
@@ -305,8 +265,7 @@ fn: lm_vcpkg_append (@: char buffer; size_t: size; size_t: used; @: char text) s
         return: size
 
     memcpy(buffer + used, text, length + 1U)
-    return: used + length
-end: lm_vcpkg_append
+return: used + length
 
 fn: lm_vcpkg_append_quoted (@: char buffer; size_t: size; size_t: used; @: char arg; int: leading_space) size_t
     if: leading_space != 0
@@ -323,8 +282,7 @@ fn: lm_vcpkg_append_quoted (@: char buffer; size_t: size; size_t: used; @: char 
     if: used = size
         return: size
 
-    return: lm_vcpkg_append(buffer, size, used, "\"")
-end: lm_vcpkg_append_quoted
+return: lm_vcpkg_append(buffer, size, used, "\"")
 
 fn: lm_vcpkg_append_prefixed_arg (@: char buffer; size_t: size; size_t: used; @: char prefix; @: char value) size_t
     []: char arg 2048
@@ -335,8 +293,7 @@ fn: lm_vcpkg_append_prefixed_arg (@: char buffer; size_t: size; size_t: used; @:
 
     strcpy(arg, prefix)
     strcat(arg, value)
-    return: lm_vcpkg_append_quoted(buffer, size, used, arg, 1)
-end: lm_vcpkg_append_prefixed_arg
+return: lm_vcpkg_append_quoted(buffer, size, used, arg, 1)
 
 fn: lm_vcpkg_discover_tool (@: char buffer; size_t: size; @@: char root_out) int
     @: char tool_env
@@ -382,8 +339,7 @@ fn: lm_vcpkg_discover_tool (@: char buffer; size_t: size; @@: char root_out) int
     ---
 
     strcpy(buffer, "vcpkg")
-    return: 0
-end: lm_vcpkg_discover_tool
+return: 0
 
 sub: lm_vcpkg_print_usage ()
     c.printf: "usage: vcpkgFetch.lm0 [options]\n"
@@ -479,8 +435,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
     if: options\host_triplet[0] = '\0'
         options\host_triplet: options\triplet
 
-    return: 0
-end: lm_vcpkg_parse_options
+return: 0
 
 fn: lm_vcpkg_build_command (@: LmVcpkgOptions options; @: char command; size_t: size) int
     @: char discovered_root 0
@@ -563,8 +518,7 @@ fn: lm_vcpkg_build_command (@: LmVcpkgOptions options; @: char command; size_t: 
             return: 1
     ---
 
-    return: 0
-end: lm_vcpkg_build_command
+return: 0
 
 external:
     fn: main (int: argc; @@: char argv) int
@@ -600,6 +554,5 @@ external:
             c.fprintf: c.stderr "vcpkgFetch.lm0: command failed with status %d\n" status
             return: 1
 
-        return: 0
-    end: main
+    return: 0
 end: external

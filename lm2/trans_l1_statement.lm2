@@ -7968,7 +7968,14 @@ static int lm_trans_function_header_common(
         out->body_start = return_field->next;
     }
 
-    if (!is_struct_return && out->body_start == 0) {
+    if (
+        !is_struct_return &&
+        out->body_start == 0 &&
+        (
+            frame->trailer == 0 ||
+            !lm_trans_text_equals(frame->trailer->spelling, "return")
+        )
+    ) {
         out->symbol_class = "callableDescriptor";
         out->is_descriptor_only = 1;
     }

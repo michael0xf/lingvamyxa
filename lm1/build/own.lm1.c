@@ -14,6 +14,10 @@ typedef int LmOwnEdgeKind;
 
 #include <stddef.h>
 
+typedef struct LmSlice {
+    void *ptr;
+    size_t length;
+} LmSlice;
 struct LmOwnPtrStack {
     void **items;
     size_t count;

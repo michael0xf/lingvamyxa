@@ -421,8 +421,7 @@ fn: lm_p0_document_init_owners (@: LmP0Document document) int
     if: document\diagnostic = 0
         lm_p0_document_destroy_owners(document)
         return: 1
-    return: 0
-end: lm_p0_document_init_owners
+return: 0
 
 sub: lm_p0_document_destroy_owners (@: LmP0Document document)
     if: document != 0 && document\owners_initialized != 0
@@ -500,17 +499,14 @@ fn: lm_p0_indent_stack_push (@: LmP0Document document; @: LmP0IndentStack stack;
 
     stack\columns[stack\count]: column
     stack\count: stack\count + 1U
-    return: 1
-end: lm_p0_indent_stack_push
+return: 1
 
 fn: lm_p0_indent_stack_init (@: LmP0Document document; @: LmP0IndentStack stack) int
     c.memset(stack, 0, c.sizeof(stack[0]))
-    return: lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U)
-end: lm_p0_indent_stack_init
+return: lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U)
 
 fn: lm_p0_indent_stack_new_empty () @: LmP0IndentStack
-    return: lm_own_new_zero(1U * c.sizeof(c.LmP0IndentStack))
-end: lm_p0_indent_stack_new_empty
+return: lm_own_new_zero(1U * c.sizeof(c.LmP0IndentStack))
 
 fn: lm_p0_indent_stack_new (@: LmP0Document document) @: LmP0IndentStack
     @: LmP0IndentStack stack
@@ -522,8 +518,7 @@ fn: lm_p0_indent_stack_new (@: LmP0Document document) @: LmP0IndentStack
     if: lm_p0_indent_stack_init(document, stack) = 0
         lm_own_delete(stack, c.lm_p0_indent_stack_free_any)
         return: 0
-    return: stack
-end: lm_p0_indent_stack_new
+return: stack
 
 sub: lm_p0_indent_stack_delete (@: LmP0IndentStack stack)
     lm_own_delete(stack, c.lm_p0_indent_stack_free_any)
@@ -547,8 +542,7 @@ fn: lm_p0_indent_stack_copy (@: LmP0Document document; @: LmP0IndentStack target
     c.memcpy(target\columns, source\columns, source\count * c.sizeof(c.target->columns[0]))
     target\count: source\count
     target\capacity: capacity
-    return: 1
-end: lm_p0_indent_stack_copy
+return: 1
 
 fn: lm_p0_indent_stack_clone (@: LmP0Document document; const: @(LmP0IndentStack source); size_t: line; size_t: column) @: LmP0IndentStack
     @: LmP0IndentStack target
@@ -560,12 +554,10 @@ fn: lm_p0_indent_stack_clone (@: LmP0Document document; const: @(LmP0IndentStack
     if: lm_p0_indent_stack_copy(document, target, source, line, column) = 0
         lm_p0_indent_stack_delete(target)
         return: 0
-    return: target
-end: lm_p0_indent_stack_clone
+return: target
 
 fn: lm_p0_indent_tab_column (size_t: column) size_t
-    return: ((column / 8U) + 1U) * 8U
-end: lm_p0_indent_tab_column
+return: ((column / 8U) + 1U) * 8U
 
 sub: lm_p0_scan_indent_column (const: @(char source); size_t: start; size_t: end; @: size_t out_offset; @: size_t out_column)
     size_t: p
@@ -608,8 +600,7 @@ fn: lm_p0_visual_column_between (const: @(char source); size_t: start; size_t: e
         column: column + 1U
         p: p + 1U
 
-    return: column
-end: lm_p0_visual_column_between
+return: column
 
 fn: lm_p0_registry_lookup (const: @(LmP0Text key); const: @(char table)) const: @: char
     size_t: i
@@ -641,8 +632,7 @@ fn: lm_p0_registry_lookup (const: @(LmP0Text key); const: @(char table)) const: 
     ---
 
     lm_p0_text_view_delete(key_payload)
-    return: payload
-end: lm_p0_registry_lookup
+return: payload
 
 fn: lm_p0_registry_table_has_rows (const: @(char table)) int
     size_t: i
@@ -662,8 +652,7 @@ fn: lm_p0_registry_table_has_rows (const: @(char table)) int
         i: i + 1U
     ---
 
-    return: 0
-end: lm_p0_registry_table_has_rows
+return: 0
 
 fn: lm_p0_registry_table_has_rows_loaded_or_loading (const: @(char table)) int
     size_t: i
@@ -683,8 +672,7 @@ fn: lm_p0_registry_table_has_rows_loaded_or_loading (const: @(char table)) int
         i: i + 1U
     ---
 
-    return: 0
-end: lm_p0_registry_table_has_rows_loaded_or_loading
+return: 0
 
 fn: lm_p0_count_line_breaks (const: @(char source); size_t: start; size_t: end) size_t
     size_t: count
@@ -702,8 +690,7 @@ fn: lm_p0_count_line_breaks (const: @(char source); size_t: start; size_t: end) 
         i: i + 1U
     ---
 
-    return: count
-end: lm_p0_count_line_breaks
+return: count
 
 sub: lm_p0_position_in_slice (const: @(char text); size_t: length; size_t: index; size_t: base_line; size_t: base_column; @: size_t out_line; @: size_t out_column)
     size_t: i
@@ -751,8 +738,7 @@ end: lm_p0_advance_layout_line
 fn: lm_p0_index_is_line_start (const: @(char text); size_t: index) int
     if: index = 0U
         return: 1
-    return: text[index - 1U] = '\n' || text[index - 1U] = '\r'
-end: lm_p0_index_is_line_start
+return: text[index - 1U] = '\n' || text[index - 1U] = '\r'
 
 fn: lm_p0_line_rest_is_horizontal_space (const: @(char source); size_t: start; size_t: end) int
     size_t: i
@@ -764,8 +750,7 @@ fn: lm_p0_line_rest_is_horizontal_space (const: @(char source); size_t: start; s
         i: i + 1U
     ---
 
-    return: 1
-end: lm_p0_line_rest_is_horizontal_space
+return: 1
 
 fn: lm_p0_find_physical_line_end (const: @(char source); size_t: length; size_t: start) size_t
     size_t: i
@@ -775,8 +760,7 @@ fn: lm_p0_find_physical_line_end (const: @(char source); size_t: length; size_t:
         i: i + 1U
     ---
 
-    return: i
-end: lm_p0_find_physical_line_end
+return: i
 
 fn: lm_p0_text_has_prefix_name (const: @(char text); size_t: length; const: @(char name); int: allow_bare) int
     size_t: name_length
@@ -790,8 +774,7 @@ fn: lm_p0_text_has_prefix_name (const: @(char text); size_t: length; const: @(ch
         return: allow_bare
     if: allow_bare != 0 && (lm_p0_is_horizontal_space(text[name_length]) != 0 || text[name_length] = '#')
         return: 1
-    return: text[name_length] = ':'
-end: lm_p0_text_has_prefix_name
+return: text[name_length] = ':'
 
 fn: lm_p0_legacy_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
     if: lm_p0_text_has_prefix_name(text, length, "end", 0) != 0
@@ -800,8 +783,7 @@ fn: lm_p0_legacy_trailer_role (const: @(char text); size_t: length) LmP0TrailerR
         return: c.LM_P0_TRAILER_ROLE_RETURN
     if: lm_p0_text_has_prefix_name(text, length, "until", 0) != 0
         return: c.LM_P0_TRAILER_ROLE_UNTIL
-    return: c.LM_P0_TRAILER_ROLE_NONE
-end: lm_p0_legacy_trailer_role
+return: c.LM_P0_TRAILER_ROLE_NONE
 
 fn: lm_p0_trailer_role_from_payload (const: @(char payload)) LmP0TrailerRole
     if: payload = 0
@@ -814,8 +796,7 @@ fn: lm_p0_trailer_role_from_payload (const: @(char payload)) LmP0TrailerRole
         return: c.LM_P0_TRAILER_ROLE_UNTIL
     if: c.strcmp(payload, "LM_P0_TRAILER_ROLE_DASH_CUTTER") = 0 || c.strcmp(payload, "trailer.dash-cutter") = 0
         return: c.LM_P0_TRAILER_ROLE_DASH_CUTTER
-    return: c.LM_P0_TRAILER_ROLE_NONE
-end: lm_p0_trailer_role_from_payload
+return: c.LM_P0_TRAILER_ROLE_NONE
 
 fn: lm_p0_trailer_role_payload (LmP0TrailerRole: role) const: @: char
     if: role = c.LM_P0_TRAILER_ROLE_END
@@ -826,19 +807,16 @@ fn: lm_p0_trailer_role_payload (LmP0TrailerRole: role) const: @: char
         return: "trailer.until"
     if: role = c.LM_P0_TRAILER_ROLE_DASH_CUTTER
         return: "trailer.dash-cutter"
-    return: 0
-end: lm_p0_trailer_role_payload
+return: 0
 
 fn: lm_p0_registry_trailer_allows_bare (const: @(char class_name)) int
     const: @: char payload
 
     payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(class_name), "trailer.allow-bare")
-    return: payload != 0 && (c.strcmp(payload, "1") = 0 || c.strcmp(payload, "true") = 0)
-end: lm_p0_registry_trailer_allows_bare
+return: payload != 0 && (c.strcmp(payload, "1") = 0 || c.strcmp(payload, "true") = 0)
 
 fn: lm_p0_trailer_role_is_tail_cutter (LmP0TrailerRole: role) int
-    return: role != c.LM_P0_TRAILER_ROLE_NONE
-end: lm_p0_trailer_role_is_tail_cutter
+return: role != c.LM_P0_TRAILER_ROLE_NONE
 
 fn: lm_p0_node_head_is (const: @(LmP0Node node); const: @(char name)) int
     size_t: name_length
@@ -847,8 +825,7 @@ fn: lm_p0_node_head_is (const: @(LmP0Node node); const: @(char name)) int
         return: 0
 
     name_length: c.strlen(name)
-    return: node\as\frame\head\length = name_length && c.memcmp(node\as\frame\head\data, name, name_length) = 0
-end: lm_p0_node_head_is
+return: node\as\frame\head\length = name_length && c.memcmp(node\as\frame\head\data, name, name_length) = 0
 
 fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: @(LmP0Node target)) int
     const: @: char role_payload
@@ -864,84 +841,73 @@ fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: @(LmP0Node 
 
     if: lm_p0_registry_table_has_rows("trailer.target") = 0 && role = c.LM_P0_TRAILER_ROLE_RETURN
         return: lm_p0_node_head_is(target, "fn")
-    return: lm_p0_trailer_role_is_tail_cutter(role)
-end: lm_p0_trailer_role_accepts_target
+return: lm_p0_trailer_role_is_tail_cutter(role)
 
 external:
     fn: lm_p0_node_structure (const: @(LmP0Node node)) const: @: LmP0Structure
         if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE
             return: 0
-        return: node\as\structure
-    end: lm_p0_node_structure
+    return: node\as\structure
 end: external
 
 external:
     fn: lm_p0_node_frame (const: @(LmP0Node node)) const: @: LmP0Frame
         if: node = 0 || node\kind != c.LM_P0_NODE_FRAME
             return: 0
-        return: node\as\frame
-    end: lm_p0_node_frame
+    return: node\as\frame
 end: external
 
 external:
     fn: lm_p0_node_atom (const: @(LmP0Node node)) const: @: LmP0Text
         if: node = 0 || (node\kind != c.LM_P0_NODE_ATOM && node\kind != c.LM_P0_NODE_DISABLED)
             return: 0
-        return: node\as\atom
-    end: lm_p0_node_atom
+    return: node\as\atom
 end: external
 
 external:
     fn: lm_p0_structure_trailer (const: @(LmP0Structure structure)) const: @: LmP0Trailer
         if: structure = 0
             return: 0
-        return: structure\trailer
-    end: lm_p0_structure_trailer
+    return: structure\trailer
 end: external
 
 external:
     fn: lm_p0_frame_head (const: @(LmP0Frame frame)) const: @: LmP0Text
         if: frame = 0
             return: 0
-        return: frame\head
-    end: lm_p0_frame_head
+    return: frame\head
 end: external
 
 external:
     fn: lm_p0_frame_body (const: @(LmP0Frame frame)) const: @: LmP0Structure
         if: frame = 0
             return: 0
-        return: frame\body
-    end: lm_p0_frame_body
+    return: frame\body
 end: external
 
 external:
     fn: lm_p0_frame_trailer (const: @(LmP0Frame frame)) const: @: LmP0Trailer
         if: frame = 0
             return: 0
-        return: frame\trailer
-    end: lm_p0_frame_trailer
+    return: frame\trailer
 end: external
 
 external:
     fn: lm_p0_trailer_spelling (const: @(LmP0Trailer trailer)) const: @: LmP0Text
         if: trailer = 0
             return: 0
-        return: trailer\spelling
-    end: lm_p0_trailer_spelling
+    return: trailer\spelling
 end: external
 
 external:
     fn: lm_p0_trailer_body (const: @(LmP0Trailer trailer)) const: @: LmP0Structure
         if: trailer = 0
             return: 0
-        return: trailer\body
-    end: lm_p0_trailer_body
+    return: trailer\body
 end: external
 
 fn: lm_p0_stream_event_is_tail_cutter (const: @(LmP0StreamEvent event)) int
-    return: event\kind = c.LM_P0_STREAM_EVENT_ITEM && lm_p0_trailer_role_is_tail_cutter(c.lm_p0_trailer_role(event\text, event\text_length)) != 0
-end: lm_p0_stream_event_is_tail_cutter
+return: event\kind = c.LM_P0_STREAM_EVENT_ITEM && lm_p0_trailer_role_is_tail_cutter(c.lm_p0_trailer_role(event\text, event\text_length)) != 0
 
 fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
     char: quote
@@ -970,16 +936,14 @@ fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: s
     ---
 
     out_end[0]: length
-    return: 0
-end: lm_p0_find_python_string_end
+return: 0
 
 fn: lm_p0_skip_python_string_unchecked (const: @(char text); size_t: length; size_t: start) size_t
     size_t: end
 
     if: lm_p0_find_python_string_end(text, length, start, @ end) = 0
         return: length
-    return: end
-end: lm_p0_skip_python_string_unchecked
+return: end
 
 sub: lm_p0_scan_layout_prefix (const: @(char source); size_t: length; size_t: start; @: size_t out_offset; @: size_t out_indent_column; @: size_t out_dot_level)
     size_t: p
@@ -1004,8 +968,7 @@ end: lm_p0_scan_layout_prefix
 fn: lm_p0_layout_prefix_is_deeper (size_t: indent_column; size_t: dot_level; size_t: base_indent_column; size_t: base_dot_level) int
     if: dot_level > 0U || base_dot_level > 0U
         return: dot_level > base_dot_level
-    return: indent_column > base_indent_column
-end: lm_p0_layout_prefix_is_deeper
+return: indent_column > base_indent_column
 
 fn: lm_p0_dash_fence_status (const: @(char text); size_t: length; @: size_t out_dash_count) LmP0DashFenceStatus
     size_t: dash_count
@@ -1041,8 +1004,7 @@ fn: lm_p0_dash_fence_status (const: @(char text); size_t: length; @: size_t out_
         return: c.LM_P0_DASH_FENCE_TRAILING_TEXT
     ---
 
-    return: c.LM_P0_DASH_FENCE_VALID
-end: lm_p0_dash_fence_status
+return: c.LM_P0_DASH_FENCE_VALID
 
 fn: lm_p0_validate_dash_fence_line (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column) int
     LmP0DashFenceStatus: status
@@ -1054,8 +1016,7 @@ fn: lm_p0_validate_dash_fence_line (@: LmP0Document document; const: @(char text
     if: status = c.LM_P0_DASH_FENCE_TRAILING_TEXT
         c.lm_p0_set_diagnostic(document, 26, line, column, "dash delimiter line must contain only the dash fence, whitespace, or a line comment")
         return: 0
-    return: 1
-end: lm_p0_validate_dash_fence_line
+return: 1
 
 fn: lm_p0_match_block_string_fence_line (const: @(char source); size_t: line_start; size_t: line_end; size_t: eq_count) int
     size_t: i
@@ -1080,8 +1041,7 @@ fn: lm_p0_match_block_string_fence_line (const: @(char source); size_t: line_sta
         i: i + 1U
     ---
 
-    return: 1
-end: lm_p0_match_block_string_fence_line
+return: 1
 
 fn: lm_p0_match_raw_comment_fence_line (const: @(char source); size_t: line_start; size_t: line_end; size_t: star_count) int
     size_t: i
@@ -1098,8 +1058,7 @@ fn: lm_p0_match_raw_comment_fence_line (const: @(char source); size_t: line_star
 
     if: line_start + star_count < line_end && source[line_start + star_count] = '*'
         return: 0
-    return: lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end)
-end: lm_p0_match_raw_comment_fence_line
+return: lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end)
 
 sub: lm_p0_dump_append_size (@: LmP0Dump dump; size_t: value)
     []: char buffer 32
