@@ -112,6 +112,146 @@ fn: lm_trans_l4_callable_type_from_node (
     @: LmTransL4CallableType out
 ) int
 
+fn: lm_trans_callable_type_reset (
+    @: LmTransL4CallableType type
+) int
+
+fn: lm_trans_expr_callable_type_new () @: LmTransL4CallableType
+
+sub: lm_trans_expr_callable_type_delete (
+    @: LmTransL4CallableType type
+)
+
+fn: lm_trans_formal_param_name (
+    const: @: LmP0Node node
+    @: LmP0Text out_name
+) int
+
+fn: lm_trans_receiver_fn (
+    const: @: LmP0Frame frame
+    int: is_external
+    @: LmTransFunctionHeader out
+) int
+
+fn: lm_trans_receiver_lazy_fn (
+    const: @: LmP0Frame frame
+    int: is_external
+    @: LmTransFunctionHeader out
+) int
+
+fn: lm_trans_receiver_sub (
+    const: @: LmP0Frame frame
+    int: is_external
+    @: LmTransFunctionHeader out
+) int
+
+table:
+    name: `layout.backend`
+    columns: class                         (backend class)
+    rows:
+             LmTransL4FramePointerBinding  c.struct
+             LmTransL4AtomPointerBinding   c.struct
+             LmTransRegistryImportFrame     c.struct
+end: `layout.backend`
+
+table:
+    name: `LmTransL4FramePointerBinding.field.class`
+    columns: class          (field class)
+    rows:
+             head           char
+             receiver_type  char
+             handler        LmTransL4FrameHandler
+end: `LmTransL4FramePointerBinding.field.class`
+
+table:
+    name: `LmTransL4FramePointerBinding.field.index`
+    columns: class          (index serial)
+    rows:
+             head           0
+             receiver_type  1
+             handler        2
+end: `LmTransL4FramePointerBinding.field.index`
+
+table:
+    name: `LmTransL4FramePointerBinding.field.address-depth`
+    columns: class          (depth serial)
+    rows:
+             head           1
+             receiver_type  1
+end: `LmTransL4FramePointerBinding.field.address-depth`
+
+table:
+    name: `LmTransL4FramePointerBinding.field.const`
+    columns: class          (value serial)
+    rows:
+             head           1
+             receiver_type  1
+end: `LmTransL4FramePointerBinding.field.const`
+
+table:
+    name: `LmTransL4AtomPointerBinding.field.class`
+    columns: class          (field class)
+    rows:
+             atom           char
+             receiver_type  char
+             handler        LmTransL4AtomHandler
+end: `LmTransL4AtomPointerBinding.field.class`
+
+table:
+    name: `LmTransL4AtomPointerBinding.field.index`
+    columns: class          (index serial)
+    rows:
+             atom           0
+             receiver_type  1
+             handler        2
+end: `LmTransL4AtomPointerBinding.field.index`
+
+table:
+    name: `LmTransL4AtomPointerBinding.field.address-depth`
+    columns: class          (depth serial)
+    rows:
+             atom           1
+             receiver_type  1
+end: `LmTransL4AtomPointerBinding.field.address-depth`
+
+table:
+    name: `LmTransL4AtomPointerBinding.field.const`
+    columns: class          (value serial)
+    rows:
+             atom           1
+             receiver_type  1
+end: `LmTransL4AtomPointerBinding.field.const`
+
+table:
+    name: `LmTransRegistryImportFrame.field.class`
+    columns: class        (field class)
+    rows:
+             field        LmP0Field
+             descend_l2   int
+end: `LmTransRegistryImportFrame.field.class`
+
+table:
+    name: `LmTransRegistryImportFrame.field.index`
+    columns: class        (index serial)
+    rows:
+             field        0
+             descend_l2   1
+end: `LmTransRegistryImportFrame.field.index`
+
+table:
+    name: `LmTransRegistryImportFrame.field.address-depth`
+    columns: class        (depth serial)
+    rows:
+             field        1
+end: `LmTransRegistryImportFrame.field.address-depth`
+
+table:
+    name: `LmTransRegistryImportFrame.field.const`
+    columns: class        (value serial)
+    rows:
+             field        1
+end: `LmTransRegistryImportFrame.field.const`
+
 fn: lm_trans_collect_abi_params (
     @@: LmTransAbiParam params
     size_t: capacity
@@ -145,7 +285,7 @@ fn: lm_trans_emit_type_node (
 ) int
 
 fn: lm_trans_registry_latest_size_payload (
-    const: @: LmOwnPtrStack stack
+    const: @: LmOwnPtrStack rows
     const: @: LmP0Text key
     size_t: default_value
     @: size_t out_value
@@ -240,3 +380,102 @@ sub: lm_trans_symbol_delete_any (
 sub: lm_trans_free_any (
     @: void object
 )
+
+fn: lm_trans_string_stack_has (
+    const: @: LmOwnPtrStack stack
+    const: @: char value
+) int
+
+fn: lm_trans_parse_size_payload (
+    const: @: char payload
+    @: size_t out_value
+) int
+
+fn: lm_trans_statement_c_declarator_new () @: LmTransCDeclarator
+
+sub: lm_trans_statement_c_declarator_destroy (
+    @: LmTransCDeclarator declarator
+)
+
+fn: lm_trans_emit_c_declarator (
+    @: FILE file
+    @: LmTransCDeclarator declarator
+    const: @: LmTransNamespace namespace_
+    const: @: char error_name
+) int
+
+fn: lm_trans_emit_size_literal (
+    @: FILE file
+    size_t: value
+) int
+
+fn: lm_trans_l4_is_function_pointer_type (
+    const: @: LmTransNamespace namespace_
+    const: @: char name
+) int
+
+fn: lm_trans_emit_l4_function_pointer_type_field (
+    @: FILE file
+    const: @: LmTransNamespace namespace_
+    const: @: char type_name
+    const: @: char field_name
+    const: @: char error_name
+) int
+
+fn: lm_trans_namespace_set_callable_shape (
+    @: LmTransNamespace namespace_
+    const: @: LmTransFunctionHeader function
+) int
+
+fn: lm_trans_emit_l4_payload_node (
+    @: FILE output
+    const: @: LmP0Node node
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_emit_import (
+    @: FILE file
+    @: LmTransStatementStack stack
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_frame_is_l2_level_receiver (
+    const: @: LmP0Frame frame
+) int
+
+fn: lm_trans_registry_load_file_path (
+    const: @: char registry_path
+    int: required
+    @: int out_loaded
+) int
+
+fn: lm_trans_registry_candidate_path (
+    const: @: char source_path
+    const: @: char candidate_name
+    @: char registry_path
+    size_t: registry_path_size
+) int
+
+fn: lm_trans_emit_configured_prelude_sequences (
+    @: FILE file
+    @: LmTransNamespace namespace_
+    @: int out_emitted
+) int
+
+fn: lm_trans_emit_root_sequence (
+    @: FILE output
+    const: @: LmP0Node root
+    int: implicit_l2
+    @: int emitted
+) int
+
+fn: lm_trans_l4_root_receiver_registry (
+    const: @: LmP0Frame frame
+    int: allow_node_cells
+) int
+
+fn: lm_trans_l4_payload_pointer_bindings_init () int
+
+sub: lm_trans_l4_payload_pointer_bindings_destroy ()
