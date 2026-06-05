@@ -3116,12 +3116,13 @@ static int lm_trans_named_structure_field_info(
     const LmP0Field **out_initializer,
     size_t *out_pointer_depth
 ) {
+    const LmP0Frame *current_frame;
     const LmP0Structure *body;
     const LmP0Field *field;
     const LmP0Field *type_field;
     const LmP0Field *name_field;
     const LmP0Frame *inner;
-    size_t nested_pointer_depth;
+    size_t pointer_depth;
 
     if (
         field_frame == 0 ||
@@ -3133,12 +3134,15 @@ static int lm_trans_named_structure_field_info(
         return 0;
     }
 
-    body = lm_trans_named_structure_body(field_frame);
-    if (body == 0) {
-        return 0;
-    }
+    current_frame = field_frame;
+    pointer_depth = 0U;
 
-    if (lm_trans_text_all_char(field_frame->head, '@')) {
+    while (lm_trans_text_all_char(current_frame->head, '@')) {
+        body = lm_trans_named_structure_body(current_frame);
+        if (body == 0) {
+            return 0;
+        }
+
         field = body->first_field;
         if (
             field != 0 &&
@@ -3147,21 +3151,9 @@ static int lm_trans_named_structure_field_info(
             field->value->kind == LM_P0_NODE_FRAME
         ) {
             inner = field->value->as->frame;
-            nested_pointer_depth = 0U;
-            if (
-                !lm_trans_named_structure_field_info(
-                    inner,
-                    namespace_,
-                    out_type_head,
-                    out_name,
-                    out_initializer,
-                    &nested_pointer_depth
-                )
-            ) {
-                return 0;
-            }
-            *out_pointer_depth = field_frame->head->length + nested_pointer_depth;
-            return 1;
+            pointer_depth += current_frame->head->length;
+            current_frame = inner;
+            continue;
         }
 
         type_field = lm_trans_nth_field(body, 0U);
@@ -3179,11 +3171,16 @@ static int lm_trans_named_structure_field_info(
         *out_type_head = type_field->value->as->atom;
         *out_name = name_field->value->as->atom;
         *out_initializer = name_field->next;
-        *out_pointer_depth = field_frame->head->length;
+        *out_pointer_depth = pointer_depth + current_frame->head->length;
         return lm_trans_head_can_declare_storage(*out_type_head, namespace_);
     }
 
-    if (!lm_trans_head_can_declare_storage(field_frame->head, namespace_)) {
+    body = lm_trans_named_structure_body(current_frame);
+    if (body == 0) {
+        return 0;
+    }
+
+    if (!lm_trans_head_can_declare_storage(current_frame->head, namespace_)) {
         return 0;
     }
 
@@ -3195,10 +3192,10 @@ static int lm_trans_named_structure_field_info(
     ) {
         return 0;
     }
-    *out_type_head = field_frame->head;
+    *out_type_head = current_frame->head;
     *out_name = name_field->value->as->atom;
     *out_initializer = name_field->next;
-    *out_pointer_depth = 0U;
+    *out_pointer_depth = pointer_depth;
     return lm_trans_atom_can_be_new_binding_name(*out_name);
 }
 
