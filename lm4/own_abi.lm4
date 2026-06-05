@@ -17,6 +17,13 @@ fn: LmOwnDestroyFields (@: void object) void
 fn: LmOwnDelete (@: void object) void
 
 table:
+    name: class
+    columns: class   (kind class)
+    rows:
+             LmSlice  layout
+end: class
+
+table:
     name: `alias.backend`
     columns: class          (backend class)
     rows:
@@ -65,12 +72,36 @@ table:
     name: `layout.backend`
     columns: class                      (backend class)
     rows:
+             LmSlice                    c.struct
              LmOwnPtrStack              c.struct
              LmOwnValueStack            c.struct
              LmOwnAllocationDescriptor  c.struct
              LmOwnLazyEdge              c.struct
              LmOwnArena                 c.named-struct
 end: `layout.backend`
+
+table:
+    name: `LmSlice.field.class`
+    columns: class   (field class)
+    rows:
+             ptr     void
+             length  size_t
+end: `LmSlice.field.class`
+
+table:
+    name: `LmSlice.field.index`
+    columns: class   (index serial)
+    rows:
+             ptr     0
+             length  1
+end: `LmSlice.field.index`
+
+table:
+    name: `LmSlice.field.address-depth`
+    columns: class  (depth serial)
+    rows:
+             ptr    1
+end: `LmSlice.field.address-depth`
 
 table:
     name: `LmOwnPtrStack.field.class`

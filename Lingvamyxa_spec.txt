@@ -6687,7 +6687,8 @@ Semantic outline:
     operator                   receiver that registers receivers/operators
     if                         registered receiver, semantics depend on level
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
-    merge                      registered L2/L3/L4 structural receiver; ordered merge of Structure/table-producing parts
+    merge                      registered L2/L3 structural receiver; ordered merge of Structure/table-producing parts
+    join                       registered table receiver; L2 preserves Structure, L4 may materialize registry tables
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
     ()                         head receiver spelling for Structure-like variable/aggregate forms
@@ -6809,9 +6810,11 @@ The language does not define C slot counting, hidden runtime addresses, hidden o
 
 This section defines the shared L2/L3 source-level receiver/operator set for
 executable and descriptor bodies. Most entries are control-flow receivers.
-`merge` is the intentionally broader structural receiver in this list: the same
-surface syntax is admitted in L2, L3 and L4, while each level supplies its own
-receiver semantics. A minimal bootstrap L2 profile may expose only the subset
+`merge` is the intentionally broader structural receiver in this list. L2 and
+L3 use the `merge` spelling for ordered Structure construction. Table profiles
+use the receiver `join` for table-shaped Structures; an L2 lowering may preserve
+that Structure directly, while an L4 profile may consume it into a registry
+view. A minimal bootstrap L2 profile may expose only the subset
 listed in section 20.5, while richer L2 profiles and ordinary L3 profiles may
 admit the full set or profile-specific extensions.
 
@@ -6851,7 +6854,7 @@ Operator summary:
     13. redo                                              L2/L3 loop frame
     14. yield                                             L2/L3 iterator-profile fn
     15. labelled break / labelled continue                L2/L3 labelled loop frame
-    16. merge                                             L2/L3/L4 structural merge receiver
+    16. merge / join                                      L2/L3 structural merge; table-shaped Structure receiver
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
@@ -7794,9 +7797,9 @@ It is a compile-time error for `continue: labelName` to target a non-loop frame.
 The exact grammar rule for attaching labels to frames is not specified beyond the form `labelName:` before a frame. A final grammar must define whether labels can attach to retryable frames, blocks, handlers, iterator frames and arbitrary Structures.
 ?
 
-19.17. `merge`
+19.17. `merge` / Table `join`
 
-`merge` is an L2/L3/L4 structural receiver/operator. It is not parser syntax, not a
+`merge` is an L2/L3 structural receiver/operator. It is not parser syntax, not a
 preprocessor include and not runtime mutation of its source operands. The parser
 builds an ordinary `merge:` Frame; the active receiver/operator namespace gives
 that Frame structural-merge semantics.
@@ -7856,12 +7859,18 @@ its short tail. Therefore a trailing body naturally contributes trailing merge
 parts. A receiver that uses `merge` to build a class/layout/import field list may
 evaluate the `merge` result before validating the final descriptor.
 
-L4 table profile:
+Table profile:
 
-In an L4 registry/table profile, the same receiver spelling may materialize a
+In an L2 table profile, `table:` and `join:` are ordinary receiver Frames whose
+bodies are valid LMX Structures. A direct ANSI C lowering may preserve them as
+C structures, recursively: each Frame becomes a nested struct carrying its head,
+and each atom becomes the final scalar leaf. This lowering does not consult or
+mutate an L4 registry view.
+
+In an L4 registry/table profile, the receiver spelling `join` may materialize a
 new table descriptor from several table-producing sources:
 
-    merge: (sourceTable0 sourceTable1 ... sourceTableN) targetName
+    join: (sourceTable0 sourceTable1 ... sourceTableN) targetName
         tableFragment
     end: targetName
 
@@ -7869,16 +7878,16 @@ The bounded first argument is the ordered source-table list. Each source item is
 consumed in a table-producing context: it may name a table descriptor visible in
 the active registry view, be a table literal/fragment, or be a receiver/call
 whose declared result is compatible with an L4 table descriptor. The second
-argument is the target table name. The L4 `merge` receiver normalizes that
+argument is the target table name. The L4 table `join` receiver normalizes that
 argument as its `name`, so the canonical explicit close is `end: targetName`;
-`end: merge` remains the admitted receiver/head close alternative.
+`end: join` remains the admitted receiver/head close alternative.
 
 The vertical body is an optional target table fragment. It may be written
 directly as table body fields such as `columns:` and `rows:`, or as an explicit
 nested `table:` descriptor. If an explicit nested `table:` contains `name:`, that
 name must match `targetName` after registry key normalization.
 
-Default L4 table merge is ordered:
+Default L4 table join is ordered:
 
     1. Resolve source tables from left to right in the active registry view.
     2. Determine the target table schema from the explicit body `columns:` when
@@ -7888,15 +7897,15 @@ Default L4 table merge is ordered:
     5. Append body rows after source rows.
     6. Preserve duplicate row keys and duplicate relation facts.
 
-`merge` does not silently override, remove or deduplicate registry rows. If the
+L4 `join` does not silently override, remove or deduplicate registry rows. If the
 active registry lookup later uses last-visible-row, first-visible-row, relation
 set, or overlay semantics, that is the consuming registry policy, not a hidden
-side effect of `merge`.
+side effect of `join`.
 
 Example:
 
 L4:
-    merge: (`Base.field.class` `Audit.field.class`) `Entity.field.class`
+    join: (`Base.field.class` `Audit.field.class`) `Entity.field.class`
         columns: class  (field class)
         rows:
                  flags  u32
@@ -8128,6 +8137,17 @@ facts separate from class tables. If a backend prints a class table as a C
 `union`, that is a projection. The LMX data remains tables of classes and
 relations.
 
+The bootstrap registry also provides a generic pointer-and-length layout class:
+
+    LmSlice:
+        ptr     void    address-depth 1
+        length  size_t  address-depth 0
+
+It is class data first, not a free-floating ANSI C helper typedef. In the hosted
+C projection it may be printed as `typedef struct LmSlice { void *ptr; size_t
+length; } LmSlice;`. A profile may introduce additional unsigned length aliases
+such as `uint`, but the bootstrap C ABI uses `size_t` for object and byte counts.
+
 Likewise, `const` is not a global variable/class-table category. In the L2
 bootstrap profile it is a local declaration/type-position modifier consumed by
 procedural lowering. Persistent model facts that happen not to change are still
@@ -8337,9 +8357,9 @@ A bootstrap implementation may still lower these table Structures to a flat
 shape over the same class/key spelling rule, not a different semantic model.
 
 An L4 table profile may also materialize a table descriptor through the
-structural `merge` receiver described in section 19.17:
+table `join` receiver described in section 19.17:
 
-    merge: (BaseTable OverlayTable) TargetTable
+    join: (BaseTable OverlayTable) TargetTable
         columns: class  (value char)
         rows:
                  local  value

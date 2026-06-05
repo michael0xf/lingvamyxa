@@ -7597,7 +7597,7 @@ static int lm_p0_registry_l4_push_column_metadata(
     return lm_p0_registry_push_column_metadata(table_name, columns, column_count);
 }
 
-static int lm_p0_registry_merge_relation_matches(
+static int lm_p0_registry_join_relation_matches(
     const char *relation_name,
     const LmP0Text *source_name,
     const char **out_suffix
@@ -7626,7 +7626,7 @@ static int lm_p0_registry_merge_relation_matches(
     return 0;
 }
 
-static char *lm_p0_registry_merge_target_relation_new(
+static char *lm_p0_registry_join_target_relation_new(
     const LmP0Text *target_name,
     const char *suffix
 ) {
@@ -7653,7 +7653,7 @@ static char *lm_p0_registry_merge_target_relation_new(
     return relation_name;
 }
 
-static int lm_p0_registry_l4_merge_table(
+static int lm_p0_registry_l4_join_table(
     void *context,
     const LmP0Text *source_table,
     const LmP0Text *target_table
@@ -7698,10 +7698,10 @@ static int lm_p0_registry_l4_merge_table(
             continue;
         }
         suffix = 0;
-        if (!lm_p0_registry_merge_relation_matches(row->table, source_name, &suffix)) {
+        if (!lm_p0_registry_join_relation_matches(row->table, source_name, &suffix)) {
             continue;
         }
-        target_relation = lm_p0_registry_merge_target_relation_new(target_name, suffix);
+        target_relation = lm_p0_registry_join_target_relation_new(target_name, suffix);
         if (target_relation == 0) {
             status = -1;
             break;
@@ -7724,7 +7724,7 @@ static int lm_p0_registry_l4_merge_table(
     if (status == 0 && copied == 0U) {
         fprintf(
             stderr,
-            "parser registry error: merge source table \"%.*s\" has no rows\n",
+            "parser registry error: join source table \"%.*s\" has no rows\n",
             (int)source_name->length,
             source_name->data
         );
@@ -7739,7 +7739,7 @@ static int lm_p0_registry_l4_merge_table(
 static int lm_p0_registry_seed_l4_receivers(void) {
     return
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "table", "l4.frame") != 0 ||
-        lm_p0_registry_push_generated_row_cstr("namespace.l4", "merge", "l4.frame") != 0 ||
+        lm_p0_registry_push_generated_row_cstr("namespace.l4", "join", "l4.frame") != 0 ||
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "row", "l4.frame") != 0 ||
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "fn", "l4.frame") != 0 ||
         lm_p0_registry_push_generated_row_cstr("namespace.l4", "lazy fn", "l4.frame") != 0;
@@ -7769,8 +7769,8 @@ static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(
     if (lm_p0_text_equals(head, "table")) {
         return lm_l4_receiver_table;
     }
-    if (lm_p0_text_equals(head, "merge")) {
-        return lm_l4_receiver_merge;
+    if (lm_p0_text_equals(head, "join")) {
+        return lm_l4_receiver_join;
     }
     if (lm_p0_text_equals(head, "row")) {
         return lm_l4_receiver_row;
@@ -7822,7 +7822,7 @@ static LmL4Loader *lm_p0_registry_l4_loader_new(void) {
     loader->push_cell = lm_p0_registry_l4_push_cell;
     loader->note_key = 0;
     loader->push_column_metadata = lm_p0_registry_l4_push_column_metadata;
-    loader->merge_table = lm_p0_registry_l4_merge_table;
+    loader->join_table = lm_p0_registry_l4_join_table;
     loader->dispatch_frame = lm_p0_registry_l4_dispatch_frame;
     return loader;
 }

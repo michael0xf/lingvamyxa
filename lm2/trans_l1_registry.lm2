@@ -11,6 +11,7 @@ static LmOwnPtrStack *lm_trans_emitted_callable_binders;
 static LmOwnPtrStack *lm_trans_emitted_array_value_helpers;
 static LmOwnPtrStack *lm_trans_emitted_function_return_structs;
 static unsigned lm_trans_next_array_value_helper_id;
+static unsigned lm_trans_next_l2_structure_object_id;
 
 static LmTransRegistry *lm_trans_registry;
 
@@ -462,7 +463,7 @@ static int lm_trans_registry_push_row_node_values(
     return 0;
 }
 
-static int lm_trans_registry_merge_relation_matches(
+static int lm_trans_registry_join_relation_matches(
     const char *relation_name,
     const LmP0Text *source_name,
     const char **out_suffix
@@ -491,7 +492,7 @@ static int lm_trans_registry_merge_relation_matches(
     return 0;
 }
 
-static char *lm_trans_registry_merge_target_relation_new(
+static char *lm_trans_registry_join_target_relation_new(
     const LmP0Text *target_name,
     const char *suffix
 ) {
@@ -518,7 +519,7 @@ static char *lm_trans_registry_merge_target_relation_new(
     return relation_name;
 }
 
-static int lm_trans_registry_merge_copy_row(
+static int lm_trans_registry_join_copy_row(
     const LmTransRegistryFact *row,
     const LmP0Text *source_name,
     const LmP0Text *target_name,
@@ -534,11 +535,11 @@ static int lm_trans_registry_merge_copy_row(
     if (row == 0 || row->table == 0 || row->key == 0 || (row->payload_node == 0 && row->payload == 0)) {
         return 0;
     }
-    if (copied == 0 || !lm_trans_registry_merge_relation_matches(row->table, source_name, &suffix)) {
+    if (copied == 0 || !lm_trans_registry_join_relation_matches(row->table, source_name, &suffix)) {
         return 0;
     }
 
-    target_relation = lm_trans_registry_merge_target_relation_new(target_name, suffix);
+    target_relation = lm_trans_registry_join_target_relation_new(target_name, suffix);
     if (target_relation == 0) {
         return 1;
     }
@@ -564,7 +565,7 @@ static int lm_trans_registry_merge_copy_row(
     return 0;
 }
 
-static int lm_trans_registry_merge_table(
+static int lm_trans_registry_join_table(
     const LmP0Text *source_table,
     const LmP0Text *target_table
 ) {
@@ -620,12 +621,12 @@ static int lm_trans_registry_merge_table(
                             relation_suffix = 0;
                             if (
                                 relation->symbols != 0 &&
-                                lm_trans_registry_merge_relation_matches(relation->name, source_name, &relation_suffix)
+                                lm_trans_registry_join_relation_matches(relation->name, source_name, &relation_suffix)
                             ) {
                                 symbol_count = relation->symbols->count;
                                 for (symbol_index = 0U; status == 0 && symbol_index < symbol_count; ++symbol_index) {
                                     row = (LmTransRegistryFact *)lm_own_ptr_stack_at(relation->symbols, symbol_index);
-                                    status = lm_trans_registry_merge_copy_row(
+                                    status = lm_trans_registry_join_copy_row(
                                         row,
                                         source_name,
                                         target_name,
@@ -645,7 +646,7 @@ static int lm_trans_registry_merge_table(
     if (status == 0 && copied == 0U) {
         fprintf(
             stderr,
-            "trans registry error: merge source table \"%.*s\" has no rows\n",
+            "trans registry error: join source table \"%.*s\" has no rows\n",
             (int)source_name->length,
             source_name->data
         );

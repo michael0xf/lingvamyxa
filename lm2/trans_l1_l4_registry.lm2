@@ -2600,7 +2600,7 @@ static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cel
     return lm_trans_registry_load_table_frame_common(frame, allow_node_cells, "trans L4");
 }
 
-static int lm_trans_l4_receiver_merge(const LmP0Frame *frame, int allow_node_cells) {
+static int lm_trans_l4_receiver_join(const LmP0Frame *frame, int allow_node_cells) {
     LmTransL4LoadContext *context;
     int status;
 
@@ -2609,10 +2609,10 @@ static int lm_trans_l4_receiver_merge(const LmP0Frame *frame, int allow_node_cel
         return 1;
     }
     context->allow_node_cells = allow_node_cells;
-    status = lm_l4_merge_from_frame(lm_trans_registry_l4_loader_get(), context, frame);
+    status = lm_l4_join_from_frame(lm_trans_registry_l4_loader_get(), context, frame);
     if (status <= 0) {
         if (status == 0) {
-            fprintf(stderr, "trans L4 error: merge receiver expects a merge frame\n");
+            fprintf(stderr, "trans L4 error: join receiver expects a join frame\n");
         }
         lm_own_delete(context, 0);
         return 1;
@@ -2767,7 +2767,7 @@ static int lm_trans_l4_pointer_bindings_init(void) {
     }
     if (
         lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 ||
-        lm_trans_l4_frame_pointer_binding_push(frame_bindings, "merge", "l4.frame", lm_trans_l4_receiver_merge) != 0 ||
+        lm_trans_l4_frame_pointer_binding_push(frame_bindings, "join", "l4.frame", lm_trans_l4_receiver_join) != 0 ||
         lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 ||
         lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 ||
         lm_trans_l4_frame_pointer_binding_push(frame_bindings, "lazy fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 ||
@@ -3232,13 +3232,13 @@ static int lm_trans_registry_l4_push_column_metadata(
     return lm_trans_registry_push_column_metadata(table_name, columns, column_count);
 }
 
-static int lm_trans_registry_l4_merge_table(
+static int lm_trans_registry_l4_join_table(
     void *context,
     const LmP0Text *source_table,
     const LmP0Text *target_table
 ) {
     (void)context;
-    return lm_trans_registry_merge_table(source_table, target_table) != 0 ? -1 : 0;
+    return lm_trans_registry_join_table(source_table, target_table) != 0 ? -1 : 0;
 }
 
 static LmL4FrameReceiver lm_trans_registry_l4_resolve_frame(
@@ -3265,8 +3265,8 @@ static LmL4FrameReceiver lm_trans_registry_l4_resolve_frame(
     if (lm_trans_text_equals(head, "table")) {
         return lm_l4_receiver_table;
     }
-    if (lm_trans_text_equals(head, "merge")) {
-        return lm_l4_receiver_merge;
+    if (lm_trans_text_equals(head, "join")) {
+        return lm_l4_receiver_join;
     }
     if (lm_trans_text_equals(head, "row")) {
         return lm_l4_receiver_row;
@@ -3318,7 +3318,7 @@ static LmL4Loader *lm_trans_registry_l4_loader_new(void) {
     loader->push_cell = lm_trans_registry_l4_push_cell;
     loader->note_key = lm_trans_registry_l4_note_key;
     loader->push_column_metadata = lm_trans_registry_l4_push_column_metadata;
-    loader->merge_table = lm_trans_registry_l4_merge_table;
+    loader->join_table = lm_trans_registry_l4_join_table;
     loader->dispatch_frame = lm_trans_registry_l4_dispatch_frame;
     return loader;
 }
@@ -3340,17 +3340,6 @@ static int lm_trans_registry_l4_runtime_init(void) {
         return 1;
     }
     return 0;
-}
-
-static int lm_trans_declare_l2_table_frame(
-    LmTransNamespace *namespace_,
-    const LmP0Frame *frame
-) {
-    (void)namespace_;
-    if (lm_trans_registry_l4_runtime_init() != 0) {
-        return 1;
-    }
-    return lm_trans_registry_load_table_frame_common(frame, 1, "trans L2");
 }
 
 static int lm_trans_registry_load_root(const LmP0Node *root, int implicit_l4, int allow_node_cells) {
@@ -3965,7 +3954,7 @@ static int lm_trans_registry_seed_l4_receivers(void) {
         ) != 0 ||
         lm_trans_registry_push_row_values(
             lm_trans_text_from_cstr("namespace.l4"),
-            lm_trans_text_from_cstr("merge"),
+            lm_trans_text_from_cstr("join"),
             lm_trans_text_from_cstr("l4.frame")
         ) != 0 ||
         lm_trans_registry_push_row_values(

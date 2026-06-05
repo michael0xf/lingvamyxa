@@ -16,7 +16,7 @@ table:
              LmL4PushCell           1
              LmL4NoteKey            1
              LmL4PushColumnMetadata 1
-             LmL4MergeTable         1
+             LmL4JoinTable          1
              LmL4FrameReceiver      1
 end: functionPointerType
 
@@ -56,7 +56,7 @@ fn: LmL4PushColumnMetadata (
     size_t: column_count
 ) int
 
-fn: LmL4MergeTable (
+fn: LmL4JoinTable (
     @: void context
     const: @: LmP0Text source_table
     const: @: LmP0Text target_table
@@ -128,7 +128,7 @@ table:
              push_cell             LmL4PushCell
              note_key              LmL4NoteKey
              push_column_metadata  LmL4PushColumnMetadata
-             merge_table           LmL4MergeTable
+             join_table            LmL4JoinTable
              dispatch_frame        LmL4FrameReceiver
 end: `LmL4Loader.field.class`
 
@@ -141,7 +141,7 @@ table:
              push_cell             2
              note_key              3
              push_column_metadata  4
-             merge_table           5
+             join_table            5
              dispatch_frame        6
 end: `LmL4Loader.field.index`
 

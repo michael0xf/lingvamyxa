@@ -143,6 +143,7 @@ table:
              define        `receiver.statement`
              `ifndef-default` `receiver.statement`
              import        `receiver.statement`
+             join          `receiver.statement`
              merge         `receiver.statement`
              os            `receiver.statement`
              ifdef         `receiver.statement`
@@ -194,6 +195,7 @@ table:
              define        lm_trans_statement_emit_define_prelude
              `ifndef-default` lm_trans_statement_emit_ifndef_default_prelude
              import        lm_trans_statement_emit_import
+             join          lm_trans_statement_emit_join
              merge         lm_trans_statement_emit_merge_named_structure
              os            lm_trans_statement_emit_os_prelude
              ifdef         lm_trans_statement_emit_ifdef_prelude
@@ -219,7 +221,7 @@ table:
     columns: class  (L4 binding marker)
     rows:
              table  `l4.frame`
-             merge  `l4.frame`
+             join   `l4.frame`
              row    `l4.frame`
              fn     `l4.frame`
              `lazy fn` `l4.frame`

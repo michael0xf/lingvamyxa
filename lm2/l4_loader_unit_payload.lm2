@@ -579,7 +579,7 @@ L2:
         return: field
     end: lm_l4_next_present_field
 
-    fn: lm_l4_merge_header (
+    fn: lm_l4_join_header (
         const: @(LmP0Frame frame)
         const: @@(LmP0Structure out_sources)
         const: @@(LmP0Text out_target)
@@ -590,7 +590,7 @@ L2:
         const: @: LmP0Text target
         const: @: LmP0Structure body
 
-        if: frame = 0 || out_sources = 0 || out_target = 0 || out_body = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "merge") = 0
+        if: frame = 0 || out_sources = 0 || out_target = 0 || out_body = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "join") = 0
             return: 0
 
         \out_sources: 0
@@ -622,15 +622,15 @@ L2:
         \out_target: target
         \out_body: body
         return: 1
-    end: lm_l4_merge_header
+    end: lm_l4_join_header
 
-    fn: lm_l4_merge_sources_into_target (const: @(LmL4Loader loader); @: void context; const: @(LmP0Structure sources); const: @(LmP0Text target_name)) int
+    fn: lm_l4_join_sources_into_target (const: @(LmL4Loader loader); @: void context; const: @(LmP0Structure sources); const: @(LmP0Text target_name)) int
         const: @: LmP0Field field
         const: @: LmP0Node node
         const: @: LmP0Text source_name
 
-        if: loader = 0 || loader\merge_table = 0
-            lm_l4_error(loader, "merge consumer is not configured")
+        if: loader = 0 || loader\join_table = 0
+            lm_l4_error(loader, "join consumer is not configured")
             return: -1
         if: sources = 0 || target_name = 0
             return: -1
@@ -640,18 +640,18 @@ L2:
             node: field\value
             if: node != 0 && lm_l4_node_is_ignored(node) = 0
                 if: node\kind != c.LM_P0_NODE_ATOM
-                    lm_l4_error(loader, "merge source list currently expects table name atoms")
+                    lm_l4_error(loader, "join source list currently expects table name atoms")
                     return: -1
                 source_name: lm_l4_node_atom(node)
-                if: source_name = 0 || c.loader->merge_table(context, source_name, target_name) != 0
+                if: source_name = 0 || c.loader->join_table(context, source_name, target_name) != 0
                     return: -1
             ---
             field: field\next
 
         return: 0
-    end: lm_l4_merge_sources_into_target
+    end: lm_l4_join_sources_into_target
 
-    fn: lm_l4_merge_from_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
+    fn: lm_l4_join_from_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
         const: @: LmP0Field field
         const: @: LmP0Node node
         const: @: LmP0Frame node_frame
@@ -665,23 +665,23 @@ L2:
         int: have_rows
         int: status
 
-        if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "merge") = 0
+        if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "join") = 0
             return: 0
 
         sources: 0
         body: 0
         target_name: 0
         field: 0
-        status: lm_l4_merge_header(frame, @ sources, @ target_name, @ body)
+        status: lm_l4_join_header(frame, @ sources, @ target_name, @ body)
         if: status <= 0
             if: status = 0
                 return: 0
-            lm_l4_error(loader, "merge expects (sourceTables...) targetName and a table fragment body")
+            lm_l4_error(loader, "join expects (sourceTables...) targetName and a table fragment body")
             return: -1
 
         columns: lm_own_new_zero(128U * c.sizeof(columns[0]))
         if: columns = 0
-            lm_l4_error(loader, "out of memory while reading merge columns")
+            lm_l4_error(loader, "out of memory while reading join columns")
             return: -1
 
         have_columns: 0
@@ -693,13 +693,13 @@ L2:
             node: field\value
             if: node != 0 && lm_l4_node_is_ignored(node) = 0
                 if: node\kind != c.LM_P0_NODE_FRAME
-                    lm_l4_error(loader, "merge body expects columns/rows frames")
+                    lm_l4_error(loader, "join body expects columns/rows frames")
                     lm_l4_columns_destroy(columns, column_count)
                     return: -1
                 node_frame: lm_l4_node_frame(node)
                 if: lm_l4_text_equals(lm_l4_frame_head(node_frame), "columns") != 0
                     if: have_columns != 0
-                        lm_l4_error(loader, "merge expects one columns frame")
+                        lm_l4_error(loader, "join expects one columns frame")
                         lm_l4_columns_destroy(columns, column_count)
                         return: -1
                     status: lm_l4_columns_from_frame(loader, node_frame, columns, 128U, @ column_count)
@@ -707,7 +707,7 @@ L2:
                         lm_l4_columns_destroy(columns, column_count)
                         return: -1
                     if: loader != 0 && loader\push_column_metadata != 0 && c.loader->push_column_metadata(context, target_name, columns, column_count) != 0
-                        lm_l4_error(loader, "cannot store merge target column metadata")
+                        lm_l4_error(loader, "cannot store join target column metadata")
                         lm_l4_columns_destroy(columns, column_count)
                         return: -1
                     have_columns: 1
@@ -715,23 +715,23 @@ L2:
                     continue
                 if: lm_l4_text_equals(lm_l4_frame_head(node_frame), "rows") != 0
                     if: have_rows != 0
-                        lm_l4_error(loader, "merge expects at most one rows frame")
+                        lm_l4_error(loader, "join expects at most one rows frame")
                         lm_l4_columns_destroy(columns, column_count)
                         return: -1
                     rows_frame: node_frame
                     have_rows: 1
                     field: lm_l4_next_present_field(field\next)
                     continue
-                lm_l4_error(loader, "merge body expects columns/rows frames")
+                lm_l4_error(loader, "join body expects columns/rows frames")
                 lm_l4_columns_destroy(columns, column_count)
                 return: -1
             field: lm_l4_next_present_field(field\next)
 
         if: have_columns = 0
-            lm_l4_error(loader, "merge requires target columns")
+            lm_l4_error(loader, "join requires target columns")
             lm_l4_columns_destroy(columns, column_count)
             return: -1
-        if: lm_l4_merge_sources_into_target(loader, context, sources, target_name) != 0
+        if: lm_l4_join_sources_into_target(loader, context, sources, target_name) != 0
             lm_l4_columns_destroy(columns, column_count)
             return: -1
         if: have_rows != 0
@@ -746,37 +746,37 @@ L2:
 
         lm_l4_columns_destroy(columns, column_count)
         return: 1
-    end: lm_l4_merge_from_frame
+    end: lm_l4_join_from_frame
 
-    fn: lm_l4_check_merge_frame_unique (const: @(LmL4Loader loader); const: @(LmP0Frame frame); @: LmOwnPtrStack seen) int
+    fn: lm_l4_check_join_frame_unique (const: @(LmL4Loader loader); const: @(LmP0Frame frame); @: LmOwnPtrStack seen) int
         const: @: LmP0Structure sources
         const: @: LmP0Structure body
         const: @: LmP0Text target_name
         int: status
 
-        if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "merge") = 0
+        if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "join") = 0
             return: 0
 
         sources: 0
         body: 0
         target_name: 0
-        status: lm_l4_merge_header(frame, @ sources, @ target_name, @ body)
+        status: lm_l4_join_header(frame, @ sources, @ target_name, @ body)
         if: status <= 0
             if: status < 0
-                lm_l4_error(loader, "merge expects (sourceTables...) targetName and a table fragment body")
+                lm_l4_error(loader, "join expects (sourceTables...) targetName and a table fragment body")
                 return: -1
             return: 0
 
         status: lm_l4_seen_table_add(seen, target_name)
         if: status < 0
-            lm_l4_error(loader, "cannot record merge target name")
+            lm_l4_error(loader, "cannot record join target name")
             return: -1
         if: status > 0
             lm_l4_error(loader, "duplicate table in one L4 schema")
             return: -1
 
         return: 0
-    end: lm_l4_check_merge_frame_unique
+    end: lm_l4_check_join_frame_unique
 
     fn: lm_l4_receiver_table (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
         @: LmOwnPtrStack seen
@@ -794,21 +794,21 @@ L2:
         return: 0
     end: lm_l4_receiver_table
 
-    fn: lm_l4_receiver_merge (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
+    fn: lm_l4_receiver_join (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
         @: LmOwnPtrStack seen
         int: status
 
         seen: lm_l4_seen_tables_get()
-        if: seen != 0 && lm_l4_check_merge_frame_unique(loader, frame, seen) != 0
+        if: seen != 0 && lm_l4_check_join_frame_unique(loader, frame, seen) != 0
             return: 1
 
-        status: lm_l4_merge_from_frame(loader, context, frame)
+        status: lm_l4_join_from_frame(loader, context, frame)
         if: status <= 0
             if: status = 0
-                lm_l4_error(loader, "merge receiver expects merge frame")
+                lm_l4_error(loader, "join receiver expects join frame")
             return: 1
         return: 0
-    end: lm_l4_receiver_merge
+    end: lm_l4_receiver_join
 
     fn: lm_l4_receiver_row (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
         int: status
