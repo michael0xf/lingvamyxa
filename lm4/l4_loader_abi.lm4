@@ -80,6 +80,19 @@ fn: lm_l4_row_from_frame (
     const: @: LmP0Frame frame
 ) int
 
+fn: lm_l4_load_rows (
+    const: @: LmL4Loader loader
+    @: void context
+    const: @: LmP0Structure structure
+) int
+
+fn: lm_l4_load_root (
+    const: @: LmL4Loader loader
+    @: void context
+    const: @: LmP0Node root
+    int: implicit_l4
+) int
+
 fn: lm_l4_receiver_table (
     const: @: LmL4Loader loader
     @: void context

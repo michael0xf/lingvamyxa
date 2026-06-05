@@ -596,6 +596,8 @@ void lm_p0_free(void *ptr);
 static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_join_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
+static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_join(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
