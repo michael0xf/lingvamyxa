@@ -4,8 +4,12 @@
 
 char * getenv(const char *name);
 size_t strlen(const char *text);
+char * strchr(const char *text, int value);
 void * memcpy(void *target, const void *source, size_t length);
+char * strcpy(char *target, const char *source);
+char * strcat(char *target, const char *source);
 int system(const char *command);
+int remove(const char *path);
 FILE * fopen(const char *path, const char *mode);
 int fclose(FILE *file);
 size_t fread(void *buffer, size_t item_size, size_t item_count, FILE *file);
