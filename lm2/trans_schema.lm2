@@ -291,6 +291,7 @@ L4:
                  l4_root_frame_pointer_bindings LmOwnPtrStack 8          1
                  l4_atom_pointer_bindings LmOwnPtrStack   9              1
                  l4_payload_pointer_bindings LmOwnPtrStack 10            1
+                 binding_pointer_bindings LmOwnPtrStack    11            1
     end: LmTransRegistry
 
     table:
@@ -647,6 +648,7 @@ L4:
                  type_structure_value_alloc  LmTransTypeStructureValueAllocReceiver  7
                  type_structure_value_fill   LmTransTypeStructureValueFillReceiver   8
                  expr_segment_materializer   LmTransExprSegmentMaterializer          9
+                 atom_statement              LmTransAtomStatementHandler             10
     end: LmTransBinding
 
     table:

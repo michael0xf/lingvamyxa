@@ -2102,6 +2102,7 @@ static void lm_trans_registry_destroy(void) {
         return;
     }
     lm_trans_l4_payload_pointer_bindings_destroy();
+    lm_trans_ptr_stack_delete(&lm_trans_registry->binding_pointer_bindings);
     lm_trans_ptr_stack_delete(&lm_trans_registry->l4_atom_pointer_bindings);
     lm_trans_ptr_stack_delete(&lm_trans_registry->l4_root_frame_pointer_bindings);
     lm_trans_ptr_stack_delete(&lm_trans_registry->l4_frame_pointer_bindings);
@@ -3594,7 +3595,7 @@ static int lm_trans_registry_load_imports_from_structure(
                 }
             } else if (
                 frame->descend_l2 &&
-                lm_trans_text_equals(node->as->frame->head, "L2") &&
+                lm_trans_frame_is_l2_level_receiver(node->as->frame) &&
                 node->as->frame->body != 0 &&
                 node->as->frame->body->first_field != 0
             ) {
