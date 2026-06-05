@@ -131,6 +131,7 @@ table:
              `lazy fn`     `receiver.function`
              fm            `receiver.function`
              sub           `receiver.function`
+             table         `receiver.statement`
              if            `receiver.statement`
              else          `receiver.statement`
              while         `receiver.statement`
@@ -181,6 +182,7 @@ table:
     name: `receiver.statement`
     columns: class         (receiver binding)
     rows:
+             table         lm_trans_statement_emit_table
              if            lm_trans_statement_emit_if
              else          lm_trans_statement_emit_else
              while         lm_trans_statement_emit_while

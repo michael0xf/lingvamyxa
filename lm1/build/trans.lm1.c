@@ -15946,6 +15946,24 @@ static int lm_trans_statement_emit_import(
     return 1;
 }
 
+static int lm_trans_statement_emit_table(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)file;
+    (void)stack;
+    (void)frame;
+    (void)namespace_;
+    if (indent == 0U) {
+        return 0;
+    }
+    fprintf(stderr, "trans L2 error: table receiver is top-level only\n");
+    return 1;
+}
+
 static int lm_trans_statement_emit_const_declaration(
     FILE *file,
     LmTransStatementStack *stack,
@@ -17985,6 +18003,7 @@ static int lm_trans_pointer_bindings_init(void) {
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", lm_trans_statement_emit_guard_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", lm_trans_statement_emit_extern_c_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", lm_trans_statement_emit_import) != 0 ||
+        lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", lm_trans_statement_emit_table) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", lm_trans_statement_emit_merge_named_structure) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", lm_trans_statement_emit_const_declaration) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", lm_trans_statement_emit_array_declaration) != 0 ||
@@ -19121,6 +19140,10 @@ static int lm_trans_emit_l2_ifdef_frame(
     LmTransNamespace *namespace_
 );
 static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame);
+static int lm_trans_declare_l2_table_frame(
+    LmTransNamespace *namespace_,
+    const LmP0Frame *frame
+);
 static int lm_trans_top_level_declare_os(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
@@ -19325,6 +19348,13 @@ static int lm_trans_top_level_declare_import(
     const LmTransTopLevelItem *item
 ) {
     return lm_trans_declare_l2_import_frame(namespace_, item != 0 ? item->frame : 0);
+}
+
+static int lm_trans_top_level_declare_table(
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    return lm_trans_declare_l2_table_frame(namespace_, item != 0 ? item->frame : 0);
 }
 
 static int lm_trans_top_level_emit_import_prelude(
@@ -19641,6 +19671,10 @@ static int lm_trans_top_level_statement_binding(
             out->emit_before_functions = lm_trans_top_level_emit_import_prelude;
             out->emit_function = lm_trans_top_level_emit_import_functions;
         }
+        return 1;
+    }
+    if (receiver == lm_trans_statement_emit_table) {
+        out->declare = lm_trans_top_level_declare_table;
         return 1;
     }
     if (receiver == lm_trans_statement_emit_merge_named_structure) {
@@ -26259,7 +26293,11 @@ static const LmL4Loader *lm_trans_registry_l4_loader_get(void) {
     return lm_trans_registry != 0 ? lm_trans_registry->l4_loader : 0;
 }
 
-static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cells) {
+static int lm_trans_registry_load_table_frame_common(
+    const LmP0Frame *frame,
+    int allow_node_cells,
+    const char *error_context
+) {
     LmTransL4LoadContext *context;
     int status;
 
@@ -26271,13 +26309,21 @@ static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cel
     status = lm_l4_table_from_frame(lm_trans_registry_l4_loader_get(), context, frame);
     if (status <= 0) {
         if (status == 0) {
-            fprintf(stderr, "trans L4 error: table receiver expects a table frame\n");
+            fprintf(
+                stderr,
+                "%s error: table receiver expects a table frame\n",
+                error_context != 0 ? error_context : "trans registry"
+            );
         }
         lm_own_delete(context, 0);
         return 1;
     }
     lm_own_delete(context, 0);
     return 0;
+}
+
+static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cells) {
+    return lm_trans_registry_load_table_frame_common(frame, allow_node_cells, "trans L4");
 }
 
 static int lm_trans_l4_receiver_merge(const LmP0Frame *frame, int allow_node_cells) {
@@ -27020,6 +27066,17 @@ static int lm_trans_registry_l4_runtime_init(void) {
         return 1;
     }
     return 0;
+}
+
+static int lm_trans_declare_l2_table_frame(
+    LmTransNamespace *namespace_,
+    const LmP0Frame *frame
+) {
+    (void)namespace_;
+    if (lm_trans_registry_l4_runtime_init() != 0) {
+        return 1;
+    }
+    return lm_trans_registry_load_table_frame_common(frame, 1, "trans L2");
 }
 
 static int lm_trans_registry_load_root(const LmP0Node *root, int implicit_l4, int allow_node_cells) {

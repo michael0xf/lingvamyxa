@@ -25,6 +25,10 @@ static int lm_trans_emit_l2_ifdef_frame(
     LmTransNamespace *namespace_
 );
 static int lm_trans_emit_l1_include_frame(FILE *output, const LmP0Frame *frame);
+static int lm_trans_declare_l2_table_frame(
+    LmTransNamespace *namespace_,
+    const LmP0Frame *frame
+);
 static int lm_trans_top_level_declare_os(
     LmTransNamespace *namespace_,
     const LmTransTopLevelItem *item
@@ -229,6 +233,13 @@ static int lm_trans_top_level_declare_import(
     const LmTransTopLevelItem *item
 ) {
     return lm_trans_declare_l2_import_frame(namespace_, item != 0 ? item->frame : 0);
+}
+
+static int lm_trans_top_level_declare_table(
+    LmTransNamespace *namespace_,
+    const LmTransTopLevelItem *item
+) {
+    return lm_trans_declare_l2_table_frame(namespace_, item != 0 ? item->frame : 0);
 }
 
 static int lm_trans_top_level_emit_import_prelude(
@@ -545,6 +556,10 @@ static int lm_trans_top_level_statement_binding(
             out->emit_before_functions = lm_trans_top_level_emit_import_prelude;
             out->emit_function = lm_trans_top_level_emit_import_functions;
         }
+        return 1;
+    }
+    if (receiver == lm_trans_statement_emit_table) {
+        out->declare = lm_trans_top_level_declare_table;
         return 1;
     }
     if (receiver == lm_trans_statement_emit_merge_named_structure) {

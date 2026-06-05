@@ -5343,6 +5343,24 @@ static int lm_trans_statement_emit_import(
     return 1;
 }
 
+static int lm_trans_statement_emit_table(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)file;
+    (void)stack;
+    (void)frame;
+    (void)namespace_;
+    if (indent == 0U) {
+        return 0;
+    }
+    fprintf(stderr, "trans L2 error: table receiver is top-level only\n");
+    return 1;
+}
+
 static int lm_trans_statement_emit_const_declaration(
     FILE *file,
     LmTransStatementStack *stack,
@@ -7382,6 +7400,7 @@ static int lm_trans_pointer_bindings_init(void) {
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", lm_trans_statement_emit_guard_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", lm_trans_statement_emit_extern_c_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", lm_trans_statement_emit_import) != 0 ||
+        lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", lm_trans_statement_emit_table) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", lm_trans_statement_emit_merge_named_structure) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", lm_trans_statement_emit_const_declaration) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", lm_trans_statement_emit_array_declaration) != 0 ||
