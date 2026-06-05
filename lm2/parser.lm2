@@ -370,6 +370,7 @@ L4:
                  rows     LmOwnPtrStack
                  loaded   int
                  loading  int
+                 l4_loader LmL4Loader
     end: `LmP0Registry.field.class`
 
     table:
@@ -379,6 +380,7 @@ L4:
                  rows     0
                  loaded   1
                  loading  2
+                 l4_loader 3
     end: `LmP0Registry.field.index`
 
     table:
@@ -386,6 +388,7 @@ L4:
         columns: class    (depth serial)
         rows:
                  rows     1
+                 l4_loader 1
     end: `LmP0Registry.field.address-depth`
 end: L4
 
@@ -1168,6 +1171,7 @@ static char *lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
 static void lm_p0_registry_row_destroy_any(void *object);
 static void lm_p0_registry_destroy(void);
+static LmL4Loader *lm_p0_registry_l4_loader_new(void);
 static void lm_p0_indent_stack_free(LmP0IndentStack *stack);
 static void lm_p0_indent_stack_free_any(void *object);
 static int lm_p0_indent_stack_push(
@@ -1294,7 +1298,16 @@ static int lm_p0_registry_init(void) {
         return 0;
     }
     lm_p0_registry = (LmP0Registry *)lm_own_new_zero(sizeof(*lm_p0_registry));
-    return lm_p0_registry == 0 ? 1 : 0;
+    if (lm_p0_registry == 0) {
+        return 1;
+    }
+    lm_p0_registry->l4_loader = lm_p0_registry_l4_loader_new();
+    if (lm_p0_registry->l4_loader == 0) {
+        lm_own_delete(lm_p0_registry, 0);
+        lm_p0_registry = 0;
+        return 1;
+    }
+    return 0;
 }
 
 static void lm_p0_registry_destroy(void) {
@@ -1306,6 +1319,8 @@ static void lm_p0_registry_destroy(void) {
         lm_own_delete(lm_p0_registry->rows, 0);
         lm_p0_registry->rows = 0;
     }
+    lm_own_delete(lm_p0_registry->l4_loader, 0);
+    lm_p0_registry->l4_loader = 0;
     lm_p0_registry->loaded = 0;
     lm_p0_registry->loading = 0;
     lm_own_delete(lm_p0_registry, 0);
@@ -7645,14 +7660,25 @@ static int lm_p0_registry_l4_dispatch_frame(
     return receiver(loader, context, frame);
 }
 
-static const LmL4Loader lm_p0_registry_l4_loader = {
-    "parser",
-    lm_p0_registry_l4_push_row,
-    lm_p0_registry_l4_push_cell,
-    0,
-    lm_p0_registry_l4_push_column_metadata,
-    lm_p0_registry_l4_dispatch_frame
-};
+static LmL4Loader *lm_p0_registry_l4_loader_new(void) {
+    LmL4Loader *loader;
+
+    loader = (LmL4Loader *)lm_own_new_zero(sizeof(*loader));
+    if (loader == 0) {
+        return 0;
+    }
+    loader->error_prefix = "parser";
+    loader->push_row = lm_p0_registry_l4_push_row;
+    loader->push_cell = lm_p0_registry_l4_push_cell;
+    loader->note_key = 0;
+    loader->push_column_metadata = lm_p0_registry_l4_push_column_metadata;
+    loader->dispatch_frame = lm_p0_registry_l4_dispatch_frame;
+    return loader;
+}
+
+static const LmL4Loader *lm_p0_registry_l4_loader_get(void) {
+    return lm_p0_registry != 0 ? lm_p0_registry->l4_loader : 0;
+}
 
 static int lm_p0_path_has_extension(const char *path, const char *extension) {
     size_t path_length;
@@ -7692,7 +7718,7 @@ static int lm_p0_path_has_extension(const char *path, const char *extension) {
 
 static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
     return lm_l4_load_root(
-        &lm_p0_registry_l4_loader,
+        lm_p0_registry_l4_loader_get(),
         0,
         root,
         implicit_l4

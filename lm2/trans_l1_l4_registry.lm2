@@ -2101,6 +2101,12 @@ static void lm_trans_registry_destroy(void) {
     if (lm_trans_registry == 0) {
         return;
     }
+    lm_trans_l4_payload_pointer_bindings_destroy();
+    lm_trans_ptr_stack_delete(&lm_trans_registry->l4_atom_pointer_bindings);
+    lm_trans_ptr_stack_delete(&lm_trans_registry->l4_root_frame_pointer_bindings);
+    lm_trans_ptr_stack_delete(&lm_trans_registry->l4_frame_pointer_bindings);
+    lm_own_delete(lm_trans_registry->l4_loader, 0);
+    lm_trans_registry->l4_loader = 0;
     if (lm_trans_registry->loaded) {
         lm_trans_identifier_table_delete(&lm_trans_registry->identifiers);
         lm_own_arena_destroy(lm_trans_registry->value_arena);
@@ -2556,7 +2562,9 @@ cleanup:
     return status;
 }
 
-static const LmL4Loader lm_trans_registry_l4_loader;
+static const LmL4Loader *lm_trans_registry_l4_loader_get(void) {
+    return lm_trans_registry != 0 ? lm_trans_registry->l4_loader : 0;
+}
 
 static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cells) {
     LmTransL4LoadContext *context;
@@ -2567,7 +2575,7 @@ static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cel
         return 1;
     }
     context->allow_node_cells = allow_node_cells;
-    status = lm_l4_table_from_frame(&lm_trans_registry_l4_loader, context, frame);
+    status = lm_l4_table_from_frame(lm_trans_registry_l4_loader_get(), context, frame);
     if (status <= 0) {
         if (status == 0) {
             fprintf(stderr, "trans L4 error: table receiver expects a table frame\n");
@@ -2588,7 +2596,7 @@ static int lm_trans_l4_receiver_row(const LmP0Frame *frame, int allow_node_cells
         return 1;
     }
     context->allow_node_cells = allow_node_cells;
-    status = lm_l4_row_from_frame(&lm_trans_registry_l4_loader, context, frame);
+    status = lm_l4_row_from_frame(lm_trans_registry_l4_loader_get(), context, frame);
     if (status <= 0) {
         if (status == 0) {
             fprintf(stderr, "trans L4 error: row receiver expects a row frame\n");
@@ -2643,68 +2651,110 @@ typedef struct LmTransL4AtomPointerBinding {
 
 static int lm_trans_l4_root_receiver_registry(const LmP0Frame *frame, int allow_node_cells);
 
-static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_table = {
-    "table",
-    "l4.frame",
-    lm_trans_l4_receiver_table
-};
+static int lm_trans_l4_frame_pointer_binding_push(
+    LmOwnPtrStack *bindings,
+    const char *head,
+    const char *receiver_type,
+    LmTransL4FrameHandler handler
+) {
+    LmTransL4FramePointerBinding *binding;
 
-static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_row = {
-    "row",
-    "l4.frame",
-    lm_trans_l4_receiver_row
-};
+    if (bindings == 0 || head == 0 || receiver_type == 0 || handler == 0) {
+        return 1;
+    }
+    binding = (LmTransL4FramePointerBinding *)lm_own_new_zero(sizeof(*binding));
+    if (binding == 0) {
+        return 1;
+    }
+    binding->head = head;
+    binding->receiver_type = receiver_type;
+    binding->handler = handler;
+    if (lm_own_ptr_stack_push(bindings, binding) != 0) {
+        lm_own_delete(binding, 0);
+        return 1;
+    }
+    return 0;
+}
 
-static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_fn = {
-    "fn",
-    "l4.frame",
-    lm_trans_l4_receiver_fn_descriptor
-};
+static int lm_trans_l4_atom_pointer_binding_push(
+    LmOwnPtrStack *bindings,
+    const char *atom,
+    const char *receiver_type,
+    LmTransL4AtomHandler handler
+) {
+    LmTransL4AtomPointerBinding *binding;
 
-static const LmTransL4FramePointerBinding lm_trans_l4_frame_pointer_binding_lazy_fn = {
-    "lazy fn",
-    "l4.frame",
-    lm_trans_l4_receiver_fn_descriptor
-};
+    if (bindings == 0 || atom == 0 || receiver_type == 0 || handler == 0) {
+        return 1;
+    }
+    binding = (LmTransL4AtomPointerBinding *)lm_own_new_zero(sizeof(*binding));
+    if (binding == 0) {
+        return 1;
+    }
+    binding->atom = atom;
+    binding->receiver_type = receiver_type;
+    binding->handler = handler;
+    if (lm_own_ptr_stack_push(bindings, binding) != 0) {
+        lm_own_delete(binding, 0);
+        return 1;
+    }
+    return 0;
+}
 
-static const LmTransL4FramePointerBinding *const lm_trans_l4_frame_pointer_bindings[] = {
-    &lm_trans_l4_frame_pointer_binding_table,
-    &lm_trans_l4_frame_pointer_binding_row,
-    &lm_trans_l4_frame_pointer_binding_fn,
-    &lm_trans_l4_frame_pointer_binding_lazy_fn
-};
+static int lm_trans_l4_pointer_bindings_init(void) {
+    LmOwnPtrStack *frame_bindings;
+    LmOwnPtrStack *root_frame_bindings;
+    LmOwnPtrStack *atom_bindings;
 
-static const LmTransL4FramePointerBinding lm_trans_l4_root_frame_pointer_binding_l4 = {
-    "L4",
-    "l4.root",
-    lm_trans_l4_root_receiver_registry
-};
+    if (lm_trans_registry == 0) {
+        return 1;
+    }
+    if (
+        lm_trans_registry->l4_frame_pointer_bindings != 0 ||
+        lm_trans_registry->l4_root_frame_pointer_bindings != 0 ||
+        lm_trans_registry->l4_atom_pointer_bindings != 0
+    ) {
+        return
+            lm_trans_registry->l4_frame_pointer_bindings != 0 &&
+            lm_trans_registry->l4_root_frame_pointer_bindings != 0 &&
+            lm_trans_registry->l4_atom_pointer_bindings != 0
+                ? 0
+                : 1;
+    }
 
-static const LmTransL4FramePointerBinding lm_trans_l4_root_frame_pointer_binding_registry = {
-    "registry",
-    "l4.root",
-    lm_trans_l4_root_receiver_registry
-};
+    frame_bindings = lm_trans_ptr_stack_new(lm_own_delete_plain);
+    root_frame_bindings = lm_trans_ptr_stack_new(lm_own_delete_plain);
+    atom_bindings = lm_trans_ptr_stack_new(lm_own_delete_plain);
+    if (frame_bindings == 0 || root_frame_bindings == 0 || atom_bindings == 0) {
+        lm_trans_ptr_stack_delete(&frame_bindings);
+        lm_trans_ptr_stack_delete(&root_frame_bindings);
+        lm_trans_ptr_stack_delete(&atom_bindings);
+        return 1;
+    }
+    if (
+        lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 ||
+        lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 ||
+        lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 ||
+        lm_trans_l4_frame_pointer_binding_push(frame_bindings, "lazy fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 ||
+        lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "L4", "l4.root", lm_trans_l4_root_receiver_registry) != 0 ||
+        lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "registry", "l4.root", lm_trans_l4_root_receiver_registry) != 0 ||
+        lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0
+    ) {
+        lm_trans_ptr_stack_delete(&frame_bindings);
+        lm_trans_ptr_stack_delete(&root_frame_bindings);
+        lm_trans_ptr_stack_delete(&atom_bindings);
+        return 1;
+    }
 
-static const LmTransL4FramePointerBinding *const lm_trans_l4_root_frame_pointer_bindings[] = {
-    &lm_trans_l4_root_frame_pointer_binding_l4,
-    &lm_trans_l4_root_frame_pointer_binding_registry
-};
-
-static const LmTransL4AtomPointerBinding lm_trans_l4_atom_pointer_binding_load_headers = {
-    "loadHeaders",
-    "l4.atom",
-    lm_trans_l4_atom_receiver_prelude_sequence
-};
-
-static const LmTransL4AtomPointerBinding *const lm_trans_l4_atom_pointer_bindings[] = {
-    &lm_trans_l4_atom_pointer_binding_load_headers
-};
+    lm_trans_registry->l4_frame_pointer_bindings = frame_bindings;
+    lm_trans_registry->l4_root_frame_pointer_bindings = root_frame_bindings;
+    lm_trans_registry->l4_atom_pointer_bindings = atom_bindings;
+    return 0;
+}
 
 static const LmTransL4FramePointerBinding *lm_trans_l4_frame_pointer_binding_find(
     const LmP0Text *head,
-    const LmTransL4FramePointerBinding *const *bindings,
-    size_t count
+    const LmOwnPtrStack *bindings
 ) {
     size_t i;
     const LmTransL4FramePointerBinding *binding;
@@ -2713,8 +2763,8 @@ static const LmTransL4FramePointerBinding *lm_trans_l4_frame_pointer_binding_fin
         return 0;
     }
 
-    for (i = 0U; i < count; ++i) {
-        binding = bindings[i];
+    for (i = 0U; i < bindings->count; ++i) {
+        binding = (const LmTransL4FramePointerBinding *)lm_own_ptr_stack_at(bindings, i);
         if (binding != 0 && lm_trans_text_equals(head, binding->head)) {
             return binding;
         }
@@ -2724,8 +2774,7 @@ static const LmTransL4FramePointerBinding *lm_trans_l4_frame_pointer_binding_fin
 
 static const LmTransL4AtomPointerBinding *lm_trans_l4_atom_pointer_binding_find(
     const LmP0Text *atom,
-    const LmTransL4AtomPointerBinding *const *bindings,
-    size_t count
+    const LmOwnPtrStack *bindings
 ) {
     size_t i;
     const LmTransL4AtomPointerBinding *binding;
@@ -2734,8 +2783,8 @@ static const LmTransL4AtomPointerBinding *lm_trans_l4_atom_pointer_binding_find(
         return 0;
     }
 
-    for (i = 0U; i < count; ++i) {
-        binding = bindings[i];
+    for (i = 0U; i < bindings->count; ++i) {
+        binding = (const LmTransL4AtomPointerBinding *)lm_own_ptr_stack_at(bindings, i);
         if (binding != 0 && lm_trans_text_equals(atom, binding->atom)) {
             return binding;
         }
@@ -2746,8 +2795,7 @@ static const LmTransL4AtomPointerBinding *lm_trans_l4_atom_pointer_binding_find(
 static int lm_trans_l4_head_binding_resolve_from_pointer_table(
     const LmP0Text *head,
     const char *namespace_table,
-    const LmTransL4FramePointerBinding *const *bindings,
-    size_t binding_count,
+    const LmOwnPtrStack *bindings,
     LmTransL4HeadBinding *out
 ) {
     const LmTransL4FramePointerBinding *binding;
@@ -2763,7 +2811,7 @@ static int lm_trans_l4_head_binding_resolve_from_pointer_table(
         return 0;
     }
 
-    binding = lm_trans_l4_frame_pointer_binding_find(head, bindings, binding_count);
+    binding = lm_trans_l4_frame_pointer_binding_find(head, bindings);
     if (binding == 0) {
         fprintf(
             stderr,
@@ -2801,8 +2849,7 @@ static int lm_trans_l4_head_binding_resolve(
     return lm_trans_l4_head_binding_resolve_from_pointer_table(
         head,
         "namespace.l4",
-        lm_trans_l4_frame_pointer_bindings,
-        sizeof(lm_trans_l4_frame_pointer_bindings) / sizeof(lm_trans_l4_frame_pointer_bindings[0]),
+        lm_trans_registry != 0 ? lm_trans_registry->l4_frame_pointer_bindings : 0,
         out
     );
 }
@@ -2814,8 +2861,7 @@ static int lm_trans_l4_root_head_binding_resolve(
     return lm_trans_l4_head_binding_resolve_from_pointer_table(
         head,
         "namespace.l4.root",
-        lm_trans_l4_root_frame_pointer_bindings,
-        sizeof(lm_trans_l4_root_frame_pointer_bindings) / sizeof(lm_trans_l4_root_frame_pointer_bindings[0]),
+        lm_trans_registry != 0 ? lm_trans_registry->l4_root_frame_pointer_bindings : 0,
         out
     );
 }
@@ -2823,8 +2869,7 @@ static int lm_trans_l4_root_head_binding_resolve(
 static int lm_trans_l4_atom_binding_resolve_from_pointer_table(
     const LmP0Text *atom,
     const char *namespace_table,
-    const LmTransL4AtomPointerBinding *const *bindings,
-    size_t binding_count,
+    const LmOwnPtrStack *bindings,
     LmTransL4AtomBinding *out
 ) {
     const LmTransL4AtomPointerBinding *binding;
@@ -2840,7 +2885,7 @@ static int lm_trans_l4_atom_binding_resolve_from_pointer_table(
         return 0;
     }
 
-    binding = lm_trans_l4_atom_pointer_binding_find(atom, bindings, binding_count);
+    binding = lm_trans_l4_atom_pointer_binding_find(atom, bindings);
     if (binding == 0) {
         fprintf(
             stderr,
@@ -2878,8 +2923,7 @@ static int lm_trans_l4_atom_binding_resolve(
     return lm_trans_l4_atom_binding_resolve_from_pointer_table(
         atom,
         "namespace.l4.atom",
-        lm_trans_l4_atom_pointer_bindings,
-        sizeof(lm_trans_l4_atom_pointer_bindings) / sizeof(lm_trans_l4_atom_pointer_bindings[0]),
+        lm_trans_registry != 0 ? lm_trans_registry->l4_atom_pointer_bindings : 0,
         out
     );
 }
@@ -3215,14 +3259,40 @@ static int lm_trans_registry_l4_dispatch_frame(
     return receiver(loader, context, frame);
 }
 
-static const LmL4Loader lm_trans_registry_l4_loader = {
-    "trans",
-    lm_trans_registry_l4_push_row,
-    lm_trans_registry_l4_push_cell,
-    lm_trans_registry_l4_note_key,
-    lm_trans_registry_l4_push_column_metadata,
-    lm_trans_registry_l4_dispatch_frame
-};
+static LmL4Loader *lm_trans_registry_l4_loader_new(void) {
+    LmL4Loader *loader;
+
+    loader = (LmL4Loader *)lm_own_new_zero(sizeof(*loader));
+    if (loader == 0) {
+        return 0;
+    }
+    loader->error_prefix = "trans";
+    loader->push_row = lm_trans_registry_l4_push_row;
+    loader->push_cell = lm_trans_registry_l4_push_cell;
+    loader->note_key = lm_trans_registry_l4_note_key;
+    loader->push_column_metadata = lm_trans_registry_l4_push_column_metadata;
+    loader->dispatch_frame = lm_trans_registry_l4_dispatch_frame;
+    return loader;
+}
+
+static int lm_trans_registry_l4_runtime_init(void) {
+    if (lm_trans_registry == 0) {
+        return 1;
+    }
+    if (lm_trans_registry->l4_loader == 0) {
+        lm_trans_registry->l4_loader = lm_trans_registry_l4_loader_new();
+        if (lm_trans_registry->l4_loader == 0) {
+            return 1;
+        }
+    }
+    if (
+        lm_trans_l4_pointer_bindings_init() != 0 ||
+        lm_trans_l4_payload_pointer_bindings_init() != 0
+    ) {
+        return 1;
+    }
+    return 0;
+}
 
 static int lm_trans_registry_load_root(const LmP0Node *root, int implicit_l4, int allow_node_cells) {
     const LmP0Field *field;
@@ -3894,6 +3964,11 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
         return 1;
     }
     lm_trans_registry->loaded_fact_count = 0U;
+
+    if (lm_trans_registry_l4_runtime_init() != 0) {
+        lm_trans_registry_destroy();
+        return 1;
+    }
 
     if (lm_trans_registry_seed_l4_receivers() != 0) {
         lm_trans_registry_destroy();

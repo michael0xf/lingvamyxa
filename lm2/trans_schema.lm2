@@ -286,6 +286,11 @@ L4:
                  source_path        char                  3              1
                  loaded_fact_count  size_t                4              0
                  loaded             int                   5              0
+                 l4_loader          LmL4Loader            6              1
+                 l4_frame_pointer_bindings LmOwnPtrStack  7              1
+                 l4_root_frame_pointer_bindings LmOwnPtrStack 8          1
+                 l4_atom_pointer_bindings LmOwnPtrStack   9              1
+                 l4_payload_pointer_bindings LmOwnPtrStack 10            1
     end: LmTransRegistry
 
     table:

@@ -3495,35 +3495,76 @@ typedef struct LmTransL4PayloadPointerBinding {
     LmTransL4PayloadFrameHandler handler;
 } LmTransL4PayloadPointerBinding;
 
-static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_binding_import = {
-    "import",
-    "l4.payload",
-    lm_trans_l4_payload_receiver_import
-};
+static int lm_trans_l4_payload_pointer_binding_push(
+    LmOwnPtrStack *bindings,
+    const char *head,
+    const char *receiver_type,
+    LmTransL4PayloadFrameHandler handler
+) {
+    LmTransL4PayloadPointerBinding *binding;
 
-static const LmTransL4PayloadPointerBinding lm_trans_l4_payload_pointer_binding_l2 = {
-    "L2",
-    "l4.payload",
-    lm_trans_l4_payload_receiver_l2
-};
+    if (bindings == 0 || head == 0 || receiver_type == 0 || handler == 0) {
+        return 1;
+    }
+    binding = (LmTransL4PayloadPointerBinding *)lm_own_new_zero(sizeof(*binding));
+    if (binding == 0) {
+        return 1;
+    }
+    binding->head = head;
+    binding->receiver_type = receiver_type;
+    binding->handler = handler;
+    if (lm_own_ptr_stack_push(bindings, binding) != 0) {
+        lm_own_delete(binding, 0);
+        return 1;
+    }
+    return 0;
+}
 
-static const LmTransL4PayloadPointerBinding *const lm_trans_l4_payload_pointer_bindings[] = {
-    &lm_trans_l4_payload_pointer_binding_import,
-    &lm_trans_l4_payload_pointer_binding_l2
-};
+static int lm_trans_l4_payload_pointer_bindings_init(void) {
+    LmOwnPtrStack *bindings;
+
+    if (lm_trans_registry == 0) {
+        return 1;
+    }
+    if (lm_trans_registry->l4_payload_pointer_bindings != 0) {
+        return 0;
+    }
+
+    bindings = lm_trans_ptr_stack_new(lm_own_delete_plain);
+    if (bindings == 0) {
+        return 1;
+    }
+    if (
+        lm_trans_l4_payload_pointer_binding_push(bindings, "import", "l4.payload", lm_trans_l4_payload_receiver_import) != 0 ||
+        lm_trans_l4_payload_pointer_binding_push(bindings, "L2", "l4.payload", lm_trans_l4_payload_receiver_l2) != 0
+    ) {
+        lm_trans_ptr_stack_delete(&bindings);
+        return 1;
+    }
+    lm_trans_registry->l4_payload_pointer_bindings = bindings;
+    return 0;
+}
+
+static void lm_trans_l4_payload_pointer_bindings_destroy(void) {
+    if (lm_trans_registry != 0) {
+        lm_trans_ptr_stack_delete(&lm_trans_registry->l4_payload_pointer_bindings);
+    }
+}
 
 static const LmTransL4PayloadPointerBinding *lm_trans_l4_payload_pointer_binding_find(
     const LmP0Text *head
 ) {
     size_t i;
+    const LmOwnPtrStack *bindings;
     const LmTransL4PayloadPointerBinding *binding;
 
-    if (head == 0) {
+    if (head == 0 || lm_trans_registry == 0 || lm_trans_registry->l4_payload_pointer_bindings == 0) {
         return 0;
     }
 
-    for (i = 0U; i < sizeof(lm_trans_l4_payload_pointer_bindings) / sizeof(lm_trans_l4_payload_pointer_bindings[0]); ++i) {
-        binding = lm_trans_l4_payload_pointer_bindings[i];
+    bindings = lm_trans_registry->l4_payload_pointer_bindings;
+    for (i = 0U; i < bindings->count; ++i) {
+        binding = (const LmTransL4PayloadPointerBinding *)lm_own_ptr_stack_at(bindings, i);
         if (binding != 0 && lm_trans_text_equals(head, binding->head)) {
             return binding;
         }
