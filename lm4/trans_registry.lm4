@@ -142,6 +142,7 @@ table:
              break         `receiver.statement`
              continue      `receiver.statement`
              synchronized  `receiver.statement`
+             finally       `receiver.statement`
              include       `receiver.statement`
              define        `receiver.statement`
              `ifndef-default` `receiver.statement`
@@ -194,6 +195,7 @@ table:
              break         lm_trans_statement_emit_loop_jump
              continue      lm_trans_statement_emit_loop_jump
              synchronized  lm_trans_statement_emit_synchronized
+             finally       lm_trans_statement_emit_finally
              include       lm_trans_statement_emit_include_prelude
              define        lm_trans_statement_emit_define_prelude
              `ifndef-default` lm_trans_statement_emit_ifndef_default_prelude
@@ -482,7 +484,6 @@ table:
              LmTransStatementLowering 1
              LmTransStatementNodeJob  1
              LmTransStatementStack    1
-             LmTransStatementSyncLeaveJob 1
              LmTransStatementTextJob  1
              LmTransSymbol            1
              LmTransStructReturnFieldValue 1

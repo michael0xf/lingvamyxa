@@ -1200,6 +1200,8 @@ fn: lm_trans_emit_function_with_hoisted (@: FILE file; const: @(LmTransFunctionH
     status: lm_trans_emit_statement_list(file, function\body_start, 1U, namespace_)
     if: status = 0
         status: lm_trans_validate_end_trailer(frame)
+    if: status = 0 && (frame\trailer = 0 || lm_trans_text_equals(frame\trailer\spelling, "return") = 0)
+        status: lm_trans_emit_cleanups_until(file, 1U, namespace_, 0U)
     if: status = 0
         status: lm_trans_emit_trailer_statement(file, frame\trailer, 1U, namespace_)
     if: status = 0

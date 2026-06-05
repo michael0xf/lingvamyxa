@@ -763,12 +763,14 @@ sub: lm_trans_hoisted_function_delete_any (@: void object)
     lm_trans_hoisted_function_destroy(cast: (@: LmTransHoistedFunction) object)
 end: lm_trans_hoisted_function_delete_any
 
-fn: lm_trans_cleanup_new (unsigned: id) @: LmTransCleanup
+fn: lm_trans_cleanup_new (unsigned: id; const: @(LmP0Field body); unsigned: scope_depth) @: LmTransCleanup
     @: LmTransCleanup cleanup
 
     cleanup: lm_own_new_zero(c.sizeof(cleanup[0]))
     if: cleanup != 0
         cleanup\id: id
+        cleanup\scope_depth: scope_depth
+        cleanup\body: body
 return: cleanup
 
 sub: lm_trans_cleanup_destroy (@: LmTransCleanup cleanup)
@@ -869,7 +871,21 @@ fn: lm_trans_cleanup_push (@: LmTransNamespace namespace_; unsigned: id) int
     if: namespace_ = 0
         return: 1
 
-    cleanup: lm_trans_cleanup_new(id)
+    cleanup: lm_trans_cleanup_new(id, 0, namespace_\depth)
+    if: cleanup = 0
+        return: 1
+    if: namespace_\cleanups = 0 || lm_own_ptr_stack_push(namespace_\cleanups, cleanup) != 0
+        lm_trans_cleanup_destroy(cleanup)
+        return: 1
+return: 0
+
+fn: lm_trans_finally_push (@: LmTransNamespace namespace_; const: @(LmP0Field body)) int
+    @: LmTransCleanup cleanup
+
+    if: namespace_ = 0 || body = 0
+        return: 1
+
+    cleanup: lm_trans_cleanup_new(0U, body, namespace_\depth)
     if: cleanup = 0
         return: 1
     if: namespace_\cleanups = 0 || lm_own_ptr_stack_push(namespace_\cleanups, cleanup) != 0

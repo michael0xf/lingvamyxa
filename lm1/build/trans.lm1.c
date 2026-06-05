@@ -285,6 +285,8 @@ typedef struct LmTransSymbol {
 } LmTransSymbol;
 typedef struct LmTransCleanup {
     unsigned id;
+    unsigned scope_depth;
+    const LmP0Field *body;
 } LmTransCleanup;
 typedef struct LmTransLoop {
     size_t cleanup_base;
@@ -369,10 +371,6 @@ typedef struct LmTransStatementTextJob {
     unsigned indent;
     const char *text;
 } LmTransStatementTextJob;
-typedef struct LmTransStatementSyncLeaveJob {
-    unsigned indent;
-    unsigned cleanup_id;
-} LmTransStatementSyncLeaveJob;
 struct LmTransStatementStack {
     LmOwnPtrStack *jobs;
 };
@@ -383,7 +381,6 @@ struct LmTransStatementJob {
     LmTransStatementNodeJob *node;
     LmTransStatementFrameJob *frame;
     LmTransStatementTextJob *text;
-    LmTransStatementSyncLeaveJob *sync_leave;
 };
 typedef struct LmTransStatementLowering {
     int (*emit)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
@@ -700,6 +697,7 @@ static int lm_trans_emit_function_params(FILE *file, const LmTransFunctionHeader
 static int lm_trans_emit_function(FILE *file, const LmTransFunctionHeader *function, LmTransNamespace *namespace_);
 static int lm_trans_emit_env_type(FILE *file, const LmTransFunctionHeader *function, const LmTransNamespace *namespace_);
 static int lm_trans_emit_statement_list(FILE *file, const LmP0Field *first, unsigned indent, LmTransNamespace *namespace_);
+static int lm_trans_emit_cleanups_until(FILE *file, unsigned indent, const LmTransNamespace *namespace_, size_t cleanup_base);
 static int lm_trans_emit_trailer_statement(FILE *file, const LmP0Trailer *trailer, unsigned indent, LmTransNamespace *namespace_);
 static char * lm_trans_captured_expr_new(const LmP0Text *name);
 static int lm_trans_capture_candidates_add_captures(LmOwnPtrStack *candidates, const LmOwnPtrStack *captures);
@@ -1981,7 +1979,7 @@ static void lm_trans_capture_destroy(LmTransCapture *capture);
 static void lm_trans_capture_delete_any(void *object);
 static void lm_trans_hoisted_function_destroy(LmTransHoistedFunction *function);
 static void lm_trans_hoisted_function_delete_any(void *object);
-static LmTransCleanup * lm_trans_cleanup_new(unsigned id);
+static LmTransCleanup * lm_trans_cleanup_new(unsigned id, const LmP0Field *body, unsigned scope_depth);
 static void lm_trans_cleanup_destroy(LmTransCleanup *cleanup);
 static void lm_trans_cleanup_delete_any(void *object);
 static LmTransLoop * lm_trans_loop_new(size_t cleanup_base);
@@ -1994,6 +1992,7 @@ static void lm_trans_namespace_delete(LmTransNamespace *namespace_);
 static void lm_trans_namespace_enter_scope(LmTransNamespace *namespace_);
 static void lm_trans_namespace_leave_scope(LmTransNamespace *namespace_);
 static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id);
+static int lm_trans_finally_push(LmTransNamespace *namespace_, const LmP0Field *body);
 static void lm_trans_cleanup_pop(LmTransNamespace *namespace_);
 static int lm_trans_loop_push(LmTransNamespace *namespace_);
 static void lm_trans_loop_pop(LmTransNamespace *namespace_);
@@ -2310,13 +2309,6 @@ static void lm_trans_statement_job_destroy_text(LmTransStatementJob *job) {
     if (job != 0) {
         lm_own_delete(job->text, 0);
         job->text = 0;
-    }
-}
-
-static void lm_trans_statement_job_destroy_sync_leave(LmTransStatementJob *job) {
-    if (job != 0) {
-        lm_own_delete(job->sync_leave, 0);
-        job->sync_leave = 0;
     }
 }
 
@@ -2742,6 +2734,41 @@ cleanup:
     return status;
 }
 
+static int lm_trans_emit_cleanup(
+    FILE *file,
+    unsigned indent,
+    const LmTransNamespace *namespace_,
+    const LmTransCleanup *cleanup
+) {
+    if (cleanup == 0) {
+        return 1;
+    }
+
+    if (cleanup->body != 0) {
+        return lm_trans_emit_statement_list(
+            file,
+            cleanup->body,
+            indent,
+            (LmTransNamespace *)namespace_
+        );
+    }
+
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_sync_name(file, cleanup->id) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, ");\n") != 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
 static int lm_trans_emit_cleanups_until(
     FILE *file,
     unsigned indent,
@@ -2759,21 +2786,36 @@ static int lm_trans_emit_cleanups_until(
     while (index > cleanup_base) {
         --index;
         cleanup = (const LmTransCleanup *)lm_own_ptr_stack_at(namespace_->cleanups, index);
-        if (cleanup == 0) {
+        if (lm_trans_emit_cleanup(file, indent, namespace_, cleanup) != 0) {
             return 1;
         }
-        if (lm_trans_emit_indent(file, indent) != 0) {
+    }
+
+    return 0;
+}
+
+static int lm_trans_emit_scope_cleanups(
+    FILE *file,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    LmTransCleanup *cleanup;
+
+    if (namespace_ == 0 || namespace_->cleanups == 0) {
+        return 0;
+    }
+
+    while (namespace_->cleanups->count > 0U) {
+        cleanup = (LmTransCleanup *)lm_own_ptr_stack_top(namespace_->cleanups);
+        if (cleanup == 0 || cleanup->scope_depth != namespace_->depth) {
+            return 0;
+        }
+        cleanup = (LmTransCleanup *)lm_own_ptr_stack_pop(namespace_->cleanups);
+        if (lm_trans_emit_cleanup(file, indent, namespace_, cleanup) != 0) {
+            lm_trans_cleanup_destroy(cleanup);
             return 1;
         }
-        if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
-            return 1;
-        }
-        if (lm_trans_emit_sync_name(file, cleanup->id) != 0) {
-            return 1;
-        }
-        if (lm_trans_put(file, ");\n") != 0) {
-            return 1;
-        }
+        lm_trans_cleanup_destroy(cleanup);
     }
 
     return 0;
@@ -7822,7 +7864,7 @@ static int lm_trans_statement_job_loop_pop(
     LmTransStatementJob *job,
     LmTransNamespace *namespace_
 );
-static int lm_trans_statement_job_cleanup_pop(
+static int lm_trans_statement_job_emit_scope_cleanups(
     FILE *file,
     LmTransStatementStack *stack,
     LmTransStatementJob *job,
@@ -7834,13 +7876,6 @@ static int lm_trans_statement_job_emit_indent_text(
     LmTransStatementJob *job,
     LmTransNamespace *namespace_
 );
-static int lm_trans_statement_job_emit_sync_leave(
-    FILE *file,
-    LmTransStatementStack *stack,
-    LmTransStatementJob *job,
-    LmTransNamespace *namespace_
-);
-
 static int lm_trans_statement_stack_push_list(
     LmTransStatementStack *stack,
     const LmP0Field *field,
@@ -7979,10 +8014,9 @@ static int lm_trans_statement_stack_push_indent_text(
     return status;
 }
 
-static int lm_trans_statement_stack_push_sync_leave(
+static int lm_trans_statement_stack_push_scope_cleanups(
     LmTransStatementStack *stack,
-    unsigned indent,
-    unsigned cleanup_id
+    unsigned indent
 ) {
     LmTransStatementJob *job;
     int status;
@@ -7991,15 +8025,14 @@ static int lm_trans_statement_stack_push_sync_leave(
     if (job == 0) {
         return 1;
     }
-    job->run = lm_trans_statement_job_emit_sync_leave;
-    job->destroy = lm_trans_statement_job_destroy_sync_leave;
-    job->sync_leave = (LmTransStatementSyncLeaveJob *)lm_own_new_zero(sizeof(*job->sync_leave));
-    if (job->sync_leave == 0) {
+    job->run = lm_trans_statement_job_emit_scope_cleanups;
+    job->destroy = lm_trans_statement_job_destroy_text;
+    job->text = (LmTransStatementTextJob *)lm_own_new_zero(sizeof(*job->text));
+    if (job->text == 0) {
         lm_trans_statement_job_delete(job);
         return 1;
     }
-    job->sync_leave->indent = indent;
-    job->sync_leave->cleanup_id = cleanup_id;
+    job->text->indent = indent;
     status = lm_trans_statement_stack_push(stack, job);
     if (status != 0) {
         lm_trans_statement_job_delete(job);
@@ -8086,6 +8119,7 @@ static int lm_trans_statement_stack_schedule_control(
         lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_leave_scope) ||
         (is_loop && lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_loop_pop)) ||
+        lm_trans_statement_stack_push_scope_cleanups(stack, indent + 1U) ||
         lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0);
     if (status != 0) {
         if (is_loop) {
@@ -8160,10 +8194,9 @@ static int lm_trans_statement_stack_schedule_synchronized(
     }
 
     status =
-        lm_trans_statement_stack_push_sync_leave(stack, indent, cleanup_id) ||
         lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_leave_scope) ||
-        lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_cleanup_pop) ||
+        lm_trans_statement_stack_push_scope_cleanups(stack, indent + 1U) ||
         lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0);
     if (status != 0) {
         lm_trans_cleanup_pop(namespace_);
@@ -8194,6 +8227,7 @@ static int lm_trans_statement_stack_schedule_else(
     status =
         lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") ||
         lm_trans_statement_stack_push_simple(stack, lm_trans_statement_job_leave_scope) ||
+        lm_trans_statement_stack_push_scope_cleanups(stack, indent + 1U) ||
         lm_trans_statement_stack_push_list(stack, frame->body->first_field, indent + 1U, 1, 0);
     if (status != 0) {
         lm_trans_namespace_leave_scope(namespace_);
@@ -8425,6 +8459,22 @@ static int lm_trans_statement_emit_synchronized(
     LmTransNamespace *namespace_
 ) {
     return lm_trans_statement_stack_schedule_synchronized(file, stack, frame, indent, namespace_);
+}
+
+static int lm_trans_statement_emit_finally(
+    FILE *file,
+    LmTransStatementStack *stack,
+    const LmP0Frame *frame,
+    unsigned indent,
+    LmTransNamespace *namespace_
+) {
+    (void)file;
+    (void)stack;
+    (void)indent;
+    if (frame == 0 || frame->body == 0 || frame->body->first_field == 0) {
+        return 1;
+    }
+    return lm_trans_finally_push(namespace_, frame->body->first_field);
 }
 
 static int lm_trans_statement_emit_loop_jump(
@@ -9646,23 +9696,6 @@ static int lm_trans_statement_stack_emit_node(
     return 0;
 }
 
-static int lm_trans_statement_stack_emit_sync_leave(
-    FILE *file,
-    unsigned indent,
-    unsigned cleanup_id
-) {
-    if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "lm_synchronized_leave(") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_sync_name(file, cleanup_id) != 0) {
-        return 1;
-    }
-    return lm_trans_put(file, ");\n");
-}
-
 static int lm_trans_statement_job_emit_list(
     FILE *file,
     LmTransStatementStack *stack,
@@ -9805,17 +9838,17 @@ static int lm_trans_statement_job_loop_pop(
     return 0;
 }
 
-static int lm_trans_statement_job_cleanup_pop(
+static int lm_trans_statement_job_emit_scope_cleanups(
     FILE *file,
     LmTransStatementStack *stack,
     LmTransStatementJob *job,
     LmTransNamespace *namespace_
 ) {
-    (void)file;
     (void)stack;
-    (void)job;
-    lm_trans_cleanup_pop(namespace_);
-    return 0;
+    if (job->text == 0) {
+        return 1;
+    }
+    return lm_trans_emit_scope_cleanups(file, job->text->indent, namespace_);
 }
 
 static int lm_trans_statement_job_emit_indent_text(
@@ -9833,24 +9866,6 @@ static int lm_trans_statement_job_emit_indent_text(
         return 1;
     }
     return lm_trans_put(file, job->text->text);
-}
-
-static int lm_trans_statement_job_emit_sync_leave(
-    FILE *file,
-    LmTransStatementStack *stack,
-    LmTransStatementJob *job,
-    LmTransNamespace *namespace_
-) {
-    (void)stack;
-    (void)namespace_;
-    if (job->sync_leave == 0) {
-        return 1;
-    }
-    return lm_trans_statement_stack_emit_sync_leave(
-        file,
-        job->sync_leave->indent,
-        job->sync_leave->cleanup_id
-    );
 }
 
 static int lm_trans_emit_statement_list(
@@ -10703,6 +10718,7 @@ static int lm_trans_pointer_bindings_init(void) {
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", lm_trans_statement_emit_while) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", lm_trans_statement_emit_else) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", lm_trans_statement_emit_synchronized) != 0 ||
+        lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", lm_trans_statement_emit_finally) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", lm_trans_statement_emit_loop_jump) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", lm_trans_statement_emit_include_prelude) != 0 ||
         lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", lm_trans_statement_emit_define_prelude) != 0 ||
@@ -14182,11 +14198,13 @@ static void lm_trans_hoisted_function_delete_any(void *object) {
     lm_trans_hoisted_function_destroy(((LmTransHoistedFunction *)object));
 }
 
-static LmTransCleanup * lm_trans_cleanup_new(unsigned id) {
+static LmTransCleanup * lm_trans_cleanup_new(unsigned id, const LmP0Field *body, unsigned scope_depth) {
     LmTransCleanup *cleanup;
     cleanup = lm_own_new_zero(sizeof(cleanup[0]));
     if (cleanup != 0) {
         cleanup->id = id;
+        cleanup->scope_depth = scope_depth;
+        cleanup->body = body;
     }
     return cleanup;
 }
@@ -14295,7 +14313,23 @@ static int lm_trans_cleanup_push(LmTransNamespace *namespace_, unsigned id) {
     if (namespace_ == 0) {
         return 1;
     }
-    cleanup = lm_trans_cleanup_new(id);
+    cleanup = lm_trans_cleanup_new(id, 0, namespace_ -> depth);
+    if (cleanup == 0) {
+        return 1;
+    }
+    if (namespace_ -> cleanups == 0 || lm_own_ptr_stack_push(namespace_ -> cleanups, cleanup) != 0) {
+        lm_trans_cleanup_destroy(cleanup);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_finally_push(LmTransNamespace *namespace_, const LmP0Field *body) {
+    LmTransCleanup *cleanup;
+    if (namespace_ == 0 || body == 0) {
+        return 1;
+    }
+    cleanup = lm_trans_cleanup_new(0U, body, namespace_ -> depth);
     if (cleanup == 0) {
         return 1;
     }
@@ -21419,6 +21453,9 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
     status = lm_trans_emit_statement_list(file, function -> body_start, 1U, namespace_);
     if (status == 0) {
         status = lm_trans_validate_end_trailer(frame);
+    }
+    if (status == 0 && (frame -> trailer == 0 || lm_trans_text_equals(frame -> trailer -> spelling, "return") == 0)) {
+        status = lm_trans_emit_cleanups_until(file, 1U, namespace_, 0U);
     }
     if (status == 0) {
         status = lm_trans_emit_trailer_statement(file, frame -> trailer, 1U, namespace_);

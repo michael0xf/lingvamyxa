@@ -241,7 +241,6 @@ L4:
                  LmTransStatementNodeJob        c.struct
                  LmTransStatementFrameJob       c.struct
                  LmTransStatementTextJob        c.struct
-                 LmTransStatementSyncLeaveJob   c.struct
                  LmTransStatementStack          c.named-struct
                  LmTransStatementJob            c.named-struct
                  LmTransStatementLowering       c.struct
@@ -417,9 +416,11 @@ L4:
 
     table:
         name: LmTransCleanup
-        columns: class  (`field.class` class)  (`field.index` serial)
+        columns: class        (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 id     unsigned               0
+                 id           unsigned               0                       0                                0
+                 scope_depth  unsigned               1                       0                                0
+                 body         LmP0Field              2                       1                                1
     end: LmTransCleanup
 
     table:
@@ -566,14 +567,6 @@ L4:
     end: LmTransStatementTextJob
 
     table:
-        name: LmTransStatementSyncLeaveJob
-        columns: class       (`field.class` class)  (`field.index` serial)
-        rows:
-                 indent      unsigned               0
-                 cleanup_id  unsigned               1
-    end: LmTransStatementSyncLeaveJob
-
-    table:
         name: LmTransStatementStack
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
         rows:
@@ -590,7 +583,6 @@ L4:
                  node        LmTransStatementNodeJob           3                       1
                  frame       LmTransStatementFrameJob          4                       1
                  text        LmTransStatementTextJob           5                       1
-                 sync_leave  LmTransStatementSyncLeaveJob      6                       1
     end: LmTransStatementJob
 
     table:

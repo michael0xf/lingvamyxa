@@ -606,6 +606,13 @@ fn: lm_trans_emit_statement_list (
     @: LmTransNamespace namespace_
 ) int
 
+fn: lm_trans_emit_cleanups_until (
+    @: FILE file
+    unsigned: indent
+    const: @: LmTransNamespace namespace_
+    size_t: cleanup_base
+) int
+
 fn: lm_trans_emit_trailer_statement (
     @: FILE file
     const: @: LmP0Trailer trailer

@@ -401,14 +401,13 @@ fn: lm_registry_control_column_spelling_alloc (const: @(LmP0Node node); @: LmReg
     if: buffer = 0
         lm_registry_control_error_set(error, "out of memory while creating column formatter")
         return: 0
+    finally: lm_registry_control_buffer_delete(buffer)
 
     if: lm_registry_control_column_spelling_append_node(buffer, node) = 0
         lm_registry_control_error_set(error, "columns: cannot format column descriptor")
-        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     result: lm_registry_control_buffer_take(buffer)
-    lm_registry_control_buffer_delete(buffer)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting column")
 return: result
@@ -454,6 +453,7 @@ fn: lm_registry_control_columns_from_frame (
     if: columns = 0
         lm_registry_control_error_set(error, "out of memory while reading columns")
         return: 0
+    finally: lm_registry_control_columns_destroy(columns, count)
 
     index: 0U
     while: index < count
@@ -461,17 +461,16 @@ fn: lm_registry_control_columns_from_frame (
         columns[index]: lm_own_new_zero(c.sizeof(c.LmRegistryControlColumn))
         if: columns[index] = 0
             lm_registry_control_error_set(error, "out of memory while reading columns")
-            lm_registry_control_columns_destroy(columns, count)
             return: 0
         columns[index]\spelling: lm_registry_control_column_spelling_alloc(node, error)
         if: columns[index]\spelling = 0
-            lm_registry_control_columns_destroy(columns, count)
             return: 0
         columns[index]\width: c.strlen(columns[index]\spelling)
         index: index + 1U
 
     out_columns[0]: columns
     out_count[0]: count
+    columns: 0
 return: 1
 
 fn: lm_registry_control_rows_frame_from_table (const: @(LmP0Frame table_frame); @: LmRegistryControlError error) const: @: LmP0Frame
@@ -624,14 +623,13 @@ fn: lm_registry_control_node_lmx_alloc (const: @(LmP0Node node); @: LmRegistryCo
     if: buffer = 0
         lm_registry_control_error_set(error, "out of memory while creating node formatter")
         return: 0
+    finally: lm_registry_control_buffer_delete(buffer)
 
     if: lm_registry_control_node_lmx_append_inline(buffer, node) = 0
         lm_registry_control_error_set(error, "cannot format P0 node")
-        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     result: lm_registry_control_buffer_take(buffer)
-    lm_registry_control_buffer_delete(buffer)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting P0 node")
 return: result
@@ -722,13 +720,12 @@ fn: lm_registry_control_fn_to_lmx_alloc (const: @(LmP0Frame fn_frame); @: LmRegi
     if: buffer = 0
         lm_registry_control_error_set(error, "out of memory while creating fn formatter")
         return: 0
+    finally: lm_registry_control_buffer_delete(buffer)
 
     if: lm_registry_control_fn_to_lmx_append(buffer, fn_frame, error) = 0
-        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     result: lm_registry_control_buffer_take(buffer)
-    lm_registry_control_buffer_delete(buffer)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting fn descriptor")
 return: result
@@ -866,26 +863,22 @@ fn: lm_registry_control_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: 
     if: buffer = 0
         lm_registry_control_error_set(error, "out of memory while creating table formatter")
         return: 0
+    finally: lm_registry_control_buffer_delete(buffer)
     columns: 0
     column_count: 0U
     row_count: 0U
+    finally: lm_registry_control_columns_destroy(columns, column_count)
 
     if: lm_registry_control_table_name_from_frame(table_frame, @ table_name_data, @ table_name_length, error) = 0
-        lm_registry_control_buffer_delete(buffer)
         return: 0
     if: lm_registry_control_columns_from_frame(table_frame, @ columns, @ column_count, error) = 0
-        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     rows_frame: lm_registry_control_rows_frame_from_table(table_frame, error)
     if: rows_frame = 0
-        lm_registry_control_columns_destroy(columns, column_count)
-        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     if: lm_registry_control_measure_rows(rows_frame, columns, column_count, @ row_count, error) = 0
-        lm_registry_control_columns_destroy(columns, column_count)
-        lm_registry_control_buffer_delete(buffer)
         return: 0
 
     lm_registry_control_table_end_name(table_frame, table_name_data, table_name_length, @ end_name_data, @ end_name_length)
@@ -900,9 +893,7 @@ fn: lm_registry_control_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: 
     lm_registry_control_buffer_append_text(buffer, end_name_data, end_name_length)
     lm_registry_control_buffer_append_cstr(buffer, "\n")
 
-    lm_registry_control_columns_destroy(columns, column_count)
     result: lm_registry_control_buffer_take(buffer)
-    lm_registry_control_buffer_delete(buffer)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting table")
 return: result
@@ -958,22 +949,20 @@ fn: lm_registry_control_document_to_lmx_alloc (const: @(LmP0Document document); 
     if: output = 0
         lm_registry_control_error_set(error, "out of memory while creating document formatter")
         return: 0
+    finally: lm_registry_control_buffer_delete(output)
     emitted: 0
     root: c.lm_p0_document_root(document)
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         lm_registry_control_error_set(error, "document root must be a Structure")
-        lm_registry_control_buffer_delete(output)
         return: 0
 
     field: root\as\structure\first_field
     while: field != 0
         if: lm_registry_control_emit_frame_from_node(output, field\value, @ emitted, error) = 0
-            lm_registry_control_buffer_delete(output)
             return: 0
         field: field\next
 
     result: lm_registry_control_buffer_take(output)
-    lm_registry_control_buffer_delete(output)
     if: result = 0
         lm_registry_control_error_set(error, "out of memory while formatting registry document")
 return: result
