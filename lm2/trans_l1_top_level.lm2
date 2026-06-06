@@ -1800,7 +1800,7 @@ fn: lm_trans_import_parse_document (const: @(char path); @: LmP0Document out_doc
         phase_name: phase
         if: phase_name = 0
             phase_name: "phase"
-        c.fprintf(c.stderr, "trans L2 import %s parse error %d at %lu:%lu in %s: %s\n", phase_name, diagnostic\code, (cast: ulong diagnostic\line), (cast: ulong diagnostic\column), path, diagnostic\message)
+        c.fprintf(c.stderr, "trans L2 import %s parse error %d at %zu:%zu in %s: %s\n", phase_name, diagnostic\code, diagnostic\line, diagnostic\column, path, diagnostic\message)
     else:
         c.fprintf(c.stderr, "trans L2 import error: cannot read %s\n", path)
     lm_p0_document_destroy(out_document[0])
@@ -3026,8 +3026,8 @@ fn: lm_trans_emit_l4_payload_import_frame (FILE: output; const: (LmP0Frame: fram
                 if: diagnostic != 0
                     c.fprintf:
                         c.stderr
-                        "trans L4 unit import parse error %d at %lu:%lu in %s: %s\n"
-                        diagnostic\code (cast: ulong diagnostic\line) (cast: ulong diagnostic\column) payload_path diagnostic\message
+                        "trans L4 unit import parse error %d at %zu:%zu in %s: %s\n"
+                        diagnostic\code diagnostic\line diagnostic\column payload_path diagnostic\message
                     ---
                 if: diagnostic = 0
                     c.fprintf(c.stderr, "trans L4 unit error: cannot read unit.payload import %s\n", payload_path)

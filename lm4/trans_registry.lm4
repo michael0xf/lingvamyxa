@@ -27,6 +27,7 @@ table:
 
              `class.spelling`           relation
              `class.cTail`              relation
+             `printf.format`            relation
              `class.reference-base`      relation
              `class.receiver`           relation
              `receiver.type`            relation
@@ -92,6 +93,19 @@ table:
              uchar  "unsigned char"
              ulong  "unsigned long"
 end: `class.spelling`
+
+table:
+    name: `printf.format`
+    columns: class  (spelling char)
+    rows:
+             int       "%d"
+             unsigned  "%u"
+             long      "%ld"
+             ulong     "%lu"
+             size_t    "%zu"
+             u64       PRIu64
+             i64       PRId64
+end: `printf.format`
 
 table:
     name: `class.cTail`

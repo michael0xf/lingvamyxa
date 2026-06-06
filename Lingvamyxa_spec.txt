@@ -3616,6 +3616,13 @@ provide the corresponding width. If a target cannot provide an exact-width
 storage type, the profile must reject that alias or define an explicit emulation
 backend.
 
+Fixed-width C spellings are projection aliases, not the semantic foundation of
+LMX integers. The semantic model should describe the useful class, range,
+representation, ABI boundary and serialization contract explicitly. A selected
+projection profile then chooses whether that class lowers to `int`, `size_t`,
+`uint32_t`, a library-backed value, a checked wrapper or another admitted
+storage spelling.
+
 The `i/u` family denotes implementation-profile integer types over C integer
 storage. A concrete profile may define names such as `i`, `u`, `i32`, `u64`,
 `isize` and `usize` as separate type constructors or as aliases over a smaller

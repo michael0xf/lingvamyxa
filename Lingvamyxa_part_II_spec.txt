@@ -1345,6 +1345,18 @@ explicit codec rows if they are serializable.
 Persistent registry rows may be stored as LMX files, generated database rows
 or cached binary indexes. LMX remains the source form.
 
+Portable persistence is structural LMX serialization, not memory imaging. A
+runtime may materialize structures in memory using whatever representation the
+selected L1 substrate provides, but a portable persistent form records admitted
+LMX Structures, registry rows, messages, evidence and L5 Thread logical state
+through codec receivers such as `toLmx` and `fromLmx`. Raw process memory,
+allocator state, native handles, alignment, endian order and ABI layout are not
+portable LMX state unless a profile admits an explicit codec for them.
+
+Binary serialization, if introduced, is a profile-specific codec. Endian and
+binary layout belong to that codec profile, not to ordinary LMX source
+semantics.
+
 
 9. L4/L5 Canonical Examples (old 23.4-23.6)
 -------------------------------------------
