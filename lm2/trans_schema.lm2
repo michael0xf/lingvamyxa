@@ -251,6 +251,7 @@ L4:
                  LmTransCapture                 c.struct
                  LmTransHoistedFunction         c.struct
                  LmTransBinding                 c.struct
+                 LmTransPointerBinding          c.struct
                  LmTransHeadBinding             c.struct
                  LmTransL4HeadBinding           c.struct
                  LmTransL4AtomBinding           c.struct
@@ -320,6 +321,14 @@ L4:
                  payload       char                   2                       1                                0
                  payload_node  LmP0Node               3                       1                                1
     end: LmTransRegistryFact
+
+    table:
+        name: LmTransPointerBinding
+        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 name          char                   0                       1                                1
+                 value         LmTransBinding         1                       1                                0
+    end: LmTransPointerBinding
 
     table:
         name: LmTransRegistryCloneFrame

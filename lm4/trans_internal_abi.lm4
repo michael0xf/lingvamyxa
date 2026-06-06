@@ -148,6 +148,12 @@ fn: lm_trans_receiver_lazy_fn (
     @: LmTransFunctionHeader out
 ) int
 
+fn: lm_trans_receiver_fm (
+    const: @: LmP0Frame frame
+    int: is_external
+    @: LmTransFunctionHeader out
+) int
+
 fn: lm_trans_receiver_sub (
     const: @: LmP0Frame frame
     int: is_external
@@ -606,6 +612,11 @@ fn: lm_trans_emit_statement_list (
     @: LmTransNamespace namespace_
 ) int
 
+fn: lm_trans_single_frame_node (
+    const: @: LmP0Node node
+    const: @@(LmP0Frame out_frame)
+) int
+
 fn: lm_trans_emit_cleanups_until (
     @: FILE file
     unsigned: indent
@@ -624,9 +635,52 @@ fn: lm_trans_captured_expr_new (
     const: @: LmP0Text name
 ) @: char
 
+fn: lm_trans_hoisted_c_name_new (
+    const: @: LmP0Text parent_name
+    const: @: LmP0Text child_name
+    size_t: index
+) @: char
+
+fn: lm_trans_hoisted_suffix_name_new (
+    const: @: LmP0Text base_name
+    const: @: char suffix
+) @: char
+
 fn: lm_trans_capture_candidates_add_captures (
     @: LmOwnPtrStack candidates
     const: @: LmOwnPtrStack captures
+) int
+
+fn: lm_trans_capture_stack_find (
+    const: @: LmOwnPtrStack captures
+    const: @: LmP0Text name
+) const: @: LmTransCapture
+
+fn: lm_trans_capture_stack_add_copy (
+    @: LmOwnPtrStack captures
+    const: @: LmTransCapture source
+) int
+
+fn: lm_trans_local_name_stack_has (
+    const: @: LmOwnPtrStack names
+    const: @: LmP0Text name
+) int
+
+fn: lm_trans_local_name_stack_add (
+    @: LmOwnPtrStack names
+    const: @: LmP0Text name
+) int
+
+fn: lm_trans_capture_from_decl_frame (
+    const: @: LmP0Frame frame
+    const: @: LmTransNamespace namespace_
+    @: LmTransCapture out
+) int
+
+fn: lm_trans_capture_candidates_add_decl (
+    @: LmOwnPtrStack candidates
+    const: @: LmP0Frame frame
+    const: @: LmTransNamespace namespace_
 ) int
 
 fn: lm_trans_capture_candidates_add_params (
@@ -813,6 +867,13 @@ fn: lm_trans_emit_l2_import_functions (
     @: LmTransNamespace namespace_
 ) int
 
+fn: lm_trans_emit_loop_jump_statement (
+    @: FILE file
+    const: @: LmP0Text spelling
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
 fn: lm_trans_statement_emit_table (
     @: FILE file
     @: LmTransStatementStack stack
@@ -826,6 +887,91 @@ fn: lm_trans_statement_emit_join (
     @: LmTransStatementStack stack
     const: @: LmP0Frame frame
     unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_emit_nested_function (
+    @: FILE file
+    @: LmTransStatementStack stack
+    const: @: LmP0Frame frame
+    unsigned: indent
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_function_header_from_frame (
+    const: @: LmP0Frame frame
+    int: is_external
+    @: LmTransFunctionHeader out
+) int
+
+fn: lm_trans_namespace_set_signature (
+    @: LmTransNamespace namespace_
+    const: @: LmP0Text name
+    const: @: LmP0Frame function_frame
+) int
+
+fn: lm_trans_namespace_find_hoisted_function (
+    const: @: LmTransNamespace namespace_
+    const: @: LmP0Frame frame
+) const: @: LmTransHoistedFunction
+
+fn: lm_trans_env_arg_new (
+    const: @: LmP0Text env_var_name
+) @: char
+
+fn: lm_trans_statement_job_emit_list (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_job_emit_node (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_job_validate_end (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_job_emit_trailer (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_job_leave_scope (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_job_loop_pop (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_job_emit_scope_cleanups (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
+    @: LmTransNamespace namespace_
+) int
+
+fn: lm_trans_statement_job_emit_indent_text (
+    @: FILE file
+    @: LmTransStatementStack stack
+    @: LmTransStatementJob job
     @: LmTransNamespace namespace_
 ) int
 
@@ -904,7 +1050,7 @@ fn: lm_trans_emit_l4_units (
 
 fn: lm_trans_emit_atom_statement_sequence (
     @: FILE file
-    const: @: LmP0Text atom
+    const: @: LmP0Text sequence_name
     unsigned: indent
     @: LmTransNamespace namespace_
 ) int
