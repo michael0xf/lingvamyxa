@@ -728,15 +728,25 @@ particular operating system, CPU family, binary format, ABI or native code
 generator, but to a portable implementation substrate - in this case, a
 C99-compatible one.
 
-In this sense, Lingvamyxa self-hosting through C99 is more hermetic at the
-level of substrate abstraction and more portable than a platform-only
-self-hosting chain: the Lingvamyxa sources, registry tables and L1 projection
+The LMX semantic machine begins at the Lingvamyxa L2 level. LMX lowers its own
+L2 machine through a selected external L1 substrate. In the hosted bootstrap
+profile described here, that substrate is ANSI C / C99. The external L1/C99
+substrate is not the VM of the language and is not its semantic parent.
+
+L3, L4 and L5 may be interpreted, validated, resolved or compiled by machinery
+written in Lingvamyxa itself. The external L1/C99 substrate only materializes
+that machinery on a host platform.
+
+In this sense, Lingvamyxa self-hosting is more hermetic at the level of
+substrate abstraction and more portable than a platform-bound native-only
+self-hosting chain. The Lingvamyxa sources, registry tables and L1 projection
 rules remain the same across platforms, while platform-specific differences are
 delegated below the Lingvamyxa semantic boundary to the selected multiplatform
-L1 toolchain, namely the C99 compiler, C runtime/library, linker and target ABI.
+L1 toolchain: the C99 compiler, C runtime/library, linker and target ABI.
+
 The LMX levels L3, L4 and L5 are even more hermetic: they are bound to the L2
-level and its L2-to-L1 projection contract, not to a particular operating
-system, ABI or CPU family.
+semantics and to the L2-to-L1 projection contract, not to a particular operating
+system, ABI, binary format or CPU family.
 
 This document does not specify the L1 target language, physical calling convention, memory ownership rules or low-level runtime representation. Those belong to translator and runtime specifications.
 
