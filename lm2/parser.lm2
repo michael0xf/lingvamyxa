@@ -566,7 +566,7 @@ L4:
     end: `LmP0PostprocessFrame.field.address-depth`
 end: L4
 
-fn: lm_p0_document_init_owners (@: LmP0Document document) int
+fn: lm_p0_document_init_owners (LmP0Document: document) int
     if: document = 0
         return: 1
     if: document\owners_initialized != 0
@@ -597,7 +597,7 @@ fn: lm_p0_document_init_owners (@: LmP0Document document) int
         return: 1
 return: 0
 
-sub: lm_p0_document_destroy_owners (@: LmP0Document document)
+sub: lm_p0_document_destroy_owners (LmP0Document: document)
     if: document != 0 && document\owners_initialized != 0
         lm_own_arena_destroy(document\diagnostic_arena)
         lm_own_delete(document\diagnostic_arena, 0)
@@ -616,14 +616,14 @@ sub: lm_p0_document_destroy_owners (@: LmP0Document document)
         document\frozen: 0
 end: lm_p0_document_destroy_owners
 
-sub: lm_p0_document_freeze_tree (@: LmP0Document document)
+sub: lm_p0_document_freeze_tree (LmP0Document: document)
     if: document != 0 && document\owners_initialized != 0
         lm_own_arena_freeze(document\tree_arena)
         lm_own_arena_freeze(document\source_owner)
         document\frozen: 1
 end: lm_p0_document_freeze_tree
 
-sub: lm_p0_registry_row_destroy_fields (@: LmP0RegistryRow row)
+sub: lm_p0_registry_row_destroy_fields (LmP0RegistryRow: row)
     if: row != 0
         lm_own_delete(row\table, 0)
         lm_own_delete(row\key, 0)
@@ -634,14 +634,14 @@ sub: lm_p0_registry_row_destroy_fields (@: LmP0RegistryRow row)
 end: lm_p0_registry_row_destroy_fields
 
 sub: lm_p0_registry_row_destroy_any (@: void object)
-    @: LmP0RegistryRow row
+    LmP0RegistryRow: row
 
     row: object
     lm_p0_registry_row_destroy_fields(row)
     lm_own_delete(row, 0)
 end: lm_p0_registry_row_destroy_any
 
-sub: lm_p0_indent_stack_free (@: LmP0IndentStack stack)
+sub: lm_p0_indent_stack_free (LmP0IndentStack: stack)
     lm_own_delete(stack\columns, 0)
     stack\columns: 0
     stack\count: 0U
@@ -649,13 +649,13 @@ sub: lm_p0_indent_stack_free (@: LmP0IndentStack stack)
 end: lm_p0_indent_stack_free
 
 sub: lm_p0_indent_stack_free_any (@: void object)
-    @: LmP0IndentStack stack
+    LmP0IndentStack: stack
 
     stack: object
     lm_p0_indent_stack_free(stack)
 end: lm_p0_indent_stack_free_any
 
-fn: lm_p0_indent_stack_push (@: LmP0Document document; @: LmP0IndentStack stack; size_t: column; size_t: line; size_t: source_column) int
+fn: lm_p0_indent_stack_push (LmP0Document: document; LmP0IndentStack: stack; size_t: column; size_t: line; size_t: source_column) int
     size_t: new_capacity
     @: size_t columns
 
@@ -675,15 +675,15 @@ fn: lm_p0_indent_stack_push (@: LmP0Document document; @: LmP0IndentStack stack;
     stack\count: stack\count + 1U
 return: 1
 
-fn: lm_p0_indent_stack_init (@: LmP0Document document; @: LmP0IndentStack stack) int
+fn: lm_p0_indent_stack_init (LmP0Document: document; LmP0IndentStack: stack) int
     c.memset(stack, 0, c.sizeof(stack[0]))
 return: lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U)
 
-fn: lm_p0_indent_stack_new_empty () @: LmP0IndentStack
-return: lm_own_new_zero(1U * c.sizeof(c.LmP0IndentStack))
+fn: lm_p0_indent_stack_new_empty () LmP0IndentStack
+    return: lm_own_new_zero(1U * c.sizeof(c.LmP0IndentStack))
 
-fn: lm_p0_indent_stack_new (@: LmP0Document document) @: LmP0IndentStack
-    @: LmP0IndentStack stack
+fn: lm_p0_indent_stack_new (LmP0Document: document) LmP0IndentStack
+    LmP0IndentStack: stack
 
     stack: lm_p0_indent_stack_new_empty()
     if: stack = 0
@@ -694,11 +694,11 @@ fn: lm_p0_indent_stack_new (@: LmP0Document document) @: LmP0IndentStack
         return: 0
 return: stack
 
-sub: lm_p0_indent_stack_delete (@: LmP0IndentStack stack)
+sub: lm_p0_indent_stack_delete (LmP0IndentStack: stack)
     lm_own_delete(stack, c.lm_p0_indent_stack_free_any)
 end: lm_p0_indent_stack_delete
 
-fn: lm_p0_indent_stack_copy (@: LmP0Document document; @: LmP0IndentStack target; const: @(LmP0IndentStack source); size_t: line; size_t: column) int
+fn: lm_p0_indent_stack_copy (LmP0Document: document; LmP0IndentStack: target; const: (LmP0IndentStack: source); size_t: line; size_t: column) int
     size_t: capacity
 
     c.memset(target, 0, c.sizeof(target[0]))
@@ -718,8 +718,8 @@ fn: lm_p0_indent_stack_copy (@: LmP0Document document; @: LmP0IndentStack target
     target\capacity: capacity
 return: 1
 
-fn: lm_p0_indent_stack_clone (@: LmP0Document document; const: @(LmP0IndentStack source); size_t: line; size_t: column) @: LmP0IndentStack
-    @: LmP0IndentStack target
+fn: lm_p0_indent_stack_clone (LmP0Document: document; const: (LmP0IndentStack: source); size_t: line; size_t: column) LmP0IndentStack
+    LmP0IndentStack: target
 
     target: lm_p0_indent_stack_new_empty()
     if: target = 0
@@ -776,10 +776,10 @@ fn: lm_p0_visual_column_between (const: @(char source); size_t: start; size_t: e
 
 return: column
 
-fn: lm_p0_registry_lookup (const: @(LmP0Text key); const: @(char table)) const: @: char
+fn: lm_p0_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: @: char
     size_t: i
-    @: LmP0RegistryRow row
-    @: LmP0Text key_payload
+    LmP0RegistryRow: row
+    LmP0Text: key_payload
     const: @: char payload
 
     if: table = 0 || c.lm_p0_registry = 0 || (c.lm_p0_registry->loaded = 0 && c.lm_p0_registry->loading = 0)
@@ -810,7 +810,7 @@ return: payload
 
 fn: lm_p0_registry_table_has_rows (const: @(char table)) int
     size_t: i
-    @: LmP0RegistryRow row
+    LmP0RegistryRow: row
 
     if: table = 0 || c.lm_p0_registry = 0 || c.lm_p0_registry->loaded = 0
         return: 0
@@ -830,7 +830,7 @@ return: 0
 
 fn: lm_p0_registry_table_has_rows_loaded_or_loading (const: @(char table)) int
     size_t: i
-    @: LmP0RegistryRow row
+    LmP0RegistryRow: row
 
     if: table = 0 || c.lm_p0_registry = 0
         return: 0
@@ -991,7 +991,7 @@ return: payload != 0 && (c.strcmp(payload, "1") = 0 || c.strcmp(payload, "true")
 fn: lm_p0_trailer_role_is_tail_cutter (LmP0TrailerRole: role) int
 return: role != c.LM_P0_TRAILER_ROLE_NONE
 
-fn: lm_p0_node_head_is (const: @(LmP0Node node); const: @(char name)) int
+fn: lm_p0_node_head_is (const: (LmP0Node: node); const: @(char name)) int
     size_t: name_length
 
     if: node = 0 || node\kind != c.LM_P0_NODE_FRAME
@@ -1000,7 +1000,7 @@ fn: lm_p0_node_head_is (const: @(LmP0Node node); const: @(char name)) int
     name_length: c.strlen(name)
 return: node\as\frame\head\length = name_length && c.memcmp(node\as\frame\head\data, name, name_length) = 0
 
-fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: @(LmP0Node target)) int
+fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: (LmP0Node: target)) int
     const: @: char role_payload
     const: @: char target_head
 
@@ -1017,69 +1017,69 @@ fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: @(LmP0Node 
 return: lm_p0_trailer_role_is_tail_cutter(role)
 
 external:
-    fn: lm_p0_node_structure (const: @(LmP0Node node)) const: @: LmP0Structure
+    fn: lm_p0_node_structure (const: (LmP0Node: node)) const: LmP0Structure
         if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE
             return: 0
     return: node\as\structure
 end: external
 
 external:
-    fn: lm_p0_node_frame (const: @(LmP0Node node)) const: @: LmP0Frame
+    fn: lm_p0_node_frame (const: (LmP0Node: node)) const: LmP0Frame
         if: node = 0 || node\kind != c.LM_P0_NODE_FRAME
             return: 0
     return: node\as\frame
 end: external
 
 external:
-    fn: lm_p0_node_atom (const: @(LmP0Node node)) const: @: LmP0Text
+    fn: lm_p0_node_atom (const: (LmP0Node: node)) const: LmP0Text
         if: node = 0 || (node\kind != c.LM_P0_NODE_ATOM && node\kind != c.LM_P0_NODE_DISABLED)
             return: 0
     return: node\as\atom
 end: external
 
 external:
-    fn: lm_p0_structure_trailer (const: @(LmP0Structure structure)) const: @: LmP0Trailer
+    fn: lm_p0_structure_trailer (const: (LmP0Structure: structure)) const: LmP0Trailer
         if: structure = 0
             return: 0
     return: structure\trailer
 end: external
 
 external:
-    fn: lm_p0_frame_head (const: @(LmP0Frame frame)) const: @: LmP0Text
+    fn: lm_p0_frame_head (const: (LmP0Frame: frame)) const: LmP0Text
         if: frame = 0
             return: 0
     return: frame\head
 end: external
 
 external:
-    fn: lm_p0_frame_body (const: @(LmP0Frame frame)) const: @: LmP0Structure
+    fn: lm_p0_frame_body (const: (LmP0Frame: frame)) const: LmP0Structure
         if: frame = 0
             return: 0
     return: frame\body
 end: external
 
 external:
-    fn: lm_p0_frame_trailer (const: @(LmP0Frame frame)) const: @: LmP0Trailer
+    fn: lm_p0_frame_trailer (const: (LmP0Frame: frame)) const: LmP0Trailer
         if: frame = 0
             return: 0
     return: frame\trailer
 end: external
 
 external:
-    fn: lm_p0_trailer_spelling (const: @(LmP0Trailer trailer)) const: @: LmP0Text
+    fn: lm_p0_trailer_spelling (const: (LmP0Trailer: trailer)) const: LmP0Text
         if: trailer = 0
             return: 0
     return: trailer\spelling
 end: external
 
 external:
-    fn: lm_p0_trailer_body (const: @(LmP0Trailer trailer)) const: @: LmP0Structure
+    fn: lm_p0_trailer_body (const: (LmP0Trailer: trailer)) const: LmP0Structure
         if: trailer = 0
             return: 0
     return: trailer\body
 end: external
 
-fn: lm_p0_stream_event_is_tail_cutter (const: @(LmP0StreamEvent event)) int
+fn: lm_p0_stream_event_is_tail_cutter (const: (LmP0StreamEvent: event)) int
 return: event\kind = c.LM_P0_STREAM_EVENT_ITEM && lm_p0_trailer_role_is_tail_cutter(c.lm_p0_trailer_role(event\text, event\text_length)) != 0
 
 fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
@@ -1175,7 +1175,7 @@ fn: lm_p0_dash_fence_status (const: @(char text); size_t: length; @: size_t out_
 
 return: c.LM_P0_DASH_FENCE_VALID
 
-fn: lm_p0_validate_dash_fence_line (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column) int
+fn: lm_p0_validate_dash_fence_line (LmP0Document: document; const: @(char text); size_t: length; size_t: line; size_t: column) int
     LmP0DashFenceStatus: status
 
     status: c.lm_p0_dash_fence_status_after_comment_trim(text, length, 0)
@@ -1227,7 +1227,7 @@ fn: lm_p0_match_raw_comment_fence_line (const: @(char source); size_t: line_star
         return: 0
 return: lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end)
 
-sub: lm_p0_dump_append_size (@: LmP0Dump dump; size_t: value)
+sub: lm_p0_dump_append_size (LmP0Dump: dump; size_t: value)
     []: char buffer 32
     size_t: index
 
@@ -1244,7 +1244,7 @@ sub: lm_p0_dump_append_size (@: LmP0Dump dump; size_t: value)
     c.lm_p0_dump_append(dump, buffer + index, c.sizeof(buffer) - index)
 end: lm_p0_dump_append_size
 
-sub: lm_p0_dump_append_field_count_line (@: LmP0Dump dump; size_t: field_count)
+sub: lm_p0_dump_append_field_count_line (LmP0Dump: dump; size_t: field_count)
     c.lm_p0_dump_append_cstr(dump, " fields=")
     lm_p0_dump_append_size(dump, field_count)
     c.lm_p0_dump_append_cstr(dump, "\n")
@@ -1252,12 +1252,12 @@ end: lm_p0_dump_append_field_count_line
 
 `ifndef-default`: LM_P0_ENABLE_REGISTRY_COMPARE 1
 
-@: LmP0Registry lm_p0_registry
+LmP0Registry: lm_p0_registry
 
 fn: lm_p0_registry_init () int
     if: (lm_p0_registry != 0)
         return: 0
-    lm_p0_registry: (cast: (@: LmP0Registry) lm_own_new_zero(c.sizeof(lm_p0_registry[0])))
+    lm_p0_registry: (cast: (LmP0Registry) lm_own_new_zero(c.sizeof(lm_p0_registry[0])))
     if: (lm_p0_registry = 0)
         return: 1
     lm_p0_registry\l4_loader: lm_p0_registry_l4_loader_new()
@@ -1283,15 +1283,15 @@ sub: lm_p0_registry_destroy ()
     lm_p0_registry: 0
 end: lm_p0_registry_destroy
 
-fn: lm_p0_text_ref_new_empty () @: LmP0Text
-    return: (cast: (@: LmP0Text) lm_own_new_zero(c.sizeof(c.LmP0Text)))
+fn: lm_p0_text_ref_new_empty () LmP0Text
+    return: (cast: (LmP0Text) lm_own_new_zero(c.sizeof(c.LmP0Text)))
 end: lm_p0_text_ref_new_empty
 
-sub: lm_p0_text_ref_delete (@: LmP0Text text)
+sub: lm_p0_text_ref_delete (LmP0Text: text)
     lm_own_delete(text, 0)
 end: lm_p0_text_ref_delete
 
-fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
+fn: lm_p0_document_register_lazy_text (LmP0Document: document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
     if: (patch_slot = 0)
         return: 0
     if: (length = 0U)
@@ -1304,9 +1304,9 @@ fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char s
     return: 1
 end: lm_p0_document_register_lazy_text
 
-fn: lm_p0_new_text (@: LmP0Document document; const: @(char source); size_t: length; size_t: line; size_t: column) @: LmP0Text
-    @: LmP0Text text
-    text: (cast: (@: LmP0Text) lm_own_arena_new_zero(document\tree_arena, c.sizeof(text[0])))
+fn: lm_p0_new_text (LmP0Document: document; const: @(char source); size_t: length; size_t: line; size_t: column) LmP0Text
+    LmP0Text: text
+    text: (cast: (LmP0Text) lm_own_arena_new_zero(document\tree_arena, c.sizeof(text[0])))
     if: (text = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser text")
         return: 0
@@ -1323,18 +1323,18 @@ fn: lm_p0_new_text (@: LmP0Document document; const: @(char source); size_t: len
     return: text
 end: lm_p0_new_text
 
-fn: lm_p0_new_structure (@: LmP0Document document; size_t: line; size_t: column) @: LmP0Structure
-    @: LmP0Structure structure
-    structure: (cast: (@: LmP0Structure) lm_own_arena_new_zero(document\tree_arena, c.sizeof(structure[0])))
+fn: lm_p0_new_structure (LmP0Document: document; size_t: line; size_t: column) LmP0Structure
+    LmP0Structure: structure
+    structure: (cast: (LmP0Structure) lm_own_arena_new_zero(document\tree_arena, c.sizeof(structure[0])))
     if: (structure = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser structure")
         return: 0
     return: structure
 end: lm_p0_new_structure
 
-fn: lm_p0_new_frame (@: LmP0Document document; size_t: line; size_t: column) @: LmP0Frame
-    @: LmP0Frame frame
-    frame: (cast: (@: LmP0Frame) lm_own_arena_new_zero(document\tree_arena, c.sizeof(frame[0])))
+fn: lm_p0_new_frame (LmP0Document: document; size_t: line; size_t: column) LmP0Frame
+    LmP0Frame: frame
+    frame: (cast: (LmP0Frame) lm_own_arena_new_zero(document\tree_arena, c.sizeof(frame[0])))
     if: (frame = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser frame")
         return: 0
@@ -1347,9 +1347,9 @@ fn: lm_p0_new_frame (@: LmP0Document document; size_t: line; size_t: column) @: 
     return: frame
 end: lm_p0_new_frame
 
-fn: lm_p0_new_trailer (@: LmP0Document document; const: @(char spelling); size_t: spelling_length; size_t: line; size_t: column) @: LmP0Trailer
-    @: LmP0Trailer trailer
-    trailer: (cast: (@: LmP0Trailer) lm_own_arena_new_zero(document\tree_arena, c.sizeof(trailer[0])))
+fn: lm_p0_new_trailer (LmP0Document: document; const: @(char spelling); size_t: spelling_length; size_t: line; size_t: column) LmP0Trailer
+    LmP0Trailer: trailer
+    trailer: (cast: (LmP0Trailer) lm_own_arena_new_zero(document\tree_arena, c.sizeof(trailer[0])))
     if: (trailer = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer")
         return: 0
@@ -1362,7 +1362,7 @@ fn: lm_p0_new_trailer (@: LmP0Document document; const: @(char spelling); size_t
     return: trailer
 end: lm_p0_new_trailer
 
-sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
+sub: lm_p0_set_diagnostic (LmP0Document: document; int: code; size_t: line; size_t: column; const: @(char message))
     if: document = 0 || document\diagnostic = 0 || document\diagnostic\code != 0
         return
     if: message = 0
@@ -1373,9 +1373,9 @@ sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; si
     c.snprintf(document\diagnostic\message, c.sizeof(document\diagnostic\message), "%s", message)
 end: lm_p0_set_diagnostic
 
-fn: lm_p0_registry_push_row_values (const: @(LmP0Text table_value); const: @(LmP0Text key_value); const: @(LmP0Text payload_value)) int
-    @: LmP0RegistryRow row
-    row: (cast: (@: LmP0RegistryRow) lm_own_new_zero(c.sizeof(row[0])))
+fn: lm_p0_registry_push_row_values (const: (LmP0Text: table_value); const: (LmP0Text: key_value); const: (LmP0Text: payload_value)) int
+    LmP0RegistryRow: row
+    row: (cast: (LmP0RegistryRow) lm_own_new_zero(c.sizeof(row[0])))
     if: (row = 0)
         return: -1
     row\table: lm_p0_registry_value_copy_cstr(table_value)
@@ -1390,10 +1390,10 @@ fn: lm_p0_registry_push_row_values (const: @(LmP0Text table_value); const: @(LmP
     return: 0
 end: lm_p0_registry_push_row_values
 
-fn: lm_p0_registry_push_row_atoms (const: @(LmP0Text table_atom); const: @(LmP0Text key_atom); const: @(LmP0Text payload_atom)) int
-    @: LmP0Text table_value
-    @: LmP0Text key_value
-    @: LmP0Text payload_value
+fn: lm_p0_registry_push_row_atoms (const: (LmP0Text: table_atom); const: (LmP0Text: key_atom); const: (LmP0Text: payload_atom)) int
+    LmP0Text: table_value
+    LmP0Text: key_value
+    LmP0Text: payload_value
     int: status
 
     if: lm_p0_registry_payload_is_null(payload_atom)
@@ -1418,7 +1418,7 @@ fn: lm_p0_registry_push_row_atoms (const: @(LmP0Text table_atom); const: @(LmP0T
 return: status
 fn: lm_p0_registry_column_has_descriptor (const: @(LmP0RegistryColumn column); const: @(char descriptor)) int
     size_t: i
-    @: LmP0Text payload
+    LmP0Text: payload
     int: result
     if: ((column = 0) || (descriptor = 0))
         return: 0
@@ -1436,7 +1436,7 @@ fn: lm_p0_registry_column_has_descriptor (const: @(LmP0RegistryColumn column); c
     return: result
 end: lm_p0_registry_column_has_descriptor
 
-fn: lm_p0_registry_cell_value (const: @(LmP0Text atom); const: @(LmP0RegistryColumn column); @: LmP0Text out_value) int
+fn: lm_p0_registry_cell_value (const: (LmP0Text: atom); const: @(LmP0RegistryColumn column); LmP0Text: out_value) int
     if: lm_p0_registry_payload_is_null(atom)
         return: 0
     if: lm_p0_registry_column_has_descriptor(column, "char")
@@ -1448,12 +1448,12 @@ fn: lm_p0_registry_cell_value (const: @(LmP0Text atom); const: @(LmP0RegistryCol
     return: -1
 end: lm_p0_registry_cell_value
 
-fn: lm_p0_registry_push_table_cell (const: @(LmP0Text table_name); const: @(LmP0RegistryColumn column); int: split_by_column; const: @(LmP0Text key_atom); const: @(LmP0Text payload_atom)) int
-    @: LmP0Text table_payload
-    @: LmP0Text column_payload
-    @: LmP0Text key_payload
-    @: LmP0Text payload_value
-    @: LmP0Text relation_table
+fn: lm_p0_registry_push_table_cell (const: (LmP0Text: table_name); const: @(LmP0RegistryColumn column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Text: payload_atom)) int
+    LmP0Text: table_payload
+    LmP0Text: column_payload
+    LmP0Text: key_payload
+    LmP0Text: payload_value
+    LmP0Text: relation_table
     @: char relation_name
     size_t: relation_length
     int: status
@@ -1585,7 +1585,7 @@ sub: lm_p0_trim_trailing_line_comment (const: @@(char text); @: size_t length)
     ---
 end: lm_p0_trim_trailing_line_comment
 
-fn: lm_p0_indent_level_from_column (@: LmP0Document document; @: LmP0IndentStack stack; size_t: column; size_t: line; size_t: source_column; @: size_t out_level) int
+fn: lm_p0_indent_level_from_column (LmP0Document: document; LmP0IndentStack: stack; size_t: column; size_t: line; size_t: source_column; @: size_t out_level) int
     size_t: top
     top: stack\columns[(stack\count - 1U)]
     if: (column = top)
@@ -1840,7 +1840,7 @@ fn: lm_p0_scan_brace_mark_unchecked (const: @(char text); size_t: length; size_t
     return: i
 end: lm_p0_scan_brace_mark_unchecked
 
-fn: lm_p0_skip_brace_mark_ex (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column; int: record) int
+fn: lm_p0_skip_brace_mark_ex (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column; int: record) int
     size_t: start
     size_t: end_index
     int: closed
@@ -1860,15 +1860,15 @@ fn: lm_p0_skip_brace_mark_ex (@: LmP0Document document; @: LmP0Structure structu
     return: 1
 end: lm_p0_skip_brace_mark_ex
 
-fn: lm_p0_skip_brace_mark (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
+fn: lm_p0_skip_brace_mark (LmP0Document: document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
     return: lm_p0_skip_brace_mark_ex(document, 0, text, length, index, line, column, 0)
 end: lm_p0_skip_brace_mark
 
-fn: lm_p0_consume_brace_mark (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
+fn: lm_p0_consume_brace_mark (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column) int
     return: lm_p0_skip_brace_mark_ex(document, structure, text, length, index, line, column, 1)
 end: lm_p0_consume_brace_mark
 
-fn: lm_p0_skip_leading_brace_marks_ex (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t index; int: record) int
+fn: lm_p0_skip_leading_brace_marks_ex (LmP0Document: document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t index; int: record) int
     while: (index[0] < length)
         while: ((index[0] < length) && lm_p0_is_horizontal_space(text[index[0]]))
             index[0]: index[0] + 1U
@@ -1880,11 +1880,11 @@ fn: lm_p0_skip_leading_brace_marks_ex (@: LmP0Document document; const: @(char t
     return: 1
 end: lm_p0_skip_leading_brace_marks_ex
 
-fn: lm_p0_skip_leading_brace_marks (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t index) int
+fn: lm_p0_skip_leading_brace_marks (LmP0Document: document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t index) int
     return: lm_p0_skip_leading_brace_marks_ex(document, text, length, line, column, index, 0)
 end: lm_p0_skip_leading_brace_marks
 
-fn: lm_p0_line_is_standalone_mix_run (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column; @: int out_is_mix) int
+fn: lm_p0_line_is_standalone_mix_run (LmP0Document: document; const: @(char text); size_t: length; size_t: line; size_t: column; @: int out_is_mix) int
     size_t: i
     int: saw_mix
     i: 0U
@@ -1906,7 +1906,7 @@ fn: lm_p0_line_is_standalone_mix_run (@: LmP0Document document; const: @(char te
     return: 1
 end: lm_p0_line_is_standalone_mix_run
 
-fn: lm_p0_scan_leading_mix_prefix (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t out_prefix_start; @: size_t out_prefix_end; @: size_t out_anchor) int
+fn: lm_p0_scan_leading_mix_prefix (LmP0Document: document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t out_prefix_start; @: size_t out_prefix_end; @: size_t out_anchor) int
     size_t: i
     size_t: prefix_start
     size_t: prefix_end
@@ -1947,7 +1947,7 @@ fn: lm_p0_dash_fence_status_after_comment_trim (const: @(char text); size_t: len
     return: lm_p0_dash_fence_status(trimmed_text, trimmed_length, out_dash_count)
 end: lm_p0_dash_fence_status_after_comment_trim
 
-fn: lm_p0_scan_raw_comment_block (@: LmP0Document document; const: @(char source); size_t: length; size_t: line_start; size_t: line; @: size_t next_offset; @: size_t next_line) int
+fn: lm_p0_scan_raw_comment_block (LmP0Document: document; const: @(char source); size_t: length; size_t: line_start; size_t: line; @: size_t next_offset; @: size_t next_line) int
     size_t: line_end
     size_t: star_count
     size_t: scan_start
@@ -1995,7 +1995,7 @@ fn: lm_p0_scan_raw_comment_block (@: LmP0Document document; const: @(char source
     return: 0
 end: lm_p0_scan_raw_comment_block
 
-fn: lm_p0_scan_block_string_event (@: LmP0Document document; const: @(char source); size_t: length; size_t: line_start; size_t: line; @: LmP0StreamEvent event; @: size_t next_offset; @: size_t next_line) int
+fn: lm_p0_scan_block_string_event (LmP0Document: document; const: @(char source); size_t: length; size_t: line_start; size_t: line; LmP0StreamEvent: event; @: size_t next_offset; @: size_t next_line) int
     size_t: line_end
     size_t: eq_count
     size_t: content_start
@@ -2055,17 +2055,17 @@ fn: lm_p0_scan_block_string_event (@: LmP0Document document; const: @(char sourc
     return: 0
 end: lm_p0_scan_block_string_event
 
-fn: lm_p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
-    @: LmP0Node node
-    node: (cast: (@: LmP0Node) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node[0])))
+fn: lm_p0_new_node (LmP0Document: document; LmP0NodeKind: kind) LmP0Node
+    LmP0Node: node
+    node: (cast: (LmP0Node) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node[0])))
     if: (node = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node")
         return: 0
-    node\span: (cast: (@: LmP0Span) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node\span[0])))
+    node\span: (cast: (LmP0Span) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node\span[0])))
     if: (node\span = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node span")
         return: 0
-    node\as: (cast: (@: LmP0NodeAs) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node\as[0])))
+    node\as: (cast: (LmP0NodeAs) lm_own_arena_new_zero(document\tree_arena, c.sizeof(node\as[0])))
     if: (node\as = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node payload")
         return: 0
@@ -2092,9 +2092,9 @@ fn: lm_p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
     return: node
 end: lm_p0_new_node
 
-fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node node) int
-    @: LmP0Field field
-    field: (cast: (@: LmP0Field) lm_own_arena_new_zero(document\tree_arena, c.sizeof(field[0])))
+fn: lm_p0_append_field (LmP0Document: document; LmP0Structure: structure; LmP0Node: node) int
+    LmP0Field: field
+    field: (cast: (LmP0Field) lm_own_arena_new_zero(document\tree_arena, c.sizeof(field[0])))
     if: (field = 0)
         size_t: lm_p0_tmp_14
         if: (node != 0)
@@ -2118,7 +2118,7 @@ fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @:
     return: 1
 end: lm_p0_append_field
 
-fn: lm_p0_pointer_source_offset (const: @(LmP0Document document); const: @(char pointer); @: size_t out_offset) int
+fn: lm_p0_pointer_source_offset (const: (LmP0Document: document); const: @(char pointer); @: size_t out_offset) int
     const: @: char begin
     const: @: char end_index
     if: (((document = 0) || (document\source = 0)) || (pointer = 0))
@@ -2158,7 +2158,7 @@ fn: lm_p0_offset_from_line_column (const: @(char text); size_t: length; size_t: 
     return: i
 end: lm_p0_offset_from_line_column
 
-sub: lm_p0_copy_payload_diagnostic (@: LmP0Document document; const: @(LmP0Document payload_document); size_t: payload_offset)
+sub: lm_p0_copy_payload_diagnostic (LmP0Document: document; const: (LmP0Document: payload_document); size_t: payload_offset)
     size_t: local_offset
     if: (((((document = 0) || (document\diagnostic = 0)) || (payload_document = 0)) || (payload_document\diagnostic = 0)) || (payload_document\diagnostic\code = 0))
         return
@@ -2167,7 +2167,7 @@ sub: lm_p0_copy_payload_diagnostic (@: LmP0Document document; const: @(LmP0Docum
     lm_p0_position_in_slice(document\source, document\source_length, (payload_offset + local_offset), 1U, 1U, @ document\diagnostic\line, @ document\diagnostic\column)
 end: lm_p0_copy_payload_diagnostic
 
-sub: lm_p0_adjust_node_span_to_document (@: LmP0Document document; @: LmP0Node node; size_t: base_offset)
+sub: lm_p0_adjust_node_span_to_document (LmP0Document: document; LmP0Node: node; size_t: base_offset)
     if: (node = 0)
         return
     node\span\offset: node\span\offset + base_offset
@@ -2187,8 +2187,8 @@ sub: lm_p0_adjust_node_span_to_document (@: LmP0Document document; @: LmP0Node n
     ---
 end: lm_p0_adjust_node_span_to_document
 
-sub: lm_p0_adjust_structure_spans_to_document (@: LmP0Document document; @: LmP0Structure structure; size_t: base_offset)
-    @: LmP0Field field
+sub: lm_p0_adjust_structure_spans_to_document (LmP0Document: document; LmP0Structure: structure; size_t: base_offset)
+    LmP0Field: field
     field: structure\first_field
     while: (field != 0)
         lm_p0_adjust_node_span_to_document(document, field\value, base_offset)
@@ -2196,14 +2196,14 @@ sub: lm_p0_adjust_structure_spans_to_document (@: LmP0Document document; @: LmP0
     ---
 end: lm_p0_adjust_structure_spans_to_document
 
-fn: lm_p0_record_mix_mark (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: start; size_t: end) int
-    @: LmP0Node node
+fn: lm_p0_record_mix_mark (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: start; size_t: end) int
+    LmP0Node: node
     size_t: span_line
     size_t: span_column
     size_t: absolute_offset
     size_t: payload_offset
     size_t: payload_length
-    @: LmP0Document payload_document
+    LmP0Document: payload_document
     int: status
 
     node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
@@ -2481,7 +2481,7 @@ fn: lm_p0_scan_c_surface_atom (const: @(char text); size_t: end_index; size_t: s
     return: i
 end: lm_p0_scan_c_surface_atom
 
-fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+fn: lm_p0_scan_c_char (LmP0Document: document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
     size_t: end_index
     end_index: lm_p0_scan_c_char_token(text, length, index[0])
     if: (end_index <= (index[0] + 1U))
@@ -2494,7 +2494,7 @@ fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: le
     return: 1
 end: lm_p0_scan_c_char
 
-fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+fn: lm_p0_scan_c_prefixed_quote (LmP0Document: document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
     size_t: end_index
     end_index: lm_p0_scan_c_prefixed_quote_token(text, length, index[0])
     if: (end_index <= (index[0] + 1U))
@@ -2523,7 +2523,7 @@ fn: lm_p0_scan_registry_compact_atom_piece (const: @(char text); size_t: end_ind
     size_t: i
     size_t: best_length
     size_t: token_length
-    @: LmP0RegistryRow row
+    LmP0RegistryRow: row
     if: (lm_p0_registry_table_has_rows_loaded_or_loading("p0.compact-token") = 0)
         return: lm_p0_scan_builtin_compact_atom_piece(text, end_index, start)
     best_length: 0U
@@ -2531,7 +2531,7 @@ fn: lm_p0_scan_registry_compact_atom_piece (const: @(char text); size_t: end_ind
     if: ((lm_p0_registry = 0) || (lm_p0_registry\rows = 0))
         return: lm_p0_scan_builtin_compact_atom_piece(text, end_index, start)
     while: (i < lm_p0_registry\rows\count)
-        row: (cast: (@: LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
+        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
         if: ((((row != 0) && (row\table != 0)) && (row\key != 0)) && (c.strcmp(row\table, "p0.compact-token") = 0))
             token_length: c.strlen(row\key)
             if: (((token_length > best_length) && ((start + token_length) <= end_index)) && (c.memcmp((text + start), row\key, token_length) = 0))
@@ -2583,8 +2583,8 @@ fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_
     return: lm_p0_scan_registry_compact_atom_piece(text, end_index, start)
 end: lm_p0_scan_compact_atom_piece
 
-fn: lm_p0_append_atom_slice (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: start; size_t: end_index) int
-    @: LmP0Node node
+fn: lm_p0_append_atom_slice (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: start; size_t: end_index) int
+    LmP0Node: node
     node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
     if: (node = 0)
         return: 0
@@ -2599,8 +2599,8 @@ fn: lm_p0_append_atom_slice (@: LmP0Document document; @: LmP0Structure structur
     return: lm_p0_append_field(document, structure, node)
 end: lm_p0_append_atom_slice
 
-fn: lm_p0_append_positional_skip (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: index) int
-    @: LmP0Node node
+fn: lm_p0_append_positional_skip (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: index) int
+    LmP0Node: node
     node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
     if: (node = 0)
         return: 0
@@ -2614,7 +2614,7 @@ fn: lm_p0_append_positional_skip (@: LmP0Document document; @: LmP0Structure str
     return: lm_p0_append_field(document, structure, node)
 end: lm_p0_append_positional_skip
 
-fn: lm_p0_append_compact_atom_pieces (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: start; size_t: end_index) int
+fn: lm_p0_append_compact_atom_pieces (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: start; size_t: end_index) int
     size_t: i
     i: start
     while: (i < end_index)
@@ -2645,11 +2645,11 @@ fn: lm_p0_append_compact_atom_pieces (@: LmP0Document document; @: LmP0Structure
     return: 1
 end: lm_p0_append_compact_atom_pieces
 
-sub: lm_p0_free_node (@: LmP0Node node)
+sub: lm_p0_free_node (LmP0Node: node)
     node: node
 end: lm_p0_free_node
 
-fn: lm_p0_relaxed_level_from_column (@: LmP0Document document; @: LmP0IndentStack stack; size_t: column; size_t: base_level; size_t: line; size_t: source_column; @: size_t out_level) int
+fn: lm_p0_relaxed_level_from_column (LmP0Document: document; LmP0IndentStack: stack; size_t: column; size_t: base_level; size_t: line; size_t: source_column; @: size_t out_level) int
     size_t: i
     size_t: parent_level
     if: (column = 0U)
@@ -2690,7 +2690,7 @@ fn: lm_p0_relaxed_level_from_column (@: LmP0Document document; @: LmP0IndentStac
     return: 0
 end: lm_p0_relaxed_level_from_column
 
-fn: lm_p0_source_level_after_line_break (@: LmP0Document document; @: LmP0IndentStack indent_stack; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column; size_t: base_level; @: size_t content_index; @: size_t out_level) int
+fn: lm_p0_source_level_after_line_break (LmP0Document: document; LmP0IndentStack: indent_stack; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column; size_t: base_level; @: size_t content_index; @: size_t out_level) int
     size_t: p
     size_t: indent_column
     size_t: dot_level
@@ -2725,7 +2725,7 @@ fn: lm_p0_source_level_after_line_break (@: LmP0Document document; @: LmP0Indent
     return: lm_p0_relaxed_level_from_column(document, indent_stack, indent_column, base_level, diagnostic_line, diagnostic_column, out_level)
 end: lm_p0_source_level_after_line_break
 
-fn: lm_p0_skip_field_space (@: LmP0Document document; @: LmP0IndentStack indent_stack; @: LmP0Structure structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; @: size_t current_source_level; @: int stopped_by_source_level) int
+fn: lm_p0_skip_field_space (LmP0Document: document; LmP0IndentStack: indent_stack; LmP0Structure: structure; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: column; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; @: size_t current_source_level; @: int stopped_by_source_level) int
     stopped_by_source_level[0]: 0
     while: (index[0] < length)
         if: lm_p0_is_horizontal_space(text[index[0]])
@@ -2760,7 +2760,7 @@ fn: lm_p0_skip_field_space (@: LmP0Document document; @: LmP0IndentStack indent_
     return: 1
 end: lm_p0_skip_field_space
 
-fn: lm_p0_scan_python_string (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+fn: lm_p0_scan_python_string (LmP0Document: document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
     size_t: end_index
     if: (lm_p0_find_python_string_end(text, length, index[0], @ end_index) = 0)
         size_t: diagnostic_line
@@ -2772,7 +2772,7 @@ fn: lm_p0_scan_python_string (@: LmP0Document document; const: @(char text); siz
     return: 1
 end: lm_p0_scan_python_string
 
-fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
+fn: lm_p0_scan_quoted (LmP0Document: document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
     size_t: i
     if: lm_p0_starts_python_string(text, length, index[0])
         return: lm_p0_scan_python_string(document, text, length, index, line, base_column)
@@ -2820,7 +2820,7 @@ fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: le
     return: 0
 end: lm_p0_scan_quoted
 
-fn: lm_p0_require_quoted_token_boundary (@: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
+fn: lm_p0_require_quoted_token_boundary (LmP0Document: document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
     size_t: diagnostic_line
     size_t: diagnostic_column
     if: ((index >= length) || lm_p0_is_quoted_token_boundary(text[index]))
@@ -2830,7 +2830,7 @@ fn: lm_p0_require_quoted_token_boundary (@: LmP0Document document; const: @(char
     return: 0
 end: lm_p0_require_quoted_token_boundary
 
-fn: lm_p0_find_matching_paren (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+fn: lm_p0_find_matching_paren (LmP0Document: document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
     size_t: i
     size_t: depth
     i: open_index
@@ -2874,7 +2874,7 @@ fn: lm_p0_find_matching_paren (@: LmP0Document document; const: @(char text); si
     return: 0
 end: lm_p0_find_matching_paren
 
-fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+fn: lm_p0_find_matching_bracket (LmP0Document: document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
     size_t: i
     size_t: bracket_depth
     size_t: paren_depth
@@ -2934,7 +2934,7 @@ fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); 
     return: 0
 end: lm_p0_find_matching_bracket
 
-fn: lm_p0_find_colon (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t colon_index) int
+fn: lm_p0_find_colon (LmP0Document: document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t colon_index) int
     size_t: i
     size_t: depth
     depth: 0U
@@ -3003,7 +3003,7 @@ fn: lm_p0_find_colon (@: LmP0Document document; const: @(char text); size_t: len
     return: 0
 end: lm_p0_find_colon
 
-fn: lm_p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
+fn: lm_p0_field_start_looks_explicit_frame (LmP0Document: document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
     size_t: i
     size_t: head_end
     size_t: close_index
@@ -3051,8 +3051,8 @@ fn: lm_p0_field_start_looks_explicit_frame (@: LmP0Document document; const: @(c
 end: lm_p0_field_start_looks_explicit_frame
 
 sub: lm_p0_field_parse_loop_frame_delete_any (@: void object)
-    @: LmP0FieldParseLoopFrame frame
-    frame: (cast: (@: LmP0FieldParseLoopFrame) object)
+    LmP0FieldParseLoopFrame: frame
+    frame: (cast: (LmP0FieldParseLoopFrame) object)
     if: (frame = 0)
         return
     if: frame\indent_stack_owned
@@ -3060,9 +3060,9 @@ sub: lm_p0_field_parse_loop_frame_delete_any (@: void object)
     lm_own_delete(frame, 0)
 end: lm_p0_field_parse_loop_frame_delete_any
 
-fn: lm_p0_field_parse_loop_stack_new (@: LmP0Document document; size_t: line; size_t: column) @: LmOwnPtrStack
-    @: LmOwnPtrStack stack
-    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+fn: lm_p0_field_parse_loop_stack_new (LmP0Document: document; size_t: line; size_t: column) LmOwnPtrStack
+    LmOwnPtrStack: stack
+    stack: (cast: (LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
     if: (stack = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while creating parser field stack")
         return: 0
@@ -3070,16 +3070,16 @@ fn: lm_p0_field_parse_loop_stack_new (@: LmP0Document document; size_t: line; si
     return: stack
 end: lm_p0_field_parse_loop_stack_new
 
-sub: lm_p0_field_parse_loop_stack_delete (@: LmOwnPtrStack stack)
+sub: lm_p0_field_parse_loop_stack_delete (LmOwnPtrStack: stack)
     if: (stack = 0)
         return
     lm_own_ptr_stack_destroy(stack)
     lm_own_delete(stack, 0)
 end: lm_p0_field_parse_loop_stack_delete
 
-fn: lm_p0_field_parse_loop_push (@: LmP0Document document; @: LmOwnPtrStack stack; @: LmP0IndentStack indent_stack; int: indent_stack_owned; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; size_t: i; size_t: current_source_level; int: allow_empty_fields; int: expect_field; int: headless_group_after_separator; LmP0FieldParseLoopContinuation: continuation; @: LmP0Node node; size_t: start; size_t: close_index) int
-    @: LmP0FieldParseLoopFrame frame
-    frame: (cast: (@: LmP0FieldParseLoopFrame) lm_own_new_zero(c.sizeof(frame[0])))
+fn: lm_p0_field_parse_loop_push (LmP0Document: document; LmOwnPtrStack: stack; LmP0IndentStack: indent_stack; int: indent_stack_owned; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: layout_base_level; size_t: i; size_t: current_source_level; int: allow_empty_fields; int: expect_field; int: headless_group_after_separator; LmP0FieldParseLoopContinuation: continuation; LmP0Node: node; size_t: start; size_t: close_index) int
+    LmP0FieldParseLoopFrame: frame
+    frame: (cast: (LmP0FieldParseLoopFrame) lm_own_new_zero(c.sizeof(frame[0])))
     if: (frame = 0)
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while growing parser field stack")
         return: 0
@@ -3110,7 +3110,7 @@ fn: lm_p0_field_parse_loop_push (@: LmP0Document document; @: LmOwnPtrStack stac
     return: 1
 end: lm_p0_field_parse_loop_push
 
-fn: lm_p0_field_parse_fail (@@: LmOwnPtrStack parse_stack; @@: LmP0IndentStack indent_stack; @: int indent_stack_owned) int
+fn: lm_p0_field_parse_fail (@: LmOwnPtrStack parse_stack; @: LmP0IndentStack indent_stack; @: int indent_stack_owned) int
     if: ((((indent_stack_owned != 0) && indent_stack_owned[0]) && (indent_stack != 0)) && (indent_stack[0] != 0))
         lm_p0_indent_stack_delete(indent_stack[0])
         indent_stack[0]: 0
@@ -3121,7 +3121,7 @@ fn: lm_p0_field_parse_fail (@@: LmOwnPtrStack parse_stack; @@: LmP0IndentStack i
     return: 0
 end: lm_p0_field_parse_fail
 
-fn: lm_p0_parse_append_node_and_update (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node node; unsigned: flags; int: allow_empty_fields; @: int expect_field; @: int headless_group_after_separator) int
+fn: lm_p0_parse_append_node_and_update (LmP0Document: document; LmP0Structure: structure; LmP0Node: node; unsigned: flags; int: allow_empty_fields; @: int expect_field; @: int headless_group_after_separator) int
     if: (lm_p0_append_field(document, structure, node) = 0)
         return: 0
     expect_field[0]: 0
@@ -3132,17 +3132,17 @@ fn: lm_p0_parse_append_node_and_update (@: LmP0Document document; @: LmP0Structu
     return: 1
 end: lm_p0_parse_append_node_and_update
 
-fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0IndentStack indent_stack; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; size_t: layout_base_level; @: size_t index) int
+fn: lm_p0_parse_fields_until_with_layout (LmP0Document: document; LmP0IndentStack: indent_stack; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; size_t: layout_base_level; @: size_t index) int
     size_t: i
     size_t: start
     size_t: head_end
     size_t: close_index
     size_t: current_source_level
     size_t: child_index
-    @: LmOwnPtrStack parse_stack
-    @: LmP0FieldParseLoopFrame frame
-    @: LmP0IndentStack child_indent_stack
-    @: LmP0Node node
+    LmOwnPtrStack: parse_stack
+    LmP0FieldParseLoopFrame: frame
+    LmP0IndentStack: child_indent_stack
+    LmP0Node: node
     int: allow_empty_fields
     int: expect_field
     int: headless_group_after_separator
@@ -3169,7 +3169,7 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
             if: (i >= length)
                 break
             if: (((((headless_group_after_separator && (text[i] != '(')) && (text[i] != ')')) && (text[i] != '#')) && (lm_p0_is_field_separator(text[i]) = 0)) && (lm_p0_field_start_looks_explicit_frame(document, text, length, i, line, column) = 0))
-                @: LmP0Node group_node
+                LmP0Node: group_node
                 group_node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
                 if: (group_node = 0)
                     return: lm_p0_field_parse_fail(@ parse_stack, @ indent_stack, @ indent_stack_owned)
@@ -3195,7 +3195,7 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
                 size_t: field_column
                 size_t: next_offset
                 size_t: next_line
-                @: LmP0StreamEvent block_event
+                LmP0StreamEvent: block_event
                 lm_p0_position_in_slice(text, length, i, line, column, @ field_line, @ field_column)
                 if: lm_p0_scan_raw_comment_block(document, text, length, i, field_line, @ next_offset, @ next_line)
                     i: next_offset
@@ -3497,7 +3497,7 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
             lm_p0_indent_stack_delete(indent_stack)
             indent_stack: 0
             indent_stack_owned: 0
-        frame: (cast: (@: LmP0FieldParseLoopFrame) lm_own_ptr_stack_pop(parse_stack))
+        frame: (cast: (LmP0FieldParseLoopFrame) lm_own_ptr_stack_pop(parse_stack))
         if: (frame = 0)
             index[0]: child_index
             lm_p0_field_parse_loop_stack_delete(parse_stack)
@@ -3592,8 +3592,8 @@ fn: lm_p0_parse_fields_until_with_layout (@: LmP0Document document; @: LmP0Inden
     return: 0
 end: lm_p0_parse_fields_until_with_layout
 
-fn: lm_p0_parse_fields_until (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; @: size_t index) int
-    @: LmP0IndentStack indent_stack
+fn: lm_p0_parse_fields_until (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; size_t: short_source_level; size_t: initial_source_level; @: size_t index) int
+    LmP0IndentStack: indent_stack
     int: status
     indent_stack: lm_p0_indent_stack_new_empty()
     if: (indent_stack = 0)
@@ -3604,15 +3604,15 @@ fn: lm_p0_parse_fields_until (@: LmP0Document document; @: LmP0Structure structu
     return: status
 end: lm_p0_parse_fields_until
 
-fn: lm_p0_parse_fields_into (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset) int
+fn: lm_p0_parse_fields_into (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset) int
     size_t: index
     index: 0U
     return: lm_p0_parse_fields_until(document, structure, text, length, line, column, offset, c.LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR, 0U, 0U, @ index)
 end: lm_p0_parse_fields_into
 
-fn: lm_p0_stack_ensure (@: LmP0Document document; @: LmP0Stack stack; size_t: level) int
-    @@: LmP0Structure parents
-    @@: LmP0Node owners
+fn: lm_p0_stack_ensure (LmP0Document: document; LmP0Stack: stack; size_t: level) int
+    @: LmP0Structure parents
+    @: LmP0Node owners
     @: uchar hard
     size_t: old_capacity
     size_t: new_capacity
@@ -3626,11 +3626,11 @@ fn: lm_p0_stack_ensure (@: LmP0Document document; @: LmP0Stack stack; size_t: le
         new_capacity: old_capacity
     while: (new_capacity <= level)
         new_capacity: new_capacity * 2U
-    parents: (cast: (@@: LmP0Structure) lm_own_resize(stack\parents, (new_capacity * c.sizeof(parents[0]))))
+    parents: (cast: (@: LmP0Structure) lm_own_resize(stack\parents, (new_capacity * c.sizeof(parents[0]))))
     if: (parents = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
         return: 0
-    owners: (cast: (@@: LmP0Node) lm_own_resize(stack\owners, (new_capacity * c.sizeof(owners[0]))))
+    owners: (cast: (@: LmP0Node) lm_own_resize(stack\owners, (new_capacity * c.sizeof(owners[0]))))
     if: (owners = 0)
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
         stack\parents: parents
@@ -3654,7 +3654,7 @@ fn: lm_p0_stack_ensure (@: LmP0Document document; @: LmP0Stack stack; size_t: le
     return: 1
 end: lm_p0_stack_ensure
 
-sub: lm_p0_stack_truncate_deeper (@: LmP0Stack stack; size_t: level)
+sub: lm_p0_stack_truncate_deeper (LmP0Stack: stack; size_t: level)
     size_t: i
     if: (stack\capacity <= (level + 1U))
         return
@@ -3667,7 +3667,7 @@ sub: lm_p0_stack_truncate_deeper (@: LmP0Stack stack; size_t: level)
     ---
 end: lm_p0_stack_truncate_deeper
 
-fn: lm_p0_stack_top_level (const: @(LmP0Stack stack)) size_t
+fn: lm_p0_stack_top_level (const: (LmP0Stack: stack)) size_t
     size_t: i
     i: stack\capacity
     while: (i > 0U)
@@ -3678,8 +3678,8 @@ fn: lm_p0_stack_top_level (const: @(LmP0Stack stack)) size_t
     return: 0U
 end: lm_p0_stack_top_level
 
-fn: lm_p0_stack_level_is_trailer_body (const: @(LmP0Stack stack); size_t: level) int
-    @: LmP0Node owner
+fn: lm_p0_stack_level_is_trailer_body (const: (LmP0Stack: stack); size_t: level) int
+    LmP0Node: owner
     if: ((level >= stack\capacity) || (stack\parents[level] = 0))
         return: 0
     owner: stack\owners[level]
@@ -3692,7 +3692,7 @@ fn: lm_p0_stack_level_is_trailer_body (const: @(LmP0Stack stack); size_t: level)
     return: 0
 end: lm_p0_stack_level_is_trailer_body
 
-fn: lm_p0_stack_collapse_soft_to_event (@: LmP0Stack stack; size_t: event_level) size_t
+fn: lm_p0_stack_collapse_soft_to_event (LmP0Stack: stack; size_t: event_level) size_t
     size_t: top_level
     top_level: lm_p0_stack_top_level(stack)
     while: (((top_level > 0U) && (event_level < top_level)) && (stack\hard[top_level] = 0U))
@@ -3703,7 +3703,7 @@ end: lm_p0_stack_collapse_soft_to_event
 
 fn: lm_p0_registry_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
     size_t: i
-    @: LmP0RegistryRow row
+    LmP0RegistryRow: row
     const: @: char role_payload
     if: (lm_p0_registry_table_has_rows("trailer.role") = 0)
         return: c.LM_P0_TRAILER_ROLE_NONE
@@ -3712,7 +3712,7 @@ fn: lm_p0_registry_trailer_role (const: @(char text); size_t: length) LmP0Traile
     i: lm_p0_registry\rows\count
     while: (i > 0U)
         i: i - 1U
-        row: (cast: (@: LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
+        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
         if: (((((row != 0) && (row\table != 0)) && (row\key != 0)) && (row\payload != 0)) && (c.strcmp(row\table, "namespace") = 0))
             role_payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(row\payload), "trailer.role")
             if: ((role_payload != 0) && lm_p0_text_has_prefix_name(text, length, row\key, lm_p0_registry_trailer_allows_bare(row\payload)))
@@ -3738,7 +3738,7 @@ fn: lm_p0_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
     return: registry_role
 end: lm_p0_trailer_role
 
-sub: lm_p0_stack_free (@: LmP0Stack stack)
+sub: lm_p0_stack_free (LmP0Stack: stack)
     lm_own_delete(stack\parents, 0)
     lm_own_delete(stack\owners, 0)
     lm_own_delete(stack\hard, 0)
@@ -3749,40 +3749,40 @@ sub: lm_p0_stack_free (@: LmP0Stack stack)
 end: lm_p0_stack_free
 
 sub: lm_p0_stack_free_any (@: void object)
-    lm_p0_stack_free((cast: (@: LmP0Stack) object))
+    lm_p0_stack_free((cast: (LmP0Stack) object))
 end: lm_p0_stack_free_any
 
-fn: lm_p0_stack_new () @: LmP0Stack
-    return: (cast: (@: LmP0Stack) lm_own_new_zero((1U * c.sizeof(c.LmP0Stack))))
+fn: lm_p0_stack_new () LmP0Stack
+    return: (cast: (LmP0Stack) lm_own_new_zero((1U * c.sizeof(c.LmP0Stack))))
 end: lm_p0_stack_new
 
-sub: lm_p0_stack_delete (@: LmP0Stack stack)
+sub: lm_p0_stack_delete (LmP0Stack: stack)
     lm_own_delete(stack, lm_p0_stack_free_any)
 end: lm_p0_stack_delete
 
-fn: lm_p0_pending_delimiter_new () @: LmP0PendingDelimiter
-    return: (cast: (@: LmP0PendingDelimiter) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingDelimiter))))
+fn: lm_p0_pending_delimiter_new () LmP0PendingDelimiter
+    return: (cast: (LmP0PendingDelimiter) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingDelimiter))))
 end: lm_p0_pending_delimiter_new
 
-fn: lm_p0_stream_event_new () @: LmP0StreamEvent
-    return: (cast: (@: LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(c.LmP0StreamEvent))))
+fn: lm_p0_stream_event_new () LmP0StreamEvent
+    return: (cast: (LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(c.LmP0StreamEvent))))
 end: lm_p0_stream_event_new
 
-fn: lm_p0_stream_event_new_copy (const: @(LmP0StreamEvent event)) @: LmP0StreamEvent
-    @: LmP0StreamEvent copy
+fn: lm_p0_stream_event_new_copy (const: (LmP0StreamEvent: event)) LmP0StreamEvent
+    LmP0StreamEvent: copy
     if: (event = 0)
         return: 0
-    copy: (cast: (@: LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(copy[0]))))
+    copy: (cast: (LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(copy[0]))))
     if: (copy != 0)
         copy[0]: event[0]
     return: copy
 end: lm_p0_stream_event_new_copy
 
-sub: lm_p0_stream_event_delete (@: LmP0StreamEvent event)
+sub: lm_p0_stream_event_delete (LmP0StreamEvent: event)
     lm_own_delete(event, 0)
 end: lm_p0_stream_event_delete
 
-sub: lm_p0_pending_delimiter_clear (@: LmP0PendingDelimiter pending)
+sub: lm_p0_pending_delimiter_clear (LmP0PendingDelimiter: pending)
     if: (pending != 0)
         lm_p0_stream_event_delete(pending\event)
         pending\event: 0
@@ -3790,7 +3790,7 @@ sub: lm_p0_pending_delimiter_clear (@: LmP0PendingDelimiter pending)
     ---
 end: lm_p0_pending_delimiter_clear
 
-fn: lm_p0_pending_delimiter_set (@: LmP0Document document; @: LmP0PendingDelimiter pending; const: @(LmP0StreamEvent event)) int
+fn: lm_p0_pending_delimiter_set (LmP0Document: document; LmP0PendingDelimiter: pending; const: (LmP0StreamEvent: event)) int
     if: (pending = 0)
         return: 0
     lm_p0_pending_delimiter_clear(pending)
@@ -3812,18 +3812,18 @@ fn: lm_p0_pending_delimiter_set (@: LmP0Document document; @: LmP0PendingDelimit
     return: 1
 end: lm_p0_pending_delimiter_set
 
-sub: lm_p0_pending_delimiter_delete (@: LmP0PendingDelimiter pending)
+sub: lm_p0_pending_delimiter_delete (LmP0PendingDelimiter: pending)
     if: (pending != 0)
         lm_p0_pending_delimiter_clear(pending)
         lm_own_delete(pending, 0)
     ---
 end: lm_p0_pending_delimiter_delete
 
-fn: lm_p0_pending_mix_new () @: LmP0PendingMix
-    return: (cast: (@: LmP0PendingMix) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingMix))))
+fn: lm_p0_pending_mix_new () LmP0PendingMix
+    return: (cast: (LmP0PendingMix) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingMix))))
 end: lm_p0_pending_mix_new
 
-sub: lm_p0_pending_mix_free (@: LmP0PendingMix pending)
+sub: lm_p0_pending_mix_free (LmP0PendingMix: pending)
     if: (pending != 0)
         lm_own_delete(pending\events, 0)
         pending\events: 0
@@ -3833,16 +3833,16 @@ sub: lm_p0_pending_mix_free (@: LmP0PendingMix pending)
 end: lm_p0_pending_mix_free
 
 sub: lm_p0_pending_mix_free_any (@: void object)
-    lm_p0_pending_mix_free((cast: (@: LmP0PendingMix) object))
+    lm_p0_pending_mix_free((cast: (LmP0PendingMix) object))
 end: lm_p0_pending_mix_free_any
 
-sub: lm_p0_pending_mix_delete (@: LmP0PendingMix pending)
+sub: lm_p0_pending_mix_delete (LmP0PendingMix: pending)
     lm_own_delete(pending, lm_p0_pending_mix_free_any)
 end: lm_p0_pending_mix_delete
 
-fn: lm_p0_pending_mix_push (@: LmP0Document document; @: LmP0PendingMix pending; const: @(LmP0StreamEvent event)) int
+fn: lm_p0_pending_mix_push (LmP0Document: document; LmP0PendingMix: pending; const: (LmP0StreamEvent: event)) int
     size_t: new_capacity
-    @: LmP0StreamEvent events
+    LmP0StreamEvent: events
     if: ((pending = 0) || (event = 0))
         return: 0
     if: (pending\count = pending\capacity)
@@ -3850,7 +3850,7 @@ fn: lm_p0_pending_mix_push (@: LmP0Document document; @: LmP0PendingMix pending;
             new_capacity: 4U
         else:
             new_capacity: (pending\capacity * 2U)
-        events: (cast: (@: LmP0StreamEvent) lm_own_resize(pending\events, (new_capacity * c.sizeof(events[0]))))
+        events: (cast: (LmP0StreamEvent) lm_own_resize(pending\events, (new_capacity * c.sizeof(events[0]))))
         if: (events = 0)
             lm_p0_set_diagnostic(document, 1, event\line, event\column, "out of memory while storing pending MIX marks")
             return: 0
@@ -3861,9 +3861,9 @@ fn: lm_p0_pending_mix_push (@: LmP0Document document; @: LmP0PendingMix pending;
     return: 1
 end: lm_p0_pending_mix_push
 
-fn: lm_p0_disabled_state_new (size_t: base_level) @: LmP0DisabledState
-    @: LmP0DisabledState state
-    state: (cast: (@: LmP0DisabledState) lm_own_new_zero((1U * c.sizeof(state[0]))))
+fn: lm_p0_disabled_state_new (size_t: base_level) LmP0DisabledState
+    LmP0DisabledState: state
+    state: (cast: (LmP0DisabledState) lm_own_new_zero((1U * c.sizeof(state[0]))))
     if: (state != 0)
         state\base_level: base_level
         state\top_level: base_level
@@ -3872,17 +3872,17 @@ fn: lm_p0_disabled_state_new (size_t: base_level) @: LmP0DisabledState
     return: state
 end: lm_p0_disabled_state_new
 
-sub: lm_p0_disabled_state_delete (@: LmP0DisabledState state)
+sub: lm_p0_disabled_state_delete (LmP0DisabledState: state)
     lm_own_delete(state, 0)
 end: lm_p0_disabled_state_delete
 
-fn: lm_p0_node_keeps_source_child_level (@: LmP0Node node) int
+fn: lm_p0_node_keeps_source_child_level (LmP0Node: node) int
     if: (node\kind = c.LM_P0_NODE_FRAME)
         return: (((node\as\frame\flags & c.LM_P0_FRAME_COLON) != 0U) && ((node\as\frame\flags & c.LM_P0_FRAME_SEPARATOR_CLOSED) = 0U))
     return: 0
 end: lm_p0_node_keeps_source_child_level
 
-fn: lm_p0_node_child_structure (@: LmP0Node node) @: LmP0Structure
+fn: lm_p0_node_child_structure (LmP0Node: node) LmP0Structure
     if: (node\kind = c.LM_P0_NODE_FRAME)
         return: node\as\frame\body
     if: (node\kind = c.LM_P0_NODE_STRUCTURE)
@@ -3890,8 +3890,8 @@ fn: lm_p0_node_child_structure (@: LmP0Node node) @: LmP0Structure
     return: 0
 end: lm_p0_node_child_structure
 
-fn: lm_p0_structure_last_colon_frame (@: LmP0Structure structure) @: LmP0Node
-    @: LmP0Node node
+fn: lm_p0_structure_last_colon_frame (LmP0Structure: structure) LmP0Node
+    LmP0Node: node
     if: ((structure\last_field = 0) || (structure\last_field\value = 0))
         return: 0
     node: structure\last_field\value
@@ -3900,8 +3900,8 @@ fn: lm_p0_structure_last_colon_frame (@: LmP0Structure structure) @: LmP0Node
     return: 0
 end: lm_p0_structure_last_colon_frame
 
-fn: lm_p0_stack_install_node_lineage (@: LmP0Document document; @: LmP0Stack stack; size_t: base_level; @: LmP0Node node) int
-    @: LmP0Node owner
+fn: lm_p0_stack_install_node_lineage (LmP0Document: document; LmP0Stack: stack; size_t: base_level; LmP0Node: node) int
+    LmP0Node: owner
     size_t: level
     if: (lm_p0_node_keeps_source_child_level(node) = 0)
         if: (lm_p0_stack_ensure(document, stack, (base_level + 1U)) = 0)
@@ -3914,8 +3914,8 @@ fn: lm_p0_stack_install_node_lineage (@: LmP0Document document; @: LmP0Stack sta
     owner: node
     level: (base_level + 1U)
     while: lm_p0_node_keeps_source_child_level(owner)
-        @: LmP0Structure body
-        @: LmP0Node next_owner
+        LmP0Structure: body
+        LmP0Node: next_owner
         if: (lm_p0_stack_ensure(document, stack, level) = 0)
             return: 0
         body: lm_p0_node_child_structure(owner)
@@ -3934,7 +3934,7 @@ fn: lm_p0_stack_install_node_lineage (@: LmP0Document document; @: LmP0Stack sta
     return: 1
 end: lm_p0_stack_install_node_lineage
 
-fn: lm_p0_stack_ensure_root_level_alias (@: LmP0Document document; @: LmP0Stack stack; size_t: level) int
+fn: lm_p0_stack_ensure_root_level_alias (LmP0Document: document; LmP0Stack: stack; size_t: level) int
     if: ((level != 1U) || (stack\parents[1] != 0))
         return: 1
     if: (lm_p0_stack_ensure(document, stack, 1U) = 0)
@@ -3945,9 +3945,9 @@ fn: lm_p0_stack_ensure_root_level_alias (@: LmP0Document document; @: LmP0Stack 
     return: 1
 end: lm_p0_stack_ensure_root_level_alias
 
-fn: lm_p0_stack_open_implicit_anonymous (@: LmP0Document document; @: LmP0Stack stack; size_t: parent_level; size_t: line; size_t: column; size_t: offset) int
-    @: LmP0Node anonymous_node
-    @: LmP0Structure parent
+fn: lm_p0_stack_open_implicit_anonymous (LmP0Document: document; LmP0Stack: stack; size_t: parent_level; size_t: line; size_t: column; size_t: offset) int
+    LmP0Node: anonymous_node
+    LmP0Structure: parent
     parent: stack\parents[parent_level]
     if: (parent = 0)
         lm_p0_set_diagnostic(document, 8, line, column, "source level has no open parent structure")
@@ -3971,17 +3971,16 @@ fn: lm_p0_stack_open_implicit_anonymous (@: LmP0Document document; @: LmP0Stack 
     return: 1
 end: lm_p0_stack_open_implicit_anonymous
 
-fn: lm_p0_node_trailer_slot (@: LmP0Node node) @@: LmP0Trailer
-    if: (node\kind = c.LM_P0_NODE_FRAME)
+fn: lm_p0_node_trailer_slot (LmP0Node: node) LmP0Trailer if: (node\kind = c.LM_P0_NODE_FRAME)
         return: @ node\as\frame\trailer
     if: (node\kind = c.LM_P0_NODE_STRUCTURE)
         return: @ node\as\structure\trailer
     return: 0
 end: lm_p0_node_trailer_slot
 
-fn: lm_p0_attach_trailer (@: LmP0Document document; @: LmP0Node node; const: @(char spelling); size_t: spelling_length; unsigned: flags; size_t: line; size_t: column) @: LmP0Trailer
-    @@: LmP0Trailer slot
-    @: LmP0Trailer trailer
+fn: lm_p0_attach_trailer (LmP0Document: document; LmP0Node: node; const: @(char spelling); size_t: spelling_length; unsigned: flags; size_t: line; size_t: column) LmP0Trailer
+    @: LmP0Trailer slot
+    LmP0Trailer: trailer
     slot: lm_p0_node_trailer_slot(node)
     if: (slot = 0)
         lm_p0_set_diagnostic(document, 10, line, column, "this parser node cannot receive a trailer")
@@ -3997,11 +3996,11 @@ fn: lm_p0_attach_trailer (@: LmP0Document document; @: LmP0Node node; const: @(c
     return: trailer
 end: lm_p0_attach_trailer
 
-fn: lm_p0_parse_trailer_item (@: LmP0Document document; @: LmP0Node target; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; @@: LmP0Structure out_body) int
+fn: lm_p0_parse_trailer_item (LmP0Document: document; LmP0Node: target; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; @: LmP0Structure out_body) int
     size_t: colon_index
     size_t: spelling_length
     size_t: body_start
-    @: LmP0Trailer trailer
+    LmP0Trailer: trailer
     out_body[0]: 0
     int: colon_status
     colon_status: lm_p0_find_colon(document, text, length, line, column, @ colon_index)
@@ -4054,10 +4053,10 @@ fn: lm_p0_parse_trailer_item (@: LmP0Document document; @: LmP0Node target; cons
     return: 1
 end: lm_p0_parse_trailer_item
 
-fn: lm_p0_stream_resolve_pending_delimiter (@: LmP0Document document; @: LmP0Stack stack; @: LmP0PendingDelimiter pending; size_t: next_level) int
-    const: @: LmP0StreamEvent event
+fn: lm_p0_stream_resolve_pending_delimiter (LmP0Document: document; LmP0Stack: stack; LmP0PendingDelimiter: pending; size_t: next_level) int
+    const: LmP0StreamEvent: event
     size_t: top_level
-    @: LmP0Structure parent
+    LmP0Structure: parent
     if: ((pending\active = 0) || (pending\event = 0))
         return: 1
     event: pending\event
@@ -4076,7 +4075,7 @@ fn: lm_p0_stream_resolve_pending_delimiter (@: LmP0Document document; @: LmP0Sta
         lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
         return: 0
     if: (next_level = (event\level + 1U))
-        @: LmP0Node anonymous_node
+        LmP0Node: anonymous_node
         anonymous_node: lm_p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
         if: (anonymous_node = 0)
             return: 0
@@ -4097,11 +4096,11 @@ fn: lm_p0_stream_resolve_pending_delimiter (@: LmP0Document document; @: LmP0Sta
     return: 1
 end: lm_p0_stream_resolve_pending_delimiter
 
-fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack; const: @(LmP0StreamEvent event)) int
+fn: lm_p0_stream_apply_item_event (LmP0Document: document; LmP0Stack: stack; const: (LmP0StreamEvent: event)) int
     LmP0TrailerRole: trailer_role
     size_t: top_level
-    @: LmP0Structure parent
-    @: LmP0Node node
+    LmP0Structure: parent
+    LmP0Node: node
     int: trailer_target_available
     int: trailer_target_accepted
     if: (lm_p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
@@ -4125,8 +4124,8 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
         lm_p0_set_diagnostic(document, 13, event\line, event\column, "tail-cutter target is not valid for this receiver")
         return: 0
     if: (lm_p0_trailer_role_is_tail_cutter(trailer_role) && trailer_target_accepted)
-        @: LmP0Structure trailer_body
-        @: LmP0Node target
+        LmP0Structure: trailer_body
+        LmP0Node: target
         size_t: target_level
         target_level: (event\level + 1U)
         target: stack\owners[target_level]
@@ -4157,8 +4156,8 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
         lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
         return: 0
     if: (event\kind = c.LM_P0_STREAM_EVENT_ITEM)
-        @: LmP0Field previous_last
-        @: LmP0Field field
+        LmP0Field: previous_last
+        LmP0Field: field
         previous_last: parent\last_field
         if: (lm_p0_parse_fields_into(document, parent, event\text, event\text_length, event\line, event\column, event\offset) = 0)
             return: 0
@@ -4210,11 +4209,11 @@ fn: lm_p0_stream_apply_item_event (@: LmP0Document document; @: LmP0Stack stack;
     return: 1
 end: lm_p0_stream_apply_item_event
 
-fn: lm_p0_stream_apply_mix_event (@: LmP0Document document; @: LmP0Stack stack; const: @(LmP0StreamEvent event)) int
+fn: lm_p0_stream_apply_mix_event (LmP0Document: document; LmP0Stack: stack; const: (LmP0StreamEvent: event)) int
     size_t: top_level
-    @: LmP0Structure parent
-    @: LmP0Field previous_last
-    @: LmP0Field field
+    LmP0Structure: parent
+    LmP0Field: previous_last
+    LmP0Field: field
     if: (lm_p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
         return: 0
     top_level: lm_p0_stack_collapse_soft_to_event(stack, event\level)
@@ -4250,7 +4249,7 @@ fn: lm_p0_stream_apply_mix_event (@: LmP0Document document; @: LmP0Stack stack; 
     return: 1
 end: lm_p0_stream_apply_mix_event
 
-fn: lm_p0_stream_apply_event (@: LmP0Document document; @: LmP0Stack stack; @: LmP0PendingDelimiter pending; const: @(LmP0StreamEvent event)) int
+fn: lm_p0_stream_apply_event (LmP0Document: document; LmP0Stack: stack; LmP0PendingDelimiter: pending; const: (LmP0StreamEvent: event)) int
     if: (event\kind = c.LM_P0_STREAM_EVENT_DELIM)
         if: (lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event\level) = 0)
             return: 0
@@ -4267,13 +4266,13 @@ fn: lm_p0_stream_apply_event (@: LmP0Document document; @: LmP0Stack stack; @: L
     return: lm_p0_stream_apply_item_event(document, stack, event)
 end: lm_p0_stream_apply_event
 
-fn: lm_p0_pending_mix_flush (@: LmP0Document document; @: LmP0Stack stack; @: LmP0PendingDelimiter pending_delimiter; @: LmP0PendingMix pending_mix; size_t: level) int
+fn: lm_p0_pending_mix_flush (LmP0Document: document; LmP0Stack: stack; LmP0PendingDelimiter: pending_delimiter; LmP0PendingMix: pending_mix; size_t: level) int
     size_t: i
     if: ((pending_mix = 0) || (pending_mix\count = 0U))
         return: 1
     i: 0U
     while: (i < pending_mix\count)
-        @: LmP0StreamEvent event
+        LmP0StreamEvent: event
         event: lm_p0_stream_event_new()
         if: (event = 0)
             lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while flushing pending MIX event")
@@ -4289,7 +4288,7 @@ fn: lm_p0_pending_mix_flush (@: LmP0Document document; @: LmP0Stack stack; @: Lm
     return: 1
 end: lm_p0_pending_mix_flush
 
-fn: lm_p0_stream_block_string_level (const: @(LmP0Stack stack); const: @(LmP0PendingDelimiter pending)) size_t
+fn: lm_p0_stream_block_string_level (const: (LmP0Stack: stack); const: (LmP0PendingDelimiter: pending)) size_t
     size_t: level
     if: (pending\active && (pending\event != 0))
         return: (pending\event\level + 1U)
@@ -4301,7 +4300,7 @@ fn: lm_p0_stream_block_string_level (const: @(LmP0Stack stack); const: @(LmP0Pen
     return: 0U
 end: lm_p0_stream_block_string_level
 
-fn: lm_p0_validate_disabled_item_text (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column) int
+fn: lm_p0_validate_disabled_item_text (LmP0Document: document; const: @(char text); size_t: length; size_t: line; size_t: column) int
     size_t: i
     i: 0U
     if: (lm_p0_validate_dash_fence_line(document, text, length, line, column) = 0)
@@ -4347,7 +4346,7 @@ fn: lm_p0_validate_disabled_item_text (@: LmP0Document document; const: @(char t
     return: 1
 end: lm_p0_validate_disabled_item_text
 
-fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack indent_stack; @: size_t offset; @: size_t line; @: LmP0StreamEvent event; @: int has_event) int
+fn: lm_p0_disabled_scan_next_event (LmP0Document: document; LmP0IndentStack: indent_stack; @: size_t offset; @: size_t line; LmP0StreamEvent: event; @: int has_event) int
     const: @: char source
     size_t: length
     source: document\source
@@ -4451,13 +4450,13 @@ fn: lm_p0_disabled_scan_next_event (@: LmP0Document document; @: LmP0IndentStack
     return: 1
 end: lm_p0_disabled_scan_next_event
 
-fn: lm_p0_disabled_event_is_tail_cutter (const: @(LmP0StreamEvent event)) int
+fn: lm_p0_disabled_event_is_tail_cutter (const: (LmP0StreamEvent: event)) int
     if: (event\kind = c.LM_P0_STREAM_EVENT_DELIM)
         return: 1
     return: lm_p0_stream_event_is_tail_cutter(event)
 end: lm_p0_disabled_event_is_tail_cutter
 
-fn: lm_p0_disabled_state_accept_event (@: LmP0Document document; @: LmP0DisabledState state; @: LmP0StreamEvent event; @: int done_after_event; @: int done_before_event) int
+fn: lm_p0_disabled_state_accept_event (LmP0Document: document; LmP0DisabledState: state; LmP0StreamEvent: event; @: int done_after_event; @: int done_before_event) int
     int: is_tail_cutter
     done_after_event[0]: 0
     done_before_event[0]: 0
@@ -4516,10 +4515,10 @@ fn: lm_p0_disabled_state_accept_event (@: LmP0Document document; @: LmP0Disabled
     return: 1
 end: lm_p0_disabled_state_accept_event
 
-fn: lm_p0_validate_disabled_block (@: LmP0Document document; const: @(LmP0IndentStack indent_stack); size_t: first_next_offset; size_t: first_next_line; size_t: base_level; const: @(char header_text); size_t: header_length; size_t: header_line; size_t: header_column; @: size_t out_offset; @: size_t out_line) int
-    @: LmP0IndentStack local_indent
-    @: LmP0DisabledState state
-    @: LmP0StreamEvent event
+fn: lm_p0_validate_disabled_block (LmP0Document: document; const: (LmP0IndentStack: indent_stack); size_t: first_next_offset; size_t: first_next_line; size_t: base_level; const: @(char header_text); size_t: header_length; size_t: header_line; size_t: header_column; @: size_t out_offset; @: size_t out_line) int
+    LmP0IndentStack: local_indent
+    LmP0DisabledState: state
+    LmP0StreamEvent: event
     size_t: offset
     size_t: line
     int: status
@@ -4577,16 +4576,16 @@ fn: lm_p0_validate_disabled_block (@: LmP0Document document; const: @(LmP0Indent
     return: (status && (document\diagnostic\code = 0))
 end: lm_p0_validate_disabled_block
 
-fn: lm_p0_parse_stream (@: LmP0Document document) int
+fn: lm_p0_parse_stream (LmP0Document: document) int
     const: @: char source
     size_t: length
     size_t: offset
     size_t: line
-    @: LmP0IndentStack indent_stack
-    @: LmP0Stack stack
-    @: LmP0PendingDelimiter pending
-    @: LmP0PendingMix pending_mix
-    @: LmP0StreamEvent event
+    LmP0IndentStack: indent_stack
+    LmP0Stack: stack
+    LmP0PendingDelimiter: pending
+    LmP0PendingMix: pending_mix
+    LmP0StreamEvent: event
     int: status
     int: has_last_physical_level
     size_t: last_physical_level
@@ -4826,7 +4825,7 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
             status: 0
             break
         if: has_leading_mix_prefix
-            @: LmP0StreamEvent mix_event
+            LmP0StreamEvent: mix_event
             mix_event: lm_p0_stream_event_new()
             if: (mix_event = 0)
                 lm_p0_set_diagnostic(document, 1, line, ((cast: size_t (mix_prefix_start - line_start)) + 1U), "out of memory while creating leading MIX event")
@@ -4864,8 +4863,8 @@ fn: lm_p0_parse_stream (@: LmP0Document document) int
     return: (status && (document\diagnostic\code = 0))
 end: lm_p0_parse_stream
 
-sub: lm_p0_structure_recount (@: LmP0Structure structure)
-    @: LmP0Field field
+sub: lm_p0_structure_recount (LmP0Structure: structure)
+    LmP0Field: field
     structure\field_count: 0U
     structure\last_field: 0
     field: structure\first_field
@@ -4876,15 +4875,15 @@ sub: lm_p0_structure_recount (@: LmP0Structure structure)
     ---
 end: lm_p0_structure_recount
 
-fn: lm_p0_postprocess_frame_new (int: phase) @: LmP0PostprocessFrame
-    @: LmP0PostprocessFrame frame
-    frame: (cast: (@: LmP0PostprocessFrame) lm_own_new_zero(c.sizeof(frame[0])))
+fn: lm_p0_postprocess_frame_new (int: phase) LmP0PostprocessFrame
+    LmP0PostprocessFrame: frame
+    frame: (cast: (LmP0PostprocessFrame) lm_own_new_zero(c.sizeof(frame[0])))
     if: (frame != 0)
         frame\phase: phase
     return: frame
 end: lm_p0_postprocess_frame_new
 
-fn: lm_p0_postprocess_push_frame (@: LmOwnPtrStack stack; @: LmP0PostprocessFrame frame) int
+fn: lm_p0_postprocess_push_frame (LmOwnPtrStack: stack; LmP0PostprocessFrame: frame) int
     if: ((stack = 0) || (frame = 0))
         lm_own_delete(frame, 0)
         return: 1
@@ -4894,8 +4893,8 @@ fn: lm_p0_postprocess_push_frame (@: LmOwnPtrStack stack; @: LmP0PostprocessFram
     return: 0
 end: lm_p0_postprocess_push_frame
 
-fn: lm_p0_postprocess_push_node (@: LmOwnPtrStack stack; @: LmP0Node node) int
-    @: LmP0PostprocessFrame frame
+fn: lm_p0_postprocess_push_node (LmOwnPtrStack: stack; LmP0Node: node) int
+    LmP0PostprocessFrame: frame
     if: (node = 0)
         return: 0
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_NODE)
@@ -4904,8 +4903,8 @@ fn: lm_p0_postprocess_push_node (@: LmOwnPtrStack stack; @: LmP0Node node) int
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_node
 
-fn: lm_p0_postprocess_push_structure (@: LmOwnPtrStack stack; @: LmP0Structure structure) int
-    @: LmP0PostprocessFrame frame
+fn: lm_p0_postprocess_push_structure (LmOwnPtrStack: stack; LmP0Structure: structure) int
+    LmP0PostprocessFrame: frame
     if: (structure = 0)
         return: 1
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_STRUCTURE)
@@ -4915,8 +4914,8 @@ fn: lm_p0_postprocess_push_structure (@: LmOwnPtrStack stack; @: LmP0Structure s
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_structure
 
-fn: lm_p0_postprocess_push_trailer (@: LmOwnPtrStack stack; @: LmP0Trailer trailer) int
-    @: LmP0PostprocessFrame frame
+fn: lm_p0_postprocess_push_trailer (LmOwnPtrStack: stack; LmP0Trailer: trailer) int
+    LmP0PostprocessFrame: frame
     if: (trailer = 0)
         return: 0
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_TRAILER)
@@ -4925,8 +4924,8 @@ fn: lm_p0_postprocess_push_trailer (@: LmOwnPtrStack stack; @: LmP0Trailer trail
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_trailer
 
-fn: lm_p0_postprocess_push_frame_wrap (@: LmOwnPtrStack stack; @: LmP0Node node) int
-    @: LmP0PostprocessFrame frame
+fn: lm_p0_postprocess_push_frame_wrap (LmOwnPtrStack: stack; LmP0Node: node) int
+    LmP0PostprocessFrame: frame
     if: (node = 0)
         return: 1
     frame: lm_p0_postprocess_frame_new(c.LM_P0_POSTPROCESS_FRAME_WRAP)
@@ -4935,15 +4934,15 @@ fn: lm_p0_postprocess_push_frame_wrap (@: LmOwnPtrStack stack; @: LmP0Node node)
     return: lm_p0_postprocess_push_frame(stack, frame)
 end: lm_p0_postprocess_push_frame_wrap
 
-fn: lm_p0_postprocess_stack_new () @: LmOwnPtrStack
-    @: LmOwnPtrStack stack
-    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+fn: lm_p0_postprocess_stack_new () LmOwnPtrStack
+    LmOwnPtrStack: stack
+    stack: (cast: (LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
     if: (stack != 0)
         lm_own_ptr_stack_init(stack, lm_own_delete_plain)
     return: stack
 end: lm_p0_postprocess_stack_new
 
-sub: lm_p0_postprocess_stack_delete (@@: LmOwnPtrStack stack)
+sub: lm_p0_postprocess_stack_delete (@: LmOwnPtrStack stack)
     if: ((stack != 0) && (stack[0] != 0))
         lm_own_ptr_stack_destroy(stack[0])
         lm_own_delete(stack[0], 0)
@@ -4951,14 +4950,14 @@ sub: lm_p0_postprocess_stack_delete (@@: LmOwnPtrStack stack)
     ---
 end: lm_p0_postprocess_stack_delete
 
-fn: lm_p0_postprocess_run (@: LmP0Document document; @: LmOwnPtrStack stack) int
-    @: LmP0PostprocessFrame frame
-    @: LmP0Node node
-    @: LmP0Structure structure
+fn: lm_p0_postprocess_run (LmP0Document: document; LmOwnPtrStack: stack) int
+    LmP0PostprocessFrame: frame
+    LmP0Node: node
+    LmP0Structure: structure
     int: status
     status: 1
     while: (((status != 0) && (stack != 0)) && (stack\count != 0U))
-        frame: (cast: (@: LmP0PostprocessFrame) lm_own_ptr_stack_top(stack))
+        frame: (cast: (LmP0PostprocessFrame) lm_own_ptr_stack_top(stack))
         if: (frame = 0)
             status: 0
             break
@@ -5003,8 +5002,8 @@ fn: lm_p0_postprocess_run (@: LmP0Document document; @: LmOwnPtrStack stack) int
     return: status
 end: lm_p0_postprocess_run
 
-fn: lm_p0_postprocess_node (@: LmP0Document document; @: LmP0Node node) int
-    @: LmOwnPtrStack stack
+fn: lm_p0_postprocess_node (LmP0Document: document; LmP0Node: node) int
+    LmOwnPtrStack: stack
     int: status
     if: (node = 0)
         return: 1
@@ -5016,12 +5015,12 @@ fn: lm_p0_postprocess_node (@: LmP0Document document; @: LmP0Node node) int
     return: status
 end: lm_p0_postprocess_node
 
-fn: lm_p0_wrap_fields_from_line (@: LmP0Document document; @: LmP0Structure structure; size_t: head_line; size_t: inline_event_end_offset) int
-    @: LmP0Field field
-    @: LmP0Field previous
-    @: LmP0Field group_first
-    @: LmP0Node group_node
-    @: LmP0Field move
+fn: lm_p0_wrap_fields_from_line (LmP0Document: document; LmP0Structure: structure; size_t: head_line; size_t: inline_event_end_offset) int
+    LmP0Field: field
+    LmP0Field: previous
+    LmP0Field: group_first
+    LmP0Node: group_node
+    LmP0Field: move
     previous: 0
     field: structure\first_field
     while: (field != 0)
@@ -5038,8 +5037,8 @@ fn: lm_p0_wrap_fields_from_line (@: LmP0Document document; @: LmP0Structure stru
     group_node\span[0]: group_first\value\span[0]
     move: group_first
     while: (move != 0)
-        @: LmP0Field next_move
-        @: LmP0Node value
+        LmP0Field: next_move
+        LmP0Node: value
         next_move: move\next
         value: move\value
         move\value: 0
@@ -5057,13 +5056,13 @@ fn: lm_p0_wrap_fields_from_line (@: LmP0Document document; @: LmP0Structure stru
     return: 1
 end: lm_p0_wrap_fields_from_line
 
-fn: lm_p0_validate_nonempty_colon_frames_in_trailer (@: LmP0Document document; const: @(LmP0Trailer trailer)) int
+fn: lm_p0_validate_nonempty_colon_frames_in_trailer (LmP0Document: document; const: (LmP0Trailer: trailer)) int
     if: (trailer = 0)
         return: 1
     return: lm_p0_validate_nonempty_colon_frames_in_structure(document, trailer\body)
 end: lm_p0_validate_nonempty_colon_frames_in_trailer
 
-fn: lm_p0_validate_nonempty_colon_frames_in_node (@: LmP0Document document; const: @(LmP0Node node)) int
+fn: lm_p0_validate_nonempty_colon_frames_in_node (LmP0Document: document; const: (LmP0Node: node)) int
     if: (node = 0)
         return: 1
     if: (node\kind = c.LM_P0_NODE_FRAME)
@@ -5077,8 +5076,8 @@ fn: lm_p0_validate_nonempty_colon_frames_in_node (@: LmP0Document document; cons
     return: 1
 end: lm_p0_validate_nonempty_colon_frames_in_node
 
-fn: lm_p0_validate_nonempty_colon_frames_in_structure (@: LmP0Document document; const: @(LmP0Structure structure)) int
-    const: @: LmP0Field field
+fn: lm_p0_validate_nonempty_colon_frames_in_structure (LmP0Document: document; const: (LmP0Structure: structure)) int
+    const: LmP0Field: field
     field: structure\first_field
     while: (field != 0)
         if: (lm_p0_validate_nonempty_colon_frames_in_node(document, field\value) = 0)
@@ -5088,12 +5087,12 @@ fn: lm_p0_validate_nonempty_colon_frames_in_structure (@: LmP0Document document;
 end: lm_p0_validate_nonempty_colon_frames_in_structure
 
 external:
-    fn: lm_p0_parse_bytes (const: @(char source); size_t: source_length; @@: LmP0Document out_document) int
-        @: LmP0Document document
+    fn: lm_p0_parse_bytes (const: @(char source); size_t: source_length; @: LmP0Document out_document) int
+        LmP0Document: document
         if: (out_document = 0)
             return: 1
         out_document[0]: 0
-        document: (cast: (@: LmP0Document) lm_own_new_zero(c.sizeof(document[0])))
+        document: (cast: (LmP0Document) lm_own_new_zero(c.sizeof(document[0])))
         if: (document = 0)
             return: 1
         if: (lm_p0_document_init_owners(document) != 0)
@@ -5130,7 +5129,7 @@ external:
 end: external
 
 external:
-    fn: lm_p0_parse_string (const: @(char source); @@: LmP0Document out_document) int
+    fn: lm_p0_parse_string (const: @(char source); @: LmP0Document out_document) int
         if: (source = 0)
             source: ""
         return: lm_p0_parse_bytes(source, c.strlen(source), out_document)
@@ -5138,7 +5137,7 @@ external:
 end: external
 
 external:
-    fn: lm_p0_parse_file (const: @(char path); @@: LmP0Document out_document) int
+    fn: lm_p0_parse_file (const: @(char path); @: LmP0Document out_document) int
         FILE: file
         long: size
         @: char buffer
@@ -5176,7 +5175,7 @@ external:
     end: lm_p0_parse_file
 end: external
 
-fn: lm_p0_registry_join_text3 (const: @(LmP0Text first); const: @(char separator); const: @(LmP0Text second)) @: char
+fn: lm_p0_registry_join_text3 (const: (LmP0Text: first); const: @(char separator); const: (LmP0Text: second)) @: char
     size_t: separator_length
     size_t: length
     @: char result
@@ -5198,13 +5197,13 @@ fn: lm_p0_registry_push_generated_row_cstr (const: @(char table); const: @(char 
     return: lm_p0_registry_push_row_atoms(lm_p0_text_from_cstr(table), lm_p0_text_from_cstr(key), lm_p0_text_from_cstr(payload))
 end: lm_p0_registry_push_generated_row_cstr
 
-fn: lm_p0_registry_push_generated_row_text (const: @(char table); const: @(char key); const: @(LmP0Text payload)) int
+fn: lm_p0_registry_push_generated_row_text (const: @(char table); const: @(char key); const: (LmP0Text: payload)) int
     return: lm_p0_registry_push_row_atoms(lm_p0_text_from_cstr(table), lm_p0_text_from_cstr(key), payload)
 end: lm_p0_registry_push_generated_row_text
 
-fn: lm_p0_registry_push_column_metadata (const: @(LmP0Text table_name); @@: LmP0RegistryColumn columns; size_t: column_count) int
-    @: LmP0Text table_payload
-    @: LmP0Text column_payload
+fn: lm_p0_registry_push_column_metadata (const: (LmP0Text: table_name); @@: LmP0RegistryColumn columns; size_t: column_count) int
+    LmP0Text: table_payload
+    LmP0Text: column_payload
     size_t: index
     size_t: descriptor_index
     @: char column_key
@@ -5259,7 +5258,7 @@ fn: lm_p0_registry_push_column_metadata (const: @(LmP0Text table_name); @@: LmP0
     lm_p0_text_ref_delete(table_payload)
     lm_p0_text_ref_delete(column_payload)
 return: status
-fn: lm_p0_registry_l4_push_row (@: void context; const: @(LmP0Text table_atom); const: @(LmP0Text key_atom); const: @(LmP0Node payload_node)) int
+fn: lm_p0_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom); const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
     context: context
     if: ((((table_atom = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
         c.fprintf(c.stderr, "parser registry error: row expects exactly three atom fields\n")
@@ -5267,7 +5266,7 @@ fn: lm_p0_registry_l4_push_row (@: void context; const: @(LmP0Text table_atom); 
     return: lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node\as\atom)
 end: lm_p0_registry_l4_push_row
 
-fn: lm_p0_registry_l4_push_cell (@: void context; const: @(LmP0Text table_name); const: @(LmL4Column column); int: split_by_column; const: @(LmP0Text key_atom); const: @(LmP0Node payload_node)) int
+fn: lm_p0_registry_l4_push_cell (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
     context: context
     if: ((((table_name = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
         c.fprintf(c.stderr, "parser registry error: table rows currently expect atom cells\n")
@@ -5275,14 +5274,14 @@ fn: lm_p0_registry_l4_push_cell (@: void context; const: @(LmP0Text table_name);
     return: lm_p0_registry_push_table_cell(table_name, column, split_by_column, key_atom, payload_node\as\atom)
 end: lm_p0_registry_l4_push_cell
 
-fn: lm_p0_registry_l4_push_column_metadata (@: void context; const: @(LmP0Text table_name); @@: LmL4Column columns; size_t: column_count) int
+fn: lm_p0_registry_l4_push_column_metadata (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) int
     context: context
     if: (table_name = 0)
         return: -1
     return: lm_p0_registry_push_column_metadata(table_name, columns, column_count)
 end: lm_p0_registry_l4_push_column_metadata
 
-fn: lm_p0_registry_join_relation_matches (const: @(char relation_name); const: @(LmP0Text source_name); const: @@(char out_suffix)) int
+fn: lm_p0_registry_join_relation_matches (const: @(char relation_name); const: (LmP0Text: source_name); const: @@(char out_suffix)) int
     size_t: relation_length
     if: ((((relation_name = 0) || (source_name = 0)) || (source_name\data = 0)) || (out_suffix = 0))
         return: 0
@@ -5296,7 +5295,7 @@ fn: lm_p0_registry_join_relation_matches (const: @(char relation_name); const: @
     return: 0
 end: lm_p0_registry_join_relation_matches
 
-fn: lm_p0_registry_join_target_relation_new (const: @(LmP0Text target_name); const: @(char suffix)) @: char
+fn: lm_p0_registry_join_target_relation_new (const: (LmP0Text: target_name); const: @(char suffix)) @: char
     size_t: suffix_length
     size_t: length
     @: char relation_name
@@ -5315,10 +5314,10 @@ fn: lm_p0_registry_join_target_relation_new (const: @(LmP0Text target_name); con
     return: relation_name
 end: lm_p0_registry_join_target_relation_new
 
-fn: lm_p0_registry_l4_join_table (@: void context; const: @(LmP0Text source_table); const: @(LmP0Text target_table)) int
-    @: LmP0Text source_name
-    @: LmP0Text target_name
-    @: LmP0RegistryRow row
+fn: lm_p0_registry_l4_join_table (@: void context; const: (LmP0Text: source_table); const: (LmP0Text: target_table)) int
+    LmP0Text: source_name
+    LmP0Text: target_name
+    LmP0RegistryRow: row
     const: @: char suffix
     @: char target_relation
     size_t: initial_count
@@ -5343,7 +5342,7 @@ fn: lm_p0_registry_l4_join_table (@: void context; const: @(LmP0Text source_tabl
     status: 0
     i: 0U
     while: (i < initial_count)
-        row: (cast: (@: LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
+        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
         if: ((((row = 0) || (row\table = 0)) || (row\key = 0)) || (row\payload = 0))
             continue
         suffix: 0
@@ -5372,7 +5371,7 @@ fn: lm_p0_registry_seed_l4_receivers () int
     return: (((((lm_p0_registry_push_generated_row_cstr("namespace.l4", "table", "l4.frame") != 0) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "join", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "row", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "fn", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "lazy fn", "l4.frame") != 0))
 end: lm_p0_registry_seed_l4_receivers
 
-fn: lm_p0_registry_l4_resolve_frame (const: @(LmL4Loader loader); const: @(LmP0Text head)) LmL4FrameReceiver
+fn: lm_p0_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP0Text: head)) LmL4FrameReceiver
     const: @: char receiver_type
     loader: loader
     receiver_type: lm_p0_registry_lookup(head, "namespace.l4")
@@ -5413,7 +5412,7 @@ fn: lm_p0_registry_l4_resolve_frame (const: @(LmL4Loader loader); const: @(LmP0T
     return: 0
 end: lm_p0_registry_l4_resolve_frame
 
-fn: lm_p0_registry_l4_dispatch_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
+fn: lm_p0_registry_l4_dispatch_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
     LmL4FrameReceiver: receiver
     if: (frame = 0)
         return: 1
@@ -5434,9 +5433,9 @@ fn: lm_p0_registry_l4_dispatch_frame (const: @(LmL4Loader loader); @: void conte
     return: receiver(loader, context, frame)
 end: lm_p0_registry_l4_dispatch_frame
 
-fn: lm_p0_registry_l4_loader_new () @: LmL4Loader
-    @: LmL4Loader loader
-    loader: (cast: (@: LmL4Loader) lm_own_new_zero(c.sizeof(loader[0])))
+fn: lm_p0_registry_l4_loader_new () LmL4Loader
+    LmL4Loader: loader
+    loader: (cast: (LmL4Loader) lm_own_new_zero(c.sizeof(loader[0])))
     if: (loader = 0)
         return: 0
     loader\error_prefix: "parser"
@@ -5449,7 +5448,7 @@ fn: lm_p0_registry_l4_loader_new () @: LmL4Loader
     return: loader
 end: lm_p0_registry_l4_loader_new
 
-fn: lm_p0_registry_l4_loader_get () const: @: LmL4Loader
+fn: lm_p0_registry_l4_loader_get () const: LmL4Loader
     if: (lm_p0_registry != 0)
         return: lm_p0_registry\l4_loader
     return: 0
@@ -5481,7 +5480,7 @@ fn: lm_p0_path_has_extension (const: @(char path); const: @(char extension)) int
     return: 1
 end: lm_p0_path_has_extension
 
-fn: lm_p0_registry_load_root (const: @(LmP0Node root); int: implicit_l4) int
+fn: lm_p0_registry_load_root (const: (LmP0Node: root); int: implicit_l4) int
     return: lm_l4_load_root(lm_p0_registry_l4_loader_get(), 0, root, implicit_l4)
 end: lm_p0_registry_load_root
 
@@ -5500,7 +5499,7 @@ end: lm_p0_registry_parse_unsigned_payload
 
 fn: lm_p0_registry_lookup_key_by_unsigned_payload (const: @(char table); unsigned: value) const: @: char
     size_t: i
-    @: LmP0RegistryRow row
+    LmP0RegistryRow: row
     unsigned: actual
     if: (((table = 0) || (lm_p0_registry = 0)) || (lm_p0_registry\loaded = 0))
         return: 0
@@ -5509,7 +5508,7 @@ fn: lm_p0_registry_lookup_key_by_unsigned_payload (const: @(char table); unsigne
     i: lm_p0_registry\rows\count
     while: (i > 0U)
         i: i - 1U
-        row: (cast: (@: LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
+        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
         if: (((((((row != 0) && (row\table != 0)) && (row\key != 0)) && (row\payload != 0)) && (c.strcmp(row\table, table) = 0)) && (lm_p0_registry_parse_unsigned_payload(row\payload, @ actual) = 0)) && (actual = value))
             return: row\key
         ---
@@ -5562,8 +5561,8 @@ fn: lm_p0_registry_load_default () int
     const: @: char override_path
     const: [10]: @: char candidates
     const: @: char registry_path
-    @: LmP0Document document
-    const: @: LmP0Diagnostic diagnostic
+    LmP0Document: document
+    const: LmP0Diagnostic: diagnostic
     int: override_enabled
     int: status
     size_t: i
@@ -5571,7 +5570,7 @@ fn: lm_p0_registry_load_default () int
         return: 0
     if: (lm_p0_registry_init() != 0)
         return: 1
-    lm_p0_registry\rows: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(lm_p0_registry\rows[0])))
+    lm_p0_registry\rows: (cast: (LmOwnPtrStack) lm_own_new_zero(c.sizeof(lm_p0_registry\rows[0])))
     if: (lm_p0_registry\rows = 0)
         lm_p0_registry_destroy()
         return: 1
@@ -5634,7 +5633,7 @@ fn: lm_p0_registry_load_default () int
 end: lm_p0_registry_load_default
 
 external:
-    sub: lm_p0_document_destroy (@: LmP0Document document)
+    sub: lm_p0_document_destroy (LmP0Document: document)
         if: (document = 0)
             return
         lm_p0_document_destroy_owners(document)
@@ -5643,7 +5642,7 @@ external:
 end: external
 
 external:
-    fn: lm_p0_document_root (const: @(LmP0Document document)) const: @: LmP0Node
+    fn: lm_p0_document_root (const: (LmP0Document: document)) const: LmP0Node
         if: (document != 0)
             return: document\root
         return: 0
@@ -5651,7 +5650,7 @@ external:
 end: external
 
 external:
-    fn: lm_p0_document_mutable_root (@: LmP0Document document) @: LmP0Node
+    fn: lm_p0_document_mutable_root (LmP0Document: document) LmP0Node
         if: (document != 0)
             return: document\root
         return: 0
@@ -5659,7 +5658,7 @@ external:
 end: external
 
 external:
-    fn: lm_p0_document_diagnostic (const: @(LmP0Document document)) const: @: LmP0Diagnostic
+    fn: lm_p0_document_diagnostic (const: (LmP0Document: document)) const: LmP0Diagnostic
         if: (((document = 0) || (document\diagnostic = 0)) || (document\diagnostic\code = 0))
             return: 0
         return: document\diagnostic
@@ -5672,7 +5671,7 @@ external:
     end: lm_p0_free
 end: external
 
-fn: lm_p0_dump_reserve (@: LmP0Dump dump; size_t: extra) int
+fn: lm_p0_dump_reserve (LmP0Dump: dump; size_t: extra) int
     @: char data
     size_t: new_capacity
     if: dump\failed
@@ -5694,7 +5693,7 @@ fn: lm_p0_dump_reserve (@: LmP0Dump dump; size_t: extra) int
     return: 1
 end: lm_p0_dump_reserve
 
-sub: lm_p0_dump_append (@: LmP0Dump dump; const: @(char text); size_t: length)
+sub: lm_p0_dump_append (LmP0Dump: dump; const: @(char text); size_t: length)
     if: (lm_p0_dump_reserve(dump, length) = 0)
         return
     c.memcpy((dump\data + dump\length), text, length)
@@ -5702,11 +5701,11 @@ sub: lm_p0_dump_append (@: LmP0Dump dump; const: @(char text); size_t: length)
     dump\data[dump\length]: '\0'
 end: lm_p0_dump_append
 
-sub: lm_p0_dump_append_cstr (@: LmP0Dump dump; const: @(char text))
+sub: lm_p0_dump_append_cstr (LmP0Dump: dump; const: @(char text))
     lm_p0_dump_append(dump, text, c.strlen(text))
 end: lm_p0_dump_append_cstr
 
-sub: lm_p0_dump_indent (@: LmP0Dump dump; size_t: indent)
+sub: lm_p0_dump_indent (LmP0Dump: dump; size_t: indent)
     size_t: i
     i: 0U
     while: (i < indent)
@@ -5715,23 +5714,23 @@ sub: lm_p0_dump_indent (@: LmP0Dump dump; size_t: indent)
     ---
 end: lm_p0_dump_indent
 
-sub: lm_p0_dump_text (@: LmP0Dump dump; const: @(LmP0Text text))
+sub: lm_p0_dump_text (LmP0Dump: dump; const: (LmP0Text: text))
     lm_p0_dump_append_cstr(dump, "\"")
     if: (text != 0)
         lm_p0_dump_append(dump, text\data, text\length)
     lm_p0_dump_append_cstr(dump, "\"")
 end: lm_p0_dump_text
 
-fn: lm_p0_dump_frame_new (int: phase; size_t: indent) @: LmP0DumpFrame
-    @: LmP0DumpFrame frame
-    frame: (cast: (@: LmP0DumpFrame) lm_own_new_zero(c.sizeof(frame[0])))
+fn: lm_p0_dump_frame_new (int: phase; size_t: indent) LmP0DumpFrame
+    LmP0DumpFrame: frame
+    frame: (cast: (LmP0DumpFrame) lm_own_new_zero(c.sizeof(frame[0])))
     if: (frame != 0)
         frame\phase: phase
         frame\indent: indent
     return: frame
 end: lm_p0_dump_frame_new
 
-fn: lm_p0_dump_push_frame (@: LmOwnPtrStack stack; @: LmP0DumpFrame frame) int
+fn: lm_p0_dump_push_frame (LmOwnPtrStack: stack; LmP0DumpFrame: frame) int
     if: ((stack = 0) || (frame = 0))
         lm_own_delete(frame, 0)
         return: 1
@@ -5741,8 +5740,8 @@ fn: lm_p0_dump_push_frame (@: LmOwnPtrStack stack; @: LmP0DumpFrame frame) int
     return: 0
 end: lm_p0_dump_push_frame
 
-fn: lm_p0_dump_push_node (@: LmOwnPtrStack stack; const: @(LmP0Node node); size_t: indent) int
-    @: LmP0DumpFrame frame
+fn: lm_p0_dump_push_node (LmOwnPtrStack: stack; const: (LmP0Node: node); size_t: indent) int
+    LmP0DumpFrame: frame
     if: (node = 0)
         return: 0
     frame: lm_p0_dump_frame_new(c.LM_P0_DUMP_NODE, indent)
@@ -5751,8 +5750,8 @@ fn: lm_p0_dump_push_node (@: LmOwnPtrStack stack; const: @(LmP0Node node); size_
     return: lm_p0_dump_push_frame(stack, frame)
 end: lm_p0_dump_push_node
 
-fn: lm_p0_dump_push_structure (@: LmOwnPtrStack stack; const: @(LmP0Structure structure); size_t: indent) int
-    @: LmP0DumpFrame frame
+fn: lm_p0_dump_push_structure (LmOwnPtrStack: stack; const: (LmP0Structure: structure); size_t: indent) int
+    LmP0DumpFrame: frame
     if: (structure = 0)
         return: 0
     frame: lm_p0_dump_frame_new(c.LM_P0_DUMP_STRUCTURE, indent)
@@ -5762,8 +5761,8 @@ fn: lm_p0_dump_push_structure (@: LmOwnPtrStack stack; const: @(LmP0Structure st
     return: lm_p0_dump_push_frame(stack, frame)
 end: lm_p0_dump_push_structure
 
-fn: lm_p0_dump_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer trailer); size_t: indent) int
-    @: LmP0DumpFrame frame
+fn: lm_p0_dump_push_trailer (LmOwnPtrStack: stack; const: (LmP0Trailer: trailer); size_t: indent) int
+    LmP0DumpFrame: frame
     if: (trailer = 0)
         return: 0
     frame: lm_p0_dump_frame_new(c.LM_P0_DUMP_TRAILER, indent)
@@ -5772,15 +5771,15 @@ fn: lm_p0_dump_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer traile
     return: lm_p0_dump_push_frame(stack, frame)
 end: lm_p0_dump_push_trailer
 
-fn: lm_p0_dump_stack_new () @: LmOwnPtrStack
-    @: LmOwnPtrStack stack
-    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+fn: lm_p0_dump_stack_new () LmOwnPtrStack
+    LmOwnPtrStack: stack
+    stack: (cast: (LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
     if: (stack != 0)
         lm_own_ptr_stack_init(stack, lm_own_delete_plain)
     return: stack
 end: lm_p0_dump_stack_new
 
-sub: lm_p0_dump_stack_delete (@@: LmOwnPtrStack stack)
+sub: lm_p0_dump_stack_delete (@: LmOwnPtrStack stack)
     if: ((stack != 0) && (stack[0] != 0))
         lm_own_ptr_stack_destroy(stack[0])
         lm_own_delete(stack[0], 0)
@@ -5788,15 +5787,15 @@ sub: lm_p0_dump_stack_delete (@@: LmOwnPtrStack stack)
     ---
 end: lm_p0_dump_stack_delete
 
-sub: lm_p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
-    @: LmP0DumpFrame frame
-    const: @: LmP0Node node
-    const: @: LmP0Structure structure
-    const: @: LmP0Trailer trailer
+sub: lm_p0_dump_run (LmP0Dump: dump; LmOwnPtrStack: stack)
+    LmP0DumpFrame: frame
+    const: LmP0Node: node
+    const: LmP0Structure: structure
+    const: LmP0Trailer: trailer
     const: @: char structure_name
     size_t: indent
     while: ((((dump != 0) && (dump\failed = 0)) && (stack != 0)) && (stack\count != 0U))
-        frame: (cast: (@: LmP0DumpFrame) lm_own_ptr_stack_top(stack))
+        frame: (cast: (LmP0DumpFrame) lm_own_ptr_stack_top(stack))
         if: (frame = 0)
             dump\failed: 1
             return
@@ -5887,8 +5886,8 @@ sub: lm_p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
     ---
 end: lm_p0_dump_run
 
-sub: lm_p0_dump_node (@: LmP0Dump dump; const: @(LmP0Node node); size_t: indent)
-    @: LmOwnPtrStack stack
+sub: lm_p0_dump_node (LmP0Dump: dump; const: (LmP0Node: node); size_t: indent)
+    LmOwnPtrStack: stack
     if: (node = 0)
         return
     stack: lm_p0_dump_stack_new()
@@ -5902,11 +5901,11 @@ sub: lm_p0_dump_node (@: LmP0Dump dump; const: @(LmP0Node node); size_t: indent)
     lm_p0_dump_stack_delete(@ stack)
 end: lm_p0_dump_node
 
-fn: lm_p0_dump_new () @: LmP0Dump
-    return: (cast: (@: LmP0Dump) lm_own_new_zero((1U * c.sizeof(c.LmP0Dump))))
+fn: lm_p0_dump_new () LmP0Dump
+    return: (cast: (LmP0Dump) lm_own_new_zero((1U * c.sizeof(c.LmP0Dump))))
 end: lm_p0_dump_new
 
-fn: lm_p0_dump_take_data (@: LmP0Dump dump) @: char
+fn: lm_p0_dump_take_data (LmP0Dump: dump) @: char
     @: char data
     if: (dump = 0)
         return: 0
@@ -5917,7 +5916,7 @@ fn: lm_p0_dump_take_data (@: LmP0Dump dump) @: char
     return: data
 end: lm_p0_dump_take_data
 
-sub: lm_p0_dump_delete (@: LmP0Dump dump)
+sub: lm_p0_dump_delete (LmP0Dump: dump)
     if: (dump != 0)
         lm_own_delete(dump\data, 0)
         lm_own_delete(dump, 0)
@@ -5925,8 +5924,8 @@ sub: lm_p0_dump_delete (@: LmP0Dump dump)
 end: lm_p0_dump_delete
 
 external:
-    fn: lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
-        @: LmP0Dump dump
+    fn: lm_p0_dump_alloc (const: (LmP0Document: document)) @: char
+        LmP0Dump: dump
         @: char data
         dump: lm_p0_dump_new()
         if: (dump = 0)

@@ -153,11 +153,11 @@ L2:
             end: lm_build_has_qt_gxx
     end: os
     
-    fn: lm_build_options_new () @: LmBuildOptions
+    fn: lm_build_options_new () LmBuildOptions
         return: c.lm_own_new_zero(c.sizeof(c.LmBuildOptions))
     end: lm_build_options_new
     
-    sub: lm_build_options_delete (@: LmBuildOptions options)
+    sub: lm_build_options_delete (LmBuildOptions: options)
         c.lm_own_delete: options 0
     end: lm_build_options_delete
     
@@ -315,7 +315,7 @@ L2:
         c.printf: "  --full  refresh L0 tools, then build the bundled third_party profile\n"
     end: lm_build_print_usage
     
-    fn: lm_build_parse_options (int: argc; @@: char argv; @: LmBuildOptions options) int
+    fn: lm_build_parse_options (int: argc; @@: char argv; LmBuildOptions: options) int
         int: index
     
         options\full_build: 0
@@ -747,7 +747,7 @@ L2:
         return: lm_build_full_build()
     end: lm_build_full_project
     
-    fn: lm_build_run_bootstrap (@: LmBuildOptions options; @: char trusted_make; @: char built_trans) int
+    fn: lm_build_run_bootstrap (LmBuildOptions: options; @: char trusted_make; @: char built_trans) int
         if: lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\"") != 0
             return: 1
     
@@ -785,7 +785,7 @@ L2:
             @: char trusted_make
             [128]: char trusted_make_buffer
             [128]: char built_trans_buffer
-            @: LmBuildOptions options
+            LmBuildOptions: options
             int: parse_status
             int: result
     

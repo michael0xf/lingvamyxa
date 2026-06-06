@@ -1,13 +1,13 @@
-fn: lm_trans_text_ref_new (const: @(LmP0Text text)) @: LmP0Text
-    @: LmP0Text copy
+fn: lm_trans_text_ref_new (const: (LmP0Text: text)) LmP0Text
+    LmP0Text: copy
 
     copy: lm_own_new_zero(c.sizeof(copy[0]))
     if: copy != 0 && text != 0
         copy[0]: text[0]
 return: copy
 
-fn: lm_trans_text_ref_new_cstr (const: @(char text)) @: LmP0Text
-    @: LmP0Text copy
+fn: lm_trans_text_ref_new_cstr (const: @(char text)) LmP0Text
+    LmP0Text: copy
 
     copy: lm_own_new_zero(c.sizeof(copy[0]))
     if: copy != 0 && text != 0
@@ -15,8 +15,8 @@ fn: lm_trans_text_ref_new_cstr (const: @(char text)) @: LmP0Text
         copy\length: c.strlen(text)
 return: copy
 
-fn: lm_trans_text_ref_tail_new (const: @(LmP0Text text); size_t: offset) @: LmP0Text
-    @: LmP0Text tail
+fn: lm_trans_text_ref_tail_new (const: (LmP0Text: text); size_t: offset) LmP0Text
+    LmP0Text: tail
 
     if: text = 0 || offset > text\length
         return: 0
@@ -27,7 +27,7 @@ fn: lm_trans_text_ref_tail_new (const: @(LmP0Text text); size_t: offset) @: LmP0
         tail\length: text\length - offset
 return: tail
 
-sub: lm_trans_text_ref_destroy (@@(LmP0Text text))
+sub: lm_trans_text_ref_destroy (@(LmP0Text text))
     if: text != 0 && text[0] != 0
         lm_own_delete(text[0], 0)
         text[0]: 0
@@ -37,7 +37,7 @@ sub: lm_trans_text_ref_delete_any (@: void object)
     lm_own_delete(object, 0)
 end: lm_trans_text_ref_delete_any
 
-fn: lm_trans_function_header_init_fields (@: LmTransFunctionHeader function) int
+fn: lm_trans_function_header_init_fields (LmTransFunctionHeader: function) int
     if: function = 0
         return: 1
     if: function\name = 0
@@ -48,8 +48,8 @@ fn: lm_trans_function_header_init_fields (@: LmTransFunctionHeader function) int
         function\env_type_name: lm_trans_text_ref_new_cstr("")
 return: function\name = 0 || function\c_name = 0 || function\env_type_name = 0
 
-fn: lm_trans_function_header_new () @: LmTransFunctionHeader
-    @: LmTransFunctionHeader function
+fn: lm_trans_function_header_new () LmTransFunctionHeader
+    LmTransFunctionHeader: function
 
     function: lm_own_new_zero(c.sizeof(function[0]))
     if: function != 0 && lm_trans_function_header_init_fields(function) != 0
@@ -60,22 +60,22 @@ fn: lm_trans_function_header_new () @: LmTransFunctionHeader
         return: 0
 return: function
 
-sub: lm_trans_function_header_destroy_fields (@: LmTransFunctionHeader function)
+sub: lm_trans_function_header_destroy_fields (LmTransFunctionHeader: function)
     if: function != 0
         lm_trans_text_ref_destroy(@ function\name)
         lm_trans_text_ref_destroy(@ function\c_name)
         lm_trans_text_ref_destroy(@ function\env_type_name)
 end: lm_trans_function_header_destroy_fields
 
-sub: lm_trans_function_header_destroy (@: LmTransFunctionHeader function)
+sub: lm_trans_function_header_destroy (LmTransFunctionHeader: function)
     lm_trans_function_header_destroy_fields(function)
     lm_own_delete(function, 0)
 end: lm_trans_function_header_destroy
 
-fn: lm_trans_function_header_copy (@: LmTransFunctionHeader target; const: @(LmTransFunctionHeader source)) int
-    @: LmP0Text name
-    @: LmP0Text c_name
-    @: LmP0Text env_type_name
+fn: lm_trans_function_header_copy (LmTransFunctionHeader: target; const: (LmTransFunctionHeader: source)) int
+    LmP0Text: name
+    LmP0Text: c_name
+    LmP0Text: env_type_name
 
     if: target = 0 || source = 0 || lm_trans_function_header_init_fields(target) != 0
         return: 1
@@ -104,25 +104,25 @@ fn: lm_trans_function_header_copy (@: LmTransFunctionHeader target; const: @(LmT
         target\env_type_name\length: 0U
 return: 0
 
-fn: lm_trans_ptr_stack_new (LmOwnDelete: delete_item) @: LmOwnPtrStack
-    @: LmOwnPtrStack stack
+fn: lm_trans_ptr_stack_new (LmOwnDelete: delete_item) LmOwnPtrStack
+    LmOwnPtrStack: stack
 
     stack: lm_own_new_zero(c.sizeof(stack[0]))
     if: stack != 0
         lm_own_ptr_stack_init(stack, delete_item)
 return: stack
 
-sub: lm_trans_ptr_stack_delete (@@(LmOwnPtrStack stack))
+sub: lm_trans_ptr_stack_delete (@(LmOwnPtrStack stack))
     if: stack != 0 && stack[0] != 0
         lm_own_ptr_stack_destroy(stack[0])
         lm_own_delete(stack[0], 0)
         stack[0]: 0
 end: lm_trans_ptr_stack_delete
 
-fn: lm_trans_function_state_new () @: LmTransFunctionState
-return: lm_own_new_zero(c.sizeof(c.LmTransFunctionState))
+fn: lm_trans_function_state_new () LmTransFunctionState
+    return: lm_own_new_zero(c.sizeof(c.LmTransFunctionState))
 
-sub: lm_trans_function_state_destroy (@: LmTransFunctionState state)
+sub: lm_trans_function_state_destroy (LmTransFunctionState: state)
     if: state != 0
         lm_trans_text_ref_destroy(@ state\current_return_type_name)
         if: state\has_previous_control_stacks
@@ -132,16 +132,16 @@ sub: lm_trans_function_state_destroy (@: LmTransFunctionState state)
 end: lm_trans_function_state_destroy
 
 sub: lm_trans_function_state_destroy_any (@: void object)
-    lm_trans_function_state_destroy(cast: (@: LmTransFunctionState) object)
+    lm_trans_function_state_destroy(cast: (LmTransFunctionState) object)
 end: lm_trans_function_state_destroy_any
 
-sub: lm_trans_function_state_delete (@: LmTransFunctionState state)
+sub: lm_trans_function_state_delete (LmTransFunctionState: state)
     lm_own_delete(state, lm_trans_function_state_destroy_any)
 end: lm_trans_function_state_delete
 
-fn: lm_trans_registry_has_expr_emitter_binding (const: @(LmP0Text key); const: @(char table)) int
+fn: lm_trans_registry_has_expr_emitter_binding (const: (LmP0Text: key); const: @(char table)) int
     const: @: char binding
-    @: LmTransBinding resolved
+    LmTransBinding: resolved
     const: @: char table_name
 
     if: key = 0
@@ -164,7 +164,7 @@ fn: lm_trans_registry_has_expr_emitter_binding (const: @(LmP0Text key); const: @
 return: 1
 
 fn: lm_trans_expr_emitter_binding_table (const: @(char class_name)) const: @: char
-    @: LmP0Text class_text
+    LmP0Text: class_text
     const: @: char table
 
     class_text: lm_trans_text_ref_new_cstr(class_name)
@@ -178,7 +178,7 @@ fn: lm_trans_expr_emitter_binding_table (const: @(char class_name)) const: @: ch
 return: table
 
 fn: lm_trans_expr_spelling_binding_table (const: @(char class_name)) const: @: char
-    @: LmP0Text class_text
+    LmP0Text: class_text
     const: @: char table
 
     class_text: lm_trans_text_ref_new_cstr(class_name)
@@ -193,19 +193,19 @@ fn: lm_trans_expr_spelling_binding_table (const: @(char class_name)) const: @: c
         return: table
 return: class_name
 
-fn: lm_trans_registry_has_expr_emitter_class (const: @(LmP0Text key); const: @(char class_name)) int
+fn: lm_trans_registry_has_expr_emitter_class (const: (LmP0Text: key); const: @(char class_name)) int
     const: @: char table
 
     table: lm_trans_expr_emitter_binding_table(class_name)
 return: table != 0 && lm_trans_registry_has_expr_emitter_binding(key, table)
 
-fn: lm_trans_registry_has_expr_emitter_binding_class (const: @(LmP0Text key); const: @(char class_name)) int
+fn: lm_trans_registry_has_expr_emitter_binding_class (const: (LmP0Text: key); const: @(char class_name)) int
 return: lm_trans_registry_has_expr_emitter_class(key, class_name)
 
-fn: lm_trans_registry_has_any_expr_emitter_binding (const: @(LmP0Text key)) int
+fn: lm_trans_registry_has_any_expr_emitter_binding (const: (LmP0Text: key)) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
 
     rows: lm_trans_registry_relation_stack(lm_trans_text_from_cstr("expr_emitter_binding"), "row")
     if: rows = 0
@@ -223,7 +223,7 @@ fn: lm_trans_registry_has_any_expr_emitter_binding (const: @(LmP0Text key)) int
         i: i + 1U
 return: 0
 
-fn: lm_trans_text_is_operator_atom (const: @(LmP0Text text)) int
+fn: lm_trans_text_is_operator_atom (const: (LmP0Text: text)) int
 return: lm_trans_registry_has_any_expr_emitter_binding(text)
 
 fn: lm_trans_copy_stream (FILE: target; FILE: source) int
@@ -262,9 +262,9 @@ fn: lm_trans_temp_output_path_new (const: @(char output_path); const: @(char suf
     c.memcpy(result + output_length, suffix, suffix_length + 1U)
 return: result
 
-fn: lm_trans_unwrap_single_anonymous_structure (const: @(LmP0Structure structure)) const: @: LmP0Structure
-    const: @: LmP0Field field
-    const: @: LmP0Structure current
+fn: lm_trans_unwrap_single_anonymous_structure (const: (LmP0Structure: structure)) const: LmP0Structure
+    const: LmP0Field: field
+    const: LmP0Structure: current
 
     current: structure
     while: current != 0
@@ -291,7 +291,7 @@ fn: lm_trans_hash_cstr (const: @(char text)) ulong
         return: lm_trans_hash_bytes(text, c.strlen(text))
 return: 0UL
 
-sub: lm_trans_ptr_stack_remove_pointer (@: LmOwnPtrStack stack; const: @(void item))
+sub: lm_trans_ptr_stack_remove_pointer (LmOwnPtrStack: stack; const: @(void item))
     size_t: i
 
     if: stack = 0 || item = 0
@@ -309,16 +309,16 @@ sub: lm_trans_ptr_stack_remove_pointer (@: LmOwnPtrStack stack; const: @(void it
             return
 end: lm_trans_ptr_stack_remove_pointer
 
-sub: lm_trans_identifier_relation_destroy (@: LmTransIdentifierRelation relation)
+sub: lm_trans_identifier_relation_destroy (LmTransIdentifierRelation: relation)
     if: relation != 0
         lm_trans_ptr_stack_delete(@ relation\symbols)
     lm_own_delete(relation, 0)
 end: lm_trans_identifier_relation_destroy
 
-sub: lm_trans_identifier_card_destroy (@: LmTransIdentifierCard card)
+sub: lm_trans_identifier_card_destroy (LmTransIdentifierCard: card)
     size_t: i
-    @: LmTransIdentifierRelation relation
-    @: LmTransIdentifierRelation next
+    LmTransIdentifierRelation: relation
+    LmTransIdentifierRelation: next
 
     if: card = 0
         return
@@ -343,14 +343,14 @@ sub: lm_trans_identifier_card_destroy (@: LmTransIdentifierCard card)
     lm_own_delete(card, 0)
 end: lm_trans_identifier_card_destroy
 
-sub: lm_trans_identifier_table_init (@: LmTransIdentifierTable table)
+sub: lm_trans_identifier_table_init (LmTransIdentifierTable: table)
     if: table != 0
         table\buckets: 0
         table\bucket_count: 0U
         table\count: 0U
 end: lm_trans_identifier_table_init
 
-fn: lm_trans_identifier_table_ensure_buckets (@: LmTransIdentifierTable table) int
+fn: lm_trans_identifier_table_ensure_buckets (LmTransIdentifierTable: table) int
     size_t: bucket_count
 
     if: table = 0
@@ -365,10 +365,10 @@ fn: lm_trans_identifier_table_ensure_buckets (@: LmTransIdentifierTable table) i
     table\bucket_count: bucket_count
 return: 0
 
-sub: lm_trans_identifier_table_destroy (@: LmTransIdentifierTable table)
+sub: lm_trans_identifier_table_destroy (LmTransIdentifierTable: table)
     size_t: i
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierCard next
+    LmTransIdentifierCard: card
+    LmTransIdentifierCard: next
 
     if: table = 0
         return
@@ -389,26 +389,26 @@ sub: lm_trans_identifier_table_destroy (@: LmTransIdentifierTable table)
     table\count: 0U
 end: lm_trans_identifier_table_destroy
 
-fn: lm_trans_identifier_table_new () @: LmTransIdentifierTable
-    @: LmTransIdentifierTable table
+fn: lm_trans_identifier_table_new () LmTransIdentifierTable
+    LmTransIdentifierTable: table
 
     table: lm_own_new_zero(c.sizeof(table[0]))
     if: table != 0
         lm_trans_identifier_table_init(table)
 return: table
 
-sub: lm_trans_identifier_table_delete (@@(LmTransIdentifierTable table))
+sub: lm_trans_identifier_table_delete (@(LmTransIdentifierTable table))
     if: table != 0 && table[0] != 0
         lm_trans_identifier_table_destroy(table[0])
         lm_own_delete(table[0], 0)
         table[0]: 0
 end: lm_trans_identifier_table_delete
 
-fn: lm_trans_identifier_table_find_card (const: @(LmTransIdentifierTable table); const: @(LmP0Text name)) @: LmTransIdentifierCard
-    @: LmP0Text payload
+fn: lm_trans_identifier_table_find_card (const: (LmTransIdentifierTable: table); const: (LmP0Text: name)) LmTransIdentifierCard
+    LmP0Text: payload
     ulong: hash
     size_t: bucket
-    @: LmTransIdentifierCard card
+    LmTransIdentifierCard: card
 
     payload: lm_trans_text_ref_new(0)
     if: payload = 0
@@ -428,11 +428,11 @@ fn: lm_trans_identifier_table_find_card (const: @(LmTransIdentifierTable table);
     lm_trans_text_ref_destroy(@ payload)
 return: 0
 
-fn: lm_trans_identifier_table_get_card (@: LmTransIdentifierTable table; const: @(LmP0Text name)) @: LmTransIdentifierCard
-    @: LmP0Text payload
+fn: lm_trans_identifier_table_get_card (LmTransIdentifierTable: table; const: (LmP0Text: name)) LmTransIdentifierCard
+    LmP0Text: payload
     ulong: hash
     size_t: bucket
-    @: LmTransIdentifierCard card
+    LmTransIdentifierCard: card
     @: char copy
 
     payload: lm_trans_text_ref_new(0)
@@ -485,10 +485,10 @@ fn: lm_trans_identifier_table_get_card (@: LmTransIdentifierTable table; const: 
     lm_trans_text_ref_destroy(@ payload)
 return: card
 
-fn: lm_trans_identifier_card_find_relation (const: @(LmTransIdentifierCard card); const: @(char relation_name)) @: LmTransIdentifierRelation
+fn: lm_trans_identifier_card_find_relation (const: (LmTransIdentifierCard: card); const: @(char relation_name)) LmTransIdentifierRelation
     ulong: hash
     size_t: bucket
-    @: LmTransIdentifierRelation relation
+    LmTransIdentifierRelation: relation
 
     if: card = 0 || relation_name = 0 || card\relation_buckets = 0 || card\relation_bucket_count = 0U
         return: 0
@@ -502,10 +502,10 @@ fn: lm_trans_identifier_card_find_relation (const: @(LmTransIdentifierCard card)
         relation: relation\next
 return: 0
 
-fn: lm_trans_identifier_card_get_relation (@: LmTransIdentifierCard card; const: @(char relation_name)) @: LmTransIdentifierRelation
+fn: lm_trans_identifier_card_get_relation (LmTransIdentifierCard: card; const: @(char relation_name)) LmTransIdentifierRelation
     ulong: hash
     size_t: bucket
-    @: LmTransIdentifierRelation relation
+    LmTransIdentifierRelation: relation
 
     if: card = 0 || relation_name = 0 || card\relation_buckets = 0 || card\relation_bucket_count = 0U
         return: 0
@@ -530,9 +530,9 @@ fn: lm_trans_identifier_card_get_relation (@: LmTransIdentifierCard card; const:
     card\relation_buckets[bucket]: relation
 return: relation
 
-fn: lm_trans_identifier_table_add_symbol (@: LmTransIdentifierTable table; @: LmTransSymbol symbol) int
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
+fn: lm_trans_identifier_table_add_symbol (LmTransIdentifierTable: table; LmTransSymbol: symbol) int
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
 
     if: table = 0 || symbol = 0 || symbol\name = 0
         return: 1
@@ -550,9 +550,9 @@ fn: lm_trans_identifier_table_add_symbol (@: LmTransIdentifierTable table; @: Lm
         return: 1
 return: 0
 
-fn: lm_trans_identifier_table_add_relation_symbol (@: LmTransIdentifierTable table; @: LmTransSymbol symbol) int
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
+fn: lm_trans_identifier_table_add_relation_symbol (LmTransIdentifierTable: table; LmTransSymbol: symbol) int
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
 
     if: table = 0 || symbol = 0 || symbol\name = 0
         return: 1
@@ -565,9 +565,9 @@ fn: lm_trans_identifier_table_add_relation_symbol (@: LmTransIdentifierTable tab
         return: 1
 return: lm_own_ptr_stack_push(relation\symbols, symbol)
 
-sub: lm_trans_identifier_table_remove_symbol (@: LmTransIdentifierTable table; const: @(LmTransSymbol symbol))
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
+sub: lm_trans_identifier_table_remove_symbol (LmTransIdentifierTable: table; const: (LmTransSymbol: symbol))
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
 
     if: table = 0 || symbol = 0 || symbol\name = 0
         return
@@ -581,16 +581,16 @@ sub: lm_trans_identifier_table_remove_symbol (@: LmTransIdentifierTable table; c
         lm_trans_ptr_stack_remove_pointer(relation\symbols, symbol)
 end: lm_trans_identifier_table_remove_symbol
 
-fn: lm_trans_identifier_table_find_latest_symbol (const: @(LmTransIdentifierTable table); const: @(LmP0Text name)) @: LmTransSymbol
-    @: LmTransIdentifierCard card
+fn: lm_trans_identifier_table_find_latest_symbol (const: (LmTransIdentifierTable: table); const: (LmP0Text: name)) LmTransSymbol
+    LmTransIdentifierCard: card
 
     card: lm_trans_identifier_table_find_card(table, name)
     if: card = 0
         return: 0
 return: lm_own_ptr_stack_top(card\symbols)
 
-fn: lm_trans_symbol_new (const: @(LmP0Text name); const: @(char kind); unsigned: depth) @: LmTransSymbol
-    @: LmTransSymbol symbol
+fn: lm_trans_symbol_new (const: (LmP0Text: name); const: @(char kind); unsigned: depth) LmTransSymbol
+    LmTransSymbol: symbol
 
     symbol: lm_own_new_zero(c.sizeof(symbol[0]))
     if: symbol = 0
@@ -615,7 +615,7 @@ fn: lm_trans_symbol_new (const: @(LmP0Text name); const: @(char kind); unsigned:
     symbol\depth: depth
 return: symbol
 
-fn: lm_trans_symbol_set_owned_name (@: LmTransSymbol symbol; const: @(LmP0Text name)) int
+fn: lm_trans_symbol_set_owned_name (LmTransSymbol: symbol; const: (LmP0Text: name)) int
     @: char copy
 
     if: symbol = 0 || symbol\name = 0 || name = 0
@@ -633,7 +633,7 @@ fn: lm_trans_symbol_set_owned_name (@: LmTransSymbol symbol; const: @(LmP0Text n
     symbol\name\length: name\length
 return: 0
 
-fn: lm_trans_symbol_set_c_name (@: LmTransSymbol symbol; const: @(LmP0Text c_name)) int
+fn: lm_trans_symbol_set_c_name (LmTransSymbol: symbol; const: (LmP0Text: c_name)) int
     @: char copy
 
     if: symbol = 0 || symbol\c_name = 0 || c_name = 0
@@ -652,7 +652,7 @@ fn: lm_trans_symbol_set_c_name (@: LmTransSymbol symbol; const: @(LmP0Text c_nam
     symbol\has_c_name: 1
 return: 0
 
-fn: lm_trans_symbol_set_env_arg (@: LmTransSymbol symbol; const: @(LmP0Text env_arg)) int
+fn: lm_trans_symbol_set_env_arg (LmTransSymbol: symbol; const: (LmP0Text: env_arg)) int
     @: char copy
 
     if: symbol = 0 || symbol\env_arg = 0 || env_arg = 0
@@ -671,7 +671,7 @@ fn: lm_trans_symbol_set_env_arg (@: LmTransSymbol symbol; const: @(LmP0Text env_
     symbol\has_env_arg: 1
 return: 0
 
-fn: lm_trans_symbol_set_closure_call_name (@: LmTransSymbol symbol; const: @(LmP0Text closure_call_name)) int
+fn: lm_trans_symbol_set_closure_call_name (LmTransSymbol: symbol; const: (LmP0Text: closure_call_name)) int
     @: char copy
 
     if: symbol = 0 || symbol\closure_call_name = 0 || closure_call_name = 0
@@ -690,7 +690,7 @@ fn: lm_trans_symbol_set_closure_call_name (@: LmTransSymbol symbol; const: @(LmP
     symbol\has_closure_call_name: 1
 return: 0
 
-fn: lm_trans_capture_init_fields (@: LmTransCapture capture) int
+fn: lm_trans_capture_init_fields (LmTransCapture: capture) int
     if: capture = 0
         return: 1
     if: capture\name = 0
@@ -699,7 +699,7 @@ fn: lm_trans_capture_init_fields (@: LmTransCapture capture) int
         capture\type_head: lm_trans_text_ref_new_cstr("")
 return: capture\name = 0 || capture\type_head = 0
 
-fn: lm_trans_capture_reset (@: LmTransCapture capture) int
+fn: lm_trans_capture_reset (LmTransCapture: capture) int
     if: lm_trans_capture_init_fields(capture) != 0
         return: 1
     capture\name\data: ""
@@ -711,8 +711,8 @@ fn: lm_trans_capture_reset (@: LmTransCapture capture) int
     capture\type_is_head: 0
 return: 0
 
-fn: lm_trans_capture_new (const: @(LmP0Text name); const: @(LmP0Text type_head); const: @(LmP0Node type_node); size_t: pointer_depth; int: type_is_head) @: LmTransCapture
-    @: LmTransCapture capture
+fn: lm_trans_capture_new (const: (LmP0Text: name); const: (LmP0Text: type_head); const: (LmP0Node: type_node); size_t: pointer_depth; int: type_is_head) LmTransCapture
+    LmTransCapture: capture
 
     if: name = 0 || type_head = 0
         return: 0
@@ -730,7 +730,7 @@ fn: lm_trans_capture_new (const: @(LmP0Text name); const: @(LmP0Text type_head);
         capture\type_is_head: type_is_head
 return: capture
 
-sub: lm_trans_capture_destroy (@: LmTransCapture capture)
+sub: lm_trans_capture_destroy (LmTransCapture: capture)
     if: capture != 0
         lm_trans_text_ref_destroy(@ capture\name)
         lm_trans_text_ref_destroy(@ capture\type_head)
@@ -738,10 +738,10 @@ sub: lm_trans_capture_destroy (@: LmTransCapture capture)
 end: lm_trans_capture_destroy
 
 sub: lm_trans_capture_delete_any (@: void object)
-    lm_trans_capture_destroy(cast: (@: LmTransCapture) object)
+    lm_trans_capture_destroy(cast: (LmTransCapture) object)
 end: lm_trans_capture_delete_any
 
-sub: lm_trans_hoisted_function_destroy (@: LmTransHoistedFunction function)
+sub: lm_trans_hoisted_function_destroy (LmTransHoistedFunction: function)
     if: function != 0
         lm_trans_function_header_destroy(function\function)
         function\function: 0
@@ -760,11 +760,11 @@ sub: lm_trans_hoisted_function_destroy (@: LmTransHoistedFunction function)
 end: lm_trans_hoisted_function_destroy
 
 sub: lm_trans_hoisted_function_delete_any (@: void object)
-    lm_trans_hoisted_function_destroy(cast: (@: LmTransHoistedFunction) object)
+    lm_trans_hoisted_function_destroy(cast: (LmTransHoistedFunction) object)
 end: lm_trans_hoisted_function_delete_any
 
-fn: lm_trans_cleanup_new (unsigned: id; const: @(LmP0Field body); unsigned: scope_depth) @: LmTransCleanup
-    @: LmTransCleanup cleanup
+fn: lm_trans_cleanup_new (unsigned: id; const: (LmP0Field: body); unsigned: scope_depth) LmTransCleanup
+    LmTransCleanup: cleanup
 
     cleanup: lm_own_new_zero(c.sizeof(cleanup[0]))
     if: cleanup != 0
@@ -773,32 +773,32 @@ fn: lm_trans_cleanup_new (unsigned: id; const: @(LmP0Field body); unsigned: scop
         cleanup\body: body
 return: cleanup
 
-sub: lm_trans_cleanup_destroy (@: LmTransCleanup cleanup)
+sub: lm_trans_cleanup_destroy (LmTransCleanup: cleanup)
     lm_own_delete(cleanup, 0)
 end: lm_trans_cleanup_destroy
 
 sub: lm_trans_cleanup_delete_any (@: void object)
-    lm_trans_cleanup_destroy(cast: (@: LmTransCleanup) object)
+    lm_trans_cleanup_destroy(cast: (LmTransCleanup) object)
 end: lm_trans_cleanup_delete_any
 
-fn: lm_trans_loop_new (size_t: cleanup_base) @: LmTransLoop
-    @: LmTransLoop loop
+fn: lm_trans_loop_new (size_t: cleanup_base) LmTransLoop
+    LmTransLoop: loop
 
     loop: lm_own_new_zero(c.sizeof(loop[0]))
     if: loop != 0
         loop\cleanup_base: cleanup_base
 return: loop
 
-sub: lm_trans_loop_destroy (@: LmTransLoop loop)
+sub: lm_trans_loop_destroy (LmTransLoop: loop)
     lm_own_delete(loop, 0)
 end: lm_trans_loop_destroy
 
 sub: lm_trans_loop_delete_any (@: void object)
-    lm_trans_loop_destroy(cast: (@: LmTransLoop) object)
+    lm_trans_loop_destroy(cast: (LmTransLoop) object)
 end: lm_trans_loop_delete_any
 
-fn: lm_trans_namespace_new () @: LmTransNamespace
-    @: LmTransNamespace namespace_
+fn: lm_trans_namespace_new () LmTransNamespace
+    LmTransNamespace: namespace_
 
     namespace_: lm_own_new_zero(c.sizeof(namespace_[0]))
     if: namespace_ != 0
@@ -818,7 +818,7 @@ fn: lm_trans_namespace_new () @: LmTransNamespace
             return: 0
 return: namespace_
 
-sub: lm_trans_namespace_destroy (@: LmTransNamespace namespace_)
+sub: lm_trans_namespace_destroy (LmTransNamespace: namespace_)
     if: namespace_ != 0
         lm_trans_identifier_table_delete(@ namespace_\identifiers)
         namespace_\registry_identifiers: 0
@@ -835,20 +835,20 @@ sub: lm_trans_namespace_destroy (@: LmTransNamespace namespace_)
 end: lm_trans_namespace_destroy
 
 sub: lm_trans_namespace_destroy_any (@: void object)
-    lm_trans_namespace_destroy(cast: (@: LmTransNamespace) object)
+    lm_trans_namespace_destroy(cast: (LmTransNamespace) object)
 end: lm_trans_namespace_destroy_any
 
-sub: lm_trans_namespace_delete (@: LmTransNamespace namespace_)
+sub: lm_trans_namespace_delete (LmTransNamespace: namespace_)
     lm_own_delete(namespace_, lm_trans_namespace_destroy_any)
 end: lm_trans_namespace_delete
 
-sub: lm_trans_namespace_enter_scope (@: LmTransNamespace namespace_)
+sub: lm_trans_namespace_enter_scope (LmTransNamespace: namespace_)
     if: namespace_ != 0
         namespace_\depth: namespace_\depth + 1U
 end: lm_trans_namespace_enter_scope
 
-sub: lm_trans_namespace_leave_scope (@: LmTransNamespace namespace_)
-    @: LmTransSymbol symbol
+sub: lm_trans_namespace_leave_scope (LmTransNamespace: namespace_)
+    LmTransSymbol: symbol
 
     if: namespace_ = 0
         return
@@ -865,8 +865,8 @@ sub: lm_trans_namespace_leave_scope (@: LmTransNamespace namespace_)
         namespace_\depth: namespace_\depth - 1U
 end: lm_trans_namespace_leave_scope
 
-fn: lm_trans_cleanup_push (@: LmTransNamespace namespace_; unsigned: id) int
-    @: LmTransCleanup cleanup
+fn: lm_trans_cleanup_push (LmTransNamespace: namespace_; unsigned: id) int
+    LmTransCleanup: cleanup
 
     if: namespace_ = 0
         return: 1
@@ -879,8 +879,8 @@ fn: lm_trans_cleanup_push (@: LmTransNamespace namespace_; unsigned: id) int
         return: 1
 return: 0
 
-fn: lm_trans_finally_push (@: LmTransNamespace namespace_; const: @(LmP0Field body)) int
-    @: LmTransCleanup cleanup
+fn: lm_trans_finally_push (LmTransNamespace: namespace_; const: (LmP0Field: body)) int
+    LmTransCleanup: cleanup
 
     if: namespace_ = 0 || body = 0
         return: 1
@@ -893,16 +893,16 @@ fn: lm_trans_finally_push (@: LmTransNamespace namespace_; const: @(LmP0Field bo
         return: 1
 return: 0
 
-sub: lm_trans_cleanup_pop (@: LmTransNamespace namespace_)
-    @: LmTransCleanup cleanup
+sub: lm_trans_cleanup_pop (LmTransNamespace: namespace_)
+    LmTransCleanup: cleanup
 
     if: namespace_ != 0
         cleanup: lm_own_ptr_stack_pop(namespace_\cleanups)
         lm_trans_cleanup_destroy(cleanup)
 end: lm_trans_cleanup_pop
 
-fn: lm_trans_loop_push (@: LmTransNamespace namespace_) int
-    @: LmTransLoop loop
+fn: lm_trans_loop_push (LmTransNamespace: namespace_) int
+    LmTransLoop: loop
 
     if: namespace_ = 0
         return: 1
@@ -917,16 +917,16 @@ fn: lm_trans_loop_push (@: LmTransNamespace namespace_) int
         return: 1
 return: 0
 
-sub: lm_trans_loop_pop (@: LmTransNamespace namespace_)
-    @: LmTransLoop loop
+sub: lm_trans_loop_pop (LmTransNamespace: namespace_)
+    LmTransLoop: loop
 
     if: namespace_ != 0
         loop: lm_own_ptr_stack_pop(namespace_\loops)
         lm_trans_loop_destroy(loop)
 end: lm_trans_loop_pop
 
-fn: lm_trans_loop_cleanup_base (const: @(LmTransNamespace namespace_)) size_t
-    const: @: LmTransLoop loop
+fn: lm_trans_loop_cleanup_base (const: (LmTransNamespace: namespace_)) size_t
+    const: LmTransLoop: loop
 
     if: namespace_ = 0 || namespace_\loops = 0 || namespace_\loops\count = 0U
         if: namespace_ != 0 && namespace_\cleanups != 0
@@ -948,19 +948,19 @@ fn: lm_trans_emit_return_name (FILE: file; unsigned: id) int
         return: 1
 return: 0
 
-fn: lm_trans_namespace_find (const: @(LmTransNamespace namespace_); const: @(LmP0Text name)) const: @: LmTransSymbol
+fn: lm_trans_namespace_find (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: LmTransSymbol
     if: namespace_ = 0
         return: 0
 return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
 
-fn: lm_trans_namespace_find_mutable (@: LmTransNamespace namespace_; const: @(LmP0Text name)) @: LmTransSymbol
+fn: lm_trans_namespace_find_mutable (LmTransNamespace: namespace_; const: (LmP0Text: name)) LmTransSymbol
     if: namespace_ = 0
         return: 0
 return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
 
-fn: lm_trans_namespace_relation_symbol_latest (const: @(LmTransNamespace namespace_); const: @(LmP0Text name); const: @(char relation_name)) const: @: LmTransSymbol
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
+fn: lm_trans_namespace_relation_symbol_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name)) const: LmTransSymbol
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
 
     if: namespace_ = 0 || namespace_\identifiers = 0 || name = 0 || relation_name = 0
         return: 0
@@ -972,8 +972,8 @@ fn: lm_trans_namespace_relation_symbol_latest (const: @(LmTransNamespace namespa
         return: 0
 return: lm_own_ptr_stack_top(relation\symbols)
 
-fn: lm_trans_namespace_relation_text_latest (const: @(LmTransNamespace namespace_); const: @(LmP0Text name); const: @(char relation_name); @: LmP0Text out_text) int
-    const: @: LmTransSymbol symbol
+fn: lm_trans_namespace_relation_text_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name); LmP0Text: out_text) int
+    const: LmTransSymbol: symbol
 
     if: out_text != 0
         out_text\data: ""
@@ -987,10 +987,10 @@ fn: lm_trans_namespace_relation_text_latest (const: @(LmTransNamespace namespace
     out_text[0]: symbol\c_name[0]
 return: 1
 
-fn: lm_trans_is_c_reference_name (const: @(LmP0Text name)) int
+fn: lm_trans_is_c_reference_name (const: (LmP0Text: name)) int
 return: name != 0 && lm_trans_text_starts_with(name, "c.") && name\length > 2U
 
-fn: lm_trans_is_reserved_head_name (const: @(LmP0Text name)) int
+fn: lm_trans_is_reserved_head_name (const: (LmP0Text: name)) int
     const: @: char namespace_class
 
     if: name = 0
@@ -998,8 +998,8 @@ fn: lm_trans_is_reserved_head_name (const: @(LmP0Text name)) int
     namespace_class: lm_trans_registry_lookup_table_link_checked(name, "namespace", "receiver.type")
 return: namespace_class != 0
 
-fn: lm_trans_head_binding_resolve (const: @(LmTransNamespace namespace_); const: @(LmP0Text head); @: LmTransHeadBinding out) int
-    @: LmTransBinding resolved
+fn: lm_trans_head_binding_resolve (const: (LmTransNamespace: namespace_); const: (LmP0Text: head); LmTransHeadBinding: out) int
+    LmTransBinding: resolved
     int: receiver_status
 
     if: head = 0 || out = 0
@@ -1032,8 +1032,8 @@ fn: lm_trans_head_binding_resolve (const: @(LmTransNamespace namespace_); const:
     lm_own_delete(resolved, 0)
 return: 0
 
-fn: lm_trans_namespace_declare_with_c_name (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char kind); const: @(LmP0Text c_name)) int
-    @: LmTransSymbol symbol
+fn: lm_trans_namespace_declare_with_c_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind); const: (LmP0Text: c_name)) int
+    LmTransSymbol: symbol
 
     if: namespace_ = 0 || name = 0
         return: 1
@@ -1057,12 +1057,12 @@ fn: lm_trans_namespace_declare_with_c_name (@: LmTransNamespace namespace_; cons
         return: 1
 return: 0
 
-fn: lm_trans_namespace_declare (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char kind)) int
+fn: lm_trans_namespace_declare (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
 return: lm_trans_namespace_declare_with_c_name(namespace_, name, kind, 0)
 
-fn: lm_trans_namespace_declare_generated (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char kind)) int
-    const: @: LmTransSymbol existing
-    @: LmTransSymbol symbol
+fn: lm_trans_namespace_declare_generated (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
+    const: LmTransSymbol: existing
+    LmTransSymbol: symbol
 
     if: namespace_ = 0 || name = 0
         return: 1
@@ -1089,17 +1089,17 @@ fn: lm_trans_namespace_declare_generated (@: LmTransNamespace namespace_; const:
         return: 1
 return: 0
 
-fn: lm_trans_namespace_attach_registry (@: LmTransNamespace namespace_) int
+fn: lm_trans_namespace_attach_registry (LmTransNamespace: namespace_) int
     if: namespace_ = 0 || lm_trans_registry = 0
         return: 1
     namespace_\registry_identifiers: lm_trans_registry\identifiers
 return: 0
 
-fn: lm_trans_namespace_declare_c_name (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char kind); const: @(LmP0Text c_name)) int
+fn: lm_trans_namespace_declare_c_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind); const: (LmP0Text: c_name)) int
 return: lm_trans_namespace_declare_with_c_name(namespace_, name, kind, c_name)
 
-fn: lm_trans_namespace_declare_relation_text (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char relation_name); const: @(LmP0Text payload)) int
-    @: LmTransSymbol symbol
+fn: lm_trans_namespace_declare_relation_text (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char relation_name); const: (LmP0Text: payload)) int
+    LmTransSymbol: symbol
 
     if: namespace_ = 0 || name = 0 || relation_name = 0 || payload = 0
         return: 1
@@ -1119,26 +1119,26 @@ fn: lm_trans_namespace_declare_relation_text (@: LmTransNamespace namespace_; co
         return: 1
 return: 0
 
-fn: lm_trans_namespace_set_env_arg (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(LmP0Text env_arg)) int
-    @: LmTransSymbol symbol
+fn: lm_trans_namespace_set_env_arg (LmTransNamespace: namespace_; const: (LmP0Text: name); const: (LmP0Text: env_arg)) int
+    LmTransSymbol: symbol
 
     symbol: lm_trans_namespace_find_mutable(namespace_, name)
     if: symbol = 0
         return: 1
 return: lm_trans_symbol_set_env_arg(symbol, env_arg)
 
-fn: lm_trans_namespace_set_closure_call_name (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(LmP0Text closure_call_name)) int
-    @: LmTransSymbol symbol
+fn: lm_trans_namespace_set_closure_call_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: (LmP0Text: closure_call_name)) int
+    LmTransSymbol: symbol
 
     symbol: lm_trans_namespace_find_mutable(namespace_, name)
     if: symbol = 0
         return: 1
 return: lm_trans_symbol_set_closure_call_name(symbol, closure_call_name)
 
-fn: lm_trans_symbol_copy_signature (@: LmTransSymbol target; const: @(LmTransSymbol source)) int
+fn: lm_trans_symbol_copy_signature (LmTransSymbol: target; const: (LmTransSymbol: source)) int
     size_t: i
-    const: @: LmP0Text source_name
-    @: LmP0Text copy
+    const: LmP0Text: source_name
+    LmP0Text: copy
 
     if: target = 0 || source = 0
         return: 1
@@ -1175,8 +1175,8 @@ fn: lm_trans_symbol_copy_signature (@: LmTransSymbol target; const: @(LmTransSym
     target\callable_is_external: source\callable_is_external
 return: 0
 
-fn: lm_trans_namespace_declare_compatible (@: LmTransNamespace namespace_; const: @(LmP0Text name); const: @(char kind)) int
-    const: @: LmTransSymbol existing
+fn: lm_trans_namespace_declare_compatible (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
+    const: LmTransSymbol: existing
 
     existing: lm_trans_namespace_find(namespace_, name)
     if: existing != 0
@@ -1186,7 +1186,7 @@ fn: lm_trans_namespace_declare_compatible (@: LmTransNamespace namespace_; const
 
 return: lm_trans_namespace_declare(namespace_, name, kind)
 
-fn: lm_trans_class_c_spelling (const: @(LmP0Text name)) const: @: char
+fn: lm_trans_class_c_spelling (const: (LmP0Text: name)) const: @: char
     if: name = 0
         return: 0
 return: lm_trans_registry_lookup(name, "class.spelling")
@@ -1194,7 +1194,7 @@ return: lm_trans_registry_lookup(name, "class.spelling")
 fn: lm_trans_layout_backend_is_reference_value (const: @(char backend)) int
 return: backend != 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.named-struct") = 0 || c.strcmp(backend, "c.union") = 0 || c.strcmp(backend, "c.named-union") = 0)
 
-fn: lm_trans_class_is_reference_base (const: @(LmP0Text name)) int
+fn: lm_trans_class_is_reference_base (const: (LmP0Text: name)) int
     const: @: char class_kind
     const: @: char backend
 
@@ -1210,15 +1210,15 @@ fn: lm_trans_class_is_reference_base (const: @(LmP0Text name)) int
         return: 1
 return: 0
 
-fn: lm_trans_builtin_c_type_tail (const: @(LmP0Text name)) int
+fn: lm_trans_builtin_c_type_tail (const: (LmP0Text: name)) int
     if: name = 0
         return: 0
     if: lm_trans_class_is_reference_base(name)
         return: 0
 return: lm_trans_class_c_spelling(name) != 0 || lm_trans_registry_has(name, "class.cTail")
 
-fn: lm_trans_builtin_c_type_name (const: @(LmP0Text name)) int
-    @: LmP0Text tail
+fn: lm_trans_builtin_c_type_name (const: (LmP0Text: name)) int
+    LmP0Text: tail
     int: result
 
     if: name = 0
@@ -1233,9 +1233,9 @@ fn: lm_trans_builtin_c_type_name (const: @(LmP0Text name)) int
 
 return: lm_trans_builtin_c_type_tail(name)
 
-fn: lm_trans_emit_name (FILE: file; const: @(LmP0Text name)) int
+fn: lm_trans_emit_name (FILE: file; const: (LmP0Text: name)) int
     const: @: char spelling
-    @: LmP0Text tail
+    LmP0Text: tail
     int: status
 
     if: name = 0
@@ -1255,9 +1255,9 @@ fn: lm_trans_emit_name (FILE: file; const: @(LmP0Text name)) int
 
 return: lm_trans_emit_identifier(file, name)
 
-fn: lm_trans_emit_type_name (FILE: file; const: @(LmP0Text name)) int
+fn: lm_trans_emit_type_name (FILE: file; const: (LmP0Text: name)) int
     const: @: char spelling
-    @: LmP0Text tail
+    LmP0Text: tail
     int: status
 
     if: name = 0
@@ -1280,7 +1280,7 @@ fn: lm_trans_emit_type_name (FILE: file; const: @(LmP0Text name)) int
         return: lm_trans_put(file, spelling)
 return: lm_trans_emit_identifier(file, name)
 
-fn: lm_trans_c_reference_has_path_dot (const: @(LmP0Text name)) int
+fn: lm_trans_c_reference_has_path_dot (const: (LmP0Text: name)) int
     size_t: i
 
     if: lm_trans_is_c_reference_name(name) = 0
@@ -1294,5 +1294,5 @@ fn: lm_trans_c_reference_has_path_dot (const: @(LmP0Text name)) int
 
 return: 0
 
-fn: lm_trans_node_is_c_reference_atom (const: @(LmP0Node node)) int
+fn: lm_trans_node_is_c_reference_atom (const: (LmP0Node: node)) int
 return: node != 0 && node\kind = c.LM_P0_NODE_ATOM && lm_trans_is_c_reference_name(node\as\atom)

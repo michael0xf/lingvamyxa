@@ -66,7 +66,7 @@ external:
 end: external
 
 external:
-    sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
+    sub: lm_own_ptr_stack_init (LmOwnPtrStack: stack; LmOwnDelete: delete_item)
         if: stack != 0
             stack\items: 0
             stack\count: 0U
@@ -76,7 +76,7 @@ external:
 end: external
 
 external:
-    sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
+    sub: lm_own_ptr_stack_destroy (LmOwnPtrStack: stack)
         if: stack != 0
             lm_own_pointer_array_delete(stack\items, stack\count, stack\delete_item)
             stack\items: 0
@@ -87,7 +87,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+    fn: lm_own_ptr_stack_push (LmOwnPtrStack: stack; @: void item) int
         @@: void items
         size_t: capacity
 
@@ -112,7 +112,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
+    fn: lm_own_ptr_stack_pop (LmOwnPtrStack: stack) @: void
         @: void item
 
         if: stack = 0 || stack\count = 0U
@@ -125,7 +125,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_ptr_stack_at (const: @(LmOwnPtrStack stack); size_t: index) @: void
+    fn: lm_own_ptr_stack_at (const: (LmOwnPtrStack: stack); size_t: index) @: void
         if: stack = 0 || index >= stack\count
             return: 0
 
@@ -133,7 +133,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_ptr_stack_top (const: @(LmOwnPtrStack stack)) @: void
+    fn: lm_own_ptr_stack_top (const: (LmOwnPtrStack: stack)) @: void
         if: stack = 0 || stack\count = 0U
             return: 0
 
@@ -141,7 +141,7 @@ external:
 end: external
 
 external:
-    sub: lm_own_ptr_stack_truncate (@: LmOwnPtrStack stack; size_t: count)
+    sub: lm_own_ptr_stack_truncate (LmOwnPtrStack: stack; size_t: count)
         @: void item
 
         if: stack = 0
@@ -155,7 +155,7 @@ external:
 end: external
 
 external:
-    sub: lm_own_value_stack_init (@: LmOwnValueStack stack; size_t: item_size)
+    sub: lm_own_value_stack_init (LmOwnValueStack: stack; size_t: item_size)
         if: stack != 0
             stack\items: 0
             stack\count: 0U
@@ -165,7 +165,7 @@ external:
 end: external
 
 external:
-    sub: lm_own_value_stack_destroy (@: LmOwnValueStack stack)
+    sub: lm_own_value_stack_destroy (LmOwnValueStack: stack)
         if: stack != 0
             c.free(stack\items)
             stack\items: 0
@@ -176,14 +176,14 @@ external:
 end: external
 
 external:
-    sub: lm_own_value_stack_truncate (@: LmOwnValueStack stack; size_t: count)
+    sub: lm_own_value_stack_truncate (LmOwnValueStack: stack; size_t: count)
         if: stack != 0 && count < stack\count
             stack\count: count
     end: lm_own_value_stack_truncate
 end: external
 
 external:
-    fn: lm_own_arena_init (@: LmOwnArena arena) int
+    fn: lm_own_arena_init (LmOwnArena: arena) int
         if: arena = 0
             return: 1
 
@@ -212,7 +212,7 @@ external:
 end: external
 
 external:
-    sub: lm_own_arena_destroy (@: LmOwnArena arena)
+    sub: lm_own_arena_destroy (LmOwnArena: arena)
         if: arena != 0
             lm_own_ptr_stack_destroy(arena\lazy_edges)
             lm_own_delete(arena\lazy_edges, 0)
@@ -228,29 +228,29 @@ external:
 end: external
 
 external:
-    sub: lm_own_arena_freeze (@: LmOwnArena arena)
+    sub: lm_own_arena_freeze (LmOwnArena: arena)
         if: arena != 0
             arena\frozen: 1
     end: lm_own_arena_freeze
 end: external
 
 external:
-    fn: lm_own_arena_is_frozen (const: @(LmOwnArena arena)) int
+    fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
     return: arena != 0 && arena\frozen
 end: external
 
 external:
-    fn: lm_own_tree_cut (@: LmOwnArena arena) int
+    fn: lm_own_tree_cut (LmOwnArena: arena) int
     return: lm_own_tree_cut_promote_lazy_edges(arena)
 end: external
 
 external:
-    fn: lm_own_tree_cut_promote_lazy_edges (@: LmOwnArena arena) int
+    fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
     return: lm_own_arena_promote_lazy_edges(arena)
 end: external
 
 external:
-    fn: lm_own_value_stack_push (@: LmOwnValueStack stack; const: @(void item)) int
+    fn: lm_own_value_stack_push (LmOwnValueStack: stack; const: @(void item)) int
         @: uchar items
         @: uchar target
         size_t: capacity
@@ -277,7 +277,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_value_stack_resize_zero (@: LmOwnValueStack stack; size_t: count) int
+    fn: lm_own_value_stack_resize_zero (LmOwnValueStack: stack; size_t: count) int
         @: uchar items
         @: uchar target
         size_t: capacity
@@ -310,7 +310,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_value_stack_pop (@: LmOwnValueStack stack; @: void out_item) int
+    fn: lm_own_value_stack_pop (LmOwnValueStack: stack; @: void out_item) int
         @: uchar source
 
         if: stack = 0 || stack\count = 0U || stack\item_size = 0U
@@ -324,7 +324,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_value_stack_at (const: @(LmOwnValueStack stack); size_t: index) @: void
+    fn: lm_own_value_stack_at (const: (LmOwnValueStack: stack); size_t: index) @: void
         @: uchar item
 
         if: stack = 0 || index >= stack\count || stack\item_size = 0U
@@ -335,7 +335,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_value_stack_top (const: @(LmOwnValueStack stack)) @: void
+    fn: lm_own_value_stack_top (const: (LmOwnValueStack: stack)) @: void
         @: uchar item
 
         if: stack = 0 || stack\count = 0U || stack\item_size = 0U
@@ -345,7 +345,7 @@ external:
     return: item
 end: external
 
-@: LmOwnPtrStack lm_own_global_allocation_descriptors
+LmOwnPtrStack: lm_own_global_allocation_descriptors
 int: lm_own_global_allocation_descriptors_ready
 
 fn: lm_own_size_multiply (size_t: left; size_t: right; @: size_t out) int
@@ -365,8 +365,8 @@ fn: lm_own_global_allocation_descriptors_init () int
         lm_own_global_allocation_descriptors_ready: 1
 return: 0
 
-fn: lm_own_allocation_descriptor_find (const: @(LmOwnPtrStack descriptors); const: @(void address)) const: @: LmOwnAllocationDescriptor
-    const: @: LmOwnAllocationDescriptor descriptor
+fn: lm_own_allocation_descriptor_find (const: (LmOwnPtrStack: descriptors); const: @(void address)) const: LmOwnAllocationDescriptor
+    const: LmOwnAllocationDescriptor: descriptor
     size_t: index
 
     if: descriptors = 0 || address = 0
@@ -382,8 +382,8 @@ fn: lm_own_allocation_descriptor_find (const: @(LmOwnPtrStack descriptors); cons
 
 return: 0
 
-fn: lm_own_allocation_descriptor_push (@: LmOwnPtrStack descriptors; @: void address; @: LmOwnArena owner; size_t: bytes; size_t: element_size; size_t: count; size_t: rank; size_t: level) int
-    @: LmOwnAllocationDescriptor descriptor
+fn: lm_own_allocation_descriptor_push (LmOwnPtrStack: descriptors; @: void address; LmOwnArena: owner; size_t: bytes; size_t: element_size; size_t: count; size_t: rank; size_t: level) int
+    LmOwnAllocationDescriptor: descriptor
     int: status
 
     if: descriptors = 0 || address = 0
@@ -427,14 +427,14 @@ external:
 end: external
 
 external:
-    fn: lm_own_allocation_descriptor (const: @(void address)) const: @: LmOwnAllocationDescriptor
+    fn: lm_own_allocation_descriptor (const: @(void address)) const: LmOwnAllocationDescriptor
         if: lm_own_global_allocation_descriptors_ready = 0
             return: 0
     return: lm_own_allocation_descriptor_find(lm_own_global_allocation_descriptors, address)
 end: external
 
 external:
-    fn: lm_own_arena_new_zero (@: LmOwnArena arena; size_t: size) @: void
+    fn: lm_own_arena_new_zero (LmOwnArena: arena; size_t: size) @: void
         @: void object
 
         if: arena = 0 || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
@@ -454,7 +454,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_arena_array_new_zero (@: LmOwnArena arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
+    fn: lm_own_arena_array_new_zero (LmOwnArena: arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
         @: void object
         size_t: bytes
 
@@ -480,14 +480,14 @@ external:
 end: external
 
 external:
-    fn: lm_own_arena_allocation_descriptor (const: @(LmOwnArena arena); const: @(void address)) const: @: LmOwnAllocationDescriptor
+    fn: lm_own_arena_allocation_descriptor (const: (LmOwnArena: arena); const: @(void address)) const: LmOwnAllocationDescriptor
         if: arena = 0 || arena\allocation_descriptors = 0
             return: 0
     return: lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
 end: external
 
 external:
-    fn: lm_own_arena_copy_bytes (@: LmOwnArena arena; const: @(char source); size_t: length) @: char
+    fn: lm_own_arena_copy_bytes (LmOwnArena: arena; const: @(char source); size_t: length) @: char
         @: char copy
 
         copy: lm_own_arena_new_zero(arena, length + 1U)
@@ -500,8 +500,8 @@ external:
 end: external
 
 external:
-    fn: lm_own_arena_add_lazy_edge (@: LmOwnArena target; @: LmOwnArena source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
-        @: LmOwnLazyEdge edge
+    fn: lm_own_arena_add_lazy_edge (LmOwnArena: target; LmOwnArena: source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
+        LmOwnLazyEdge: edge
         int: status
 
         if: target = 0 || source = 0 || patch_slot = 0 || target\frozen || target\lazy_edges = 0
@@ -527,8 +527,8 @@ external:
 end: external
 
 external:
-    fn: lm_own_arena_promote_lazy_edges (@: LmOwnArena arena) int
-        @: LmOwnLazyEdge edge
+    fn: lm_own_arena_promote_lazy_edges (LmOwnArena: arena) int
+        LmOwnLazyEdge: edge
         @: void copy
         size_t: i
 
@@ -559,7 +559,7 @@ external:
 end: external
 
 external:
-    fn: lm_own_arena_absorb (@: LmOwnArena target; @: LmOwnArena source) int
+    fn: lm_own_arena_absorb (LmOwnArena: target; LmOwnArena: source) int
         @@: void items
         size_t: descriptor_base
         size_t: descriptor_new_count
@@ -568,8 +568,8 @@ external:
         size_t: lazy_base
         size_t: lazy_new_count
         size_t: i
-        @: LmOwnAllocationDescriptor descriptor
-        @: LmOwnLazyEdge edge
+        LmOwnAllocationDescriptor: descriptor
+        LmOwnLazyEdge: edge
 
         if: target = 0 || source = 0 || target\frozen
             return: 1

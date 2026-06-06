@@ -125,10 +125,10 @@ os:
         return: 0
 end: os
 
-fn: lm_vcpkg_options_new () @: LmVcpkgOptions
-return: lm_own_new_zero(c.sizeof(c.LmVcpkgOptions))
+fn: lm_vcpkg_options_new () LmVcpkgOptions
+    return: lm_own_new_zero(c.sizeof(c.LmVcpkgOptions))
 
-sub: lm_vcpkg_options_delete (@: LmVcpkgOptions options)
+sub: lm_vcpkg_options_delete (LmVcpkgOptions: options)
     lm_own_delete(options, 0)
 end: lm_vcpkg_options_delete
 
@@ -352,7 +352,7 @@ sub: lm_vcpkg_print_usage ()
     c.printf: "  --dry-run               print vcpkg plan without downloading\n"
 end: lm_vcpkg_print_usage
 
-fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options) int
+fn: lm_vcpkg_parse_options (int: argc; @@: char argv; LmVcpkgOptions: options) int
     int: index
 
     options\output_dir: lm_vcpkg_env_or_default("LM_VCPKG_DOWNLOADS", "build/vcpkg-downloads")
@@ -437,7 +437,7 @@ fn: lm_vcpkg_parse_options (int: argc; @@: char argv; @: LmVcpkgOptions options)
 
 return: 0
 
-fn: lm_vcpkg_build_command (@: LmVcpkgOptions options; @: char command; size_t: size) int
+fn: lm_vcpkg_build_command (LmVcpkgOptions: options; @: char command; size_t: size) int
     @: char discovered_root 0
     []: char discovered_tool 1024
     size_t: used
@@ -522,7 +522,7 @@ return: 0
 
 external:
     fn: main (int: argc; @@: char argv) int
-        @: LmVcpkgOptions options
+        LmVcpkgOptions: options
         []: char command 8192
         int: status
 

@@ -1,6 +1,6 @@
 import: "lm4/own_abi.lm4"
 
-fn: lm_trans_text_equals (const: @(LmP0Text text); const: @(char value)) int
+fn: lm_trans_text_equals (const: (LmP0Text: text); const: @(char value)) int
     size_t: length
 
     if: text = 0 || value = 0
@@ -8,7 +8,7 @@ fn: lm_trans_text_equals (const: @(LmP0Text text); const: @(char value)) int
     length: c.strlen(value)
 return: text\length = length && c.memcmp(text\data, value, length) = 0
 
-fn: lm_trans_text_same (const: @(LmP0Text left); const: @(LmP0Text right)) int
+fn: lm_trans_text_same (const: (LmP0Text: left); const: (LmP0Text: right)) int
     if: left = 0 || right = 0
         return: 0
     if: left\length != right\length
@@ -17,7 +17,7 @@ fn: lm_trans_text_same (const: @(LmP0Text left); const: @(LmP0Text right)) int
         return: 1
 return: c.memcmp(left\data, right\data, left\length) = 0
 
-fn: lm_trans_text_starts_with (const: @(LmP0Text text); const: @(char prefix)) int
+fn: lm_trans_text_starts_with (const: (LmP0Text: text); const: @(char prefix)) int
     size_t: length
 
     if: text = 0 || prefix = 0
@@ -25,7 +25,7 @@ fn: lm_trans_text_starts_with (const: @(LmP0Text text); const: @(char prefix)) i
     length: c.strlen(prefix)
 return: text\length >= length && c.memcmp(text\data, prefix, length) = 0
 
-fn: lm_trans_identifier_payload (const: @(LmP0Text atom); @: LmP0Text out_payload) int
+fn: lm_trans_identifier_payload (const: (LmP0Text: atom); LmP0Text: out_payload) int
     if: atom = 0 || out_payload = 0 || atom\data = 0
         return: 0
 
@@ -37,9 +37,9 @@ fn: lm_trans_identifier_payload (const: @(LmP0Text atom); @: LmP0Text out_payloa
 
 return: 1
 
-fn: lm_trans_identifier_same (const: @(LmP0Text left); const: @(LmP0Text right)) int
-    @: LmP0Text left_payload
-    @: LmP0Text right_payload
+fn: lm_trans_identifier_same (const: (LmP0Text: left); const: (LmP0Text: right)) int
+    LmP0Text: left_payload
+    LmP0Text: right_payload
     int: same
 
     left_payload: c.lm_trans_text_ref_new_cstr("")
@@ -59,8 +59,8 @@ fn: lm_trans_identifier_same (const: @(LmP0Text left); const: @(LmP0Text right))
     c.lm_trans_text_ref_destroy(@ right_payload)
 return: same
 
-fn: lm_trans_emit_identifier (FILE: file; const: @(LmP0Text name)) int
-    @: LmP0Text payload
+fn: lm_trans_emit_identifier (FILE: file; const: (LmP0Text: name)) int
+    LmP0Text: payload
     int: status
 
     payload: c.lm_trans_text_ref_new_cstr("")
@@ -74,14 +74,14 @@ fn: lm_trans_emit_identifier (FILE: file; const: @(LmP0Text name)) int
     c.lm_trans_text_ref_destroy(@ payload)
 return: status
 
-fn: lm_trans_registry_identifier_value (const: @(LmP0Text atom); @: LmP0Text out_payload) int
+fn: lm_trans_registry_identifier_value (const: (LmP0Text: atom); LmP0Text: out_payload) int
     if: atom = 0 || out_payload = 0
         return: 0
     if: atom\length > 0U && (atom\data[0] = '"' || atom\data[0] = '\'')
         return: 0
 return: lm_trans_identifier_payload(atom, out_payload)
 
-fn: lm_trans_registry_literal_value (const: @(LmP0Text atom); @: LmP0Text out_payload) int
+fn: lm_trans_registry_literal_value (const: (LmP0Text: atom); LmP0Text: out_payload) int
     char: quote
 
     if: atom = 0 || out_payload = 0 || atom\data = 0
@@ -100,8 +100,8 @@ fn: lm_trans_registry_literal_value (const: @(LmP0Text atom); @: LmP0Text out_pa
 
 return: lm_trans_identifier_payload(atom, out_payload)
 
-fn: lm_trans_registry_payload_is_null (const: @(LmP0Text atom)) int
-    @: LmP0Text payload
+fn: lm_trans_registry_payload_is_null (const: (LmP0Text: atom)) int
+    LmP0Text: payload
     int: is_null
 
     payload: c.lm_trans_text_ref_new_cstr("")
@@ -114,13 +114,13 @@ fn: lm_trans_registry_payload_is_null (const: @(LmP0Text atom)) int
     c.lm_trans_text_ref_destroy(@ payload)
 return: is_null
 
-fn: lm_trans_text_copy_cstr (const: @(LmP0Text text)) @: char
+fn: lm_trans_text_copy_cstr (const: (LmP0Text: text)) @: char
     if: text = 0
         return: 0
 return: lm_own_copy_bytes(text\data, text\length)
 
 fn: lm_trans_text_copy_cstr_from_cstr (const: @(char text)) @: char
-    @: LmP0Text view
+    LmP0Text: view
     @: char copy
 
     view: lm_trans_text_from_cstr(text)
@@ -130,7 +130,7 @@ fn: lm_trans_text_copy_cstr_from_cstr (const: @(char text)) @: char
     c.lm_trans_text_ref_destroy(@ view)
 return: copy
 
-fn: lm_trans_registry_value_copy_cstr (const: @(LmP0Text value)) @: char
+fn: lm_trans_registry_value_copy_cstr (const: (LmP0Text: value)) @: char
     @: char copy
     size_t: length
 
@@ -146,7 +146,7 @@ fn: lm_trans_registry_value_copy_cstr (const: @(LmP0Text value)) @: char
     copy[length]: '\0'
 return: copy
 
-fn: lm_trans_registry_clone_text (const: @(LmP0Text source); @: LmP0Text out_text) int
+fn: lm_trans_registry_clone_text (const: (LmP0Text: source); LmP0Text: out_text) int
     @: char copy
 
     if: out_text = 0
@@ -169,10 +169,10 @@ fn: lm_trans_registry_clone_text (const: @(LmP0Text source); @: LmP0Text out_tex
     out_text\length: source\length
 return: 0
 
-fn: lm_trans_text_from_cstr (const: @(char text)) @: LmP0Text
-return: c.lm_trans_text_ref_new_cstr(text)
+fn: lm_trans_text_from_cstr (const: @(char text)) LmP0Text
+    return: c.lm_trans_text_ref_new_cstr(text)
 
-fn: lm_trans_text_assign_cstr (@: LmP0Text out_text; const: @(char text)) int
+fn: lm_trans_text_assign_cstr (LmP0Text: out_text; const: @(char text)) int
     if: out_text = 0
         return: 0
     if: text = 0
@@ -181,7 +181,7 @@ fn: lm_trans_text_assign_cstr (@: LmP0Text out_text; const: @(char text)) int
     out_text\length: c.strlen(text)
 return: 1
 
-fn: lm_trans_text_all_char (const: @(LmP0Text text); char: ch) int
+fn: lm_trans_text_all_char (const: (LmP0Text: text); char: ch) int
     size_t: i
     size_t: length
 
@@ -215,7 +215,7 @@ fn: lm_trans_prelude_file (FILE: fallback) FILE
         return: c.lm_trans_prelude_output
 return: fallback
 
-fn: lm_trans_write_text (FILE: file; const: @(LmP0Text text)) int
+fn: lm_trans_write_text (FILE: file; const: (LmP0Text: text)) int
     if: text = 0
         return: 1
 return: lm_trans_write_all(file, text\data, text\length)
@@ -232,8 +232,8 @@ fn: lm_trans_emit_indent (FILE: file; unsigned: indent) int
 
 return: 0
 
-fn: lm_trans_nth_field (const: @(LmP0Structure structure); size_t: index) const: @: LmP0Field
-    const: @: LmP0Field field
+fn: lm_trans_nth_field (const: (LmP0Structure: structure); size_t: index) const: LmP0Field
+    const: LmP0Field: field
     size_t: i
 
     field: c.structure->first_field

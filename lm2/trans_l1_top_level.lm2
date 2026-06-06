@@ -1,40 +1,40 @@
-sub: lm_trans_top_level_item_destroy (@: LmTransTopLevelItem item)
+sub: lm_trans_top_level_item_destroy (LmTransTopLevelItem: item)
     if: item != 0
         lm_trans_function_header_destroy(item\function)
         item\function: 0
 end: lm_trans_top_level_item_destroy
 
-fn: lm_trans_top_level_item_new () @: LmTransTopLevelItem
-    @: LmTransTopLevelItem item
+fn: lm_trans_top_level_item_new () LmTransTopLevelItem
+    LmTransTopLevelItem: item
 
     item: lm_own_new_zero(c.sizeof(item[0]))
 return: item
 
-sub: lm_trans_top_level_item_delete (@: LmTransTopLevelItem item)
+sub: lm_trans_top_level_item_delete (LmTransTopLevelItem: item)
     lm_trans_top_level_item_destroy(item)
     lm_own_delete(item, 0)
 end: lm_trans_top_level_item_delete
 
-fn: lm_trans_head_binding_new () @: LmTransHeadBinding
-    @: LmTransHeadBinding binding
+fn: lm_trans_head_binding_new () LmTransHeadBinding
+    LmTransHeadBinding: binding
 
     binding: lm_own_new_zero(c.sizeof(binding[0]))
 return: binding
 
-fn: lm_trans_p0_structure_view_new () @: LmP0Structure
-    @: LmP0Structure structure
+fn: lm_trans_p0_structure_view_new () LmP0Structure
+    LmP0Structure: structure
 
     structure: lm_own_new_zero(c.sizeof(structure[0]))
 return: structure
 
-fn: lm_trans_top_level_item_frame (const: @(LmTransTopLevelItem item)) const: @: LmP0Frame
+fn: lm_trans_top_level_item_frame (const: (LmTransTopLevelItem: item)) const: LmP0Frame
     if: item != 0
         return: item\frame
 return: 0
 
-fn: lm_trans_top_level_declare_generated_return_class (@: LmTransNamespace namespace_; const: @(LmTransFunctionHeader function)) int
+fn: lm_trans_top_level_declare_generated_return_class (LmTransNamespace: namespace_; const: (LmTransFunctionHeader: function)) int
     @: char return_type_name_storage
-    @: LmP0Text return_type_name
+    LmP0Text: return_type_name
     int: status
 
     if: function = 0 || function\is_struct_return = 0
@@ -54,12 +54,12 @@ fn: lm_trans_top_level_declare_generated_return_class (@: LmTransNamespace names
 return: status
 
 fn: lm_trans_top_level_declare_function_params (
-    @: LmTransNamespace namespace_
-    const: @(LmTransFunctionHeader function)
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
 ) int
-    const: @: LmP0Field field
-    @: LmP0Text name
-    @: LmTransL4CallableType type
+    const: LmP0Field: field
+    LmP0Text: name
+    LmTransL4CallableType: type
     int: status
 
     if: namespace_ = 0 || function = 0
@@ -87,11 +87,11 @@ fn: lm_trans_top_level_declare_function_params (
 return: status
 
 fn: lm_trans_top_level_declare_function_body_named_structures (
-    @: LmTransNamespace namespace_
-    const: @(LmTransFunctionHeader function)
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
 ) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+    const: LmP0Field: field
+    const: LmP0Node: node
     int: status
 
     if: namespace_ = 0 || function = 0 || function\is_descriptor_only
@@ -110,7 +110,7 @@ fn: lm_trans_top_level_declare_function_body_named_structures (
     lm_trans_namespace_leave_scope(namespace_)
 return: status
 
-fn: lm_trans_top_level_declare_function (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     int: status
 
     if: item = 0 || item\function = 0
@@ -127,7 +127,7 @@ fn: lm_trans_top_level_declare_function (@: LmTransNamespace namespace_; const: 
         status: lm_trans_top_level_declare_function_body_named_structures(namespace_, item\function)
 return: status
 
-fn: lm_trans_top_level_declare_function_compatible (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     int: status
 
     if: item = 0 || item\function = 0
@@ -144,129 +144,129 @@ fn: lm_trans_top_level_declare_function_compatible (@: LmTransNamespace namespac
         status: lm_trans_top_level_declare_function_body_named_structures(namespace_, item\function)
 return: status
 
-fn: lm_trans_top_level_emit_l1 (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_l1 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     namespace_: namespace_
 return: lm_trans_emit_l1_frame(file, item\frame)
 
-fn: lm_trans_top_level_emit_l2 (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_l2 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     namespace_: namespace_
 return: lm_trans_emit_l2_frame(file, item\frame)
 
-fn: lm_trans_top_level_emit_os (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_os (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_os_frame(file, item\frame, namespace_)
 
-fn: lm_trans_top_level_emit_ifdef (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_ifdef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_ifdef_frame(file, item\frame, namespace_)
 
-fn: lm_trans_top_level_declare_guard (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_guard (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_guard_frame(namespace_, lm_trans_top_level_item_frame(item))
 
-fn: lm_trans_top_level_emit_guard (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_guard (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_guard_frame(file, item\frame, namespace_)
 
-fn: lm_trans_top_level_declare_extern_c (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_extern_c (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_extern_c_frame(namespace_, lm_trans_top_level_item_frame(item))
 
-fn: lm_trans_top_level_emit_extern_c (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_extern_c (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_extern_c_frame(file, item\frame, namespace_)
 
-fn: lm_trans_top_level_declare_import (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_import (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_import_frame(namespace_, lm_trans_top_level_item_frame(item))
 
-fn: lm_trans_top_level_emit_table (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_table (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_statement_emit_table(file, 0, lm_trans_top_level_item_frame(item), 0U, namespace_)
 
-fn: lm_trans_top_level_emit_join (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_join (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_statement_emit_join(file, 0, lm_trans_top_level_item_frame(item), 0U, namespace_)
 
-fn: lm_trans_top_level_emit_import_prelude (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_import_prelude (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_import_prelude(file, lm_trans_top_level_item_frame(item), namespace_)
 
-fn: lm_trans_top_level_emit_import_functions (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_import_functions (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_import_functions(file, lm_trans_top_level_item_frame(item), namespace_)
 
-fn: lm_trans_top_level_emit_include (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_include (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     namespace_: namespace_
 return: lm_trans_emit_l1_include_frame(file, item\frame)
 
-fn: lm_trans_top_level_declare_atom_os (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_atom_os (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_declare_l2_registry_os_table(namespace_)
 
-fn: lm_trans_top_level_declare_atom_ifdef (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_atom_ifdef (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_declare_l2_registry_ifdef_table(namespace_)
 
-fn: lm_trans_top_level_emit_atom_include (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_include (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_registry_include_table(file, namespace_)
 
-fn: lm_trans_top_level_emit_define (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_define (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_define_frame(file, lm_trans_top_level_item_frame(item), namespace_)
 
-fn: lm_trans_top_level_emit_ifndef_default (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_ifndef_default (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_ifndef_default_frame(file, lm_trans_top_level_item_frame(item), namespace_)
 
-fn: lm_trans_top_level_emit_atom_os (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_os (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l2_registry_os_table(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_ifdef (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_ifdef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l2_registry_ifdef_table(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_layout (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_layout (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_layout_typedefs(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_constant (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_constant (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_constant_defines(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_define (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_define (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_define_table(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_alias (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_alias (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_alias_typedefs(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_forward (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_forward (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_forward_typedefs(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_prototype (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_prototype (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_prototypes(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_fn (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_fn (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_fn_descriptors(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_guard (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_guard (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_guard_markers(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_extern_c (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_extern_c (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_extern_c_markers(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_unit (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_unit (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     item: item
 return: lm_trans_emit_l4_units(file, namespace_)
 
-fn: lm_trans_top_level_emit_atom_sequence (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_atom_sequence (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\node = 0 || item\node\kind != c.LM_P0_NODE_ATOM
         return: 1
 return: lm_trans_emit_atom_statement_sequence(file, item\node\as\atom, 0U, namespace_)
 
-fn: lm_trans_top_level_declare_atom_sequence (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
-    const: @: LmOwnPtrStack rows
-    @: LmTransRegistryFact row
-    @: LmP0Node node
-    @: LmP0NodeAs node_as
-    @: LmP0Text item_name
-    @: LmTransTopLevelItem child
+fn: lm_trans_top_level_declare_atom_sequence (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    const: LmOwnPtrStack: rows
+    LmTransRegistryFact: row
+    LmP0Node: node
+    LmP0NodeAs: node_as
+    LmP0Text: item_name
+    LmTransTopLevelItem: child
     size_t: i
     int: status
 
@@ -312,7 +312,7 @@ fn: lm_trans_top_level_declare_atom_sequence (@: LmTransNamespace namespace_; co
     lm_trans_text_ref_destroy(@ item_name)
 return: status
 
-fn: lm_trans_top_level_atom_binding (const: @(LmP0Text atom); @: LmTransTopLevelItem out) int
+fn: lm_trans_top_level_atom_binding (const: (LmP0Text: atom); LmTransTopLevelItem: out) int
     const: @: char binding
 
     if: out = 0
@@ -385,7 +385,7 @@ fn: lm_trans_top_level_atom_binding (const: @(LmP0Text atom); @: LmTransTopLevel
     c.fprintf(c.stderr, "trans registry error: unknown top-level atom binding %s\n", binding)
 return: -1
 
-fn: lm_trans_top_level_statement_binding (const: @(LmTransHeadBinding binding); @: LmTransTopLevelItem out) int
+fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); LmTransTopLevelItem: out) int
     const: @: char receiver
 
     if: binding = 0 || out = 0 || binding\statement_frame = 0
@@ -449,7 +449,7 @@ fn: lm_trans_top_level_statement_binding (const: @(LmTransHeadBinding binding); 
         return: 1
 return: 0
 
-fn: lm_trans_level_receiver_binding_from_head (const: @(LmP0Text head)) const: @: char
+fn: lm_trans_level_receiver_binding_from_head (const: (LmP0Text: head)) const: @: char
     const: @: char receiver_type
 
     if: head = 0
@@ -460,12 +460,12 @@ fn: lm_trans_level_receiver_binding_from_head (const: @(LmP0Text head)) const: @
         return: 0
 return: lm_trans_registry_lookup(head, "receiver.level")
 
-fn: lm_trans_level_receiver_binding_from_frame (const: @(LmP0Frame frame)) const: @: char
+fn: lm_trans_level_receiver_binding_from_frame (const: (LmP0Frame: frame)) const: @: char
     if: frame != 0
         return: lm_trans_level_receiver_binding_from_head(frame\head)
 return: 0
 
-fn: lm_trans_frame_has_level_receiver_binding (const: @(LmP0Frame frame); const: @(char binding)) int
+fn: lm_trans_frame_has_level_receiver_binding (const: (LmP0Frame: frame); const: @(char binding)) int
     const: @: char actual
 
     if: binding = 0
@@ -474,13 +474,13 @@ fn: lm_trans_frame_has_level_receiver_binding (const: @(LmP0Frame frame); const:
     actual: lm_trans_level_receiver_binding_from_frame(frame)
 return: actual != 0 && c.strcmp(actual, binding) = 0
 
-fn: lm_trans_frame_is_l1_level_receiver (const: @(LmP0Frame frame)) int
+fn: lm_trans_frame_is_l1_level_receiver (const: (LmP0Frame: frame)) int
 return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l1_frame")
 
-fn: lm_trans_frame_is_l2_level_receiver (const: @(LmP0Frame frame)) int
+fn: lm_trans_frame_is_l2_level_receiver (const: (LmP0Frame: frame)) int
 return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l2_frame")
 
-fn: lm_trans_top_level_level_binding (const: @(LmTransHeadBinding binding); @: LmTransTopLevelItem out) int
+fn: lm_trans_top_level_level_binding (const: (LmTransHeadBinding: binding); LmTransTopLevelItem: out) int
     const: @: char receiver
 
     if: binding = 0 || out = 0 || binding\receiver_type = 0 || c.strcmp(binding\receiver_type, "receiver.level") != 0
@@ -502,9 +502,9 @@ fn: lm_trans_top_level_level_binding (const: @(LmTransHeadBinding binding); @: L
     c.fprintf(c.stderr, "trans registry error: unknown receiver.level binding %s\n", receiver)
 return: -1
 
-fn: lm_trans_end_frame_target (const: @(LmP0Frame frame)) const: @: LmP0Text
+fn: lm_trans_end_frame_target (const: (LmP0Frame: frame)) const: LmP0Text
     const: @: char receiver_type
-    const: @: LmP0Field field
+    const: LmP0Field: field
 
     if: frame = 0 || frame\head = 0 || frame\body = 0
         return: 0
@@ -518,8 +518,8 @@ fn: lm_trans_end_frame_target (const: @(LmP0Frame frame)) const: @: LmP0Text
         return: 0
 return: field\value\as\atom
 
-fn: lm_trans_end_frame_targets_level_receiver_binding (const: @(LmP0Frame frame); const: @(char binding)) int
-    const: @: LmP0Text target
+fn: lm_trans_end_frame_targets_level_receiver_binding (const: (LmP0Frame: frame); const: @(char binding)) int
+    const: LmP0Text: target
     const: @: char actual
 
     if: binding = 0
@@ -529,18 +529,18 @@ fn: lm_trans_end_frame_targets_level_receiver_binding (const: @(LmP0Frame frame)
     actual: lm_trans_level_receiver_binding_from_head(target)
 return: actual != 0 && c.strcmp(actual, binding) = 0
 
-fn: lm_trans_end_frame_targets_l1_level_receiver (const: @(LmP0Frame frame)) int
+fn: lm_trans_end_frame_targets_l1_level_receiver (const: (LmP0Frame: frame)) int
 return: lm_trans_end_frame_targets_level_receiver_binding(frame, "lm_trans_emit_l1_frame")
 
-fn: lm_trans_top_level_emit_registry (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_registry (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0
         return: 1
     file: file
     namespace_: namespace_
 return: 0
 
-fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: @(LmP0Node params); const: @(LmTransNamespace namespace_); int: emit_void_when_empty) int
-    const: @: LmP0Field field
+fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmP0Node: params); const: (LmTransNamespace: namespace_); int: emit_void_when_empty) int
+    const: LmP0Field: field
     int: first
 
     if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
@@ -561,7 +561,7 @@ fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: @(LmP0Node
         return: lm_trans_put(file, "void")
 return: 0
 
-fn: lm_trans_emit_callable_descriptor (FILE: file; const: @(LmTransFunctionHeader function); const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader: function); const: (LmTransNamespace: namespace_)) int
     if: function = 0 || function\is_descriptor_only = 0
         return: 1
 
@@ -601,9 +601,9 @@ fn: lm_trans_emit_callable_descriptor (FILE: file; const: @(LmTransFunctionHeade
         return: 1
 return: lm_trans_put(file, ");\n    void *env;\n    void (*destroy)(void *env);\n};\n")
 
-fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     int: status
-    @: LmP0Text descriptor_name
+    LmP0Text: descriptor_name
     @: char descriptor_name_storage
 
     descriptor_name: lm_trans_text_from_cstr("")
@@ -637,12 +637,12 @@ fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; @: LmTransNamespace
         return: 1
 return: 0
 
-fn: lm_trans_function_raw_return_descriptor_name (const: @(LmTransFunctionHeader function); const: @(LmTransNamespace namespace_); @: LmP0Text out_descriptor_name) int
+fn: lm_trans_function_raw_return_descriptor_name (const: (LmTransFunctionHeader: function); const: (LmTransNamespace: namespace_); LmP0Text: out_descriptor_name) int
     if: function = 0 || function\is_sub || function\is_struct_return || function\return_node = 0 || function\return_node\kind = c.LM_P0_NODE_STRUCTURE || out_descriptor_name = 0 || lm_trans_node_callable_descriptor_name(function\return_node, namespace_, out_descriptor_name) = 0 || lm_trans_registry_is_function_pointer_type_name(namespace_, out_descriptor_name) || lm_trans_callable_descriptor_is_raw_function_reference(namespace_, out_descriptor_name) = 0
         return: 0
 return: 1
 
-fn: lm_trans_emit_raw_callable_return_prefix (FILE: file; const: @(LmTransNamespace namespace_); const: @(LmP0Text descriptor_name)) int
+fn: lm_trans_emit_raw_callable_return_prefix (FILE: file; const: (LmTransNamespace: namespace_); const: (LmP0Text: descriptor_name)) int
     @: char descriptor_cstr
     int: status
 
@@ -656,8 +656,8 @@ fn: lm_trans_emit_raw_callable_return_prefix (FILE: file; const: @(LmTransNamesp
     lm_own_delete(descriptor_cstr, 0)
 return: status
 
-fn: lm_trans_emit_raw_callable_return_suffix (FILE: file; const: @(LmTransNamespace namespace_); const: @(LmP0Text descriptor_name)) int
-    @@: LmTransAbiParam params
+fn: lm_trans_emit_raw_callable_return_suffix (FILE: file; const: (LmTransNamespace: namespace_); const: (LmP0Text: descriptor_name)) int
+    @: LmTransAbiParam params
     size_t: param_capacity
     size_t: param_count
     @: char descriptor_cstr
@@ -689,10 +689,10 @@ fn: lm_trans_emit_raw_callable_return_suffix (FILE: file; const: @(LmTransNamesp
     lm_own_delete(descriptor_cstr, 0)
 return: status
 
-fn: lm_trans_emit_function_prototype (FILE: file; const: @(LmTransFunctionHeader function); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader: function); LmTransNamespace: namespace_) int
     int: status
     int: raw_return
-    @: LmP0Text raw_return_descriptor_name
+    LmP0Text: raw_return_descriptor_name
 
     if: function = 0 || function\is_descriptor_only
         return: 0
@@ -759,12 +759,12 @@ fn: lm_trans_emit_function_prototype (FILE: file; const: @(LmTransFunctionHeader
         return: lm_trans_put(file, ";\n")
 return: lm_trans_put(file, ");\n")
 
-fn: lm_trans_top_level_emit_function_prototype (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_function_prototype (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\function = 0
         return: 1
 return: lm_trans_emit_function_prototype(file, item\function, namespace_)
 
-fn: lm_trans_top_level_emit_function (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_function (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     int: status
 
     if: item = 0 || item\function = 0
@@ -777,8 +777,8 @@ fn: lm_trans_top_level_emit_function (FILE: file; @: LmTransNamespace namespace_
         return: 1
 return: 0
 
-fn: lm_trans_const_storage_inner_frame (const: @(LmP0Frame frame)) const: @: LmP0Frame
-    const: @: LmP0Field field
+fn: lm_trans_const_storage_inner_frame (const: (LmP0Frame: frame)) const: LmP0Frame
+    const: LmP0Field: field
 
     if: frame = 0 || lm_trans_text_equals(frame\head, "const") = 0
         return: 0
@@ -790,8 +790,8 @@ fn: lm_trans_const_storage_inner_frame (const: @(LmP0Frame frame)) const: @: LmP
         return: 0
 return: field\value\as\frame
 
-fn: lm_trans_frame_looks_top_level_storage_declaration (const: @(LmP0Frame frame); const: @(LmTransNamespace namespace_)) int
-    const: @: LmP0Frame inner
+fn: lm_trans_frame_looks_top_level_storage_declaration (const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
+    const: LmP0Frame: inner
 
     if: lm_trans_frame_looks_storage_declaration(frame, namespace_) || (frame != 0 && lm_trans_text_all_char(frame\head, '@')) || (frame != 0 && lm_trans_text_is_array_receiver_head(frame\head))
         return: 1
@@ -799,15 +799,15 @@ fn: lm_trans_frame_looks_top_level_storage_declaration (const: @(LmP0Frame frame
     inner: lm_trans_const_storage_inner_frame(frame)
 return: lm_trans_frame_looks_storage_declaration(inner, namespace_) || (inner != 0 && lm_trans_text_all_char(inner\head, '@')) || (inner != 0 && lm_trans_text_is_array_receiver_head(inner\head))
 
-fn: lm_trans_top_level_declare_storage_declaration (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
-    const: @: LmP0Frame frame
-    const: @: LmP0Structure body
-    const: @: LmP0Field field
-    const: @: LmP0Field type_field
-    const: @: LmP0Field name_field
-    const: @: LmP0Node type_node
-    const: @: LmP0Node name_node
-    const: @: LmP0Frame inner
+fn: lm_trans_top_level_declare_storage_declaration (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    const: LmP0Frame: frame
+    const: LmP0Structure: body
+    const: LmP0Field: field
+    const: LmP0Field: type_field
+    const: LmP0Field: name_field
+    const: LmP0Node: type_node
+    const: LmP0Node: name_node
+    const: LmP0Frame: inner
 
     if: item = 0 || item\frame = 0
         return: 1
@@ -889,9 +889,9 @@ fn: lm_trans_top_level_declare_storage_declaration (@: LmTransNamespace namespac
 
 return: 1
 
-fn: lm_trans_top_level_emit_static_declaration (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
-    const: @: LmP0Frame frame
-    const: @: LmP0Frame inner
+fn: lm_trans_top_level_emit_static_declaration (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    const: LmP0Frame: frame
+    const: LmP0Frame: inner
     const: @: char qualifier
 
     if: item = 0 || item\frame = 0
@@ -911,21 +911,21 @@ fn: lm_trans_top_level_emit_static_declaration (FILE: file; @: LmTransNamespace 
         return: lm_trans_emit_array_declaration_with_qualifier(file, frame, 0U, namespace_, qualifier)
 return: 1
 
-fn: lm_trans_top_level_declare_named_structure (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_named_structure (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
 return: lm_trans_declare_named_structure_layout(namespace_, item\frame)
 
 fn: lm_trans_top_level_named_structure_typedef_emitted (
-    const: @(LmTransNamespace namespace_)
-    const: @(LmP0Text name)
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
 ) int
 return: lm_trans_namespace_registry_lookup(namespace_, name, "typedef.emitted") != 0
 
 fn: lm_trans_top_level_mark_named_structure_typedef_emitted (
-    const: @(LmP0Text name)
+    const: LmP0Text: name
 ) int
-    @: LmP0Text table
+    LmP0Text: table
     int: status
 
     if: name = 0
@@ -939,8 +939,8 @@ return: status
 
 fn: lm_trans_top_level_emit_named_structure_typedef_once (
     FILE: file
-    @: LmTransNamespace namespace_
-    const: @(LmP0Frame frame)
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
     @: int out_emitted
 ) int
     if: out_emitted != 0
@@ -957,18 +957,18 @@ fn: lm_trans_top_level_emit_named_structure_typedef_once (
         out_emitted[0]: 1
 return: 0
 
-fn: lm_trans_top_level_emit_named_structure_typedef (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_named_structure_typedef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
 return: lm_trans_top_level_emit_named_structure_typedef_once(file, namespace_, item\frame, 0)
 
 fn: lm_trans_top_level_emit_function_named_structure_typedefs (
     FILE: file
-    @: LmTransNamespace namespace_
-    const: @(LmTransTopLevelItem item)
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
 ) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+    const: LmP0Field: field
+    const: LmP0Node: node
     int: status
     int: emitted
     int: emitted_any
@@ -995,10 +995,10 @@ fn: lm_trans_top_level_emit_function_named_structure_typedefs (
 return: status
 
 fn: lm_trans_top_level_function_body_has_named_structure_declaration (
-    const: @(LmTransFunctionHeader function)
+    const: LmTransFunctionHeader: function
 ) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+    const: LmP0Field: field
+    const: LmP0Node: node
 
     if: function = 0 || function\is_descriptor_only
         return: 0
@@ -1012,29 +1012,29 @@ fn: lm_trans_top_level_function_body_has_named_structure_declaration (
         field: field\next
 return: 0
 
-fn: lm_trans_top_level_emit_named_structure_storage (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_named_structure_storage (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
 return: lm_trans_emit_named_structure_storage(file, item\frame, 0U, namespace_, "static ")
 
-fn: lm_trans_top_level_declare_merge_named_structure (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_merge_named_structure (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
 return: lm_trans_declare_merge_named_structure_layout(namespace_, item\frame)
 
-fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
 return: lm_trans_emit_merge_named_structure_typedef(file, item\frame, 0U, namespace_)
 
-fn: lm_trans_top_level_emit_merge_named_structure_storage (FILE: file; @: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_emit_merge_named_structure_storage (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
 return: lm_trans_emit_merge_named_structure_storage(file, item\frame, 0U, namespace_, "static ")
 
-fn: lm_trans_lower_top_level_item (const: @(LmP0Node node); @: LmTransTopLevelItem out) int
-    @: LmTransHeadBinding binding
-    @: LmTransL4HeadBinding l4_root_binding
+fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem: out) int
+    LmTransHeadBinding: binding
+    LmTransL4HeadBinding: l4_root_binding
     int: function_status
     int: statement_status
     int: level_status
@@ -1134,8 +1134,8 @@ fn: lm_trans_lower_top_level_item (const: @(LmP0Node node); @: LmTransTopLevelIt
     c.fprintf(c.stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, registered level receiver, or registered L4 root receiver data\n")
 return: 1
 
-fn: lm_trans_top_level_item_lowered_new (const: @(LmP0Node node)) @: LmTransTopLevelItem
-    @: LmTransTopLevelItem item
+fn: lm_trans_top_level_item_lowered_new (const: (LmP0Node: node)) LmTransTopLevelItem
+    LmTransTopLevelItem: item
 
     item: lm_trans_top_level_item_new()
     if: item = 0
@@ -1145,17 +1145,17 @@ fn: lm_trans_top_level_item_lowered_new (const: @(LmP0Node node)) @: LmTransTopL
         return: 0
 return: item
 
-fn: lm_trans_emit_function_with_hoisted (FILE: file; const: @(LmTransFunctionHeader function); @: LmTransNamespace namespace_; @: LmOwnPtrStack hoisted_functions) int
-    const: @: LmP0Frame frame
-    @: LmTransFunctionState state
+fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHeader: function); LmTransNamespace: namespace_; LmOwnPtrStack: hoisted_functions) int
+    const: LmP0Frame: frame
+    LmTransFunctionState: state
     int: status
-    @: LmP0Text env_text
+    LmP0Text: env_text
     int: raw_return
-    @: LmP0Text raw_return_descriptor_name
+    LmP0Text: raw_return_descriptor_name
     size_t: capture_index
-    const: @: LmTransCapture capture
+    const: LmTransCapture: capture
     @: char capture_expr
-    @: LmP0Text capture_text
+    LmP0Text: capture_text
 
     if: function = 0 || function\frame = 0 || hoisted_functions = 0
         lm_trans_ptr_stack_delete(@ hoisted_functions)
@@ -1385,17 +1385,17 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: @(LmTransFunctionHea
 return: status
 
 sub: lm_trans_function_emit_frame_delete_any (@: void item)
-    @: LmTransFunctionEmitFrame frame
+    LmTransFunctionEmitFrame: frame
 
-    frame: cast: (@: LmTransFunctionEmitFrame) item
+    frame: cast: (LmTransFunctionEmitFrame) item
     if: frame != 0
         lm_trans_ptr_stack_delete(@ frame\hoisted_functions)
     lm_own_delete(frame, 0)
 end: lm_trans_function_emit_frame_delete_any
 
-fn: lm_trans_function_emit_frame_new (const: @(LmTransFunctionHeader function); @: LmTransNamespace namespace_) @: LmTransFunctionEmitFrame
-    @: LmTransFunctionEmitFrame frame
-    @: LmOwnPtrStack capture_candidates
+fn: lm_trans_function_emit_frame_new (const: (LmTransFunctionHeader: function); LmTransNamespace: namespace_) LmTransFunctionEmitFrame
+    LmTransFunctionEmitFrame: frame
+    LmOwnPtrStack: capture_candidates
 
     if: function = 0 || function\frame = 0
         return: 0
@@ -1428,12 +1428,12 @@ fn: lm_trans_function_emit_frame_new (const: @(LmTransFunctionHeader function); 
     lm_trans_ptr_stack_delete(@ capture_candidates)
 return: frame
 
-fn: lm_trans_emit_function (FILE: file; const: @(LmTransFunctionHeader function); @: LmTransNamespace namespace_) int
-    @: LmOwnPtrStack stack
-    @: LmTransFunctionEmitFrame frame
-    @: LmTransFunctionEmitFrame child
-    @: LmTransHoistedFunction hoisted
-    @: LmOwnPtrStack hoisted_functions
+fn: lm_trans_emit_function (FILE: file; const: (LmTransFunctionHeader: function); LmTransNamespace: namespace_) int
+    LmOwnPtrStack: stack
+    LmTransFunctionEmitFrame: frame
+    LmTransFunctionEmitFrame: child
+    LmTransHoistedFunction: hoisted
+    LmOwnPtrStack: hoisted_functions
     int: status
 
     stack: lm_trans_ptr_stack_new(@lm_trans_function_emit_frame_delete_any)
@@ -1498,10 +1498,10 @@ fn: lm_trans_emit_function (FILE: file; const: @(LmTransFunctionHeader function)
     lm_trans_ptr_stack_delete(@ stack)
 return: status
 
-fn: lm_trans_emit_l2_structure_prelude (FILE: file; const: @(LmP0Structure body); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_structure_prelude (FILE: file; const: (LmP0Structure: body); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: status
     int: emitted_prelude
 
@@ -1536,10 +1536,10 @@ fn: lm_trans_emit_l2_structure_prelude (FILE: file; const: @(LmP0Structure body)
         field: field\next
 return: 0
 
-fn: lm_trans_emit_l2_structure_prototypes (FILE: file; const: @(LmP0Structure body); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_structure_prototypes (FILE: file; const: (LmP0Structure: body); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: status
     int: emitted_prototype
 
@@ -1569,10 +1569,10 @@ fn: lm_trans_emit_l2_structure_prototypes (FILE: file; const: @(LmP0Structure bo
         return: lm_trans_put(file, "\n")
 return: 0
 
-fn: lm_trans_emit_l2_structure_after_prototypes (FILE: file; const: @(LmP0Structure body); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_structure_after_prototypes (FILE: file; const: (LmP0Structure: body); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: status
     int: emitted_prelude
 
@@ -1607,10 +1607,10 @@ fn: lm_trans_emit_l2_structure_after_prototypes (FILE: file; const: @(LmP0Struct
         field: field\next
 return: 0
 
-fn: lm_trans_emit_l2_structure_functions (FILE: file; const: @(LmP0Structure body); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_structure_functions (FILE: file; const: (LmP0Structure: body); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: status
     int: emitted_function
 
@@ -1640,10 +1640,10 @@ fn: lm_trans_emit_l2_structure_functions (FILE: file; const: @(LmP0Structure bod
         field: field\next
 return: 0
 
-fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: @(LmP0Structure body); const: @(LmP0Frame explicit_l2); @: LmTransNamespace namespace_; int: declare_items) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: (LmP0Structure: body); const: (LmP0Frame: explicit_l2); LmTransNamespace: namespace_; int: declare_items) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     FILE: prelude_file
 
     if: namespace_ = 0
@@ -1677,8 +1677,8 @@ fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: @(LmP0Structur
         return: lm_trans_validate_end_trailer(explicit_l2)
 return: 0
 
-fn: lm_trans_emit_l2_structure (FILE: file; const: @(LmP0Structure body); const: @(LmP0Frame explicit_l2)) int
-    @: LmTransNamespace namespace_
+fn: lm_trans_emit_l2_structure (FILE: file; const: (LmP0Structure: body); const: (LmP0Frame: explicit_l2)) int
+    LmTransNamespace: namespace_
     int: status
 
     namespace_: lm_trans_namespace_new()
@@ -1689,7 +1689,7 @@ fn: lm_trans_emit_l2_structure (FILE: file; const: @(LmP0Structure body); const:
     lm_trans_namespace_delete(namespace_)
 return: status
 
-fn: lm_trans_emit_l2_frame (FILE: file; const: @(LmP0Frame l2)) int
+fn: lm_trans_emit_l2_frame (FILE: file; const: (LmP0Frame: l2)) int
     if: l2 = 0
         return: 1
 return: lm_trans_emit_l2_structure(file, l2\body, l2)
@@ -1701,7 +1701,7 @@ fn: lm_trans_import_source_path () const: @: char
         return: lm_trans_registry\source_path
 return: 0
 
-fn: lm_trans_import_stack_note (@: LmOwnPtrStack stack; const: @(char path)) int
+fn: lm_trans_import_stack_note (LmOwnPtrStack: stack; const: @(char path)) int
     @: char copy
 
     if: stack = 0 || path = 0
@@ -1717,7 +1717,7 @@ fn: lm_trans_import_stack_note (@: LmOwnPtrStack stack; const: @(char path)) int
         return: 1
 return: 0
 
-fn: lm_trans_import_text_has_extension (const: @(LmP0Text path); const: @(char extension)) int
+fn: lm_trans_import_text_has_extension (const: (LmP0Text: path); const: @(char extension)) int
     size_t: extension_length
 
     if: path = 0 || extension = 0
@@ -1727,10 +1727,10 @@ fn: lm_trans_import_text_has_extension (const: @(LmP0Text path); const: @(char e
         return: 0
 return: c.memcmp(path\data + path\length - extension_length, extension, extension_length) = 0
 
-fn: lm_trans_import_frame_has_code_path (const: @(LmP0Frame frame)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmP0Text path_value
+fn: lm_trans_import_frame_has_code_path (const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmP0Text: path_value
     int: result
 
     path_value: lm_trans_text_from_cstr("")
@@ -1754,8 +1754,8 @@ fn: lm_trans_import_frame_has_code_path (const: @(LmP0Frame frame)) int
     lm_trans_text_ref_destroy(@ path_value)
 return: result
 
-fn: lm_trans_import_resolve_node (const: @(LmP0Node node); @: char path; size_t: path_size; const: @(char error_name)) int
-    @: LmP0Text path_value
+fn: lm_trans_import_resolve_node (const: (LmP0Node: node); @: char path; size_t: path_size; const: @(char error_name)) int
+    LmP0Text: path_value
     @: char candidate_name
     const: @: char effective_error_name
     int: status
@@ -1782,8 +1782,8 @@ fn: lm_trans_import_resolve_node (const: @(LmP0Node node); @: char path; size_t:
         return: 1
 return: 0
 
-fn: lm_trans_import_parse_document (const: @(char path); @@: LmP0Document out_document; const: @(char phase)) int
-    const: @: LmP0Diagnostic diagnostic
+fn: lm_trans_import_parse_document (const: @(char path); @: LmP0Document out_document; const: @(char phase)) int
+    const: LmP0Diagnostic: diagnostic
     const: @: char phase_name
     int: status
 
@@ -1807,10 +1807,10 @@ fn: lm_trans_import_parse_document (const: @(char path); @@: LmP0Document out_do
     out_document[0]: 0
 return: 1
 
-fn: lm_trans_declare_l2_import_root (@: LmTransNamespace namespace_; const: @(LmP0Node root); int: implicit_l2) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_declare_l2_import_root (LmTransNamespace: namespace_; const: (LmP0Node: root); int: implicit_l2) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
 
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         return: 1
@@ -1839,10 +1839,10 @@ fn: lm_trans_declare_l2_import_root (@: LmTransNamespace namespace_; const: @(Lm
         field: field\next
 return: 0
 
-fn: lm_trans_emit_l2_import_root_prelude (FILE: file; const: @(LmP0Node root); int: implicit_l2; @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_import_root_prelude (FILE: file; const: (LmP0Node: root); int: implicit_l2; LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: emitted
     int: status
 
@@ -1882,10 +1882,10 @@ fn: lm_trans_emit_l2_import_root_prelude (FILE: file; const: @(LmP0Node root); i
         field: field\next
 return: 0
 
-fn: lm_trans_emit_l2_import_root_prototypes (FILE: file; const: @(LmP0Node root); int: implicit_l2; @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_import_root_prototypes (FILE: file; const: (LmP0Node: root); int: implicit_l2; LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: status
 
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
@@ -1916,10 +1916,10 @@ fn: lm_trans_emit_l2_import_root_prototypes (FILE: file; const: @(LmP0Node root)
         field: field\next
 return: 0
 
-fn: lm_trans_emit_l2_import_root_after_prototypes (FILE: file; const: @(LmP0Node root); int: implicit_l2; @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_import_root_after_prototypes (FILE: file; const: (LmP0Node: root); int: implicit_l2; LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: emitted
     int: status
 
@@ -1958,10 +1958,10 @@ fn: lm_trans_emit_l2_import_root_after_prototypes (FILE: file; const: @(LmP0Node
         field: field\next
 return: 0
 
-fn: lm_trans_emit_l2_import_root_functions (FILE: file; const: @(LmP0Node root); int: implicit_l2; @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_emit_l2_import_root_functions (FILE: file; const: (LmP0Node: root); int: implicit_l2; LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
     int: emitted
     int: status
 
@@ -2006,8 +2006,8 @@ fn: lm_trans_emit_l2_import_root_functions (FILE: file; const: @(LmP0Node root);
         field: field\next
 return: 0
 
-fn: lm_trans_declare_l2_import_path (@: LmTransNamespace namespace_; const: @(char path)) int
-    @: LmP0Document document
+fn: lm_trans_declare_l2_import_path (LmTransNamespace: namespace_; const: @(char path)) int
+    LmP0Document: document
     const: @: char previous_source_path
     int: loaded
     int: status
@@ -2046,8 +2046,8 @@ fn: lm_trans_declare_l2_import_path (@: LmTransNamespace namespace_; const: @(ch
         return: 1
 return: 0
 
-fn: lm_trans_emit_l2_import_path_prelude (FILE: file; @: LmTransNamespace namespace_; const: @(char path)) int
-    @: LmP0Document document
+fn: lm_trans_emit_l2_import_path_prelude (FILE: file; LmTransNamespace: namespace_; const: @(char path)) int
+    LmP0Document: document
     const: @: char previous_source_path
     int: loaded
     int: status
@@ -2078,8 +2078,8 @@ fn: lm_trans_emit_l2_import_path_prelude (FILE: file; @: LmTransNamespace namesp
     lm_p0_document_destroy(document)
 return: status
 
-fn: lm_trans_emit_l2_import_path_functions (FILE: file; @: LmTransNamespace namespace_; const: @(char path)) int
-    @: LmP0Document document
+fn: lm_trans_emit_l2_import_path_functions (FILE: file; LmTransNamespace: namespace_; const: @(char path)) int
+    LmP0Document: document
     const: @: char previous_source_path
     int: loaded
     int: status
@@ -2106,9 +2106,9 @@ fn: lm_trans_emit_l2_import_path_functions (FILE: file; @: LmTransNamespace name
     lm_p0_document_destroy(document)
 return: status
 
-fn: lm_trans_declare_l2_import_frame (@: LmTransNamespace namespace_; const: @(LmP0Frame frame)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_declare_l2_import_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     [4096]: char path
     int: declared
 
@@ -2132,9 +2132,9 @@ fn: lm_trans_declare_l2_import_frame (@: LmTransNamespace namespace_; const: @(L
         return: 1
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_emit_l2_import_prelude (FILE: file; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_emit_l2_import_prelude (FILE: file; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     [4096]: char path
     int: emitted
 
@@ -2158,9 +2158,9 @@ fn: lm_trans_emit_l2_import_prelude (FILE: file; const: @(LmP0Frame frame); @: L
         return: 1
 return: 0
 
-fn: lm_trans_emit_l2_import_functions (FILE: file; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_emit_l2_import_functions (FILE: file; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     [4096]: char path
     int: emitted
 
@@ -2184,7 +2184,7 @@ fn: lm_trans_emit_l2_import_functions (FILE: file; const: @(LmP0Frame frame); @:
         return: 1
 return: 0
 
-fn: lm_trans_inline_string_payload (const: @(LmP0Text text); @: LmP0Text out_payload; @: size_t out_run) int
+fn: lm_trans_inline_string_payload (const: (LmP0Text: text); LmP0Text: out_payload; @: size_t out_run) int
     char: quote
     size_t: open_run
     size_t: close_run
@@ -2214,8 +2214,8 @@ fn: lm_trans_inline_string_payload (const: @(LmP0Text text); @: LmP0Text out_pay
         out_run[0]: open_run
 return: 1
 
-fn: lm_trans_emit_l1_payload (FILE: output; const: @(LmP0Text text)) int
-    @: LmP0Text payload
+fn: lm_trans_emit_l1_payload (FILE: output; const: (LmP0Text: text)) int
+    LmP0Text: payload
     size_t: delimiter_run
     size_t: i
     char: ch
@@ -2264,8 +2264,8 @@ fn: lm_trans_emit_l1_payload (FILE: output; const: @(LmP0Text text)) int
     lm_trans_text_ref_destroy(@ payload)
 return: lm_trans_write_text(output, text)
 
-fn: lm_trans_emit_l1_structure (FILE: output; const: @(LmP0Structure structure)) int
-    const: @: LmP0Field field
+fn: lm_trans_emit_l1_structure (FILE: output; const: (LmP0Structure: structure)) int
+    const: LmP0Field: field
 
     if: structure = 0
         return: 0
@@ -2277,7 +2277,7 @@ fn: lm_trans_emit_l1_structure (FILE: output; const: @(LmP0Structure structure))
         field: field\next
 return: 0
 
-fn: lm_trans_os_condition (const: @(LmP0Text name)) const: @: char
+fn: lm_trans_os_condition (const: (LmP0Text: name)) const: @: char
     if: lm_trans_text_equals(name, "win")
         return: "defined(_WIN32)"
     if: lm_trans_text_equals(name, "mac")
@@ -2286,14 +2286,14 @@ fn: lm_trans_os_condition (const: @(LmP0Text name)) const: @: char
         return: "defined(__unix__)"
 return: 0
 
-fn: lm_trans_ifdef_condition_payload (const: @(LmP0Text name); @: LmP0Text out_condition) int
+fn: lm_trans_ifdef_condition_payload (const: (LmP0Text: name); LmP0Text: out_condition) int
     if: out_condition = 0 || lm_trans_identifier_payload(name, out_condition) = 0 || out_condition\length = 0U
         c.fprintf(c.stderr, "trans preprocessor error: ifdef branch expects a non-empty condition\n")
         return: 1
 return: 0
 
-fn: lm_trans_emit_preprocessor_atom_token (FILE: output; const: @(LmP0Node node); const: @(char receiver_name)) int
-    @: LmP0Text payload
+fn: lm_trans_emit_preprocessor_atom_token (FILE: output; const: (LmP0Node: node); const: @(char receiver_name)) int
+    LmP0Text: payload
     const: @: char effective_receiver
     int: status
 
@@ -2314,9 +2314,9 @@ fn: lm_trans_emit_preprocessor_atom_token (FILE: output; const: @(LmP0Node node)
     lm_trans_text_ref_destroy(@ payload)
 return: status
 
-fn: lm_trans_emit_preprocessor_define_frame (FILE: output; const: @(LmP0Frame frame); int: ifndef_default; const: @(char receiver_name)) int
-    const: @: LmP0Field field
-    @: LmP0Text name
+fn: lm_trans_emit_preprocessor_define_frame (FILE: output; const: (LmP0Frame: frame); int: ifndef_default; const: @(char receiver_name)) int
+    const: LmP0Field: field
+    LmP0Text: name
     const: @: char effective_receiver
     int: status
 
@@ -2369,17 +2369,17 @@ fn: lm_trans_emit_preprocessor_define_frame (FILE: output; const: @(LmP0Frame fr
     lm_trans_text_ref_destroy(@ name)
 return: status
 
-fn: lm_trans_emit_l2_define_frame (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_define_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
     namespace_: namespace_
 return: lm_trans_emit_preprocessor_define_frame(output, frame, 0, "define")
 
-fn: lm_trans_emit_l2_ifndef_default_frame (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_ifndef_default_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
     namespace_: namespace_
 return: lm_trans_emit_preprocessor_define_frame(output, frame, 1, "ifndef-default")
 
-fn: lm_trans_os_branch_looks_l2 (const: @(LmP0Structure body)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_os_branch_looks_l2 (const: (LmP0Structure: body)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
 
     if: body = 0
         return: 0
@@ -2398,10 +2398,10 @@ fn: lm_trans_os_branch_looks_l2 (const: @(LmP0Structure body)) int
         field: field\next
 return: 0
 
-fn: lm_trans_declare_l2_os_frame (@: LmTransNamespace namespace_; const: @(LmP0Frame frame)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    const: @: LmP0Frame branch
+fn: lm_trans_declare_l2_os_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: branch
     const: @: char condition
     int: emitted_default
 
@@ -2443,11 +2443,11 @@ fn: lm_trans_declare_l2_os_frame (@: LmTransNamespace namespace_; const: @(LmP0F
         field: field\next
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_declare_l2_ifdef_frame (@: LmTransNamespace namespace_; const: @(LmP0Frame frame)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    const: @: LmP0Frame branch
-    @: LmP0Text condition
+fn: lm_trans_declare_l2_ifdef_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: branch
+    LmP0Text: condition
     int: emitted_default
 
     if: frame = 0
@@ -2491,13 +2491,13 @@ fn: lm_trans_declare_l2_ifdef_frame (@: LmTransNamespace namespace_; const: @(Lm
         field: field\next
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_top_level_declare_ifdef (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_ifdef (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_ifdef_frame(namespace_, lm_trans_top_level_item_frame(item))
 
-fn: lm_trans_declare_l2_structure_import (@: LmTransNamespace namespace_; const: @(LmP0Structure body)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmTransTopLevelItem item
+fn: lm_trans_declare_l2_structure_import (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
 
     field: 0
     if: body != 0
@@ -2524,18 +2524,18 @@ fn: lm_trans_declare_l2_structure_import (@: LmTransNamespace namespace_; const:
         field: field\next
 return: 0
 
-fn: lm_trans_top_level_declare_os (@: LmTransNamespace namespace_; const: @(LmTransTopLevelItem item)) int
+fn: lm_trans_top_level_declare_os (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_os_frame(namespace_, lm_trans_top_level_item_frame(item))
 
-fn: lm_trans_emit_l2_os_branch (FILE: output; const: @(LmP0Frame branch); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_os_branch (FILE: output; const: (LmP0Frame: branch); LmTransNamespace: namespace_) int
     if: lm_trans_os_branch_looks_l2(branch\body)
         return: lm_trans_emit_l2_structure_with_namespace(output, branch\body, 0, namespace_, 0)
 return: lm_trans_emit_l1_structure(output, branch\body)
 
-fn: lm_trans_emit_l2_os_frame (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    const: @: LmP0Frame branch
+fn: lm_trans_emit_l2_os_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: branch
     const: @: char condition
     int: opened
     int: emitted_default
@@ -2590,11 +2590,11 @@ fn: lm_trans_emit_l2_os_frame (FILE: output; const: @(LmP0Frame frame); @: LmTra
         return: 1
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_emit_l2_ifdef_frame (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    const: @: LmP0Frame branch
-    @: LmP0Text condition
+fn: lm_trans_emit_l2_ifdef_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: branch
+    LmP0Text: condition
     int: opened
     int: emitted_default
 
@@ -2654,8 +2654,8 @@ fn: lm_trans_emit_l2_ifdef_frame (FILE: output; const: @(LmP0Frame frame); @: Lm
         return: 1
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_first_active_field (const: @(LmP0Structure body)) const: @: LmP0Field
-    const: @: LmP0Field field
+fn: lm_trans_first_active_field (const: (LmP0Structure: body)) const: LmP0Field
+    const: LmP0Field: field
 
     field: 0
     if: body != 0
@@ -2664,17 +2664,17 @@ fn: lm_trans_first_active_field (const: @(LmP0Structure body)) const: @: LmP0Fie
         field: field\next
 return: field
 
-fn: lm_trans_emit_l2_wrapper_body (FILE: output; const: @(LmP0Structure body); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_wrapper_body (FILE: output; const: (LmP0Structure: body); LmTransNamespace: namespace_) int
     if: lm_trans_os_branch_looks_l2(body)
         return: lm_trans_emit_l2_structure_with_namespace(output, body, 0, namespace_, 0)
 return: lm_trans_emit_l1_structure(output, body)
 
-fn: lm_trans_declare_l2_wrapper_body (@: LmTransNamespace namespace_; const: @(LmP0Structure body)) int
+fn: lm_trans_declare_l2_wrapper_body (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
     if: lm_trans_os_branch_looks_l2(body)
         return: lm_trans_declare_l2_structure_import(namespace_, body)
 return: 0
 
-sub: lm_trans_structure_view_assign (@: LmP0Structure target; const: @(LmP0Structure source))
+sub: lm_trans_structure_view_assign (LmP0Structure: target; const: (LmP0Structure: source))
     if: target = 0
         return
     if: source = 0
@@ -2687,10 +2687,10 @@ sub: lm_trans_structure_view_assign (@: LmP0Structure target; const: @(LmP0Struc
     target\field_count: source\field_count
 end: lm_trans_structure_view_assign
 
-fn: lm_trans_guard_body_from_frame (const: @(LmP0Frame frame); @: LmP0Text out_name; @: LmP0Structure out_body) int
-    const: @: LmP0Field name_field
-    const: @: LmP0Field body_field
-    const: @: LmP0Field extra_field
+fn: lm_trans_guard_body_from_frame (const: (LmP0Frame: frame); LmP0Text: out_name; LmP0Structure: out_body) int
+    const: LmP0Field: name_field
+    const: LmP0Field: body_field
+    const: LmP0Field: extra_field
 
     if: frame = 0 || out_name = 0 || out_body = 0
         return: 1
@@ -2714,9 +2714,9 @@ fn: lm_trans_guard_body_from_frame (const: @(LmP0Frame frame); @: LmP0Text out_n
     ---
 return: 0
 
-fn: lm_trans_declare_l2_guard_frame (@: LmTransNamespace namespace_; const: @(LmP0Frame frame)) int
-    @: LmP0Text name
-    @: LmP0Structure body
+fn: lm_trans_declare_l2_guard_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+    LmP0Text: name
+    LmP0Structure: body
     int: status
 
     name: lm_trans_text_from_cstr("")
@@ -2736,9 +2736,9 @@ fn: lm_trans_declare_l2_guard_frame (@: LmTransNamespace namespace_; const: @(Lm
     lm_own_delete(body, 0)
 return: status
 
-fn: lm_trans_emit_l2_guard_frame (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
-    @: LmP0Text name
-    @: LmP0Structure body
+fn: lm_trans_emit_l2_guard_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    LmP0Text: name
+    LmP0Structure: body
     int: status
 
     name: lm_trans_text_from_cstr("")
@@ -2768,14 +2768,14 @@ fn: lm_trans_emit_l2_guard_frame (FILE: output; const: @(LmP0Frame frame); @: Lm
     lm_own_delete(body, 0)
 return: status
 
-fn: lm_trans_declare_l2_extern_c_frame (@: LmTransNamespace namespace_; const: @(LmP0Frame frame)) int
+fn: lm_trans_declare_l2_extern_c_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
     if: frame = 0
         return: 1
     if: lm_trans_declare_l2_wrapper_body(namespace_, frame\body) != 0
         return: 1
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_emit_l2_extern_c_frame (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_extern_c_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
     if: frame = 0
         return: 1
     if: lm_trans_put(output, "#ifdef __cplusplus\nextern \"C\" {\n#endif\n") != 0
@@ -2786,7 +2786,7 @@ fn: lm_trans_emit_l2_extern_c_frame (FILE: output; const: @(LmP0Frame frame); @:
         return: 1
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_declare_l2_registry_os_node (@: LmTransNamespace namespace_; const: @(LmP0Node node)) int
+fn: lm_trans_declare_l2_registry_os_node (LmTransNamespace: namespace_; const: (LmP0Node: node)) int
     if: node = 0
         return: 0
     if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
@@ -2797,11 +2797,11 @@ fn: lm_trans_declare_l2_registry_os_node (@: LmTransNamespace namespace_; const:
         return: lm_trans_declare_l2_structure_import(namespace_, node\as\structure)
 return: 0
 
-fn: lm_trans_declare_l2_registry_os_table (@: LmTransNamespace namespace_) int
+fn: lm_trans_declare_l2_registry_os_table (LmTransNamespace: namespace_) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
-    @: LmP0Text branch_name
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    LmP0Text: branch_name
     const: @: char condition
     int: emitted_default
     int: emitted
@@ -2851,12 +2851,12 @@ fn: lm_trans_declare_l2_registry_os_table (@: LmTransNamespace namespace_) int
     lm_trans_text_ref_destroy(@ branch_name)
 return: 0
 
-fn: lm_trans_declare_l2_registry_ifdef_table (@: LmTransNamespace namespace_) int
+fn: lm_trans_declare_l2_registry_ifdef_table (LmTransNamespace: namespace_) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
-    @: LmP0Text branch_name
-    @: LmP0Text condition
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    LmP0Text: branch_name
+    LmP0Text: condition
     int: emitted_default
     int: emitted
 
@@ -2909,7 +2909,7 @@ fn: lm_trans_declare_l2_registry_ifdef_table (@: LmTransNamespace namespace_) in
     lm_trans_text_ref_destroy(@ branch_name)
 return: 0
 
-fn: lm_trans_emit_l2_registry_os_node (FILE: output; const: @(LmP0Node node); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_registry_os_node (FILE: output; const: (LmP0Node: node); LmTransNamespace: namespace_) int
     if: node = 0
         return: 0
     if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
@@ -2918,9 +2918,9 @@ fn: lm_trans_emit_l2_registry_os_node (FILE: output; const: @(LmP0Node node); @:
         return: lm_trans_emit_l2_structure_with_namespace(output, node\as\structure, 0, namespace_, 0)
 return: lm_trans_emit_l1_node(output, node)
 
-fn: lm_trans_l4_payload_structure_looks_bare_l2 (const: @(LmP0Structure body)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_l4_payload_structure_looks_bare_l2 (const: (LmP0Structure: body)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     int: found
 
     if: body = 0
@@ -2948,7 +2948,7 @@ fn: lm_trans_l4_payload_structure_looks_bare_l2 (const: @(LmP0Structure body)) i
         field: field\next
 return: found
 
-fn: lm_trans_emit_l4_payload_import_document (FILE: output; const: @(char payload_path); const: @(LmP0Node root); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l4_payload_import_document (FILE: output; const: @(char payload_path); const: (LmP0Node: root); LmTransNamespace: namespace_) int
     const: @: char previous_source_path
     FILE: prelude_file
     int: loaded
@@ -2980,12 +2980,12 @@ fn: lm_trans_emit_l4_payload_import_document (FILE: output; const: @(char payloa
     lm_trans_current_source_path: previous_source_path
 return: status
 
-fn: lm_trans_emit_l4_payload_import_frame (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    const: @: LmP0Diagnostic diagnostic
-    @: LmP0Document document
-    @: LmP0Text path_value
+fn: lm_trans_emit_l4_payload_import_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Diagnostic: diagnostic
+    LmP0Document: document
+    LmP0Text: path_value
     @: char candidate_name
     [4096]: char payload_path
     int: emitted
@@ -3051,16 +3051,16 @@ fn: lm_trans_emit_l4_payload_import_frame (FILE: output; const: @(LmP0Frame fram
     lm_trans_text_ref_destroy(@ path_value)
 return: 0
 
-fn: lm_trans_l4_payload_receiver_import (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
+fn: lm_trans_l4_payload_receiver_import (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
 return: lm_trans_emit_l4_payload_import_frame(output, frame, namespace_)
 
-fn: lm_trans_l4_payload_receiver_l2 (FILE: output; const: @(LmP0Frame frame); @: LmTransNamespace namespace_) int
+fn: lm_trans_l4_payload_receiver_l2 (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
     if: frame = 0
         return: 1
 return: lm_trans_emit_l2_structure_with_namespace(output, frame\body, frame, namespace_, 0)
 
-fn: lm_trans_l4_payload_pointer_binding_push (@: LmOwnPtrStack bindings; const: @(char head); const: @(char receiver_type); LmTransL4PayloadFrameHandler: handler) int
-    @: LmTransL4PayloadPointerBinding binding
+fn: lm_trans_l4_payload_pointer_binding_push (LmOwnPtrStack: bindings; const: @(char head); const: @(char receiver_type); LmTransL4PayloadFrameHandler: handler) int
+    LmTransL4PayloadPointerBinding: binding
 
     if: bindings = 0 || head = 0 || receiver_type = 0 || handler = 0
         return: 1
@@ -3076,7 +3076,7 @@ fn: lm_trans_l4_payload_pointer_binding_push (@: LmOwnPtrStack bindings; const: 
 return: 0
 
 fn: lm_trans_l4_payload_pointer_bindings_init () int
-    @: LmOwnPtrStack bindings
+    LmOwnPtrStack: bindings
 
     if: lm_trans_registry = 0
         return: 1
@@ -3097,10 +3097,10 @@ sub: lm_trans_l4_payload_pointer_bindings_destroy ()
         lm_trans_ptr_stack_delete(@ lm_trans_registry\l4_payload_pointer_bindings)
 end: lm_trans_l4_payload_pointer_bindings_destroy
 
-fn: lm_trans_l4_payload_pointer_binding_find (const: @(LmP0Text head)) const: @: LmTransL4PayloadPointerBinding
+fn: lm_trans_l4_payload_pointer_binding_find (const: (LmP0Text: head)) const: LmTransL4PayloadPointerBinding
     size_t: i
-    const: @: LmOwnPtrStack bindings
-    const: @: LmTransL4PayloadPointerBinding binding
+    const: LmOwnPtrStack: bindings
+    const: LmTransL4PayloadPointerBinding: binding
 
     if: head = 0 || lm_trans_registry = 0 || lm_trans_registry\l4_payload_pointer_bindings = 0
         return: 0
@@ -3114,9 +3114,9 @@ fn: lm_trans_l4_payload_pointer_binding_find (const: @(LmP0Text head)) const: @:
         i: i + 1U
 return: 0
 
-fn: lm_trans_l4_payload_frame_handler_resolve (const: @(LmP0Text head); @: LmTransL4PayloadFrameHandler out) int
+fn: lm_trans_l4_payload_frame_handler_resolve (const: (LmP0Text: head); @: LmTransL4PayloadFrameHandler out) int
     const: @: char receiver_type
-    const: @: LmTransL4PayloadPointerBinding binding
+    const: LmTransL4PayloadPointerBinding: binding
 
     if: head = 0 || out = 0
         return: 1
@@ -3144,7 +3144,7 @@ fn: lm_trans_l4_payload_frame_handler_resolve (const: @(LmP0Text head); @: LmTra
     out[0]: binding\handler
 return: 0
 
-fn: lm_trans_emit_l4_payload_node (FILE: output; const: @(LmP0Node node); @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l4_payload_node (FILE: output; const: (LmP0Node: node); LmTransNamespace: namespace_) int
     LmTransL4PayloadFrameHandler: frame_handler
 
     if: node = 0
@@ -3159,11 +3159,11 @@ fn: lm_trans_emit_l4_payload_node (FILE: output; const: @(LmP0Node node); @: LmT
         return: lm_trans_emit_l2_structure_with_namespace(output, node\as\structure, 0, namespace_, 0)
 return: lm_trans_emit_l1_node(output, node)
 
-fn: lm_trans_emit_l2_registry_os_table (FILE: output; @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_registry_os_table (FILE: output; LmTransNamespace: namespace_) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
-    @: LmP0Text branch_name
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    LmP0Text: branch_name
     const: @: char condition
     int: opened
     int: emitted_default
@@ -3233,12 +3233,12 @@ fn: lm_trans_emit_l2_registry_os_table (FILE: output; @: LmTransNamespace namesp
     lm_trans_text_ref_destroy(@ branch_name)
 return: 0
 
-fn: lm_trans_emit_l2_registry_ifdef_table (FILE: output; @: LmTransNamespace namespace_) int
+fn: lm_trans_emit_l2_registry_ifdef_table (FILE: output; LmTransNamespace: namespace_) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
-    @: LmP0Text branch_name
-    @: LmP0Text condition
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    LmP0Text: branch_name
+    LmP0Text: condition
     int: opened
     int: emitted_default
     int: emitted
@@ -3314,10 +3314,10 @@ fn: lm_trans_emit_l2_registry_ifdef_table (FILE: output; @: LmTransNamespace nam
     lm_trans_text_ref_destroy(@ branch_name)
 return: 0
 
-fn: lm_trans_emit_l1_os_frame (FILE: output; const: @(LmP0Frame frame)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    const: @: LmP0Frame branch
+fn: lm_trans_emit_l1_os_frame (FILE: output; const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: branch
     const: @: char condition
     int: opened
     int: emitted_default
@@ -3372,11 +3372,11 @@ fn: lm_trans_emit_l1_os_frame (FILE: output; const: @(LmP0Frame frame)) int
         return: 1
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_emit_l1_ifdef_frame (FILE: output; const: @(LmP0Frame frame)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    const: @: LmP0Frame branch
-    @: LmP0Text condition
+fn: lm_trans_emit_l1_ifdef_frame (FILE: output; const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: branch
+    LmP0Text: condition
     int: opened
     int: emitted_default
 
@@ -3452,10 +3452,10 @@ fn: lm_trans_emit_l1_include_target_text (FILE: output; const: @(char data); siz
         return: 1
 return: lm_trans_put(output, "\n")
 
-fn: lm_trans_emit_registry_include_table (FILE: output; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_registry_include_table (FILE: output; const: (LmTransNamespace: namespace_)) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
     int: emitted
 
     emitted: 0
@@ -3477,10 +3477,10 @@ fn: lm_trans_emit_registry_include_table (FILE: output; const: @(LmTransNamespac
         return: 0
 return: 1
 
-fn: lm_trans_emit_l1_include_frame (FILE: output; const: @(LmP0Frame frame)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmP0Text payload
+fn: lm_trans_emit_l1_include_frame (FILE: output; const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmP0Text: payload
     int: emitted
 
     if: frame = 0
@@ -3513,7 +3513,7 @@ fn: lm_trans_emit_l1_include_frame (FILE: output; const: @(LmP0Frame frame)) int
     lm_trans_text_ref_destroy(@ payload)
 return: lm_trans_validate_end_trailer(frame)
 
-fn: lm_trans_emit_l1_node (FILE: output; const: @(LmP0Node node)) int
+fn: lm_trans_emit_l1_node (FILE: output; const: (LmP0Node: node)) int
     if: lm_trans_node_is_ignored(node)
         return: 0
 
@@ -3544,23 +3544,23 @@ fn: lm_trans_emit_l1_node (FILE: output; const: @(LmP0Node node)) int
     ---
 return: 0
 
-fn: lm_trans_emit_l1_frame (FILE: output; const: @(LmP0Frame l1)) int
+fn: lm_trans_emit_l1_frame (FILE: output; const: (LmP0Frame: l1)) int
     if: l1 = 0
         return: 1
     if: lm_trans_emit_l1_structure(output, l1\body) != 0
         return: 1
 return: lm_trans_validate_end_trailer(l1)
 
-fn: lm_trans_emit_l1_body (FILE: output; const: @(LmP0Frame l1); @: int emitted) int
+fn: lm_trans_emit_l1_body (FILE: output; const: (LmP0Frame: l1); @: int emitted) int
     if: lm_trans_emit_l1_frame(output, l1) != 0
         return: 1
     if: emitted != 0
         emitted[0]: 1
 return: 0
 
-fn: lm_trans_root_has_explicit_l2_frame (const: @(LmP0Structure root)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_root_has_explicit_l2_frame (const: (LmP0Structure: root)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
 
     if: root = 0
         return: 0
@@ -3573,11 +3573,11 @@ fn: lm_trans_root_has_explicit_l2_frame (const: @(LmP0Structure root)) int
         field: field\next
 return: 0
 
-fn: lm_trans_emit_root_sequence (FILE: output; const: @(LmP0Node root); int: implicit_l2; @: int emitted) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: implicit_l2; @: int emitted) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     FILE: prelude_file
-    @: LmTransL4HeadBinding l4_root_binding
+    LmTransL4HeadBinding: l4_root_binding
     int: has_l4_root
     int: handled
 
@@ -3656,7 +3656,7 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: @(LmP0Node root); int: imp
         field: field\next
 return: 0
 
-fn: lm_trans_string_stack_has (const: @(LmOwnPtrStack stack); const: @(char value)) int
+fn: lm_trans_string_stack_has (const: (LmOwnPtrStack: stack); const: @(char value)) int
     size_t: i
     const: @: char item
 
