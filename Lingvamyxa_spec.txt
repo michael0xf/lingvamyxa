@@ -707,6 +707,16 @@ Examples of L0 artifacts:
 
 L1 is an external bootstrap, implementation and lowering layer. It may host initial parsers, translators, runtime components and receivers. L1 has its own syntax and semantics and is not part of the Lingvamyxa source-semantic core described by this document.
 
+The implementation source of Lingvamyxa is Lingvamyxa.
+
+A hosted bootstrap distribution may include generated C snapshots. These
+snapshots are portable lowering artifacts, not the source-semantic
+implementation of the language.
+
+On a new platform, CMake and a C compiler may build the snapshot compiler.
+That compiler then rebuilds the Lingvamyxa sources through the normal LMX
+pipeline.
+
 This document does not specify the L1 target language, physical calling convention, memory ownership rules or low-level runtime representation. Those belong to translator and runtime specifications.
 
 1.3. L2
