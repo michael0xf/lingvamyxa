@@ -78,7 +78,7 @@ L2:
             end: lm_build_platform_absolute
     
             fn: lm_build_file_exists (@: char path) int
-                @: FILE file
+                FILE: file
     
                 file: c.fopen(path, "rb")
                 if: file = 0
@@ -126,7 +126,7 @@ L2:
             end: lm_build_platform_absolute
     
             fn: lm_build_file_exists (@: char path) int
-                @: FILE file
+                FILE: file
     
                 file: c.fopen(path, "rb")
                 if: file = 0

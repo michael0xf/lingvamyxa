@@ -76,7 +76,7 @@ L4:
     end: `define.value`
 
     fn: LmTransExprSegmentMaterializer (
-        @: FILE file
+        FILE: file
         @: LmTransExprStack stack
         const: @: LmTransExprSegment segment
         const: @: LmTransNamespace namespace_
@@ -90,14 +90,14 @@ L4:
     ) int
 
     fn: LmTransExprFrameHandler (
-        @: FILE file
+        FILE: file
         @: LmTransExprStack stack
         const: @: LmP0Frame frame
         const: @: LmTransNamespace namespace_
     ) int
 
     fn: LmTransExprAtomEmitHandler (
-        @: FILE file
+        FILE: file
         const: @: LmTransExprAtomLowering lowering
         const: @: LmTransNamespace namespace_
     ) int
@@ -112,7 +112,7 @@ L4:
     ) int
 
     fn: LmTransExprPieceEmitHandler (
-        @: FILE file
+        FILE: file
         @: LmTransExprStack stack
         @: LmTransExprLoweredRange lowered
         const: @: LmTransExprPiece piece
@@ -121,7 +121,7 @@ L4:
     ) int
 
     fn: LmTransExprJobHandler (
-        @: FILE file
+        FILE: file
         @: LmTransExprStack stack
         @: LmTransExprJob job
         const: @: LmTransNamespace namespace_
@@ -130,7 +130,7 @@ L4:
     fn: LmTransExprJobDestroyHandler (@: LmTransExprJob job) void
 
     fn: LmTransStatementJobHandler (
-        @: FILE file
+        FILE: file
         @: LmTransStatementStack stack
         @: LmTransStatementJob job
         @: LmTransNamespace namespace_
@@ -139,7 +139,7 @@ L4:
     fn: LmTransStatementJobDestroyHandler (@: LmTransStatementJob job) void
 
     fn: LmTransStatementFrameHandler (
-        @: FILE file
+        FILE: file
         @: LmTransStatementStack stack
         const: @: LmP0Frame frame
         unsigned: indent
@@ -147,7 +147,7 @@ L4:
     ) int
 
     fn: LmTransAtomStatementHandler (
-        @: FILE file
+        FILE: file
         const: @: LmP0Node node
         unsigned: indent
         @: LmTransNamespace namespace_
@@ -160,12 +160,12 @@ L4:
     ) int
 
     fn: LmTransTypeEmitReceiver (
-        @: FILE file
+        FILE: file
         const: @: LmP0Node type_node
     ) int
 
     fn: LmTransTypeStructureValueAllocReceiver (
-        @: FILE file
+        FILE: file
         unsigned: indent
         const: @: LmP0Node type_node
         const: @: LmP0Text target_name
@@ -175,7 +175,7 @@ L4:
     ) int
 
     fn: LmTransTypeStructureValueFillReceiver (
-        @: FILE file
+        FILE: file
         unsigned: indent
         const: @: LmP0Node type_node
         const: @: LmP0Text target_name
@@ -190,7 +190,7 @@ L4:
     ) int
 
     fn: LmTransTopLevelEmitHandler (
-        @: FILE file
+        FILE: file
         @: LmTransNamespace namespace_
         const: @: LmTransTopLevelItem item
     ) int
@@ -206,7 +206,7 @@ L4:
     ) int
 
     fn: LmTransL4PayloadFrameHandler (
-        @: FILE output
+        FILE: output
         const: @: LmP0Frame frame
         @: LmTransNamespace namespace_
     ) int

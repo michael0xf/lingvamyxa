@@ -189,7 +189,7 @@ fn: lm_vcpkg_trim_last_path_part (@: char path) int
 return: 0
 
 fn: lm_vcpkg_file_exists (@: char path) int
-    @: FILE file
+    FILE: file
 
     file: fopen(path, "rb")
     if: file = 0

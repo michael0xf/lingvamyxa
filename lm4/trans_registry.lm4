@@ -9,6 +9,8 @@ table:
              callable                   descriptor
              `callable.zero-arg.value`  descriptor
              `callable.descriptor.value` descriptor
+             opaqueReference            class
+             FILE                       opaqueReference
 
              emit                       relation
              structure_value_alloc      relation
@@ -25,6 +27,7 @@ table:
 
              `class.spelling`           relation
              `class.cTail`              relation
+             `class.reference-base`      relation
              `class.receiver`           relation
              `receiver.type`            relation
              `receiver.level`           relation
@@ -106,6 +109,13 @@ table:
              size_t    size_t
              FILE      FILE
 end: `class.cTail`
+
+table:
+    name: `class.reference-base`
+    columns: class  (value serial)
+    rows:
+             FILE   1
+end: `class.reference-base`
 
 table:
     name: `class.receiver`

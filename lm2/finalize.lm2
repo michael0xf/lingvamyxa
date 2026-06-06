@@ -121,7 +121,7 @@ fn: lm_finalize_enter_project_root (@: char program_path) int
 return: 0
 
 sub: lm_finalize_log (@: char message)
-    @: FILE log_file
+    FILE: log_file
 
     log_file: fopen("build/lm0/finalize.log", "a")
     if: log_file = 0
@@ -144,8 +144,8 @@ end: lm_finalize_tool_path
 
 fn: lm_finalize_copy_once (@: char source_path; @: char output_path; int: quiet) int
     []: char buffer 32768
-    @: FILE source
-    @: FILE output
+    FILE: source
+    FILE: output
     size_t: count
     int: status
 

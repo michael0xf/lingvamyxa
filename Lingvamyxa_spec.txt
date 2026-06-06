@@ -3900,7 +3900,7 @@ L2:
         c.printf: "Hello C\n"
         c.printf: "%s\n" "message"
         size_t: n c.strlen("abc")
-        @: FILE file
+        FILE: file
         c.puts: "Hello C"
         return: 0
     end: main
@@ -5696,14 +5696,19 @@ This keeps prefix address-of simple while preserving arbitrary address depth in 
 The implementation of `@ⁿ` may be represented by reserved operator descriptors in the L2 operator table. The source semantics only require that `@ⁿ` is parsed as a reserved operator family and that its declaration form produces typed address slots compatible with the active L2 memory profile.
 
 Address-depth projection composes with the base type category. A primitive base
-type starts at address depth 0. An external opaque L1 base type, such as
-ANSI C `FILE` in the hosted C99 profile, also starts at address depth 0: it is
-not a Lingvamyxa primitive, but it is an imported substrate base type rather
-than a Lingvamyxa reference-class. A reference-class base type, such as a named
-layout/class `User`, denotes a source-level reference by its bare name and
-therefore starts at address depth 1 in an ANSI C pointer projection. Explicit
-address-depth and array-like receivers add further address layers on top of
-that base category.
+type starts at address depth 0. External scalar L1 base types imported by a
+projection profile, such as `size_t` in the hosted C99 profile, also start at
+address depth 0. A reference-class base type denotes a source-level reference
+by its bare name and therefore starts at address depth 1 in an ANSI C pointer
+projection. This includes ordinary Lingvamyxa layout/classes such as `User`
+and opaque imported L1 object/layout types such as ANSI C `FILE`. An opaque
+reference-class may be stored, passed and addressed by LMX code. Its fields are
+not visible in the hosted C99 profile because the ANSI C/C99 substrate does not
+publish a portable field layout for that object type; this is not a separate
+LMX restriction. A profile/import that explicitly declares layout metadata for
+an opaque object type may make typed field-follow available for that imported
+layout. Explicit address-depth and array-like receivers add further address
+layers on top of that base category.
 
 Examples in the hosted ANSI C profile:
 
@@ -5711,12 +5716,42 @@ Examples in the hosted ANSI C profile:
     @: char       -> char *
     []: char      -> char *
 
-    FILE          -> FILE
-    @: FILE       -> FILE *
+    FILE          -> FILE *      # opaque imported reference-class
+    @: FILE       -> FILE **     # address of a `FILE` reference slot
 
     User          -> User *      # `User` is a reference-class, not a primitive
     @: User       -> User **     # address of a `User` reference slot
     []: User      -> User **     # array/layer of `User` references
+
+The hosted C99 profile distinguishes three related, but not identical,
+reference/layout cases:
+
+1. A registered Lingvamyxa layout/reference-class has visible layout metadata
+   in the registry. For example `User` may publish `User.field.class(age)`,
+   `User.field.address-depth(age)` and related facts. Typed field-follow may
+   use those facts to determine the result type of `user\age`.
+
+2. An opaque imported reference-class, such as `FILE`, is a reference-class for
+   storage and call signatures, but the selected ANSI C/C99 L1 substrate does
+   not publish portable field metadata for it. Therefore `FILE: file` lowers as
+   `FILE *file`, and `fopen(...)` may return `FILE`, but no portable
+   `FILE.field.class(...)` facts are available unless a profile/import
+   explicitly declares them.
+
+3. A projection-only pointer-follow may lower `a\b` to the selected L1 pointer
+   member spelling, for example `a->b` in the hosted C99 profile, without
+   requiring the LMX translator to prove the field layout. In this case the
+   selected L1 toolchain validates the projected spelling. For an opaque C99
+   type such as `FILE`, an attempted `file\some_field` in such a projection
+   path is accepted or rejected by the C compiler according to the platform's
+   visible C declarations.
+
+Typed lookup is required when the translator needs the result type before L1
+compilation. Examples include a field-chain used as a callable head, such as
+`binding\handler(...)`; a local named structure escaping through `return:
+User`; and inferred named-structure fields whose class is derived from an
+existing binding. In those cases the translator consults namespace and registry
+facts such as `variable.type` and `<Class>.field.class`.
 
 11.3. Address-of, Raw Load and Callable References
 
