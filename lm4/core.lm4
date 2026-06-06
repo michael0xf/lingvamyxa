@@ -16,6 +16,10 @@ table:
              profile                    class
              platform                   class
              spelling                   class
+             semantic                   class
+             range                      class
+             codec                      class
+             projection                 class
              binding                    class
              functionPointerType        class
              closureType                class
@@ -41,6 +45,11 @@ table:
              `constant.value`           relation
              `define.value`             relation
              `printf.format`            relation
+             `class.semantic`           relation
+             `class.range`              relation
+             `class.c.projection`       relation
+             `serialization.codec`      relation
+             `callable.projection`      relation
              `class.present`            relation
              `class.reference-base`      relation
              `fn.descriptor`            relation

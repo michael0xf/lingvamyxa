@@ -3623,6 +3623,14 @@ projection profile then chooses whether that class lowers to `int`, `size_t`,
 `uint32_t`, a library-backed value, a checked wrapper or another admitted
 storage spelling.
 
+Registry profiles should keep these concerns in separate relations. For
+example, `class.semantic` describes the abstract value family, `class.range`
+describes the admitted range, `class.c.projection` describes the selected C/L1
+storage spelling, `printf.format` describes C formatted-output spellings, and
+`serialization.codec` describes portable LMX persistence. A type may be
+semantically compatible even when a selected projection profile cannot lower it;
+that is a projection failure, not a parser fact.
+
 The `i/u` family denotes implementation-profile integer types over C integer
 storage. A concrete profile may define names such as `i`, `u`, `i32`, `u64`,
 `isize` and `usize` as separate type constructors or as aliases over a smaller
@@ -4574,6 +4582,13 @@ Conceptual registry rows produced by this consumption may be:
     callableArgs[AddX]   -> (int)
     callableResult[AddX] -> int
     callableKind[AddX]   -> callableDescriptor
+
+The callable descriptor is the semantic object. C99 forms such as
+`int (*add)(int)`, a `typedef`, a function symbol, a trampoline or a closure
+structure are projection spellings selected by the active L2-to-L1 profile.
+They may be recorded in registry relations such as `callable.projection`, but
+they are not separate source-level callable kinds and are not the semantic
+parent of the descriptor.
 
 The descriptor is data. It does not define an implementation and cannot be
 called merely because its name is visible. It may be used as a compatibility

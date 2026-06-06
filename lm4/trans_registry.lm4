@@ -24,10 +24,19 @@ table:
              materializer               relation
              ansi_c                     relation
              emitter                    relation
+             semantic                   class
+             range                      class
+             codec                      class
+             projection                 class
 
              `class.spelling`           relation
              `class.cTail`              relation
              `printf.format`            relation
+             `class.semantic`           relation
+             `class.range`              relation
+             `class.c.projection`       relation
+             `serialization.codec`      relation
+             `callable.projection`      relation
              `class.reference-base`      relation
              `class.receiver`           relation
              `receiver.type`            relation
@@ -79,6 +88,55 @@ table:
 end: class
 
 table:
+    name: `class.semantic`
+    columns: class  (value char)
+    rows:
+             void      none
+             char      integer
+             short     integer
+             int       integer
+             long      integer
+             signed    integer
+             unsigned  integer
+             uchar     integer
+             ulong     integer
+             size_t    count
+             u8        integer
+             u16       integer
+             u32       integer
+             u64       integer
+             i8        integer
+             i16       integer
+             i32       integer
+             i64       integer
+             FILE      opaqueHandle
+end: `class.semantic`
+
+table:
+    name: `class.range`
+    columns: class  (value char)
+    rows:
+             char      "C99-char(profile)"
+             short     "C99-short(profile)"
+             int       "C99-int(profile)"
+             long      "C99-long(profile)"
+             signed    "C99-signed-int(profile)"
+             unsigned  "C99-unsigned-int(profile)"
+             uchar     "0..UCHAR_MAX(profile)"
+             ulong     "0..ULONG_MAX(profile)"
+             size_t    "0..SIZE_MAX(profile)"
+             u8        "0..UINT8_MAX"
+             u16       "0..UINT16_MAX"
+             u32       "0..UINT32_MAX"
+             u64       "0..UINT64_MAX"
+             i8        "INT8_MIN..INT8_MAX"
+             i16       "INT16_MIN..INT16_MAX"
+             i32       "INT32_MIN..INT32_MAX"
+             i64       "INT64_MIN..INT64_MAX"
+             FILE      opaque
+end: `class.range`
+
+table:
     name: `class.spelling`
     columns: class  (spelling char)
     rows:
@@ -106,6 +164,68 @@ table:
              u64       PRIu64
              i64       PRId64
 end: `printf.format`
+
+table:
+    name: `class.c.projection`
+    columns: class  (spelling char)
+    rows:
+             void      void
+             char      char
+             short     short
+             int       int
+             long      long
+             signed    signed
+             unsigned  unsigned
+             uchar     "unsigned char"
+             ulong     "unsigned long"
+             size_t    size_t
+             FILE      FILE
+             u8        uint8_t
+             u16       uint16_t
+             u32       uint32_t
+             u64       uint64_t
+             i8        int8_t
+             i16       int16_t
+             i32       int32_t
+             i64       int64_t
+end: `class.c.projection`
+
+table:
+    name: `serialization.codec`
+    columns: class  (codec char)
+    rows:
+             char      lmx.char
+             short     lmx.decimal-atom
+             int       lmx.decimal-atom
+             long      lmx.decimal-atom
+             signed    lmx.decimal-atom
+             unsigned  lmx.decimal-atom
+             uchar     lmx.decimal-atom
+             ulong     lmx.decimal-atom
+             size_t    lmx.decimal-atom
+             u8        lmx.decimal-atom
+             u16       lmx.decimal-atom
+             u32       lmx.decimal-atom
+             u64       lmx.decimal-atom
+             i8        lmx.decimal-atom
+             i16       lmx.decimal-atom
+             i32       lmx.decimal-atom
+             i64       lmx.decimal-atom
+             FILE      lmx.opaque-handle
+end: `serialization.codec`
+
+table:
+    name: `callable.projection`
+    columns: class  (projection char)
+    rows:
+             fn                         c.function-symbol
+             sub                        c.procedure-symbol
+             functionPointerType        c.function-pointer
+             callableDescriptor         lmx.callable-descriptor
+             closureType                c.closure-struct
+             `callable.zero-arg.value`  lmx.callable-value
+             `callable.descriptor.value` lmx.callable-value
+end: `callable.projection`
 
 table:
     name: `class.cTail`
