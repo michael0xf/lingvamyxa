@@ -440,7 +440,11 @@ Mandatory payload kinds are:
         the resolver may continue through tables selected by the consuming
         profile. Structured descriptor records, callable descriptor payloads,
         provider descriptor records and other descriptor forms are reserved for
-        later revisions.
+        later revisions. A descriptor is the semantic entity or materialized
+        semantic view selected by the cell: it may summarize registry rows,
+        inferred facts, profile data and validation evidence. It is not merely a
+        table-walking cursor. If the payload exists only to continue lookup
+        through another table coordinate, use `tableKey`.
 
     expression
         An L2/L3/L4/L5 expression Structure admitted by the selected profile.
@@ -449,7 +453,9 @@ Mandatory payload kinds are:
 
     tableKey
         An intermediate registry class/key used to continue n-ary or graph
-        resolution through another table.
+        resolution through another table. A `tableKey` is resolver navigation
+        state, not the final semantic descriptor selected for execution,
+        validation or projection.
 
     validator
         A validator target or validation expression that may produce acceptance,
@@ -1123,6 +1129,12 @@ Validator dependencies are ordinary registry graph dependencies. The
 Validator/Merge driver must therefore define cycle detection, memoization of
 evidence and termination/diagnostic rules, but it does not need custom
 semantics for each validator class.
+
+Projection validators are ordinary validators. For example, a hosted C99
+profile may expose `c99.ub.policy` rows for dangerous projection patterns and
+`profile.validator` rows for concrete checks such as formatted-output argument
+validation. These rows are profile vocabulary, not a separate hidden C static
+analyzer inside the language core.
 
 5.4. Evidence Lifetime (old 18.3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

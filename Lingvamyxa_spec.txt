@@ -3631,6 +3631,22 @@ storage spelling, `printf.format` describes C formatted-output spellings, and
 semantically compatible even when a selected projection profile cannot lower it;
 that is a projection failure, not a parser fact.
 
+Formatted-output validation is likewise table data. A profile may use
+`printf.format` for recommended class-to-spelling projection and a separate
+`printf.argument.class` relation for spelling-to-expected-argument-class
+validation. For example, `%zu` may map to `size_t` and `%lu` may map to `ulong`;
+passing a known `size_t` value to a `%lu` slot is then a validation failure in
+the selected C99 projection profile, not a style warning.
+
+C99 undefined-behavior policy is not a global promise that no generated program
+can ever enter a bad state. It is ordinary profile validation vocabulary. A
+profile may declare rows such as `c99.ub.policy[c99.format-mismatch] =
+diagnostic`, `c99.ub.policy[c99.null-dereference] = diagnostic` or
+`c99.ub.policy[c99.signed-overflow] = profile-defined`, and may bind concrete
+validators through `profile.validator`. The C99 projection profile must not use
+undefined behavior as a semantic mechanism; known dangerous projection patterns
+are rejected, guarded, checked or explicitly delegated to a profile rule.
+
 The `i/u` family denotes implementation-profile integer types over C integer
 storage. A concrete profile may define names such as `i`, `u`, `i32`, `u64`,
 `isize` and `usize` as separate type constructors or as aliases over a smaller

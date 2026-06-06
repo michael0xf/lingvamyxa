@@ -28,15 +28,19 @@ table:
              range                      class
              codec                      class
              projection                 class
+             printfFormat               class
 
              `class.spelling`           relation
              `class.cTail`              relation
              `printf.format`            relation
+             `printf.argument.class`    relation
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
              `serialization.codec`      relation
              `callable.projection`      relation
+             `c99.ub.policy`            relation
+             `profile.validator`        relation
              `class.reference-base`      relation
              `class.receiver`           relation
              `receiver.type`            relation
@@ -85,6 +89,44 @@ table:
              `column.index`             relation
              `column.descriptor.count`  relation
              `column.descriptor`        relation
+
+             ubPattern                  class
+             validatorPolicy            class
+             profileRule                class
+             diagnostic                 validatorPolicy
+             checked                    validatorPolicy
+             `profile-defined`          validatorPolicy
+             `c99.null-dereference`     ubPattern
+             `c99.signed-overflow`      ubPattern
+             `c99.shift-count-range`    ubPattern
+             `c99.format-mismatch`      ubPattern
+             `c99.invalid-pointer-cast` ubPattern
+             `%d`                       printfFormat
+             `%i`                       printfFormat
+             `%u`                       printfFormat
+             `%o`                       printfFormat
+             `%x`                       printfFormat
+             `%X`                       printfFormat
+             `%ld`                      printfFormat
+             `%li`                      printfFormat
+             `%lu`                      printfFormat
+             `%lo`                      printfFormat
+             `%lx`                      printfFormat
+             `%lX`                      printfFormat
+             `%zu`                      printfFormat
+             `%zo`                      printfFormat
+             `%zx`                      printfFormat
+             `%zX`                      printfFormat
+             `%c`                       printfFormat
+             `%s`                       printfFormat
+             `%f`                       printfFormat
+             `%F`                       printfFormat
+             `%e`                       printfFormat
+             `%E`                       printfFormat
+             `%g`                       printfFormat
+             `%G`                       printfFormat
+             `%a`                       printfFormat
+             `%A`                       printfFormat
 end: class
 
 table:
@@ -166,6 +208,38 @@ table:
 end: `printf.format`
 
 table:
+    name: `printf.argument.class`
+    columns: class  (value class)
+    rows:
+             `%d`   int
+             `%i`   int
+             `%u`   unsigned
+             `%o`   unsigned
+             `%x`   unsigned
+             `%X`   unsigned
+             `%ld`  long
+             `%li`  long
+             `%lu`  ulong
+             `%lo`  ulong
+             `%lx`  ulong
+             `%lX`  ulong
+             `%zu`  size_t
+             `%zo`  size_t
+             `%zx`  size_t
+             `%zX`  size_t
+             `%c`   int
+             `%s`   char
+             `%f`   double
+             `%F`   double
+             `%e`   double
+             `%E`   double
+             `%g`   double
+             `%G`   double
+             `%a`   double
+             `%A`   double
+end: `printf.argument.class`
+
+table:
     name: `class.c.projection`
     columns: class  (spelling char)
     rows:
@@ -226,6 +300,24 @@ table:
              `callable.zero-arg.value`  lmx.callable-value
              `callable.descriptor.value` lmx.callable-value
 end: `callable.projection`
+
+table:
+    name: `c99.ub.policy`
+    columns: class                     (policy class)
+    rows:
+             `c99.null-dereference`     diagnostic
+             `c99.signed-overflow`      `profile-defined`
+             `c99.shift-count-range`    diagnostic
+             `c99.format-mismatch`      diagnostic
+             `c99.invalid-pointer-cast` diagnostic
+end: `c99.ub.policy`
+
+table:
+    name: `profile.validator`
+    columns: class                  (binding char)
+    rows:
+             `c99.format-mismatch`  lm_trans_validate_c_printf_call
+end: `profile.validator`
 
 table:
     name: `class.cTail`
