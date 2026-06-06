@@ -248,6 +248,8 @@ table:
              short     short
              int       int
              long      long
+             float     float
+             double    double
              signed    signed
              unsigned  unsigned
              uchar     "unsigned char"

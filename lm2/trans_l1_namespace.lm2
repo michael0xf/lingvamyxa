@@ -1187,8 +1187,13 @@ fn: lm_trans_namespace_declare_compatible (LmTransNamespace: namespace_; const: 
 return: lm_trans_namespace_declare(namespace_, name, kind)
 
 fn: lm_trans_class_c_spelling (const: (LmP0Text: name)) const: @: char
+    const: @: char spelling
+
     if: name = 0
         return: 0
+    spelling: lm_trans_registry_lookup(name, "class.c.projection")
+    if: spelling != 0
+        return: spelling
 return: lm_trans_registry_lookup(name, "class.spelling")
 
 fn: lm_trans_layout_backend_is_reference_value (const: @(char backend)) int
@@ -1196,6 +1201,7 @@ return: backend != 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, 
 
 fn: lm_trans_class_is_reference_base (const: (LmP0Text: name)) int
     const: @: char class_kind
+    const: @: char semantic
     const: @: char backend
 
     if: name = 0
@@ -1204,6 +1210,9 @@ fn: lm_trans_class_is_reference_base (const: (LmP0Text: name)) int
         return: 1
     class_kind: lm_trans_registry_lookup(name, "class.kind")
     if: class_kind != 0 && c.strcmp(class_kind, "opaqueReference") = 0
+        return: 1
+    semantic: lm_trans_registry_lookup(name, "class.semantic")
+    if: semantic != 0 && c.strcmp(semantic, "opaqueHandle") = 0
         return: 1
     backend: lm_trans_registry_lookup(name, "layout.backend")
     if: lm_trans_layout_backend_is_reference_value(backend)
