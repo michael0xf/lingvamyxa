@@ -1315,18 +1315,31 @@ fn: lm_trans_emit_callable_adapter_args (@: FILE file; @@: LmTransAbiParam param
     return: 0
 end: lm_trans_emit_callable_adapter_args
 
+fn: lm_trans_layout_type_implicit_address_depth (const: @(LmP0Text class_name)) size_t
+    const: @: char backend
+
+    if: class_name = 0 || lm_trans_builtin_c_type_name(class_name)
+        return: 0U
+
+    backend: lm_trans_registry_lookup(class_name, "layout.backend")
+    if: backend != 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.named-struct") = 0 || c.strcmp(backend, "c.union") = 0 || c.strcmp(backend, "c.named-union") = 0)
+        return: 1U
+return: 0U
+
 fn: lm_trans_emit_callable_type_named (@: FILE file; const: @(LmTransL4CallableType type); const: @(LmP0Text name)) int
     size_t: i
+    size_t: effective_address_depth
     if: ((file = 0) || (type = 0))
         return: 1
+    effective_address_depth: type\address_depth + lm_trans_layout_type_implicit_address_depth(type\class_name)
     if: (type\is_const && (lm_trans_put(file, "const ") != 0))
         return: 1
     if: (lm_trans_emit_type_name(file, type\class_name) != 0)
         return: 1
-    if: (((type\address_depth != 0U) || ((name != 0) && (name\length != 0U))) && (lm_trans_put(file, " ") != 0))
+    if: (((effective_address_depth != 0U) || ((name != 0) && (name\length != 0U))) && (lm_trans_put(file, " ") != 0))
         return: 1
     i: 0U
-    while: (i < type\address_depth)
+    while: (i < effective_address_depth)
         if: (lm_trans_put(file, "*") != 0)
             return: 1
         i: i + 1U
@@ -3935,6 +3948,7 @@ fn: lm_trans_emit_type_node (@: FILE file; const: @(LmP0Node type_node)) int
     @: LmTransBinding type_receiver
     int: type_receiver_status
     int: status
+    size_t: implicit_depth
     if: (type_node = 0)
         c.fprintf(c.stderr, "trans L2 error: type position expects a name\n")
         return: 1
@@ -3947,6 +3961,10 @@ fn: lm_trans_emit_type_node (@: FILE file; const: @(LmP0Node type_node)) int
             status: 1
             break
         if: (current\kind = c.LM_P0_NODE_ATOM)
+            implicit_depth: lm_trans_layout_type_implicit_address_depth(current\as\atom)
+            if: implicit_depth != 0U && lm_trans_type_suffix_stack_push(@ suffixes, implicit_depth) != 0
+                status: 1
+                break
             status: lm_trans_emit_type_name(file, current\as\atom)
             break
         if: ((current\kind = c.LM_P0_NODE_FRAME) && lm_trans_text_equals(current\as\frame\head, "const"))
@@ -4169,9 +4187,16 @@ fn: lm_trans_emit_type_and_name (@: FILE file; const: @(LmP0Node type_node); con
 end: lm_trans_emit_type_and_name
 
 fn: lm_trans_emit_type_head_only (@: FILE file; const: @(LmP0Text type_head)) int
+    size_t: implicit_depth
+    int: status
+
     if: lm_trans_builtin_c_type_name(type_head)
         return: lm_trans_emit_type_name(file, type_head)
-    return: lm_trans_emit_name(file, type_head)
+    status: lm_trans_emit_name(file, type_head)
+    implicit_depth: lm_trans_layout_type_implicit_address_depth(type_head)
+    if: status = 0 && implicit_depth != 0U
+        status: lm_trans_emit_type_pointer_suffix(file, implicit_depth)
+    return: status
 end: lm_trans_emit_type_head_only
 
 fn: lm_trans_emit_c_dimension_text (@: FILE file; const: @(LmP0Text dimension); const: @(LmTransNamespace namespace_); const: @(char error_name)) int

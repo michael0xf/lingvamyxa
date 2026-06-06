@@ -1,0 +1,13 @@
+L2:
+    fn: check (int: age) int
+        User:
+            age: age
+        return: User\age
+    end: check
+
+    external:
+        fn: main () int
+            return: check(33) != 33
+        end: main
+    end: external
+end: L2

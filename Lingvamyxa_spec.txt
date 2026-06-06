@@ -5695,6 +5695,23 @@ This keeps prefix address-of simple while preserving arbitrary address depth in 
 
 The implementation of `@ⁿ` may be represented by reserved operator descriptors in the L2 operator table. The source semantics only require that `@ⁿ` is parsed as a reserved operator family and that its declaration form produces typed address slots compatible with the active L2 memory profile.
 
+Address-depth projection composes with the base type category. A primitive base
+type starts at address depth 0. A reference-class base type, such as a named
+layout/class `User`, denotes a source-level reference by its bare name and
+therefore starts at address depth 1 in an ANSI C pointer projection. Explicit
+address-depth and array-like receivers add further address layers on top of
+that base category.
+
+Examples in the hosted ANSI C profile:
+
+    char          -> char
+    @: char       -> char *
+    []: char      -> char *
+
+    User          -> User *      # `User` is a reference-class, not a primitive
+    @: User       -> User **     # address of a `User` reference slot
+    []: User      -> User **     # array/layer of `User` references
+
 11.3. Address-of, Raw Load and Callable References
 
 The prefix form:

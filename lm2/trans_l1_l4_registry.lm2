@@ -363,6 +363,26 @@ fn: lm_trans_emit_layout_fields (@: FILE file; const: @(char layout_name); const
     lm_trans_layout_fields_delete(fields, field_capacity)
 return: 0
 
+fn: lm_trans_l4_mark_typedef_emitted_cstr (const: @(char name)) int
+    @: LmP0Text table
+    @: LmP0Text key
+    int: status
+
+    if: name = 0
+        return: 1
+
+    table: lm_trans_l4_text_view_new("typedef.emitted")
+    key: lm_trans_l4_text_view_new(name)
+    if: table = 0 || key = 0
+        lm_trans_l4_text_view_delete(@ table)
+        lm_trans_l4_text_view_delete(@ key)
+        return: 1
+
+    status: lm_trans_registry_push_row_atoms(table, key, key) != 0
+    lm_trans_l4_text_view_delete(@ table)
+    lm_trans_l4_text_view_delete(@ key)
+return: status
+
 fn: lm_trans_emit_layout_definition (@: FILE file; const: @(char layout_name); const: @(LmTransNamespace namespace_)) int
     @: LmTransRegistryFact backend_row
     @: LmTransRegistryFact forward_row
@@ -433,6 +453,8 @@ fn: lm_trans_emit_layout_definition (@: FILE file; const: @(char layout_name); c
             status: 1
         else:
             status: 0
+        if: status = 0 && lm_trans_l4_mark_typedef_emitted_cstr(layout_name) != 0
+            status: 1
         lm_trans_l4_text_view_delete(@ layout_text)
         return: status
     status: lm_trans_put(file, "};\n")

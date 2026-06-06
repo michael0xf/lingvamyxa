@@ -1,0 +1,24 @@
+import: "lm4/own_abi.lm4"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: make_user (int: age) User
+    User:
+        age: age
+return: User
+
+external:
+    fn: main () int
+        User: user make_user(41)
+        if: user = 0
+            return: 1
+        if: user\age != 41
+            return: 2
+        return: 0
+    end: main
+end: external
