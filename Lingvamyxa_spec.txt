@@ -717,19 +717,26 @@ On a new platform, CMake and a C compiler may build the snapshot compiler.
 That compiler then rebuilds the Lingvamyxa sources through the normal LMX
 pipeline.
 
-Lingvamyxa is source-self-hosting at the language level: the compiler core is
-written in Lingvamyxa source, while the hosted bootstrap profile lowers through
-an external ANSI C / C99 L1 substrate. This does not make ANSI C the semantic
-parent of Lingvamyxa and does not make the generated C projection the source of
-the compiler. It means that the bootstrap is bound to a portable
-C99-compatible implementation substrate rather than to one particular operating
-system, CPU family, binary format, ABI or native code generator. In this sense,
-a Lingvamyxa-to-C99 self-hosting chain is more hermetic at the substrate
-abstraction level and more portable than a native-only self-hosting chain:
-Lingvamyxa sources, registry tables and L1 projection rules remain the same
-across platforms, while platform-specific differences are delegated below the
-Lingvamyxa semantic boundary to the C99 compiler, C runtime, linker and target
-ABI.
+Lingvamyxa is source-self-hosting at the level of its own source code: the
+compiler core is written in Lingvamyxa, while the hosted bootstrap profile
+lowers it through an external L1 substrate selected by the L2-to-L1 projection
+profile. In this implementation, that low-level cross-platform implementation
+substrate is ANSI C / C99. This does not make ANSI C the semantic parent of
+Lingvamyxa, and it does not turn the generated C projection into the compiler's
+source implementation. It means that the L2 bootstrap is not bound to one
+particular operating system, CPU family, binary format, ABI or native code
+generator, but to a portable implementation substrate - in this case, a
+C99-compatible one.
+
+In this sense, Lingvamyxa self-hosting through C99 is more hermetic at the
+level of substrate abstraction and more portable than a platform-only
+self-hosting chain: the Lingvamyxa sources, registry tables and L1 projection
+rules remain the same across platforms, while platform-specific differences are
+delegated below the Lingvamyxa semantic boundary to the selected multiplatform
+L1 toolchain, namely the C99 compiler, C runtime/library, linker and target ABI.
+The LMX levels L3, L4 and L5 are even more hermetic: they are bound to the L2
+level and its L2-to-L1 projection contract, not to a particular operating
+system, ABI or CPU family.
 
 This document does not specify the L1 target language, physical calling convention, memory ownership rules or low-level runtime representation. Those belong to translator and runtime specifications.
 
