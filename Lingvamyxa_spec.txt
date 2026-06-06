@@ -5696,7 +5696,10 @@ This keeps prefix address-of simple while preserving arbitrary address depth in 
 The implementation of `@ⁿ` may be represented by reserved operator descriptors in the L2 operator table. The source semantics only require that `@ⁿ` is parsed as a reserved operator family and that its declaration form produces typed address slots compatible with the active L2 memory profile.
 
 Address-depth projection composes with the base type category. A primitive base
-type starts at address depth 0. A reference-class base type, such as a named
+type starts at address depth 0. An external opaque L1 base type, such as
+ANSI C `FILE` in the hosted C99 profile, also starts at address depth 0: it is
+not a Lingvamyxa primitive, but it is an imported substrate base type rather
+than a Lingvamyxa reference-class. A reference-class base type, such as a named
 layout/class `User`, denotes a source-level reference by its bare name and
 therefore starts at address depth 1 in an ANSI C pointer projection. Explicit
 address-depth and array-like receivers add further address layers on top of
@@ -5707,6 +5710,9 @@ Examples in the hosted ANSI C profile:
     char          -> char
     @: char       -> char *
     []: char      -> char *
+
+    FILE          -> FILE
+    @: FILE       -> FILE *
 
     User          -> User *      # `User` is a reference-class, not a primitive
     @: User       -> User **     # address of a `User` reference slot
