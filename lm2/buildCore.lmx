@@ -310,7 +310,8 @@ L2:
     end: lm_build_default_cxx
     
     sub: lm_build_print_usage ()
-        c.printf: "usage: buildCore.lm0 [--full]\n"
+        c.printf: "usage: buildCore.lm0 [--build] [--full]\n"
+        c.printf: "  --build refresh the L0 bootstrap tools\n"
         c.printf: "  --full  refresh L0 tools, then build the bundled third_party profile\n"
     end: lm_build_print_usage
     
@@ -321,12 +322,14 @@ L2:
         index: 1
     
         while: index < argc
+            if: c.strcmp(argv[index], "--build") = 0
+                # Explicit default bootstrap mode.
             if: c.strcmp(argv[index], "--full") = 0
                 options\full_build: 1
             if: c.strcmp(argv[index], "--help") = 0 || c.strcmp(argv[index], "-h") = 0
                 lm_build_print_usage()
                 return: 2
-            if: c.strcmp(argv[index], "--full") != 0 && c.strcmp(argv[index], "--help") != 0 && c.strcmp(argv[index], "-h") != 0
+            if: c.strcmp(argv[index], "--build") != 0 && c.strcmp(argv[index], "--full") != 0 && c.strcmp(argv[index], "--help") != 0 && c.strcmp(argv[index], "-h") != 0
                 c.fprintf: c.stderr "buildCore.lm0: unknown option: %s\n" argv[index]
                 lm_build_print_usage()
                 return: 1
