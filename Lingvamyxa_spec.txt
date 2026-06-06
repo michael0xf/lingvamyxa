@@ -717,6 +717,20 @@ On a new platform, CMake and a C compiler may build the snapshot compiler.
 That compiler then rebuilds the Lingvamyxa sources through the normal LMX
 pipeline.
 
+Lingvamyxa is source-self-hosting at the language level: the compiler core is
+written in Lingvamyxa source, while the hosted bootstrap profile lowers through
+an external ANSI C / C99 L1 substrate. This does not make ANSI C the semantic
+parent of Lingvamyxa and does not make the generated C projection the source of
+the compiler. It means that the bootstrap is bound to a portable
+C99-compatible implementation substrate rather than to one particular operating
+system, CPU family, binary format, ABI or native code generator. In this sense,
+a Lingvamyxa-to-C99 self-hosting chain is more hermetic at the substrate
+abstraction level and more portable than a native-only self-hosting chain:
+Lingvamyxa sources, registry tables and L1 projection rules remain the same
+across platforms, while platform-specific differences are delegated below the
+Lingvamyxa semantic boundary to the C99 compiler, C runtime, linker and target
+ABI.
+
 This document does not specify the L1 target language, physical calling convention, memory ownership rules or low-level runtime representation. Those belong to translator and runtime specifications.
 
 1.3. L2
