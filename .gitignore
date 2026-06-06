@@ -70,21 +70,10 @@ CMakeCache.txt
 lm1/build/*
 !lm1/build/buildCore.lm1.c
 !lm1/build/finalize.lm1.c
-!lm1/build/l4_loader_unit_payload.lm1.c
 !lm1/build/make.lm1.c
 !lm1/build/own.lm1.c
 !lm1/build/parser.lm1.c
-!lm1/build/parser_text.lm1.c
 !lm1/build/trans.lm1.c
-!lm1/build/trans_core.lm1.c
-!lm1/build/trans_l1_expr.lm1.c
-!lm1/build/trans_l1_l4_registry.lm1.c
-!lm1/build/trans_l1_namespace.lm1.c
-!lm1/build/trans_l1_registry.lm1.c
-!lm1/build/trans_l1_statement.lm1.c
-!lm1/build/trans_l1_top_level.lm1.c
-!lm1/build/trans_schema.lm1.c
-!lm1/build/trans_text.lm1.c
 
 # vcpkg source-catalog local state.
 cmake/vcpkg-sources/vcpkg_installed/
