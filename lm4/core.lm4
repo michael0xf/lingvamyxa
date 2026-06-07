@@ -47,6 +47,8 @@ table:
              `define.value`             relation
              `printf.format`            relation
              `printf.argument.class`    relation
+             `printf.conversion.rule.expected` relation
+             `printf.conversion.rule.profile` relation
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation

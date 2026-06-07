@@ -37,6 +37,8 @@ table:
              `class.cTail`              relation
              `printf.format`            relation
              `printf.argument.class`    relation
+             `printf.conversion.rule.expected` relation
+             `printf.conversion.rule.profile` relation
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
@@ -245,6 +247,38 @@ table:
              `%a`   double
              `%A`   double
 end: `printf.argument.class`
+
+table:
+    name: `printf.conversion.rule`
+    columns: class  (expected class)  (profile profileRule)
+    rows:
+             `%d`   int       `c99.format-mismatch`
+             `%i`   int       `c99.format-mismatch`
+             `%u`   unsigned  `c99.format-mismatch`
+             `%o`   unsigned  `c99.format-mismatch`
+             `%x`   unsigned  `c99.format-mismatch`
+             `%X`   unsigned  `c99.format-mismatch`
+             `%ld`  long      `c99.format-mismatch`
+             `%li`  long      `c99.format-mismatch`
+             `%lu`  ulong     `c99.format-mismatch`
+             `%lo`  ulong     `c99.format-mismatch`
+             `%lx`  ulong     `c99.format-mismatch`
+             `%lX`  ulong     `c99.format-mismatch`
+             `%zu`  size_t    `c99.format-mismatch`
+             `%zo`  size_t    `c99.format-mismatch`
+             `%zx`  size_t    `c99.format-mismatch`
+             `%zX`  size_t    `c99.format-mismatch`
+             `%c`   int       `c99.format-mismatch`
+             `%s`   char      `c99.format-mismatch`
+             `%f`   double    `c99.format-mismatch`
+             `%F`   double    `c99.format-mismatch`
+             `%e`   double    `c99.format-mismatch`
+             `%E`   double    `c99.format-mismatch`
+             `%g`   double    `c99.format-mismatch`
+             `%G`   double    `c99.format-mismatch`
+             `%a`   double    `c99.format-mismatch`
+             `%A`   double    `c99.format-mismatch`
+end: `printf.conversion.rule`
 
 table:
     name: `class.c.projection`

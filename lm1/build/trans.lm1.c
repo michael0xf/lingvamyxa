@@ -2206,8 +2206,11 @@ static int lm_trans_printf_atom_is_decimal_literal(const LmP0Text * atom, int *o
 static int lm_trans_printf_arg_class_from_field_chain(const LmP0Text * atom, const LmTransNamespace * namespace_, LmP0Text * out_class);
 static int lm_trans_printf_arg_class_from_segment(const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, LmP0Text * out_class);
 static int lm_trans_printf_format_is_flag(char ch);
+static int lm_trans_profile_rule_enabled(const LmTransNamespace * namespace_, const char *rule);
 static int lm_trans_profile_validator_enabled(const LmTransNamespace * namespace_, const char *rule, const char *binding_name);
+static const char * lm_trans_printf_conversion_rule_lookup(const LmTransNamespace * namespace_, char conversion, char modifier, const char *relation);
 static const char * lm_trans_printf_expected_class(const LmTransNamespace * namespace_, char conversion, char modifier);
+static const char * lm_trans_printf_profile_rule(const LmTransNamespace * namespace_, char conversion, char modifier);
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame * frame, const LmTransNamespace * namespace_, size_t arg_index, const char *expected_class);
 static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTransNamespace * namespace_);
 static int lm_trans_validate_profile_c_printf_call(const LmP0Frame * frame, const LmTransNamespace * namespace_);
@@ -9386,12 +9389,11 @@ static int lm_trans_printf_format_is_flag(char ch) {
     return ch == '-' || ch == '+' || ch == ' ' || ch == '#' || ch == '0';
 }
 
-static int lm_trans_profile_validator_enabled(const LmTransNamespace * namespace_, const char *rule, const char *binding_name) {
+static int lm_trans_profile_rule_enabled(const LmTransNamespace * namespace_, const char *rule) {
     LmP0Text * rule_text;
     const char *policy;
-    const char *binding;
     int enabled;
-    if (rule == 0 || binding_name == 0) {
+    if (rule == 0) {
         return 0;
     }
     rule_text = lm_trans_text_ref_new_cstr(rule);
@@ -9399,10 +9401,9 @@ static int lm_trans_profile_validator_enabled(const LmTransNamespace * namespace
         return 0;
     }
     policy = lm_trans_namespace_registry_lookup(namespace_, rule_text, "c99.ub.policy");
-    binding = lm_trans_namespace_registry_lookup(namespace_, rule_text, "profile.validator");
     enabled = 0;
-    if (policy != 0 && binding != 0) {
-        if ((strcmp(policy, "diagnostic") == 0 || strcmp(policy, "checked") == 0) && strcmp(binding, binding_name) == 0) {
+    if (policy != 0) {
+        if (strcmp(policy, "diagnostic") == 0 || strcmp(policy, "checked") == 0) {
             enabled = 1;
         }
     }
@@ -9410,11 +9411,34 @@ static int lm_trans_profile_validator_enabled(const LmTransNamespace * namespace
     return enabled;
 }
 
-static const char * lm_trans_printf_expected_class(const LmTransNamespace * namespace_, char conversion, char modifier) {
+static int lm_trans_profile_validator_enabled(const LmTransNamespace * namespace_, const char *rule, const char *binding_name) {
+    LmP0Text * rule_text;
+    const char *binding;
+    int enabled;
+    if (rule == 0 || binding_name == 0) {
+        return 0;
+    }
+    if (lm_trans_profile_rule_enabled(namespace_, rule) == 0) {
+        return 0;
+    }
+    rule_text = lm_trans_text_ref_new_cstr(rule);
+    if (rule_text == 0) {
+        return 0;
+    }
+    binding = lm_trans_namespace_registry_lookup(namespace_, rule_text, "profile.validator");
+    enabled = binding != 0 && strcmp(binding, binding_name) == 0;
+    lm_trans_text_ref_destroy(&rule_text);
+    return enabled;
+}
+
+static const char * lm_trans_printf_conversion_rule_lookup(const LmTransNamespace * namespace_, char conversion, char modifier, const char *relation) {
     char key_buffer[5];
     LmP0Text * key;
-    const char *expected;
+    const char *value;
     size_t index;
+    if (relation == 0) {
+        return 0;
+    }
     key = lm_trans_text_ref_new_cstr("");
     if (key == 0) {
         return 0;
@@ -9431,9 +9455,30 @@ static const char * lm_trans_printf_expected_class(const LmTransNamespace * name
     key_buffer[index] = '\0';
     key->data = key_buffer;
     key->length = index;
-    expected = lm_trans_namespace_registry_lookup(namespace_, key, "printf.argument.class");
+    value = lm_trans_namespace_registry_lookup(namespace_, key, relation);
     lm_trans_text_ref_destroy(&key);
-    return expected;
+    return value;
+}
+
+static const char * lm_trans_printf_expected_class(const LmTransNamespace * namespace_, char conversion, char modifier) {
+    const char *expected;
+    expected = lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.expected");
+    if (expected != 0) {
+        return expected;
+    }
+    return lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.argument.class");
+}
+
+static const char * lm_trans_printf_profile_rule(const LmTransNamespace * namespace_, char conversion, char modifier) {
+    const char *rule;
+    rule = lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.profile");
+    if (rule != 0) {
+        return rule;
+    }
+    if (lm_trans_printf_expected_class(namespace_, conversion, modifier) != 0) {
+        return "c99.format-mismatch";
+    }
+    return 0;
 }
 
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame * frame, const LmTransNamespace * namespace_, size_t arg_index, const char *expected_class) {
@@ -9469,6 +9514,7 @@ static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTran
     const LmP0Node * format_node;
     LmP0Text * format_payload;
     const char *expected;
+    const char *profile_rule;
     size_t format_index;
     size_t arg_index;
     size_t i;
@@ -9578,8 +9624,11 @@ static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTran
         conversion = format_payload -> data[i];
         i = i + 1U;
         expected = lm_trans_printf_expected_class(namespace_, conversion, modifier);
+        profile_rule = lm_trans_printf_profile_rule(namespace_, conversion, modifier);
         if (conversion != 'n') {
-            status = lm_trans_validate_printf_expected_arg(frame, namespace_, arg_index, expected);
+            if (profile_rule == 0 || lm_trans_profile_rule_enabled(namespace_, profile_rule)) {
+                status = lm_trans_validate_printf_expected_arg(frame, namespace_, arg_index, expected);
+            }
             arg_index = arg_index + 1U;
         }
     }
