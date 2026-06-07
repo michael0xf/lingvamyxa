@@ -53,6 +53,11 @@ World-description formula:
     continuously classifies the active world enough to resolve, validate and
     execute current work.
 
+    The L-levels define language strata. The analytical engine is not another
+    source language level such as `L6`; it is an active interpretation,
+    translation and runtime machine operating over existing strata, especially
+    L3, L4 and L5.
+
 Registry query principle:
 
     Strict classification happens in L4 registry tables. Type checking, class
@@ -2117,6 +2122,7 @@ Part II reduces to these rules:
     missing row/column/cell = no relation;
     strict classification = L4 registry data;
     analytical typing = registry queries during static stages and L5 runtime;
+    analytical engine = active machine over L3/L4/L5 strata, not L6 syntax;
     L4 analysis = knowledge/classification/derived decisions queried by L3
                   expressions and L5 messages;
     rules/unification/backtracking/resolution = admissible L4 analysis

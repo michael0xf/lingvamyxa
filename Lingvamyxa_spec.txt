@@ -34,6 +34,10 @@ structures, L5 stores proposed actions/messages. The analytical engine
 continuously classifies the active world enough to resolve, validate and
 execute current work.
 
+The L-levels define language strata. The analytical engine is not another
+source language level such as `L6`; it is an active interpretation, translation
+and runtime machine operating over existing strata, especially L3, L4 and L5.
+
 Canonical semantic pipeline:
 
     source text
