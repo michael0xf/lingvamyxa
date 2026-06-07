@@ -420,7 +420,8 @@ static char * lm_build_default_cxx(void) {
 }
 
 static void lm_build_print_usage(void) {
-    printf("usage: buildCore.lm0 [--full]\n");
+    printf("usage: buildCore.lm0 [--build] [--full]\n");
+    printf("  --build refresh the L0 bootstrap tools\n");
     printf("  --full  refresh L0 tools, then build the bundled third_party profile\n");
 }
 
@@ -429,6 +430,8 @@ static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options
     options->full_build = 0;
     index = 1;
     while (index < argc) {
+        if (strcmp(argv[index], "--build") == 0) {
+        }
         if (strcmp(argv[index], "--full") == 0) {
             options->full_build = 1;
         }
@@ -436,7 +439,7 @@ static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options
             lm_build_print_usage();
             return 2;
         }
-        if (strcmp(argv[index], "--full") != 0 && strcmp(argv[index], "--help") != 0 && strcmp(argv[index], "-h") != 0) {
+        if (strcmp(argv[index], "--build") != 0 && strcmp(argv[index], "--full") != 0 && strcmp(argv[index], "--help") != 0 && strcmp(argv[index], "-h") != 0) {
             fprintf(stderr, "buildCore.lm0: unknown option: %s\n", argv[index]);
             lm_build_print_usage();
             return 1;
