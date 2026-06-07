@@ -640,7 +640,7 @@ fn: lm_registry_control_fn_descriptor_frame (const: (LmP0Frame: frame)) int
 
     if: frame = 0 || frame\trailer != 0
         return: 0
-    if: lm_registry_control_text_equals(frame\head\data, frame\head\length, "fn") = 0 && lm_registry_control_text_equals(frame\head\data, frame\head\length, "lazy fn") = 0
+    if: lm_registry_control_text_equals(frame\head\data, frame\head\length, "fn") = 0 && lm_registry_control_text_equals(frame\head\data, frame\head\length, "callable") = 0
         return: 0
 
     field_count: lm_registry_control_visible_field_count(frame\body)
@@ -689,9 +689,9 @@ fn: lm_registry_control_fn_to_lmx_append (LmRegistryControlBuffer: buffer; const
         lm_registry_control_error_set(error, "fn: descriptor expects name and parameter Structure")
         return: 0
 
-    if: lm_registry_control_text_equals(fn_frame\head\data, fn_frame\head\length, "lazy fn")
-        lm_registry_control_buffer_append_cstr(buffer, "`lazy fn`: ")
-    if: lm_registry_control_text_equals(fn_frame\head\data, fn_frame\head\length, "lazy fn") = 0
+    if: lm_registry_control_text_equals(fn_frame\head\data, fn_frame\head\length, "callable")
+        lm_registry_control_buffer_append_cstr(buffer, "callable: ")
+    if: lm_registry_control_text_equals(fn_frame\head\data, fn_frame\head\length, "callable") = 0
         lm_registry_control_buffer_append_cstr(buffer, "fn: ")
     ---
 

@@ -4792,7 +4792,7 @@ Keep this distinct from the two other deferred/result mechanisms:
         reply ProposedMessage only when the message boundary supplies a reply
         target, future, continuation or correlation id.
 
-7.2.3. Callable Descriptor Argument Consumption and Lazy Binding
+7.2.3. Callable Descriptor Argument Consumption and Partial Binding
 
 When a receiver/function parameter is declared with a callable descriptor, the
 argument position expects a callable value compatible with that descriptor. A
@@ -4818,10 +4818,28 @@ callable value for `five`. The call to `five` happens only inside
 `callSource`, where `source()` is explicitly called.
 
 If a compact call appears in a callable-descriptor argument position, the active
-L2 profile may consume it as a lazy binding/residual callable when the remaining
-unbound parameters match the expected descriptor:
+L2 profile may consume it as a partial binding/residual callable when the
+expected descriptor admits `callable.partial`, the remaining unbound parameters
+match the expected descriptor, and `callable.projection` selects a representation
+that can store the bound environment:
 
-    `lazy fn`: AddX (int: value) int
+    L4:
+        table:
+            name: `callable.partial`
+            columns: class (value serial)
+            rows:
+                     AddX 1
+        end: `callable.partial`
+
+        table:
+            name: `callable.projection`
+            columns: class (value projection)
+            rows:
+                     AddX `c.closure-struct`
+        end: `callable.projection`
+    end: L4
+
+    fn: AddX (int: value) int
 
     fn: addBase (int: base; int: value) int
         return: base + value
@@ -4836,6 +4854,23 @@ unbound parameters match the expected descriptor:
 Here `addBase(4)` is not executed at the argument site. The argument site binds
 `base = 4` and produces a residual callable compatible with `AddX`; later
 `callAdd` calls that residual callable with `value = 3`.
+
+The same operation may be written explicitly when the active profile admits the
+`partial` row in `callable.partial.form`:
+
+    table:
+        name: `callable.partial.form`
+        columns: class (materializer binding)
+        rows:
+                 `call-frame` lm_trans_materialize_call_frame_partial
+                 partial      lm_trans_materialize_partial_callable
+    end: `callable.partial.form`
+
+    callAdd(partial(addBase, 4))
+
+The `call-frame` row admits the compact sugar `addBase(4)` in a callable slot.
+The `partial` row admits the explicit Python-like spelling. Both forms use the
+same residual-callable builder after the surface form has been recognized.
 
 Informative line-count comparison:
 
@@ -4877,7 +4912,21 @@ Java:
 
 Lingvamyxa / LMX:
 
-    `lazy fn`: AddX (int: value) int
+    fn: AddX (int: value) int
+
+    table:
+        name: `callable.partial`
+        columns: class (value serial)
+        rows:
+                 AddX 1
+    end: `callable.partial`
+
+    table:
+        name: `callable.projection`
+        columns: class (value projection)
+        rows:
+                 AddX `c.closure-struct`
+    end: `callable.projection`
 
     fn: addBase (int: base; int: value) int
         return: base + value
@@ -4894,9 +4943,10 @@ Lingvamyxa / LMX:
     end: external
 
 In the LMX example, `AddX` is visible in the signature of `callAdd`, and
-`` `lazy fn` `` marks the descriptor as able to carry the residual environment.
-The expression `callAdd(addBase(4))` returns `7`; an executable test that uses C
-process exit status would normally write `return: callAdd(addBase(4)) != 7`.
+`callable.partial` plus `callable.projection[AddX] = c.closure-struct` mark the
+descriptor as able to carry a residual environment. The expression
+`callAdd(addBase(4))` returns `7`; an executable test that uses C process exit
+status would normally write `return: callAdd(addBase(4)) != 7`.
 
 The same rule may use declared default argument values while forming the
 residual callable:
@@ -7922,53 +7972,100 @@ consume the next step. This is different from Haskell-style global laziness:
 Lingvamyxa does not make every argument and every data field lazy by default.
 That keeps effects, ownership, validation and message scheduling explicit.
 
-Lazy callable descriptor marker
+Callable partial/capture capability tables
 
-`lazy` is a descriptor declaration modifier. It is not an ordinary runtime call
-and does not execute the named callable. In the first L2 translator profile,
-`lazy` is accepted only as part of the quoted callable descriptor receiver head
-being materialized:
+Partial application and escaping closure capture are separate descriptor
+capabilities. They may use the same backend representation, but they answer
+different semantic questions:
 
-    `lazy fn`: AddX (int: value) int
+    callable.partial
+        A callable descriptor may consume a call-shaped argument such as
+        `addBase(4)` or an explicit `partial(addBase, 4)` as a residual callable.
 
-The active profile records the marker in the registry while consuming that
-descriptor declaration. The effective lazy/eager state of the descriptor must be
-known before expressions are type-checked and lowered.
+    callable.capture
+        A callable descriptor may receive a nested callable whose environment
+        escapes the defining scope.
 
-The canonical set-style registry table for this marker is:
+    callable.projection
+        The backend representation selected for the descriptor. In the first C
+        projection profile, `callable.partial` and `callable.capture` require
+        `c.closure-struct` or another representation that can store an
+        environment.
+
+The canonical set-style registry tables are:
 
     table:
-        name: `callable.lazy`
+        name: `callable.partial`
         columns: class  (value serial)
-    end: `callable.lazy`
+    end: `callable.partial`
 
-For the first L2 translator profile, post-declaration marker operations are
+    table:
+        name: `callable.capture`
+        columns: class  (value serial)
+    end: `callable.capture`
+
+    table:
+        name: `callable.projection`
+        columns: class  (value projection)
+        rows:
+                 AddX `c.closure-struct`
+    end: `callable.projection`
+
+The active profile may also declare which surface forms are admitted for partial
+binding:
+
+    table:
+        name: `callable.partial.form`
+        columns: class (materializer binding)
+        rows:
+                 `call-frame` lm_trans_materialize_call_frame_partial
+                 partial      lm_trans_materialize_partial_callable
+    end: `callable.partial.form`
+
+The `call-frame` row admits the existing compact callable-slot spelling:
+
+    callAdd(addBase(4))
+
+The `partial` row admits the explicit spelling:
+
+    callAdd(partial(addBase, 4))
+
+The descriptor receiver head:
+
+    callable: AddX (int: value) int
+
+is compact sugar for the common closure-capable callable descriptor bundle. In
+the current bootstrap profile it materializes:
+
+    callable.partial[AddX] = 1
+    callable.capture[AddX] = 1
+    callable.projection[AddX] = c.closure-struct
+
+Semantic rules should test `callable.partial` and `callable.capture`
+separately.
+
+For the first L2 translator profile, post-declaration marker operations remain
 reserved but rejected:
 
     lazy X
     eager X
 
-That is, `lazy` may not be applied to an already-declared descriptor, and
-`eager` is not yet accepted as a source form. Future profiles may admit
-post-declaration set/override operations, but such operations are still
-compile-time or registry-materialization operations, not runtime switches.
+That is, these words may not yet be applied to an already-declared descriptor as
+source-level modifiers. Future profiles may admit post-declaration set/override
+operations, but such operations are still compile-time or registry-materializing
+operations, not runtime switches.
 
-A lazy-marked callable descriptor admits call-shaped arguments as residual
-callables when the remaining unbound parameters match the expected descriptor.
-For example, if `AddX` is lazy-compatible, `addBase(4)` in an `AddX` argument
-position may bind `base = 4` and produce a residual callable instead of invoking
-`addBase` at the argument site.
+A descriptor without `callable.partial` does not admit the residual-callable
+interpretation through the first L2 translator profile. A compact call in that
+position must either be consumed by another explicitly declared
+descriptor/receiver protocol or be lowered as an ordinary value-producing call
+according to the expected argument type.
 
-A descriptor without an effective `callable.lazy` marker does not admit this
-residual-callable interpretation through the first L2 translator profile. A
-compact call in that position must either be consumed by another explicitly
-declared descriptor/receiver protocol or be lowered as an ordinary
-value-producing call according to the expected argument type.
-
-Marking a descriptor lazy does not by itself make a bare C function pointer able
-to store an environment. A profile that represents a descriptor as a bare C
-function pointer must reject lazy partial binding for that descriptor unless an
-explicit adapter or closure representation is also selected.
+A descriptor without `callable.capture` does not admit returning an escaping
+nested callable with captured environment. A descriptor whose
+`callable.projection` is a bare C function pointer must reject partial binding
+and escaping capture unless an explicit adapter or closure representation is
+also selected.
 
 19.15.1. Iterator function
 

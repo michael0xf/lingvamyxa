@@ -648,7 +648,7 @@ L4:
                  is_descriptor_only    int                    12                      0                                0
                  declare_self_alias    int                    13                      0                                0
                  has_env               int                    14                      0                                0
-                 is_lazy_descriptor    int                    15                      0                                0
+                 is_callable_descriptor int                   15                      0                                0
     end: LmTransFunctionHeader
 
     table:

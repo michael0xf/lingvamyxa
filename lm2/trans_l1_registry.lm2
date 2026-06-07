@@ -540,7 +540,7 @@ fn: lm_trans_registry_join_table (const: (LmP0Text: source_table); const: (LmP0T
                             ---
                             relation: relation\next
                         relation_bucket_index: relation_bucket_index + 1U
-            ---
+                ---
                 card: card\next
             bucket_index: bucket_index + 1U
 
