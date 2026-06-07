@@ -900,6 +900,20 @@ fn: lm_trans_registry_lookup_row_in_identifiers (const: (LmTransIdentifierTable:
         return: 0
 return: lm_own_ptr_stack_top(relation\symbols)
 
+fn: lm_trans_registry_lookup_default_row_in_identifiers (const: (LmTransIdentifierTable: identifiers); const: @(char table)) LmTransRegistryFact
+    LmP0Text: default_key
+    LmTransRegistryFact: row
+
+    if: table = 0
+        return: 0
+
+    default_key: lm_trans_text_from_cstr("default")
+    if: default_key = 0
+        return: 0
+    row: lm_trans_registry_lookup_row_in_identifiers(identifiers, default_key, table)
+    lm_trans_text_ref_destroy(@ default_key)
+return: row
+
 fn: lm_trans_registry_relation_stack_in_identifiers (const: (LmTransIdentifierTable: identifiers); const: (LmP0Text: key); const: @(char relation_name)) const: LmOwnPtrStack
     LmTransIdentifierCard: card
     LmTransIdentifierRelation: relation
@@ -980,7 +994,7 @@ fn: lm_trans_registry_relation_stack_latest_row (const: (LmOwnPtrStack: stack); 
     lm_trans_text_ref_destroy(@ key_payload)
 return: 0
 
-fn: lm_trans_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: @: char
+fn: lm_trans_registry_lookup_exact (const: (LmP0Text: key); const: @(char table)) const: @: char
     LmTransRegistryFact: row
 
     row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, key, table)
@@ -988,6 +1002,23 @@ fn: lm_trans_registry_lookup (const: (LmP0Text: key); const: @(char table)) cons
         return: row\payload
 
 return: 0
+
+fn: lm_trans_registry_lookup_default (const: @(char table)) const: @: char
+    LmTransRegistryFact: row
+
+    row: lm_trans_registry_lookup_default_row_in_identifiers(c.lm_trans_registry->identifiers, table)
+    if: row != 0
+        return: row\payload
+
+return: 0
+
+fn: lm_trans_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: @: char
+    const: @: char payload
+
+    payload: lm_trans_registry_lookup_exact(key, table)
+    if: payload != 0
+        return: payload
+return: lm_trans_registry_lookup_default(table)
 
 fn: lm_trans_registry_has (const: (LmP0Text: key); const: @(char table)) int
 return: lm_trans_registry_lookup(key, table) != 0
@@ -1040,14 +1071,25 @@ return: target_table
 
 fn: lm_trans_namespace_registry_lookup (const: (LmTransNamespace: namespace_); const: (LmP0Text: key); const: @(char table)) const: @: char
     LmTransRegistryFact: row
+    const: @: char payload
 
     if: namespace_ != 0 && namespace_\registry_identifiers != 0
         row: lm_trans_registry_lookup_row_in_identifiers(namespace_\registry_identifiers, key, table)
         if: row != 0
             return: row\payload
-
     ---
-return: lm_trans_registry_lookup(key, table)
+
+    payload: lm_trans_registry_lookup_exact(key, table)
+    if: payload != 0
+        return: payload
+
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0
+        row: lm_trans_registry_lookup_default_row_in_identifiers(namespace_\registry_identifiers, table)
+        if: row != 0
+            return: row\payload
+    ---
+
+return: lm_trans_registry_lookup_default(table)
 
 fn: lm_trans_namespace_registry_lookup_table_link_checked (const: (LmTransNamespace: namespace_); const: (LmP0Text: key); const: @(char source_table); const: @(char target_class_table)) const: @: char
     const: @: char target_table

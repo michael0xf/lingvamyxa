@@ -1921,11 +1921,14 @@ static int lm_trans_registry_note_class_kind(const LmP0Text * name, const char *
 static int lm_trans_registry_note_class_reference_base(const LmP0Text * name);
 static int lm_trans_registry_note_class_present(const LmP0Text * name);
 static LmTransRegistryFact * lm_trans_registry_lookup_row_in_identifiers(const LmTransIdentifierTable * identifiers, const LmP0Text * key, const char *table);
+static LmTransRegistryFact * lm_trans_registry_lookup_default_row_in_identifiers(const LmTransIdentifierTable * identifiers, const char *table);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_in_identifiers(const LmTransIdentifierTable * identifiers, const LmP0Text * key, const char *relation_name);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack(const LmP0Text * key, const char *relation_name);
 static const LmOwnPtrStack * lm_trans_namespace_registry_relation_stack(const LmTransNamespace * namespace_, const LmP0Text * key, const char *relation_name);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_for_table(const char *table);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_row(const LmOwnPtrStack * stack, const LmP0Text * key);
+static const char * lm_trans_registry_lookup_exact(const LmP0Text * key, const char *table);
+static const char * lm_trans_registry_lookup_default(const char *table);
 static const char * lm_trans_registry_lookup(const LmP0Text * key, const char *table);
 static int lm_trans_registry_has(const LmP0Text * key, const char *table);
 static int lm_trans_registry_table_has_rows(const char *table);
@@ -3959,6 +3962,21 @@ static LmTransRegistryFact * lm_trans_registry_lookup_row_in_identifiers(const L
     return lm_own_ptr_stack_top(relation -> symbols);
 }
 
+static LmTransRegistryFact * lm_trans_registry_lookup_default_row_in_identifiers(const LmTransIdentifierTable * identifiers, const char *table) {
+    LmP0Text * default_key;
+    LmTransRegistryFact * row;
+    if (table == 0) {
+        return 0;
+    }
+    default_key = lm_trans_text_from_cstr("default");
+    if (default_key == 0) {
+        return 0;
+    }
+    row = lm_trans_registry_lookup_row_in_identifiers(identifiers, default_key, table);
+    lm_trans_text_ref_destroy(&default_key);
+    return row;
+}
+
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_in_identifiers(const LmTransIdentifierTable * identifiers, const LmP0Text * key, const char *relation_name) {
     LmTransIdentifierCard * card;
     LmTransIdentifierRelation * relation;
@@ -4041,13 +4059,31 @@ static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_row(const L
     return 0;
 }
 
-static const char * lm_trans_registry_lookup(const LmP0Text * key, const char *table) {
+static const char * lm_trans_registry_lookup_exact(const LmP0Text * key, const char *table) {
     LmTransRegistryFact * row;
     row = lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry->identifiers, key, table);
     if (row != 0) {
         return row -> payload;
     }
     return 0;
+}
+
+static const char * lm_trans_registry_lookup_default(const char *table) {
+    LmTransRegistryFact * row;
+    row = lm_trans_registry_lookup_default_row_in_identifiers(lm_trans_registry->identifiers, table);
+    if (row != 0) {
+        return row -> payload;
+    }
+    return 0;
+}
+
+static const char * lm_trans_registry_lookup(const LmP0Text * key, const char *table) {
+    const char *payload;
+    payload = lm_trans_registry_lookup_exact(key, table);
+    if (payload != 0) {
+        return payload;
+    }
+    return lm_trans_registry_lookup_default(table);
 }
 
 static int lm_trans_registry_has(const LmP0Text * key, const char *table) {
@@ -4109,13 +4145,24 @@ static const char * lm_trans_registry_lookup_table_link_checked(const LmP0Text *
 
 static const char * lm_trans_namespace_registry_lookup(const LmTransNamespace * namespace_, const LmP0Text * key, const char *table) {
     LmTransRegistryFact * row;
+    const char *payload;
     if (namespace_ != 0 && namespace_ -> registry_identifiers != 0) {
         row = lm_trans_registry_lookup_row_in_identifiers(namespace_ -> registry_identifiers, key, table);
         if (row != 0) {
             return row -> payload;
         }
     }
-    return lm_trans_registry_lookup(key, table);
+    payload = lm_trans_registry_lookup_exact(key, table);
+    if (payload != 0) {
+        return payload;
+    }
+    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0) {
+        row = lm_trans_registry_lookup_default_row_in_identifiers(namespace_ -> registry_identifiers, table);
+        if (row != 0) {
+            return row -> payload;
+        }
+    }
+    return lm_trans_registry_lookup_default(table);
 }
 
 static const char * lm_trans_namespace_registry_lookup_table_link_checked(const LmTransNamespace * namespace_, const LmP0Text * key, const char *source_table, const char *target_class_table) {

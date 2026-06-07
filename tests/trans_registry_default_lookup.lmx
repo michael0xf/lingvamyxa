@@ -1,0 +1,24 @@
+L4:
+    table:
+        name: namespace
+        columns: class  (`receiver.type` class)
+        rows:
+                 default  `receiver.statement`
+    end: namespace
+
+    table:
+        name: `receiver.statement`
+        columns: class  (receiver binding)
+        rows:
+                 default  lm_trans_statement_emit_assert
+    end: `receiver.statement`
+end: L4
+
+L2:
+    external:
+        fn: main () int
+            customAssert: 1 = 1
+            return: 0
+        end: main
+    end: external
+end: L2
