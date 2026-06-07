@@ -20,6 +20,7 @@ table:
              range                      class
              codec                      class
              projection                 class
+             printfFormat               class
              binding                    class
              functionPointerType        class
              closureType                class
@@ -45,14 +46,29 @@ table:
              `constant.value`           relation
              `define.value`             relation
              `printf.format`            relation
+             `printf.argument.class`    relation
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
              `serialization.codec`      relation
              `callable.projection`      relation
+             `c99.ub.policy`            relation
+             `profile.validator`        relation
              `class.present`            relation
              `class.reference-base`      relation
              `fn.descriptor`            relation
+
+             ubPattern                  class
+             validatorPolicy            class
+             profileRule                class
+             diagnostic                 validatorPolicy
+             checked                    validatorPolicy
+             `profile-defined`          validatorPolicy
+             `c99.null-dereference`     ubPattern
+             `c99.signed-overflow`      ubPattern
+             `c99.shift-count-range`    ubPattern
+             `c99.format-mismatch`      ubPattern
+             `c99.invalid-pointer-cast` ubPattern
 
              void                       primitive
              char                       primitive

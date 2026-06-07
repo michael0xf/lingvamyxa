@@ -3189,26 +3189,31 @@ return: 0
 fn: lm_trans_printf_format_is_flag (char: ch) int
 return: ch = '-' || ch = '+' || ch = ' ' || ch = '#' || ch = '0'
 
-fn: lm_trans_printf_expected_class (char: conversion; char: modifier) const: @: char
-    if: conversion = 'd' || conversion = 'i'
-        if: modifier = 'l'
-            return: "long"
-        if: modifier = 'z'
-            return: 0
-        return: "int"
-    if: conversion = 'u' || conversion = 'o' || conversion = 'x' || conversion = 'X'
-        if: modifier = 'l'
-            return: "ulong"
-        if: modifier = 'z'
-            return: "size_t"
-        return: "unsigned"
-    if: conversion = 'c'
-        return: "int"
-    if: conversion = 's'
-        return: "char"
-    if: conversion = 'f' || conversion = 'F' || conversion = 'e' || conversion = 'E' || conversion = 'g' || conversion = 'G' || conversion = 'a' || conversion = 'A'
-        return: "double"
-return: 0
+fn: lm_trans_printf_expected_class (const: (LmTransNamespace: namespace_); char: conversion; char: modifier) const: @: char
+    [5]: char key_buffer
+    LmP0Text: key
+    const: @: char expected
+    size_t: index
+
+    key: lm_trans_text_ref_new_cstr("")
+    if: key = 0
+        return: 0
+
+    index: 0U
+    key_buffer[index]: '%'
+    index: index + 1U
+    if: modifier != '\0'
+        key_buffer[index]: modifier
+        index: index + 1U
+    key_buffer[index]: conversion
+    index: index + 1U
+    key_buffer[index]: '\0'
+
+    key\data: key_buffer
+    key\length: index
+    expected: lm_trans_namespace_registry_lookup(namespace_, key, "printf.argument.class")
+    lm_trans_text_ref_destroy(@ key)
+return: expected
 
 fn: lm_trans_validate_printf_expected_arg (const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_); size_t: arg_index; const: @: char expected_class) int
     const: LmP0Field: first
@@ -3312,12 +3317,15 @@ fn: lm_trans_validate_c_printf_call (const: (LmP0Frame: frame); const: (LmTransN
                     modifier: 'l'
                     i: i + 1U
                     if: i < format_payload\length && format_payload\data[i] = 'l'
+                        modifier: 'q'
                         i: i + 1U
                     ---
                 else:
                     if: format_payload\data[i] = 'h' || format_payload\data[i] = 'j' || format_payload\data[i] = 't' || format_payload\data[i] = 'L'
+                        modifier: format_payload\data[i]
                         i: i + 1U
                         if: i < format_payload\length && format_payload\data[i - 1U] = 'h' && format_payload\data[i] = 'h'
+                            modifier: 'H'
                             i: i + 1U
                         ---
                     ---
@@ -3327,7 +3335,7 @@ fn: lm_trans_validate_c_printf_call (const: (LmP0Frame: frame); const: (LmTransN
             break
         conversion: format_payload\data[i]
         i: i + 1U
-        expected: lm_trans_printf_expected_class(conversion, modifier)
+        expected: lm_trans_printf_expected_class(namespace_, conversion, modifier)
         if: conversion != 'n'
             status: lm_trans_validate_printf_expected_arg(frame, namespace_, arg_index, expected)
             arg_index: arg_index + 1U

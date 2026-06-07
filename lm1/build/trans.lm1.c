@@ -2205,7 +2205,7 @@ static int lm_trans_printf_atom_is_decimal_literal(const LmP0Text * atom, int *o
 static int lm_trans_printf_arg_class_from_field_chain(const LmP0Text * atom, const LmTransNamespace * namespace_, LmP0Text * out_class);
 static int lm_trans_printf_arg_class_from_segment(const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, LmP0Text * out_class);
 static int lm_trans_printf_format_is_flag(char ch);
-static const char * lm_trans_printf_expected_class(char conversion, char modifier);
+static const char * lm_trans_printf_expected_class(const LmTransNamespace * namespace_, char conversion, char modifier);
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame * frame, const LmTransNamespace * namespace_, size_t arg_index, const char *expected_class);
 static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTransNamespace * namespace_);
 static int lm_trans_cast_type_is_allowed(const LmP0Node * type_node, const LmTransNamespace * namespace_);
@@ -9331,35 +9331,30 @@ static int lm_trans_printf_format_is_flag(char ch) {
     return ch == '-' || ch == '+' || ch == ' ' || ch == '#' || ch == '0';
 }
 
-static const char * lm_trans_printf_expected_class(char conversion, char modifier) {
-    if (conversion == 'd' || conversion == 'i') {
-        if (modifier == 'l') {
-            return "long";
-        }
-        if (modifier == 'z') {
-            return 0;
-        }
-        return "int";
+static const char * lm_trans_printf_expected_class(const LmTransNamespace * namespace_, char conversion, char modifier) {
+    char key_buffer[5];
+    LmP0Text * key;
+    const char *expected;
+    size_t index;
+    key = lm_trans_text_ref_new_cstr("");
+    if (key == 0) {
+        return 0;
     }
-    if (conversion == 'u' || conversion == 'o' || conversion == 'x' || conversion == 'X') {
-        if (modifier == 'l') {
-            return "ulong";
-        }
-        if (modifier == 'z') {
-            return "size_t";
-        }
-        return "unsigned";
+    index = 0U;
+    key_buffer[index] = '%';
+    index = index + 1U;
+    if (modifier != '\0') {
+        key_buffer[index] = modifier;
+        index = index + 1U;
     }
-    if (conversion == 'c') {
-        return "int";
-    }
-    if (conversion == 's') {
-        return "char";
-    }
-    if (conversion == 'f' || conversion == 'F' || conversion == 'e' || conversion == 'E' || conversion == 'g' || conversion == 'G' || conversion == 'a' || conversion == 'A') {
-        return "double";
-    }
-    return 0;
+    key_buffer[index] = conversion;
+    index = index + 1U;
+    key_buffer[index] = '\0';
+    key->data = key_buffer;
+    key->length = index;
+    expected = lm_trans_namespace_registry_lookup(namespace_, key, "printf.argument.class");
+    lm_trans_text_ref_destroy(&key);
+    return expected;
 }
 
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame * frame, const LmTransNamespace * namespace_, size_t arg_index, const char *expected_class) {
@@ -9482,13 +9477,16 @@ static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTran
                     modifier = 'l';
                     i = i + 1U;
                     if (i < format_payload -> length && format_payload -> data[i] == 'l') {
+                        modifier = 'q';
                         i = i + 1U;
                     }
                 }
                 else {
                     if (format_payload -> data[i] == 'h' || format_payload -> data[i] == 'j' || format_payload -> data[i] == 't' || format_payload -> data[i] == 'L') {
+                        modifier = format_payload -> data[i];
                         i = i + 1U;
                         if (i < format_payload -> length && format_payload -> data[i - 1U] == 'h' && format_payload -> data[i] == 'h') {
+                            modifier = 'H';
                             i = i + 1U;
                         }
                     }
@@ -9500,7 +9498,7 @@ static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTran
         }
         conversion = format_payload -> data[i];
         i = i + 1U;
-        expected = lm_trans_printf_expected_class(conversion, modifier);
+        expected = lm_trans_printf_expected_class(namespace_, conversion, modifier);
         if (conversion != 'n') {
             status = lm_trans_validate_printf_expected_arg(frame, namespace_, arg_index, expected);
             arg_index = arg_index + 1U;
