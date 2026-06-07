@@ -621,8 +621,13 @@ fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: n
         lm_own_delete(descriptor_name_storage, 0)
         return: 1
 
-    if: lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name)
-        status: lm_trans_emit_callable_descriptor(file, item\function, namespace_)
+    if: lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) || lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_name)
+        if: lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) = 0
+            c.fprintf(c.stderr, "trans L2 error: callable descriptor %.*s admits partial/capture but callable.projection is not c.closure-struct\n", (cast: int descriptor_name\length), descriptor_name\data)
+            status: 1
+        else:
+            status: lm_trans_emit_callable_descriptor(file, item\function, namespace_)
+        ---
     else:
         if: lm_trans_l4_is_function_pointer_type(namespace_, descriptor_name_storage)
             status: lm_trans_emit_l4_function_pointer_type_name(file, namespace_, descriptor_name_storage, "functionPointerType")

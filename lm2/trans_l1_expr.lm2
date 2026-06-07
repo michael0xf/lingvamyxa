@@ -941,12 +941,36 @@ fn: lm_trans_registry_is_function_pointer_type_name (const: (LmTransNamespace: n
     return: (lm_trans_registry_relation_stack_latest_row(rows, name) != 0)
 end: lm_trans_registry_is_function_pointer_type_name
 
-fn: lm_trans_callable_descriptor_is_lazy (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    return: (lm_trans_namespace_registry_lookup(namespace_, name, "callable.lazy") != 0)
-end: lm_trans_callable_descriptor_is_lazy
+fn: lm_trans_callable_descriptor_allows_partial (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+    return: lm_trans_namespace_registry_lookup(namespace_, name, "callable.partial") != 0
+end: lm_trans_callable_descriptor_allows_partial
+
+fn: lm_trans_callable_descriptor_allows_capture (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+    return: lm_trans_namespace_registry_lookup(namespace_, name, "callable.capture") != 0
+end: lm_trans_callable_descriptor_allows_capture
+
+fn: lm_trans_callable_descriptor_uses_closure_struct (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+    const: @: char projection
+    if: name = 0
+        return: 0
+    projection: lm_trans_namespace_registry_lookup(namespace_, name, "callable.projection")
+    return: projection != 0 && c.strcmp(projection, "c.closure-struct") = 0
+end: lm_trans_callable_descriptor_uses_closure_struct
+
+fn: lm_trans_callable_partial_form_is (const: (LmTransNamespace: namespace_); const: (LmP0Text: form); const: @(char binding_name)) int
+    const: @: char binding
+    if: form = 0 || binding_name = 0
+        return: 0
+    binding: lm_trans_namespace_registry_lookup(namespace_, form, "callable.partial.form")
+    return: binding != 0 && c.strcmp(binding, binding_name) = 0
+end: lm_trans_callable_partial_form_is
+
+fn: lm_trans_callable_partial_call_frame_enabled (const: (LmTransNamespace: namespace_)) int
+    return: lm_trans_callable_partial_form_is(namespace_, lm_trans_text_from_cstr("call-frame"), "lm_trans_materialize_call_frame_partial")
+end: lm_trans_callable_partial_call_frame_enabled
 
 fn: lm_trans_callable_descriptor_is_raw_function_reference (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    return: (((name != 0) && lm_trans_callable_projection_class_is("callableDescriptor", "lmx.callable-descriptor")) && (lm_trans_callable_descriptor_is_lazy(namespace_, name) = 0))
+    return: (((name != 0) && lm_trans_callable_projection_class_is("callableDescriptor", "lmx.callable-descriptor")) && ((lm_trans_callable_descriptor_allows_partial(namespace_, name) = 0) && (lm_trans_callable_descriptor_allows_capture(namespace_, name) = 0)))
 end: lm_trans_callable_descriptor_is_raw_function_reference
 
 fn: lm_trans_emit_raw_callable_declarator (FILE: file; const: (LmTransNamespace: namespace_); const: (LmP0Text: descriptor_name); const: (LmP0Text: name); const: @(char error_name)) int
@@ -1333,12 +1357,16 @@ fn: lm_trans_emit_callable_adapter_args (FILE: file; @: LmTransAbiParam params; 
 end: lm_trans_emit_callable_adapter_args
 
 fn: lm_trans_layout_type_implicit_address_depth (const: (LmP0Text: class_name)) size_t
+    const: @: char projection
     if: class_name = 0
+        return: 0U
+    if: lm_trans_builtin_c_type_name(class_name)
         return: 0U
     if: lm_trans_class_is_reference_base(class_name)
         return: 1U
-    if: lm_trans_builtin_c_type_name(class_name)
-        return: 0U
+    projection: lm_trans_registry_lookup(class_name, "class.c.projection")
+    if: projection != 0 && (c.strcmp(projection, "c.struct") = 0 || c.strcmp(projection, "c.named-struct") = 0 || c.strcmp(projection, "c.union") = 0 || c.strcmp(projection, "c.named-union") = 0)
+        return: 1U
 return: 0U
 
 fn: lm_trans_effective_address_depth (const: (LmP0Text: class_name); size_t: explicit_depth) size_t
@@ -1642,14 +1670,14 @@ fn: lm_trans_callable_descriptor_accepts_source_bind (const: (LmTransNamespace: 
     return: 1
 end: lm_trans_callable_descriptor_accepts_source_bind
 
-fn: lm_trans_call_body_positional_arg_count (const: (LmP0Structure: body); @: size_t out_count) int
+fn: lm_trans_positional_arg_count_from_field (const: (LmP0Field: first); @: size_t out_count) int
     const: LmP0Field: field
     const: LmP0Field: next
     const: LmP0Frame: frame
     if: (out_count = 0)
         return: 0
     out_count[0]: 0U
-    field: lm_trans_call_body_first_field(body)
+    field: first
     while: (field != 0)
         if: ((field\value != 0) && (field\value\kind = c.LM_P0_NODE_FRAME))
             frame: field\value\as\frame
@@ -1660,6 +1688,10 @@ fn: lm_trans_call_body_positional_arg_count (const: (LmP0Structure: body); @: si
         out_count[0]: out_count[0] + 1U
         field: next
     return: 1
+end: lm_trans_positional_arg_count_from_field
+
+fn: lm_trans_call_body_positional_arg_count (const: (LmP0Structure: body); @: size_t out_count) int
+    return: lm_trans_positional_arg_count_from_field(lm_trans_call_body_first_field(body), out_count)
 end: lm_trans_call_body_positional_arg_count
 
 fn: lm_trans_callable_default_adapter_name_new (const: (LmP0Text: source_name); const: (LmP0Text: descriptor_name)) @: char
@@ -2139,9 +2171,8 @@ fn: lm_trans_emit_callable_binder (FILE: file; const: (LmTransNamespace: namespa
     return: 0
 end: lm_trans_emit_callable_binder
 
-fn: lm_trans_expr_stack_push_lazy_binder_call (FILE: file; LmTransExprStack: stack; const: (LmP0Text: binder_name); const: (LmP0Structure: body); const: (LmTransSymbol: source_symbol); size_t: bound_count; const: (LmTransNamespace: namespace_)) int
+fn: lm_trans_expr_stack_push_lazy_binder_fields (FILE: file; LmTransExprStack: stack; const: (LmP0Text: binder_name); const: (LmP0Field: first); const: (LmTransSymbol: source_symbol); size_t: bound_count; const: (LmTransNamespace: namespace_)) int
     LmOwnPtrStack: segments
-    const: LmP0Field: first
     const: LmP0Field: field
     const: LmP0Field: next
     LmTransExprSegment: segment
@@ -2149,7 +2180,6 @@ fn: lm_trans_expr_stack_push_lazy_binder_call (FILE: file; LmTransExprStack: sta
     int: status
     if: (lm_trans_expr_stack_push_text(stack, ")") != 0)
         return: 1
-    first: lm_trans_call_body_first_field(body)
     segments: lm_trans_expr_segment_stack_new()
     if: (segments = 0)
         return: 1
@@ -2198,6 +2228,10 @@ fn: lm_trans_expr_stack_push_lazy_binder_call (FILE: file; LmTransExprStack: sta
     if: ((lm_trans_expr_stack_push_text(stack, "(") != 0) || (lm_trans_expr_stack_push_name_text(stack, binder_name) != 0))
         return: 1
     return: 0
+end: lm_trans_expr_stack_push_lazy_binder_fields
+
+fn: lm_trans_expr_stack_push_lazy_binder_call (FILE: file; LmTransExprStack: stack; const: (LmP0Text: binder_name); const: (LmP0Structure: body); const: (LmTransSymbol: source_symbol); size_t: bound_count; const: (LmTransNamespace: namespace_)) int
+    return: lm_trans_expr_stack_push_lazy_binder_fields(file, stack, binder_name, lm_trans_call_body_first_field(body), source_symbol, bound_count, namespace_)
 end: lm_trans_expr_stack_push_lazy_binder_call
 
 fn: lm_trans_param_descriptor_matches_return (const: (LmP0Node: param); const: (LmP0Node: return_node); const: (LmTransNamespace: namespace_)) int
@@ -2344,44 +2378,112 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
         node: segment\first\value
         if: (node\kind = c.LM_P0_NODE_FRAME)
             frame: node\as\frame
-            symbol: lm_trans_namespace_find(namespace_, frame\head)
-            if: ((((((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name) = 0)) && (descriptor_is_function_pointer = 0)) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0)) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count)) && (symbol\param_names\count >= descriptor_param_count))
-                bound_count: (symbol\param_names\count - descriptor_param_count)
-                if: (explicit_bound_count <= bound_count)
-                    if: symbol\has_c_name
-                        name[0]: symbol\c_name[0]
-                    else:
-                        name[0]: frame\head[0]
-                    if: (lm_trans_emit_callable_default_adapter(file, namespace_, name, symbol, descriptor_name, frame\body, bound_count, adapter_name) != 0)
+            if: lm_trans_callable_partial_form_is(namespace_, frame\head, "lm_trans_materialize_partial_callable")
+                const: LmP0Field: source_field
+                const: LmP0Field: source_end
+                const: LmP0Field: bound_first
+                source_field: lm_trans_call_body_first_field(frame\body)
+                if: source_field = 0 || source_field\value = 0 || source_field\value\kind != c.LM_P0_NODE_ATOM
+                    c.fprintf(c.stderr, "trans L2 error: partial(...) expects a callable name as its first argument\n")
+                    status: 1
+                else:
+                    source_end: lm_trans_expr_segment_end(source_field)
+                    if: source_end != source_field\next
+                        c.fprintf(c.stderr, "trans L2 error: partial(...) callable argument must be a single callable name\n")
                         status: 1
-                    if: ((status = 0) && (adapter_name\length != 0U))
-                        if: (lm_trans_expr_stack_push_name_text(stack, adapter_name) != 0)
+                    else:
+                        atom[0]: source_field\value\as\atom[0]
+                        symbol: lm_trans_namespace_find(namespace_, atom)
+                        bound_first: source_end
+                        if: symbol = 0 || lm_trans_symbol_is_executable_callable(symbol) = 0
+                            c.fprintf(c.stderr, "trans L2 error: partial(...) source %.*s is not an executable callable\n", (cast: int atom\length), atom\data)
                             status: 1
                         else:
-                            consumed: 1
+                            if: lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) = 0
+                                c.fprintf(c.stderr, "trans L2 error: callable descriptor %.*s does not admit callable.partial\n", (cast: int descriptor_name\length), descriptor_name\data)
+                                status: 1
+                            else:
+                                if: lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) = 0
+                                    c.fprintf(c.stderr, "trans L2 error: callable descriptor %.*s admits callable.partial but callable.projection is not c.closure-struct\n", (cast: int descriptor_name\length), descriptor_name\data)
+                                    status: 1
+                                else:
+                                    if: (lm_trans_positional_arg_count_from_field(bound_first, @ explicit_bound_count) = 0) || (lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count) = 0) || (symbol\param_names\count < descriptor_param_count)
+                                        c.fprintf(c.stderr, "trans L2 error: partial(...) cannot match source callable %.*s to descriptor %.*s\n", (cast: int atom\length), atom\data, (cast: int descriptor_name\length), descriptor_name\data)
+                                        status: 1
+                                    else:
+                                        bound_count: (symbol\param_names\count - descriptor_param_count)
+                                        if: explicit_bound_count > bound_count
+                                            c.fprintf(c.stderr, "trans L2 error: too many partial arguments for callable descriptor %.*s\n", (cast: int descriptor_name\length), descriptor_name\data)
+                                            status: 1
+                                        else:
+                                            if: symbol\has_c_name
+                                                name[0]: symbol\c_name[0]
+                                            else:
+                                                name[0]: atom[0]
+                                            if: (lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, bound_count, binder_name) != 0)
+                                                status: 1
+                                            if: ((status = 0) && (binder_name\length = 0U))
+                                                c.fprintf(c.stderr, "trans L2 error: partial(...) source %.*s is not compatible with callable descriptor %.*s\n", (cast: int atom\length), atom\data, (cast: int descriptor_name\length), descriptor_name\data)
+                                                status: 1
+                                            if: ((status = 0) && (lm_trans_expr_stack_push_lazy_binder_fields(file, stack, binder_name, bound_first, symbol, bound_count, namespace_) != 0))
+                                                status: 1
+                                            if: status = 0
+                                                consumed: 1
+                                            ---
+                                        ---
+                                    ---
+                                ---
+                            ---
                         ---
                     ---
                 ---
-            if: (((status = 0) && (consumed = 0)) && ((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name) = 0))
-                c.fprintf(c.stderr, "trans L2 error: call-shaped callable argument for %.*s is not a raw function reference; defaults could not form an adapter\n", (cast: int descriptor_name\length), descriptor_name\data)
-                status: 1
-            if: ((status = 0) && (consumed = 0) && (descriptor_is_function_pointer = 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count) && (symbol\param_names\count >= descriptor_param_count))
-                bound_count: (symbol\param_names\count - descriptor_param_count)
-                if: (explicit_bound_count > bound_count)
-                    c.fprintf(c.stderr, "trans L2 error: too many lazy-bind arguments for callable descriptor %.*s\n", (cast: int descriptor_name\length), descriptor_name\data)
-                    status: 1
+            else:
+                symbol: lm_trans_namespace_find(namespace_, frame\head)
+                if: (((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && lm_trans_node_callable_descriptor_name(symbol\callable_return_node, namespace_, atom) && lm_trans_identifier_same(atom, descriptor_name))
+                    symbol: symbol
                 else:
-                    if: symbol\has_c_name
-                        name[0]: symbol\c_name[0]
-                    else:
-                        name[0]: frame\head[0]
-                    if: (lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, bound_count, binder_name) != 0)
+                    if: ((((((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) = 0)) && (descriptor_is_function_pointer = 0)) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0)) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count)) && (symbol\param_names\count >= descriptor_param_count))
+                        bound_count: (symbol\param_names\count - descriptor_param_count)
+                        if: (explicit_bound_count <= bound_count)
+                            if: symbol\has_c_name
+                                name[0]: symbol\c_name[0]
+                            else:
+                                name[0]: frame\head[0]
+                            if: (lm_trans_emit_callable_default_adapter(file, namespace_, name, symbol, descriptor_name, frame\body, bound_count, adapter_name) != 0)
+                                status: 1
+                            if: ((status = 0) && (adapter_name\length != 0U))
+                                if: (lm_trans_expr_stack_push_name_text(stack, adapter_name) != 0)
+                                    status: 1
+                                else:
+                                    consumed: 1
+                                ---
+                            ---
+                        ---
+                    if: (((status = 0) && (consumed = 0)) && ((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) = 0))
+                        c.fprintf(c.stderr, "trans L2 error: call-shaped callable argument for %.*s is not a raw function reference; defaults could not form an adapter\n", (cast: int descriptor_name\length), descriptor_name\data)
                         status: 1
-                    if: ((status = 0) && (binder_name\length != 0U))
-                        if: (lm_trans_expr_stack_push_lazy_binder_call(file, stack, binder_name, frame\body, symbol, bound_count, namespace_) != 0)
+                    if: ((status = 0) && (consumed = 0) && lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) = 0))
+                        c.fprintf(c.stderr, "trans L2 error: callable descriptor %.*s admits callable.partial but callable.projection is not c.closure-struct\n", (cast: int descriptor_name\length), descriptor_name\data)
+                        status: 1
+                    if: ((status = 0) && (consumed = 0) && lm_trans_callable_partial_call_frame_enabled(namespace_) && lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) && lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) && (descriptor_is_function_pointer = 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count) && (symbol\param_names\count >= descriptor_param_count))
+                        bound_count: (symbol\param_names\count - descriptor_param_count)
+                        if: (explicit_bound_count > bound_count)
+                            c.fprintf(c.stderr, "trans L2 error: too many lazy-bind arguments for callable descriptor %.*s\n", (cast: int descriptor_name\length), descriptor_name\data)
                             status: 1
                         else:
-                            consumed: 1
+                            if: symbol\has_c_name
+                                name[0]: symbol\c_name[0]
+                            else:
+                                name[0]: frame\head[0]
+                            if: (lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, bound_count, binder_name) != 0)
+                                status: 1
+                            if: ((status = 0) && (binder_name\length != 0U))
+                                if: (lm_trans_expr_stack_push_lazy_binder_call(file, stack, binder_name, frame\body, symbol, bound_count, namespace_) != 0)
+                                    status: 1
+                                else:
+                                    consumed: 1
+                                ---
+                            ---
                         ---
                     ---
                 ---

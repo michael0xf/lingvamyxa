@@ -87,7 +87,9 @@ table:
              expr_emitter_binding       relation
              `call.lowering`            relation
              `materialize.argument`     relation
-             `callable.lazy`            relation
+             `callable.partial`         relation
+             `callable.capture`         relation
+             `callable.partial.form`    relation
              `cast.target`              relation
              `operator.prefix`          relation
              `operator.postfix`         relation
@@ -535,7 +537,7 @@ table:
     columns: class  (receiver binding)
     rows:
              fn     lm_trans_receiver_fn
-             `lazy fn` lm_trans_receiver_lazy_fn
+             callable lm_trans_receiver_callable
              fm     lm_trans_receiver_fm
              sub    lm_trans_receiver_sub
 end: `receiver.function`
@@ -547,7 +549,7 @@ table:
              L1            `receiver.level`
              L2            `receiver.level`
              fn            `receiver.function`
-             `lazy fn`     `receiver.function`
+             callable      `receiver.function`
              fm            `receiver.function`
              sub           `receiver.function`
              table         `receiver.statement`
@@ -653,7 +655,7 @@ table:
              join   `l4.frame`
              row    `l4.frame`
              fn     `l4.frame`
-             `lazy fn` `l4.frame`
+             callable `l4.frame`
              sub    `l4.frame`
 end: `namespace.l4`
 
@@ -779,6 +781,14 @@ table:
              `callable.descriptor.value` lm_trans_materialize_callable_descriptor_value
              `array.value`              lm_trans_materialize_array_value
 end: `materialize.argument`
+
+table:
+    name: `callable.partial.form`
+    columns: class       (materializer binding)
+    rows:
+             `call-frame` lm_trans_materialize_call_frame_partial
+             partial      lm_trans_materialize_partial_callable
+end: `callable.partial.form`
 
 table:
     name: `cast.target`

@@ -142,7 +142,7 @@ fn: lm_trans_receiver_fn (
     LmTransFunctionHeader: out
 ) int
 
-fn: lm_trans_receiver_lazy_fn (
+fn: lm_trans_receiver_callable (
     const: LmP0Frame: frame
     int: is_external
     LmTransFunctionHeader: out
@@ -559,7 +559,17 @@ fn: lm_trans_registry_is_function_pointer_type_name (
     const: LmP0Text: name
 ) int
 
-fn: lm_trans_callable_descriptor_is_lazy (
+fn: lm_trans_callable_descriptor_allows_partial (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_callable_descriptor_allows_capture (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_callable_descriptor_uses_closure_struct (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
 ) int

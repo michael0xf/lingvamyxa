@@ -7618,7 +7618,7 @@ static int lm_p0_registry_l4_join_table(void *context, const LmP0Text * source_t
 }
 
 static int lm_p0_registry_seed_l4_receivers(void) {
-    return (((((lm_p0_registry_push_generated_row_cstr("namespace.l4", "table", "l4.frame") != 0) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "join", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "row", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "fn", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "lazy fn", "l4.frame") != 0));
+    return (((((lm_p0_registry_push_generated_row_cstr("namespace.l4", "table", "l4.frame") != 0) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "join", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "row", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "fn", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "callable", "l4.frame") != 0));
 }
 
 static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader * loader, const LmP0Text * head) {
@@ -7655,7 +7655,7 @@ static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader * load
     if (lm_p0_text_equals(head, "row")) {
         return &lm_l4_receiver_row;
     }
-    if ((lm_p0_text_equals(head, "fn") || lm_p0_text_equals(head, "lazy fn"))) {
+    if ((lm_p0_text_equals(head, "fn") || lm_p0_text_equals(head, "callable"))) {
         return &lm_l4_receiver_ignore;
     }
     int lm_p0_tmp_24;

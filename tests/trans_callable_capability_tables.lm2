@@ -1,0 +1,47 @@
+import: "lm2/own.lm2"
+
+L4:
+    table:
+        name: `callable.partial`
+        columns: class (value serial)
+        rows:
+                 AddX 1
+    end: `callable.partial`
+
+    table:
+        name: `callable.capture`
+        columns: class (value serial)
+        rows:
+                 AddX 1
+    end: `callable.capture`
+
+    table:
+        name: `callable.projection`
+        columns: class (value projection)
+        rows:
+                 AddX `c.closure-struct`
+    end: `callable.projection`
+end: L4
+
+fn: AddX (int: value) int
+
+fn: addBase (int: base; int: value) int
+    return: base + value
+end: addBase
+
+fn: makeAdder (int: base) AddX
+    fn: addX (int: value) int
+        return: base + value
+    ---
+    return: addX
+end: makeAdder
+
+fn: callAdd (AddX: add) int
+    return: add(3)
+end: callAdd
+
+external:
+    fn: main () int
+        return: callAdd(addBase(4)) != 7 || callAdd(partial(addBase, 4)) != 7 || callAdd(makeAdder(4)) != 7
+    end: main
+end: external

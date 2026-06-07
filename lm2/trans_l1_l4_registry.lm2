@@ -1879,8 +1879,8 @@ fn: lm_trans_registry_materialize_fn_descriptor_frame (const: (LmP0Frame: frame)
         status: 1
 
     if: status = 0
-        if: lm_trans_text_equals(receiver_name, "lazy fn")
-            if: lm_trans_receiver_lazy_fn(frame, 0, function) <= 0
+        if: lm_trans_text_equals(receiver_name, "callable")
+            if: lm_trans_receiver_callable(frame, 0, function) <= 0
                 status: 1
         ---
         else:
@@ -1904,8 +1904,10 @@ fn: lm_trans_registry_materialize_fn_descriptor_frame (const: (LmP0Frame: frame)
         status: 1
     if: status = 0 && return_type\is_const && lm_trans_registry_push_owner_relation_size(function_name, ".return.const", lm_trans_text_from_cstr("return"), 1U) != 0
         status: 1
-    if: status = 0 && function\is_lazy_descriptor && lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.lazy"), function_name, lm_trans_text_from_cstr("1")) != 0
-        status: 1
+    if: status = 0 && function\is_callable_descriptor
+        if: lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.partial"), function_name, lm_trans_text_from_cstr("1")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.capture"), function_name, lm_trans_text_from_cstr("1")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.projection"), function_name, lm_trans_text_from_cstr("c.closure-struct")) != 0
+            status: 1
+    ---
 
     if: status = 0 && (function\params_node = 0 || function\params_node\kind != c.LM_P0_NODE_STRUCTURE)
         c.fprintf(c.stderr, "trans fn descriptor error: parameters must be a Structure\n")
@@ -2122,7 +2124,7 @@ fn: lm_trans_l4_pointer_bindings_init () int
         lm_trans_ptr_stack_delete(@ root_frame_bindings)
         lm_trans_ptr_stack_delete(@ atom_bindings)
         return: 1
-    if: lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "join", "l4.frame", lm_trans_l4_receiver_join) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "lazy fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "sub", "l4.frame", lm_trans_l4_receiver_sub_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "L4", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "registry", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0
+    if: lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "join", "l4.frame", lm_trans_l4_receiver_join) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "callable", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "sub", "l4.frame", lm_trans_l4_receiver_sub_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "L4", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "registry", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0
         lm_trans_ptr_stack_delete(@ frame_bindings)
         lm_trans_ptr_stack_delete(@ root_frame_bindings)
         lm_trans_ptr_stack_delete(@ atom_bindings)
@@ -2458,7 +2460,7 @@ fn: lm_trans_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP
         return: @ lm_l4_receiver_join
     if: lm_trans_text_equals(head, "row") != 0
         return: @ lm_l4_receiver_row
-    if: lm_trans_text_equals(head, "fn") != 0 || lm_trans_text_equals(head, "lazy fn") != 0
+    if: lm_trans_text_equals(head, "fn") != 0 || lm_trans_text_equals(head, "callable") != 0
         return: @ lm_l4_receiver_ignore
     c.fprintf:
         c.stderr
@@ -2923,7 +2925,7 @@ fn: lm_trans_registry_seed_l4_receivers () int
         return: 1
     if: lm_trans_registry_push_row_values(lm_trans_text_from_cstr("namespace.l4"), lm_trans_text_from_cstr("fn"), lm_trans_text_from_cstr("l4.frame")) != 0
         return: 1
-    if: lm_trans_registry_push_row_values(lm_trans_text_from_cstr("namespace.l4"), lm_trans_text_from_cstr("lazy fn"), lm_trans_text_from_cstr("l4.frame")) != 0
+    if: lm_trans_registry_push_row_values(lm_trans_text_from_cstr("namespace.l4"), lm_trans_text_from_cstr("callable"), lm_trans_text_from_cstr("l4.frame")) != 0
         return: 1
     if: lm_trans_registry_push_row_values(lm_trans_text_from_cstr("namespace.l4"), lm_trans_text_from_cstr("sub"), lm_trans_text_from_cstr("l4.frame")) != 0
         return: 1

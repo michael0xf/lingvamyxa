@@ -1384,7 +1384,7 @@ fn: lm_trans_emit_raw_callable_return_statement (
     if: symbol\has_env_arg || lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
         c.fprintf(
             c.stderr,
-            "trans L2 error: cannot return capturing callable %.*s as raw descriptor %.*s; use `lazy fn`\n",
+            "trans L2 error: cannot return capturing callable %.*s as raw descriptor %.*s; descriptor must admit callable.capture\n",
             (cast: int atom\length),
             atom\data,
             (cast: int descriptor_type\length),
@@ -1445,12 +1445,27 @@ fn: lm_trans_emit_closure_return_statement (
 
     if: lm_trans_return_fields_single_atom(return_fields, atom) = 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) = 0
         return: 0
-    if: lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_type) = 0
-        return: 0
-
     symbol: lm_trans_namespace_find(namespace_, atom)
     if: symbol = 0 || lm_trans_symbol_is(symbol, "function") = 0 || symbol\has_closure_call_name = 0
         return: 0
+    if: lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_type) = 0
+        c.fprintf(
+            c.stderr,
+            "trans L2 error: callable descriptor %.*s does not admit callable.capture for returned closure %.*s\n",
+            (cast: int descriptor_type\length),
+            descriptor_type\data,
+            (cast: int atom\length),
+            atom\data
+        )
+        return: 1
+    if: lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_type) = 0
+        c.fprintf(
+            c.stderr,
+            "trans L2 error: callable descriptor %.*s admits callable.capture but callable.projection is not c.closure-struct\n",
+            (cast: int descriptor_type\length),
+            descriptor_type\data
+        )
+        return: 1
 
     out_consumed[0]: 1
     return_id: namespace_\next_return_id
@@ -5948,7 +5963,7 @@ fn: lm_trans_function_header_common (
     LmTransFunctionHeader: out
     int: is_sub
     int: is_struct_return
-    int: is_lazy_descriptor
+    int: is_callable_descriptor
 ) int
     const: LmP0Field: name_field
     const: LmP0Field: params_field
@@ -5989,7 +6004,7 @@ fn: lm_trans_function_header_common (
     out\is_sub: is_sub
     out\is_struct_return: is_struct_return
     out\is_external: is_external
-    out\is_lazy_descriptor: is_lazy_descriptor
+    out\is_callable_descriptor: is_callable_descriptor
 
     if: is_sub
         body_field: lm_trans_nth_field(frame\body, 2U)
@@ -6016,8 +6031,8 @@ fn: lm_trans_function_header_common (
     if: is_struct_return = 0 && out\body_start = 0 && (frame\trailer = 0 || lm_trans_text_equals(frame\trailer\spelling, "return") = 0)
         out\symbol_class: "callableDescriptor"
         out\is_descriptor_only: 1
-    if: is_lazy_descriptor && out\is_descriptor_only = 0
-        c.fprintf(c.stderr, "trans L2 error: lazy fn is supported only for descriptor-only fn declarations in this profile\n")
+    if: is_callable_descriptor && out\is_descriptor_only = 0
+        c.fprintf(c.stderr, "trans L2 error: callable is supported only for descriptor-only fn declarations in this profile\n")
         return: -1
 return: 1
 
@@ -6028,7 +6043,7 @@ fn: lm_trans_receiver_fn (
 ) int
 return: lm_trans_function_header_common(frame, is_external, out, 0, 0, 0)
 
-fn: lm_trans_receiver_lazy_fn (
+fn: lm_trans_receiver_callable (
     const: LmP0Frame: frame
     int: is_external
     LmTransFunctionHeader: out
@@ -6244,7 +6259,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_contextual_literal_assignment", @lm_trans_statement_emit_contextual_literal_assignment) != 0
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fn", @lm_trans_receiver_fn) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_lazy_fn", @lm_trans_receiver_lazy_fn) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fm", @lm_trans_receiver_fm) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_sub", @lm_trans_receiver_sub) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fn", @lm_trans_receiver_fn) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_callable", @lm_trans_receiver_callable) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fm", @lm_trans_receiver_fm) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_sub", @lm_trans_receiver_sub) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_type_emit("lm_trans_type_receiver_array_emit", @lm_trans_type_receiver_array_emit) != 0 || lm_trans_pointer_binding_push_type_alloc("lm_trans_type_receiver_array_structure_value_alloc", @lm_trans_type_receiver_array_structure_value_alloc) != 0 || lm_trans_pointer_binding_push_type_fill("lm_trans_type_receiver_array_structure_value_fill", @lm_trans_type_receiver_array_structure_value_fill) != 0)
         status: 1

@@ -73,6 +73,9 @@ table:
              `false.value`              relation
              `true.value`               relation
              `callable.projection`      relation
+             `callable.partial`         relation
+             `callable.capture`         relation
+             `callable.partial.form`    relation
              `c99.ub.policy`            relation
              `profile.validator`        relation
              `class.present`            relation
