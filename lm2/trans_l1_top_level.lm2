@@ -1362,7 +1362,11 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         lm_trans_ptr_stack_delete(@ hoisted_functions)
         return: 1
 
-    status: lm_trans_emit_statement_list(file, function\body_start, 1U, namespace_)
+    status: 0
+    if: function\is_external && lm_trans_text_equals(function\c_name, "main")
+        status: lm_trans_emit_l5_main_root(file, 1U)
+    if: status = 0
+        status: lm_trans_emit_statement_list(file, function\body_start, 1U, namespace_)
     if: status = 0
         status: lm_trans_validate_end_trailer(frame)
     if: status = 0 && (frame\trailer = 0 || lm_trans_text_equals(frame\trailer\spelling, "return") = 0)

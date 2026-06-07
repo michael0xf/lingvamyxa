@@ -375,6 +375,8 @@ table:
              core_stdint   "<stdint.h>"
              core_inttypes "<inttypes.h>"
              core_stdio    "<stdio.h>"
+             core_stdlib   "<stdlib.h>"
+             core_setjmp   "<setjmp.h>"
 end: `core.c.include`
 
 table:
@@ -572,6 +574,7 @@ table:
              continue      `receiver.statement`
              synchronized  `receiver.statement`
              finally       `receiver.statement`
+             assert        `receiver.statement`
              include       `receiver.statement`
              define        `receiver.statement`
              `ifndef-default` `receiver.statement`
@@ -629,6 +632,7 @@ table:
              continue      lm_trans_statement_emit_loop_jump
              synchronized  lm_trans_statement_emit_synchronized
              finally       lm_trans_statement_emit_finally
+             assert        lm_trans_statement_emit_assert
              include       lm_trans_statement_emit_include_prelude
              define        lm_trans_statement_emit_define_prelude
              `ifndef-default` lm_trans_statement_emit_ifndef_default_prelude

@@ -10,12 +10,14 @@ L2:
             Boolean: yes true
             Boolean: status OK
             Boolean: legacy None
-            if: var = None && state = None
-                return: status
-            if: var = None
-                return: no
-            if: raw = false && legacy = None
-                return: yes
+            assert: var = None
+            assert: var2 = OK
+            assert: raw = false
+            assert: state = None
+            assert: no = false
+            assert: yes = true
+            assert: status = OK
+            assert: legacy = None
             return: 0
         end: main
     end: external

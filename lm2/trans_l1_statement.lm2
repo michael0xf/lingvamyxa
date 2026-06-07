@@ -460,6 +460,102 @@ fn: lm_trans_emit_scope_cleanups (
 
 return: 0
 
+fn: lm_trans_emit_l5_runtime_prelude (FILE: file) int
+    if: file = 0
+        return: 1
+    if: lm_trans_emitted_l5_runtime_prelude
+        return: 0
+
+    lm_trans_emitted_l5_runtime_prelude: 1
+    if: lm_trans_put(file, "typedef struct LmL5ExecutionContext LmL5ExecutionContext;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "typedef struct LmL5Thread LmL5Thread;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmL5ExecutionContext {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    jmp_buf diagnostic_root;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    int diagnostic_code;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    const char *diagnostic_label;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    const char *diagnostic_file;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    int diagnostic_line;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    const char *diagnostic_expr;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "};\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmL5Thread {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    LmL5ExecutionContext main_context;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    LmL5ExecutionContext *current;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "};\n") != 0
+        return: 1
+    if: lm_trans_put(file, "static LmL5Thread lm_l5_main_thread_storage;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "static inline LmL5Thread *lm_l5_main_thread(void) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    return &lm_l5_main_thread_storage;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_put(file, "static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        return 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    return thread->current->diagnostic_code;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_put(file, "static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (thread == 0 || thread->current == 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        abort();\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    thread->current->diagnostic_code = 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    thread->current->diagnostic_label = \"AssertionViolation\";\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    thread->current->diagnostic_file = file;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    thread->current->diagnostic_line = line;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    thread->current->diagnostic_expr = expr;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    longjmp(thread->current->diagnostic_root, 1);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "}\n\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_emit_l5_main_root (FILE: file; unsigned: indent) int
+    if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "LmL5Thread *lm_l5_thread = lm_l5_main_thread();\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_l5_thread->current = &lm_l5_thread->main_context;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_l5_thread->main_context.diagnostic_code = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+return: 0
+
 fn: lm_trans_return_fields_single_atom (
     const: LmP0Field: return_fields
     LmP0Text: out_atom
@@ -4551,6 +4647,34 @@ fn: lm_trans_statement_emit_finally (
         return: 1
 return: lm_trans_finally_push(namespace_, frame\body\first_field)
 
+fn: lm_trans_statement_emit_assert (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    if: stack != 0 && stack = 0
+        return: 1
+    if: frame = 0 || frame\body = 0 || frame\body\first_field = 0
+        c.fprintf(c.stderr, "trans L2 error: assert receiver expects condition expression\n")
+        return: 1
+    if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!(") != 0
+        return: 1
+    if: lm_trans_emit_control_condition(file, frame, namespace_) != 0
+        return: 1
+    if: lm_trans_put(file, ")) {\n") != 0
+        return: 1
+    if: lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_l5_assert_violation(lm_l5_main_thread(), __FILE__, __LINE__, \"assert\");\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+return: 0
+
 fn: lm_trans_statement_emit_loop_jump (
     FILE: file
     LmTransStatementStack: stack
@@ -6251,7 +6375,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", @lm_trans_expr_emit_raw, @lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", @lm_trans_expr_emit_raw, @lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", @lm_trans_expr_emit_raw, @lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", @lm_trans_expr_emit_raw, @lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", @lm_trans_expr_emit_cast_frame) != 0)
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", @lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1

@@ -142,6 +142,7 @@ table:
              continue                   descriptor
              synchronized               descriptor
              finally                    descriptor
+             assert                     descriptor
              const                      descriptor
              define                     descriptor
              external                   descriptor

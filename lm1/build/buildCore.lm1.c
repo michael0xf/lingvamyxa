@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <setjmp.h>
 
 #include <stddef.h>
 typedef struct LmOwnPtrStack LmOwnPtrStack;
@@ -222,7 +224,7 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fprintf(file, "$ownLib = '%s'\n", own_library);
     fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file);
     fputs("$parserSkip = @()\n", file);
-    fputs("$transSkip = @('trans_contextual_literal_none_ok.lmx', 'trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2')\n", file);
+    fputs("$transSkip = @('trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2')\n", file);
     fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2')\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
     fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
@@ -356,7 +358,7 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);
-    fputs("    case \"$name\" in trans_contextual_literal_none_ok.lmx|trans_double_semicolon_params.lm2|trans_fn_descriptor_only.lm2) continue ;; esac\n", file);
+    fputs("    case \"$name\" in trans_double_semicolon_params.lm2|trans_fn_descriptor_only.lm2) continue ;; esac\n", file);
     fputs("    base=${name%.*}\n", file);
     fputs("    c_path=\"build/obj/tests/$base.c\"\n", file);
     fputs("    exe_path=\"build/obj/tests/$base\"\n", file);
@@ -409,6 +411,42 @@ static int lm_build_full_build(void);
 static int lm_build_full_project(void);
 static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans);
 int main(int argc, char **argv);
+
+typedef struct LmL5ExecutionContext LmL5ExecutionContext;
+typedef struct LmL5Thread LmL5Thread;
+struct LmL5ExecutionContext {
+    jmp_buf diagnostic_root;
+    int diagnostic_code;
+    const char *diagnostic_label;
+    const char *diagnostic_file;
+    int diagnostic_line;
+    const char *diagnostic_expr;
+};
+struct LmL5Thread {
+    LmL5ExecutionContext main_context;
+    LmL5ExecutionContext *current;
+};
+static LmL5Thread lm_l5_main_thread_storage;
+static inline LmL5Thread *lm_l5_main_thread(void) {
+    return &lm_l5_main_thread_storage;
+}
+static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
+    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+        return 1;
+    }
+    return thread->current->diagnostic_code;
+}
+static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {
+    if (thread == 0 || thread->current == 0) {
+        abort();
+    }
+    thread->current->diagnostic_code = 1;
+    thread->current->diagnostic_label = "AssertionViolation";
+    thread->current->diagnostic_file = file;
+    thread->current->diagnostic_line = line;
+    thread->current->diagnostic_expr = expr;
+    longjmp(thread->current->diagnostic_root, 1);
+}
 
 static LmBuildOptions * lm_build_options_new(void) {
     return lm_own_new_zero(sizeof(LmBuildOptions));
@@ -1138,6 +1176,12 @@ static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, 
 }
 
 int main(int argc, char **argv) {
+    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
+    lm_l5_thread->current = &lm_l5_thread->main_context;
+    lm_l5_thread->main_context.diagnostic_code = 0;
+    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
+        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
+    }
     char *trusted_make;
     char trusted_make_buffer[128];
     char built_trans_buffer[128];

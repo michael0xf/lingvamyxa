@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <setjmp.h>
 
 #if defined(_WIN32)
 /* no POSIX feature macro on Windows */
@@ -135,6 +137,42 @@ static int lm_finalize_install_legacy_next_tool(char *tool_name);
 static int lm_finalize_install_next_artifact(char *artifact_name);
 static int lm_finalize_defer(void);
 int main(int argc, char **argv);
+
+typedef struct LmL5ExecutionContext LmL5ExecutionContext;
+typedef struct LmL5Thread LmL5Thread;
+struct LmL5ExecutionContext {
+    jmp_buf diagnostic_root;
+    int diagnostic_code;
+    const char *diagnostic_label;
+    const char *diagnostic_file;
+    int diagnostic_line;
+    const char *diagnostic_expr;
+};
+struct LmL5Thread {
+    LmL5ExecutionContext main_context;
+    LmL5ExecutionContext *current;
+};
+static LmL5Thread lm_l5_main_thread_storage;
+static inline LmL5Thread *lm_l5_main_thread(void) {
+    return &lm_l5_main_thread_storage;
+}
+static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
+    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+        return 1;
+    }
+    return thread->current->diagnostic_code;
+}
+static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {
+    if (thread == 0 || thread->current == 0) {
+        abort();
+    }
+    thread->current->diagnostic_code = 1;
+    thread->current->diagnostic_label = "AssertionViolation";
+    thread->current->diagnostic_file = file;
+    thread->current->diagnostic_line = line;
+    thread->current->diagnostic_expr = expr;
+    longjmp(thread->current->diagnostic_root, 1);
+}
 
 static int lm_finalize_is_path_separator(char value) {
     return value == '/' || value == '\\';
@@ -425,6 +463,12 @@ static int lm_finalize_defer(void) {
 }
 
 int main(int argc, char **argv) {
+    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
+    lm_l5_thread->current = &lm_l5_thread->main_context;
+    lm_l5_thread->main_context.diagnostic_code = 0;
+    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
+        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
+    }
     char staged_build_core_path[256];
     if (lm_finalize_enter_project_root(argv[0]) != 0) {
         return 1;

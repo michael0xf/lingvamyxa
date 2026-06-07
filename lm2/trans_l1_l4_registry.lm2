@@ -3139,6 +3139,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_prelude_output: prelude_output
     lm_trans_current_source_path: source_path
     lm_trans_next_array_value_helper_id: 0U
+    lm_trans_emitted_l5_runtime_prelude: 0
     emitted: 0
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
