@@ -3189,6 +3189,30 @@ return: 0
 fn: lm_trans_printf_format_is_flag (char: ch) int
 return: ch = '-' || ch = '+' || ch = ' ' || ch = '#' || ch = '0'
 
+fn: lm_trans_profile_validator_enabled (const: (LmTransNamespace: namespace_); const: @(char rule); const: @(char binding_name)) int
+    LmP0Text: rule_text
+    const: @: char policy
+    const: @: char binding
+    int: enabled
+
+    if: rule = 0 || binding_name = 0
+        return: 0
+
+    rule_text: lm_trans_text_ref_new_cstr(rule)
+    if: rule_text = 0
+        return: 0
+
+    policy: lm_trans_namespace_registry_lookup(namespace_, rule_text, "c99.ub.policy")
+    binding: lm_trans_namespace_registry_lookup(namespace_, rule_text, "profile.validator")
+    enabled: 0
+    if: policy != 0 && binding != 0
+        if: (c.strcmp(policy, "diagnostic") = 0 || c.strcmp(policy, "checked") = 0) && c.strcmp(binding, binding_name) = 0
+            enabled: 1
+        ---
+    ---
+    lm_trans_text_ref_destroy(@ rule_text)
+return: enabled
+
 fn: lm_trans_printf_expected_class (const: (LmTransNamespace: namespace_); char: conversion; char: modifier) const: @: char
     [5]: char key_buffer
     LmP0Text: key
@@ -3343,6 +3367,11 @@ fn: lm_trans_validate_c_printf_call (const: (LmP0Frame: frame); const: (LmTransN
     lm_trans_text_ref_destroy(@ format_payload)
 return: status
 
+fn: lm_trans_validate_profile_c_printf_call (const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
+    if: lm_trans_profile_validator_enabled(namespace_, "c99.format-mismatch", "lm_trans_validate_c_printf_call") = 0
+        return: 0
+return: lm_trans_validate_c_printf_call(frame, namespace_)
+
 fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTransNamespace: namespace_)) int
     LmP0Text: key
     key: lm_trans_text_ref_new_cstr("")
@@ -3439,7 +3468,7 @@ fn: lm_trans_expr_stack_emit_frame (FILE: file; LmTransExprStack: stack; const: 
         lm_trans_expr_call_lowering_delete(call)
         lm_own_delete(expr_receiver, 0)
         return: 1
-    if: lm_trans_validate_c_printf_call(frame, namespace_) != 0
+    if: lm_trans_validate_profile_c_printf_call(frame, namespace_) != 0
         lm_trans_expr_call_lowering_delete(call)
         lm_own_delete(expr_receiver, 0)
         return: 1

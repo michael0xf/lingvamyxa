@@ -2366,7 +2366,7 @@ fn: lm_trans_emit_call_statement (
 
     if: lm_trans_lower_call(frame\head, namespace_, "callable", call) != 0
         return: 1
-    if: lm_trans_validate_c_printf_call(frame, namespace_) != 0
+    if: lm_trans_validate_profile_c_printf_call(frame, namespace_) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1

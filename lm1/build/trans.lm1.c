@@ -2205,9 +2205,11 @@ static int lm_trans_printf_atom_is_decimal_literal(const LmP0Text * atom, int *o
 static int lm_trans_printf_arg_class_from_field_chain(const LmP0Text * atom, const LmTransNamespace * namespace_, LmP0Text * out_class);
 static int lm_trans_printf_arg_class_from_segment(const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, LmP0Text * out_class);
 static int lm_trans_printf_format_is_flag(char ch);
+static int lm_trans_profile_validator_enabled(const LmTransNamespace * namespace_, const char *rule, const char *binding_name);
 static const char * lm_trans_printf_expected_class(const LmTransNamespace * namespace_, char conversion, char modifier);
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame * frame, const LmTransNamespace * namespace_, size_t arg_index, const char *expected_class);
 static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTransNamespace * namespace_);
+static int lm_trans_validate_profile_c_printf_call(const LmP0Frame * frame, const LmTransNamespace * namespace_);
 static int lm_trans_cast_type_is_allowed(const LmP0Node * type_node, const LmTransNamespace * namespace_);
 static int lm_trans_expr_emit_cast_frame(FILE * file, LmTransExprStack * stack, const LmP0Frame * frame, const LmTransNamespace * namespace_);
 static int lm_trans_lookup_expr_frame_receiver_binding(const LmTransNamespace * namespace_, const LmP0Text * head, LmTransBinding * out);
@@ -5434,14 +5436,20 @@ static int lm_trans_namespace_declare_compatible(LmTransNamespace * namespace_, 
 }
 
 static const char * lm_trans_class_c_spelling(const LmP0Text * name) {
+    const char *spelling;
     if (name == 0) {
         return 0;
+    }
+    spelling = lm_trans_registry_lookup(name, "class.c.projection");
+    if (spelling != 0) {
+        return spelling;
     }
     return lm_trans_registry_lookup(name, "class.spelling");
 }
 
 static int lm_trans_class_is_reference_base(const LmP0Text * name) {
     const char *class_kind;
+    const char *semantic;
     if (name == 0) {
         return 0;
     }
@@ -5450,6 +5458,10 @@ static int lm_trans_class_is_reference_base(const LmP0Text * name) {
     }
     class_kind = lm_trans_registry_lookup(name, "class.kind");
     if (class_kind != 0 && strcmp(class_kind, "opaqueReference") == 0) {
+        return 1;
+    }
+    semantic = lm_trans_registry_lookup(name, "class.semantic");
+    if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
         return 1;
     }
     return 0;
@@ -9331,6 +9343,30 @@ static int lm_trans_printf_format_is_flag(char ch) {
     return ch == '-' || ch == '+' || ch == ' ' || ch == '#' || ch == '0';
 }
 
+static int lm_trans_profile_validator_enabled(const LmTransNamespace * namespace_, const char *rule, const char *binding_name) {
+    LmP0Text * rule_text;
+    const char *policy;
+    const char *binding;
+    int enabled;
+    if (rule == 0 || binding_name == 0) {
+        return 0;
+    }
+    rule_text = lm_trans_text_ref_new_cstr(rule);
+    if (rule_text == 0) {
+        return 0;
+    }
+    policy = lm_trans_namespace_registry_lookup(namespace_, rule_text, "c99.ub.policy");
+    binding = lm_trans_namespace_registry_lookup(namespace_, rule_text, "profile.validator");
+    enabled = 0;
+    if (policy != 0 && binding != 0) {
+        if ((strcmp(policy, "diagnostic") == 0 || strcmp(policy, "checked") == 0) && strcmp(binding, binding_name) == 0) {
+            enabled = 1;
+        }
+    }
+    lm_trans_text_ref_destroy(&rule_text);
+    return enabled;
+}
+
 static const char * lm_trans_printf_expected_class(const LmTransNamespace * namespace_, char conversion, char modifier) {
     char key_buffer[5];
     LmP0Text * key;
@@ -9508,6 +9544,13 @@ static int lm_trans_validate_c_printf_call(const LmP0Frame * frame, const LmTran
     return status;
 }
 
+static int lm_trans_validate_profile_c_printf_call(const LmP0Frame * frame, const LmTransNamespace * namespace_) {
+    if (lm_trans_profile_validator_enabled(namespace_, "c99.format-mismatch", "lm_trans_validate_c_printf_call") == 0) {
+        return 0;
+    }
+    return lm_trans_validate_c_printf_call(frame, namespace_);
+}
+
 static int lm_trans_cast_type_is_allowed(const LmP0Node * type_node, const LmTransNamespace * namespace_) {
     LmP0Text * key;
     key = lm_trans_text_ref_new_cstr("");
@@ -9625,7 +9668,7 @@ static int lm_trans_expr_stack_emit_frame(FILE * file, LmTransExprStack * stack,
         lm_own_delete(expr_receiver, 0);
         return 1;
     }
-    if (lm_trans_validate_c_printf_call(frame, namespace_) != 0) {
+    if (lm_trans_validate_profile_c_printf_call(frame, namespace_) != 0) {
         lm_trans_expr_call_lowering_delete(call);
         lm_own_delete(expr_receiver, 0);
         return 1;
@@ -14333,7 +14376,7 @@ static int lm_trans_emit_call_statement(FILE * file, const LmP0Frame * frame, un
             return lm_return_0;
         }
     }
-    if (lm_trans_validate_c_printf_call(frame, namespace_) != 0) {
+    if (lm_trans_validate_profile_c_printf_call(frame, namespace_) != 0) {
         {
             int lm_return_1 = 1;
             lm_trans_expr_call_lowering_delete(call);
