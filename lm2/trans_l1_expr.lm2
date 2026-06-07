@@ -4693,13 +4693,8 @@ fn: lm_trans_emit_c_declarator (FILE: file; LmTransCDeclarator: declarator; cons
     if: declarator\type_is_head
         if: declarator\type_head = 0
             return: 1
-        if: declarator\suppress_implicit_reference_depth
-            if: lm_trans_emit_type_head_only_raw(file, declarator\type_head) != 0
-                return: 1
-            ---
-        else:
-            if: lm_trans_emit_type_head_only(file, declarator\type_head) != 0
-                return: 1
+        if: lm_trans_emit_type_head_only(file, declarator\type_head) != 0
+            return: 1
         ---
     else:
         if: ((declarator\type_node = 0) || (lm_trans_emit_type_node(file, declarator\type_node) != 0))

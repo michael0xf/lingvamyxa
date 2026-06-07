@@ -97,7 +97,7 @@ struct LmOwnValueStack {
 };
 struct LmOwnAllocationDescriptor {
     void *address;
-    LmOwnArena *owner;
+    LmOwnArena * owner;
     size_t bytes;
     size_t element_size;
     size_t count;
@@ -106,16 +106,16 @@ struct LmOwnAllocationDescriptor {
 };
 struct LmOwnLazyEdge {
     LmOwnEdgeKind kind;
-    LmOwnArena *source_owner;
-    LmOwnArena *target_owner;
+    LmOwnArena * source_owner;
+    LmOwnArena * target_owner;
     const void *source;
     size_t size;
     const void **patch_slot;
 };
 struct LmOwnArena {
-    LmOwnPtrStack *allocations;
-    LmOwnPtrStack *allocation_descriptors;
-    LmOwnPtrStack *lazy_edges;
+    LmOwnPtrStack * allocations;
+    LmOwnPtrStack * allocation_descriptors;
+    LmOwnPtrStack * lazy_edges;
     int frozen;
 };
 typedef struct LmP0Text {
@@ -135,40 +135,40 @@ typedef struct LmP0Diagnostic {
     char message[256U];
 } LmP0Diagnostic;
 typedef struct LmP0Structure {
-    LmP0Field *first_field;
-    LmP0Field *last_field;
+    LmP0Field * first_field;
+    LmP0Field * last_field;
     size_t field_count;
-    LmP0Trailer *trailer;
+    LmP0Trailer * trailer;
 } LmP0Structure;
 struct LmP0Trailer {
-    LmP0Text *spelling;
+    LmP0Text * spelling;
     unsigned flags;
-    LmP0Structure *body;
+    LmP0Structure * body;
 };
 typedef struct LmP0Frame {
-    LmP0Text *head;
+    LmP0Text * head;
     unsigned flags;
-    LmP0Structure *body;
-    LmP0Trailer *trailer;
+    LmP0Structure * body;
+    LmP0Trailer * trailer;
 } LmP0Frame;
 typedef struct LmP0NodeAs {
-    LmP0Structure *structure;
-    LmP0Frame *frame;
-    LmP0Text *atom;
+    LmP0Structure * structure;
+    LmP0Frame * frame;
+    LmP0Text * atom;
 } LmP0NodeAs;
 struct LmP0Node {
     LmP0NodeKind kind;
     unsigned flags;
-    LmP0Span *span;
-    LmP0NodeAs *as;
+    LmP0Span * span;
+    LmP0NodeAs * as;
 };
 struct LmP0Field {
-    LmP0Node *value;
-    LmP0Field *next;
+    LmP0Node * value;
+    LmP0Field * next;
 };
 struct LmL4Column {
-    const LmP0Text *name;
-    const LmP0Text *descriptors[16U];
+    const LmP0Text * name;
+    const LmP0Text * descriptors[16U];
     size_t descriptor_count;
 };
 struct LmL4Loader {
@@ -193,21 +193,21 @@ typedef struct LmP0StreamEvent {
 struct LmP0Document {
     char *source;
     size_t source_length;
-    LmP0Node *root;
-    LmP0Diagnostic *diagnostic;
-    LmOwnArena *source_owner;
-    LmOwnArena *token_arena;
-    LmOwnArena *tree_arena;
-    LmOwnArena *diagnostic_arena;
+    LmP0Node * root;
+    LmP0Diagnostic * diagnostic;
+    LmOwnArena * source_owner;
+    LmOwnArena * token_arena;
+    LmOwnArena * tree_arena;
+    LmOwnArena * diagnostic_arena;
     int owners_initialized;
     int frozen;
 };
 typedef struct LmP0PendingDelimiter {
     int active;
-    LmP0StreamEvent *event;
+    LmP0StreamEvent * event;
 } LmP0PendingDelimiter;
 typedef struct LmP0PendingMix {
-    LmP0StreamEvent *events;
+    LmP0StreamEvent * events;
     size_t count;
     size_t capacity;
 } LmP0PendingMix;
@@ -224,8 +224,8 @@ typedef struct LmP0DisabledState {
     size_t pending_level;
 } LmP0DisabledState;
 typedef struct LmP0Stack {
-    LmP0Structure **parents;
-    LmP0Node **owners;
+    LmP0Structure * *parents;
+    LmP0Node * *owners;
     unsigned char *hard;
     size_t capacity;
 } LmP0Stack;
@@ -237,15 +237,15 @@ typedef struct LmP0Dump {
 } LmP0Dump;
 typedef struct LmP0DumpFrame {
     int phase;
-    const LmP0Node *node;
-    const LmP0Structure *structure;
-    const LmP0Trailer *trailer;
-    const LmP0Field *field;
+    const LmP0Node * node;
+    const LmP0Structure * structure;
+    const LmP0Trailer * trailer;
+    const LmP0Field * field;
     size_t indent;
 } LmP0DumpFrame;
 typedef struct LmP0FieldParseLoopFrame {
-    LmP0IndentStack *indent_stack;
-    LmP0Structure *structure;
+    LmP0IndentStack * indent_stack;
+    LmP0Structure * structure;
     const char *text;
     size_t length;
     size_t line;
@@ -261,7 +261,7 @@ typedef struct LmP0FieldParseLoopFrame {
     int headless_group_after_separator;
     int indent_stack_owned;
     LmP0FieldParseLoopContinuation continuation;
-    LmP0Node *node;
+    LmP0Node * node;
     size_t start;
     size_t close_index;
 } LmP0FieldParseLoopFrame;
@@ -271,17 +271,17 @@ typedef struct LmP0RegistryRow {
     char *payload;
 } LmP0RegistryRow;
 typedef struct LmP0Registry {
-    LmOwnPtrStack *rows;
+    LmOwnPtrStack * rows;
     int loaded;
     int loading;
-    LmL4Loader *l4_loader;
+    LmL4Loader * l4_loader;
 } LmP0Registry;
 typedef struct LmP0PostprocessFrame {
     int phase;
-    LmP0Node *node;
-    LmP0Structure *structure;
-    LmP0Trailer *trailer;
-    LmP0Field *field;
+    LmP0Node * node;
+    LmP0Structure * structure;
+    LmP0Trailer * trailer;
+    LmP0Field * field;
 } LmP0PostprocessFrame;
 
 typedef void (*LmOwnDestroyFields)(void *object);

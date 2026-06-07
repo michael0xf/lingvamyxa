@@ -84,7 +84,7 @@ struct LmOwnValueStack {
 };
 struct LmOwnAllocationDescriptor {
     void *address;
-    LmOwnArena *owner;
+    LmOwnArena * owner;
     size_t bytes;
     size_t element_size;
     size_t count;
@@ -93,16 +93,16 @@ struct LmOwnAllocationDescriptor {
 };
 struct LmOwnLazyEdge {
     LmOwnEdgeKind kind;
-    LmOwnArena *source_owner;
-    LmOwnArena *target_owner;
+    LmOwnArena * source_owner;
+    LmOwnArena * target_owner;
     const void *source;
     size_t size;
     const void **patch_slot;
 };
 struct LmOwnArena {
-    LmOwnPtrStack *allocations;
-    LmOwnPtrStack *allocation_descriptors;
-    LmOwnPtrStack *lazy_edges;
+    LmOwnPtrStack * allocations;
+    LmOwnPtrStack * allocation_descriptors;
+    LmOwnPtrStack * lazy_edges;
     int frozen;
 };
 typedef struct LmP0Text {
@@ -122,40 +122,40 @@ typedef struct LmP0Diagnostic {
     char message[256U];
 } LmP0Diagnostic;
 typedef struct LmP0Structure {
-    LmP0Field *first_field;
-    LmP0Field *last_field;
+    LmP0Field * first_field;
+    LmP0Field * last_field;
     size_t field_count;
-    LmP0Trailer *trailer;
+    LmP0Trailer * trailer;
 } LmP0Structure;
 struct LmP0Trailer {
-    LmP0Text *spelling;
+    LmP0Text * spelling;
     unsigned flags;
-    LmP0Structure *body;
+    LmP0Structure * body;
 };
 typedef struct LmP0Frame {
-    LmP0Text *head;
+    LmP0Text * head;
     unsigned flags;
-    LmP0Structure *body;
-    LmP0Trailer *trailer;
+    LmP0Structure * body;
+    LmP0Trailer * trailer;
 } LmP0Frame;
 typedef struct LmP0NodeAs {
-    LmP0Structure *structure;
-    LmP0Frame *frame;
-    LmP0Text *atom;
+    LmP0Structure * structure;
+    LmP0Frame * frame;
+    LmP0Text * atom;
 } LmP0NodeAs;
 struct LmP0Node {
     LmP0NodeKind kind;
     unsigned flags;
-    LmP0Span *span;
-    LmP0NodeAs *as;
+    LmP0Span * span;
+    LmP0NodeAs * as;
 };
 struct LmP0Field {
-    LmP0Node *value;
-    LmP0Field *next;
+    LmP0Node * value;
+    LmP0Field * next;
 };
 struct LmL4Column {
-    const LmP0Text *name;
-    const LmP0Text *descriptors[16U];
+    const LmP0Text * name;
+    const LmP0Text * descriptors[16U];
     size_t descriptor_count;
 };
 struct LmL4Loader {
@@ -178,54 +178,54 @@ typedef struct LmTransL4AtomPointerBinding {
     int (*handler)(const LmP0Text *atom, int allow_node_cells);
 } LmTransL4AtomPointerBinding;
 typedef struct LmTransRegistryImportFrame {
-    const LmP0Field *field;
+    const LmP0Field * field;
     int descend_l2;
 } LmTransRegistryImportFrame;
 struct LmTransIdentifierRelation {
     const char *name;
-    LmOwnPtrStack *symbols;
-    LmTransIdentifierRelation *next;
+    LmOwnPtrStack * symbols;
+    LmTransIdentifierRelation * next;
 };
 struct LmTransIdentifierCard {
-    LmP0Text *name;
+    LmP0Text * name;
     char *name_storage;
     unsigned long hash;
-    LmOwnPtrStack *symbols;
-    LmTransIdentifierRelation **relation_buckets;
+    LmOwnPtrStack * symbols;
+    LmTransIdentifierRelation * *relation_buckets;
     size_t relation_bucket_count;
-    LmTransIdentifierCard *next;
+    LmTransIdentifierCard * next;
 };
 typedef struct LmTransIdentifierTable {
-    LmTransIdentifierCard **buckets;
+    LmTransIdentifierCard * *buckets;
     size_t bucket_count;
     size_t count;
 } LmTransIdentifierTable;
 typedef struct LmTransRegistry {
-    LmTransIdentifierTable *identifiers;
-    LmOwnArena *value_arena;
-    LmOwnPtrStack *loaded_paths;
+    LmTransIdentifierTable * identifiers;
+    LmOwnArena * value_arena;
+    LmOwnPtrStack * loaded_paths;
     char *source_path;
     size_t loaded_fact_count;
     int loaded;
-    LmL4Loader *l4_loader;
-    LmOwnPtrStack *l4_frame_pointer_bindings;
-    LmOwnPtrStack *l4_root_frame_pointer_bindings;
-    LmOwnPtrStack *l4_atom_pointer_bindings;
-    LmOwnPtrStack *l4_payload_pointer_bindings;
-    LmOwnPtrStack *binding_pointer_bindings;
+    LmL4Loader * l4_loader;
+    LmOwnPtrStack * l4_frame_pointer_bindings;
+    LmOwnPtrStack * l4_root_frame_pointer_bindings;
+    LmOwnPtrStack * l4_atom_pointer_bindings;
+    LmOwnPtrStack * l4_payload_pointer_bindings;
+    LmOwnPtrStack * binding_pointer_bindings;
 } LmTransRegistry;
 typedef struct LmTransRegistryFact {
     char *table;
     char *key;
     char *payload;
-    const LmP0Node *payload_node;
+    const LmP0Node * payload_node;
 } LmTransRegistryFact;
 struct LmTransRegistryCloneFrame {
     int phase;
-    const LmP0Structure *source_structure;
-    LmP0Structure *copy_structure;
-    const LmP0Trailer *source_trailer;
-    LmP0Trailer **copy_trailer_slot;
+    const LmP0Structure * source_structure;
+    LmP0Structure * copy_structure;
+    const LmP0Trailer * source_trailer;
+    LmP0Trailer * *copy_trailer_slot;
 };
 typedef struct LmTransLayoutField {
     const char *name;
@@ -239,16 +239,15 @@ typedef struct LmTransLayoutField {
     int is_union;
 } LmTransLayoutField;
 typedef struct LmTransCDeclarator {
-    const LmP0Node *type_node;
-    const LmP0Field *expression_dimensions;
-    LmP0Text *type_head;
-    LmP0Text *name;
-    LmP0Text *array_head;
+    const LmP0Node * type_node;
+    const LmP0Field * expression_dimensions;
+    LmP0Text * type_head;
+    LmP0Text * name;
+    LmP0Text * array_head;
     size_t pointer_depth;
     size_t literal_dimensions[8U];
     size_t literal_dimension_count;
     int type_is_head;
-    int suppress_implicit_reference_depth;
 } LmTransCDeclarator;
 typedef struct LmTransAbiParam {
     const char *name;
@@ -258,28 +257,28 @@ typedef struct LmTransAbiParam {
     int is_const;
 } LmTransAbiParam;
 typedef struct LmTransL4CallableType {
-    LmP0Text *class_name;
+    LmP0Text * class_name;
     size_t address_depth;
     int is_const;
 } LmTransL4CallableType;
 typedef struct LmTransSymbol {
-    LmP0Text *name;
+    LmP0Text * name;
     char *name_storage;
     const char *class_name;
-    LmP0Text *c_name;
+    LmP0Text * c_name;
     char *c_name_storage;
     int has_c_name;
-    LmP0Text *env_arg;
+    LmP0Text * env_arg;
     char *env_arg_storage;
     int has_env_arg;
-    LmP0Text *closure_call_name;
+    LmP0Text * closure_call_name;
     char *closure_call_name_storage;
     int has_closure_call_name;
     unsigned depth;
-    LmOwnPtrStack *param_names;
+    LmOwnPtrStack * param_names;
     int has_signature;
-    const LmP0Node *callable_params_node;
-    const LmP0Node *callable_return_node;
+    const LmP0Node * callable_params_node;
+    const LmP0Node * callable_return_node;
     int has_callable_shape;
     int callable_returns_value;
     int callable_is_struct_return;
@@ -288,90 +287,90 @@ typedef struct LmTransSymbol {
 typedef struct LmTransCleanup {
     unsigned id;
     unsigned scope_depth;
-    const LmP0Field *body;
+    const LmP0Field * body;
 } LmTransCleanup;
 typedef struct LmTransLoop {
     size_t cleanup_base;
 } LmTransLoop;
 struct LmTransExprSegment {
-    const LmP0Field *first;
-    const LmP0Field *stop;
-    const LmP0Node *expected_param;
+    const LmP0Field * first;
+    const LmP0Field * stop;
+    const LmP0Node * expected_param;
     int present;
 };
 typedef struct LmTransStructReturnFieldValue {
-    const LmP0Field *first;
-    const LmP0Field *stop;
+    const LmP0Field * first;
+    const LmP0Field * stop;
     int present;
 } LmTransStructReturnFieldValue;
 struct LmTransCallLowering {
-    LmP0Text *name;
-    const LmTransSymbol *signature;
+    LmP0Text * name;
+    const LmTransSymbol * signature;
     int is_closure;
 };
 struct LmTransExprLoweredRange {
-    LmOwnPtrStack *pieces;
+    LmOwnPtrStack * pieces;
     size_t index;
 };
 struct LmTransExprStack {
-    LmOwnPtrStack *jobs;
+    LmOwnPtrStack * jobs;
 };
 struct LmTransArrayStructureValueFillFrame {
-    const LmP0Field *field;
+    const LmP0Field * field;
     size_t depth;
     size_t index;
 };
 typedef struct LmTransExprRangeJob {
-    const LmP0Field *field;
-    const LmP0Field *stop;
+    const LmP0Field * field;
+    const LmP0Field * stop;
     int wrote;
-    const LmP0Node *previous_operand;
+    const LmP0Node * previous_operand;
     int expect_field_name;
     int expect_c_field_name;
     int c_dot_path;
 } LmTransExprRangeJob;
 typedef struct LmTransExprCallArgsJob {
-    const LmP0Structure *body;
-    const LmTransSymbol *callee;
-    LmTransSymbol *owned_callee;
+    const LmP0Structure * body;
+    const LmTransSymbol * callee;
+    LmTransSymbol * owned_callee;
 } LmTransExprCallArgsJob;
 struct LmTransExprAtomLowering {
     int (*emit)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
     int (*update)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
-    LmP0Text *text;
+    LmP0Text * text;
 };
 struct LmTransExprPiece {
     int (*emit)(FILE *file, LmTransExprStack *stack, LmTransExprLoweredRange *lowered, const LmTransExprPiece *piece, const LmTransNamespace *namespace_, int *out_suspend);
     int leading_space;
-    const LmP0Node *node;
-    LmTransExprAtomLowering *atom;
-    const LmP0Field *first;
-    const LmP0Field *stop;
+    const LmP0Node * node;
+    LmTransExprAtomLowering * atom;
+    const LmP0Field * first;
+    const LmP0Field * stop;
 };
 struct LmTransExprJob {
     int (*run)(FILE *file, LmTransExprStack *stack, LmTransExprJob *job, const LmTransNamespace *namespace_);
     void (*destroy)(LmTransExprJob *job);
     const char *text;
-    LmP0Text *name_text;
-    const LmP0Node *node;
-    const LmP0Frame *frame;
-    LmTransExprRangeJob *range;
-    LmTransExprCallArgsJob *call_args;
-    LmTransExprLoweredRange *lowered_range;
+    LmP0Text * name_text;
+    const LmP0Node * node;
+    const LmP0Frame * frame;
+    LmTransExprRangeJob * range;
+    LmTransExprCallArgsJob * call_args;
+    LmTransExprLoweredRange * lowered_range;
 };
 typedef struct LmTransStatementListJob {
-    const LmP0Field *field;
+    const LmP0Field * field;
     unsigned indent;
     int unwrap_single_structure;
-    const LmP0Frame *repeat_frame;
+    const LmP0Frame * repeat_frame;
 } LmTransStatementListJob;
 typedef struct LmTransStatementNodeJob {
-    const LmP0Node *node;
+    const LmP0Node * node;
     unsigned indent;
-    const LmP0Frame *repeat_frame;
+    const LmP0Frame * repeat_frame;
 } LmTransStatementNodeJob;
 typedef struct LmTransStatementFrameJob {
-    const LmP0Frame *frame;
+    const LmP0Frame * frame;
     unsigned indent;
 } LmTransStatementFrameJob;
 typedef struct LmTransStatementTextJob {
@@ -379,39 +378,39 @@ typedef struct LmTransStatementTextJob {
     const char *text;
 } LmTransStatementTextJob;
 struct LmTransStatementStack {
-    LmOwnPtrStack *jobs;
+    LmOwnPtrStack * jobs;
 };
 struct LmTransStatementJob {
     int (*run)(FILE *file, LmTransStatementStack *stack, LmTransStatementJob *job, LmTransNamespace *namespace_);
     void (*destroy)(LmTransStatementJob *job);
-    LmTransStatementListJob *list;
-    LmTransStatementNodeJob *node;
-    LmTransStatementFrameJob *frame;
-    LmTransStatementTextJob *text;
+    LmTransStatementListJob * list;
+    LmTransStatementNodeJob * node;
+    LmTransStatementFrameJob * frame;
+    LmTransStatementTextJob * text;
 };
 typedef struct LmTransStatementLowering {
     int (*emit)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 } LmTransStatementLowering;
 typedef struct LmTransFunctionState {
-    const LmP0Node *previous_return_type_node;
+    const LmP0Node * previous_return_type_node;
     int previous_return_type_is_struct;
-    LmP0Text *previous_return_type_name;
-    LmP0Text *current_return_type_name;
+    LmP0Text * previous_return_type_name;
+    LmP0Text * current_return_type_name;
     unsigned previous_next_return_id;
-    const LmOwnPtrStack *previous_hoisted_functions;
-    LmOwnPtrStack *previous_cleanups;
-    LmOwnPtrStack *previous_loops;
+    const LmOwnPtrStack * previous_hoisted_functions;
+    LmOwnPtrStack * previous_cleanups;
+    LmOwnPtrStack * previous_loops;
     int has_previous_control_stacks;
 } LmTransFunctionState;
 struct LmTransFunctionHeader {
-    const LmP0Frame *frame;
-    LmP0Text *name;
-    LmP0Text *c_name;
-    LmP0Text *env_type_name;
-    const LmP0Node *params_node;
-    const LmP0Node *return_node;
-    const LmP0Field *body_start;
-    const LmOwnPtrStack *captures;
+    const LmP0Frame * frame;
+    LmP0Text * name;
+    LmP0Text * c_name;
+    LmP0Text * env_type_name;
+    const LmP0Node * params_node;
+    const LmP0Node * return_node;
+    const LmP0Field * body_start;
+    const LmOwnPtrStack * captures;
     const char *symbol_class;
     int is_sub;
     int is_struct_return;
@@ -422,21 +421,21 @@ struct LmTransFunctionHeader {
     int is_lazy_descriptor;
 };
 typedef struct LmTransCapture {
-    LmP0Text *name;
-    LmP0Text *type_head;
-    const LmP0Node *type_node;
+    LmP0Text * name;
+    LmP0Text * type_head;
+    const LmP0Node * type_node;
     size_t pointer_depth;
     int type_is_head;
 } LmTransCapture;
 typedef struct LmTransHoistedFunction {
-    LmTransFunctionHeader *function;
-    LmOwnPtrStack *captures;
+    LmTransFunctionHeader * function;
+    LmOwnPtrStack * captures;
     char *c_name_storage;
     char *env_type_storage;
     char *env_var_storage;
     char *closure_call_storage;
-    LmP0Text *env_var_name;
-    LmP0Text *closure_call_name;
+    LmP0Text * env_var_name;
+    LmP0Text * closure_call_name;
 } LmTransHoistedFunction;
 typedef struct LmTransBinding {
     int (*call_lowering)(const LmP0Text *head, const LmTransSymbol *symbol, LmTransCallLowering *out);
@@ -453,10 +452,10 @@ typedef struct LmTransBinding {
 } LmTransBinding;
 typedef struct LmTransPointerBinding {
     const char *name;
-    LmTransBinding *value;
+    LmTransBinding * value;
 } LmTransPointerBinding;
 typedef struct LmTransHeadBinding {
-    const LmTransSymbol *symbol;
+    const LmTransSymbol * symbol;
     const char *receiver_type;
     const char *function_receiver_binding;
     const char *statement_receiver_binding;
@@ -483,15 +482,15 @@ struct LmTransTopLevelItem {
     int (*emit_before_functions)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
     int (*emit_function)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
     int emits_top_level;
-    const LmP0Node *node;
-    const LmP0Frame *frame;
-    LmTransFunctionHeader *function;
+    const LmP0Node * node;
+    const LmP0Frame * frame;
+    LmTransFunctionHeader * function;
     int (*emit_prototype)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
     int (*emit_after_prototypes)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 };
 struct LmTransFunctionEmitFrame {
-    const LmTransFunctionHeader *function;
-    LmOwnPtrStack *hoisted_functions;
+    const LmTransFunctionHeader * function;
+    LmOwnPtrStack * hoisted_functions;
     size_t hoisted_index;
     int phase;
 };
@@ -499,18 +498,18 @@ struct LmTransTypePointerSuffix {
     size_t depth;
 };
 struct LmTransNamespace {
-    LmOwnPtrStack *items;
-    LmTransIdentifierTable *identifiers;
-    const LmTransIdentifierTable *registry_identifiers;
+    LmOwnPtrStack * items;
+    LmTransIdentifierTable * identifiers;
+    const LmTransIdentifierTable * registry_identifiers;
     unsigned depth;
-    LmOwnPtrStack *cleanups;
-    LmOwnPtrStack *loops;
+    LmOwnPtrStack * cleanups;
+    LmOwnPtrStack * loops;
     unsigned next_cleanup_id;
-    const LmP0Node *return_type_node;
+    const LmP0Node * return_type_node;
     int return_type_is_struct;
-    LmP0Text *return_type_name;
+    LmP0Text * return_type_name;
     unsigned next_return_id;
-    const LmOwnPtrStack *hoisted_functions;
+    const LmOwnPtrStack * hoisted_functions;
 };
 typedef struct LmTransL4LoadContext {
     int allow_node_cells;
@@ -11213,15 +11212,8 @@ static int lm_trans_emit_c_declarator(FILE * file, LmTransCDeclarator * declarat
         if (declarator -> type_head == 0) {
             return 1;
         }
-        if (declarator -> suppress_implicit_reference_depth) {
-            if (lm_trans_emit_type_head_only_raw(file, declarator -> type_head) != 0) {
-                return 1;
-            }
-        }
-        else {
-            if (lm_trans_emit_type_head_only(file, declarator -> type_head) != 0) {
-                return 1;
-            }
+        if (lm_trans_emit_type_head_only(file, declarator -> type_head) != 0) {
+            return 1;
         }
     }
     else {
@@ -24471,9 +24463,8 @@ static int lm_trans_emit_layout_field(FILE * file, const LmTransLayoutField * fi
             }
             lm_trans_text_assign_cstr(declarator -> type_head, field -> class_name);
             lm_trans_text_assign_cstr(declarator -> name, field -> name);
-            declarator->pointer_depth = effective_address_depth;
+            declarator->pointer_depth = field -> address_depth;
             declarator->type_is_head = 1;
-            declarator->suppress_implicit_reference_depth = 1;
             if (field -> has_array_count) {
                 declarator->literal_dimensions[0] = field -> array_count;
                 declarator->literal_dimension_count = 1U;

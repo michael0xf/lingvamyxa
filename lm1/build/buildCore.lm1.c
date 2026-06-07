@@ -32,7 +32,7 @@ struct LmOwnValueStack {
 };
 struct LmOwnAllocationDescriptor {
     void *address;
-    LmOwnArena *owner;
+    LmOwnArena * owner;
     size_t bytes;
     size_t element_size;
     size_t count;
@@ -41,16 +41,16 @@ struct LmOwnAllocationDescriptor {
 };
 struct LmOwnLazyEdge {
     LmOwnEdgeKind kind;
-    LmOwnArena *source_owner;
-    LmOwnArena *target_owner;
+    LmOwnArena * source_owner;
+    LmOwnArena * target_owner;
     const void *source;
     size_t size;
     const void **patch_slot;
 };
 struct LmOwnArena {
-    LmOwnPtrStack *allocations;
-    LmOwnPtrStack *allocation_descriptors;
-    LmOwnPtrStack *lazy_edges;
+    LmOwnPtrStack * allocations;
+    LmOwnPtrStack * allocation_descriptors;
+    LmOwnPtrStack * lazy_edges;
     int frozen;
 };
 typedef struct LmBuildOptions {

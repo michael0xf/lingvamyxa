@@ -327,9 +327,8 @@ fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); 
                 return: 1
             lm_trans_text_assign_cstr(declarator\type_head, field\class_name)
             lm_trans_text_assign_cstr(declarator\name, field\name)
-            declarator\pointer_depth: effective_address_depth
+            declarator\pointer_depth: field\address_depth
             declarator\type_is_head: 1
-            declarator\suppress_implicit_reference_depth: 1
             if: field\has_array_count
                 declarator\literal_dimensions[0]: field\array_count
                 declarator\literal_dimension_count: 1U
