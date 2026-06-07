@@ -7312,7 +7312,7 @@ static char * lm_trans_callable_binder_name_new(const LmP0Text * source_name, co
     if (((source_name == 0) || (descriptor_name == 0))) {
         return 0;
     }
-    snprintf(count_buffer, sizeof(count_buffer), "_%lu", (((unsigned long)bound_count)));
+    snprintf(count_buffer, sizeof(count_buffer), "_%zu", bound_count);
     prefix_length = strlen(prefix);
     middle_length = strlen(middle);
     count_length = strlen(count_buffer);
@@ -14433,8 +14433,8 @@ static int lm_trans_named_structure_push_field_relations(const LmP0Text * owner,
     if (owner == 0 || name == 0 || type == 0 || type -> class_name == 0) {
         return 1;
     }
-    snprintf(index_buffer, sizeof(index_buffer), "%lu", (((unsigned long)index)));
-    snprintf(depth_buffer, sizeof(depth_buffer), "%lu", (((unsigned long)type -> address_depth)));
+    snprintf(index_buffer, sizeof(index_buffer), "%zu", index);
+    snprintf(depth_buffer, sizeof(depth_buffer), "%zu", type -> address_depth);
     index_payload = lm_trans_text_from_cstr(index_buffer);
     if (index_payload == 0) {
         return 1;
@@ -14988,7 +14988,7 @@ static char * lm_trans_l2_structure_member_name_new(const LmP0Node * node, size_
         }
         base = generated_base;
     }
-    snprintf(suffix, sizeof(suffix), "_%lu", (((unsigned long)index)));
+    snprintf(suffix, sizeof(suffix), "_%zu", index);
     {
         char * lm_return_2 = lm_trans_l2_c_identifier_new("field_", base, suffix);
         lm_trans_text_ref_destroy(&generated_base);
@@ -15458,7 +15458,7 @@ static int lm_trans_frame_looks_merge_named_structure_declaration(const LmP0Fram
 static int lm_trans_merge_push_size_relation(const LmP0Text * owner, const char *suffix, const LmP0Text * name, size_t value) {
     LmP0Text * payload;
     char buffer[32];
-    snprintf(buffer, sizeof(buffer), "%lu", (((unsigned long)value)));
+    snprintf(buffer, sizeof(buffer), "%zu", value);
     payload = lm_trans_text_from_cstr(buffer);
     if (payload == 0) {
         return 1;
@@ -17133,7 +17133,7 @@ static int lm_trans_emit_atom_statement_sequence(FILE * file, const LmP0Text * s
             row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i)));
             if (row != 0 && row -> key != 0 && lm_trans_sequence_item_index(row -> payload, &index) && index == expected_index) {
                 if (found) {
-                    fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" has duplicate index %lu\n", (((int)sequence_name -> length)), sequence_name -> data, (((unsigned long)expected_index)));
+                    fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" has duplicate index %zu\n", (((int)sequence_name -> length)), sequence_name -> data, expected_index);
                     status = 1;
                 }
                 else {
@@ -17167,7 +17167,7 @@ static int lm_trans_emit_atom_statement_sequence(FILE * file, const LmP0Text * s
             i = i + 1U;
         }
         if (status == 0 && found == 0) {
-            fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" is missing index %lu\n", (((int)sequence_name -> length)), sequence_name -> data, (((unsigned long)expected_index)));
+            fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" is missing index %zu\n", (((int)sequence_name -> length)), sequence_name -> data, expected_index);
             status = 1;
         }
         if (status == 0) {
@@ -17921,7 +17921,7 @@ static int lm_trans_namespace_set_signature(LmTransNamespace * namespace_, const
     while (field != 0) {
         if (lm_trans_formal_param_name(field -> value, param_name) == 0) {
             if (allow_unnamed_params == 0) {
-                fprintf(stderr, "trans L2 error: function \"%.*s\" parameter %lu must expose a binding name\n", (((int)name -> length)), name -> data, (((unsigned long)index)));
+                fprintf(stderr, "trans L2 error: function \"%.*s\" parameter %zu must expose a binding name\n", (((int)name -> length)), name -> data, index);
                 {
                     int lm_return_1 = 1;
                     lm_trans_ptr_stack_delete(&param_names);
@@ -21297,7 +21297,7 @@ static int lm_trans_import_parse_document(const char *path, LmP0Document * *out_
         if (phase_name == 0) {
             phase_name = "phase";
         }
-        fprintf(stderr, "trans L2 import %s parse error %d at %lu:%lu in %s: %s\n", phase_name, diagnostic -> code, (((unsigned long)diagnostic -> line)), (((unsigned long)diagnostic -> column)), path, diagnostic -> message);
+        fprintf(stderr, "trans L2 import %s parse error %d at %zu:%zu in %s: %s\n", phase_name, diagnostic -> code, diagnostic -> line, diagnostic -> column, path, diagnostic -> message);
     }
     else {
         fprintf(stderr, "trans L2 import error: cannot read %s\n", path);
@@ -22708,7 +22708,7 @@ static int lm_trans_emit_l4_payload_import_frame(FILE * output, const LmP0Frame 
             if (status != 0) {
                 diagnostic = lm_p0_document_diagnostic(document);
                 if (diagnostic != 0) {
-                    fprintf(stderr, "trans L4 unit import parse error %d at %lu:%lu in %s: %s\n", diagnostic -> code, (((unsigned long)diagnostic -> line)), (((unsigned long)diagnostic -> column)), payload_path, diagnostic -> message);
+                    fprintf(stderr, "trans L4 unit import parse error %d at %zu:%zu in %s: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, payload_path, diagnostic -> message);
                 }
                 if (diagnostic == 0) {
                     fprintf(stderr, "trans L4 unit error: cannot read unit.payload import %s\n", payload_path);

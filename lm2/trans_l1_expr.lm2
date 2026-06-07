@@ -1507,7 +1507,7 @@ fn: lm_trans_callable_binder_name_new (const: (LmP0Text: source_name); const: (L
     middle: "_as_"
     if: ((source_name = 0) || (descriptor_name = 0))
         return: 0
-    c.snprintf(count_buffer, c.sizeof(count_buffer), "_%lu", (cast: ulong bound_count))
+    c.snprintf(count_buffer, c.sizeof(count_buffer), "_%zu", bound_count)
     prefix_length: c.strlen(prefix)
     middle_length: c.strlen(middle)
     count_length: c.strlen(count_buffer)

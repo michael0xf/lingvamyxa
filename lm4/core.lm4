@@ -40,6 +40,7 @@ table:
              `constant.backend`         relation
              `constant.value`           relation
              `define.value`             relation
+             `printf.format`            relation
              `class.present`            relation
              `class.reference-base`      relation
              `fn.descriptor`            relation

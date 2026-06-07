@@ -5256,13 +5256,13 @@ fn: lm_p0_registry_push_column_metadata (const: (LmP0Text: table_name); @: LmP0R
             if: column_key = 0
                 status: -1
             else:
-                c.snprintf(index_buffer, c.sizeof(index_buffer), "%lu", (cast: ulong index))
-                c.snprintf(count_buffer, c.sizeof(count_buffer), "%lu", (cast: ulong columns[index]\descriptor_count))
+                c.snprintf(index_buffer, c.sizeof(index_buffer), "%zu", index)
+                c.snprintf(count_buffer, c.sizeof(count_buffer), "%zu", columns[index]\descriptor_count)
                 if: lm_p0_registry_push_generated_row_text("column.table", column_key, table_payload) != 0 || lm_p0_registry_push_generated_row_text("column.name", column_key, column_payload) != 0 || lm_p0_registry_push_generated_row_cstr("column.index", column_key, index_buffer) != 0 || lm_p0_registry_push_generated_row_cstr("column.descriptor.count", column_key, count_buffer) != 0
                     status: -1
                 descriptor_index: 0U
                 while: status = 0 && descriptor_index < columns[index]\descriptor_count
-                    c.snprintf(index_buffer, c.sizeof(index_buffer), "%lu", (cast: ulong descriptor_index))
+                    c.snprintf(index_buffer, c.sizeof(index_buffer), "%zu", descriptor_index)
                     descriptor_key: lm_p0_registry_join_text3(lm_p0_text_from_cstr(column_key), ".", lm_p0_text_from_cstr(index_buffer))
                     if: descriptor_key = 0
                         status: -1
@@ -5624,7 +5624,7 @@ fn: lm_p0_registry_load_default () int
             break
         diagnostic: lm_p0_document_diagnostic(document)
         if: (diagnostic != 0)
-            c.fprintf(c.stderr, "parser registry parse error %d at %lu:%lu in %s: %s\n", diagnostic\code, (cast: ulong diagnostic\line), (cast: ulong diagnostic\column), registry_path, diagnostic\message)
+            c.fprintf(c.stderr, "parser registry parse error %d at %zu:%zu in %s: %s\n", diagnostic\code, diagnostic\line, diagnostic\column, registry_path, diagnostic\message)
             lm_p0_document_destroy(document)
             lm_p0_registry_destroy()
             return: 1

@@ -2798,8 +2798,8 @@ fn: lm_trans_named_structure_push_field_relations (
     if: owner = 0 || name = 0 || type = 0 || type\class_name = 0
         return: 1
 
-    c.snprintf(index_buffer, c.sizeof(index_buffer), "%lu", (cast: ulong index))
-    c.snprintf(depth_buffer, c.sizeof(depth_buffer), "%lu", (cast: ulong type\address_depth))
+    c.snprintf(index_buffer, c.sizeof(index_buffer), "%zu", index)
+    c.snprintf(depth_buffer, c.sizeof(depth_buffer), "%zu", type\address_depth)
     index_payload: lm_trans_text_from_cstr(index_buffer)
     if: index_payload = 0
         return: 1
@@ -3175,7 +3175,7 @@ fn: lm_trans_l2_structure_member_name_new (const: (LmP0Node: node); size_t: inde
             return: 0
         base: generated_base
 
-    c.snprintf(suffix, c.sizeof(suffix), "_%lu", (cast: ulong index))
+    c.snprintf(suffix, c.sizeof(suffix), "_%zu", index)
 return: lm_trans_l2_c_identifier_new("field_", base, suffix)
 
 fn: lm_trans_l2_object_suffix_name_new (
@@ -3586,7 +3586,7 @@ fn: lm_trans_merge_push_size_relation (
     LmP0Text: payload
     [32]: char buffer
 
-    c.snprintf(buffer, c.sizeof(buffer), "%lu", (cast: ulong value))
+    c.snprintf(buffer, c.sizeof(buffer), "%zu", value)
     payload: lm_trans_text_from_cstr(buffer)
     if: payload = 0
         return: 1
@@ -5168,7 +5168,7 @@ fn: lm_trans_emit_atom_statement_sequence (
             row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(rows, i))
             if: row != 0 && row\key != 0 && lm_trans_sequence_item_index(row\payload, @ index) && index = expected_index
                 if: found
-                    c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" has duplicate index %lu\n", (cast: int sequence_name\length), sequence_name\data, (cast: ulong expected_index))
+                    c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" has duplicate index %zu\n", (cast: int sequence_name\length), sequence_name\data, expected_index)
                     status: 1
                 else:
                     found: 1
@@ -5195,7 +5195,7 @@ fn: lm_trans_emit_atom_statement_sequence (
             ---
             i: i + 1U
         if: status = 0 && found = 0
-            c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" is missing index %lu\n", (cast: int sequence_name\length), sequence_name\data, (cast: ulong expected_index))
+            c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" is missing index %zu\n", (cast: int sequence_name\length), sequence_name\data, expected_index)
             status: 1
         if: status = 0
             expected_index: expected_index + 1U
@@ -5820,7 +5820,7 @@ fn: lm_trans_namespace_set_signature (
     while: field != 0
         if: lm_trans_formal_param_name(field\value, param_name) = 0
             if: allow_unnamed_params = 0
-                c.fprintf(c.stderr, "trans L2 error: function \"%.*s\" parameter %lu must expose a binding name\n", (cast: int name\length), name\data, (cast: ulong index))
+                c.fprintf(c.stderr, "trans L2 error: function \"%.*s\" parameter %zu must expose a binding name\n", (cast: int name\length), name\data, index)
                 return: 1
             lm_trans_text_assign_cstr(param_name, "")
 

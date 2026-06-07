@@ -7399,14 +7399,14 @@ static int lm_p0_registry_push_column_metadata(const LmP0Text * table_name, LmP0
                 status = - 1;
             }
             else {
-                snprintf(index_buffer, sizeof(index_buffer), "%lu", (((unsigned long)index)));
-                snprintf(count_buffer, sizeof(count_buffer), "%lu", (((unsigned long)columns[index] -> descriptor_count)));
+                snprintf(index_buffer, sizeof(index_buffer), "%zu", index);
+                snprintf(count_buffer, sizeof(count_buffer), "%zu", columns[index] -> descriptor_count);
                 if (lm_p0_registry_push_generated_row_text("column.table", column_key, table_payload) != 0 || lm_p0_registry_push_generated_row_text("column.name", column_key, column_payload) != 0 || lm_p0_registry_push_generated_row_cstr("column.index", column_key, index_buffer) != 0 || lm_p0_registry_push_generated_row_cstr("column.descriptor.count", column_key, count_buffer) != 0) {
                     status = - 1;
                 }
                 descriptor_index = 0U;
                 while (status == 0 && descriptor_index < columns[index] -> descriptor_count) {
-                    snprintf(index_buffer, sizeof(index_buffer), "%lu", (((unsigned long)descriptor_index)));
+                    snprintf(index_buffer, sizeof(index_buffer), "%zu", descriptor_index);
                     descriptor_key = lm_p0_registry_join_text3(lm_p0_text_from_cstr(column_key), ".", lm_p0_text_from_cstr(index_buffer));
                     if (descriptor_key == 0) {
                         status = - 1;
@@ -7842,7 +7842,7 @@ static int lm_p0_registry_load_default(void) {
         }
         diagnostic = lm_p0_document_diagnostic(document);
         if ((diagnostic != 0)) {
-            fprintf(stderr, "parser registry parse error %d at %lu:%lu in %s: %s\n", diagnostic -> code, (((unsigned long)diagnostic -> line)), (((unsigned long)diagnostic -> column)), registry_path, diagnostic -> message);
+            fprintf(stderr, "parser registry parse error %d at %zu:%zu in %s: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, registry_path, diagnostic -> message);
             lm_p0_document_destroy(document);
             lm_p0_registry_destroy();
             return 1;
