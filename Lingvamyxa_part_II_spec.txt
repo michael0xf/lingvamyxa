@@ -69,6 +69,14 @@ Registry query principle:
     projections/materializations of L4, not the model that L4 must be mapped
     onto.
 
+    L4 is therefore not merely metadata for the compiler. It is the analytical
+    layer of the language. L3 expressions describe computation; L5 messages
+    describe proposed actions, effects and runtime boundaries; L4 supplies
+    knowledge, classification and derived decisions that both L3 and L5 may
+    query. A minimal implementation may start with table lookup, but the model
+    is intended to admit rule-based reasoning, unification, backtracking and
+    resolution over L4 facts and derived relations.
+
     A table named `X`, when present in an L4 schema, is the descriptor table for
     class/key `X`. The table named `class` is an index/classification table over
     class keys; it is not the only source of class existence. If a class has no
@@ -2102,6 +2110,10 @@ Part II reduces to these rules:
     missing row/column/cell = no relation;
     strict classification = L4 registry data;
     analytical typing = registry queries during static stages and L5 runtime;
+    L4 analysis = knowledge/classification/derived decisions queried by L3
+                  expressions and L5 messages;
+    rules/unification/backtracking/resolution = admissible L4 analysis
+                  mechanisms over facts and derived relations;
     type/class resolution = logical query over the active registry view;
     in-memory registry rows/indexes/caches/SQLite = materialized views, not semantics;
     expression = Structure requiring table cells;

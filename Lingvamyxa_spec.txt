@@ -81,6 +81,13 @@ active RegistryViews. The model is the L4 registry data itself, predominantly
 table data; SQLite or another database is a projection/materialization of L4,
 not a separate model that the language must later map to.
 
+Equivalently, L4 is the analytical layer of the language, not only compiler
+metadata. L3 expressions describe computation; L5 messages describe proposed
+actions, effects and runtime boundaries; L4 supplies knowledge, classification
+and derived decisions that both layers may query. Implementations may begin with
+table lookup, but L4 is intended to grow toward rule-based reasoning,
+unification, backtracking and resolution over facts and derived relations.
+
 0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
 It can be used for human-readable records, trees, nested configurations,
