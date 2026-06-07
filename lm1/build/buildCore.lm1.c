@@ -136,7 +136,7 @@ static int lm_build_platform_absolute(char *path) {
 }
 
 static int lm_build_file_exists(char *path) {
-    FILE *file;
+    FILE * file;
     file = fopen(path, "rb");
     if (file == 0) {
         return 0;
@@ -194,7 +194,7 @@ static int lm_build_platform_absolute(char *path) {
 }
 
 static int lm_build_file_exists(char *path) {
-    FILE *file;
+    FILE * file;
     file = fopen(path, "rb");
     if (file == 0) {
         return 0;

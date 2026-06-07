@@ -7292,7 +7292,7 @@ int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
 }
 
 int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
-    FILE *file;
+    FILE * file;
     long size;
     char *buffer;
     size_t read_size;

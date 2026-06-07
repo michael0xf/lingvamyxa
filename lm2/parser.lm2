@@ -5139,7 +5139,7 @@ end: external
 
 external:
     fn: lm_p0_parse_file (const: @(char path); @@: LmP0Document out_document) int
-        @: FILE file
+        FILE: file
         long: size
         @: char buffer
         size_t: read_size

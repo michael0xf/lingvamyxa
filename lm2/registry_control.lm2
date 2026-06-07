@@ -1213,7 +1213,7 @@ fn: lm_registry_control_parse_file (const: @(char path); @@: LmP0Document out_do
 return: 0
 
 fn: lm_registry_control_write_text_file (const: @(char path); const: @(char text); @: LmRegistryControlError error) int
-    @: FILE file
+    FILE: file
     size_t: length
 
     file: c.fopen(path, "wb")

@@ -91,8 +91,8 @@ static int lm_make_run_tool(char *tool, int argc, char **argv, int start) {
 
 static int lm_make_copy_file(char *source_path, char *output_path) {
     char buffer[32768];
-    FILE *source;
-    FILE *output;
+    FILE * source;
+    FILE * output;
     size_t count;
     int status;
     source = fopen(source_path, "rb");

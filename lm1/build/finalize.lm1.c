@@ -180,7 +180,7 @@ static int lm_finalize_enter_project_root(char *program_path) {
 }
 
 static void lm_finalize_log(char *message) {
-    FILE *log_file;
+    FILE * log_file;
     log_file = fopen("build/lm0/finalize.log", "a");
     if (log_file == 0) {
         return;
@@ -199,8 +199,8 @@ static void lm_finalize_tool_path(char *path, size_t size, char *tool_name, char
 
 static int lm_finalize_copy_once(char *source_path, char *output_path, int quiet) {
     char buffer[32768];
-    FILE *source;
-    FILE *output;
+    FILE * source;
+    FILE * output;
     size_t count;
     int status;
     source = fopen(source_path, "rb");

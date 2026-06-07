@@ -59,8 +59,8 @@ return: lm_make_run_command(command)
 
 fn: lm_make_copy_file (@: char source_path; @: char output_path) int
     []: char buffer 32768
-    @: FILE source
-    @: FILE output
+    FILE: source
+    FILE: output
     size_t: count
     int: status
 
