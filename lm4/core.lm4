@@ -24,7 +24,9 @@ table:
              binding                    class
              functionPointerType        class
              closureType                class
-             serial                     class
+             decimal                    literal
+             boolean                    literal
+             serial                     decimal
              name                       class
              namespace                  class
              kind                       class
@@ -33,7 +35,6 @@ table:
              body                       class
              node                       class
              prototype                  class
-             NULL                       class
              forbidden                  class
              `field.class`              relation
              `field.index`              relation
@@ -52,6 +53,7 @@ table:
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
+             `class.null`               relation
              `serialization.codec`      relation
              `callable.projection`      relation
              `c99.ub.policy`            relation

@@ -252,12 +252,13 @@ registry classes/keys. The strings `"uint8_t"` and `"uint16_t"` are terminal
 primitive payloads for the active L2/L1 lowering profile unless another table
 explicitly treats those spellings as registry classes.
 
-`NULL` is the standard empty cell value. At the LMX semantic lookup boundary, a
-missing row, missing column, missing cell and an SQL-style NULL cell all
-normalize to `NULL`. An implementation resolver may still distinguish
-"not found in this overlay" from "found NULL" internally in order to support
-imports, overlays and masking, but `ABSENT` is not a separate semantic class in
-the core table model.
+An empty table cell is interpreted through the declared class/domain of that
+cell. A class may define its empty sentinel through the relation `class.null`.
+For a reference class this is normally the pointer value `0`; for a primitive or
+domain-specific class it is an explicit domain fact. Primitive classes are still
+ordinary registry classes, not a separate Java-style type universe. A hosted
+bootstrap implementation may accept the legacy atom `NULL` as compatibility
+input, but `NULL` is not the core semantic class of absence.
 
 `FORBIDDEN` is the standard explicit prohibition class/value. It is different
 from `NULL`: `NULL` means no value is present, while `FORBIDDEN` means the
@@ -469,9 +470,11 @@ Mandatory payload kinds are:
         diagnostic Structure.
 
     null
-        The standard empty result. Missing row, missing column, missing cell and
-        SQL-style NULL cell all normalize to `NULL` after the full lookup path
-        is exhausted.
+        The standard empty result of resolution. Missing row, missing column or
+        missing cell normalize to the resolver's empty result after the full
+        lookup path is exhausted. In table source, an intentionally empty cell
+        is preferably expressed by the declared cell class through `class.null`;
+        the legacy atom `NULL` is only a compatibility spelling.
 
     forbidden
         Explicit prohibition. `FORBIDDEN` is not an empty value; it means the

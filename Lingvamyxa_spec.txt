@@ -5748,6 +5748,13 @@ an opaque object type may make typed field-follow available for that imported
 layout. Explicit address-depth and array-like receivers add further address
 layers on top of that base category.
 
+Primitive/scalar types are still registry classes. They are not a Java-style
+separate universe outside the language model. A primitive class may have facts
+such as `class.range`, `class.null`, `class.c.projection` and
+`serialization.codec` exactly like other classes; the selected profile then
+uses those facts to validate and lower the value. The difference is projection
+and storage shape, not source-level ontology.
+
 Examples in the hosted ANSI C profile:
 
     char          -> char
@@ -8555,9 +8562,13 @@ example `(l2 binding)` names column `l2` and records descriptor `binding`.
 
 Rows are dense. The number of row cells must be divisible by the number of
 columns. The loader does not use physical source lines to infer missing cells.
-Use an explicit service atom such as `NULL` when a relation cell is intentionally
-empty or absent. A table pretty-printer may align columns for readability, but
-that alignment is not semantic.
+The preferred empty-cell spelling is class-specific: the declared class of a
+cell may define a sentinel through the relation `class.null`. For a reference
+class this is usually the pointer value `0`; for a primitive/domain class it is
+an explicit domain fact, not a global SQL-like null. A hosted bootstrap loader
+may still accept the legacy atom `NULL` as compatibility input, but `NULL` is
+not the core semantic class of absence. A table pretty-printer may align columns
+for readability, but that alignment is not semantic.
 
 A bootstrap implementation may still lower these table Structures to a flat
 `row: table key payload` internal representation. That is a temporary storage
