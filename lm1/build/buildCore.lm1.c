@@ -217,7 +217,8 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fprintf(file, "$ownLib = '%s'\n", own_library);
     fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file);
     fputs("$parserSkip = @()\n", file);
-    fputs("$transSkip = @('trans_callable_force_argument.lm2', 'trans_callable_lazy_bind.lm2', 'trans_contextual_literal_none_ok.lmx', 'trans_default_arguments.lm2', 'trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2', 'trans_l4_abi_receivers.lm2')\n", file);
+    fputs("$transSkip = @('trans_contextual_literal_none_ok.lmx', 'trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2')\n", file);
+    fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2')\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
     fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
     fputs("    if ($parserSkip -contains $testFile.Name) { continue }\n", file);
@@ -234,6 +235,7 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fputs("    $exePath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.exe')\n", file);
     fputs("    & $trans $testFile.FullName $cPath\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke translation failed: ' + $testFile.Name) }\n", file);
+    fputs("    if ($transTranslationOnly -contains $testFile.Name) { continue }\n", file);
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Ilm1' $cPath $parserLib $ownLib '-o' $exePath\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke link failed: ' + $testFile.Name) }\n", file);
     fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file);
@@ -349,11 +351,12 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);
-    fputs("    case \"$name\" in trans_callable_force_argument.lm2|trans_callable_lazy_bind.lm2|trans_contextual_literal_none_ok.lmx|trans_default_arguments.lm2|trans_double_semicolon_params.lm2|trans_fn_descriptor_only.lm2|trans_l4_abi_receivers.lm2) continue ;; esac\n", file);
+    fputs("    case \"$name\" in trans_contextual_literal_none_ok.lmx|trans_double_semicolon_params.lm2|trans_fn_descriptor_only.lm2) continue ;; esac\n", file);
     fputs("    base=${name%.*}\n", file);
     fputs("    c_path=\"build/obj/tests/$base.c\"\n", file);
     fputs("    exe_path=\"build/obj/tests/$base\"\n", file);
     fputs("    \"$trans\" \"$src\" \"$c_path\"\n", file);
+    fputs("    case \"$name\" in trans_l4_abi_receivers.lm2) continue ;; esac\n", file);
     fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
     fputs("    \"$exe_path\"\n", file);
     fputs("done\n", file);

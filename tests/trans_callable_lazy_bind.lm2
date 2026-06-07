@@ -1,6 +1,6 @@
 import: "lm2/own.lm2"
 
-fn: IntSource () int
+callable: IntSource () int
 
 callable: AddX (int: value) int
 
