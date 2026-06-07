@@ -30,6 +30,7 @@ ui_*.h
 Makefile*
 *build-*
 build/
+work/
 *.qm
 *.prl
 *.qmlls.ini
