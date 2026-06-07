@@ -1191,8 +1191,22 @@ fn: lm_trans_class_c_spelling (const: @(LmP0Text name)) const: @: char
         return: 0
 return: lm_trans_registry_lookup(name, "class.spelling")
 
+fn: lm_trans_class_is_reference_base (const: @(LmP0Text name)) int
+    const: @: char class_kind
+
+    if: name = 0
+        return: 0
+    if: lm_trans_registry_has(name, "class.reference-base")
+        return: 1
+    class_kind: lm_trans_registry_lookup(name, "class.kind")
+    if: class_kind != 0 && c.strcmp(class_kind, "opaqueReference") = 0
+        return: 1
+return: 0
+
 fn: lm_trans_builtin_c_type_tail (const: @(LmP0Text name)) int
     if: name = 0
+        return: 0
+    if: lm_trans_class_is_reference_base(name)
         return: 0
 return: lm_trans_class_c_spelling(name) != 0 || lm_trans_registry_has(name, "class.cTail")
 

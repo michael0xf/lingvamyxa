@@ -2779,7 +2779,7 @@ fn: lm_trans_declare_named_structure_owner (
         return: 1
     finally: lm_trans_text_ref_destroy(@ backend_payload)
 
-    status: lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, owner, backend_payload) != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0
+    status: lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, owner, backend_payload) != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0
 return: status != 0
 
 fn: lm_trans_named_structure_push_field_relations (

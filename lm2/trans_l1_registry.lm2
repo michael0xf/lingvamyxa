@@ -794,6 +794,22 @@ fn: lm_trans_registry_note_class_kind (const: @(LmP0Text name); const: @(char ki
     lm_trans_text_ref_destroy(@ payload)
 return: status
 
+fn: lm_trans_registry_note_class_reference_base (const: @(LmP0Text name)) int
+    @: LmP0Text table
+    @: LmP0Text payload
+    int: status
+
+    table: lm_trans_text_from_cstr("class.reference-base")
+    payload: lm_trans_text_from_cstr("1")
+    if: table = 0 || payload = 0
+        lm_trans_text_ref_destroy(@ table)
+        lm_trans_text_ref_destroy(@ payload)
+        return: 1
+    status: lm_trans_registry_push_row_atoms(table, name, payload) != 0
+    lm_trans_text_ref_destroy(@ table)
+    lm_trans_text_ref_destroy(@ payload)
+return: status
+
 fn: lm_trans_registry_note_class_present (const: @(LmP0Text name)) int
     @: LmP0Text table
     @: LmP0Text payload

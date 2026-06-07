@@ -707,6 +707,7 @@ return: found
 
 fn: lm_trans_emit_abi_typed_name (@: FILE file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) int
     size_t: i
+    size_t: effective_address_depth
     @: LmP0Text class_text
 
     if: file = 0 || class_name = 0
@@ -717,14 +718,15 @@ fn: lm_trans_emit_abi_typed_name (@: FILE file; const: @(char class_name); size_
     class_text: lm_trans_l4_text_view_new(class_name)
     if: class_text = 0
         return: 1
+    effective_address_depth: lm_trans_effective_address_depth(class_text, address_depth)
     if: lm_trans_emit_type_name(file, class_text) != 0
         lm_trans_l4_text_view_delete(@ class_text)
         return: 1
-    if: (address_depth != 0U || name != 0) && lm_trans_put(file, " ") != 0
+    if: (effective_address_depth != 0U || name != 0) && lm_trans_put(file, " ") != 0
         lm_trans_l4_text_view_delete(@ class_text)
         return: 1
     i: 0U
-    while: i < address_depth
+    while: i < effective_address_depth
         if: lm_trans_put(file, "*") != 0
             lm_trans_l4_text_view_delete(@ class_text)
             return: 1

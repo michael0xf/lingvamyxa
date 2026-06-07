@@ -1910,6 +1910,7 @@ static int lm_trans_registry_column_is_class_typed(const LmTransRegistryColumn *
 static int lm_trans_registry_cell_value(const LmP0Text *atom, const LmTransRegistryColumn *column, LmP0Text *out_value);
 static int lm_trans_registry_push_table_cell(const LmP0Text *table_name, const LmTransRegistryColumn *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node, int allow_node_cells);
 static int lm_trans_registry_note_class_kind(const LmP0Text *name, const char *kind);
+static int lm_trans_registry_note_class_reference_base(const LmP0Text *name);
 static int lm_trans_registry_note_class_present(const LmP0Text *name);
 static LmTransRegistryFact * lm_trans_registry_lookup_row_in_identifiers(const LmTransIdentifierTable *identifiers, const LmP0Text *key, const char *table);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_in_identifiers(const LmTransIdentifierTable *identifiers, const LmP0Text *key, const char *relation_name);
@@ -2051,6 +2052,7 @@ static int lm_trans_namespace_set_closure_call_name(LmTransNamespace *namespace_
 static int lm_trans_symbol_copy_signature(LmTransSymbol *target, const LmTransSymbol *source);
 static int lm_trans_namespace_declare_compatible(LmTransNamespace *namespace_, const LmP0Text *name, const char *kind);
 static const char * lm_trans_class_c_spelling(const LmP0Text *name);
+static int lm_trans_class_is_reference_base(const LmP0Text *name);
 static int lm_trans_builtin_c_type_tail(const LmP0Text *name);
 static int lm_trans_builtin_c_type_name(const LmP0Text *name);
 static int lm_trans_emit_name(FILE *file, const LmP0Text *name);
@@ -2149,6 +2151,8 @@ static const char * lm_trans_string_stack_find(const LmOwnPtrStack *stack, const
 static int lm_trans_c_identifier_char(char ch);
 static char * lm_trans_callable_adapter_name_new(const LmP0Text *source_name, const LmP0Text *descriptor_name);
 static int lm_trans_emit_callable_adapter_args(FILE *file, LmTransAbiParam **params, size_t param_count);
+static size_t lm_trans_layout_type_implicit_address_depth(const LmP0Text *class_name);
+static size_t lm_trans_effective_address_depth(const LmP0Text *class_name, size_t explicit_depth);
 static int lm_trans_emit_callable_type_named(FILE *file, const LmTransL4CallableType *type, const LmP0Text *name);
 static int lm_trans_emit_callable_param_node_named(FILE *file, const LmP0Node *param_node, const LmP0Text *name);
 static int lm_trans_emit_callable_symbol_param_slice(FILE *file, const LmTransSymbol *symbol, size_t first, size_t count);
@@ -3741,6 +3745,23 @@ static int lm_trans_registry_note_class_kind(const LmP0Text *name, const char *k
     }
     table = lm_trans_text_from_cstr("class.kind");
     payload = lm_trans_text_from_cstr(kind);
+    if (table == 0 || payload == 0) {
+        lm_trans_text_ref_destroy(&table);
+        lm_trans_text_ref_destroy(&payload);
+        return 1;
+    }
+    status = lm_trans_registry_push_row_atoms(table, name, payload) != 0;
+    lm_trans_text_ref_destroy(&table);
+    lm_trans_text_ref_destroy(&payload);
+    return status;
+}
+
+static int lm_trans_registry_note_class_reference_base(const LmP0Text *name) {
+    LmP0Text *table;
+    LmP0Text *payload;
+    int status;
+    table = lm_trans_text_from_cstr("class.reference-base");
+    payload = lm_trans_text_from_cstr("1");
     if (table == 0 || payload == 0) {
         lm_trans_text_ref_destroy(&table);
         lm_trans_text_ref_destroy(&payload);
@@ -5406,8 +5427,26 @@ static const char * lm_trans_class_c_spelling(const LmP0Text *name) {
     return lm_trans_registry_lookup(name, "class.spelling");
 }
 
+static int lm_trans_class_is_reference_base(const LmP0Text *name) {
+    const char *class_kind;
+    if (name == 0) {
+        return 0;
+    }
+    if (lm_trans_registry_has(name, "class.reference-base")) {
+        return 1;
+    }
+    class_kind = lm_trans_registry_lookup(name, "class.kind");
+    if (class_kind != 0 && strcmp(class_kind, "opaqueReference") == 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_builtin_c_type_tail(const LmP0Text *name) {
     if (name == 0) {
+        return 0;
+    }
+    if (lm_trans_class_is_reference_base(name)) {
         return 0;
     }
     return lm_trans_class_c_spelling(name) != 0 || lm_trans_registry_has(name, "class.cTail");
@@ -7041,22 +7080,41 @@ static int lm_trans_emit_callable_adapter_args(FILE *file, LmTransAbiParam **par
     return 0;
 }
 
+static size_t lm_trans_layout_type_implicit_address_depth(const LmP0Text *class_name) {
+    if (class_name == 0 || lm_trans_builtin_c_type_name(class_name)) {
+        return 0U;
+    }
+    if (lm_trans_class_is_reference_base(class_name)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+static size_t lm_trans_effective_address_depth(const LmP0Text *class_name, size_t explicit_depth) {
+    if (explicit_depth != 0U) {
+        return explicit_depth;
+    }
+    return explicit_depth + lm_trans_layout_type_implicit_address_depth(class_name);
+}
+
 static int lm_trans_emit_callable_type_named(FILE *file, const LmTransL4CallableType *type, const LmP0Text *name) {
     size_t i;
+    size_t effective_address_depth;
     if (((file == 0) || (type == 0))) {
         return 1;
     }
+    effective_address_depth = lm_trans_effective_address_depth(type -> class_name, type -> address_depth);
     if ((type -> is_const && (lm_trans_put(file, "const ") != 0))) {
         return 1;
     }
     if ((lm_trans_emit_type_name(file, type -> class_name) != 0)) {
         return 1;
     }
-    if ((((type -> address_depth != 0U) || ((name != 0) && (name -> length != 0U))) && (lm_trans_put(file, " ") != 0))) {
+    if ((((effective_address_depth != 0U) || ((name != 0) && (name -> length != 0U))) && (lm_trans_put(file, " ") != 0))) {
         return 1;
     }
     i = 0U;
-    while ((i < type -> address_depth)) {
+    while ((i < effective_address_depth)) {
         if ((lm_trans_put(file, "*") != 0)) {
             return 1;
         }
@@ -10139,6 +10197,7 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
     LmTransBinding *type_receiver;
     int type_receiver_status;
     int status;
+    size_t implicit_depth;
     if ((type_node == 0)) {
         fprintf(stderr, "trans L2 error: type position expects a name\n");
         return 1;
@@ -10153,6 +10212,14 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
             break;
         }
         if ((current -> kind == LM_P0_NODE_ATOM)) {
+            implicit_depth = 0U;
+            if (suffixes == 0 || suffixes -> count == 0U) {
+                implicit_depth = lm_trans_layout_type_implicit_address_depth(current -> as -> atom);
+            }
+            if (implicit_depth != 0U && lm_trans_type_suffix_stack_push(&suffixes, implicit_depth) != 0) {
+                status = 1;
+                break;
+            }
             status = lm_trans_emit_type_name(file, current -> as -> atom);
             break;
         }
@@ -10408,11 +10475,16 @@ static int lm_trans_array_type_node_info(const LmP0Node *type_node, const LmP0No
 
 static int lm_trans_emit_type_and_name(FILE *file, const LmP0Node *type_node, const LmP0Text *name, size_t pointer_depth, const LmTransNamespace *namespace_) {
     size_t i;
+    int use_raw_atom;
     if ((type_node == 0)) {
         return 1;
     }
     namespace_ = namespace_;
-    if ((lm_trans_emit_type_node(file, type_node) != 0)) {
+    use_raw_atom = pointer_depth != 0U && type_node -> kind == LM_P0_NODE_ATOM;
+    if (use_raw_atom && lm_trans_emit_type_name(file, type_node -> as -> atom) != 0) {
+        return 1;
+    }
+    if (use_raw_atom == 0 && lm_trans_emit_type_node(file, type_node) != 0) {
         return 1;
     }
     if ((lm_trans_put(file, " ") != 0)) {
@@ -10429,10 +10501,17 @@ static int lm_trans_emit_type_and_name(FILE *file, const LmP0Node *type_node, co
 }
 
 static int lm_trans_emit_type_head_only(FILE *file, const LmP0Text *type_head) {
+    size_t implicit_depth;
+    int status;
     if (lm_trans_builtin_c_type_name(type_head)) {
         return lm_trans_emit_type_name(file, type_head);
     }
-    return lm_trans_emit_name(file, type_head);
+    status = lm_trans_emit_name(file, type_head);
+    implicit_depth = lm_trans_layout_type_implicit_address_depth(type_head);
+    if (status == 0 && implicit_depth != 0U) {
+        status = lm_trans_emit_type_pointer_suffix(file, implicit_depth);
+    }
+    return status;
 }
 
 static int lm_trans_emit_c_dimension_text(FILE *file, const LmP0Text *dimension, const LmTransNamespace *namespace_, const char *error_name) {
@@ -14322,7 +14401,7 @@ static int lm_trans_declare_named_structure_owner(LmTransNamespace *namespace_, 
             return lm_return_2;
         }
     }
-    status = lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, owner, backend_payload) != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0;
+    status = lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, owner, backend_payload) != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0;
     {
         int lm_return_3 = status != 0;
         lm_trans_text_ref_destroy(&backend_payload);
@@ -24150,6 +24229,7 @@ static int lm_trans_l4_is_function_pointer_type(const LmTransNamespace *namespac
 
 static int lm_trans_emit_abi_typed_name(FILE *file, const char *class_name, size_t address_depth, int is_const, const char *name) {
     size_t i;
+    size_t effective_address_depth;
     LmP0Text *class_text;
     if (file == 0 || class_name == 0) {
         return 1;
@@ -24161,16 +24241,17 @@ static int lm_trans_emit_abi_typed_name(FILE *file, const char *class_name, size
     if (class_text == 0) {
         return 1;
     }
+    effective_address_depth = lm_trans_effective_address_depth(class_text, address_depth);
     if (lm_trans_emit_type_name(file, class_text) != 0) {
         lm_trans_l4_text_view_delete(&class_text);
         return 1;
     }
-    if ((address_depth != 0U || name != 0) && lm_trans_put(file, " ") != 0) {
+    if ((effective_address_depth != 0U || name != 0) && lm_trans_put(file, " ") != 0) {
         lm_trans_l4_text_view_delete(&class_text);
         return 1;
     }
     i = 0U;
-    while (i < address_depth) {
+    while (i < effective_address_depth) {
         if (lm_trans_put(file, "*") != 0) {
             lm_trans_l4_text_view_delete(&class_text);
             return 1;

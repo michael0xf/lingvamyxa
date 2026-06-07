@@ -27,6 +27,20 @@ table:
              strcmp  1
 end: `fn.external`
 
+table:
+    name: class
+    columns: class  (kind class)
+    rows:
+             FILE   opaqueReference
+end: class
+
+table:
+    name: `class.reference-base`
+    columns: class  (value serial)
+    rows:
+             FILE   1
+end: `class.reference-base`
+
 fn: getenv (const: @(char name)) @: char
 fn: strlen (const: @(char text)) size_t
 fn: strchr (const: @(char text); int: value) @: char

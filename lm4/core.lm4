@@ -5,6 +5,7 @@ table:
              class                      core
              core                       class
              primitive                  class
+             opaqueReference            class
              descriptor                 class
              relation                   class
              layout                     class
@@ -40,6 +41,7 @@ table:
              `constant.value`           relation
              `define.value`             relation
              `class.present`            relation
+             `class.reference-base`      relation
              `fn.descriptor`            relation
 
              void                       primitive
@@ -54,7 +56,7 @@ table:
              uchar                      primitive
              ulong                      primitive
              size_t                     primitive
-             FILE                       primitive
+             FILE                       opaqueReference
              u8                         primitive
              u16                        primitive
              u32                        primitive
