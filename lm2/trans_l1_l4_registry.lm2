@@ -1767,6 +1767,14 @@ fn: lm_trans_l4_callable_type_from_node (const: @(LmP0Node node); @: LmTransL4Ca
 
     current: node
     while: current != 0
+        if: current\kind = c.LM_P0_NODE_STRUCTURE
+            field: current\as\structure\first_field
+            if: field = 0 || field\next != 0 || field\value = 0
+                return: 0
+            current: field\value
+            continue
+        ---
+
         if: current\kind = c.LM_P0_NODE_ATOM
             if: lm_trans_registry_identifier_value(current\as\atom, out\class_name) = 0
                 return: 0
