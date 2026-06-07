@@ -26,18 +26,6 @@ fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: name
     lm_trans_l4_text_view_delete(@ class_text)
 return: result
 
-fn: lm_trans_layout_field_effective_address_depth (const: (LmTransLayoutField: field); const: (LmTransNamespace: namespace_)) size_t
-    size_t: depth
-
-    if: field = 0
-        return: 0U
-    depth: field\address_depth
-    if: field\is_union
-        return: depth
-    if: lm_trans_layout_class_requires_pointer_field(namespace_, field\class_name)
-        return: depth + 1U
-return: depth
-
 fn: lm_trans_l4_abi_params_new (size_t: capacity) @: LmTransAbiParam
     @: LmTransAbiParam params
     size_t: i
@@ -241,7 +229,7 @@ fn: lm_trans_collect_layout_fields (const: @(char layout_name); const: (LmTransN
                     lm_trans_l4_text_view_delete(@ layout_text)
                     return: 1
                 field\class_name: row\payload
-                if: field\is_const && lm_trans_layout_field_effective_address_depth(field, namespace_) = 0U && field\has_array_count = 0
+                if: field\is_const && field\address_depth = 0U && lm_trans_layout_class_requires_pointer_field(namespace_, field\class_name) = 0 && field\has_array_count = 0
                     c.fprintf(c.stderr, "trans L4 layout error: field %s.%s const value fields are not supported yet\n", layout_name, row\key)
                     lm_trans_l4_text_view_delete(@ layout_text)
                     return: 1
@@ -296,12 +284,10 @@ return: 0
 
 fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); const: (LmTransNamespace: namespace_); unsigned: indent) int
     LmTransCDeclarator: declarator
-    size_t: effective_address_depth
 
     if: file = 0 || field = 0
         return: 1
     declarator: 0
-    effective_address_depth: lm_trans_layout_field_effective_address_depth(field, namespace_)
 
     if: field\is_union
         if: field\union_layout_name = 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "union {\n") != 0 || lm_trans_emit_layout_fields(file, field\union_layout_name, namespace_, indent + 1U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field\name)) != 0
@@ -309,7 +295,7 @@ fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); 
         ---
     else:
         if: lm_trans_l4_is_function_pointer_type(namespace_, field\class_name)
-            if: field\is_const || effective_address_depth != 0U || field\has_array_count
+            if: field\is_const || field\address_depth != 0U || field\has_array_count
                 c.fprintf(c.stderr, "trans L4 layout error: function pointer field %s cannot use const, pointer-depth, or array-count\n", field\name)
                 return: 1
             if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_l4_function_pointer_type_field(file, namespace_, field\class_name, field\name, "layout") != 0
@@ -321,9 +307,8 @@ fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); 
                 return: 1
             lm_trans_text_assign_cstr(declarator\type_head, field\class_name)
             lm_trans_text_assign_cstr(declarator\name, field\name)
-            declarator\pointer_depth: effective_address_depth
+            declarator\pointer_depth: field\address_depth
             declarator\type_is_head: 1
-            declarator\suppress_implicit_reference_depth: 1
             if: field\has_array_count
                 declarator\literal_dimensions[0]: field\array_count
                 declarator\literal_dimension_count: 1U
