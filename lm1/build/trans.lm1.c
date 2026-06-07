@@ -248,6 +248,7 @@ typedef struct LmTransCDeclarator {
     size_t literal_dimensions[8U];
     size_t literal_dimension_count;
     int type_is_head;
+    int suppress_implicit_reference_depth;
 } LmTransCDeclarator;
 typedef struct LmTransAbiParam {
     const char *name;
@@ -2263,6 +2264,7 @@ static int lm_trans_emit_current_return_type(FILE * file, const LmTransNamespace
 static int lm_trans_array_type_node_info(const LmP0Node *type_node, const LmP0Node **out_element_type, size_t *out_rank);
 static int lm_trans_emit_type_and_name(FILE * file, const LmP0Node *type_node, const LmP0Text *name, size_t pointer_depth, const LmTransNamespace *namespace_);
 static int lm_trans_emit_type_head_only(FILE * file, const LmP0Text *type_head);
+static int lm_trans_emit_type_head_only_raw(FILE * file, const LmP0Text *type_head);
 static int lm_trans_emit_c_dimension_text(FILE * file, const LmP0Text *dimension, const LmTransNamespace *namespace_, const char *error_name);
 static int lm_trans_emit_c_declarator(FILE * file, LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name);
 static int lm_trans_emit_array_param(FILE * file, const LmP0Frame *frame, LmTransNamespace *namespace_);
@@ -10517,6 +10519,13 @@ static int lm_trans_emit_type_head_only(FILE * file, const LmP0Text *type_head) 
     return status;
 }
 
+static int lm_trans_emit_type_head_only_raw(FILE * file, const LmP0Text *type_head) {
+    if (lm_trans_builtin_c_type_name(type_head)) {
+        return lm_trans_emit_type_name(file, type_head);
+    }
+    return lm_trans_emit_name(file, type_head);
+}
+
 static int lm_trans_emit_c_dimension_text(FILE * file, const LmP0Text *dimension, const LmTransNamespace *namespace_, const char *error_name) {
     LmP0Document *dimension_document;
     const LmP0Diagnostic *diagnostic;
@@ -10573,8 +10582,18 @@ static int lm_trans_emit_c_declarator(FILE * file, LmTransCDeclarator *declarato
         return 1;
     }
     if (declarator -> type_is_head) {
-        if (((declarator -> type_head == 0) || (lm_trans_emit_type_head_only(file, declarator -> type_head) != 0))) {
+        if (declarator -> type_head == 0) {
             return 1;
+        }
+        if (declarator -> suppress_implicit_reference_depth) {
+            if (lm_trans_emit_type_head_only_raw(file, declarator -> type_head) != 0) {
+                return 1;
+            }
+        }
+        else {
+            if (lm_trans_emit_type_head_only(file, declarator -> type_head) != 0) {
+                return 1;
+            }
         }
     }
     else {
@@ -23798,6 +23817,7 @@ static int lm_trans_emit_layout_field(FILE * file, const LmTransLayoutField *fie
             lm_trans_text_assign_cstr(declarator -> name, field -> name);
             declarator->pointer_depth = effective_address_depth;
             declarator->type_is_head = 1;
+            declarator->suppress_implicit_reference_depth = 1;
             if (field -> has_array_count) {
                 declarator->literal_dimensions[0] = field -> array_count;
                 declarator->literal_dimension_count = 1U;

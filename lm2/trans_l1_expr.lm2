@@ -4208,6 +4208,11 @@ fn: lm_trans_emit_type_head_only (FILE: file; const: @(LmP0Text type_head)) int
     return: status
 end: lm_trans_emit_type_head_only
 
+fn: lm_trans_emit_type_head_only_raw (FILE: file; const: @(LmP0Text type_head)) int
+    if: lm_trans_builtin_c_type_name(type_head)
+        return: lm_trans_emit_type_name(file, type_head)
+return: lm_trans_emit_name(file, type_head)
+
 fn: lm_trans_emit_c_dimension_text (FILE: file; const: @(LmP0Text dimension); const: @(LmTransNamespace namespace_); const: @(char error_name)) int
     @: LmP0Document dimension_document
     const: @: LmP0Diagnostic diagnostic
@@ -4253,8 +4258,15 @@ fn: lm_trans_emit_c_declarator (FILE: file; @: LmTransCDeclarator declarator; co
     if: ((file = 0) || (declarator = 0))
         return: 1
     if: declarator\type_is_head
-        if: ((declarator\type_head = 0) || (lm_trans_emit_type_head_only(file, declarator\type_head) != 0))
+        if: declarator\type_head = 0
             return: 1
+        if: declarator\suppress_implicit_reference_depth
+            if: lm_trans_emit_type_head_only_raw(file, declarator\type_head) != 0
+                return: 1
+            ---
+        else:
+            if: lm_trans_emit_type_head_only(file, declarator\type_head) != 0
+                return: 1
         ---
     else:
         if: ((declarator\type_node = 0) || (lm_trans_emit_type_node(file, declarator\type_node) != 0))

@@ -369,6 +369,7 @@ L4:
                  literal_dimensions        size_t                 6                       0                                0
                  literal_dimension_count   size_t                 7                       0                                0
                  type_is_head              int                    8                       0                                0
+                 suppress_implicit_reference_depth int            9                       0                                0
     end: LmTransCDeclarator
 
     table:
