@@ -21,100 +21,100 @@ table:
 end: functionPointerType
 
 fn: LmL4FrameReceiver (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 fn: LmL4PushRow (
     @: void context
-    const: @: LmP0Text table_atom
-    const: @: LmP0Text key_atom
-    const: @: LmP0Node payload_node
+    const: LmP0Text: table_atom
+    const: LmP0Text: key_atom
+    const: LmP0Node: payload_node
 ) int
 
 fn: LmL4PushCell (
     @: void context
-    const: @: LmP0Text table_name
-    const: @: LmL4Column column
+    const: LmP0Text: table_name
+    const: LmL4Column: column
     int: split_by_column
-    const: @: LmP0Text key_atom
-    const: @: LmP0Node payload_node
+    const: LmP0Text: key_atom
+    const: LmP0Node: payload_node
 ) int
 
 fn: LmL4NoteKey (
     @: void context
-    const: @: LmP0Text table_name
-    const: @: LmL4Column column
-    const: @: LmP0Text key_atom
+    const: LmP0Text: table_name
+    const: LmL4Column: column
+    const: LmP0Text: key_atom
 ) int
 
 fn: LmL4PushColumnMetadata (
     @: void context
-    const: @: LmP0Text table_name
-    @@: LmL4Column columns
+    const: LmP0Text: table_name
+    @: LmL4Column columns
     size_t: column_count
 ) int
 
 fn: LmL4JoinTable (
     @: void context
-    const: @: LmP0Text source_table
-    const: @: LmP0Text target_table
+    const: LmP0Text: source_table
+    const: LmP0Text: target_table
 ) int
 
 fn: lm_l4_table_from_frame (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 fn: lm_l4_join_from_frame (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 fn: lm_l4_row_from_frame (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 fn: lm_l4_load_rows (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Structure structure
+    const: LmP0Structure: structure
 ) int
 
 fn: lm_l4_load_root (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Node root
+    const: LmP0Node: root
     int: implicit_l4
 ) int
 
 fn: lm_l4_receiver_table (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 fn: lm_l4_receiver_join (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 fn: lm_l4_receiver_row (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 fn: lm_l4_receiver_ignore (
-    const: @: LmL4Loader loader
+    const: LmL4Loader: loader
     @: void context
-    const: @: LmP0Frame frame
+    const: LmP0Frame: frame
 ) int
 
 table:
@@ -132,6 +132,14 @@ table:
              LmL4Column  c.struct
              LmL4Loader  c.struct
 end: `layout.backend`
+
+table:
+    name: `class.reference-base`
+    columns: class       (value serial)
+    rows:
+             LmL4Column  1
+             LmL4Loader  1
+end: `class.reference-base`
 
 table:
     name: `LmL4Column.field.class`

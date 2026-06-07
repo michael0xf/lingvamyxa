@@ -220,7 +220,7 @@ static int lm_build_has_qt_gxx(void) {
 }
 #endif
 static LmBuildOptions * lm_build_options_new(void);
-static void lm_build_options_delete(LmBuildOptions *options);
+static void lm_build_options_delete(LmBuildOptions * options);
 static int lm_build_is_path_separator(char value);
 static int lm_build_has_path_separator(char *path);
 static int lm_build_is_absolute_path(char *path);
@@ -235,7 +235,7 @@ static char * lm_build_default_make_program(void);
 static char * lm_build_default_cc(void);
 static char * lm_build_default_cxx(void);
 static void lm_build_print_usage(void);
-static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options);
+static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options);
 static size_t lm_build_append(char *buffer, size_t size, size_t used, char *text);
 static size_t lm_build_append_arg(char *buffer, size_t size, size_t used, char *arg);
 static size_t lm_build_append_prefixed_arg(char *buffer, size_t size, size_t used, char *prefix, char *value);
@@ -253,14 +253,14 @@ static int lm_build_clear_full_cmake_cache(char *cmake_tool, char *build_dir);
 static int lm_build_full_configure(void);
 static int lm_build_full_build(void);
 static int lm_build_full_project(void);
-static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans);
+static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans);
 int main(int argc, char **argv);
 
 static LmBuildOptions * lm_build_options_new(void) {
     return lm_own_new_zero(sizeof(LmBuildOptions));
 }
 
-static void lm_build_options_delete(LmBuildOptions *options) {
+static void lm_build_options_delete(LmBuildOptions * options) {
     lm_own_delete(options, 0);
 }
 
@@ -425,7 +425,7 @@ static void lm_build_print_usage(void) {
     printf("  --full  refresh L0 tools, then build the bundled third_party profile\n");
 }
 
-static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options) {
+static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options) {
     int index;
     options->full_build = 0;
     index = 1;
@@ -861,7 +861,7 @@ static int lm_build_full_project(void) {
     return lm_build_full_build();
 }
 
-static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans) {
+static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans) {
     if (lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\"") != 0) {
         return 1;
     }
@@ -905,7 +905,7 @@ int main(int argc, char **argv) {
     char *trusted_make;
     char trusted_make_buffer[128];
     char built_trans_buffer[128];
-    LmBuildOptions *options;
+    LmBuildOptions * options;
     int parse_status;
     int result;
     options = lm_build_options_new();

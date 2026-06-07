@@ -99,6 +99,20 @@ L4:
                  LmRegistryControlError   c.struct
                  LmRegistryControlRename  c.struct
     end: `layout.backend`
+
+    table:
+        name: `class.reference-base`
+        columns: class                    (value serial)
+        rows:
+                 LmRegistryControlBuffer  1
+                 LmRegistryControlColumn  1
+                 LmRegistryControlColumnSpellingFrame 1
+                 LmRegistryControlNodeLmxFrame 1
+                 LmRegistryControlRenameDescriptorFrame 1
+                 LmRegistryControlRenameStructureFrame 1
+                 LmRegistryControlError   1
+                 LmRegistryControlRename  1
+    end: `class.reference-base`
 end: L4
 
 import: "lm4/own_abi.lm4"
@@ -112,19 +126,19 @@ fn: lm_registry_control_text_equals (const: @(char data); size_t: text_length; c
     length: c.strlen(value)
 return: text_length = length && c.memcmp(data, value, length) = 0
 
-fn: lm_registry_control_text_equals_text (const: @(LmP0Text text); const: @: char value) int
+fn: lm_registry_control_text_equals_text (const: (LmP0Text: text); const: @: char value) int
     if: text = 0
         return: 0
 return: lm_registry_control_text_equals(text\data, text\length, value)
 
-sub: lm_registry_control_error_set (@: LmRegistryControlError error; const: @: char message)
+sub: lm_registry_control_error_set (LmRegistryControlError: error; const: @: char message)
     if: error = 0 || error\message != 0
         return
 
     error\message: message
 end: lm_registry_control_error_set
 
-fn: lm_registry_control_buffer_reserve (@: LmRegistryControlBuffer buffer; size_t: extra) int
+fn: lm_registry_control_buffer_reserve (LmRegistryControlBuffer: buffer; size_t: extra) int
     @: char new_data
     size_t: new_capacity
     size_t: required
@@ -157,7 +171,7 @@ fn: lm_registry_control_buffer_reserve (@: LmRegistryControlBuffer buffer; size_
     buffer\capacity: new_capacity
 return: 1
 
-sub: lm_registry_control_buffer_append (@: LmRegistryControlBuffer buffer; const: @(char data); size_t: length)
+sub: lm_registry_control_buffer_append (LmRegistryControlBuffer: buffer; const: @(char data); size_t: length)
     if: lm_registry_control_buffer_reserve(buffer, length) = 0
         return
 
@@ -167,21 +181,21 @@ sub: lm_registry_control_buffer_append (@: LmRegistryControlBuffer buffer; const
     buffer\data[buffer\length]: '\0'
 end: lm_registry_control_buffer_append
 
-sub: lm_registry_control_buffer_append_cstr (@: LmRegistryControlBuffer buffer; const: @: char text)
+sub: lm_registry_control_buffer_append_cstr (LmRegistryControlBuffer: buffer; const: @: char text)
     lm_registry_control_buffer_append(buffer, text, c.strlen(text))
 end: lm_registry_control_buffer_append_cstr
 
-sub: lm_registry_control_buffer_append_text (@: LmRegistryControlBuffer buffer; const: @(char data); size_t: length)
+sub: lm_registry_control_buffer_append_text (LmRegistryControlBuffer: buffer; const: @(char data); size_t: length)
     lm_registry_control_buffer_append(buffer, data, length)
 end: lm_registry_control_buffer_append_text
 
-sub: lm_registry_control_buffer_append_spaces (@: LmRegistryControlBuffer buffer; size_t: count)
+sub: lm_registry_control_buffer_append_spaces (LmRegistryControlBuffer: buffer; size_t: count)
     while: count != 0U
         lm_registry_control_buffer_append_cstr(buffer, " ")
         count: count - 1U
 end: lm_registry_control_buffer_append_spaces
 
-fn: lm_registry_control_buffer_take (@: LmRegistryControlBuffer buffer) @: char
+fn: lm_registry_control_buffer_take (LmRegistryControlBuffer: buffer) @: char
     @: char result
 
     if: buffer = 0 || buffer\failed != 0
@@ -196,7 +210,7 @@ fn: lm_registry_control_buffer_take (@: LmRegistryControlBuffer buffer) @: char
     buffer\capacity: 0U
 return: result
 
-sub: lm_registry_control_buffer_destroy (@: LmRegistryControlBuffer buffer)
+sub: lm_registry_control_buffer_destroy (LmRegistryControlBuffer: buffer)
     if: buffer != 0
         lm_own_delete(buffer\data, 0)
         buffer\data: 0
@@ -205,34 +219,34 @@ sub: lm_registry_control_buffer_destroy (@: LmRegistryControlBuffer buffer)
         buffer\failed: 0
 end: lm_registry_control_buffer_destroy
 
-fn: lm_registry_control_buffer_new () @: LmRegistryControlBuffer
-return: lm_own_new_zero(1U * c.sizeof(c.LmRegistryControlBuffer))
+fn: lm_registry_control_buffer_new () LmRegistryControlBuffer
+    return: lm_own_new_zero(1U * c.sizeof(c.LmRegistryControlBuffer))
 
-sub: lm_registry_control_buffer_delete (@: LmRegistryControlBuffer buffer)
+sub: lm_registry_control_buffer_delete (LmRegistryControlBuffer: buffer)
     if: buffer != 0
         lm_registry_control_buffer_destroy(buffer)
         lm_own_delete(buffer, 0)
 end: lm_registry_control_buffer_delete
 
-fn: lm_registry_control_error_new () @: LmRegistryControlError
-return: lm_own_new_zero(1U * c.sizeof(c.LmRegistryControlError))
+fn: lm_registry_control_error_new () LmRegistryControlError
+    return: lm_own_new_zero(1U * c.sizeof(c.LmRegistryControlError))
 
-sub: lm_registry_control_error_delete (@: LmRegistryControlError error)
+sub: lm_registry_control_error_delete (LmRegistryControlError: error)
     lm_own_delete(error, 0)
 end: lm_registry_control_error_delete
 
-fn: lm_registry_control_rename_new () @: LmRegistryControlRename
-return: lm_own_new_zero(1U * c.sizeof(c.LmRegistryControlRename))
+fn: lm_registry_control_rename_new () LmRegistryControlRename
+    return: lm_own_new_zero(1U * c.sizeof(c.LmRegistryControlRename))
 
-sub: lm_registry_control_rename_delete (@: LmRegistryControlRename rename)
+sub: lm_registry_control_rename_delete (LmRegistryControlRename: rename)
     lm_own_delete(rename, 0)
 end: lm_registry_control_rename_delete
 
-fn: lm_registry_control_node_ignored (const: @: LmP0Node node) int
+fn: lm_registry_control_node_ignored (const: (LmP0Node: node)) int
 return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
 
-fn: lm_registry_control_visible_field_count (const: @: LmP0Structure structure) size_t
-    const: @: LmP0Field field
+fn: lm_registry_control_visible_field_count (const: (LmP0Structure: structure)) size_t
+    const: LmP0Field: field
     size_t: count
 
     count: 0U
@@ -247,8 +261,8 @@ fn: lm_registry_control_visible_field_count (const: @: LmP0Structure structure) 
 
 return: count
 
-fn: lm_registry_control_nth_visible_field (const: @(LmP0Structure structure); size_t: index) const: @: LmP0Node
-    const: @: LmP0Field field
+fn: lm_registry_control_nth_visible_field (const: (LmP0Structure: structure); size_t: index) const: LmP0Node
+    const: LmP0Field: field
     size_t: current
 
     if: structure = 0
@@ -265,9 +279,9 @@ fn: lm_registry_control_nth_visible_field (const: @(LmP0Structure structure); si
 
 return: 0
 
-fn: lm_registry_control_find_child_frame (const: @(LmP0Frame frame); const: @: char head) const: @: LmP0Frame
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_registry_control_find_child_frame (const: (LmP0Frame: frame); const: @: char head) const: LmP0Frame
+    const: LmP0Field: field
+    const: LmP0Node: node
 
     if: frame = 0
         return: 0
@@ -281,15 +295,15 @@ fn: lm_registry_control_find_child_frame (const: @(LmP0Frame frame); const: @: c
 
 return: 0
 
-fn: lm_registry_control_single_body_node (const: @: LmP0Frame frame) const: @: LmP0Node
+fn: lm_registry_control_single_body_node (const: (LmP0Frame: frame)) const: LmP0Node
     if: frame = 0 || lm_registry_control_visible_field_count(frame\body) != 1U
         return: 0
 
 return: lm_registry_control_nth_visible_field(frame\body, 0U)
 
-fn: lm_registry_control_table_name_from_frame (const: @(LmP0Frame table_frame); const: @@(char out_name_data); @: size_t out_name_length; @: LmRegistryControlError error) int
-    const: @: LmP0Frame name_frame
-    const: @: LmP0Node name_node
+fn: lm_registry_control_table_name_from_frame (const: (LmP0Frame: table_frame); const: @@(char out_name_data); @: size_t out_name_length; LmRegistryControlError: error) int
+    const: LmP0Frame: name_frame
+    const: LmP0Node: name_node
 
     name_frame: lm_registry_control_find_child_frame(table_frame, "name")
     if: name_frame = 0
@@ -305,8 +319,8 @@ fn: lm_registry_control_table_name_from_frame (const: @(LmP0Frame table_frame); 
     out_name_length[0]: name_node\as\atom\length
 return: 1
 
-fn: lm_registry_control_column_spelling_frame_new (const: @(LmP0Field field)) @: LmRegistryControlColumnSpellingFrame
-    @: LmRegistryControlColumnSpellingFrame frame
+fn: lm_registry_control_column_spelling_frame_new (const: (LmP0Field: field)) LmRegistryControlColumnSpellingFrame
+    LmRegistryControlColumnSpellingFrame: frame
 
     frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlColumnSpellingFrame))
     if: frame = 0
@@ -315,10 +329,10 @@ fn: lm_registry_control_column_spelling_frame_new (const: @(LmP0Field field)) @:
     frame\first: 1
 return: frame
 
-fn: lm_registry_control_column_spelling_append_node (@: LmRegistryControlBuffer buffer; const: @: LmP0Node node) int
-    @: LmOwnPtrStack stack
-    @: LmRegistryControlColumnSpellingFrame frame
-    const: @: LmP0Node current
+fn: lm_registry_control_column_spelling_append_node (LmRegistryControlBuffer: buffer; const: (LmP0Node: node)) int
+    LmOwnPtrStack: stack
+    LmRegistryControlColumnSpellingFrame: frame
+    const: LmP0Node: current
     int: done
     int: status
 
@@ -393,8 +407,8 @@ fn: lm_registry_control_column_spelling_append_node (@: LmRegistryControlBuffer 
     lm_own_delete(stack, 0)
 return: status != 0 && buffer\failed = 0
 
-fn: lm_registry_control_column_spelling_alloc (const: @(LmP0Node node); @: LmRegistryControlError error) @: char
-    @: LmRegistryControlBuffer buffer
+fn: lm_registry_control_column_spelling_alloc (const: (LmP0Node: node); LmRegistryControlError: error) @: char
+    LmRegistryControlBuffer: buffer
     @: char result
 
     buffer: lm_registry_control_buffer_new()
@@ -412,7 +426,7 @@ fn: lm_registry_control_column_spelling_alloc (const: @(LmP0Node node); @: LmReg
         lm_registry_control_error_set(error, "out of memory while formatting column")
 return: result
 
-sub: lm_registry_control_columns_destroy (@@: LmRegistryControlColumn columns; size_t: count)
+sub: lm_registry_control_columns_destroy (@: LmRegistryControlColumn columns; size_t: count)
     size_t: index
 
     if: columns = 0
@@ -428,14 +442,14 @@ sub: lm_registry_control_columns_destroy (@@: LmRegistryControlColumn columns; s
 end: lm_registry_control_columns_destroy
 
 fn: lm_registry_control_columns_from_frame (
-    const: @(LmP0Frame table_frame)
-    @@@: LmRegistryControlColumn out_columns
+    const: LmP0Frame: table_frame
+    @@: LmRegistryControlColumn out_columns
     @: size_t out_count
-    @: LmRegistryControlError error
+    LmRegistryControlError: error
 ) int
-    const: @: LmP0Frame columns_frame
-    const: @: LmP0Node node
-    @@: LmRegistryControlColumn columns
+    const: LmP0Frame: columns_frame
+    const: LmP0Node: node
+    @: LmRegistryControlColumn columns
     size_t: count
     size_t: index
 
@@ -473,8 +487,8 @@ fn: lm_registry_control_columns_from_frame (
     columns: 0
 return: 1
 
-fn: lm_registry_control_rows_frame_from_table (const: @(LmP0Frame table_frame); @: LmRegistryControlError error) const: @: LmP0Frame
-    const: @: LmP0Frame rows_frame
+fn: lm_registry_control_rows_frame_from_table (const: (LmP0Frame: table_frame); LmRegistryControlError: error) const: LmP0Frame
+    const: LmP0Frame: rows_frame
 
     rows_frame: lm_registry_control_find_child_frame(table_frame, "rows")
     if: rows_frame = 0
@@ -483,8 +497,8 @@ fn: lm_registry_control_rows_frame_from_table (const: @(LmP0Frame table_frame); 
 
 return: rows_frame
 
-fn: lm_registry_control_node_lmx_frame_new (const: @(LmP0Field field); const: @(LmP0Trailer trailer); int: phase; int: first) @: LmRegistryControlNodeLmxFrame
-    @: LmRegistryControlNodeLmxFrame frame
+fn: lm_registry_control_node_lmx_frame_new (const: (LmP0Field: field); const: (LmP0Trailer: trailer); int: phase; int: first) LmRegistryControlNodeLmxFrame
+    LmRegistryControlNodeLmxFrame: frame
 
     frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlNodeLmxFrame))
     if: frame = 0
@@ -495,10 +509,10 @@ fn: lm_registry_control_node_lmx_frame_new (const: @(LmP0Field field); const: @(
     frame\first: first
 return: frame
 
-fn: lm_registry_control_node_lmx_append_inline (@: LmRegistryControlBuffer buffer; const: @: LmP0Node node) int
-    @: LmOwnPtrStack stack
-    @: LmRegistryControlNodeLmxFrame frame
-    const: @: LmP0Node current
+fn: lm_registry_control_node_lmx_append_inline (LmRegistryControlBuffer: buffer; const: (LmP0Node: node)) int
+    LmOwnPtrStack: stack
+    LmRegistryControlNodeLmxFrame: frame
+    const: LmP0Node: current
     int: done
     int: status
 
@@ -615,8 +629,8 @@ fn: lm_registry_control_node_lmx_append_inline (@: LmRegistryControlBuffer buffe
     lm_own_delete(stack, 0)
 return: status != 0 && buffer\failed = 0
 
-fn: lm_registry_control_node_lmx_alloc (const: @(LmP0Node node); @: LmRegistryControlError error) @: char
-    @: LmRegistryControlBuffer buffer
+fn: lm_registry_control_node_lmx_alloc (const: (LmP0Node: node); LmRegistryControlError: error) @: char
+    LmRegistryControlBuffer: buffer
     @: char result
 
     buffer: lm_registry_control_buffer_new()
@@ -634,8 +648,8 @@ fn: lm_registry_control_node_lmx_alloc (const: @(LmP0Node node); @: LmRegistryCo
         lm_registry_control_error_set(error, "out of memory while formatting P0 node")
 return: result
 
-fn: lm_registry_control_fn_descriptor_frame (const: @(LmP0Frame frame)) int
-    const: @: LmP0Node params_node
+fn: lm_registry_control_fn_descriptor_frame (const: (LmP0Frame: frame)) int
+    const: LmP0Node: params_node
     size_t: field_count
 
     if: frame = 0 || frame\trailer != 0
@@ -650,8 +664,8 @@ fn: lm_registry_control_fn_descriptor_frame (const: @(LmP0Frame frame)) int
     params_node: lm_registry_control_nth_visible_field(frame\body, 1U)
 return: params_node != 0 && params_node\kind = c.LM_P0_NODE_STRUCTURE
 
-fn: lm_registry_control_fn_params_append_lmx (@: LmRegistryControlBuffer buffer; const: @(LmP0Structure params)) int
-    const: @: LmP0Field field
+fn: lm_registry_control_fn_params_append_lmx (LmRegistryControlBuffer: buffer; const: (LmP0Structure: params)) int
+    const: LmP0Field: field
     size_t: param_count
 
     param_count: lm_registry_control_visible_field_count(params)
@@ -672,10 +686,10 @@ fn: lm_registry_control_fn_params_append_lmx (@: LmRegistryControlBuffer buffer;
     lm_registry_control_buffer_append_cstr(buffer, ")")
 return: buffer\failed = 0
 
-fn: lm_registry_control_fn_to_lmx_append (@: LmRegistryControlBuffer buffer; const: @(LmP0Frame fn_frame); @: LmRegistryControlError error) int
-    const: @: LmP0Node name_node
-    const: @: LmP0Node params_node
-    const: @: LmP0Node node
+fn: lm_registry_control_fn_to_lmx_append (LmRegistryControlBuffer: buffer; const: (LmP0Frame: fn_frame); LmRegistryControlError: error) int
+    const: LmP0Node: name_node
+    const: LmP0Node: params_node
+    const: LmP0Node: node
     size_t: field_count
     size_t: index
 
@@ -712,8 +726,8 @@ fn: lm_registry_control_fn_to_lmx_append (@: LmRegistryControlBuffer buffer; con
 
 return: buffer\failed = 0
 
-fn: lm_registry_control_fn_to_lmx_alloc (const: @(LmP0Frame fn_frame); @: LmRegistryControlError error) @: char
-    @: LmRegistryControlBuffer buffer
+fn: lm_registry_control_fn_to_lmx_alloc (const: (LmP0Frame: fn_frame); LmRegistryControlError: error) @: char
+    LmRegistryControlBuffer: buffer
     @: char result
 
     buffer: lm_registry_control_buffer_new()
@@ -731,13 +745,13 @@ fn: lm_registry_control_fn_to_lmx_alloc (const: @(LmP0Frame fn_frame); @: LmRegi
 return: result
 
 fn: lm_registry_control_measure_rows (
-    const: @: LmP0Frame rows_frame
-    @@: LmRegistryControlColumn columns
+    const: LmP0Frame: rows_frame
+    @: LmRegistryControlColumn columns
     size_t: column_count
     @: size_t out_row_count
-    @: LmRegistryControlError error
+    LmRegistryControlError: error
 ) int
-    const: @: LmP0Node node
+    const: LmP0Node: node
     @: char spelling
     size_t: cell_count
     size_t: index
@@ -773,7 +787,7 @@ fn: lm_registry_control_measure_rows (
     out_row_count[0]: cell_count / column_count
 return: 1
 
-fn: lm_registry_control_emit_columns (@: LmRegistryControlBuffer buffer; @@: LmRegistryControlColumn columns; size_t: column_count) int
+fn: lm_registry_control_emit_columns (LmRegistryControlBuffer: buffer; @: LmRegistryControlColumn columns; size_t: column_count) int
     size_t: index
     size_t: length
 
@@ -790,14 +804,14 @@ fn: lm_registry_control_emit_columns (@: LmRegistryControlBuffer buffer; @@: LmR
 return: buffer\failed = 0
 
 fn: lm_registry_control_emit_rows (
-    @: LmRegistryControlBuffer buffer
-    const: @: LmP0Frame rows_frame
-    @@: LmRegistryControlColumn columns
+    LmRegistryControlBuffer: buffer
+    const: LmP0Frame: rows_frame
+    @: LmRegistryControlColumn columns
     size_t: column_count
     size_t: row_count
-    @: LmRegistryControlError error
+    LmRegistryControlError: error
 ) int
-    const: @: LmP0Node node
+    const: LmP0Node: node
     @: char spelling
     size_t: row_index
     size_t: column_index
@@ -827,13 +841,13 @@ fn: lm_registry_control_emit_rows (
 return: buffer\failed = 0
 
 sub: lm_registry_control_table_end_name (
-    const: @: LmP0Frame table_frame
+    const: LmP0Frame: table_frame
     const: @: char table_name_data
     size_t: table_name_length
     const: @@: char out_name_data
     @: size_t out_name_length
 )
-    const: @: LmP0Node node
+    const: LmP0Node: node
 
     if: table_frame != 0 && table_frame\trailer != 0 && lm_registry_control_text_equals(table_frame\trailer\spelling\data, table_frame\trailer\spelling\length, "end") && lm_registry_control_visible_field_count(table_frame\trailer\body) = 1U
         node: lm_registry_control_nth_visible_field(table_frame\trailer\body, 0U)
@@ -847,14 +861,14 @@ sub: lm_registry_control_table_end_name (
     out_name_length[0]: table_name_length
 end: lm_registry_control_table_end_name
 
-fn: lm_registry_control_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: LmRegistryControlError error) @: char
-    const: @: LmP0Frame rows_frame
+fn: lm_registry_control_table_to_lmx_alloc (const: (LmP0Frame: table_frame); LmRegistryControlError: error) @: char
+    const: LmP0Frame: rows_frame
     const: @: char table_name_data
     size_t: table_name_length
     const: @: char end_name_data
     size_t: end_name_length
-    @@: LmRegistryControlColumn columns
-    @: LmRegistryControlBuffer buffer
+    @: LmRegistryControlColumn columns
+    LmRegistryControlBuffer: buffer
     size_t: column_count
     size_t: row_count
     @: char result
@@ -899,10 +913,10 @@ fn: lm_registry_control_table_to_lmx_alloc (const: @(LmP0Frame table_frame); @: 
 return: result
 
 fn: lm_registry_control_emit_frame_from_node (
-    @: LmRegistryControlBuffer output
-    const: @: LmP0Node node
+    LmRegistryControlBuffer: output
+    const: LmP0Node: node
     @: int emitted
-    @: LmRegistryControlError error
+    LmRegistryControlError: error
 ) int
     @: char text
     int: is_table
@@ -938,10 +952,10 @@ fn: lm_registry_control_emit_frame_from_node (
     emitted[0]: 1
 return: output\failed = 0
 
-fn: lm_registry_control_document_to_lmx_alloc (const: @(LmP0Document document); @: LmRegistryControlError error) @: char
-    const: @: LmP0Node root
-    const: @: LmP0Field field
-    @: LmRegistryControlBuffer output
+fn: lm_registry_control_document_to_lmx_alloc (const: (LmP0Document: document); LmRegistryControlError: error) @: char
+    const: LmP0Node: root
+    const: LmP0Field: field
+    LmRegistryControlBuffer: output
     int: emitted
     @: char result
 
@@ -967,7 +981,7 @@ fn: lm_registry_control_document_to_lmx_alloc (const: @(LmP0Document document); 
         lm_registry_control_error_set(error, "out of memory while formatting registry document")
 return: result
 
-fn: lm_registry_control_rename_atom_if_match (@: LmP0Node node; @: LmRegistryControlRename rename) int
+fn: lm_registry_control_rename_atom_if_match (LmP0Node: node; LmRegistryControlRename: rename) int
     if: node = 0 || rename = 0 || node\kind != c.LM_P0_NODE_ATOM
         return: 0
 
@@ -980,8 +994,8 @@ fn: lm_registry_control_rename_atom_if_match (@: LmP0Node node; @: LmRegistryCon
     rename\changed_count: rename\changed_count + 1U
 return: 1
 
-fn: lm_registry_control_rename_descriptor_frame_new (const: @(LmP0Field field)) @: LmRegistryControlRenameDescriptorFrame
-    @: LmRegistryControlRenameDescriptorFrame frame
+fn: lm_registry_control_rename_descriptor_frame_new (const: (LmP0Field: field)) LmRegistryControlRenameDescriptorFrame
+    LmRegistryControlRenameDescriptorFrame: frame
 
     frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlRenameDescriptorFrame))
     if: frame = 0
@@ -989,10 +1003,10 @@ fn: lm_registry_control_rename_descriptor_frame_new (const: @(LmP0Field field)) 
     frame\field: field
 return: frame
 
-fn: lm_registry_control_rename_descriptor_node (@: LmP0Node node; @: LmRegistryControlRename rename) int
-    @: LmOwnPtrStack stack
-    @: LmRegistryControlRenameDescriptorFrame frame
-    @: LmP0Node current
+fn: lm_registry_control_rename_descriptor_node (LmP0Node: node; LmRegistryControlRename: rename) int
+    LmOwnPtrStack: stack
+    LmRegistryControlRenameDescriptorFrame: frame
+    LmP0Node: current
     int: done
     int: status
 
@@ -1062,9 +1076,9 @@ fn: lm_registry_control_rename_descriptor_node (@: LmP0Node node; @: LmRegistryC
     lm_own_delete(stack, 0)
 return: 0
 
-fn: lm_registry_control_rename_table_column_descriptors (@: LmP0Frame table_frame; @: LmRegistryControlRename rename) int
-    const: @: LmP0Frame columns_frame
-    @: LmP0Field field
+fn: lm_registry_control_rename_table_column_descriptors (LmP0Frame: table_frame; LmRegistryControlRename: rename) int
+    const: LmP0Frame: columns_frame
+    LmP0Field: field
 
     if: table_frame = 0 || rename = 0
         return: 0
@@ -1081,8 +1095,8 @@ fn: lm_registry_control_rename_table_column_descriptors (@: LmP0Frame table_fram
 
 return: 0
 
-fn: lm_registry_control_rename_structure_frame_new (const: @(LmP0Field field)) @: LmRegistryControlRenameStructureFrame
-    @: LmRegistryControlRenameStructureFrame frame
+fn: lm_registry_control_rename_structure_frame_new (const: (LmP0Field: field)) LmRegistryControlRenameStructureFrame
+    LmRegistryControlRenameStructureFrame: frame
 
     frame: lm_own_new_zero(c.sizeof(c.LmRegistryControlRenameStructureFrame))
     if: frame = 0
@@ -1090,10 +1104,10 @@ fn: lm_registry_control_rename_structure_frame_new (const: @(LmP0Field field)) @
     frame\field: field
 return: frame
 
-fn: lm_registry_control_rename_structure_tables (@: LmP0Structure structure; @: LmRegistryControlRename rename) int
-    @: LmOwnPtrStack stack
-    @: LmRegistryControlRenameStructureFrame frame
-    @: LmP0Node node
+fn: lm_registry_control_rename_structure_tables (LmP0Structure: structure; LmRegistryControlRename: rename) int
+    LmOwnPtrStack: stack
+    LmRegistryControlRenameStructureFrame: frame
+    LmP0Node: node
     int: done
     int: is_table
     int: status
@@ -1155,9 +1169,9 @@ fn: lm_registry_control_rename_structure_tables (@: LmP0Structure structure; @: 
     lm_own_delete(stack, 0)
 return: 0
 
-fn: lm_registry_control_rename_document_column_descriptor (@: LmP0Document document; const: @(char old_name); const: @(char new_name); @: size_t out_changed) int
-    @: LmP0Node root
-    @: LmRegistryControlRename rename
+fn: lm_registry_control_rename_document_column_descriptor (LmP0Document: document; const: @(char old_name); const: @(char new_name); @: size_t out_changed) int
+    LmP0Node: root
+    LmRegistryControlRename: rename
 
     if: out_changed != 0
         out_changed[0]: 0U
@@ -1182,9 +1196,9 @@ fn: lm_registry_control_rename_document_column_descriptor (@: LmP0Document docum
     lm_registry_control_rename_delete(rename)
 return: 0
 
-fn: lm_registry_control_parse_file (const: @(char path); @@: LmP0Document out_document; @: LmRegistryControlError error) int
-    @: LmP0Document document
-    const: @: LmP0Diagnostic diagnostic
+fn: lm_registry_control_parse_file (const: @(char path); @: LmP0Document out_document; LmRegistryControlError: error) int
+    LmP0Document: document
+    const: LmP0Diagnostic: diagnostic
     int: status
 
     if: out_document = 0
@@ -1212,7 +1226,7 @@ fn: lm_registry_control_parse_file (const: @(char path); @@: LmP0Document out_do
     out_document[0]: document
 return: 0
 
-fn: lm_registry_control_write_text_file (const: @(char path); const: @(char text); @: LmRegistryControlError error) int
+fn: lm_registry_control_write_text_file (const: @(char path); const: @(char text); LmRegistryControlError: error) int
     FILE: file
     size_t: length
 
@@ -1233,14 +1247,14 @@ fn: lm_registry_control_write_text_file (const: @(char path); const: @(char text
 
 return: 0
 
-fn: lm_registry_control_mutable_document_load_file (const: @(char path); @@: LmP0Document out_document; @: LmRegistryControlError error) int
+fn: lm_registry_control_mutable_document_load_file (const: @(char path); @: LmP0Document out_document; LmRegistryControlError: error) int
 return: lm_registry_control_parse_file(path, out_document, error)
 
-sub: lm_registry_control_mutable_document_destroy (@: LmP0Document document)
+sub: lm_registry_control_mutable_document_destroy (LmP0Document: document)
     c.lm_p0_document_destroy(document)
 end: lm_registry_control_mutable_document_destroy
 
-fn: lm_registry_control_mutable_document_save_file (const: @(char path); @: LmP0Document document; @: LmRegistryControlError error) int
+fn: lm_registry_control_mutable_document_save_file (const: @(char path); LmP0Document: document; LmRegistryControlError: error) int
     @: char text
     int: status
 
@@ -1252,8 +1266,8 @@ fn: lm_registry_control_mutable_document_save_file (const: @(char path); @: LmP0
     lm_own_delete(text, 0)
 return: status
 
-fn: lm_registry_control_rename_file_column_descriptor (const: @(char path); const: @(char old_name); const: @(char new_name); @: size_t out_changed; @: LmRegistryControlError error) int
-    @: LmP0Document document
+fn: lm_registry_control_rename_file_column_descriptor (const: @(char path); const: @(char old_name); const: @(char new_name); @: size_t out_changed; LmRegistryControlError: error) int
+    LmP0Document: document
     int: status
 
     if: out_changed != 0
@@ -1269,7 +1283,7 @@ fn: lm_registry_control_rename_file_column_descriptor (const: @(char path); cons
     lm_registry_control_mutable_document_destroy(document)
 return: status
 
-fn: lm_registry_control_rename_files_column_descriptor (int: argc; @@: char argv; const: @(char old_name); const: @(char new_name); @: size_t out_changed; @: LmRegistryControlError error) int
+fn: lm_registry_control_rename_files_column_descriptor (int: argc; @@: char argv; const: @(char old_name); const: @(char new_name); @: size_t out_changed; LmRegistryControlError: error) int
     int: index
     size_t: changed
     size_t: total_changed

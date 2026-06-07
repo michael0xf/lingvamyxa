@@ -8,7 +8,7 @@ fn
 layout
 prototype
 
-fn: doubleSemicolon (const: @: LmP0Text text;; const: @: char value) int
+fn: doubleSemicolon (const: (LmP0Text: text);; const: @: char value) int
     return: text != 0 && value != 0
 end: doubleSemicolon
 

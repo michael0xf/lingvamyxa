@@ -1,17 +1,17 @@
 fn: lm_trans_layout_backend_is_supported (const: @(char backend)) int
 return: backend != 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.named-struct") = 0 || c.strcmp(backend, "c.union") = 0 || c.strcmp(backend, "c.named-union") = 0)
 
-fn: lm_trans_l4_text_view_new (const: @(char text)) @: LmP0Text
+fn: lm_trans_l4_text_view_new (const: @(char text)) LmP0Text
     if: text != 0
         return: lm_trans_text_from_cstr(text)
 return: lm_trans_text_from_cstr("")
 
-sub: lm_trans_l4_text_view_delete (@@: LmP0Text view)
+sub: lm_trans_l4_text_view_delete (@: LmP0Text view)
     lm_trans_text_ref_destroy(view)
 end: lm_trans_l4_text_view_delete
 
-fn: lm_trans_layout_class_requires_pointer_field (const: @(LmTransNamespace namespace_); const: @(char class_name)) int
-    @: LmP0Text class_text
+fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: namespace_); const: @(char class_name)) int
+    LmP0Text: class_text
     const: @: char backend
     int: result
 
@@ -26,7 +26,7 @@ fn: lm_trans_layout_class_requires_pointer_field (const: @(LmTransNamespace name
     lm_trans_l4_text_view_delete(@ class_text)
 return: result
 
-fn: lm_trans_layout_field_effective_address_depth (const: @(LmTransLayoutField field); const: @(LmTransNamespace namespace_)) size_t
+fn: lm_trans_layout_field_effective_address_depth (const: (LmTransLayoutField: field); const: (LmTransNamespace: namespace_)) size_t
     if: field = 0
         return: 0U
     if: field\is_union || field\address_depth != 0U
@@ -35,8 +35,8 @@ fn: lm_trans_layout_field_effective_address_depth (const: @(LmTransLayoutField f
         return: 1U
 return: 0U
 
-fn: lm_trans_l4_abi_params_new (size_t: capacity) @@: LmTransAbiParam
-    @@: LmTransAbiParam params
+fn: lm_trans_l4_abi_params_new (size_t: capacity) @: LmTransAbiParam
+    @: LmTransAbiParam params
     size_t: i
 
     if: capacity = 0U
@@ -57,7 +57,7 @@ fn: lm_trans_l4_abi_params_new (size_t: capacity) @@: LmTransAbiParam
         i: i + 1U
 return: params
 
-sub: lm_trans_l4_abi_params_delete (@@: LmTransAbiParam params; size_t: capacity)
+sub: lm_trans_l4_abi_params_delete (@: LmTransAbiParam params; size_t: capacity)
     size_t: i
 
     if: params = 0
@@ -69,8 +69,8 @@ sub: lm_trans_l4_abi_params_delete (@@: LmTransAbiParam params; size_t: capacity
     lm_own_delete(params, 0)
 end: lm_trans_l4_abi_params_delete
 
-fn: lm_trans_layout_fields_new (size_t: capacity) @@: LmTransLayoutField
-    @@: LmTransLayoutField fields
+fn: lm_trans_layout_fields_new (size_t: capacity) @: LmTransLayoutField
+    @: LmTransLayoutField fields
     size_t: i
 
     if: capacity = 0U
@@ -91,7 +91,7 @@ fn: lm_trans_layout_fields_new (size_t: capacity) @@: LmTransLayoutField
         i: i + 1U
 return: fields
 
-sub: lm_trans_layout_fields_delete (@@: LmTransLayoutField fields; size_t: capacity)
+sub: lm_trans_layout_fields_delete (@: LmTransLayoutField fields; size_t: capacity)
     size_t: i
 
     if: fields = 0
@@ -103,12 +103,12 @@ sub: lm_trans_layout_fields_delete (@@: LmTransLayoutField fields; size_t: capac
     lm_own_delete(fields, 0)
 end: lm_trans_layout_fields_delete
 
-fn: lm_trans_registry_collect_layout_names (@: LmOwnPtrStack names; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_registry_collect_layout_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_)) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
     @: char name
-    @: LmP0Text key_text
+    LmP0Text: key_text
 
     if: names = 0
         return: 1
@@ -145,13 +145,13 @@ fn: lm_trans_registry_collect_layout_names (@: LmOwnPtrStack names; const: @(LmT
     lm_trans_l4_text_view_delete(@ key_text)
 return: 0
 
-fn: lm_trans_collect_layout_field_common (const: @(char layout_name); const: @(char field_name); const: @(LmOwnPtrStack index_rows); const: @(LmOwnPtrStack address_depth_rows); const: @(LmOwnPtrStack const_rows); const: @(LmOwnPtrStack array_count_rows); @: LmTransLayoutField field) int
+fn: lm_trans_collect_layout_field_common (const: @(char layout_name); const: @(char field_name); const: (LmOwnPtrStack: index_rows); const: (LmOwnPtrStack: address_depth_rows); const: (LmOwnPtrStack: const_rows); const: (LmOwnPtrStack: array_count_rows); LmTransLayoutField: field) int
     size_t: index
-    @: LmTransRegistryFact index_row
-    @: LmTransRegistryFact address_depth_row
-    @: LmTransRegistryFact const_row
-    @: LmTransRegistryFact array_count_row
-    @: LmP0Text field_text
+    LmTransRegistryFact: index_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: const_row
+    LmTransRegistryFact: array_count_row
+    LmP0Text: field_text
 
     if: layout_name = 0 || field_name = 0 || field = 0
         return: 1
@@ -192,18 +192,18 @@ fn: lm_trans_collect_layout_field_common (const: @(char layout_name); const: @(c
     lm_trans_l4_text_view_delete(@ field_text)
 return: 0
 
-fn: lm_trans_collect_layout_fields (const: @(char layout_name); const: @(LmTransNamespace namespace_); @@: LmTransLayoutField fields; size_t: capacity; @: size_t out_count) int
+fn: lm_trans_collect_layout_fields (const: @(char layout_name); const: (LmTransNamespace: namespace_); @: LmTransLayoutField fields; size_t: capacity; @: size_t out_count) int
     size_t: i
     size_t: field_count
-    @: LmTransRegistryFact row
-    @: LmTransLayoutField field
-    const: @: LmOwnPtrStack class_rows
-    const: @: LmOwnPtrStack union_rows
-    const: @: LmOwnPtrStack index_rows
-    const: @: LmOwnPtrStack address_depth_rows
-    const: @: LmOwnPtrStack const_rows
-    const: @: LmOwnPtrStack array_count_rows
-    @: LmP0Text layout_text
+    LmTransRegistryFact: row
+    LmTransLayoutField: field
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: union_rows
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    const: LmOwnPtrStack: array_count_rows
+    LmP0Text: layout_text
 
     if: layout_name = 0 || fields = 0 || out_count = 0
         return: 1
@@ -271,10 +271,10 @@ fn: lm_trans_collect_layout_fields (const: @(char layout_name); const: @(LmTrans
     lm_trans_l4_text_view_delete(@ layout_text)
 return: 0
 
-fn: lm_trans_sort_layout_fields (@@: LmTransLayoutField fields; size_t: field_count) int
+fn: lm_trans_sort_layout_fields (@: LmTransLayoutField fields; size_t: field_count) int
     size_t: i
     size_t: j
-    @: LmTransLayoutField swap
+    LmTransLayoutField: swap
 
     if: fields = 0
         return: 1
@@ -291,8 +291,8 @@ fn: lm_trans_sort_layout_fields (@@: LmTransLayoutField fields; size_t: field_co
         i: i + 1U
 return: 0
 
-fn: lm_trans_emit_layout_field (FILE: file; const: @(LmTransLayoutField field); const: @(LmTransNamespace namespace_); unsigned: indent) int
-    @: LmTransCDeclarator declarator
+fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); const: (LmTransNamespace: namespace_); unsigned: indent) int
+    LmTransCDeclarator: declarator
     size_t: effective_address_depth
 
     if: file = 0 || field = 0
@@ -337,8 +337,8 @@ fn: lm_trans_emit_layout_field (FILE: file; const: @(LmTransLayoutField field); 
 
 return: lm_trans_put(file, ";\n")
 
-fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: @(LmTransNamespace namespace_); unsigned: indent) int
-    @@: LmTransLayoutField fields
+fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: (LmTransNamespace: namespace_); unsigned: indent) int
+    @: LmTransLayoutField fields
     size_t: field_capacity
     size_t: field_count
     size_t: i
@@ -365,8 +365,8 @@ fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: 
 return: 0
 
 fn: lm_trans_l4_mark_typedef_emitted_cstr (const: @(char name)) int
-    @: LmP0Text table
-    @: LmP0Text key
+    LmP0Text: table
+    LmP0Text: key
     int: status
 
     if: name = 0
@@ -384,15 +384,15 @@ fn: lm_trans_l4_mark_typedef_emitted_cstr (const: @(char name)) int
     lm_trans_l4_text_view_delete(@ key)
 return: status
 
-fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); const: @(LmTransNamespace namespace_)) int
-    @: LmTransRegistryFact backend_row
-    @: LmTransRegistryFact forward_row
-    const: @: LmOwnPtrStack backend_rows
-    const: @: LmOwnPtrStack forward_rows
+fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); const: (LmTransNamespace: namespace_)) int
+    LmTransRegistryFact: backend_row
+    LmTransRegistryFact: forward_row
+    const: LmOwnPtrStack: backend_rows
+    const: LmOwnPtrStack: forward_rows
     const: @: char backend
     const: @: char prefix
     int: has_forward
-    @: LmP0Text layout_text
+    LmP0Text: layout_text
     int: status
 
     if: file = 0 || layout_name = 0
@@ -462,8 +462,8 @@ fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); con
     lm_trans_l4_text_view_delete(@ layout_text)
 return: status
 
-fn: lm_trans_emit_l4_layout_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
+fn: lm_trans_emit_l4_layout_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
     size_t: i
     const: @: char name
 
@@ -492,12 +492,12 @@ fn: lm_trans_emit_l4_layout_typedefs (FILE: file; const: @(LmTransNamespace name
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_registry_collect_constant_define_names (@: LmOwnPtrStack names; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_registry_collect_constant_define_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_)) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
     @: char name
-    @: LmP0Text key_text
+    LmP0Text: key_text
 
     if: names = 0
         return: 1
@@ -534,12 +534,12 @@ fn: lm_trans_registry_collect_constant_define_names (@: LmOwnPtrStack names; con
     lm_trans_l4_text_view_delete(@ key_text)
 return: 0
 
-fn: lm_trans_emit_l4_constant_defines (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
+fn: lm_trans_emit_l4_constant_defines (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
     size_t: i
     const: @: char name
-    @: LmTransRegistryFact value_row
-    const: @: LmOwnPtrStack value_rows
+    LmTransRegistryFact: value_row
+    const: LmOwnPtrStack: value_rows
 
     names: lm_trans_ptr_stack_new(lm_trans_free_any)
     if: names = 0
@@ -570,9 +570,9 @@ fn: lm_trans_emit_l4_constant_defines (FILE: file; const: @(LmTransNamespace nam
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_define_table (FILE: file; const: @(LmTransNamespace namespace_)) int
-    const: @: LmOwnPtrStack rows
-    @: LmTransRegistryFact row
+fn: lm_trans_emit_l4_define_table (FILE: file; const: (LmTransNamespace: namespace_)) int
+    const: LmOwnPtrStack: rows
+    LmTransRegistryFact: row
     size_t: i
     int: emitted
 
@@ -599,12 +599,12 @@ fn: lm_trans_emit_l4_define_table (FILE: file; const: @(LmTransNamespace namespa
         return: 1
 return: 0
 
-fn: lm_trans_registry_collect_backend_names (@: LmOwnPtrStack names; const: @(LmTransNamespace namespace_); const: @(char receiver_name); const: @(char backend_payload); const: @(char error_name); int: require_class) int
+fn: lm_trans_registry_collect_backend_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_); const: @(char receiver_name); const: @(char backend_payload); const: @(char error_name); int: require_class) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
     @: char name
-    @: LmP0Text key_text
+    LmP0Text: key_text
 
     if: names = 0 || receiver_name = 0 || backend_payload = 0 || error_name = 0
         return: 1
@@ -642,12 +642,12 @@ fn: lm_trans_registry_collect_backend_names (@: LmOwnPtrStack names; const: @(Lm
     lm_trans_l4_text_view_delete(@ key_text)
 return: 0
 
-fn: lm_trans_registry_collect_relation_names (@: LmOwnPtrStack names; const: @(LmTransNamespace namespace_); const: @(char owner_name); const: @(char relation_name); const: @(char error_name); int: require_class) int
+fn: lm_trans_registry_collect_relation_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char relation_name); const: @(char error_name); int: require_class) int
     size_t: i
-    @: LmTransRegistryFact row
-    const: @: LmOwnPtrStack rows
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
     @: char name
-    @: LmP0Text key_text
+    LmP0Text: key_text
 
     if: names = 0 || owner_name = 0 || relation_name = 0 || error_name = 0
         return: 1
@@ -685,9 +685,9 @@ fn: lm_trans_registry_collect_relation_names (@: LmOwnPtrStack names; const: @(L
     lm_trans_l4_text_view_delete(@ key_text)
 return: 0
 
-fn: lm_trans_l4_is_function_pointer_type (const: @(LmTransNamespace namespace_); const: @(char name)) int
-    @: LmP0Text name_text
-    const: @: LmOwnPtrStack rows
+fn: lm_trans_l4_is_function_pointer_type (const: (LmTransNamespace: namespace_); const: @(char name)) int
+    LmP0Text: name_text
+    const: LmOwnPtrStack: rows
     int: found
 
     if: name = 0
@@ -709,7 +709,7 @@ return: found
 fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) int
     size_t: i
     size_t: effective_address_depth
-    @: LmP0Text class_text
+    LmP0Text: class_text
 
     if: file = 0 || class_name = 0
         return: 1
@@ -740,8 +740,8 @@ fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t:
     lm_trans_l4_text_view_delete(@ class_text)
 return: 0
 
-fn: lm_trans_registry_latest_size_payload (const: @(LmOwnPtrStack rows); const: @(LmP0Text key); size_t: default_value; @: size_t out_value) int
-    @: LmTransRegistryFact row
+fn: lm_trans_registry_latest_size_payload (const: (LmOwnPtrStack: rows); const: (LmP0Text: key); size_t: default_value; @: size_t out_value) int
+    LmTransRegistryFact: row
 
     if: out_value = 0
         return: 0
@@ -752,33 +752,33 @@ fn: lm_trans_registry_latest_size_payload (const: @(LmOwnPtrStack rows); const: 
         return: 1
 return: lm_trans_parse_size_payload(row\payload, out_value)
 
-fn: lm_trans_registry_relation_stack_latest_any (const: @(LmOwnPtrStack stack)) @: LmTransRegistryFact
+fn: lm_trans_registry_relation_stack_latest_any (const: (LmOwnPtrStack: stack)) LmTransRegistryFact
     if: stack = 0 || stack\count = 0U
         return: 0
 return: lm_own_ptr_stack_at(stack, stack\count - 1U)
 
-fn: lm_trans_registry_relation_stack_latest_return_row (const: @(LmOwnPtrStack stack)) @: LmTransRegistryFact
-    @: LmTransRegistryFact row
+fn: lm_trans_registry_relation_stack_latest_return_row (const: (LmOwnPtrStack: stack)) LmTransRegistryFact
+    LmTransRegistryFact: row
 
     row: lm_trans_registry_relation_stack_latest_row(stack, lm_trans_text_from_cstr("return"))
     if: row != 0
         return: row
 return: lm_trans_registry_relation_stack_latest_any(stack)
 
-fn: lm_trans_collect_abi_params (@@: LmTransAbiParam params; size_t: capacity; @: size_t out_count; const: @(LmTransNamespace namespace_); const: @(char owner_name); const: @(char error_name)) int
-    const: @: LmOwnPtrStack class_rows
-    const: @: LmOwnPtrStack index_rows
-    const: @: LmOwnPtrStack address_depth_rows
-    const: @: LmOwnPtrStack const_rows
-    @: LmP0Text owner_text
-    @: LmP0Text param_text
-    @: LmTransRegistryFact row
-    @: LmTransRegistryFact index_row
+fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @: size_t out_count; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char error_name)) int
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    LmP0Text: owner_text
+    LmP0Text: param_text
+    LmTransRegistryFact: row
+    LmTransRegistryFact: index_row
     size_t: i
     size_t: j
     size_t: index
     size_t: const_flag
-    @: LmTransAbiParam swap
+    LmTransAbiParam: swap
     int: status
 
     if: params = 0 || out_count = 0 || owner_name = 0 || error_name = 0
@@ -847,7 +847,7 @@ fn: lm_trans_collect_abi_params (@@: LmTransAbiParam params; size_t: capacity; @
     lm_trans_l4_text_view_delete(@ param_text)
 return: status
 
-fn: lm_trans_emit_abi_params (FILE: file; @@: LmTransAbiParam params; size_t: count) int
+fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: count) int
     size_t: i
 
     if: file = 0 || (params = 0 && count != 0U)
@@ -865,14 +865,14 @@ fn: lm_trans_emit_abi_params (FILE: file; @@: LmTransAbiParam params; size_t: co
         i: i + 1U
 return: 0
 
-fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
-    const: @: LmOwnPtrStack target_rows
-    const: @: LmOwnPtrStack address_depth_rows
-    const: @: LmOwnPtrStack const_rows
-    @: LmTransRegistryFact target_row
+fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: LmOwnPtrStack: target_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    LmTransRegistryFact: target_row
     const: @: char name
-    @: LmP0Text name_text
+    LmP0Text: name_text
     size_t: i
     size_t: address_depth
     size_t: const_flag
@@ -922,10 +922,10 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: @(LmTransNamespace names
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
-    const: @: LmOwnPtrStack backend_rows
-    @: LmTransRegistryFact backend_row
+fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: LmOwnPtrStack: backend_rows
+    LmTransRegistryFact: backend_row
     const: @: char name
     const: @: char tag
     size_t: i
@@ -970,13 +970,13 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: @(LmTransNamespace nam
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_abi_return_type (FILE: file; const: @(LmTransNamespace namespace_); const: @(char owner_name); const: @(char error_name)) int
-    @: LmP0Text owner_text
-    const: @: LmOwnPtrStack class_rows
-    const: @: LmOwnPtrStack address_depth_rows
-    const: @: LmOwnPtrStack const_rows
-    @: LmTransRegistryFact class_row
-    @: LmP0Text return_key
+fn: lm_trans_emit_abi_return_type (FILE: file; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char error_name)) int
+    LmP0Text: owner_text
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    LmTransRegistryFact: class_row
+    LmP0Text: return_key
     size_t: address_depth
     size_t: const_flag
     int: status
@@ -1013,8 +1013,8 @@ fn: lm_trans_emit_abi_return_type (FILE: file; const: @(LmTransNamespace namespa
     lm_trans_l4_text_view_delete(@ return_key)
 return: status
 
-fn: lm_trans_emit_l4_prototype_name (FILE: file; const: @(LmTransNamespace namespace_); const: @(char name); const: @(char error_name)) int
-    @@: LmTransAbiParam params
+fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
+    @: LmTransAbiParam params
     size_t: param_capacity
     size_t: param_count
     const: @: char class_kind
@@ -1047,8 +1047,8 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: @(LmTransNamespace names
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: status
 
-fn: lm_trans_emit_l4_prototypes (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
+fn: lm_trans_emit_l4_prototypes (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
     const: @: char name
     size_t: i
 
@@ -1075,8 +1075,8 @@ fn: lm_trans_emit_l4_prototypes (FILE: file; const: @(LmTransNamespace namespace
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_registry_synthetic_node (LmP0NodeKind: kind) @: LmP0Node
-    @: LmP0Node node
+fn: lm_trans_registry_synthetic_node (LmP0NodeKind: kind) LmP0Node
+    LmP0Node: node
 
     node: lm_own_arena_new_zero(lm_trans_registry\value_arena, c.sizeof(node[0]))
     if: node = 0
@@ -1101,8 +1101,8 @@ fn: lm_trans_registry_synthetic_node (LmP0NodeKind: kind) @: LmP0Node
             return: 0
 return: node
 
-fn: lm_trans_registry_synthetic_atom_node (const: @(LmP0Text text)) @: LmP0Node
-    @: LmP0Node node
+fn: lm_trans_registry_synthetic_atom_node (const: (LmP0Text: text)) LmP0Node
+    LmP0Node: node
 
     node: lm_trans_registry_synthetic_node(c.LM_P0_NODE_ATOM)
     if: node = 0
@@ -1111,11 +1111,11 @@ fn: lm_trans_registry_synthetic_atom_node (const: @(LmP0Text text)) @: LmP0Node
         return: 0
 return: node
 
-fn: lm_trans_registry_synthetic_atom_node_cstr (const: @(char text)) @: LmP0Node
-return: lm_trans_registry_synthetic_atom_node(lm_trans_text_from_cstr(text))
+fn: lm_trans_registry_synthetic_atom_node_cstr (const: @(char text)) LmP0Node
+    return: lm_trans_registry_synthetic_atom_node(lm_trans_text_from_cstr(text))
 
-fn: lm_trans_registry_synthetic_append_node (@: LmP0Structure structure; @: LmP0Node value) @: LmP0Field
-    @: LmP0Field field
+fn: lm_trans_registry_synthetic_append_node (LmP0Structure: structure; LmP0Node: value) LmP0Field
+    LmP0Field: field
 
     if: structure = 0 || value = 0
         return: 0
@@ -1134,8 +1134,8 @@ fn: lm_trans_registry_synthetic_append_node (@: LmP0Structure structure; @: LmP0
     structure\field_count: structure\field_count + 1U
 return: field
 
-fn: lm_trans_registry_synthetic_frame_node (const: @(LmP0Text head)) @: LmP0Node
-    @: LmP0Node node
+fn: lm_trans_registry_synthetic_frame_node (const: (LmP0Text: head)) LmP0Node
+    LmP0Node: node
 
     node: lm_trans_registry_synthetic_node(c.LM_P0_NODE_FRAME)
     if: node = 0
@@ -1144,11 +1144,11 @@ fn: lm_trans_registry_synthetic_frame_node (const: @(LmP0Text head)) @: LmP0Node
         return: 0
 return: node
 
-fn: lm_trans_registry_synthetic_frame_node_cstr (const: @(char head)) @: LmP0Node
-return: lm_trans_registry_synthetic_frame_node(lm_trans_text_from_cstr(head))
+fn: lm_trans_registry_synthetic_frame_node_cstr (const: @(char head)) LmP0Node
+    return: lm_trans_registry_synthetic_frame_node(lm_trans_text_from_cstr(head))
 
-fn: lm_trans_registry_synthetic_structure_node () @: LmP0Node
-return: lm_trans_registry_synthetic_node(c.LM_P0_NODE_STRUCTURE)
+fn: lm_trans_registry_synthetic_structure_node () LmP0Node
+    return: lm_trans_registry_synthetic_node(c.LM_P0_NODE_STRUCTURE)
 
 fn: lm_trans_registry_synthetic_at_head (size_t: address_depth) @: char
     @: char head
@@ -1163,9 +1163,9 @@ fn: lm_trans_registry_synthetic_at_head (size_t: address_depth) @: char
     head[address_depth]: '\0'
 return: head
 
-fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) @: LmP0Node
-    @: LmP0Node node
-    @: LmP0Node wrapper
+fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) LmP0Node
+    LmP0Node: node
+    LmP0Node: wrapper
     @: char at_head
 
     if: class_name = 0
@@ -1201,14 +1201,14 @@ fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); s
         return: 0
 return: wrapper
 
-fn: lm_trans_registry_synthetic_return_node (const: @(LmTransNamespace namespace_); const: @(char name)) @: LmP0Node
-    @: LmP0Text name_text
-    @: LmP0Text return_key
-    const: @: LmOwnPtrStack class_rows
-    const: @: LmOwnPtrStack address_depth_rows
-    const: @: LmOwnPtrStack const_rows
-    @: LmTransRegistryFact class_row
-    @: LmP0Node return_node
+fn: lm_trans_registry_synthetic_return_node (const: (LmTransNamespace: namespace_); const: @(char name)) LmP0Node
+    LmP0Text: name_text
+    LmP0Text: return_key
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    LmTransRegistryFact: class_row
+    LmP0Node: return_node
     size_t: address_depth
     size_t: const_flag
 
@@ -1248,10 +1248,10 @@ fn: lm_trans_registry_synthetic_return_node (const: @(LmTransNamespace namespace
     lm_trans_l4_text_view_delete(@ return_key)
 return: return_node
 
-fn: lm_trans_registry_synthetic_params_node (const: @(LmTransNamespace namespace_); const: @(char name)) @: LmP0Node
-    @@: LmTransAbiParam params
-    @: LmP0Node params_node
-    @: LmP0Node param_node
+fn: lm_trans_registry_synthetic_params_node (const: (LmTransNamespace: namespace_); const: @(char name)) LmP0Node
+    @: LmTransAbiParam params
+    LmP0Node: params_node
+    LmP0Node: param_node
     size_t: param_capacity
     size_t: param_count
     size_t: i
@@ -1283,8 +1283,8 @@ fn: lm_trans_registry_synthetic_params_node (const: @(LmTransNamespace namespace
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: params_node
 
-fn: lm_trans_registry_synthetic_fn_frame_node (const: @(char name); @: LmP0Node params_node; @: LmP0Node return_node) @: LmP0Node
-    @: LmP0Node frame_node
+fn: lm_trans_registry_synthetic_fn_frame_node (const: @(char name); LmP0Node: params_node; LmP0Node: return_node) LmP0Node
+    LmP0Node: frame_node
 
     if: name = 0 || params_node = 0 || return_node = 0
         return: 0
@@ -1300,8 +1300,8 @@ fn: lm_trans_registry_synthetic_fn_frame_node (const: @(char name); @: LmP0Node 
         return: 0
 return: frame_node
 
-fn: lm_trans_registry_synthetic_sub_frame_node (const: @(char name); @: LmP0Node params_node) @: LmP0Node
-    @: LmP0Node frame_node
+fn: lm_trans_registry_synthetic_sub_frame_node (const: @(char name); LmP0Node: params_node) LmP0Node
+    LmP0Node: frame_node
 
     if: name = 0 || params_node = 0
         return: 0
@@ -1315,11 +1315,11 @@ fn: lm_trans_registry_synthetic_sub_frame_node (const: @(char name); @: LmP0Node
         return: 0
 return: frame_node
 
-fn: lm_trans_declare_l4_sub_descriptor (@: LmTransNamespace namespace_; const: @(char name)) int
-    @: LmP0Node params_node
-    @: LmP0Node frame_node
-    @: LmTransFunctionHeader function
-    @: LmP0Text name_text
+fn: lm_trans_declare_l4_sub_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
+    LmP0Node: params_node
+    LmP0Node: frame_node
+    LmTransFunctionHeader: function
+    LmP0Text: name_text
     int: status
 
     if: namespace_ = 0 || name = 0
@@ -1359,12 +1359,12 @@ fn: lm_trans_declare_l4_sub_descriptor (@: LmTransNamespace namespace_; const: @
     lm_trans_l4_text_view_delete(@ name_text)
 return: status
 
-fn: lm_trans_declare_l4_fn_descriptor (@: LmTransNamespace namespace_; const: @(char name)) int
-    @: LmP0Node params_node
-    @: LmP0Node return_node
-    @: LmP0Node frame_node
-    @: LmTransFunctionHeader function
-    @: LmP0Text name_text
+fn: lm_trans_declare_l4_fn_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
+    LmP0Node: params_node
+    LmP0Node: return_node
+    LmP0Node: frame_node
+    LmTransFunctionHeader: function
+    LmP0Text: name_text
     const: @: char receiver_name
     int: status
 
@@ -1412,8 +1412,8 @@ fn: lm_trans_declare_l4_fn_descriptor (@: LmTransNamespace namespace_; const: @(
     lm_trans_l4_text_view_delete(@ name_text)
 return: status
 
-fn: lm_trans_declare_l4_fn_descriptors (@: LmTransNamespace namespace_) int
-    @: LmOwnPtrStack names
+fn: lm_trans_declare_l4_fn_descriptors (LmTransNamespace: namespace_) int
+    LmOwnPtrStack: names
     const: @: char name
     size_t: i
 
@@ -1438,8 +1438,8 @@ fn: lm_trans_declare_l4_fn_descriptors (@: LmTransNamespace namespace_) int
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: @(LmTransNamespace namespace_); const: @(char name); const: @(char error_name)) int
-    @@: LmTransAbiParam params
+fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
+    @: LmTransAbiParam params
     size_t: param_capacity
     size_t: param_count
     int: status
@@ -1455,8 +1455,8 @@ fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: @(LmTransNam
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: status
 
-fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: @(LmTransNamespace namespace_); const: @(char type_name); const: @(char field_name); const: @(char error_name)) int
-    @@: LmTransAbiParam params
+fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: (LmTransNamespace: namespace_); const: @(char type_name); const: @(char field_name); const: @(char error_name)) int
+    @: LmTransAbiParam params
     size_t: param_capacity
     size_t: param_count
     int: status
@@ -1472,8 +1472,8 @@ fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: @(LmTransNa
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: status
 
-fn: lm_trans_emit_l4_function_pointer_type_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
+fn: lm_trans_emit_l4_function_pointer_type_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
     const: @: char name
     size_t: i
 
@@ -1498,11 +1498,11 @@ fn: lm_trans_emit_l4_function_pointer_type_typedefs (FILE: file; const: @(LmTran
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_fn_descriptors (FILE: file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_fn_descriptors (FILE: file; const: (LmTransNamespace: namespace_)) int
 return: lm_trans_emit_l4_function_pointer_type_typedefs(file, namespace_)
 
-fn: lm_trans_emit_l4_guard_markers (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
+fn: lm_trans_emit_l4_guard_markers (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
     const: @: char name
     size_t: i
 
@@ -1527,8 +1527,8 @@ fn: lm_trans_emit_l4_guard_markers (FILE: file; const: @(LmTransNamespace namesp
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_extern_c_markers (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
+fn: lm_trans_emit_l4_extern_c_markers (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
 
     names: lm_trans_ptr_stack_new(lm_trans_free_any)
     if: names = 0
@@ -1544,11 +1544,11 @@ fn: lm_trans_emit_l4_extern_c_markers (FILE: file; const: @(LmTransNamespace nam
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_units (FILE: file; const: @(LmTransNamespace namespace_)) int
-    @: LmOwnPtrStack names
-    const: @: LmOwnPtrStack backend_rows
-    const: @: LmOwnPtrStack payload_rows
-    @: LmTransRegistryFact payload_row
+fn: lm_trans_emit_l4_units (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: LmOwnPtrStack: backend_rows
+    const: LmOwnPtrStack: payload_rows
+    LmTransRegistryFact: payload_row
     const: @: char name
     size_t: i
 
@@ -1573,7 +1573,7 @@ fn: lm_trans_emit_l4_units (FILE: file; const: @(LmTransNamespace namespace_)) i
             lm_trans_ptr_stack_delete(@ names)
             return: 1
         if: payload_row\payload_node != 0
-            if: lm_trans_emit_l4_payload_node(file, payload_row\payload_node, (cast: (@: LmTransNamespace) namespace_)) != 0 || lm_trans_put(file, "\n") != 0
+            if: lm_trans_emit_l4_payload_node(file, payload_row\payload_node, (cast: (LmTransNamespace) namespace_)) != 0 || lm_trans_put(file, "\n") != 0
                 lm_trans_ptr_stack_delete(@ names)
                 return: 1
         ---
@@ -1621,7 +1621,7 @@ sub: lm_trans_registry_destroy ()
     lm_trans_registry: 0
 end: lm_trans_registry_destroy
 
-fn: lm_trans_registry_join_text3 (const: @(LmP0Text first); const: @(char separator); const: @(LmP0Text second)) @: char
+fn: lm_trans_registry_join_text3 (const: (LmP0Text: first); const: @(char separator); const: (LmP0Text: second)) @: char
     size_t: separator_length
     size_t: length
     @: char result
@@ -1642,12 +1642,12 @@ return: result
 fn: lm_trans_registry_push_generated_row_cstr (const: @(char table); const: @(char key); const: @(char payload)) int
 return: lm_trans_registry_push_row_atoms(lm_trans_text_from_cstr(table), lm_trans_text_from_cstr(key), lm_trans_text_from_cstr(payload))
 
-fn: lm_trans_registry_push_generated_row_text (const: @(char table); const: @(char key); const: @(LmP0Text payload)) int
+fn: lm_trans_registry_push_generated_row_text (const: @(char table); const: @(char key); const: (LmP0Text: payload)) int
 return: lm_trans_registry_push_row_atoms(lm_trans_text_from_cstr(table), lm_trans_text_from_cstr(key), payload)
 
-fn: lm_trans_registry_push_column_metadata (const: @(LmP0Text table_name); @@: LmTransRegistryColumn columns; size_t: column_count) int
-    @: LmP0Text table_payload
-    @: LmP0Text column_payload
+fn: lm_trans_registry_push_column_metadata (const: (LmP0Text: table_name); @: LmTransRegistryColumn columns; size_t: column_count) int
+    LmP0Text: table_payload
+    LmP0Text: column_payload
     size_t: index
     size_t: descriptor_index
     @: char column_key
@@ -1716,7 +1716,7 @@ fn: lm_trans_registry_push_column_metadata (const: @(LmP0Text table_name); @@: L
     lm_trans_l4_text_view_delete(@ column_payload)
 return: status
 
-fn: lm_trans_registry_relation_name_new (const: @(LmP0Text owner); const: @(char suffix)) @: char
+fn: lm_trans_registry_relation_name_new (const: (LmP0Text: owner); const: @(char suffix)) @: char
     size_t: suffix_length
     size_t: length
     @: char result
@@ -1735,7 +1735,7 @@ fn: lm_trans_registry_relation_name_new (const: @(LmP0Text owner); const: @(char
     result[length]: '\0'
 return: result
 
-fn: lm_trans_registry_push_owner_relation_text (const: @(LmP0Text owner); const: @(char suffix); const: @(LmP0Text key); const: @(LmP0Text payload)) int
+fn: lm_trans_registry_push_owner_relation_text (const: (LmP0Text: owner); const: @(char suffix); const: (LmP0Text: key); const: (LmP0Text: payload)) int
     @: char table_name
     int: status
 
@@ -1746,7 +1746,7 @@ fn: lm_trans_registry_push_owner_relation_text (const: @(LmP0Text owner); const:
     lm_own_delete(table_name, 0)
 return: status
 
-fn: lm_trans_registry_push_owner_relation_size (const: @(LmP0Text owner); const: @(char suffix); const: @(LmP0Text key); size_t: value) int
+fn: lm_trans_registry_push_owner_relation_size (const: (LmP0Text: owner); const: @(char suffix); const: (LmP0Text: key); size_t: value) int
     [32]: char buffer
 
     c.snprintf:
@@ -1755,10 +1755,10 @@ fn: lm_trans_registry_push_owner_relation_size (const: @(LmP0Text owner); const:
         value
 return: lm_trans_registry_push_owner_relation_text(owner, suffix, key, lm_trans_text_from_cstr(buffer))
 
-fn: lm_trans_l4_callable_type_from_node (const: @(LmP0Node node); @: LmTransL4CallableType out) int
-    const: @: LmP0Node current
-    const: @: LmP0Frame frame
-    const: @: LmP0Field field
+fn: lm_trans_l4_callable_type_from_node (const: (LmP0Node: node); LmTransL4CallableType: out) int
+    const: LmP0Node: current
+    const: LmP0Frame: frame
+    const: LmP0Field: field
 
     if: node = 0 || out = 0
         return: 0
@@ -1818,9 +1818,9 @@ fn: lm_trans_l4_callable_type_from_node (const: @(LmP0Node node); @: LmTransL4Ca
         return: 1
 return: 0
 
-fn: lm_trans_registry_materialize_fn_descriptor_param (const: @(LmP0Text function_name); const: @(LmP0Node param_node); size_t: index) int
-    @: LmTransL4CallableType param_type
-    @: LmP0Text param_name
+fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: function_name); const: (LmP0Node: param_node); size_t: index) int
+    LmTransL4CallableType: param_type
+    LmP0Text: param_name
     [32]: char fallback_name
     int: status
 
@@ -1848,13 +1848,13 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: @(LmP0Text functio
     lm_trans_l4_text_view_delete(@ param_name)
 return: status
 
-fn: lm_trans_registry_materialize_fn_descriptor_frame (const: @(LmP0Frame frame)) int
-    @: LmTransFunctionHeader function
-    @: LmTransL4CallableType return_type
-    const: @: LmP0Field field
+fn: lm_trans_registry_materialize_fn_descriptor_frame (const: (LmP0Frame: frame)) int
+    LmTransFunctionHeader: function
+    LmTransL4CallableType: return_type
+    const: LmP0Field: field
     size_t: index
-    @: LmP0Text function_name
-    @: LmP0Text receiver_name
+    LmP0Text: function_name
+    LmP0Text: receiver_name
     int: status
 
     if: frame = 0
@@ -1922,12 +1922,12 @@ fn: lm_trans_registry_materialize_fn_descriptor_frame (const: @(LmP0Frame frame)
     lm_trans_l4_text_view_delete(@ receiver_name)
 return: status
 
-fn: lm_trans_registry_materialize_sub_descriptor_frame (const: @(LmP0Frame frame)) int
-    @: LmTransFunctionHeader function
-    const: @: LmP0Field field
+fn: lm_trans_registry_materialize_sub_descriptor_frame (const: (LmP0Frame: frame)) int
+    LmTransFunctionHeader: function
+    const: LmP0Field: field
     size_t: index
-    @: LmP0Text function_name
-    @: LmP0Text receiver_name
+    LmP0Text: function_name
+    LmP0Text: receiver_name
     int: status
 
     if: frame = 0
@@ -1976,13 +1976,13 @@ fn: lm_trans_registry_materialize_sub_descriptor_frame (const: @(LmP0Frame frame
     lm_trans_l4_text_view_delete(@ receiver_name)
 return: status
 
-fn: lm_trans_registry_l4_loader_get () const: @: LmL4Loader
+fn: lm_trans_registry_l4_loader_get () const: LmL4Loader
     if: lm_trans_registry != 0
         return: lm_trans_registry\l4_loader
 return: 0
 
-fn: lm_trans_registry_load_table_frame_common (const: @(LmP0Frame frame); int: allow_node_cells; const: @(char error_context)) int
-    @: LmTransL4LoadContext context
+fn: lm_trans_registry_load_table_frame_common (const: (LmP0Frame: frame); int: allow_node_cells; const: @(char error_context)) int
+    LmTransL4LoadContext: context
     const: @: char context_name
     int: status
 
@@ -2003,11 +2003,11 @@ fn: lm_trans_registry_load_table_frame_common (const: @(LmP0Frame frame); int: a
     lm_own_delete(context, 0)
 return: 0
 
-fn: lm_trans_l4_receiver_table (const: @(LmP0Frame frame); int: allow_node_cells) int
+fn: lm_trans_l4_receiver_table (const: (LmP0Frame: frame); int: allow_node_cells) int
 return: lm_trans_registry_load_table_frame_common(frame, allow_node_cells, "trans L4")
 
-fn: lm_trans_l4_receiver_join (const: @(LmP0Frame frame); int: allow_node_cells) int
-    @: LmTransL4LoadContext context
+fn: lm_trans_l4_receiver_join (const: (LmP0Frame: frame); int: allow_node_cells) int
+    LmTransL4LoadContext: context
     int: status
 
     context: lm_own_new_zero(c.sizeof(context[0]))
@@ -2023,8 +2023,8 @@ fn: lm_trans_l4_receiver_join (const: @(LmP0Frame frame); int: allow_node_cells)
     lm_own_delete(context, 0)
 return: 0
 
-fn: lm_trans_l4_receiver_row (const: @(LmP0Frame frame); int: allow_node_cells) int
-    @: LmTransL4LoadContext context
+fn: lm_trans_l4_receiver_row (const: (LmP0Frame: frame); int: allow_node_cells) int
+    LmTransL4LoadContext: context
     int: status
 
     context: lm_own_new_zero(c.sizeof(context[0]))
@@ -2040,15 +2040,15 @@ fn: lm_trans_l4_receiver_row (const: @(LmP0Frame frame); int: allow_node_cells) 
     lm_own_delete(context, 0)
 return: 0
 
-fn: lm_trans_l4_receiver_fn_descriptor (const: @(LmP0Frame frame); int: allow_node_cells) int
+fn: lm_trans_l4_receiver_fn_descriptor (const: (LmP0Frame: frame); int: allow_node_cells) int
     allow_node_cells: allow_node_cells
 return: lm_trans_registry_materialize_fn_descriptor_frame(frame)
 
-fn: lm_trans_l4_receiver_sub_descriptor (const: @(LmP0Frame frame); int: allow_node_cells) int
+fn: lm_trans_l4_receiver_sub_descriptor (const: (LmP0Frame: frame); int: allow_node_cells) int
     allow_node_cells: allow_node_cells
 return: lm_trans_registry_materialize_sub_descriptor_frame(frame)
 
-fn: lm_trans_l4_atom_receiver_prelude_sequence (const: @(LmP0Text atom); int: allow_node_cells) int
+fn: lm_trans_l4_atom_receiver_prelude_sequence (const: (LmP0Text: atom); int: allow_node_cells) int
     allow_node_cells: allow_node_cells
     if: atom = 0
         return: 1
@@ -2062,8 +2062,8 @@ fn: lm_trans_l4_atom_receiver_prelude_sequence (const: @(LmP0Text atom); int: al
         return: 0
 return: lm_trans_registry_push_row_values(lm_trans_text_from_cstr("prelude.sequence"), atom, lm_trans_text_from_cstr("1")) != 0
 
-fn: lm_trans_l4_frame_pointer_binding_push (@: LmOwnPtrStack bindings; const: @(char head); const: @(char receiver_type); LmTransL4FrameHandler: handler) int
-    @: LmTransL4FramePointerBinding binding
+fn: lm_trans_l4_frame_pointer_binding_push (LmOwnPtrStack: bindings; const: @(char head); const: @(char receiver_type); LmTransL4FrameHandler: handler) int
+    LmTransL4FramePointerBinding: binding
 
     if: bindings = 0 || head = 0 || receiver_type = 0 || handler = 0
         return: 1
@@ -2078,8 +2078,8 @@ fn: lm_trans_l4_frame_pointer_binding_push (@: LmOwnPtrStack bindings; const: @(
         return: 1
 return: 0
 
-fn: lm_trans_l4_atom_pointer_binding_push (@: LmOwnPtrStack bindings; const: @(char atom); const: @(char receiver_type); LmTransL4AtomHandler: handler) int
-    @: LmTransL4AtomPointerBinding binding
+fn: lm_trans_l4_atom_pointer_binding_push (LmOwnPtrStack: bindings; const: @(char atom); const: @(char receiver_type); LmTransL4AtomHandler: handler) int
+    LmTransL4AtomPointerBinding: binding
 
     if: bindings = 0 || atom = 0 || receiver_type = 0 || handler = 0
         return: 1
@@ -2095,9 +2095,9 @@ fn: lm_trans_l4_atom_pointer_binding_push (@: LmOwnPtrStack bindings; const: @(c
 return: 0
 
 fn: lm_trans_l4_pointer_bindings_init () int
-    @: LmOwnPtrStack frame_bindings
-    @: LmOwnPtrStack root_frame_bindings
-    @: LmOwnPtrStack atom_bindings
+    LmOwnPtrStack: frame_bindings
+    LmOwnPtrStack: root_frame_bindings
+    LmOwnPtrStack: atom_bindings
 
     if: lm_trans_registry = 0
         return: 1
@@ -2125,9 +2125,9 @@ fn: lm_trans_l4_pointer_bindings_init () int
     lm_trans_registry\l4_atom_pointer_bindings: atom_bindings
 return: 0
 
-fn: lm_trans_l4_frame_pointer_binding_find (const: @(LmP0Text head); const: @(LmOwnPtrStack bindings)) const: @: LmTransL4FramePointerBinding
+fn: lm_trans_l4_frame_pointer_binding_find (const: (LmP0Text: head); const: (LmOwnPtrStack: bindings)) const: LmTransL4FramePointerBinding
     size_t: i
-    const: @: LmTransL4FramePointerBinding binding
+    const: LmTransL4FramePointerBinding: binding
 
     if: head = 0 || bindings = 0
         return: 0
@@ -2140,9 +2140,9 @@ fn: lm_trans_l4_frame_pointer_binding_find (const: @(LmP0Text head); const: @(Lm
         i: i + 1U
 return: 0
 
-fn: lm_trans_l4_atom_pointer_binding_find (const: @(LmP0Text atom); const: @(LmOwnPtrStack bindings)) const: @: LmTransL4AtomPointerBinding
+fn: lm_trans_l4_atom_pointer_binding_find (const: (LmP0Text: atom); const: (LmOwnPtrStack: bindings)) const: LmTransL4AtomPointerBinding
     size_t: i
-    const: @: LmTransL4AtomPointerBinding binding
+    const: LmTransL4AtomPointerBinding: binding
 
     if: atom = 0 || bindings = 0
         return: 0
@@ -2155,8 +2155,8 @@ fn: lm_trans_l4_atom_pointer_binding_find (const: @(LmP0Text atom); const: @(LmO
         i: i + 1U
 return: 0
 
-fn: lm_trans_l4_head_binding_resolve_from_pointer_table (const: @(LmP0Text head); const: @(char namespace_table); const: @(LmOwnPtrStack bindings); @: LmTransL4HeadBinding out) int
-    const: @: LmTransL4FramePointerBinding binding
+fn: lm_trans_l4_head_binding_resolve_from_pointer_table (const: (LmP0Text: head); const: @(char namespace_table); const: (LmOwnPtrStack: bindings); LmTransL4HeadBinding: out) int
+    const: LmTransL4FramePointerBinding: binding
     const: @: char receiver_type
 
     if: head = 0 || out = 0
@@ -2187,24 +2187,24 @@ fn: lm_trans_l4_head_binding_resolve_from_pointer_table (const: @(LmP0Text head)
     out\frame: binding\handler
 return: 0
 
-fn: lm_trans_l4_head_binding_resolve (const: @(LmP0Text head); @: LmTransL4HeadBinding out) int
-    const: @: LmOwnPtrStack bindings
+fn: lm_trans_l4_head_binding_resolve (const: (LmP0Text: head); LmTransL4HeadBinding: out) int
+    const: LmOwnPtrStack: bindings
 
     bindings: 0
     if: lm_trans_registry != 0
         bindings: lm_trans_registry\l4_frame_pointer_bindings
 return: lm_trans_l4_head_binding_resolve_from_pointer_table(head, "namespace.l4", bindings, out)
 
-fn: lm_trans_l4_root_head_binding_resolve (const: @(LmP0Text head); @: LmTransL4HeadBinding out) int
-    const: @: LmOwnPtrStack bindings
+fn: lm_trans_l4_root_head_binding_resolve (const: (LmP0Text: head); LmTransL4HeadBinding: out) int
+    const: LmOwnPtrStack: bindings
 
     bindings: 0
     if: lm_trans_registry != 0
         bindings: lm_trans_registry\l4_root_frame_pointer_bindings
 return: lm_trans_l4_head_binding_resolve_from_pointer_table(head, "namespace.l4.root", bindings, out)
 
-fn: lm_trans_l4_atom_binding_resolve_from_pointer_table (const: @(LmP0Text atom); const: @(char namespace_table); const: @(LmOwnPtrStack bindings); @: LmTransL4AtomBinding out) int
-    const: @: LmTransL4AtomPointerBinding binding
+fn: lm_trans_l4_atom_binding_resolve_from_pointer_table (const: (LmP0Text: atom); const: @(char namespace_table); const: (LmOwnPtrStack: bindings); LmTransL4AtomBinding: out) int
+    const: LmTransL4AtomPointerBinding: binding
     const: @: char receiver_type
 
     if: atom = 0 || out = 0
@@ -2235,16 +2235,16 @@ fn: lm_trans_l4_atom_binding_resolve_from_pointer_table (const: @(LmP0Text atom)
     out\atom: binding\handler
 return: 0
 
-fn: lm_trans_l4_atom_binding_resolve (const: @(LmP0Text atom); @: LmTransL4AtomBinding out) int
-    const: @: LmOwnPtrStack bindings
+fn: lm_trans_l4_atom_binding_resolve (const: (LmP0Text: atom); LmTransL4AtomBinding: out) int
+    const: LmOwnPtrStack: bindings
 
     bindings: 0
     if: lm_trans_registry != 0
         bindings: lm_trans_registry\l4_atom_pointer_bindings
 return: lm_trans_l4_atom_binding_resolve_from_pointer_table(atom, "namespace.l4.atom", bindings, out)
 
-fn: lm_trans_registry_load_l4_frame (const: @(LmP0Frame frame); int: allow_node_cells; @: int out_loaded) int
-    @: LmTransL4HeadBinding binding
+fn: lm_trans_registry_load_l4_frame (const: (LmP0Frame: frame); int: allow_node_cells; @: int out_loaded) int
+    LmTransL4HeadBinding: binding
     int: status
 
     if: out_loaded != 0
@@ -2268,8 +2268,8 @@ fn: lm_trans_registry_load_l4_frame (const: @(LmP0Frame frame); int: allow_node_
         out_loaded[0]: 1
 return: 0
 
-fn: lm_trans_registry_load_l4_atom (const: @(LmP0Text atom); int: allow_node_cells; @: int out_loaded) int
-    @: LmTransL4AtomBinding binding
+fn: lm_trans_registry_load_l4_atom (const: (LmP0Text: atom); int: allow_node_cells; @: int out_loaded) int
+    LmTransL4AtomBinding: binding
     int: status
 
     if: out_loaded != 0
@@ -2291,9 +2291,9 @@ fn: lm_trans_registry_load_l4_atom (const: @(LmP0Text atom); int: allow_node_cel
         out_loaded[0]: 1
 return: 0
 
-fn: lm_trans_registry_load_l4_structure (const: @(LmP0Structure structure); int: allow_node_cells) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_registry_load_l4_structure (const: (LmP0Structure: structure); int: allow_node_cells) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     int: loaded
     int: handled
 
@@ -2327,15 +2327,15 @@ fn: lm_trans_registry_load_l4_structure (const: @(LmP0Structure structure); int:
         field: field\next
 return: 0
 
-fn: lm_trans_l4_root_receiver_registry (const: @(LmP0Frame frame); int: allow_node_cells) int
+fn: lm_trans_l4_root_receiver_registry (const: (LmP0Frame: frame); int: allow_node_cells) int
     if: frame = 0
         return: 1
     if: lm_trans_registry_load_l4_structure(frame\body, allow_node_cells) != 0
         return: 1
 return: 0
 
-fn: lm_trans_registry_load_l4_root_frame (const: @(LmP0Frame frame); int: allow_node_cells; @: int out_loaded) int
-    @: LmTransL4HeadBinding binding
+fn: lm_trans_registry_load_l4_root_frame (const: (LmP0Frame: frame); int: allow_node_cells; @: int out_loaded) int
+    LmTransL4HeadBinding: binding
     int: status
 
     if: out_loaded != 0
@@ -2359,13 +2359,13 @@ fn: lm_trans_registry_load_l4_root_frame (const: @(LmP0Frame frame); int: allow_
         out_loaded[0]: 1
 return: 0
 
-fn: lm_trans_registry_l4_push_row (@: void context; const: @(LmP0Text table_atom); const: @(LmP0Text key_atom); const: @(LmP0Node payload_node)) int
-    @: LmTransL4LoadContext load_context
-    @: LmP0Text table_value
-    @: LmP0Text key_value
+fn: lm_trans_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom); const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
+    LmTransL4LoadContext: load_context
+    LmP0Text: table_value
+    LmP0Text: key_value
     int: status
 
-    load_context: cast: (@: LmTransL4LoadContext) context
+    load_context: cast: (LmTransL4LoadContext) context
     if: table_atom = 0 || key_atom = 0 || payload_node = 0
         return: -1
     if: payload_node\kind = c.LM_P0_NODE_ATOM
@@ -2389,7 +2389,7 @@ fn: lm_trans_registry_l4_push_row (@: void context; const: @(LmP0Text table_atom
     lm_trans_l4_text_view_delete(@ key_value)
 return: status
 
-fn: lm_trans_registry_l4_note_key (@: void context; const: @(LmP0Text table_name); const: @(LmL4Column column); const: @(LmP0Text key_atom)) int
+fn: lm_trans_registry_l4_note_key (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); const: (LmP0Text: key_atom)) int
     context: context
     table_name: table_name
     if: key_atom = 0
@@ -2398,11 +2398,11 @@ fn: lm_trans_registry_l4_note_key (@: void context; const: @(LmP0Text table_name
         return: lm_trans_registry_note_class_present(key_atom)
 return: 0
 
-fn: lm_trans_registry_l4_push_cell (@: void context; const: @(LmP0Text table_name); const: @(LmL4Column column); int: split_by_column; const: @(LmP0Text key_atom); const: @(LmP0Node payload_node)) int
-    @: LmTransL4LoadContext load_context
+fn: lm_trans_registry_l4_push_cell (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
+    LmTransL4LoadContext: load_context
     int: allow_node_cells
 
-    load_context: cast: (@: LmTransL4LoadContext) context
+    load_context: cast: (LmTransL4LoadContext) context
     if: table_name = 0 || key_atom = 0
         return: -1
     allow_node_cells: load_context != 0 && load_context\allow_node_cells != 0
@@ -2412,19 +2412,19 @@ fn: lm_trans_registry_l4_push_cell (@: void context; const: @(LmP0Text table_nam
         return: lm_trans_registry_note_class_present(payload_node\as\atom)
 return: 0
 
-fn: lm_trans_registry_l4_push_column_metadata (@: void context; const: @(LmP0Text table_name); @@: LmL4Column columns; size_t: column_count) int
+fn: lm_trans_registry_l4_push_column_metadata (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) int
     context: context
     if: table_name = 0
         return: -1
 return: lm_trans_registry_push_column_metadata(table_name, columns, column_count)
 
-fn: lm_trans_registry_l4_join_table (@: void context; const: @(LmP0Text source_table); const: @(LmP0Text target_table)) int
+fn: lm_trans_registry_l4_join_table (@: void context; const: (LmP0Text: source_table); const: (LmP0Text: target_table)) int
     context: context
     if: lm_trans_registry_join_table(source_table, target_table) != 0
         return: -1
 return: 0
 
-fn: lm_trans_registry_l4_resolve_frame (const: @(LmL4Loader loader); const: @(LmP0Text head)) LmL4FrameReceiver
+fn: lm_trans_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP0Text: head)) LmL4FrameReceiver
     const: @: char receiver_type
     int: head_length
     const: @: char head_data
@@ -2458,7 +2458,7 @@ fn: lm_trans_registry_l4_resolve_frame (const: @(LmL4Loader loader); const: @(Lm
         head_length head_data
 return: 0
 
-fn: lm_trans_registry_l4_dispatch_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
+fn: lm_trans_registry_l4_dispatch_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
     LmL4FrameReceiver: receiver
     int: head_length
     const: @: char head_data
@@ -2479,8 +2479,8 @@ fn: lm_trans_registry_l4_dispatch_frame (const: @(LmL4Loader loader); @: void co
         return: 1
 return: receiver(loader, context, frame)
 
-fn: lm_trans_registry_l4_loader_new () @: LmL4Loader
-    @: LmL4Loader loader
+fn: lm_trans_registry_l4_loader_new () LmL4Loader
+    LmL4Loader: loader
 
     loader: lm_own_new_zero(c.sizeof(loader[0]))
     if: loader = 0
@@ -2506,9 +2506,9 @@ fn: lm_trans_registry_l4_runtime_init () int
         return: 1
 return: 0
 
-fn: lm_trans_registry_load_root (const: @(LmP0Node root); int: implicit_l4; int: allow_node_cells) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_registry_load_root (const: (LmP0Node: root); int: implicit_l4; int: allow_node_cells) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     int: loaded
     int: item_loaded
 
@@ -2605,10 +2605,10 @@ fn: lm_trans_registry_note_loaded_path (const: @(char registry_path)) int
         return: 1
 return: 0
 
-fn: lm_trans_registry_load_import_frame (const: @(LmP0Frame frame); const: @(char source_path)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
-    @: LmP0Text path_value
+fn: lm_trans_registry_load_import_frame (const: (LmP0Frame: frame); const: @(char source_path)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmP0Text: path_value
     @: char candidate_name
     [4096]: char registry_path
     int: loaded
@@ -2657,8 +2657,8 @@ fn: lm_trans_registry_load_import_frame (const: @(LmP0Frame frame); const: @(cha
     lm_trans_l4_text_view_delete(@ path_value)
 return: 0
 
-fn: lm_trans_registry_import_frame_new (const: @(LmP0Field field); int: descend_l2) @: LmTransRegistryImportFrame
-    @: LmTransRegistryImportFrame frame
+fn: lm_trans_registry_import_frame_new (const: (LmP0Field: field); int: descend_l2) LmTransRegistryImportFrame
+    LmTransRegistryImportFrame: frame
 
     frame: lm_own_new_zero(c.sizeof(frame[0]))
     if: frame != 0
@@ -2666,11 +2666,11 @@ fn: lm_trans_registry_import_frame_new (const: @(LmP0Field field); int: descend_
         frame\descend_l2: descend_l2
 return: frame
 
-fn: lm_trans_registry_load_imports_from_structure (const: @(LmP0Structure structure); const: @(char source_path); int: descend_l2) int
-    @: LmOwnPtrStack stack
-    @: LmTransRegistryImportFrame frame
-    const: @: LmP0Node node
-    @: LmTransHeadBinding binding
+fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: structure); const: @(char source_path); int: descend_l2) int
+    LmOwnPtrStack: stack
+    LmTransRegistryImportFrame: frame
+    const: LmP0Node: node
+    LmTransHeadBinding: binding
     @: void popped
     int: status
 
@@ -2731,9 +2731,9 @@ fn: lm_trans_registry_load_imports_from_structure (const: @(LmP0Structure struct
     lm_own_delete(binding, 0)
 return: status
 
-fn: lm_trans_registry_load_inline_root (const: @(LmP0Node root); const: @(char source_path)) int
-    const: @: LmP0Field field
-    const: @: LmP0Node node
+fn: lm_trans_registry_load_inline_root (const: (LmP0Node: root); const: @(char source_path)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
     int: loaded
 
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
@@ -2847,8 +2847,8 @@ fn: lm_trans_registry_path_for_source (const: @(char source_path); const: @(char
 return: 0
 
 fn: lm_trans_registry_load_file_path (const: @(char registry_path); int: required; @: int out_loaded) int
-    @: LmP0Document document
-    const: @: LmP0Diagnostic diagnostic
+    LmP0Document: document
+    const: LmP0Diagnostic: diagnostic
     int: status
 
     if: out_loaded != 0
@@ -3033,7 +3033,7 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
 return: 0
 
 fn: lm_trans_emit_module_prelude_plan (FILE: file) int
-    @: LmTransNamespace namespace_
+    LmTransNamespace: namespace_
     int: emitted
     int: status
 
@@ -3052,9 +3052,9 @@ fn: lm_trans_emit_module_prelude_plan (FILE: file) int
 return: status
 
 fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_path)) int
-    @: LmP0Document document
-    const: @: LmP0Diagnostic diagnostic
-    const: @: LmP0Node root
+    LmP0Document: document
+    const: LmP0Diagnostic: diagnostic
+    const: LmP0Node: root
     FILE: output
     FILE: prelude_output
     FILE: body_output

@@ -87,6 +87,22 @@ table:
 end: `layout.backend`
 
 table:
+    name: `class.reference-base`
+    columns: class         (value serial)
+    rows:
+             LmP0Text      1
+             LmP0Span      1
+             LmP0Diagnostic 1
+             LmP0Structure 1
+             LmP0Trailer   1
+             LmP0Frame     1
+             LmP0NodeAs    1
+             LmP0Node      1
+             LmP0Field     1
+             LmP0Document  1
+end: `class.reference-base`
+
+table:
     name: `LmP0Text.field.class`
     columns: class   (field class)
     rows:
@@ -351,23 +367,22 @@ table:
              lm_p0_free                1
 end: `fn.external`
 
-fn: lm_p0_parse_string (const: @(char source); @@: LmP0Document out_document) int
-fn: lm_p0_parse_bytes (const: @(char source); size_t: source_length; @@: LmP0Document out_document) int
-fn: lm_p0_parse_file (const: @(char path); @@: LmP0Document out_document) int
-fn: lm_p0_document_destroy (@: LmP0Document document) void
-fn: lm_p0_document_root (const: @(LmP0Document document)) const: @: LmP0Node
-fn: lm_p0_document_mutable_root (@: LmP0Document document) @: LmP0Node
-fn: lm_p0_document_diagnostic (const: @(LmP0Document document)) const: @: LmP0Diagnostic
-fn: lm_p0_node_structure (const: @(LmP0Node node)) const: @: LmP0Structure
-fn: lm_p0_node_frame (const: @(LmP0Node node)) const: @: LmP0Frame
-fn: lm_p0_node_atom (const: @(LmP0Node node)) const: @: LmP0Text
-fn: lm_p0_structure_trailer (const: @(LmP0Structure structure)) const: @: LmP0Trailer
-fn: lm_p0_frame_head (const: @(LmP0Frame frame)) const: @: LmP0Text
-fn: lm_p0_frame_body (const: @(LmP0Frame frame)) const: @: LmP0Structure
-fn: lm_p0_frame_trailer (const: @(LmP0Frame frame)) const: @: LmP0Trailer
-fn: lm_p0_trailer_spelling (const: @(LmP0Trailer trailer)) const: @: LmP0Text
-fn: lm_p0_trailer_body (const: @(LmP0Trailer trailer)) const: @: LmP0Structure
+fn: lm_p0_parse_string (const: @(char source); @: LmP0Document out_document) int
+fn: lm_p0_parse_bytes (const: @(char source); size_t: source_length; @: LmP0Document out_document) int
+fn: lm_p0_parse_file (const: @(char path); @: LmP0Document out_document) int
+fn: lm_p0_document_destroy (LmP0Document: document) void
+fn: lm_p0_document_root (const: (LmP0Document: document)) const: LmP0Node
+fn: lm_p0_document_mutable_root (LmP0Document: document) LmP0Node
+fn: lm_p0_document_diagnostic (const: (LmP0Document: document)) const: LmP0Diagnostic
+fn: lm_p0_node_structure (const: (LmP0Node: node)) const: LmP0Structure
+fn: lm_p0_node_frame (const: (LmP0Node: node)) const: LmP0Frame
+fn: lm_p0_node_atom (const: (LmP0Node: node)) const: LmP0Text
+fn: lm_p0_structure_trailer (const: (LmP0Structure: structure)) const: LmP0Trailer
+fn: lm_p0_frame_head (const: (LmP0Frame: frame)) const: LmP0Text
+fn: lm_p0_frame_body (const: (LmP0Frame: frame)) const: LmP0Structure
+fn: lm_p0_frame_trailer (const: (LmP0Frame: frame)) const: LmP0Trailer
+fn: lm_p0_trailer_spelling (const: (LmP0Trailer: trailer)) const: LmP0Text
+fn: lm_p0_trailer_body (const: (LmP0Trailer: trailer)) const: LmP0Structure
 fn: lm_p0_node_kind_class_name (LmP0NodeKind: kind) const: @: char
-fn: lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
+fn: lm_p0_dump_alloc (const: (LmP0Document: document)) @: char
 fn: lm_p0_free (@: void ptr) void
-
