@@ -65,6 +65,7 @@ table:
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
+             `core.c.include`           relation
              `None.cell`                relation
              `serialization.codec`      relation
              `contextual.literal.value` relation

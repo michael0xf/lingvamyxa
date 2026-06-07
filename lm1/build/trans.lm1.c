@@ -1,4 +1,9 @@
 #include <stddef.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <stdio.h>
+
+#include <stddef.h>
 #include <stddef.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -2760,6 +2765,7 @@ static int lm_trans_emit_l1_os_frame(FILE * output, const LmP0Frame * frame);
 static int lm_trans_emit_l1_ifdef_frame(FILE * output, const LmP0Frame * frame);
 static int lm_trans_emit_l1_include_target_text(FILE * output, const char *data, size_t length);
 static int lm_trans_emit_registry_include_table(FILE * output, const LmTransNamespace * namespace_);
+static int lm_trans_emit_core_include_table(FILE * output, const LmTransNamespace * namespace_, int *out_emitted);
 static int lm_trans_emit_l1_include_frame(FILE * output, const LmP0Frame * frame);
 static int lm_trans_emit_l1_node(FILE * output, const LmP0Node * node);
 static int lm_trans_emit_l1_frame(FILE * output, const LmP0Frame * l1);
@@ -24211,6 +24217,33 @@ static int lm_trans_emit_registry_include_table(FILE * output, const LmTransName
     return 1;
 }
 
+static int lm_trans_emit_core_include_table(FILE * output, const LmTransNamespace * namespace_, int *out_emitted) {
+    size_t i;
+    LmTransRegistryFact * row;
+    const LmOwnPtrStack * rows;
+    int emitted;
+    emitted = 0;
+    rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("core"), "c.include");
+    if (rows == 0) {
+        return 0;
+    }
+    i = 0U;
+    while (i < rows -> count) {
+        row = lm_own_ptr_stack_at(rows, i);
+        if (row != 0 && row -> payload != 0) {
+            if (lm_trans_emit_l1_include_target_text(output, row -> payload, strlen(row -> payload)) != 0) {
+                return 1;
+            }
+            emitted = 1;
+        }
+        i = i + 1U;
+    }
+    if (emitted && out_emitted != 0) {
+        out_emitted[0] = 1;
+    }
+    return 0;
+}
+
 static int lm_trans_emit_l1_include_frame(FILE * output, const LmP0Frame * frame) {
     const LmP0Field * field;
     const LmP0Node * node;
@@ -27857,6 +27890,9 @@ static int lm_trans_emit_module_prelude_plan(FILE * file) {
     }
     emitted = 0;
     status = lm_trans_namespace_attach_registry(namespace_);
+    if (status == 0) {
+        status = lm_trans_emit_core_include_table(file, namespace_, &emitted);
+    }
     if (status == 0) {
         status = lm_trans_emit_configured_prelude_sequences(file, namespace_, &emitted);
     }

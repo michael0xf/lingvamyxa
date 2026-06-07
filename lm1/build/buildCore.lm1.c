@@ -1,4 +1,9 @@
 #include <stddef.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <stdio.h>
+
+#include <stddef.h>
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;

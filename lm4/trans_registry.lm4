@@ -53,6 +53,7 @@ table:
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
+             `core.c.include`           relation
              `None.cell`                relation
              `serialization.codec`      relation
              `contextual.literal.value` relation
@@ -365,6 +366,16 @@ table:
              i32       int32_t
              i64       int64_t
 end: `class.c.projection`
+
+table:
+    name: `core.c.include`
+    columns: class  (target char)
+    rows:
+             core_stddef   "<stddef.h>"
+             core_stdint   "<stdint.h>"
+             core_inttypes "<inttypes.h>"
+             core_stdio    "<stdio.h>"
+end: `core.c.include`
 
 table:
     name: `serialization.codec`

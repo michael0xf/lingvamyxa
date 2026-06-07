@@ -3054,6 +3054,8 @@ fn: lm_trans_emit_module_prelude_plan (FILE: file) int
     emitted: 0
     status: lm_trans_namespace_attach_registry(namespace_)
     if: status = 0
+        status: lm_trans_emit_core_include_table(file, namespace_, @ emitted)
+    if: status = 0
         status: lm_trans_emit_configured_prelude_sequences(file, namespace_, @ emitted)
     if: status = 0 && emitted != 0
         status: lm_trans_put(file, "\n")

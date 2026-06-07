@@ -1,3 +1,8 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <stdio.h>
+
 #if defined(_WIN32)
 /* no POSIX feature macro on Windows */
 #else
