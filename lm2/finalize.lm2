@@ -64,7 +64,7 @@ os:
         end: lm_finalize_platform_sleep_retry
 
         fn: lm_finalize_platform_defer_command_format () const: @: char
-        return: "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &"
+        return: "cd \"%s\" && \"%s\" \"--copy\" >/dev/null 2>&1 &"
 end: os
 
 fn: lm_finalize_is_path_separator (char: value) int
@@ -78,6 +78,16 @@ fn: lm_finalize_is_absolute_path (@: char path) int
     if: lm_finalize_platform_is_drive_absolute(path)
         return: 1
 return: 0
+
+fn: lm_finalize_file_exists (@: char path) int
+    FILE: file
+
+    file: fopen(path, "rb")
+    if: file = 0
+        return: 0
+
+    fclose(file)
+return: 1
 
 fn: lm_finalize_trim_last_path_part (@: char path) int
     size_t: length
@@ -135,12 +145,40 @@ sub: lm_finalize_sleep_retry ()
     lm_finalize_platform_sleep_retry()
 end: lm_finalize_sleep_retry
 
-sub: lm_finalize_tool_path (@: char path; size_t: size; @: char tool_name; @: char variant)
+sub: lm_finalize_live_tool_path (@: char path; size_t: size; @: char tool_name)
     c.snprintf:
-        path size "build%slm0%s%s%s.lm0%s"
+        path size "build%slm0%s%s.lm0%s"
         lm_finalize_platform_path_sep() lm_finalize_platform_path_sep()
-        tool_name variant lm_finalize_platform_exe_suffix()
-end: lm_finalize_tool_path
+        tool_name lm_finalize_platform_exe_suffix()
+end: lm_finalize_live_tool_path
+
+sub: lm_finalize_next_tool_path (@: char path; size_t: size; @: char tool_name)
+    c.snprintf:
+        path size "build%slm0%snext%s%s.lm0%s"
+        lm_finalize_platform_path_sep() lm_finalize_platform_path_sep()
+        lm_finalize_platform_path_sep() tool_name lm_finalize_platform_exe_suffix()
+end: lm_finalize_next_tool_path
+
+sub: lm_finalize_legacy_next_tool_path (@: char path; size_t: size; @: char tool_name)
+    c.snprintf:
+        path size "build%slm0%s%s.next.lm0%s"
+        lm_finalize_platform_path_sep() lm_finalize_platform_path_sep()
+        tool_name lm_finalize_platform_exe_suffix()
+end: lm_finalize_legacy_next_tool_path
+
+sub: lm_finalize_live_artifact_path (@: char path; size_t: size; @: char artifact_name)
+    c.snprintf:
+        path size "build%slm0%s%s"
+        lm_finalize_platform_path_sep() lm_finalize_platform_path_sep()
+        artifact_name
+end: lm_finalize_live_artifact_path
+
+sub: lm_finalize_next_artifact_path (@: char path; size_t: size; @: char artifact_name)
+    c.snprintf:
+        path size "build%slm0%snext%s%s"
+        lm_finalize_platform_path_sep() lm_finalize_platform_path_sep()
+        lm_finalize_platform_path_sep() artifact_name
+end: lm_finalize_next_artifact_path
 
 fn: lm_finalize_copy_once (@: char source_path; @: char output_path; int: quiet) int
     []: char buffer 32768
@@ -203,8 +241,21 @@ fn: lm_finalize_install_next_tool (@: char tool_name) int
     []: char source_path 256
     []: char output_path 256
 
-    lm_finalize_tool_path(source_path, c.sizeof(source_path), tool_name, ".next")
-    lm_finalize_tool_path(output_path, c.sizeof(output_path), tool_name, "")
+    lm_finalize_next_tool_path(source_path, c.sizeof(source_path), tool_name)
+    lm_finalize_live_tool_path(output_path, c.sizeof(output_path), tool_name)
+
+    if: lm_finalize_copy_with_retry(source_path, output_path) != 0
+        lm_finalize_log("copy failed")
+        return: 1
+
+return: 0
+
+fn: lm_finalize_install_legacy_next_tool (@: char tool_name) int
+    []: char source_path 256
+    []: char output_path 256
+
+    lm_finalize_legacy_next_tool_path(source_path, c.sizeof(source_path), tool_name)
+    lm_finalize_live_tool_path(output_path, c.sizeof(output_path), tool_name)
 
     if: lm_finalize_copy_with_retry(source_path, output_path) != 0
         lm_finalize_log("copy failed")
@@ -213,6 +264,19 @@ fn: lm_finalize_install_next_tool (@: char tool_name) int
     if: remove(source_path) != 0
         c.fprintf: c.stderr "finalize.lm0: cannot remove temporary file %s\n" source_path
         lm_finalize_log("remove failed")
+        return: 1
+
+return: 0
+
+fn: lm_finalize_install_next_artifact (@: char artifact_name) int
+    []: char source_path 256
+    []: char output_path 256
+
+    lm_finalize_next_artifact_path(source_path, c.sizeof(source_path), artifact_name)
+    lm_finalize_live_artifact_path(output_path, c.sizeof(output_path), artifact_name)
+
+    if: lm_finalize_copy_with_retry(source_path, output_path) != 0
+        lm_finalize_log("copy failed")
         return: 1
 
 return: 0
@@ -228,10 +292,13 @@ fn: lm_finalize_defer () int
         return: 1
 
     c.snprintf:
-        finalize_path c.sizeof(finalize_path) "%s%sbuild%slm0%sfinalize.lm0%s"
-        root_path lm_finalize_platform_path_sep()
+        finalize_path c.sizeof(finalize_path) "build%slm0%snext%sfinalize.lm0%s"
         lm_finalize_platform_path_sep() lm_finalize_platform_path_sep()
+        lm_finalize_platform_path_sep()
         lm_finalize_platform_exe_suffix()
+    if: lm_finalize_file_exists(finalize_path) = 0
+        lm_finalize_live_tool_path(finalize_path, c.sizeof(finalize_path), "finalize")
+    ---
 
     c.snprintf:
         command c.sizeof(command) lm_finalize_platform_defer_command_format()
@@ -244,11 +311,13 @@ fn: lm_finalize_defer () int
         return: 1
 
     lm_finalize_log("defer scheduled")
-    c.printf: "finalize.lm0: scheduled deferred buildCore install\n"
+    c.printf: "finalize.lm0: scheduled deferred staged install\n"
 return: 0
 
 external:
     fn: main (int: argc; @@: char argv) int
+        []: char staged_build_core_path 256
+
         if: lm_finalize_enter_project_root(argv[0]) != 0
             return: 1
 
@@ -261,7 +330,37 @@ external:
 
         lm_finalize_log("copy started")
 
+        lm_finalize_next_tool_path(staged_build_core_path, c.sizeof(staged_build_core_path), "buildCore")
+        if: lm_finalize_file_exists(staged_build_core_path) = 0
+            if: lm_finalize_install_legacy_next_tool("make") != 0
+                return: 1
+
+            if: lm_finalize_install_legacy_next_tool("buildCore") != 0
+                return: 1
+
+            lm_finalize_log("legacy copy completed")
+            return: 0
+        ---
+
+        if: lm_finalize_install_next_artifact("libparser.lm0.a") != 0
+            return: 1
+
+        if: lm_finalize_install_next_artifact("libown.lm0.a") != 0
+            return: 1
+
         if: lm_finalize_install_next_tool("make") != 0
+            return: 1
+
+        if: lm_finalize_install_next_tool("trans") != 0
+            return: 1
+
+        if: lm_finalize_install_next_tool("vcpkgFetch") != 0
+            return: 1
+
+        if: lm_finalize_install_next_tool("printTree") != 0
+            return: 1
+
+        if: lm_finalize_install_next_tool("finalize") != 0
             return: 1
 
         if: lm_finalize_install_next_tool("buildCore") != 0

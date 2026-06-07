@@ -55,6 +55,7 @@ struct LmOwnArena {
 };
 typedef struct LmBuildOptions {
     int full_build;
+    int next_build;
 } LmBuildOptions;
 
 typedef void (*LmOwnDestroyFields)(void *object);
@@ -114,6 +115,7 @@ static int lm_build_has_qt_cmake(void);
 static int lm_build_has_qt_mingw_make(void);
 static int lm_build_has_qt_gcc(void);
 static int lm_build_has_qt_gxx(void);
+static char * lm_build_platform_canary_command_format(void);
 
 static char * lm_build_exe_suffix(void) {
     return ".exe";
@@ -160,6 +162,10 @@ static int lm_build_has_qt_gcc(void) {
 static int lm_build_has_qt_gxx(void) {
     return lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe");
 }
+
+static char * lm_build_platform_canary_command_format(void) {
+    return "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=Start-Process -FilePath '%s' -ArgumentList '--next' -PassThru; if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }; exit $p.ExitCode\"";
+}
 #else
 #include <unistd.h>
 static char * lm_build_exe_suffix(void);
@@ -172,6 +178,7 @@ static int lm_build_has_qt_cmake(void);
 static int lm_build_has_qt_mingw_make(void);
 static int lm_build_has_qt_gcc(void);
 static int lm_build_has_qt_gxx(void);
+static char * lm_build_platform_canary_command_format(void);
 
 static char * lm_build_exe_suffix(void) {
     return "";
@@ -218,6 +225,10 @@ static int lm_build_has_qt_gcc(void) {
 static int lm_build_has_qt_gxx(void) {
     return 0;
 }
+
+static char * lm_build_platform_canary_command_format(void) {
+    return "timeout 120s \"%s\" --next";
+}
 #endif
 static LmBuildOptions * lm_build_options_new(void);
 static void lm_build_options_delete(LmBuildOptions * options);
@@ -236,6 +247,7 @@ static char * lm_build_default_cc(void);
 static char * lm_build_default_cxx(void);
 static void lm_build_print_usage(void);
 static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options);
+static char * lm_build_output_dir(LmBuildOptions * options);
 static size_t lm_build_append(char *buffer, size_t size, size_t used, char *text);
 static size_t lm_build_append_arg(char *buffer, size_t size, size_t used, char *arg);
 static size_t lm_build_append_prefixed_arg(char *buffer, size_t size, size_t used, char *prefix, char *value);
@@ -243,10 +255,11 @@ static int lm_build_run(char *command);
 static int lm_build_make(char *make_tool, char *operation, char *args);
 static int lm_build_trans(char *trans_tool, char *source_path, char *output_path);
 static int lm_build_generate_all(char *trans_tool);
-static int lm_build_parser_library(char *make_tool);
-static int lm_build_own_library(char *make_tool);
-static int lm_build_compile_trans(char *make_tool, char *parser_library, char *own_library);
-static int lm_build_compile_generated_tools(char *make_tool);
+static int lm_build_parser_library(char *make_tool, char *output_dir);
+static int lm_build_own_library(char *make_tool, char *output_dir);
+static int lm_build_compile_trans(char *make_tool, char *output_dir, char *parser_library, char *own_library);
+static int lm_build_compile_generated_tools(char *make_tool, char *output_dir, char *parser_library, char *own_library);
+static int lm_build_run_canary(void);
 static int lm_build_defer_finalize(void);
 static int lm_build_extract_third_party_zips(void);
 static int lm_build_clear_full_cmake_cache(char *cmake_tool, char *build_dir);
@@ -420,14 +433,16 @@ static char * lm_build_default_cxx(void) {
 }
 
 static void lm_build_print_usage(void) {
-    printf("usage: buildCore.lm0 [--build] [--full]\n");
+    printf("usage: buildCore.lm0 [--build] [--full] [--next]\n");
     printf("  --build refresh the L0 bootstrap tools\n");
     printf("  --full  refresh L0 tools, then build the bundled third_party profile\n");
+    printf("  --next  verify the staged L0 bootstrap tools without installing them\n");
 }
 
 static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options) {
     int index;
     options->full_build = 0;
+    options->next_build = 0;
     index = 1;
     while (index < argc) {
         if (strcmp(argv[index], "--build") == 0) {
@@ -435,11 +450,14 @@ static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * option
         if (strcmp(argv[index], "--full") == 0) {
             options->full_build = 1;
         }
+        if (strcmp(argv[index], "--next") == 0) {
+            options->next_build = 1;
+        }
         if (strcmp(argv[index], "--help") == 0 || strcmp(argv[index], "-h") == 0) {
             lm_build_print_usage();
             return 2;
         }
-        if (strcmp(argv[index], "--build") != 0 && strcmp(argv[index], "--full") != 0 && strcmp(argv[index], "--help") != 0 && strcmp(argv[index], "-h") != 0) {
+        if (strcmp(argv[index], "--build") != 0 && strcmp(argv[index], "--full") != 0 && strcmp(argv[index], "--next") != 0 && strcmp(argv[index], "--help") != 0 && strcmp(argv[index], "-h") != 0) {
             fprintf(stderr, "buildCore.lm0: unknown option: %s\n", argv[index]);
             lm_build_print_usage();
             return 1;
@@ -447,6 +465,13 @@ static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * option
         index = index + 1;
     }
     return 0;
+}
+
+static char * lm_build_output_dir(LmBuildOptions * options) {
+    if (options -> next_build) {
+        return "build/lm0/next/check";
+    }
+    return "build/lm0/next";
 }
 
 static size_t lm_build_append(char *buffer, size_t size, size_t used, char *text) {
@@ -568,62 +593,80 @@ static int lm_build_generate_all(char *trans_tool) {
     return 0;
 }
 
-static int lm_build_parser_library(char *make_tool) {
+static int lm_build_parser_library(char *make_tool, char *output_dir) {
+    char library_path[512];
+    char command[4096];
+    snprintf(library_path, sizeof(library_path), "%s/libparser.lm0.a", output_dir);
     if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0) {
         return 1;
     }
-    remove("build/lm0/libparser.lm0.a");
-    if (lm_build_make(make_tool, "ar", "rcs \"build/lm0/libparser.lm0.a\" \"build/obj/parser.lm1.o\"") != 0) {
+    remove(library_path);
+    snprintf(command, sizeof(command), "rcs \"%s\" \"build/obj/parser.lm1.o\"", library_path);
+    if (lm_build_make(make_tool, "ar", command) != 0) {
         return 1;
     }
-    return lm_build_make(make_tool, "ranlib", "\"build/lm0/libparser.lm0.a\"");
+    snprintf(command, sizeof(command), "\"%s\"", library_path);
+    return lm_build_make(make_tool, "ranlib", command);
 }
 
-static int lm_build_own_library(char *make_tool) {
+static int lm_build_own_library(char *make_tool, char *output_dir) {
+    char library_path[512];
+    char command[4096];
+    snprintf(library_path, sizeof(library_path), "%s/libown.lm0.a", output_dir);
     if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0) {
         return 1;
     }
-    remove("build/lm0/libown.lm0.a");
-    if (lm_build_make(make_tool, "ar", "rcs \"build/lm0/libown.lm0.a\" \"build/obj/own.lm1.o\"") != 0) {
+    remove(library_path);
+    snprintf(command, sizeof(command), "rcs \"%s\" \"build/obj/own.lm1.o\"", library_path);
+    if (lm_build_make(make_tool, "ar", command) != 0) {
         return 1;
     }
-    return lm_build_make(make_tool, "ranlib", "\"build/lm0/libown.lm0.a\"");
+    snprintf(command, sizeof(command), "\"%s\"", library_path);
+    return lm_build_make(make_tool, "ranlib", command);
 }
 
-static int lm_build_compile_trans(char *make_tool, char *parser_library, char *own_library) {
+static int lm_build_compile_trans(char *make_tool, char *output_dir, char *parser_library, char *own_library) {
     char command[4096];
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\"", parser_library, own_library, lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/trans.lm1.c\" \"%s\" \"%s\" -o \"%s/trans.lm0%s\"", parser_library, own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
     return 0;
 }
 
-static int lm_build_compile_generated_tools(char *make_tool) {
+static int lm_build_compile_generated_tools(char *make_tool, char *output_dir, char *parser_library, char *own_library) {
     char command[4096];
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" -o \"%s/make.lm0%s\"", output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" -o \"%s/finalize.lm0%s\"", output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/vcpkgFetch.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/vcpkgFetch.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/vcpkgFetch.lm1.c\" \"%s\" -o \"%s/vcpkgFetch.lm0%s\"", own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/printTree.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/printTree.lm1.c\" \"%s\" \"%s\" -o \"%s/printTree.lm0%s\"", parser_library, own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/buildCore.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/buildCore.next.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/buildCore.lm1.c\" \"%s\" -o \"%s/buildCore.lm0%s\"", own_library, output_dir, lm_build_exe_suffix());
     return lm_build_make(make_tool, "link", command);
+}
+
+static int lm_build_run_canary(void) {
+    char canary_path[512];
+    char command[4096];
+    snprintf(canary_path, sizeof(canary_path), "build/lm0/next/buildCore.lm0%s", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), lm_build_platform_canary_command_format(), canary_path);
+    return lm_build_run(command);
 }
 
 static int lm_build_defer_finalize(void) {
     char command[256];
-    snprintf(command, sizeof(command), "build%slm0%sfinalize.lm0%s --defer", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "build%slm0%snext%sfinalize.lm0%s --defer", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
     return lm_build_run(command);
 }
 
@@ -862,34 +905,47 @@ static int lm_build_full_project(void) {
 }
 
 static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans) {
-    if (lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\"") != 0) {
+    char *output_dir;
+    char parser_library[512];
+    char own_library[512];
+    output_dir = lm_build_output_dir(options);
+    snprintf(parser_library, sizeof(parser_library), "%s/libparser.lm0.a", output_dir);
+    snprintf(own_library, sizeof(own_library), "%s/libown.lm0.a", output_dir);
+    if (lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0) {
         return 1;
     }
     if (lm_build_generate_all(built_trans) != 0) {
         return 1;
     }
-    if (lm_build_parser_library(trusted_make) != 0) {
+    if (lm_build_parser_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_own_library(trusted_make) != 0) {
+    if (lm_build_own_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a", "build/lm0/libown.lm0.a") != 0) {
+    if (lm_build_compile_trans(trusted_make, output_dir, parser_library, own_library) != 0) {
         return 1;
     }
     if (lm_build_generate_all(built_trans) != 0) {
         return 1;
     }
-    if (lm_build_parser_library(trusted_make) != 0) {
+    if (lm_build_parser_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_own_library(trusted_make) != 0) {
+    if (lm_build_own_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a", "build/lm0/libown.lm0.a") != 0) {
+    if (lm_build_compile_trans(trusted_make, output_dir, parser_library, own_library) != 0) {
         return 1;
     }
-    if (lm_build_compile_generated_tools(trusted_make) != 0) {
+    if (lm_build_compile_generated_tools(trusted_make, output_dir, parser_library, own_library) != 0) {
+        return 1;
+    }
+    if (options -> next_build) {
+        return 0;
+    }
+    if (lm_build_run_canary() != 0) {
+        fprintf(stderr, "buildCore.lm0: staged bootstrap tools failed the --next rebuild; live tools were not overwritten\n");
         return 1;
     }
     if (options -> full_build) {
@@ -927,6 +983,10 @@ int main(int argc, char **argv) {
     }
     snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
     snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+    if (options -> next_build) {
+        snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%snext%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+        snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%snext%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+    }
     trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
     result = lm_build_run_bootstrap(options, trusted_make, built_trans_buffer);
     lm_build_options_delete(options);

@@ -105,19 +105,26 @@ static void lm_finalize_platform_sleep_retry(void) {
 }
 
 static const char * lm_finalize_platform_defer_command_format(void) {
-    return "cd \"%s\" && \"%s\" \"--copy\" >/dev/0 2>&1 &";
+    return "cd \"%s\" && \"%s\" \"--copy\" >/dev/null 2>&1 &";
 }
 #endif
 static int lm_finalize_is_path_separator(char value);
 static int lm_finalize_is_absolute_path(char *path);
+static int lm_finalize_file_exists(char *path);
 static int lm_finalize_trim_last_path_part(char *path);
 static int lm_finalize_enter_project_root(char *program_path);
 static void lm_finalize_log(char *message);
 static void lm_finalize_sleep_retry(void);
-static void lm_finalize_tool_path(char *path, size_t size, char *tool_name, char *variant);
+static void lm_finalize_live_tool_path(char *path, size_t size, char *tool_name);
+static void lm_finalize_next_tool_path(char *path, size_t size, char *tool_name);
+static void lm_finalize_legacy_next_tool_path(char *path, size_t size, char *tool_name);
+static void lm_finalize_live_artifact_path(char *path, size_t size, char *artifact_name);
+static void lm_finalize_next_artifact_path(char *path, size_t size, char *artifact_name);
 static int lm_finalize_copy_once(char *source_path, char *output_path, int quiet);
 static int lm_finalize_copy_with_retry(char *source_path, char *output_path);
 static int lm_finalize_install_next_tool(char *tool_name);
+static int lm_finalize_install_legacy_next_tool(char *tool_name);
+static int lm_finalize_install_next_artifact(char *artifact_name);
 static int lm_finalize_defer(void);
 int main(int argc, char **argv);
 
@@ -136,6 +143,16 @@ static int lm_finalize_is_absolute_path(char *path) {
         return 1;
     }
     return 0;
+}
+
+static int lm_finalize_file_exists(char *path) {
+    FILE * file;
+    file = fopen(path, "rb");
+    if (file == 0) {
+        return 0;
+    }
+    fclose(file);
+    return 1;
 }
 
 static int lm_finalize_trim_last_path_part(char *path) {
@@ -193,8 +210,24 @@ static void lm_finalize_sleep_retry(void) {
     lm_finalize_platform_sleep_retry();
 }
 
-static void lm_finalize_tool_path(char *path, size_t size, char *tool_name, char *variant) {
-    snprintf(path, size, "build%slm0%s%s%s.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), tool_name, variant, lm_finalize_platform_exe_suffix());
+static void lm_finalize_live_tool_path(char *path, size_t size, char *tool_name) {
+    snprintf(path, size, "build%slm0%s%s.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), tool_name, lm_finalize_platform_exe_suffix());
+}
+
+static void lm_finalize_next_tool_path(char *path, size_t size, char *tool_name) {
+    snprintf(path, size, "build%slm0%snext%s%s.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), tool_name, lm_finalize_platform_exe_suffix());
+}
+
+static void lm_finalize_legacy_next_tool_path(char *path, size_t size, char *tool_name) {
+    snprintf(path, size, "build%slm0%s%s.next.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), tool_name, lm_finalize_platform_exe_suffix());
+}
+
+static void lm_finalize_live_artifact_path(char *path, size_t size, char *artifact_name) {
+    snprintf(path, size, "build%slm0%s%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), artifact_name);
+}
+
+static void lm_finalize_next_artifact_path(char *path, size_t size, char *artifact_name) {
+    snprintf(path, size, "build%slm0%snext%s%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), artifact_name);
 }
 
 static int lm_finalize_copy_once(char *source_path, char *output_path, int quiet) {
@@ -263,8 +296,20 @@ static int lm_finalize_copy_with_retry(char *source_path, char *output_path) {
 static int lm_finalize_install_next_tool(char *tool_name) {
     char source_path[256];
     char output_path[256];
-    lm_finalize_tool_path(source_path, sizeof(source_path), tool_name, ".next");
-    lm_finalize_tool_path(output_path, sizeof(output_path), tool_name, "");
+    lm_finalize_next_tool_path(source_path, sizeof(source_path), tool_name);
+    lm_finalize_live_tool_path(output_path, sizeof(output_path), tool_name);
+    if (lm_finalize_copy_with_retry(source_path, output_path) != 0) {
+        lm_finalize_log("copy failed");
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_finalize_install_legacy_next_tool(char *tool_name) {
+    char source_path[256];
+    char output_path[256];
+    lm_finalize_legacy_next_tool_path(source_path, sizeof(source_path), tool_name);
+    lm_finalize_live_tool_path(output_path, sizeof(output_path), tool_name);
     if (lm_finalize_copy_with_retry(source_path, output_path) != 0) {
         lm_finalize_log("copy failed");
         return 1;
@@ -272,6 +317,18 @@ static int lm_finalize_install_next_tool(char *tool_name) {
     if (remove(source_path) != 0) {
         fprintf(stderr, "finalize.lm0: cannot remove temporary file %s\n", source_path);
         lm_finalize_log("remove failed");
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_finalize_install_next_artifact(char *artifact_name) {
+    char source_path[256];
+    char output_path[256];
+    lm_finalize_next_artifact_path(source_path, sizeof(source_path), artifact_name);
+    lm_finalize_live_artifact_path(output_path, sizeof(output_path), artifact_name);
+    if (lm_finalize_copy_with_retry(source_path, output_path) != 0) {
+        lm_finalize_log("copy failed");
         return 1;
     }
     return 0;
@@ -286,7 +343,10 @@ static int lm_finalize_defer(void) {
         fprintf(stderr, "finalize.lm0: cannot get current directory\n");
         return 1;
     }
-    snprintf(finalize_path, sizeof(finalize_path), "%s%sbuild%slm0%sfinalize.lm0%s", root_path, lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_exe_suffix());
+    snprintf(finalize_path, sizeof(finalize_path), "build%slm0%snext%sfinalize.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_exe_suffix());
+    if (lm_finalize_file_exists(finalize_path) == 0) {
+        lm_finalize_live_tool_path(finalize_path, sizeof(finalize_path), "finalize");
+    }
     snprintf(command, sizeof(command), lm_finalize_platform_defer_command_format(), root_path, finalize_path);
     status = system(command);
     if (status != 0) {
@@ -295,11 +355,12 @@ static int lm_finalize_defer(void) {
         return 1;
     }
     lm_finalize_log("defer scheduled");
-    printf("finalize.lm0: scheduled deferred buildCore install\n");
+    printf("finalize.lm0: scheduled deferred staged install\n");
     return 0;
 }
 
 int main(int argc, char **argv) {
+    char staged_build_core_path[256];
     if (lm_finalize_enter_project_root(argv[0]) != 0) {
         return 1;
     }
@@ -311,7 +372,36 @@ int main(int argc, char **argv) {
         return 1;
     }
     lm_finalize_log("copy started");
+    lm_finalize_next_tool_path(staged_build_core_path, sizeof(staged_build_core_path), "buildCore");
+    if (lm_finalize_file_exists(staged_build_core_path) == 0) {
+        if (lm_finalize_install_legacy_next_tool("make") != 0) {
+            return 1;
+        }
+        if (lm_finalize_install_legacy_next_tool("buildCore") != 0) {
+            return 1;
+        }
+        lm_finalize_log("legacy copy completed");
+        return 0;
+    }
+    if (lm_finalize_install_next_artifact("libparser.lm0.a") != 0) {
+        return 1;
+    }
+    if (lm_finalize_install_next_artifact("libown.lm0.a") != 0) {
+        return 1;
+    }
     if (lm_finalize_install_next_tool("make") != 0) {
+        return 1;
+    }
+    if (lm_finalize_install_next_tool("trans") != 0) {
+        return 1;
+    }
+    if (lm_finalize_install_next_tool("vcpkgFetch") != 0) {
+        return 1;
+    }
+    if (lm_finalize_install_next_tool("printTree") != 0) {
+        return 1;
+    }
+    if (lm_finalize_install_next_tool("finalize") != 0) {
         return 1;
     }
     if (lm_finalize_install_next_tool("buildCore") != 0) {
