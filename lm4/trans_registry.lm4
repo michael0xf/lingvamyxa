@@ -39,6 +39,16 @@ table:
              `printf.argument.class`    relation
              `printf.conversion.rule.expected` relation
              `printf.conversion.rule.profile` relation
+             `class.category.value`     relation
+             `class.category.numeric`   relation
+             `class.category.integer`   relation
+             `class.category.floating`  relation
+             `class.category.reference` relation
+             `class.category.opaque`    relation
+             `class.category.callable`  relation
+             `class.category.descriptor` relation
+             `class.category.fixedWidth` relation
+             `class.category.profileWidth` relation
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
@@ -139,6 +149,26 @@ table:
 end: class
 
 table:
+    name: `class.null`
+    columns: class         (value uint8)
+    rows:
+             categoryFlag  0
+end: `class.null`
+
+table:
+    name: `class.category`
+    columns: class            (value categoryFlag)  (numeric categoryFlag)  (integer categoryFlag)  (floating categoryFlag)  (reference categoryFlag)  (opaque categoryFlag)  (callable categoryFlag)  (descriptor categoryFlag)  (fixedWidth categoryFlag)  (profileWidth categoryFlag)
+    rows:
+             int              1              1                1                0                 0                 0               0                0                  0                  1
+             u32              1              1                1                0                 0                 0               0                0                  1                  0
+             uint8            1              1                1                0                 0                 0               0                0                  1                  0
+             double           1              1                0                1                 0                 0               0                0                  0                  0
+             FILE             1              0                0                0                 1                 1               0                0                  0                  0
+             functionPointer  0              0                0                0                 1                 0               1                1                  0                  0
+             closure          0              0                0                0                 1                 0               1                1                  0                  0
+end: `class.category`
+
+table:
     name: `class.semantic`
     columns: class  (value char)
     rows:
@@ -154,6 +184,8 @@ table:
              uchar     integer
              ulong     integer
              size_t    count
+             categoryFlag flag
+             uint8     integer
              u8        integer
              u16       integer
              u32       integer
@@ -180,6 +212,8 @@ table:
              uchar     "0..UCHAR_MAX(profile)"
              ulong     "0..ULONG_MAX(profile)"
              size_t    "0..SIZE_MAX(profile)"
+             categoryFlag "0..1"
+             uint8     "0..UINT8_MAX"
              u8        "0..UINT8_MAX"
              u16       "0..UINT16_MAX"
              u32       "0..UINT32_MAX"
@@ -195,6 +229,8 @@ table:
     name: `class.spelling`
     columns: class  (spelling char)
     rows:
+             categoryFlag uint8_t
+             uint8  uint8_t
              u8     uint8_t
              u16    uint16_t
              u32    uint32_t
@@ -301,6 +337,8 @@ table:
              ulong     "unsigned long"
              size_t    size_t
              FILE      FILE
+             categoryFlag uint8_t
+             uint8     uint8_t
              u8        uint8_t
              u16       uint16_t
              u32       uint32_t
@@ -326,6 +364,8 @@ table:
              uchar     lmx.decimal-atom
              ulong     lmx.decimal-atom
              size_t    lmx.decimal-atom
+             categoryFlag lmx.decimal-atom
+             uint8     lmx.decimal-atom
              u8        lmx.decimal-atom
              u16       lmx.decimal-atom
              u32       lmx.decimal-atom
@@ -661,6 +701,8 @@ table:
              double                   1
              size_t                   1
              FILE                     1
+             categoryFlag             1
+             uint8                    1
              u8                       1
              u16                      1
              u32                      1

@@ -2083,7 +2083,7 @@ Bare identifiers are single tokens. Exact quoted identifiers are atomic name tok
 
 Example:
 
-    if( i = 1, print(choose, hello), print(choose, world) )
+    route( i = 1, print(choose, hello), print(choose, world) )
 
 Logical argument sections:
 
@@ -2093,11 +2093,11 @@ Logical argument sections:
 
 Receiver-signature roles:
 
-    field0 -> condition
-    field1 -> then
-    field2 -> else
+    field0 -> selector
+    field1 -> onTrue
+    field2 -> onFalse
 
-The names `condition`, `then` and `else` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `if` receiver. The internal layout of the expression Structure is outside this structural-core document.
+The names `selector`, `onTrue` and `onFalse` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `route` receiver. The internal layout of the expression Structure is outside this structural-core document.
 
 4.5. Vertical Source Levels: Canonical Source-Level Notation and Relaxed Indentation Notation
 
@@ -2503,22 +2503,22 @@ A separator effect is just a visible down/up level transition.
 
 For example:
 
-if: condition
+branch: condition
     ---
-        thenBody
+        firstBody
     ---
-        elseBody
-end: if
+        secondBody
+end: branch
 
 means:
 
-    level 0: if
+    level 0: branch
     level 1: explicit marker
     level 2: first anonymous body
     level 1: explicit marker
     level 2: second anonymous body
 
-The second `---` is not a special `else` separator. It is the visible level-1 point between two level-2 anonymous bodies. It closes the first anonymous body and, because the next source item is deeper, opens the next anonymous body.
+The second `---` is not a special control-flow separator. It is the visible level-1 point between two level-2 anonymous bodies. It closes the first anonymous body and, because the next source item is deeper, opens the next anonymous body.
 
 Example with four positional arguments and no anonymous branch Structures:
 
@@ -2533,43 +2533,43 @@ Conceptual normal form:
 
     match(value, 1, print(World), 2, print(Hello))
 
-Example with two positional branch Structures in an `if` receiver:
+Example with two positional branch Structures in an ordinary receiver:
 
-if: condition
+branch: condition
     ---
-        thenBody
+        firstBody
     ---
-        elseBody
-end: if
+        secondBody
+end: branch
 
-The two `---` sections are two anonymous Structure arguments of `if` after the condition.
+The two `---` sections are two anonymous Structure arguments of `branch` after the condition.
 
 Equivalent named-argument form in canonical source-level notation:
 
-if: a
-. then:
+branch: a
+. first:
 . . doSomething
-. else:
+. second:
 . . doOtherThing
-end: if
+end: branch
 
 Relaxed indentation notation with explicit delimiter followed by a named continuation receiver:
 
-if: condition
+branch: condition
     ---
         # doSomething
     ---
         # doOtherThing
-end: if
+end: branch
 
-if: condition
+branch: condition
     ---
         # doSomething
-    else: # This "else" is at the correct level and therefore automatically closes the previous block.
+    second: # This named receiver is at the correct level and therefore automatically closes the previous block.
         # doOtherThing
-end: if
+end: branch
 
-The line `else:` is at the same source level as the preceding anonymous section. It therefore closes/separates that anonymous section and starts the ordinary nested Structure `else:`. The active `if` receiver may consume `else(...)` as a semantic field. A spelling such as `---else:` is invalid because `---` must be alone on its delimiter line, except for an optional trailing `#` comment.
+The line `second:` is at the same source level as the preceding anonymous section. It therefore closes/separates that anonymous section and starts the ordinary nested Structure `second:`. The active `branch` receiver may consume `second(...)` as a semantic field. A spelling such as `---second:` is invalid because `---` must be alone on its delimiter line, except for an optional trailing `#` comment.
 
 Example with an explicit nameless close after a nested `if`:
 
@@ -2701,39 +2701,39 @@ Some receivers expect positional Structure arguments whose semantic role is assi
 
 Canonical source-level notation single-body example:
 
-if: a
+branch: a
 . doSomething
-end: if
+end: branch
 
-Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
+Under a `branch(selector, firstBody, secondBody)` receiver signature, this builds:
 
-    if(
+    branch(
       a,
       (
         doSomething
       )
     )
 
-The name `thenBody` is assigned by the `if` receiver signature. It is not a surface keyword in this form.
+The name `firstBody` is assigned by the `branch` receiver signature. It is not a surface keyword in this form.
 
 Relaxed indentation notation:
 
-if: a
+branch: a
     doSomething
-end: if
+end: branch
 
 Two-body positional example using relaxed anonymous sections:
 
-if: a
+branch: a
     ---
         doSomething
     ---
         doOtherThing
-end: if
+end: branch
 
-Under the same `if(condition, thenBody, elseBody)` receiver signature, this builds:
+Under the same `branch(selector, firstBody, secondBody)` receiver signature, this builds:
 
-    if(
+    branch(
       a,
       (
         doSomething
@@ -2745,29 +2745,29 @@ Under the same `if(condition, thenBody, elseBody)` receiver signature, this buil
 
 The same branches may also be written as explicit named argument Structures:
 
-if: a
-. then:
+branch: a
+. first:
 . . doSomething
-. else:
+. second:
 . . doOtherThing
-end: if
+end: branch
 
 or in relaxed indentation notation:
 
-if: a
-    then:
+branch: a
+    first:
         doSomething
-    else:
+    second:
         doOtherThing
-end: if
+end: branch
 
-The names `then` and `else` are ordinary nested Structures consumed by the active `if` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
+The names `first` and `second` are ordinary nested Structures consumed by the active `branch` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
 
 A one-line form is also possible when the receiver defines it:
 
-    if: a doSomething
+    branch: a doSomething
 
-This builds a Frame whose final meaning is assigned by the active `if` receiver.
+This builds a Frame whose final meaning is assigned by the active `branch` receiver.
 
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one anonymous Structure wrapper around those arguments are not separate semantic categories. The argument list itself is a Structure. Therefore a sole anonymous Structure in the positional argument-container position is consumed as the argument sequence itself, as described in section 4.0.1.
 
@@ -2819,23 +2819,23 @@ A Structure may contain positional fields. A receiver may assign semantic names 
 
 Example:
 
-if: a
+branch: a
     doSomething
     doOtherThing
-end: if
+end: branch
 
-With an `if(condition, thenBody, elseBody)` receiver signature, the two vertical child items are consumed positionally as `thenBody` and `elseBody`.
+With a `branch(selector, firstBody, secondBody)` receiver signature, the two vertical child items are consumed positionally as `firstBody` and `secondBody`.
 
 Named vertical form:
 
-if: a
-    then:
+branch: a
+    first:
         doSomething
-    else:
+    second:
         doOtherThing
-end: if
+end: branch
 
-Here `then` and `else` are explicit nested Structures consumed as named semantic fields.
+Here `first` and `second` are explicit nested Structures consumed as named semantic fields.
 
 Explicit semantic field-like input should be represented by nested Structures:
 
@@ -2881,29 +2881,29 @@ The `%` marker does not contribute to source level. The source level of a disabl
 
 Example:
 
-%if: mode = debug
-    then:
+%branch: mode = debug
+    first:
         print: debug branch
     ---
-    else:
+    second:
         print: release branch
     ---
 
 
-This whole `if` Structure is disabled, but the parser still verifies the syntax and closing structure.
+This whole `branch` Structure is disabled, but the parser still verifies the syntax and closing structure.
 
 Example inside an enabled block:
 
-if: mode = debug
-    %then:
-        print: disabled then branch
+branch: mode = debug
+    %first:
+        print: disabled first branch
     ---
-    else:
-        print: active else branch
+    second:
+        print: active second branch
     ---
 
 
-Here only the `then` Structure is disabled. Its body is still parsed and syntax-checked.
+Here only the `first` Structure is disabled. Its body is still parsed and syntax-checked.
 
 The `%` marker is not a receiver, not an operator and not a runtime action. It is a source-control marker handled before receiver consumption.
 
@@ -3019,21 +3019,21 @@ signature names that position as its statement tail and lowers it as the loop
 body. The compact body example uses only compact Frames and contains no inline
 short colon-form.
 
-5.4. Example: `if`
+5.4. Example: Profile-Level Branch Receiver
 
-For a computational L3 `if`, the receiver may define fields:
+For a computational profile-level branch receiver, the receiver may define fields:
 
     condition
-    then
-    else
+    first
+    second
 
 and consume them as:
 
     condition -> boolean-producing expression
-    then      -> statement Structure
-    else      -> statement Structure
+    first     -> statement Structure
+    second    -> statement Structure
 
-During translation, the receiver lowers these fields into target control flow. During interpretation, the receiver evaluates the condition and then interprets only the selected body.
+During translation, the receiver lowers these fields into target control flow. During interpretation, the receiver evaluates the condition and then interprets only the selected body. This example illustrates receiver-signature field assignment; the concrete L2/L3 `if` control receiver is described in chapter 19 and may use a separate sibling `else` receiver.
 
 5.5. Example: `fn`
 
@@ -3624,12 +3624,16 @@ projection profile then chooses whether that class lowers to `int`, `size_t`,
 storage spelling.
 
 Registry profiles should keep these concerns in separate relations. For
-example, `class.semantic` describes the abstract value family, `class.range`
-describes the admitted range, `class.c.projection` describes the selected C/L1
-storage spelling, `printf.format` describes C formatted-output spellings, and
-`serialization.codec` describes portable LMX persistence. A type may be
-semantically compatible even when a selected projection profile cannot lower it;
-that is a projection failure, not a parser fact.
+example, `class.category` may expose small `categoryFlag` facets over `uint8`
+such as value, numeric, integer, floating, reference, callable and descriptor;
+the `categoryFlag` class may define `class.null[categoryFlag] = 0` so empty
+facets are written as `0` in source tables without making `0` null for all
+`uint8` values. `class.semantic` describes the abstract value family,
+`class.range` describes the admitted range, `class.c.projection` describes the
+selected C/L1 storage spelling, `printf.format` describes C formatted-output
+spellings, and `serialization.codec` describes portable LMX persistence. A type
+may be semantically compatible even when a selected projection profile cannot
+lower it; that is a projection failure, not a parser fact.
 
 Formatted-output validation is likewise table data. A profile may use
 `printf.format` for recommended class-to-spelling projection and a separate
@@ -4805,17 +4809,17 @@ incompatible function.
 
 Example source:
 
-sub: l5_if (boolean(condition)) then else
+sub: l5_branch (boolean(condition)) on_true on_false
 return
 
 Strict conceptual form:
 
     sub(
-      name(l5_if),
+      name(l5_branch),
       args(
         boolean(condition),
-        then,
-        else
+        on_true,
+        on_false
       ),
       body(...)
     )
@@ -4823,16 +4827,16 @@ Strict conceptual form:
 Explicit nested-source form:
 
 sub:
-    name: l5_if
+    name: l5_branch
     args:
         boolean: condition
-        then
-        else
+        on_true
+        on_false
     body:
         return
-end: l5_if
+end: l5_branch
 
-The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
+The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `on_true` and `on_false` are structural arguments. No `Struct on_true` annotation is required.
 
 7.3.1. Shared Lexical Namespace View and No Silent Shadowing
 
@@ -4997,9 +5001,19 @@ Examples:
 if: condition
     bodyCall()
 end: if
+else:
+    fallbackCall()
+end: else
 
-Here `if` has no separate `name` argument, so the core `if` receiver exposes its
-head spelling as the close target.
+or with ordinary source-level cuts:
+
+if: condition
+    bodyCall()
+else:
+    fallbackCall()
+
+Here `if` and `else` have no separate `name` argument, so the core receivers
+expose their head spellings as close targets.
 
 fn: myFunc (int(i)) (int(r))
     return: i
@@ -5565,15 +5579,26 @@ A receiver such as `fn`, `sub`, `autoModel` or `args` may consume these Structur
 10. Conditional Structures: L3 Core Extract
 10.1. L3 `if`
 
-L3 `if` is a computational control-flow receiver. It consumes:
+L3 `if` is a computational control-flow statement receiver. In the current
+core form it consumes:
 
     condition -> boolean-producing expression
-    then      -> statement Structure consumed by `if`
-    else      -> statement Structure consumed by `if`
+    body      -> statement Structure consumed by `if`
 
-At interpretation time, only the selected body is interpreted.
+`else` is a separate sibling statement receiver. It may immediately follow an
+`if` at the same statement level and consumes:
 
-At translation time, the receiver lowers the condition and statement Structures into target control flow.
+    body      -> statement Structure consumed by `else`
+
+At interpretation time, the `if` condition is evaluated once. If the condition
+is true, the `if` body is interpreted and the following sibling `else` body is
+skipped. If the condition is false, the `if` body is skipped and the following
+sibling `else` body, when present, is interpreted.
+
+At translation time, the two receivers lower to adjacent target control-flow
+forms such as `if (...) { ... } else { ... }`. If another statement separates
+`if` and `else`, the pair is no longer adjacent and the target/profile
+validator may reject the resulting control flow.
 
 10.2. Conditional Forms
 
@@ -5581,33 +5606,40 @@ Short positional conditional form:
 
 if: mode = debug
     build: debugTarget
+
+else:
     build: releaseTarget
 
-Normal form under signature `if(condition, thenBody, elseBody)`:
+Normal receiver sequence:
 
     if(
       <expression Structure for `mode = debug`>,
-      (build(debugTarget)),
+      (build(debugTarget))
+    )
+    else(
       (build(releaseTarget))
     )
 
-The same conditional may be written with explicit named branch Structures:
+A profile may also define an independent branch-like receiver with explicit
+named branch Structures:
 
-if: mode = debug
-    then:
+branch: mode = debug
+    first:
         build: debugTarget
-    else:
+    second:
         build: releaseTarget
+end: branch
 
 This builds:
 
-    if(
+    branch(
       <expression Structure for `mode = debug`>,
-      then(build(debugTarget)),
-      else(build(releaseTarget))
+      first(build(debugTarget)),
+      second(build(releaseTarget))
     )
 
-The short positional form is valid when the active `if` receiver assigns sibling child Structures to semantic fields by signature order. Named vertical form remains available for readability or when a style/profile requires explicit names.
+The named vertical form is an ordinary receiver-signature pattern. It is not
+required for the current core `if`/`else` statement pair.
 
 11. L2 Addresses
 
@@ -7042,7 +7074,7 @@ separate parser syntax.
 
 Operator summary:
 
-    0.  if / then / else                                  L2/L3
+    0.  if / else                                         L2/L3
     1.  match / default-pattern receivers                 L2/L3
     2.  while                                             L2/L3
     3.  until                                             L2/L3
@@ -7063,46 +7095,42 @@ Operator summary:
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
-19.1. `if`, `then` and `else`
+19.1. `if` and `else`
 
-`if` consumes a condition and one or two statement Structures.
+`if` is a statement receiver. It consumes a condition expression and a statement
+Structure for the true branch. `else` is a separate sibling statement receiver.
+It may immediately follow an `if` at the same statement level and consumes the
+false-branch statement Structure.
 
 Semantic form:
 
-    if(condition, thenBody, elseBody?)
+    if(condition, body)
+    else(body)?
 
-Explicit form:
+Compact sibling form:
 
 if: condition
-    then:
-        thenBody
-    else:
-        elseBody
+    trueBody
+
+else:
+    falseBody
+
+Explicit named-close form, useful for long blocks or diagnostics:
+
+if: condition
+    trueBody
 end: if
+else:
+    falseBody
+end: else
 
-
-Short positional form:
-
-if: condition
-    thenBody
-
-    elseBody
-
-Nested short positional form:
+Nested form:
 
     if: condition
-        thenBody
-    ---
-        elseBody
-    ---
+        trueBody
 
-Nested explicit `else` form:
-
-    if: condition
-        thenBody
     else:
-        elseBody
-    ---
+        falseBody
 
 
 Single-line form:
@@ -7113,9 +7141,13 @@ The condition is evaluated once before branch selection.
 
 Only the selected body is executed.
 
-If no `else` body is provided and the condition is false, `if` completes normally without executing a body.
+If no following sibling `else` receiver is provided and the condition is false, `if` completes normally without executing a body.
 
-In named form, `then` and `else` are structural section markers inside `if`. They are not ordinary runtime calls when consumed by the `if` receiver. In positional form, sibling child Structures are mapped to `thenBody` and `elseBody` by receiver signature order.
+`else` is not parser syntax and not a reserved P0 word. It is an ordinary
+namespace receiver whose registered statement semantics are meaningful when it
+appears as the following sibling of an `if` in the selected profile. If another
+statement separates `if` and `else`, the pair is not adjacent; the target
+projection or profile validator may reject the resulting control flow.
 
 19.2. `match` and default-pattern receivers
 
@@ -8673,7 +8705,7 @@ still compose with the same operator-token consumption model.
 
 The minimal L2 executable-body control set is:
 
-    if / then / else
+    if / else
     while
     synchronized
     until
@@ -8682,7 +8714,9 @@ The minimal L2 executable-body control set is:
     break
     continue
 
-These are source-level control receivers/parser forms. They are not raw jumps in the source semantics, even if a translator lowers them to labels and branches.
+These are source-level control receivers. They are not raw jumps in the source
+semantics, even if a translator lowers them to labels and branches. In
+particular, `else` is a receiver in the namespace, not parser syntax.
 
 The first ANSI C bootstrap translator needs only:
 
@@ -8696,13 +8730,19 @@ The first ANSI C bootstrap translator needs only:
 `until` and `for` remain part of the minimal L2 semantic set, but may be added
 after the first procedural bootstrap subset.
 
-20.5.1. `if`, `then` and `else`
+20.5.1. `if` and `else`
 
 L2 `if` consumes:
 
     condition -> boolean-producing expression
-    then      -> statement Structure consumed by the `if` receiver
-    else      -> optional statement Structure consumed by the `if` receiver
+    body      -> statement Structure consumed by the `if` receiver
+
+L2 `else` is a separate statement receiver. It consumes:
+
+    body      -> statement Structure consumed by the `else` receiver
+
+`else` is valid as the false branch only when it immediately follows an `if`
+statement at the same statement level.
 
 Example:
 
@@ -8710,15 +8750,13 @@ if: count > 0
     print: count
 
 
-Explicit branch example:
+With a following sibling `else`:
 
 if: count > 0
-    then:
-        print: count
-    ---
-    else:
-        print: 0
-    ---
+    print: count
+
+else:
+    print: 0
 
 
 20.5.2. `while`

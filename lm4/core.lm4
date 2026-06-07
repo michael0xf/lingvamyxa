@@ -27,6 +27,7 @@ table:
              decimal                    literal
              boolean                    literal
              serial                     decimal
+             categoryFlag               uint8
              name                       class
              namespace                  class
              kind                       class
@@ -50,6 +51,16 @@ table:
              `printf.argument.class`    relation
              `printf.conversion.rule.expected` relation
              `printf.conversion.rule.profile` relation
+             `class.category.value`     relation
+             `class.category.numeric`   relation
+             `class.category.integer`   relation
+             `class.category.floating`  relation
+             `class.category.reference` relation
+             `class.category.opaque`    relation
+             `class.category.callable`  relation
+             `class.category.descriptor` relation
+             `class.category.fixedWidth` relation
+             `class.category.profileWidth` relation
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
@@ -87,6 +98,7 @@ table:
              ulong                      primitive
              size_t                     primitive
              FILE                       opaqueReference
+             uint8                      primitive
              u8                         primitive
              u16                        primitive
              u32                        primitive
