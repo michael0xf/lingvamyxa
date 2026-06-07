@@ -129,7 +129,7 @@ The row values are visually aligned under the corresponding schema fields from
 comes from ordinary whitespace-separated row fields and the column count. A
 profile must not infer missing cells from the physical source line. If a table
 needs an empty or absent cell in a dense row, write an explicit value such as
-`NULL`.
+`None`.
 
 Exact quoted identifiers such as `north field` and `river lowland` keep
 multi-word field values atomic.
@@ -470,7 +470,7 @@ L4:
                  path_sep       lm_build_path_sep            '\\'          '/'
                  getcwd         lm_build_platform_getcwd     _getcwd       getcwd
                  chdir          lm_build_platform_chdir      _chdir        chdir
-                 include        NULL                         "<direct.h>"  "<unistd.h>"
+                 include        None                         "<direct.h>"  "<unistd.h>"
     end: BUILD
 end: L4
 
@@ -3626,14 +3626,78 @@ storage spelling.
 Registry profiles should keep these concerns in separate relations. For
 example, `class.category` may expose small `categoryFlag` facets over `uint8`
 such as value, numeric, integer, floating, reference, callable and descriptor;
-the `categoryFlag` class may define `class.null[categoryFlag] = 0` so empty
-facets are written as `0` in source tables without making `0` null for all
-`uint8` values. `class.semantic` describes the abstract value family,
+those `0` and `1` cells are ordinary facts, not a global nullable encoding for
+all `uint8` values. If an L4 table profile wants a typed cell spelling that does
+not materialize a row, it declares that under `None.cell`; expression-level
+`None` values live separately under `None.value` or under a target class's own
+context-literal table. `class.semantic` describes the abstract value family,
 `class.range` describes the admitted range, `class.c.projection` describes the
 selected C/L1 storage spelling, `printf.format` describes C formatted-output
 spellings, and `serialization.codec` describes portable LMX persistence. A type
 may be semantically compatible even when a selected projection profile cannot
 lower it; that is a projection failure, not a parser fact.
+
+Contextual literals are ordinary L4/registry classes, not parser keywords. A
+profile may declare `contextualLiteral` as a class, add `None` and `OK` as
+instances of that class, and then provide class-local values:
+
+    table:
+        name: int8
+        columns: class  (`context literal` int8)
+        rows:
+    end: int8
+
+    join: (int8) Boolean
+        columns: class  (`context literal` int8)
+        rows:
+                 None  -1
+                 false 0
+                 true  1
+                 OK    1
+    end: Boolean
+
+When a consumer expects `Boolean`, the contextual atom is first resolved through
+the `Boolean` table itself: `Boolean[None] = -1`, `Boolean[false] = 0`,
+`Boolean[true] = 1` and `Boolean[OK] = 1`. A profile may also provide
+per-literal fallback tables:
+
+    table:
+        name: `contextual.literal.value`
+        columns: class (value relation)
+        rows:
+                 None `None.value`
+                 OK   `OK.value`
+                 false `false.value`
+                 true  `true.value`
+    end: `contextual.literal.value`
+
+    table:
+        name: `None.value`
+        columns: class (value char)
+        rows:
+                 int     0
+                 int8    0
+    end: `None.value`
+
+    table:
+        name: `OK.value`
+        columns: class (value char)
+        rows:
+                 int     1
+                 int8    1
+    end: `OK.value`
+
+The executable profile wires those names through ordinary registry relations:
+`expr.atom` binds `None`, `OK`, `false` and `true` to a contextual-literal expression emitter,
+while `namespace` / `receiver.statement` bind the same names to the contextual
+literal assignment receiver. `None: target` therefore lowers to assigning the
+value selected by the target's expected class table, with
+`contextual.literal.value[None]` / `None.value[...]` as fallback. Likewise,
+`Boolean: flag OK` and `if: value = None` use the same table-driven expression
+atom path: the surrounding declaration, call slot, assignment peer or other
+consumer provides the expected class. Adding another
+contextual literal such as `Red` is another table row plus receiver/expression
+binding data, not a parser change.
 
 Formatted-output validation is likewise table data. A profile may use
 `printf.format` for recommended class-to-spelling projection and a separate
@@ -5782,7 +5846,7 @@ layers on top of that base category.
 
 Primitive/scalar types are still registry classes. They are not a Java-style
 separate universe outside the language model. A primitive class may have facts
-such as `class.range`, `class.null`, `class.c.projection` and
+such as `class.range`, `None.cell`, `class.c.projection` and
 `serialization.codec` exactly like other classes; the selected profile then
 uses those facts to validate and lower the value. The difference is projection
 and storage shape, not source-level ontology.
@@ -8578,7 +8642,7 @@ L4:
         columns: class              (l2 binding)                (win char)  (unix char)
         rows:
                  exe_suffix         lm_build_exe_suffix         ".exe"     ""
-                 platform_absolute  lm_build_platform_absolute  NULL       NULL
+                 platform_absolute  lm_build_platform_absolute  None       None
     end: BUILD
 end: L4
 
@@ -8594,13 +8658,12 @@ example `(l2 binding)` names column `l2` and records descriptor `binding`.
 
 Rows are dense. The number of row cells must be divisible by the number of
 columns. The loader does not use physical source lines to infer missing cells.
-The preferred empty-cell spelling is class-specific: the declared class of a
-cell may define a sentinel through the relation `class.null`. For a reference
-class this is usually the pointer value `0`; for a primitive/domain class it is
-an explicit domain fact, not a global SQL-like null. A hosted bootstrap loader
-may still accept the legacy atom `NULL` as compatibility input, but `NULL` is
-not the core semantic class of absence. A table pretty-printer may align columns
-for readability, but that alignment is not semantic.
+The preferred empty-cell spelling is `None`; if a table profile wants a typed
+cell to omit materializing a row, it declares that behavior through `None.cell`.
+For expression and assignment contexts, `None` is resolved through the target
+class's contextual literal table or through `None.value`. A hosted bootstrap
+loader uses `None`, not a separate semantic class. A table pretty-printer may
+align columns for readability, but that alignment is not semantic.
 
 A bootstrap implementation may still lower these table Structures to a flat
 `row: table key payload` internal representation. That is a temporary storage

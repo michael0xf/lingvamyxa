@@ -110,7 +110,7 @@ fn: lm_trans_registry_payload_is_null (const: (LmP0Text: atom)) int
     if: lm_trans_registry_identifier_value(atom, payload) = 0
         c.lm_trans_text_ref_destroy(@ payload)
         return: 0
-    is_null: payload\length = 4U && c.memcmp(payload\data, "NULL", 4U) = 0
+    is_null: payload\length = 4U && c.memcmp(payload\data, "None", 4U) = 0
     c.lm_trans_text_ref_destroy(@ payload)
 return: is_null
 

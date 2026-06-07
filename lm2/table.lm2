@@ -683,7 +683,7 @@ fn: lm_table_measure_rows (
         return: 1
 
     if: column_count = 0U || (cell_count % column_count) != 0U
-        lm_table_error_set(error, "rows: cell count must be divisible by column count; use explicit NULL for empty cells")
+        lm_table_error_set(error, "rows: cell count must be divisible by column count; use explicit None for empty cells")
         return: 0
 
     index: 0U

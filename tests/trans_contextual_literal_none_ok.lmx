@@ -1,0 +1,23 @@
+L2:
+    external:
+        fn: main () int
+            int: var
+            None: var
+            int: var2 OK
+            int8: raw false
+            Boolean: state None
+            Boolean: no false
+            Boolean: yes true
+            Boolean: status OK
+            Boolean: legacy None
+            if: var = None
+                if: state = None
+                    return: status
+                return: no
+            if: raw = false
+                if: legacy = None
+                    return: yes
+            return: 0
+        end: main
+    end: external
+end: L2

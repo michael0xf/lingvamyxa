@@ -1770,7 +1770,7 @@ fn: lm_trans_emit_declaration_with_qualifier (
 
     if: name_field\next != 0 && lm_trans_put(file, " = ") != 0
         return: 1
-    if: name_field\next != 0 && lm_trans_emit_expr_fields(file, name_field\next, namespace_) != 0
+    if: name_field\next != 0 && lm_trans_emit_expr_fields_with_expected_class(file, name_field\next, namespace_, frame\head) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
         return: 1
@@ -3991,6 +3991,51 @@ fn: lm_trans_emit_assignment (
         return: 1
 return: lm_trans_put(file, ";\n")
 
+fn: lm_trans_emit_contextual_literal_assignment (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    const: LmTransNamespace: namespace_
+) int
+    const: @: char value
+    LmP0Text: expected_class
+    const: LmP0Structure: body
+    const: LmP0Field: target_field
+    const: LmP0Node: target_node
+
+    if: frame = 0 || frame\body = 0
+        return: 1
+
+    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
+    if: body = 0
+        return: 1
+    target_field: lm_trans_nth_field(body, 0U)
+    if: target_field = 0 || target_field\next != 0 || target_field\value = 0 || target_field\value\kind != c.LM_P0_NODE_ATOM
+        c.fprintf(c.stderr, "trans L2 error: contextual literal assignment expects exactly one target atom\n")
+        return: 1
+
+    target_node: target_field\value
+    expected_class: lm_trans_statement_text_new()
+    if: expected_class = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ expected_class)
+    if: lm_trans_expr_value_class_from_atom(target_node\as\atom, namespace_, expected_class) = 0
+        c.fprintf(c.stderr, "trans L2 error: contextual literal assignment target \"%.*s\" has no expected class\n", (cast: int target_node\as\atom\length), target_node\as\atom\data)
+        return: 1
+    value: lm_trans_contextual_literal_value(namespace_, frame\head, expected_class)
+    if: value = 0
+        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" has no value for class \"%.*s\"\n", (cast: int frame\head\length), frame\head\data, (cast: int expected_class\length), expected_class\data)
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: lm_trans_emit_assignment_target(file, target_node\as\atom) != 0
+        return: 1
+    if: lm_trans_put(file, " = ") != 0
+        return: 1
+    if: lm_trans_put(file, value) != 0
+        return: 1
+return: lm_trans_put(file, ";\n")
+
 fn: lm_trans_emit_struct_field_with_qualifier (
     FILE: file
     const: LmP0Node: node
@@ -4766,6 +4811,17 @@ fn: lm_trans_statement_emit_assignment (
     if: stack != 0 && stack = 0
         return: 1
 return: lm_trans_emit_assignment(file, frame, indent, namespace_)
+
+fn: lm_trans_statement_emit_contextual_literal_assignment (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    if: stack != 0 && stack = 0
+        return: 1
+return: lm_trans_emit_contextual_literal_assignment(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_lowering_from_head (
     const: LmP0Text: head
@@ -6176,6 +6232,8 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_value", @lm_trans_expr_emit_value, @lm_trans_expr_state_value) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_addressable_value", @lm_trans_expr_emit_addressable_value, @lm_trans_expr_state_value) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_name", @lm_trans_expr_emit_name, @lm_trans_expr_state_value) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_field_name", @lm_trans_expr_emit_name, @lm_trans_expr_state_field_name) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_field_name", @lm_trans_expr_emit_name, @lm_trans_expr_state_c_field_name) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_surface", @lm_trans_expr_emit_name, @lm_trans_expr_state_c_surface) != 0)
         status: 1
+    if: status = 0 && lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_contextual_literal", @lm_trans_expr_emit_contextual_literal, @lm_trans_expr_state_value) != 0
+        status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", @lm_trans_expr_emit_raw, @lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", @lm_trans_expr_emit_raw, @lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", @lm_trans_expr_emit_raw, @lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", @lm_trans_expr_emit_raw, @lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", @lm_trans_expr_emit_cast_frame) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
@@ -6183,6 +6241,8 @@ fn: lm_trans_pointer_bindings_init () int
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", @lm_trans_statement_emit_import) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", @lm_trans_statement_emit_table) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_join", @lm_trans_statement_emit_join) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", @lm_trans_statement_emit_merge_named_structure) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", @lm_trans_statement_emit_const_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", @lm_trans_statement_emit_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_structure_declaration", @lm_trans_statement_emit_structure_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_tagged_declaration", @lm_trans_statement_emit_c_tagged_declaration) != 0)
+        status: 1
+    if: status = 0 && lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_contextual_literal_assignment", @lm_trans_statement_emit_contextual_literal_assignment) != 0
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fn", @lm_trans_receiver_fn) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_lazy_fn", @lm_trans_receiver_lazy_fn) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fm", @lm_trans_receiver_fm) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_sub", @lm_trans_receiver_sub) != 0)
         status: 1

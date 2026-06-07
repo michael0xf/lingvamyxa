@@ -130,7 +130,10 @@ fn: lm_trans_expr_atom_lowering_new () LmTransExprAtomLowering
     lowering: (cast: (LmTransExprAtomLowering) lm_own_new_zero(c.sizeof(lowering[0])))
     if: (lowering != 0)
         lowering\text: lm_trans_text_ref_new_cstr("")
-        if: (lowering\text = 0)
+        lowering\expected_class: lm_trans_text_ref_new_cstr("")
+        if: (lowering\text = 0) || (lowering\expected_class = 0)
+            lm_trans_text_ref_destroy(@ lowering\text)
+            lm_trans_text_ref_destroy(@ lowering\expected_class)
             lm_own_delete(lowering, 0)
             return: 0
         ---
@@ -140,6 +143,7 @@ end: lm_trans_expr_atom_lowering_new
 sub: lm_trans_expr_atom_lowering_destroy_fields (LmTransExprAtomLowering: lowering)
     if: (lowering != 0)
         lm_trans_text_ref_destroy(@ lowering\text)
+        lm_trans_text_ref_destroy(@ lowering\expected_class)
     ---
 end: lm_trans_expr_atom_lowering_destroy_fields
 
@@ -150,16 +154,26 @@ end: lm_trans_expr_atom_lowering_delete
 
 fn: lm_trans_expr_atom_lowering_copy (LmTransExprAtomLowering: target; const: (LmTransExprAtomLowering: source)) int
     LmP0Text: text
-    if: (((target = 0) || (source = 0)) || (target\text = 0))
+    LmP0Text: expected_class
+    if: (((target = 0) || (source = 0)) || (target\text = 0)) || (target\expected_class = 0)
         return: 1
     text: target\text
+    expected_class: target\expected_class
     target[0]: source[0]
     target\text: text
+    target\expected_class: expected_class
     if: (source\text != 0)
         target\text[0]: source\text[0]
     else:
         target\text\data: ""
         target\text\length: 0U
+    if: expected_class != 0
+        if: source\expected_class != 0
+            expected_class[0]: source\expected_class[0]
+        else:
+            expected_class\data: ""
+            expected_class\length: 0U
+        ---
     return: 0
 end: lm_trans_expr_atom_lowering_copy
 
@@ -603,6 +617,7 @@ fn: lm_trans_expr_stack_push_range (LmTransExprStack: stack; const: (LmP0Field: 
     range\expect_field_name: 0
     range\expect_c_field_name: 0
     range\c_dot_path: 0
+    range\expected_class: 0
     status: lm_trans_expr_stack_push_range_state(stack, range)
     lm_own_delete(range, 0)
     return: status
@@ -3146,6 +3161,9 @@ fn: lm_trans_printf_arg_class_from_field_chain (const: (LmP0Text: atom); const: 
     lm_trans_text_ref_destroy(@ current_class)
 return: result
 
+fn: lm_trans_expr_value_class_from_atom (const: (LmP0Text: atom); const: (LmTransNamespace: namespace_); LmP0Text: out_class) int
+return: lm_trans_printf_arg_class_from_field_chain(atom, namespace_, out_class)
+
 fn: lm_trans_printf_arg_class_from_segment (const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); LmP0Text: out_class) int
     const: LmP0Node: node
     const: LmP0Field: type_field
@@ -3617,6 +3635,58 @@ fn: lm_trans_expr_emit_raw (FILE: file; const: (LmTransExprAtomLowering: lowerin
     return: lm_trans_write_text(file, lowering\text)
 end: lm_trans_expr_emit_raw
 
+fn: lm_trans_contextual_literal_value_table (const: (LmTransNamespace: namespace_); const: (LmP0Text: literal)) const: @: char
+    if: literal = 0
+        return: 0
+return: lm_trans_namespace_registry_lookup(namespace_, literal, "contextual.literal.value")
+
+fn: lm_trans_contextual_literal_value (
+    const: (LmTransNamespace: namespace_)
+    const: (LmP0Text: literal)
+    const: (LmP0Text: expected_class)
+) const: @: char
+    const: @: char table_name
+    @: char expected_table
+    const: @: char value
+
+    if: expected_class = 0 || expected_class\length = 0U
+        return: 0
+    expected_table: lm_trans_text_copy_cstr(expected_class)
+    if: expected_table != 0
+        value: lm_trans_namespace_registry_lookup(namespace_, literal, expected_table)
+        lm_own_delete(expected_table, 0)
+        if: value != 0
+            return: value
+    ---
+    table_name: lm_trans_contextual_literal_value_table(namespace_, literal)
+    if: table_name = 0
+        return: 0
+return: lm_trans_namespace_registry_lookup(namespace_, expected_class, table_name)
+
+fn: lm_trans_contextual_literal_set_expected_class (LmTransExprAtomLowering: lowering; const: (LmP0Text: expected_class)) int
+    if: lowering = 0 || lowering\expected_class = 0
+        return: 1
+    if: expected_class != 0
+        lowering\expected_class[0]: expected_class[0]
+    else:
+        lowering\expected_class\data: ""
+        lowering\expected_class\length: 0U
+return: 0
+
+fn: lm_trans_expr_emit_contextual_literal (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
+    const: @: char value
+    if: (lowering = 0) || (lowering\text = 0)
+        return: 1
+    if: lowering\expected_class = 0 || lowering\expected_class\length = 0U
+        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" requires an expected class\n", (cast: int lowering\text\length), lowering\text\data)
+        return: 1
+    value: lm_trans_contextual_literal_value(namespace_, lowering\text, lowering\expected_class)
+    if: value = 0
+        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" has no contextual value for class \"%.*s\"\n", (cast: int lowering\text\length), lowering\text\data, (cast: int lowering\expected_class\length), lowering\expected_class\data)
+        return: 1
+    return: lm_trans_put(file, value)
+end: lm_trans_expr_emit_contextual_literal
+
 fn: lm_trans_expr_state_value (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
     expect_field_name: expect_field_name
     expect_c_field_name: expect_c_field_name
@@ -3897,10 +3967,12 @@ fn: lm_trans_find_matching_index_close (const: (LmP0Field: open); const: (LmP0Fi
     return: 0
 end: lm_trans_find_matching_index_close
 
-fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: (LmTransExprRangeJob: range)) int
+fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: (LmTransExprRangeJob: range); const: (LmTransNamespace: namespace_)) int
     const: LmP0Field: field
     const: LmP0Node: node
     const: LmP0Node: previous_operand
+    LmP0Text: pending_expected_class
+    LmP0Text: operand_class
     int: expect_field_name
     int: expect_c_field_name
     int: c_dot_path
@@ -3913,6 +3985,15 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     atom: lm_trans_expr_atom_lowering_new()
     if: (atom = 0)
         return: 1
+    pending_expected_class: lm_trans_text_ref_new_cstr("")
+    operand_class: lm_trans_text_ref_new_cstr("")
+    if: pending_expected_class = 0 || operand_class = 0
+        lm_trans_expr_atom_lowering_delete(atom)
+        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_text_ref_destroy(@ operand_class)
+        return: 1
+    if: range\expected_class != 0
+        pending_expected_class[0]: range\expected_class[0]
     field: range\field
     previous_operand: range\previous_operand
     expect_field_name: range\expect_field_name
@@ -3927,12 +4008,21 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                 const: LmP0Field: close
                 if: (previous_operand = 0)
                     c.fprintf(c.stderr, "trans L2 error: index operator expects a target expression\n")
+                    lm_trans_expr_atom_lowering_delete(atom)
+                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 close: lm_trans_find_matching_index_close(field, range\stop)
                 if: (close = 0)
                     c.fprintf(c.stderr, "trans L2 error: unclosed index operator\n")
+                    lm_trans_expr_atom_lowering_delete(atom)
+                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 if: (lm_trans_expr_lowered_range_append_index(lowered, field\next, close) != 0)
+                    lm_trans_expr_atom_lowering_delete(atom)
+                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 previous_operand: close\value
                 expect_field_name: 0
@@ -3946,12 +4036,29 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                     piece_leading_space: wrote
                     if: (lm_trans_lower_expr_atom(node, previous_operand, expect_field_name, expect_c_field_name, c_dot_path, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    if: atom\emit = @lm_trans_expr_emit_contextual_literal
+                        if: lm_trans_contextual_literal_set_expected_class(atom, pending_expected_class) != 0
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_text_ref_destroy(@ pending_expected_class)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        ---
+                    ---
                     if: (((address_next_operand && (expect_field_name = 0)) && (expect_c_field_name = 0)) && lm_trans_atom_is_operand_like(node\as\atom))
                         lm_trans_expr_atom_lowering_set_builtin(atom, node\as\atom, "lm_trans_expr_emit_addressable_value")
                         piece_leading_space: 0
+                    if: (lm_trans_text_equals(node\as\atom, "=") || lm_trans_text_equals(node\as\atom, "!=")) && previous_operand != 0 && previous_operand\kind = c.LM_P0_NODE_ATOM
+                        if: lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class)
+                            pending_expected_class[0]: operand_class[0]
+                        ---
+                    ---
                     if: (lm_trans_update_expr_atom_lowering_state(atom, node, @ previous_operand, @ expect_field_name, @ expect_c_field_name, @ c_dot_path) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     if: lm_trans_text_equals(node\as\atom, "@")
                         address_next_operand: 1
@@ -3961,11 +4068,15 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         ---
                     if: (lm_trans_expr_lowered_range_append_atom(lowered, piece_leading_space, node, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     ---
                 else:
                     if: (lm_trans_expr_lowered_range_append_node(lowered, wrote, node) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     previous_operand: node
                     expect_field_name: 0
@@ -3978,12 +4089,18 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     if: expect_field_name
         c.fprintf(c.stderr, "trans L2 error: field-follow expects a field name\n")
         lm_trans_expr_atom_lowering_delete(atom)
+        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_text_ref_destroy(@ operand_class)
         return: 1
     if: expect_c_field_name
         c.fprintf(c.stderr, "trans L2 error: C value-field dot expects a field name\n")
         lm_trans_expr_atom_lowering_delete(atom)
+        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_text_ref_destroy(@ operand_class)
         return: 1
     lm_trans_expr_atom_lowering_delete(atom)
+    lm_trans_text_ref_destroy(@ pending_expected_class)
+    lm_trans_text_ref_destroy(@ operand_class)
     return: 0
 end: lm_trans_expr_lowered_range_build
 
@@ -4065,7 +4182,7 @@ fn: lm_trans_expr_stack_emit_range (FILE: file; LmTransExprStack: stack; const: 
     lowered: lm_trans_expr_lowered_range_new()
     if: (lowered = 0)
         return: 1
-    if: (lm_trans_expr_lowered_range_build(lowered, range) != 0)
+    if: (lm_trans_expr_lowered_range_build(lowered, range, namespace_) != 0)
         lm_trans_expr_lowered_range_delete(lowered)
         return: 1
     return: lm_trans_expr_stack_emit_lowered_range(file, stack, lowered, namespace_)
@@ -4217,9 +4334,38 @@ fn: lm_trans_emit_expr_range (FILE: file; const: (LmP0Field: first); const: (LmP
     job\range\expect_field_name: 0
     job\range\expect_c_field_name: 0
     job\range\c_dot_path: 0
+    job\range\expected_class: 0
     status: lm_trans_emit_expr_stack_run(file, job, namespace_)
     return: status
 end: lm_trans_emit_expr_range
+
+fn: lm_trans_emit_expr_range_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
+    LmTransExprJob: job
+    int: status
+    job: lm_trans_expr_job_new()
+    if: (job = 0)
+        return: 1
+    job\run: @lm_trans_expr_job_emit_range
+    job\destroy: @lm_trans_expr_job_destroy_range
+    job\range: lm_trans_expr_range_job_new()
+    if: (job\range = 0)
+        lm_trans_expr_job_delete(job)
+        return: 1
+    job\range\field: first
+    job\range\stop: stop
+    job\range\wrote: 0
+    job\range\previous_operand: 0
+    job\range\expect_field_name: 0
+    job\range\expect_c_field_name: 0
+    job\range\c_dot_path: 0
+    job\range\expected_class: expected_class
+    status: lm_trans_emit_expr_stack_run(file, job, namespace_)
+    return: status
+end: lm_trans_emit_expr_range_with_expected_class
+
+fn: lm_trans_emit_expr_fields_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
+    return: lm_trans_emit_expr_range_with_expected_class(file, first, 0, namespace_, expected_class)
+end: lm_trans_emit_expr_fields_with_expected_class
 
 fn: lm_trans_frame_receiver_key (const: (LmP0Frame: frame); LmP0Text: out_key) int
     if: ((frame = 0) || (out_key = 0))

@@ -21,6 +21,7 @@ table:
              codec                      class
              projection                 class
              printfFormat               class
+             contextualLiteral          class
              binding                    class
              functionPointerType        class
              closureType                class
@@ -64,8 +65,13 @@ table:
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
-             `class.null`               relation
+             `None.cell`                relation
              `serialization.codec`      relation
+             `contextual.literal.value` relation
+             `None.value`               relation
+             `OK.value`                 relation
+             `false.value`              relation
+             `true.value`               relation
              `callable.projection`      relation
              `c99.ub.policy`            relation
              `profile.validator`        relation
@@ -84,6 +90,10 @@ table:
              `c99.shift-count-range`    ubPattern
              `c99.format-mismatch`      ubPattern
              `c99.invalid-pointer-cast` ubPattern
+             None                       contextualLiteral
+             OK                         contextualLiteral
+             false                      contextualLiteral
+             true                       contextualLiteral
 
              void                       primitive
              char                       primitive
@@ -99,6 +109,8 @@ table:
              size_t                     primitive
              FILE                       opaqueReference
              uint8                      primitive
+             int8                       primitive
+             Boolean                    primitive
              u8                         primitive
              u16                        primitive
              u32                        primitive

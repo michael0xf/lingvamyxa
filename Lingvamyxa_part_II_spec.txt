@@ -129,7 +129,7 @@ type. The following names may all be classes in this general sense:
     Message
     Validator
     AuthTicket
-    NULL
+    None
     FORBIDDEN
     spelling
     implementation
@@ -253,19 +253,19 @@ primitive payloads for the active L2/L1 lowering profile unless another table
 explicitly treats those spellings as registry classes.
 
 An empty table cell is interpreted through the declared class/domain of that
-cell. A class may define its empty sentinel through the relation `class.null`.
-For a reference class this is normally the pointer value `0`; for a primitive or
-domain-specific class it is an explicit domain fact. Primitive classes are still
+cell. A table profile may define its typed empty-cell behavior through
+`None.cell`; expression-level `None` values are defined through `None.value` or
+through the target class's contextual-literal table. Primitive classes are still
 ordinary registry classes, not a separate Java-style type universe. A hosted
-bootstrap implementation may accept the legacy atom `NULL` as compatibility
-input, but `NULL` is not the core semantic class of absence.
+bootstrap implementation uses `None`, not a separate semantic class of absence.
 
 `FORBIDDEN` is the standard explicit prohibition class/value. It is different
-from `NULL`: `NULL` means no value is present, while `FORBIDDEN` means the
-relation is present and explicitly denied.
+from `None`: `None` is the typed empty/contextual value selected by the active
+table profile, while `FORBIDDEN` means the relation is present and explicitly
+denied.
 
 Adding a new class does not require adding it to every table. Missing cells
-become `NULL` after the full lookup path is exhausted.
+become the resolver's empty result after the full lookup path is exhausted.
 
 The same information may be viewed through another table, for example a
 class-centered view:
@@ -372,10 +372,10 @@ the resolver performs:
     column = class(b)
     cell = plus[row][column]
 
-If the full lookup path returns `NULL`, the expression is invalid in that
-registry unless the consuming receiver/profile explicitly admits `NULL`. If the
+If the full lookup path returns `None`, the expression is invalid in that
+registry unless the consuming receiver/profile explicitly admits `None`. If the
 selected cell is `FORBIDDEN`, the expression is rejected with an explicit
-prohibition diagnostic. If exactly one non-NULL cell is selected, the expression
+prohibition diagnostic. If exactly one non-None cell is selected, the expression
 becomes resolved. If a table profile admits multiple candidates, priority/cost
 tables must reduce them to one candidate or report ambiguity.
 
@@ -469,12 +469,11 @@ Mandatory payload kinds are:
         A rejection, missing relation, ambiguity, conflict or profile-defined
         diagnostic Structure.
 
-    null
+    None
         The standard empty result of resolution. Missing row, missing column or
         missing cell normalize to the resolver's empty result after the full
         lookup path is exhausted. In table source, an intentionally empty cell
-        is preferably expressed by the declared cell class through `class.null`;
-        the legacy atom `NULL` is only a compatibility spelling.
+        is expressed through `None.cell`.
 
     forbidden
         Explicit prohibition. `FORBIDDEN` is not an empty value; it means the
@@ -489,8 +488,8 @@ A short source spelling may normalize directly to a payload. Examples:
         name: plus
         columns: class (int char) (u32 char)
         rows:
-            decimal decimal_int_add NULL
-            u32     NULL            plus_u32_u32_l2
+            decimal decimal_int_add None
+            u32     None            plus_u32_u32_l2
     end: plus
 
 may normalize conceptually as:
@@ -1126,7 +1125,7 @@ A validator is not required to be a boolean predicate. It may produce:
     stronger evidence;
     obligation for a later stage;
     tableKey for continued resolution;
-    conflict/NULL/FORBIDDEN payload.
+    conflict/None/FORBIDDEN payload.
 
 Validator dependencies are ordinary registry graph dependencies. The
 Validator/Merge driver must therefore define cycle detection, memoization of
@@ -1385,8 +1384,8 @@ Example operator cell:
         name: equals
         columns: class (u32 char) (decimal char)
         rows:
-            u32     u32_eq NULL
-            decimal NULL decimal_eq
+            u32     u32_eq None
+            decimal None decimal_eq
     end: equals
 
 Example L5 conditional route:

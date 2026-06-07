@@ -23,13 +23,13 @@ L4:
                  path_sep           lm_build_path_sep           '\\'                                             '/'
                  platform_chdir     lm_build_platform_chdir     _chdir                                           chdir
                  platform_getcwd    lm_build_platform_getcwd    _getcwd                                          getcwd
-                 platform_absolute  lm_build_platform_absolute  NULL                                             NULL
-                 file_exists        lm_build_file_exists        NULL                                             NULL
-                 has_qt_cmake       lm_build_has_qt_cmake       "C:/Qt/Tools/CMake_64/bin/cmake.exe"             NULL
-                 has_qt_mingw_make  lm_build_has_qt_mingw_make  "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"  NULL
-                 has_qt_gcc         lm_build_has_qt_gcc         "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"           NULL
-                 has_qt_gxx         lm_build_has_qt_gxx         "C:/Qt/Tools/mingw1310_64/bin/g++.exe"           NULL
-                 include            NULL                        "<direct.h>"                                     "<unistd.h>"
+                 platform_absolute  lm_build_platform_absolute  None                                             None
+                 file_exists        lm_build_file_exists        None                                             None
+                 has_qt_cmake       lm_build_has_qt_cmake       "C:/Qt/Tools/CMake_64/bin/cmake.exe"             None
+                 has_qt_mingw_make  lm_build_has_qt_mingw_make  "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"  None
+                 has_qt_gcc         lm_build_has_qt_gcc         "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"           None
+                 has_qt_gxx         lm_build_has_qt_gxx         "C:/Qt/Tools/mingw1310_64/bin/g++.exe"           None
+                 include            None                        "<direct.h>"                                     "<unistd.h>"
     end: BUILD
 end: L4
 
