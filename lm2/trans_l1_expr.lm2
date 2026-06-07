@@ -3186,13 +3186,12 @@ return: 0
 fn: lm_trans_printf_format_is_flag (char: ch) int
 return: ch = '-' || ch = '+' || ch = ' ' || ch = '#' || ch = '0'
 
-fn: lm_trans_profile_validator_enabled (const: (LmTransNamespace: namespace_); const: @(char rule); const: @(char binding_name)) int
+fn: lm_trans_profile_rule_enabled (const: (LmTransNamespace: namespace_); const: @(char rule)) int
     LmP0Text: rule_text
     const: @: char policy
-    const: @: char binding
     int: enabled
 
-    if: rule = 0 || binding_name = 0
+    if: rule = 0
         return: 0
 
     rule_text: lm_trans_text_ref_new_cstr(rule)
@@ -3200,21 +3199,41 @@ fn: lm_trans_profile_validator_enabled (const: (LmTransNamespace: namespace_); c
         return: 0
 
     policy: lm_trans_namespace_registry_lookup(namespace_, rule_text, "c99.ub.policy")
-    binding: lm_trans_namespace_registry_lookup(namespace_, rule_text, "profile.validator")
     enabled: 0
-    if: policy != 0 && binding != 0
-        if: (c.strcmp(policy, "diagnostic") = 0 || c.strcmp(policy, "checked") = 0) && c.strcmp(binding, binding_name) = 0
+    if: policy != 0
+        if: c.strcmp(policy, "diagnostic") = 0 || c.strcmp(policy, "checked") = 0
             enabled: 1
         ---
     ---
     lm_trans_text_ref_destroy(@ rule_text)
 return: enabled
 
-fn: lm_trans_printf_expected_class (const: (LmTransNamespace: namespace_); char: conversion; char: modifier) const: @: char
+fn: lm_trans_profile_validator_enabled (const: (LmTransNamespace: namespace_); const: @(char rule); const: @(char binding_name)) int
+    LmP0Text: rule_text
+    const: @: char binding
+    int: enabled
+
+    if: rule = 0 || binding_name = 0
+        return: 0
+    if: lm_trans_profile_rule_enabled(namespace_, rule) = 0
+        return: 0
+
+    rule_text: lm_trans_text_ref_new_cstr(rule)
+    if: rule_text = 0
+        return: 0
+    binding: lm_trans_namespace_registry_lookup(namespace_, rule_text, "profile.validator")
+    enabled: binding != 0 && c.strcmp(binding, binding_name) = 0
+    lm_trans_text_ref_destroy(@ rule_text)
+return: enabled
+
+fn: lm_trans_printf_conversion_rule_lookup (const: (LmTransNamespace: namespace_); char: conversion; char: modifier; const: @(char relation)) const: @: char
     [5]: char key_buffer
     LmP0Text: key
-    const: @: char expected
+    const: @: char value
     size_t: index
+
+    if: relation = 0
+        return: 0
 
     key: lm_trans_text_ref_new_cstr("")
     if: key = 0
@@ -3232,9 +3251,27 @@ fn: lm_trans_printf_expected_class (const: (LmTransNamespace: namespace_); char:
 
     key\data: key_buffer
     key\length: index
-    expected: lm_trans_namespace_registry_lookup(namespace_, key, "printf.argument.class")
+    value: lm_trans_namespace_registry_lookup(namespace_, key, relation)
     lm_trans_text_ref_destroy(@ key)
-return: expected
+return: value
+
+fn: lm_trans_printf_expected_class (const: (LmTransNamespace: namespace_); char: conversion; char: modifier) const: @: char
+    const: @: char expected
+
+    expected: lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.expected")
+    if: expected != 0
+        return: expected
+return: lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.argument.class")
+
+fn: lm_trans_printf_profile_rule (const: (LmTransNamespace: namespace_); char: conversion; char: modifier) const: @: char
+    const: @: char rule
+
+    rule: lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.profile")
+    if: rule != 0
+        return: rule
+    if: lm_trans_printf_expected_class(namespace_, conversion, modifier) != 0
+        return: "c99.format-mismatch"
+return: 0
 
 fn: lm_trans_validate_printf_expected_arg (const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_); size_t: arg_index; const: @: char expected_class) int
     const: LmP0Field: first
@@ -3266,6 +3303,7 @@ fn: lm_trans_validate_c_printf_call (const: (LmP0Frame: frame); const: (LmTransN
     const: LmP0Node: format_node
     LmP0Text: format_payload
     const: @: char expected
+    const: @: char profile_rule
     size_t: format_index
     size_t: arg_index
     size_t: i
@@ -3357,8 +3395,11 @@ fn: lm_trans_validate_c_printf_call (const: (LmP0Frame: frame); const: (LmTransN
         conversion: format_payload\data[i]
         i: i + 1U
         expected: lm_trans_printf_expected_class(namespace_, conversion, modifier)
+        profile_rule: lm_trans_printf_profile_rule(namespace_, conversion, modifier)
         if: conversion != 'n'
-            status: lm_trans_validate_printf_expected_arg(frame, namespace_, arg_index, expected)
+            if: profile_rule = 0 || lm_trans_profile_rule_enabled(namespace_, profile_rule)
+                status: lm_trans_validate_printf_expected_arg(frame, namespace_, arg_index, expected)
+            ---
             arg_index: arg_index + 1U
         ---
     lm_trans_text_ref_destroy(@ format_payload)
