@@ -259,6 +259,115 @@ through the target class's contextual-literal table. Primitive classes are still
 ordinary registry classes, not a separate Java-style type universe. A hosted
 bootstrap implementation uses `None`, not a separate semantic class of absence.
 
+Contextual literals are ordinary L4 registry facts, not parser keywords. A
+contextual literal is a class/key whose concrete payload is selected by the
+expected target class supplied by a declaration, assignment target, call slot,
+operator slot, comparison peer or other consumer.
+
+To introduce a new contextual literal such as `None`, `true`, `false`, `OK` or
+a profile-defined name:
+
+    1. Declare the literal name as a `contextualLiteral` class/key. The usual
+       place is the `class` table:
+
+           table:
+               name: class
+               columns: class (kind class)
+               rows:
+                        None  contextualLiteral
+                        OK    contextualLiteral
+                        false contextualLiteral
+                        true  contextualLiteral
+           end: class
+
+    2. For each target value class that wants a class-local meaning, add rows to
+       that target class table. The conventional column descriptor is
+       `context literal` plus the target class:
+
+           table:
+               name: int8
+               columns: class  (`context literal` int8)
+               rows:
+           end: int8
+
+           join: (int8) Boolean
+               columns: class  (`context literal` int8)
+               rows:
+                        None  -1
+                        false 0
+                        true  1
+                        OK    1
+           end: Boolean
+
+       In this example `Boolean[None] = -1`, `Boolean[false] = 0`,
+       `Boolean[true] = 1` and `Boolean[OK] = 1`. The numeric cells are ordinary
+       payloads. They are not a global empty-cell encoding.
+
+    3. If the literal also has a fallback mapping, register it in
+       `contextual.literal.value`. The payload points to a value table keyed by
+       the expected target class:
+
+           table:
+               name: `contextual.literal.value`
+               columns: class (value relation)
+               rows:
+                        None  `None.value`
+                        OK    `OK.value`
+                        false `false.value`
+                        true  `true.value`
+           end: `contextual.literal.value`
+
+           table:
+               name: `None.value`
+               columns: class (value char)
+               rows:
+                        int     0
+                        int8    0
+                        Boolean -1
+           end: `None.value`
+
+       A class-local row in the expected target table is preferred. The fallback
+       path is used only when the consumer still has an expected class but the
+       class table does not define a more local contextual value.
+
+    4. If the literal may appear as an expression atom, bind it through the
+       active expression profile, for example `expr.atom`:
+
+           table:
+               name: `expr.atom`
+               columns: class (ansi_c char) (emitter binding)
+               rows:
+                        None  None  lm_trans_expr_emit_contextual_literal
+                        OK    OK    lm_trans_expr_emit_contextual_literal
+           end: `expr.atom`
+
+    5. If the literal may be used as a statement receiver for contextual
+       assignment, bind the receiver vocabulary as ordinary namespace data:
+
+           table:
+               name: namespace
+               columns: class (receiver.type relation)
+               rows:
+                        None `receiver.statement`
+                        OK   `receiver.statement`
+           end: namespace
+
+           table:
+               name: `receiver.statement`
+               columns: class (receiver binding)
+               rows:
+                        None lm_trans_statement_emit_contextual_literal_assignment
+                        OK   lm_trans_statement_emit_contextual_literal_assignment
+           end: `receiver.statement`
+
+With those rows, `None: target`, `Boolean: flag OK`, a call argument containing
+`None` and `if: value = None` all use the same table-driven path. The syntax
+supplies the surrounding consumer; the registry supplies the contextual value.
+Adding another name such as `Red` or `Maybe` is another set of rows, not a
+parser change. Empty source cells in tables remain a separate table-loading
+concern and should be declared through `None.cell` when a typed empty cell must
+not materialize a row.
+
 `FORBIDDEN` is the standard explicit prohibition class/value. It is different
 from `None`: `None` is the typed empty/contextual value selected by the active
 table profile, while `FORBIDDEN` means the relation is present and explicitly
