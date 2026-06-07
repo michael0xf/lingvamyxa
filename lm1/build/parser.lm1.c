@@ -3404,7 +3404,7 @@ static int lm_p0_skip_brace_mark_ex(LmP0Document * document, LmP0Structure * str
         lm_p0_set_diagnostic(document, 31, diagnostic_line, diagnostic_column, "unterminated brace mark");
         return 0;
     }
-    if ((record && (lm_p0_record_mix_mark(document, structure, text, length, start, end_index, line, column) == 0))) {
+    if ((record && (lm_p0_record_mix_mark(document, structure, text, length, line, column, start, end_index) == 0))) {
         return 0;
     }
     return 1;
