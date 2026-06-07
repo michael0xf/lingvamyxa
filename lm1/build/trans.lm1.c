@@ -2731,6 +2731,7 @@ static int lm_trans_collect_layout_fields(const char *layout_name, const LmTrans
 static int lm_trans_sort_layout_fields(LmTransLayoutField **fields, size_t field_count);
 static int lm_trans_emit_layout_field(FILE *file, const LmTransLayoutField *field, const LmTransNamespace *namespace_, unsigned indent);
 static int lm_trans_emit_layout_fields(FILE *file, const char *layout_name, const LmTransNamespace *namespace_, unsigned indent);
+static int lm_trans_l4_mark_typedef_emitted_cstr(const char *name);
 static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_layout_typedefs(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_registry_collect_constant_define_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_);
@@ -23152,6 +23153,26 @@ static int lm_trans_emit_layout_fields(FILE *file, const char *layout_name, cons
     return 0;
 }
 
+static int lm_trans_l4_mark_typedef_emitted_cstr(const char *name) {
+    LmP0Text *table;
+    LmP0Text *key;
+    int status;
+    if (name == 0) {
+        return 1;
+    }
+    table = lm_trans_l4_text_view_new("typedef.emitted");
+    key = lm_trans_l4_text_view_new(name);
+    if (table == 0 || key == 0) {
+        lm_trans_l4_text_view_delete(&table);
+        lm_trans_l4_text_view_delete(&key);
+        return 1;
+    }
+    status = lm_trans_registry_push_row_atoms(table, key, key) != 0;
+    lm_trans_l4_text_view_delete(&table);
+    lm_trans_l4_text_view_delete(&key);
+    return status;
+}
+
 static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, const LmTransNamespace *namespace_) {
     LmTransRegistryFact *backend_row;
     LmTransRegistryFact *forward_row;
@@ -23229,6 +23250,9 @@ static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, 
         }
         else {
             status = 0;
+        }
+        if (status == 0 && lm_trans_l4_mark_typedef_emitted_cstr(layout_name) != 0) {
+            status = 1;
         }
         lm_trans_l4_text_view_delete(&layout_text);
         return status;
