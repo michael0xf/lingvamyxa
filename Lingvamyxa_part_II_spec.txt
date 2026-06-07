@@ -46,6 +46,13 @@ Short formula:
     Validator/Merge turns candidates into concrete plans.
     Executor runs only concrete plans.
 
+World-description formula:
+
+    User describes the world. L4 stores relations, L3 stores computable
+    structures, L5 stores proposed actions/messages. The analytical engine
+    continuously classifies the active world enough to resolve, validate and
+    execute current work.
+
 Registry query principle:
 
     Strict classification happens in L4 registry tables. Type checking, class

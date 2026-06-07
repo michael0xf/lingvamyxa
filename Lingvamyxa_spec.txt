@@ -29,6 +29,11 @@ Lingvamyxa is based on the following model:
 
 The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver or subroutine consumes a Structure and assigns typed semantics to it.
 
+User describes the world. L4 stores relations, L3 stores computable
+structures, L5 stores proposed actions/messages. The analytical engine
+continuously classifies the active world enough to resolve, validate and
+execute current work.
+
 Canonical semantic pipeline:
 
     source text
