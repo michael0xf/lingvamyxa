@@ -1909,6 +1909,8 @@ static int lm_trans_registry_push_row_atoms(const LmP0Text * table_atom, const L
 static int lm_trans_registry_column_has_descriptor(const LmTransRegistryColumn column, const char *descriptor);
 static int lm_trans_registry_column_is_class_typed(const LmTransRegistryColumn column);
 static const char * lm_trans_registry_column_serialization_codec(const LmTransRegistryColumn column);
+static int lm_trans_registry_cell_class_null_matches(const LmP0Text * payload, const LmP0Text * class_atom);
+static int lm_trans_registry_cell_is_null(const LmP0Text * atom, const LmTransRegistryColumn column);
 static int lm_trans_registry_cell_value(const LmP0Text * atom, const LmTransRegistryColumn column, LmP0Text * out_value);
 static int lm_trans_registry_push_table_cell(const LmP0Text * table_name, const LmTransRegistryColumn column, int split_by_column, const LmP0Text * key_atom, const LmP0Node * payload_node, int allow_node_cells);
 static int lm_trans_registry_note_class_kind(const LmP0Text * name, const char *kind);
@@ -3618,9 +3620,64 @@ static const char * lm_trans_registry_column_serialization_codec(const LmTransRe
     return 0;
 }
 
+static int lm_trans_registry_cell_class_null_matches(const LmP0Text * payload, const LmP0Text * class_atom) {
+    LmP0Text * class_name;
+    const char *null_value;
+    int result;
+    if (payload == 0 || class_atom == 0) {
+        return 0;
+    }
+    class_name = lm_trans_text_ref_new_cstr("");
+    if (class_name == 0) {
+        return 0;
+    }
+    result = 0;
+    if (lm_trans_registry_identifier_value(class_atom, class_name) != 0) {
+        null_value = lm_trans_registry_lookup(class_name, "class.null");
+        if (null_value != 0 && lm_trans_text_equals(payload, null_value) != 0) {
+            result = 1;
+        }
+    }
+    lm_trans_text_ref_destroy(&class_name);
+    return result;
+}
+
+static int lm_trans_registry_cell_is_null(const LmP0Text * atom, const LmTransRegistryColumn column) {
+    LmP0Text * payload;
+    size_t i;
+    int result;
+    if (lm_trans_registry_payload_is_null(atom) != 0) {
+        return 1;
+    }
+    if (atom == 0 || column == 0) {
+        return 0;
+    }
+    payload = lm_trans_text_ref_new_cstr("");
+    if (payload == 0) {
+        return 0;
+    }
+    if (lm_trans_registry_identifier_value(atom, payload) == 0) {
+        lm_trans_text_ref_destroy(&payload);
+        return 0;
+    }
+    result = 0;
+    if (column -> name != 0 && lm_trans_registry_cell_class_null_matches(payload, column -> name) != 0) {
+        result = 1;
+    }
+    i = 0U;
+    while (result == 0 && i < column -> descriptor_count) {
+        if (column -> descriptors[i] != 0 && lm_trans_registry_cell_class_null_matches(payload, column -> descriptors[i]) != 0) {
+            result = 1;
+        }
+        i = i + 1U;
+    }
+    lm_trans_text_ref_destroy(&payload);
+    return result;
+}
+
 static int lm_trans_registry_cell_value(const LmP0Text * atom, const LmTransRegistryColumn column, LmP0Text * out_value) {
     const char *codec;
-    if (lm_trans_registry_payload_is_null(atom) != 0) {
+    if (lm_trans_registry_cell_is_null(atom, column) != 0) {
         return 0;
     }
     codec = lm_trans_registry_column_serialization_codec(column);

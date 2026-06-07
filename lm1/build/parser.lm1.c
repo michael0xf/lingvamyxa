@@ -1528,6 +1528,8 @@ static void lm_p0_set_diagnostic(LmP0Document * document, int code, size_t line,
 static int lm_p0_registry_push_row_values(const LmP0Text * table_value, const LmP0Text * key_value, const LmP0Text * payload_value);
 static int lm_p0_registry_push_row_atoms(const LmP0Text * table_atom, const LmP0Text * key_atom, const LmP0Text * payload_atom);
 static int lm_p0_registry_column_has_descriptor(const LmP0RegistryColumn column, const char *descriptor);
+static int lm_p0_registry_cell_class_null_matches(const LmP0Text * payload, const LmP0Text * class_atom);
+static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmP0RegistryColumn column);
 static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmP0RegistryColumn column, LmP0Text * out_value);
 static int lm_p0_registry_push_table_cell(const LmP0Text * table_name, const LmP0RegistryColumn column, int split_by_column, const LmP0Text * key_atom, const LmP0Text * payload_atom);
 static int lm_p0_registry_compare_enabled(void);
@@ -2839,8 +2841,63 @@ static int lm_p0_registry_column_has_descriptor(const LmP0RegistryColumn column,
     return result;
 }
 
-static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmP0RegistryColumn column, LmP0Text * out_value) {
+static int lm_p0_registry_cell_class_null_matches(const LmP0Text * payload, const LmP0Text * class_atom) {
+    LmP0Text * class_name;
+    const char *null_value;
+    int result;
+    if (payload == 0 || class_atom == 0) {
+        return 0;
+    }
+    class_name = lm_p0_text_ref_new_empty();
+    if (class_name == 0) {
+        return 0;
+    }
+    result = 0;
+    if (lm_p0_registry_identifier_value(class_atom, class_name) != 0) {
+        null_value = lm_p0_registry_lookup(class_name, "class.null");
+        if (null_value != 0 && lm_p0_text_equals(payload, null_value)) {
+            result = 1;
+        }
+    }
+    lm_p0_text_ref_delete(class_name);
+    return result;
+}
+
+static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmP0RegistryColumn column) {
+    LmP0Text * payload;
+    size_t i;
+    int result;
     if (lm_p0_registry_payload_is_null(atom)) {
+        return 1;
+    }
+    if (atom == 0 || column == 0) {
+        return 0;
+    }
+    payload = lm_p0_text_ref_new_empty();
+    if (payload == 0) {
+        return 0;
+    }
+    if (lm_p0_registry_identifier_value(atom, payload) == 0) {
+        lm_p0_text_ref_delete(payload);
+        return 0;
+    }
+    result = 0;
+    if (column -> name != 0 && lm_p0_registry_cell_class_null_matches(payload, column -> name)) {
+        result = 1;
+    }
+    i = 0U;
+    while (result == 0 && i < column -> descriptor_count) {
+        if (column -> descriptors[i] != 0 && lm_p0_registry_cell_class_null_matches(payload, column -> descriptors[i])) {
+            result = 1;
+        }
+        i = i + 1U;
+    }
+    lm_p0_text_ref_delete(payload);
+    return result;
+}
+
+static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmP0RegistryColumn column, LmP0Text * out_value) {
+    if (lm_p0_registry_cell_is_null(atom, column)) {
         return 0;
     }
     if (lm_p0_registry_column_has_descriptor(column, "char")) {

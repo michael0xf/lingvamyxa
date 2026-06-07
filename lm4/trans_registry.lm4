@@ -42,6 +42,7 @@ table:
              `class.semantic`           relation
              `class.range`              relation
              `class.c.projection`       relation
+             `class.null`               relation
              `serialization.codec`      relation
              `callable.projection`      relation
              `c99.ub.policy`            relation
@@ -98,6 +99,9 @@ table:
              ubPattern                  class
              validatorPolicy            class
              profileRule                class
+             decimal                    literal
+             boolean                    literal
+             serial                     decimal
              diagnostic                 validatorPolicy
              checked                    validatorPolicy
              `profile-defined`          validatorPolicy
@@ -387,7 +391,7 @@ end: `class.cTail`
 
 table:
     name: `class.reference-base`
-    columns: class  (value serial)
+    columns: class  (value decimal)
     rows:
              FILE   1
 end: `class.reference-base`
@@ -562,7 +566,7 @@ end: `receiver.atom.statement`
 
 table:
     name: `loadHeaders.item`
-    columns: class      (index serial)
+    columns: class      (index decimal)
     rows:
              include    0
              define     1
@@ -579,7 +583,7 @@ end: `loadHeaders.item`
 
 table:
     name: `receiver.positional-name`
-    columns: class         (argument class)  (index serial)
+    columns: class         (argument class)  (index decimal)
     rows:
              fn            name              0
              fm            name              0
@@ -593,7 +597,7 @@ end: `receiver.positional-name`
 
 table:
     name: `receiver.formal-param.unwrap`
-    columns: class  (index serial)
+    columns: class  (index decimal)
     rows:
              const  0
 end: `receiver.formal-param.unwrap`
@@ -643,7 +647,7 @@ end: `materialize.argument`
 
 table:
     name: `cast.target`
-    columns: class                    (value serial)
+    columns: class                    (value decimal)
     rows:
              char                     1
              uchar                    1
