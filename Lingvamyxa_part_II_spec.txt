@@ -61,6 +61,14 @@ Registry query principle:
     materialized views of that registry schema. They may optimize lookup, but
     they do not define a second type system.
 
+    In this sense Lingvamyxa uses analytical typing. Classification starts in
+    the static interpretation/translation/compilation stages, where receivers
+    and validators query L4 data, and continues at runtime through the active L5
+    RegistryView. The model is the L4 registry data itself, predominantly table
+    data. SQLite, generated C arrays, hash indexes or other stores are
+    projections/materializations of L4, not the model that L4 must be mapped
+    onto.
+
     A table named `X`, when present in an L4 schema, is the descriptor table for
     class/key `X`. The table named `class` is an index/classification table over
     class keys; it is not the only source of class existence. If a class has no
@@ -2093,8 +2101,9 @@ Part II reduces to these rules:
     table row/column/cell = relation;
     missing row/column/cell = no relation;
     strict classification = L4 registry data;
+    analytical typing = registry queries during static stages and L5 runtime;
     type/class resolution = logical query over the active registry view;
-    in-memory registry rows/indexes/caches = materialized views, not semantics;
+    in-memory registry rows/indexes/caches/SQLite = materialized views, not semantics;
     expression = Structure requiring table cells;
     message = proposed possibly effectful/action-capable LMX expression candidate;
     message expression = ordinary LMX admitted by receiver policy;

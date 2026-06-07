@@ -75,6 +75,12 @@ existence. Current in-memory registry rows, hash tables, binary indexes or
 future SQLite views are caches/materialized views of those tables, not a second
 semantic type system.
 
+This is analytical typing. Lingvamyxa typing starts in the static
+interpretation/translation/compilation stages and continues at runtime through
+active RegistryViews. The model is the L4 registry data itself, predominantly
+table data; SQLite or another database is a projection/materialization of L4,
+not a separate model that the language must later map to.
+
 0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
 It can be used for human-readable records, trees, nested configurations,
@@ -8578,7 +8584,8 @@ tables for the class descriptor, fields, operation cells, result class,
 validator rows, effects, lifetimes and lowering bindings. An implementation may
 answer those queries from in-memory rows, hash tables, generated arrays, SQLite
 or another equivalent algorithm/index, but such structures are
-caches/materialized views of the L4 tables.
+caches/materialized views of the L4 tables. The registry data is the model; a
+database backend is an access/projection layer over that model.
 
 `class` is the only source-semantic notion that answers "what kind of thing is
 this?" It includes primitive classes such as `int` or `u32`, structural layout
