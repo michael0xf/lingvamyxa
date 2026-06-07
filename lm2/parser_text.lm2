@@ -56,7 +56,7 @@ fn: lm_p0_registry_payload_is_null (const: (LmP0Text: atom)) int
     if: lm_p0_registry_identifier_value(atom, payload) = 0
         lm_p0_text_view_delete(payload)
         return: 0
-    is_null: payload\length = 4U && c.memcmp(payload\data, "NULL", 4U) = 0
+    is_null: payload\length = 4U && c.memcmp(payload\data, "None", 4U) = 0
     lm_p0_text_view_delete(payload)
 return: is_null
 

@@ -3,7 +3,7 @@ L4:
         name: `registry.multicolumn.smoke`
         columns: class  (left char)  (right char)
         rows:
-                 sample        one          NULL
+                 sample        one          None
     end: `registry.multicolumn.smoke`
 end: L4
 

@@ -382,10 +382,7 @@ L2:
             field: field\next
 
         if: (field_index % column_count) != 0U
-            lm_l4_error(loader, "rows field count is not divisible by column count; use explicit NULL for empty cells")
-            return: -1
-        if: field_index = 0U
-            lm_l4_error(loader, "table rows must not be empty")
+            lm_l4_error(loader, "rows field count is not divisible by column count; use explicit None for empty cells")
             return: -1
 
     return: 1

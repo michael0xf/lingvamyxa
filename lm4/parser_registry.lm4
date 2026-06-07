@@ -24,7 +24,7 @@ table:
              role                relation
              `allow-bare`        relation
              target              relation
-             `class.null`        relation
+             `None.cell`         relation
              decimal             literal
              boolean             literal
              serial              decimal
@@ -36,13 +36,13 @@ table:
 end: class
 
 table:
-    name: `class.null`
+    name: `None.cell`
     columns: class       (value decimal)
     rows:
              nodeFlag    0
              frameFlag   0
              trailerFlag 0
-end: `class.null`
+end: `None.cell`
 
 table:
     name: `p0.compact-token`

@@ -547,6 +547,7 @@ L4:
                  expect_field_name    int                    4                       0                                0
                  expect_c_field_name  int                    5                       0                                0
                  c_dot_path           int                    6                       0                                0
+                 expected_class       LmP0Text               7                       0                                1
     end: LmTransExprRangeJob
 
     table:
@@ -565,6 +566,7 @@ L4:
                  emit    LmTransExprAtomEmitHandler   0                  0                                0
                  update  LmTransExprAtomStateHandler  1                  0                                0
                  text    LmP0Text                      2                  0                                0
+                 expected_class LmP0Text               3                  0                                0
     end: LmTransExprAtomLowering
 
     table:

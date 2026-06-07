@@ -1455,9 +1455,9 @@ fn: lm_p0_registry_column_has_descriptor (const: (LmP0RegistryColumn: column); c
     return: result
 end: lm_p0_registry_column_has_descriptor
 
-fn: lm_p0_registry_cell_class_null_matches (const: (LmP0Text: payload); const: (LmP0Text: class_atom)) int
+fn: lm_p0_registry_cell_none_cell_matches (const: (LmP0Text: payload); const: (LmP0Text: class_atom)) int
     LmP0Text: class_name
-    const: @: char null_value
+    const: @: char none_value
     int: result
 
     if: payload = 0 || class_atom = 0
@@ -1467,8 +1467,8 @@ fn: lm_p0_registry_cell_class_null_matches (const: (LmP0Text: payload); const: (
         return: 0
     result: 0
     if: lm_p0_registry_identifier_value(class_atom, class_name) != 0
-        null_value: lm_p0_registry_lookup(class_name, "class.null")
-        if: null_value != 0 && lm_p0_text_equals(payload, null_value)
+        none_value: lm_p0_registry_lookup(class_name, "None.cell")
+        if: none_value != 0 && lm_p0_text_equals(payload, none_value)
             result: 1
     ---
     lm_p0_text_ref_delete(class_name)
@@ -1491,11 +1491,11 @@ fn: lm_p0_registry_cell_is_null (const: (LmP0Text: atom); const: (LmP0RegistryCo
         return: 0
 
     result: 0
-    if: column\name != 0 && lm_p0_registry_cell_class_null_matches(payload, column\name)
+    if: column\name != 0 && lm_p0_registry_cell_none_cell_matches(payload, column\name)
         result: 1
     i: 0U
     while: result = 0 && i < column\descriptor_count
-        if: column\descriptors[i] != 0 && lm_p0_registry_cell_class_null_matches(payload, column\descriptors[i])
+        if: column\descriptors[i] != 0 && lm_p0_registry_cell_none_cell_matches(payload, column\descriptors[i])
             result: 1
         i: i + 1U
 
@@ -2356,6 +2356,13 @@ fn: lm_p0_scan_number_token (const: @(char text); size_t: end_index; size_t: sta
     int: saw_digit
     i: start
     saw_digit: 0
+    if: ((i < end_index) && ((text[i] = '+') || (text[i] = '-')))
+        if: (((i + 1U) < end_index) && lm_p0_is_decimal_digit(text[(i + 1U)]))
+            i: i + 1U
+        else:
+            out_end[0]: start
+            return: 0
+        ---
     if: ((((i + 1U) < end_index) && (text[i] = '0')) && ((text[(i + 1U)] = 'x') || (text[(i + 1U)] = 'X')))
         i: i + 2U
         while: ((i < end_index) && lm_p0_is_hex_digit(text[i]))
@@ -2609,7 +2616,7 @@ fn: lm_p0_scan_registry_compact_atom_piece (const: @(char text); size_t: end_ind
     return: (start + 1U)
 end: lm_p0_scan_registry_compact_atom_piece
 
-fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_t: start) size_t
+fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_t: start; int: allow_signed_number) size_t
     size_t: i
     if: (start >= end_index)
         return: start
@@ -2627,7 +2634,7 @@ fn: lm_p0_scan_compact_atom_piece (const: @(char text); size_t: end_index; size_
                 i: i + 1U
             ---
         return: i
-    if: lm_p0_is_decimal_digit(text[start])
+    if: lm_p0_is_decimal_digit(text[start]) || (allow_signed_number && (((start + 1U) < end_index) && ((text[start] = '+') || (text[start] = '-')) && lm_p0_is_decimal_digit(text[(start + 1U)])))
         size_t: number_end
         if: lm_p0_scan_number_token(text, end_index, start, @ number_end)
             return: number_end
@@ -2682,7 +2689,9 @@ end: lm_p0_append_positional_skip
 
 fn: lm_p0_append_compact_atom_pieces (LmP0Document: document; LmP0Structure: structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; size_t: start; size_t: end_index) int
     size_t: i
+    int: allow_signed_number
     i: start
+    allow_signed_number: 1
     while: (i < end_index)
         size_t: piece_end
         if: lm_p0_is_field_space(text[i])
@@ -2701,13 +2710,15 @@ fn: lm_p0_append_compact_atom_pieces (LmP0Document: document; LmP0Structure: str
             if: (lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, close_index, (close_index + 1U)) = 0)
                 return: 0
             i: (close_index + 1U)
+            allow_signed_number: 0
             continue
-        piece_end: lm_p0_scan_compact_atom_piece(text, end_index, i)
+        piece_end: lm_p0_scan_compact_atom_piece(text, end_index, i, allow_signed_number)
         if: (piece_end <= i)
             piece_end: (i + 1U)
         if: (lm_p0_append_atom_slice(document, structure, text, length, line, column, offset, i, piece_end) = 0)
             return: 0
         i: piece_end
+        allow_signed_number: 0
     return: 1
 end: lm_p0_append_compact_atom_pieces
 
@@ -5410,25 +5421,22 @@ fn: lm_p0_registry_l4_join_table (@: void context; const: (LmP0Text: source_tabl
     i: 0U
     while: (i < initial_count)
         row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
-        if: ((((row = 0) || (row\table = 0)) || (row\key = 0)) || (row\payload = 0))
-            continue
-        suffix: 0
-        if: (lm_p0_registry_join_relation_matches(row\table, source_name, @ suffix) = 0)
-            continue
-        target_relation: lm_p0_registry_join_target_relation_new(target_name, suffix)
-        if: (target_relation = 0)
-            status: -1
-            break
-        if: (lm_p0_registry_push_row_values(lm_p0_text_from_cstr(target_relation), lm_p0_text_from_cstr(row\key), lm_p0_text_from_cstr(row\payload)) != 0)
-            lm_own_delete(target_relation, 0)
-            status: -1
-            break
-        lm_own_delete(target_relation, 0)
-        copied: copied + 1U
+        if: (((row != 0) && (row\table != 0)) && ((row\key != 0) && (row\payload != 0)))
+            suffix: 0
+            if: lm_p0_registry_join_relation_matches(row\table, source_name, @ suffix)
+                target_relation: lm_p0_registry_join_target_relation_new(target_name, suffix)
+                if: (target_relation = 0)
+                    status: -1
+                    break
+                if: (lm_p0_registry_push_row_values(lm_p0_text_from_cstr(target_relation), lm_p0_text_from_cstr(row\key), lm_p0_text_from_cstr(row\payload)) != 0)
+                    lm_own_delete(target_relation, 0)
+                    status: -1
+                    break
+                lm_own_delete(target_relation, 0)
+                copied: copied + 1U
+            ---
+        ---
         i: i + 1U
-    if: ((status = 0) && (copied = 0U))
-        c.fprintf(c.stderr, "parser registry error: join source table \"%.*s\" has no rows\n", (cast: int source_name\length), source_name\data)
-        status: -1
     lm_p0_text_ref_delete(source_name)
     lm_p0_text_ref_delete(target_name)
     return: status

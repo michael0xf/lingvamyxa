@@ -155,7 +155,7 @@ void * lm_own_resize(void *object, size_t size) {
 
 char * lm_own_copy_bytes(const char *source, size_t length) {
     char *copy;
-    if (length == (((size_t)- 1))) {
+    if (length == (((size_t)-1))) {
         return 0;
     }
     copy = lm_own_new_zero(length + 1U);
@@ -462,7 +462,7 @@ static int lm_own_size_multiply(size_t left, size_t right, size_t *out) {
     if (out == 0) {
         return 1;
     }
-    if (left != 0U && right > (((size_t)- 1)) / left) {
+    if (left != 0U && right > (((size_t)-1)) / left) {
         return 1;
     }
     out[0] = left * right;

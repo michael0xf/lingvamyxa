@@ -3,6 +3,10 @@ L2:
         return: value
     end: take
 
+    fn: add (int: left; int: right) int
+        return: left + right
+    end: add
+
     external:
         fn: main () int
             int: i 3
@@ -25,8 +29,26 @@ L2:
             if: result != -1
                 return: 4
 
+            result: add(1 + (-1), -1)
+            if: result != -1
+                return: 5
+
+            result: add(1+2, 4-1)
+            if: result != 6
+                return: 6
+
+            result: take(1 + --i)
+            if: result != 2 || i != 1
+                return: 7
+
+            result: take(1 + -1)
+            if: result != 0
+                return: 8
+
             result: take(mask & 3) + take(mask | 1) + take(mask ^ 3)
-            return: result != 14
+            if: result != 14
+                return: 9
+            return: 0
         end: main
     end: external
 end: L2
