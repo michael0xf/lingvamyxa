@@ -174,7 +174,7 @@ L2:
                     own_library
                 c.fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file)
                 c.fputs("$parserSkip = @()\n", file)
-                c.fputs("$transSkip = @('trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2')\n", file)
+                c.fputs("$transSkip = @()\n", file)
                 c.fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2')\n", file)
                 c.fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file)
                 c.fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file)
@@ -302,7 +302,6 @@ L2:
                 c.fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file)
                 c.fputs("    [ -e \"$src\" ] || continue\n", file)
                 c.fputs("    name=${src##*/}\n", file)
-                c.fputs("    case \"$name\" in trans_double_semicolon_params.lm2|trans_fn_descriptor_only.lm2) continue ;; esac\n", file)
                 c.fputs("    base=${name%.*}\n", file)
                 c.fputs("    c_path=\"build/obj/tests/$base.c\"\n", file)
                 c.fputs("    exe_path=\"build/obj/tests/$base\"\n", file)

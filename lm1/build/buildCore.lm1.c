@@ -224,7 +224,7 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fprintf(file, "$ownLib = '%s'\n", own_library);
     fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file);
     fputs("$parserSkip = @()\n", file);
-    fputs("$transSkip = @('trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2')\n", file);
+    fputs("$transSkip = @()\n", file);
     fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2')\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
     fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
@@ -358,7 +358,6 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);
-    fputs("    case \"$name\" in trans_double_semicolon_params.lm2|trans_fn_descriptor_only.lm2) continue ;; esac\n", file);
     fputs("    base=${name%.*}\n", file);
     fputs("    c_path=\"build/obj/tests/$base.c\"\n", file);
     fputs("    exe_path=\"build/obj/tests/$base\"\n", file);
