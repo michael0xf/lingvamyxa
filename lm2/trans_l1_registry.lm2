@@ -611,10 +611,46 @@ fn: lm_trans_registry_column_is_class_typed (const: (LmTransRegistryColumn: colu
     lm_trans_text_ref_destroy(@ payload)
 return: is_class || lm_trans_registry_column_has_descriptor(column, "class")
 
+fn: lm_trans_registry_column_serialization_codec (const: (LmTransRegistryColumn: column)) const: @: char
+    LmP0Text: payload
+    const: @: char codec
+    size_t: i
+
+    if: column = 0
+        return: 0
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+
+    i: 0U
+    while: i < column\descriptor_count
+        if: column\descriptors[i] != 0 && lm_trans_registry_identifier_value(column\descriptors[i], payload) != 0
+            codec: lm_trans_registry_lookup(payload, "serialization.codec")
+            if: codec != 0
+                lm_trans_text_ref_destroy(@ payload)
+                return: codec
+            ---
+        ---
+        i: i + 1U
+
+    if: column\name != 0 && lm_trans_registry_identifier_value(column\name, payload) != 0
+        codec: lm_trans_registry_lookup(payload, "serialization.codec")
+        if: codec != 0
+            lm_trans_text_ref_destroy(@ payload)
+            return: codec
+        ---
+    ---
+
+    lm_trans_text_ref_destroy(@ payload)
+return: 0
+
 fn: lm_trans_registry_cell_value (const: (LmP0Text: atom); const: (LmTransRegistryColumn: column); LmP0Text: out_value) int
+    const: @: char codec
+
     if: lm_trans_registry_payload_is_null(atom) != 0
         return: 0
-    if: lm_trans_registry_column_has_descriptor(column, "char") != 0
+    codec: lm_trans_registry_column_serialization_codec(column)
+    if: (codec != 0 && c.strcmp(codec, "lmx.char") = 0) || lm_trans_registry_column_has_descriptor(column, "char") != 0
         if: lm_trans_registry_literal_value(atom, out_value) != 0
             return: 1
         return: -1

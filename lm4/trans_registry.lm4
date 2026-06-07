@@ -6,6 +6,9 @@ table:
              c.union                    descriptor
              c.enum                     descriptor
              function                   descriptor
+             procedure                  descriptor
+             functionPointer            descriptor
+             closure                    descriptor
              callable                   descriptor
              `callable.zero-arg.value`  descriptor
              `callable.descriptor.value` descriptor
@@ -138,6 +141,8 @@ table:
              short     integer
              int       integer
              long      integer
+             float     floating
+             double    floating
              signed    integer
              unsigned  integer
              uchar     integer
@@ -162,6 +167,8 @@ table:
              short     "C99-short(profile)"
              int       "C99-int(profile)"
              long      "C99-long(profile)"
+             float     "C99-float(profile)"
+             double    "C99-double(profile)"
              signed    "C99-signed-int(profile)"
              unsigned  "C99-unsigned-int(profile)"
              uchar     "0..UCHAR_MAX(profile)"
@@ -274,6 +281,8 @@ table:
              short     lmx.decimal-atom
              int       lmx.decimal-atom
              long      lmx.decimal-atom
+             float     lmx.decimal-atom
+             double    lmx.decimal-atom
              signed    lmx.decimal-atom
              unsigned  lmx.decimal-atom
              uchar     lmx.decimal-atom
@@ -295,10 +304,14 @@ table:
     columns: class  (projection char)
     rows:
              fn                         c.function-symbol
+             function                   c.function-symbol
              sub                        c.procedure-symbol
+             procedure                  c.procedure-symbol
              functionPointerType        c.function-pointer
+             functionPointer            c.function-pointer
              callableDescriptor         lmx.callable-descriptor
              closureType                c.closure-struct
+             closure                    c.closure-struct
              `callable.zero-arg.value`  lmx.callable-value
              `callable.descriptor.value` lmx.callable-value
 end: `callable.projection`

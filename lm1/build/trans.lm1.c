@@ -1908,6 +1908,7 @@ static int lm_trans_registry_join_table(const LmP0Text * source_table, const LmP
 static int lm_trans_registry_push_row_atoms(const LmP0Text * table_atom, const LmP0Text * key_atom, const LmP0Text * payload_atom);
 static int lm_trans_registry_column_has_descriptor(const LmTransRegistryColumn column, const char *descriptor);
 static int lm_trans_registry_column_is_class_typed(const LmTransRegistryColumn column);
+static const char * lm_trans_registry_column_serialization_codec(const LmTransRegistryColumn column);
 static int lm_trans_registry_cell_value(const LmP0Text * atom, const LmTransRegistryColumn column, LmP0Text * out_value);
 static int lm_trans_registry_push_table_cell(const LmP0Text * table_name, const LmTransRegistryColumn column, int split_by_column, const LmP0Text * key_atom, const LmP0Node * payload_node, int allow_node_cells);
 static int lm_trans_registry_note_class_kind(const LmP0Text * name, const char *kind);
@@ -2910,6 +2911,10 @@ static int lm_trans_trailer_single_atom(const LmP0Trailer * trailer, LmP0Text * 
 static const char * lm_trans_symbol_class_name(const char *class_name);
 static int lm_trans_symbol_class_is(const char *class_name, const char *expected);
 static int lm_trans_symbol_is(const LmTransSymbol * symbol, const char *class_name);
+static const char * lm_trans_symbol_callable_projection(const LmTransSymbol * symbol);
+static int lm_trans_callable_projection_class_is(const char *class_name, const char *projection);
+static int lm_trans_callable_projection_is_executable(const char *projection);
+static int lm_trans_symbol_has_callable_projection(const LmTransSymbol * symbol, const char *projection);
 static int lm_trans_symbol_is_executable_callable(const LmTransSymbol * symbol);
 static int lm_trans_symbol_is_value_callable(const LmTransSymbol * symbol);
 static void lm_trans_symbol_destroy_fields(LmTransSymbol * symbol);
@@ -3577,11 +3582,46 @@ static int lm_trans_registry_column_is_class_typed(const LmTransRegistryColumn c
     return is_class || lm_trans_registry_column_has_descriptor(column, "class");
 }
 
+static const char * lm_trans_registry_column_serialization_codec(const LmTransRegistryColumn column) {
+    LmP0Text * payload;
+    const char *codec;
+    size_t i;
+    if (column == 0) {
+        return 0;
+    }
+    payload = lm_trans_text_ref_new_cstr("");
+    if (payload == 0) {
+        return 0;
+    }
+    i = 0U;
+    while (i < column -> descriptor_count) {
+        if (column -> descriptors[i] != 0 && lm_trans_registry_identifier_value(column -> descriptors[i], payload) != 0) {
+            codec = lm_trans_registry_lookup(payload, "serialization.codec");
+            if (codec != 0) {
+                lm_trans_text_ref_destroy(&payload);
+                return codec;
+            }
+        }
+        i = i + 1U;
+    }
+    if (column -> name != 0 && lm_trans_registry_identifier_value(column -> name, payload) != 0) {
+        codec = lm_trans_registry_lookup(payload, "serialization.codec");
+        if (codec != 0) {
+            lm_trans_text_ref_destroy(&payload);
+            return codec;
+        }
+    }
+    lm_trans_text_ref_destroy(&payload);
+    return 0;
+}
+
 static int lm_trans_registry_cell_value(const LmP0Text * atom, const LmTransRegistryColumn column, LmP0Text * out_value) {
+    const char *codec;
     if (lm_trans_registry_payload_is_null(atom) != 0) {
         return 0;
     }
-    if (lm_trans_registry_column_has_descriptor(column, "char") != 0) {
+    codec = lm_trans_registry_column_serialization_codec(column);
+    if ((codec != 0 && strcmp(codec, "lmx.char") == 0) || lm_trans_registry_column_has_descriptor(column, "char") != 0) {
         if (lm_trans_registry_literal_value(atom, out_value) != 0) {
             return 1;
         }
@@ -5822,7 +5862,7 @@ static int lm_trans_call_lower_value(const LmP0Text * head, const LmTransSymbol 
         return 1;
     }
     out->signature = symbol;
-    out->is_closure = lm_trans_symbol_is(symbol, "closure");
+    out->is_closure = lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct");
     return 0;
 }
 
@@ -5839,7 +5879,7 @@ static int lm_trans_call_lower_statement(const LmP0Text * head, const LmTransSym
         return 1;
     }
     out->signature = symbol;
-    out->is_closure = lm_trans_symbol_is(symbol, "closure");
+    out->is_closure = lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct");
     return 0;
 }
 
@@ -6634,6 +6674,9 @@ static int lm_trans_expr_segment_set_default(LmTransExprSegment * segment, const
 
 static int lm_trans_registry_is_function_pointer_type_name(const LmTransNamespace * namespace_, const LmP0Text * name) {
     const LmOwnPtrStack * rows;
+    if (lm_trans_callable_projection_class_is("functionPointerType", "c.function-pointer") == 0) {
+        return 0;
+    }
     rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("functionPointerType"), "value");
     if ((lm_trans_registry_relation_stack_latest_row(rows, name) != 0)) {
         return 1;
@@ -6647,7 +6690,7 @@ static int lm_trans_callable_descriptor_is_lazy(const LmTransNamespace * namespa
 }
 
 static int lm_trans_callable_descriptor_is_raw_function_reference(const LmTransNamespace * namespace_, const LmP0Text * name) {
-    return ((name != 0) && (lm_trans_callable_descriptor_is_lazy(namespace_, name) == 0));
+    return (((name != 0) && lm_trans_callable_projection_class_is("callableDescriptor", "lmx.callable-descriptor")) && (lm_trans_callable_descriptor_is_lazy(namespace_, name) == 0));
 }
 
 static int lm_trans_emit_raw_callable_declarator(FILE * file, const LmTransNamespace * namespace_, const LmP0Text * descriptor_name, const LmP0Text * name, const char *error_name) {
@@ -8208,7 +8251,7 @@ static int lm_trans_expr_stack_push_forced_zero_arg_callable(LmTransExprStack * 
     if ((lm_trans_expr_stack_push_text(stack, ")") != 0)) {
         return 1;
     }
-    if (lm_trans_symbol_is(symbol, "closure")) {
+    if (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")) {
         if (((((lm_trans_expr_stack_push_text(stack, "->env") != 0) || (lm_trans_expr_stack_push_name_text(stack, name) != 0)) || (lm_trans_expr_stack_push_text(stack, "->call(") != 0)) || (lm_trans_expr_stack_push_name_text(stack, name) != 0))) {
             return 1;
         }
@@ -8296,7 +8339,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
         if ((node -> kind == LM_P0_NODE_FRAME)) {
             frame = node -> as -> frame;
             symbol = lm_trans_namespace_find(namespace_, frame -> head);
-            if (((((((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name) == 0)) && (descriptor_is_function_pointer == 0)) && (lm_trans_symbol_is(symbol, "closure") == 0)) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count)) && (symbol -> param_names -> count >= descriptor_param_count))) {
+            if (((((((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name) == 0)) && (descriptor_is_function_pointer == 0)) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0)) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count)) && (symbol -> param_names -> count >= descriptor_param_count))) {
                 bound_count = (symbol -> param_names -> count - descriptor_param_count);
                 if ((explicit_bound_count <= bound_count)) {
                     if (symbol -> has_c_name) {
@@ -8322,7 +8365,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                 fprintf(stderr, "trans L2 error: call-shaped callable argument for %.*s is not a raw function reference; defaults could not form an adapter\n", (((int)descriptor_name -> length)), descriptor_name -> data);
                 status = 1;
             }
-            if (((status == 0) && (consumed == 0) && (descriptor_is_function_pointer == 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_symbol_is(symbol, "closure") == 0) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count) && (symbol -> param_names -> count >= descriptor_param_count))) {
+            if (((status == 0) && (consumed == 0) && (descriptor_is_function_pointer == 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count) && (symbol -> param_names -> count >= descriptor_param_count))) {
                 bound_count = (symbol -> param_names -> count - descriptor_param_count);
                 if ((explicit_bound_count > bound_count)) {
                     fprintf(stderr, "trans L2 error: too many lazy-bind arguments for callable descriptor %.*s\n", (((int)descriptor_name -> length)), descriptor_name -> data);
@@ -8372,7 +8415,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                             name[0] = atom[0];
                         }
                         if (lm_trans_callable_signature_matches_descriptor_name(descriptor_name, symbol, namespace_)) {
-                            if ((lm_trans_callable_descriptor_is_raw_function_reference(namespace_, descriptor_name) && (lm_trans_symbol_is(symbol, "closure") == 0))) {
+                            if ((lm_trans_callable_descriptor_is_raw_function_reference(namespace_, descriptor_name) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0))) {
                                 if ((lm_trans_expr_stack_push_name_text(stack, name) != 0)) {
                                     status = 1;
                                 }
@@ -8381,7 +8424,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                                 }
                             }
                             else {
-                                if (((descriptor_is_function_pointer == 0) && (lm_trans_symbol_is(symbol, "closure") == 0))) {
+                                if (((descriptor_is_function_pointer == 0) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0))) {
                                     if ((lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, 0U, binder_name) != 0)) {
                                         status = 1;
                                     }
@@ -8405,7 +8448,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                             }
                         }
                         else {
-                            if (((descriptor_is_function_pointer && (lm_trans_symbol_is(symbol, "closure") == 0)) && lm_trans_callable_return_chain_depth_to_descriptor(symbol, descriptor_name, namespace_, &chain_depth))) {
+                            if (((descriptor_is_function_pointer && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0)) && lm_trans_callable_return_chain_depth_to_descriptor(symbol, descriptor_name, namespace_, &chain_depth))) {
                                 if (((lm_trans_emit_callable_return_chain_adapter(file, namespace_, name, symbol, descriptor_name, chain_depth, adapter_name) != 0) || (lm_trans_expr_stack_push_name_text(stack, adapter_name) != 0))) {
                                     status = 1;
                                 }
@@ -9553,6 +9596,7 @@ static int lm_trans_validate_profile_c_printf_call(const LmP0Frame * frame, cons
 
 static int lm_trans_cast_type_is_allowed(const LmP0Node * type_node, const LmTransNamespace * namespace_) {
     LmP0Text * key;
+    const char *range;
     key = lm_trans_text_ref_new_cstr("");
     if ((key == 0)) {
         return 0;
@@ -9562,11 +9606,16 @@ static int lm_trans_cast_type_is_allowed(const LmP0Node * type_node, const LmTra
         lm_trans_text_ref_destroy(&key);
         return 0;
     }
+    range = lm_trans_namespace_registry_lookup(namespace_, key, "class.range");
+    if (range != 0) {
+        lm_trans_text_ref_destroy(&key);
+        return 1;
+    }
     if ((lm_trans_namespace_registry_lookup(namespace_, key, "cast.target") != 0)) {
         lm_trans_text_ref_destroy(&key);
         return 1;
     }
-    fprintf(stderr, "trans L2 error: cast target type \"%.*s\" is not listed in cast.target\n", (((int)key -> length)), key -> data);
+    fprintf(stderr, "trans L2 error: cast target type \"%.*s\" is not listed in class.range or cast.target\n", (((int)key -> length)), key -> data);
     lm_trans_text_ref_destroy(&key);
     return 0;
 }
@@ -12993,7 +13042,7 @@ static int lm_trans_emit_raw_callable_return_statement(FILE * file, const LmP0Fi
             return lm_return_4;
         }
     }
-    if (symbol -> has_env_arg || lm_trans_symbol_is(symbol, "closure")) {
+    if (symbol -> has_env_arg || lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")) {
         fprintf(stderr, "trans L2 error: cannot return capturing callable %.*s as raw descriptor %.*s; use `lazy fn`\n", (((int)atom -> length)), atom -> data, (((int)descriptor_type -> length)), descriptor_type -> data);
         {
             int lm_return_5 = 1;
@@ -27821,8 +27870,34 @@ static int lm_trans_symbol_is(const LmTransSymbol * symbol, const char *class_na
     return symbol != 0 && lm_trans_symbol_class_is(symbol -> class_name, class_name) != 0;
 }
 
+static const char * lm_trans_symbol_callable_projection(const LmTransSymbol * symbol) {
+    if (symbol == 0 || symbol -> class_name == 0) {
+        return 0;
+    }
+    return lm_trans_registry_lookup(lm_trans_text_from_cstr(symbol -> class_name), "callable.projection");
+}
+
+static int lm_trans_callable_projection_class_is(const char *class_name, const char *projection) {
+    const char *actual;
+    if (class_name == 0 || projection == 0) {
+        return 0;
+    }
+    actual = lm_trans_registry_lookup(lm_trans_text_from_cstr(class_name), "callable.projection");
+    return actual != 0 && strcmp(actual, projection) == 0;
+}
+
+static int lm_trans_callable_projection_is_executable(const char *projection) {
+    return projection != 0 && (strcmp(projection, "c.function-symbol") == 0 || strcmp(projection, "c.procedure-symbol") == 0 || strcmp(projection, "c.function-pointer") == 0 || strcmp(projection, "c.closure-struct") == 0);
+}
+
+static int lm_trans_symbol_has_callable_projection(const LmTransSymbol * symbol, const char *projection) {
+    const char *actual;
+    actual = lm_trans_symbol_callable_projection(symbol);
+    return actual != 0 && projection != 0 && strcmp(actual, projection) == 0;
+}
+
 static int lm_trans_symbol_is_executable_callable(const LmTransSymbol * symbol) {
-    return symbol != 0 && symbol -> has_callable_shape != 0 && (lm_trans_symbol_is(symbol, "function") != 0 || lm_trans_symbol_is(symbol, "procedure") != 0 || lm_trans_symbol_is(symbol, "closure") != 0 || lm_trans_symbol_is(symbol, "functionPointer") != 0);
+    return symbol != 0 && symbol -> has_callable_shape != 0 && lm_trans_callable_projection_is_executable(lm_trans_symbol_callable_projection(symbol)) != 0;
 }
 
 static int lm_trans_symbol_is_value_callable(const LmTransSymbol * symbol) {

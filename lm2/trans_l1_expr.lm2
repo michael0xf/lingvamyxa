@@ -222,7 +222,7 @@ fn: lm_trans_call_lower_value (const: (LmP0Text: head); const: (LmTransSymbol: s
         c.fprintf(c.stderr, "trans L2 error: \"%.*s\" is %s, not a value-returning function\n", (cast: int head\length), head\data, lm_trans_symbol_class_name(symbol\class_name))
         return: 1
     out\signature: symbol
-    out\is_closure: lm_trans_symbol_is(symbol, "closure")
+    out\is_closure: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
     return: 0
 end: lm_trans_call_lower_value
 
@@ -236,7 +236,7 @@ fn: lm_trans_call_lower_statement (const: (LmP0Text: head); const: (LmTransSymbo
         c.fprintf(c.stderr, "trans L2 error: \"%.*s\" is %s, not a callable\n", (cast: int head\length), head\data, lm_trans_symbol_class_name(symbol\class_name))
         return: 1
     out\signature: symbol
-    out\is_closure: lm_trans_symbol_is(symbol, "closure")
+    out\is_closure: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
     return: 0
 end: lm_trans_call_lower_statement
 
@@ -917,6 +917,8 @@ end: lm_trans_expr_segment_set_default
 
 fn: lm_trans_registry_is_function_pointer_type_name (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
     const: LmOwnPtrStack: rows
+    if: lm_trans_callable_projection_class_is("functionPointerType", "c.function-pointer") = 0
+        return: 0
     rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("functionPointerType"), "value")
     if: (lm_trans_registry_relation_stack_latest_row(rows, name) != 0)
         return: 1
@@ -929,7 +931,7 @@ fn: lm_trans_callable_descriptor_is_lazy (const: (LmTransNamespace: namespace_);
 end: lm_trans_callable_descriptor_is_lazy
 
 fn: lm_trans_callable_descriptor_is_raw_function_reference (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    return: ((name != 0) && (lm_trans_callable_descriptor_is_lazy(namespace_, name) = 0))
+    return: (((name != 0) && lm_trans_callable_projection_class_is("callableDescriptor", "lmx.callable-descriptor")) && (lm_trans_callable_descriptor_is_lazy(namespace_, name) = 0))
 end: lm_trans_callable_descriptor_is_raw_function_reference
 
 fn: lm_trans_emit_raw_callable_declarator (FILE: file; const: (LmTransNamespace: namespace_); const: (LmP0Text: descriptor_name); const: (LmP0Text: name); const: @(char error_name)) int
@@ -2252,7 +2254,7 @@ fn: lm_trans_expr_stack_push_forced_zero_arg_callable (LmTransExprStack: stack; 
         return: 1
     if: (lm_trans_expr_stack_push_text(stack, ")") != 0)
         return: 1
-    if: lm_trans_symbol_is(symbol, "closure")
+    if: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
         if: ((((lm_trans_expr_stack_push_text(stack, "->env") != 0) || (lm_trans_expr_stack_push_name_text(stack, name) != 0)) || (lm_trans_expr_stack_push_text(stack, "->call(") != 0)) || (lm_trans_expr_stack_push_name_text(stack, name) != 0))
             return: 1
         return: 0
@@ -2328,7 +2330,7 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
         if: (node\kind = c.LM_P0_NODE_FRAME)
             frame: node\as\frame
             symbol: lm_trans_namespace_find(namespace_, frame\head)
-            if: ((((((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name) = 0)) && (descriptor_is_function_pointer = 0)) && (lm_trans_symbol_is(symbol, "closure") = 0)) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count)) && (symbol\param_names\count >= descriptor_param_count))
+            if: ((((((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name) = 0)) && (descriptor_is_function_pointer = 0)) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0)) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count)) && (symbol\param_names\count >= descriptor_param_count))
                 bound_count: (symbol\param_names\count - descriptor_param_count)
                 if: (explicit_bound_count <= bound_count)
                     if: symbol\has_c_name
@@ -2348,7 +2350,7 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
             if: (((status = 0) && (consumed = 0)) && ((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_is_lazy(namespace_, descriptor_name) = 0))
                 c.fprintf(c.stderr, "trans L2 error: call-shaped callable argument for %.*s is not a raw function reference; defaults could not form an adapter\n", (cast: int descriptor_name\length), descriptor_name\data)
                 status: 1
-            if: ((status = 0) && (consumed = 0) && (descriptor_is_function_pointer = 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_symbol_is(symbol, "closure") = 0) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count) && (symbol\param_names\count >= descriptor_param_count))
+            if: ((status = 0) && (consumed = 0) && (descriptor_is_function_pointer = 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count) && (symbol\param_names\count >= descriptor_param_count))
                 bound_count: (symbol\param_names\count - descriptor_param_count)
                 if: (explicit_bound_count > bound_count)
                     c.fprintf(c.stderr, "trans L2 error: too many lazy-bind arguments for callable descriptor %.*s\n", (cast: int descriptor_name\length), descriptor_name\data)
@@ -2388,14 +2390,14 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
                         else:
                             name[0]: atom[0]
                         if: lm_trans_callable_signature_matches_descriptor_name(descriptor_name, symbol, namespace_)
-                            if: (lm_trans_callable_descriptor_is_raw_function_reference(namespace_, descriptor_name) && (lm_trans_symbol_is(symbol, "closure") = 0))
+                            if: (lm_trans_callable_descriptor_is_raw_function_reference(namespace_, descriptor_name) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0))
                                 if: (lm_trans_expr_stack_push_name_text(stack, name) != 0)
                                     status: 1
                                 else:
                                     consumed: 1
                                 ---
                             else:
-                                if: ((descriptor_is_function_pointer = 0) && (lm_trans_symbol_is(symbol, "closure") = 0))
+                                if: ((descriptor_is_function_pointer = 0) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0))
                                     if: (lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, 0U, binder_name) != 0)
                                         status: 1
                                     if: ((status = 0) && (binder_name\length != 0U))
@@ -2414,7 +2416,7 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
                                 ---
                             ---
                         else:
-                            if: ((descriptor_is_function_pointer && (lm_trans_symbol_is(symbol, "closure") = 0)) && lm_trans_callable_return_chain_depth_to_descriptor(symbol, descriptor_name, namespace_, @ chain_depth))
+                            if: ((descriptor_is_function_pointer && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") = 0)) && lm_trans_callable_return_chain_depth_to_descriptor(symbol, descriptor_name, namespace_, @ chain_depth))
                                 if: ((lm_trans_emit_callable_return_chain_adapter(file, namespace_, name, symbol, descriptor_name, chain_depth, adapter_name) != 0) || (lm_trans_expr_stack_push_name_text(stack, adapter_name) != 0))
                                     status: 1
                                 else:
@@ -3374,6 +3376,7 @@ return: lm_trans_validate_c_printf_call(frame, namespace_)
 
 fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTransNamespace: namespace_)) int
     LmP0Text: key
+    const: @: char range
     key: lm_trans_text_ref_new_cstr("")
     if: (key = 0)
         return: 0
@@ -3381,10 +3384,14 @@ fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTrans
         c.fprintf(c.stderr, "trans L2 error: cast target expects a type\n")
         lm_trans_text_ref_destroy(@ key)
         return: 0
+    range: lm_trans_namespace_registry_lookup(namespace_, key, "class.range")
+    if: range != 0
+        lm_trans_text_ref_destroy(@ key)
+        return: 1
     if: (lm_trans_namespace_registry_lookup(namespace_, key, "cast.target") != 0)
         lm_trans_text_ref_destroy(@ key)
         return: 1
-    c.fprintf(c.stderr, "trans L2 error: cast target type \"%.*s\" is not listed in cast.target\n", (cast: int key\length), key\data)
+    c.fprintf(c.stderr, "trans L2 error: cast target type \"%.*s\" is not listed in class.range or cast.target\n", (cast: int key\length), key\data)
     lm_trans_text_ref_destroy(@ key)
     return: 0
 end: lm_trans_cast_type_is_allowed
