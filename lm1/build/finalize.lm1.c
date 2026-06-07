@@ -109,8 +109,11 @@ static const char * lm_finalize_platform_defer_command_format(void) {
 }
 #endif
 static int lm_finalize_is_path_separator(char value);
+static int lm_finalize_has_path_separator(char *path);
 static int lm_finalize_is_absolute_path(char *path);
 static int lm_finalize_file_exists(char *path);
+static int lm_finalize_join_path(char *buffer, size_t size, char *base, char *tail);
+static int lm_finalize_has_project_marker(char *path);
 static int lm_finalize_trim_last_path_part(char *path);
 static int lm_finalize_enter_project_root(char *program_path);
 static void lm_finalize_log(char *message);
@@ -130,6 +133,10 @@ int main(int argc, char **argv);
 
 static int lm_finalize_is_path_separator(char value) {
     return value == '/' || value == '\\';
+}
+
+static int lm_finalize_has_path_separator(char *path) {
+    return strchr(path, '/') != 0 || strchr(path, '\\') != 0;
 }
 
 static int lm_finalize_is_absolute_path(char *path) {
@@ -155,6 +162,37 @@ static int lm_finalize_file_exists(char *path) {
     return 1;
 }
 
+static int lm_finalize_join_path(char *buffer, size_t size, char *base, char *tail) {
+    size_t base_length;
+    size_t tail_length;
+    size_t used;
+    base_length = strlen(base);
+    tail_length = strlen(tail);
+    used = base_length;
+    if (base_length + tail_length + 2U >= size) {
+        fprintf(stderr, "finalize.lm0: path is too long\n");
+        return 1;
+    }
+    memcpy(buffer, base, base_length);
+    if (base_length > 0U && tail_length > 0U && lm_finalize_is_path_separator(base[base_length - 1U]) == 0 && lm_finalize_is_path_separator(tail[0]) == 0) {
+        memcpy(buffer + used, lm_finalize_platform_path_sep(), strlen(lm_finalize_platform_path_sep()));
+        used = used + strlen(lm_finalize_platform_path_sep());
+    }
+    memcpy(buffer + used, tail, tail_length + 1U);
+    return 0;
+}
+
+static int lm_finalize_has_project_marker(char *path) {
+    char marker_path[2048];
+    if (lm_finalize_join_path(marker_path, sizeof(marker_path), path, "lm2/buildCore.lmx") != 0) {
+        return 0;
+    }
+    if (lm_finalize_file_exists(marker_path)) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_finalize_trim_last_path_part(char *path) {
     size_t length;
     length = strlen(path);
@@ -174,25 +212,47 @@ static int lm_finalize_trim_last_path_part(char *path) {
 }
 
 static int lm_finalize_enter_project_root(char *program_path) {
-    char root_path[1024];
-    if (lm_finalize_is_absolute_path(program_path) == 0) {
-        return 0;
-    }
-    if (strlen(program_path) >= sizeof(root_path)) {
-        fprintf(stderr, "finalize.lm0: executable path is too long\n");
+    char search_path[1024];
+    char executable_path[1024];
+    char cwd[1024];
+    int depth;
+    if (lm_finalize_platform_getcwd(cwd, sizeof(cwd)) == 0) {
+        fprintf(stderr, "finalize.lm0: cannot read current directory\n");
         return 1;
     }
-    strcpy(root_path, program_path);
-    lm_finalize_trim_last_path_part(root_path);
-    lm_finalize_trim_last_path_part(root_path);
-    lm_finalize_trim_last_path_part(root_path);
-    if (root_path[0] == '\0') {
-        return 0;
+    if (program_path != 0 && program_path[0] != '\0' && lm_finalize_has_path_separator(program_path)) {
+        if (lm_finalize_is_absolute_path(program_path)) {
+            if (strlen(program_path) >= sizeof(executable_path)) {
+                fprintf(stderr, "finalize.lm0: executable path is too long\n");
+                return 1;
+            }
+            strcpy(executable_path, program_path);
+        }
+        if (lm_finalize_is_absolute_path(program_path) == 0) {
+            if (lm_finalize_join_path(executable_path, sizeof(executable_path), cwd, program_path) != 0) {
+                return 1;
+            }
+        }
+        strcpy(search_path, executable_path);
+        lm_finalize_trim_last_path_part(search_path);
     }
-    if (lm_finalize_platform_chdir(root_path) != 0) {
-        fprintf(stderr, "finalize.lm0: cannot enter project root %s\n", root_path);
-        return 1;
+    if (program_path == 0 || program_path[0] == '\0' || lm_finalize_has_path_separator(program_path) == 0) {
+        strcpy(search_path, cwd);
     }
+    depth = 0;
+    while (depth < 12 && search_path[0] != '\0') {
+        if (lm_finalize_has_project_marker(search_path)) {
+            if (lm_finalize_platform_chdir(search_path) != 0) {
+                fprintf(stderr, "finalize.lm0: cannot enter project root %s\n", search_path);
+                return 1;
+            }
+            return 0;
+        }
+        lm_finalize_trim_last_path_part(search_path);
+        depth = depth + 1;
+    }
+    fprintf(stderr, "finalize.lm0: cannot locate project root from %s\n", cwd);
+    return 1;
     return 0;
 }
 

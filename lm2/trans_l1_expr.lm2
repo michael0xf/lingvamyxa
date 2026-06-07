@@ -4889,11 +4889,6 @@ fn: lm_trans_emit_type_head_only (FILE: file; const: (LmP0Text: type_head)) int
     return: status
 end: lm_trans_emit_type_head_only
 
-fn: lm_trans_emit_type_head_only_raw (FILE: file; const: (LmP0Text: type_head)) int
-    if: lm_trans_builtin_c_type_name(type_head)
-        return: lm_trans_emit_type_name(file, type_head)
-return: lm_trans_emit_name(file, type_head)
-
 fn: lm_trans_emit_c_dimension_text (FILE: file; const: (LmP0Text: dimension); const: (LmTransNamespace: namespace_); const: @(char error_name)) int
     LmP0Document: dimension_document
     const: LmP0Diagnostic: diagnostic

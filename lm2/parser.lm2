@@ -1435,7 +1435,7 @@ fn: lm_p0_registry_push_row_atoms (const: (LmP0Text: table_atom); const: (LmP0Te
     lm_p0_text_ref_delete(key_value)
     lm_p0_text_ref_delete(payload_value)
 return: status
-fn: lm_p0_registry_column_has_descriptor (const: (LmP0RegistryColumn: column); const: @(char descriptor)) int
+fn: lm_p0_registry_column_has_descriptor (const: (LmL4Column: column); const: @(char descriptor)) int
     size_t: i
     LmP0Text: payload
     int: result
@@ -1474,7 +1474,7 @@ fn: lm_p0_registry_cell_none_cell_matches (const: (LmP0Text: payload); const: (L
     lm_p0_text_ref_delete(class_name)
 return: result
 
-fn: lm_p0_registry_cell_is_null (const: (LmP0Text: atom); const: (LmP0RegistryColumn: column)) int
+fn: lm_p0_registry_cell_is_null (const: (LmP0Text: atom); const: (LmL4Column: column)) int
     LmP0Text: payload
     size_t: i
     int: result
@@ -1502,7 +1502,7 @@ fn: lm_p0_registry_cell_is_null (const: (LmP0Text: atom); const: (LmP0RegistryCo
     lm_p0_text_ref_delete(payload)
 return: result
 
-fn: lm_p0_registry_cell_value (const: (LmP0Text: atom); const: (LmP0RegistryColumn: column); LmP0Text: out_value) int
+fn: lm_p0_registry_cell_value (const: (LmP0Text: atom); const: (LmL4Column: column); LmP0Text: out_value) int
     if: lm_p0_registry_cell_is_null(atom, column)
         return: 0
     if: lm_p0_registry_column_has_descriptor(column, "char")
@@ -1514,7 +1514,7 @@ fn: lm_p0_registry_cell_value (const: (LmP0Text: atom); const: (LmP0RegistryColu
     return: -1
 end: lm_p0_registry_cell_value
 
-fn: lm_p0_registry_push_table_cell (const: (LmP0Text: table_name); const: (LmP0RegistryColumn: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Text: payload_atom)) int
+fn: lm_p0_registry_push_table_cell (const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Text: payload_atom)) int
     LmP0Text: table_payload
     LmP0Text: column_payload
     LmP0Text: key_payload

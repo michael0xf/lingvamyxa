@@ -116,6 +116,12 @@ static int lm_build_has_qt_mingw_make(void);
 static int lm_build_has_qt_gcc(void);
 static int lm_build_has_qt_gxx(void);
 static char * lm_build_platform_canary_command_format(void);
+static char * lm_build_platform_canary_script_path(void);
+static char * lm_build_platform_canary_command_path(char *canary_path);
+static int lm_build_prepare_platform_canary(char *canary_path);
+static char * lm_build_platform_tests_script_path(void);
+static char * lm_build_platform_tests_command_format(void);
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(void) {
     return ".exe";
@@ -164,7 +170,77 @@ static int lm_build_has_qt_gxx(void) {
 }
 
 static char * lm_build_platform_canary_command_format(void) {
-    return "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=Start-Process -FilePath '%s' -ArgumentList '--next' -PassThru; if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }; exit $p.ExitCode\"";
+    return "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\"";
+}
+
+static char * lm_build_platform_canary_script_path(void) {
+    return "build/obj/run_lm0_canary.ps1";
+}
+
+static char * lm_build_platform_canary_command_path(char *canary_path) {
+    canary_path = canary_path;
+    return lm_build_platform_canary_script_path();
+}
+
+static int lm_build_prepare_platform_canary(char *canary_path) {
+    FILE * file;
+    file = fopen(lm_build_platform_canary_script_path(), "wb");
+    if (file == 0) {
+        fprintf(stderr, "buildCore.lm0: cannot write canary script %s\n", lm_build_platform_canary_script_path());
+        return 1;
+    }
+    fprintf(file, "$exe = (Resolve-Path -LiteralPath '%s').Path\n", canary_path);
+    fputs("$p = Start-Process -FilePath $exe -ArgumentList '--next' -WorkingDirectory (Get-Location).Path -PassThru\n", file);
+    fputs("if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }\n", file);
+    fputs("exit $p.ExitCode\n", file);
+    if (fclose(file) != 0) {
+        fprintf(stderr, "buildCore.lm0: cannot close canary script %s\n", lm_build_platform_canary_script_path());
+        return 1;
+    }
+    return 0;
+}
+
+static char * lm_build_platform_tests_script_path(void) {
+    return "build/obj/tests/run_lm0_tests.ps1";
+}
+
+static char * lm_build_platform_tests_command_format(void) {
+    return "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\"";
+}
+
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library) {
+    fputs("$ErrorActionPreference = 'Continue'\n", file);
+    fprintf(file, "$printTree = '%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "$trans = '%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "$make = '%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "$parserLib = '%s'\n", parser_library);
+    fprintf(file, "$ownLib = '%s'\n", own_library);
+    fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file);
+    fputs("$parserSkip = @('if_else_dotted_empty_body_gap_probe.lmx', 't0.lmx')\n", file);
+    fputs("$transSkip = @('trans_callable_force_argument.lm2', 'trans_callable_lazy_bind.lm2', 'trans_contextual_literal_none_ok.lmx', 'trans_default_arguments.lm2', 'trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2', 'trans_l4_abi_receivers.lm2')\n", file);
+    fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
+    fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
+    fputs("    if ($parserSkip -contains $testFile.Name) { continue }\n", file);
+    fputs("    & $printTree $testFile.FullName *> $null\n", file);
+    fputs("    $code = $LASTEXITCODE\n", file);
+    fputs("    if ($testFile.Name -like 'invalid_*') {\n", file);
+    fputs("        if ($code -eq 0) { throw ('negative parser test unexpectedly passed: ' + $testFile.Name) }\n", file);
+    fputs("    }\n", file);
+    fputs("    elseif ($code -ne 0) { throw ('positive parser test failed: ' + $testFile.Name) }\n", file);
+    fputs("}\n", file);
+    fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File | Where-Object { $_.Name -like 'trans_*' -and ($_.Extension -eq '.lm2' -or $_.Extension -eq '.lmx') } | Sort-Object Name) {\n", file);
+    fputs("    if ($transSkip -contains $testFile.Name) { continue }\n", file);
+    fputs("    $cPath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.c')\n", file);
+    fputs("    $exePath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.exe')\n", file);
+    fputs("    & $trans $testFile.FullName $cPath\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke translation failed: ' + $testFile.Name) }\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Ilm1' $cPath $parserLib $ownLib '-o' $exePath\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke link failed: ' + $testFile.Name) }\n", file);
+    fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + $testFile.Name) }\n", file);
+    fputs("}\n", file);
+    fputs("Write-Host 'lm0 staged tests passed'\n", file);
+    return 0;
 }
 #else
 #include <unistd.h>
@@ -179,6 +255,11 @@ static int lm_build_has_qt_mingw_make(void);
 static int lm_build_has_qt_gcc(void);
 static int lm_build_has_qt_gxx(void);
 static char * lm_build_platform_canary_command_format(void);
+static char * lm_build_platform_canary_command_path(char *canary_path);
+static int lm_build_prepare_platform_canary(char *canary_path);
+static char * lm_build_platform_tests_script_path(void);
+static char * lm_build_platform_tests_command_format(void);
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(void) {
     return "";
@@ -229,6 +310,56 @@ static int lm_build_has_qt_gxx(void) {
 static char * lm_build_platform_canary_command_format(void) {
     return "timeout 120s \"%s\" --next";
 }
+
+static char * lm_build_platform_canary_command_path(char *canary_path) {
+    return canary_path;
+}
+
+static int lm_build_prepare_platform_canary(char *canary_path) {
+    canary_path = canary_path;
+    return 0;
+}
+
+static char * lm_build_platform_tests_script_path(void) {
+    return "build/obj/tests/run_lm0_tests.sh";
+}
+
+static char * lm_build_platform_tests_command_format(void) {
+    return "sh \"%s\"";
+}
+
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library) {
+    fputs("set -eu\n", file);
+    fprintf(file, "printTree='%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "trans='%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "make_tool='%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "parserLib='%s'\n", parser_library);
+    fprintf(file, "ownLib='%s'\n", own_library);
+    fputs("mkdir -p build/obj/tests\n", file);
+    fputs("for src in tests/*.lmx; do\n", file);
+    fputs("    [ -e \"$src\" ] || continue\n", file);
+    fputs("    name=${src##*/}\n", file);
+    fputs("    case \"$name\" in trans_*|if_else_dotted_empty_body_gap_probe.lmx|t0.lmx) continue ;; esac\n", file);
+    fputs("    if \"$printTree\" \"$src\" >/dev/null 2>&1; then code=0; else code=$?; fi\n", file);
+    fputs("    case \"$name\" in\n", file);
+    fputs("        invalid_*) if [ \"$code\" -eq 0 ]; then echo \"negative parser test unexpectedly passed: $name\" >&2; exit 1; fi ;;\n", file);
+    fputs("        *) if [ \"$code\" -ne 0 ]; then echo \"positive parser test failed: $name\" >&2; exit 1; fi ;;\n", file);
+    fputs("    esac\n", file);
+    fputs("done\n", file);
+    fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file);
+    fputs("    [ -e \"$src\" ] || continue\n", file);
+    fputs("    name=${src##*/}\n", file);
+    fputs("    case \"$name\" in trans_callable_force_argument.lm2|trans_callable_lazy_bind.lm2|trans_contextual_literal_none_ok.lmx|trans_default_arguments.lm2|trans_double_semicolon_params.lm2|trans_fn_descriptor_only.lm2|trans_l4_abi_receivers.lm2) continue ;; esac\n", file);
+    fputs("    base=${name%.*}\n", file);
+    fputs("    c_path=\"build/obj/tests/$base.c\"\n", file);
+    fputs("    exe_path=\"build/obj/tests/$base\"\n", file);
+    fputs("    \"$trans\" \"$src\" \"$c_path\"\n", file);
+    fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
+    fputs("    \"$exe_path\"\n", file);
+    fputs("done\n", file);
+    fputs("echo 'lm0 staged tests passed'\n", file);
+    return 0;
+}
 #endif
 static LmBuildOptions * lm_build_options_new(void);
 static void lm_build_options_delete(LmBuildOptions * options);
@@ -260,6 +391,8 @@ static int lm_build_own_library(char *make_tool, char *output_dir);
 static int lm_build_compile_trans(char *make_tool, char *output_dir, char *parser_library, char *own_library);
 static int lm_build_compile_generated_tools(char *make_tool, char *output_dir, char *parser_library, char *own_library);
 static int lm_build_run_canary(void);
+static int lm_build_write_staged_tests_script(char *output_dir, char *parser_library, char *own_library);
+static int lm_build_run_staged_tests(char *make_tool, char *output_dir, char *parser_library, char *own_library);
 static int lm_build_defer_finalize(void);
 static int lm_build_extract_third_party_zips(void);
 static int lm_build_clear_full_cmake_cache(char *cmake_tool, char *build_dir);
@@ -658,9 +791,44 @@ static int lm_build_compile_generated_tools(char *make_tool, char *output_dir, c
 
 static int lm_build_run_canary(void) {
     char canary_path[512];
+    char *command_path;
     char command[4096];
     snprintf(canary_path, sizeof(canary_path), "build/lm0/next/buildCore.lm0%s", lm_build_exe_suffix());
-    snprintf(command, sizeof(command), lm_build_platform_canary_command_format(), canary_path);
+    if (lm_build_prepare_platform_canary(canary_path) != 0) {
+        return 1;
+    }
+    command_path = lm_build_platform_canary_command_path(canary_path);
+    snprintf(command, sizeof(command), lm_build_platform_canary_command_format(), command_path);
+    return lm_build_run(command);
+}
+
+static int lm_build_write_staged_tests_script(char *output_dir, char *parser_library, char *own_library) {
+    FILE * file;
+    file = fopen(lm_build_platform_tests_script_path(), "wb");
+    if (file == 0) {
+        fprintf(stderr, "buildCore.lm0: cannot write staged tests script %s\n", lm_build_platform_tests_script_path());
+        return 1;
+    }
+    if (lm_build_write_platform_tests_script(file, output_dir, parser_library, own_library) != 0) {
+        fclose(file);
+        return 1;
+    }
+    if (fclose(file) != 0) {
+        fprintf(stderr, "buildCore.lm0: cannot close staged tests script %s\n", lm_build_platform_tests_script_path());
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_build_run_staged_tests(char *make_tool, char *output_dir, char *parser_library, char *own_library) {
+    char command[512];
+    if (lm_build_make(make_tool, "mkdir", "\"build/obj/tests\"") != 0) {
+        return 1;
+    }
+    if (lm_build_write_staged_tests_script(output_dir, parser_library, own_library) != 0) {
+        return 1;
+    }
+    snprintf(command, sizeof(command), lm_build_platform_tests_command_format(), lm_build_platform_tests_script_path());
     return lm_build_run(command);
 }
 
@@ -946,6 +1114,10 @@ static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, 
     }
     if (lm_build_run_canary() != 0) {
         fprintf(stderr, "buildCore.lm0: staged bootstrap tools failed the --next rebuild; live tools were not overwritten\n");
+        return 1;
+    }
+    if (lm_build_run_staged_tests(trusted_make, output_dir, parser_library, own_library) != 0) {
+        fprintf(stderr, "buildCore.lm0: staged bootstrap tools failed tests; live tools were not overwritten\n");
         return 1;
     }
     if (options -> full_build) {

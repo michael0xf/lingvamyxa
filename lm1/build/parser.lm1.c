@@ -1523,11 +1523,11 @@ static LmP0Trailer * lm_p0_new_trailer(LmP0Document * document, const char *spel
 static void lm_p0_set_diagnostic(LmP0Document * document, int code, size_t line, size_t column, const char *message);
 static int lm_p0_registry_push_row_values(const LmP0Text * table_value, const LmP0Text * key_value, const LmP0Text * payload_value);
 static int lm_p0_registry_push_row_atoms(const LmP0Text * table_atom, const LmP0Text * key_atom, const LmP0Text * payload_atom);
-static int lm_p0_registry_column_has_descriptor(const LmP0RegistryColumn column, const char *descriptor);
+static int lm_p0_registry_column_has_descriptor(const LmL4Column * column, const char *descriptor);
 static int lm_p0_registry_cell_none_cell_matches(const LmP0Text * payload, const LmP0Text * class_atom);
-static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmP0RegistryColumn column);
-static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmP0RegistryColumn column, LmP0Text * out_value);
-static int lm_p0_registry_push_table_cell(const LmP0Text * table_name, const LmP0RegistryColumn column, int split_by_column, const LmP0Text * key_atom, const LmP0Text * payload_atom);
+static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmL4Column * column);
+static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmL4Column * column, LmP0Text * out_value);
+static int lm_p0_registry_push_table_cell(const LmP0Text * table_name, const LmL4Column * column, int split_by_column, const LmP0Text * key_atom, const LmP0Text * payload_atom);
 static int lm_p0_registry_compare_enabled(void);
 static void lm_p0_registry_compare_fail(const char *table, const char *key, const char *registry_payload, const char *legacy_payload);
 static void lm_p0_trim_right(const char **text, size_t *length);
@@ -2813,7 +2813,7 @@ static int lm_p0_registry_push_row_atoms(const LmP0Text * table_atom, const LmP0
     return status;
 }
 
-static int lm_p0_registry_column_has_descriptor(const LmP0RegistryColumn column, const char *descriptor) {
+static int lm_p0_registry_column_has_descriptor(const LmL4Column * column, const char *descriptor) {
     size_t i;
     LmP0Text * payload;
     int result;
@@ -2859,7 +2859,7 @@ static int lm_p0_registry_cell_none_cell_matches(const LmP0Text * payload, const
     return result;
 }
 
-static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmP0RegistryColumn column) {
+static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmL4Column * column) {
     LmP0Text * payload;
     size_t i;
     int result;
@@ -2892,7 +2892,7 @@ static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmP0Registry
     return result;
 }
 
-static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmP0RegistryColumn column, LmP0Text * out_value) {
+static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmL4Column * column, LmP0Text * out_value) {
     if (lm_p0_registry_cell_is_null(atom, column)) {
         return 0;
     }
@@ -2908,7 +2908,7 @@ static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmP0RegistryCo
     return -1;
 }
 
-static int lm_p0_registry_push_table_cell(const LmP0Text * table_name, const LmP0RegistryColumn column, int split_by_column, const LmP0Text * key_atom, const LmP0Text * payload_atom) {
+static int lm_p0_registry_push_table_cell(const LmP0Text * table_name, const LmL4Column * column, int split_by_column, const LmP0Text * key_atom, const LmP0Text * payload_atom) {
     LmP0Text * table_payload;
     LmP0Text * column_payload;
     LmP0Text * key_payload;
