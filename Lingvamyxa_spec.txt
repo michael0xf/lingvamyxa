@@ -4818,28 +4818,13 @@ callable value for `five`. The call to `five` happens only inside
 `callSource`, where `source()` is explicitly called.
 
 If a compact call appears in a callable-descriptor argument position, the active
-L2 profile may consume it as a partial binding/residual callable when the
-expected descriptor admits `callable.partial`, the remaining unbound parameters
-match the expected descriptor, and `callable.projection` selects a representation
-that can store the bound environment:
+L2 profile may consume it as a partial binding/residual callable. The expected
+descriptor must admit `callable.partial`, the remaining unbound parameters must
+match the expected descriptor, and `callable.projection` must select a
+representation that can store the bound environment. The descriptor receiver
+head `callable:` declares the common closure-capable bundle:
 
-    L4:
-        table:
-            name: `callable.partial`
-            columns: class (value serial)
-            rows:
-                     AddX 1
-        end: `callable.partial`
-
-        table:
-            name: `callable.projection`
-            columns: class (value projection)
-            rows:
-                     AddX `c.closure-struct`
-        end: `callable.projection`
-    end: L4
-
-    fn: AddX (int: value) int
+    callable: AddX (int: value) int
 
     fn: addBase (int: base; int: value) int
         return: base + value
@@ -4855,16 +4840,26 @@ Here `addBase(4)` is not executed at the argument site. The argument site binds
 `base = 4` and produces a residual callable compatible with `AddX`; later
 `callAdd` calls that residual callable with `value = 3`.
 
-The same operation may be written explicitly when the active profile admits the
-`partial` row in `callable.partial.form`:
+In the current bootstrap profile, `callable: AddX ...` materializes the registry
+facts that make this legal:
 
-    table:
-        name: `callable.partial.form`
-        columns: class (materializer binding)
-        rows:
-                 `call-frame` lm_trans_materialize_call_frame_partial
-                 partial      lm_trans_materialize_partial_callable
-    end: `callable.partial.form`
+    callable.partial[AddX] = 1
+    callable.capture[AddX] = 1
+    callable.projection[AddX] = c.closure-struct
+
+The same operation may be written explicitly when the active profile admits the
+`partial` row in `callable.partial.form`. This profile switch is an L4 registry
+declaration, not an L2 statement table:
+
+    L4:
+        table:
+            name: `callable.partial.form`
+            columns: class (materializer binding)
+            rows:
+                     `call-frame` lm_trans_materialize_call_frame_partial
+                     partial      lm_trans_materialize_partial_callable
+        end: `callable.partial.form`
+    end: L4
 
     callAdd(partial(addBase, 4))
 
@@ -4910,23 +4905,9 @@ Java:
     var add4 = (IntUnaryOperator) (value -> addBase.applyAsInt(4, value));
     System.out.println(add4.applyAsInt(3)); // 7
 
-Lingvamyxa / LMX:
+Lingvamyxa / LMX, compact callable receiver form:
 
-    fn: AddX (int: value) int
-
-    table:
-        name: `callable.partial`
-        columns: class (value serial)
-        rows:
-                 AddX 1
-    end: `callable.partial`
-
-    table:
-        name: `callable.projection`
-        columns: class (value projection)
-        rows:
-                 AddX `c.closure-struct`
-    end: `callable.projection`
+    callable: AddX (int: value) int
 
     fn: addBase (int: base; int: value) int
         return: base + value
@@ -4943,10 +4924,32 @@ Lingvamyxa / LMX:
     end: external
 
 In the LMX example, `AddX` is visible in the signature of `callAdd`, and
-`callable.partial` plus `callable.projection[AddX] = c.closure-struct` mark the
-descriptor as able to carry a residual environment. The expression
-`callAdd(addBase(4))` returns `7`; an executable test that uses C process exit
-status would normally write `return: callAdd(addBase(4)) != 7`.
+the `callable:` descriptor receiver marks the descriptor as able to carry a
+residual environment. The expression `callAdd(addBase(4))` returns `7`; an
+executable test that uses C process exit status would normally write
+`return: callAdd(addBase(4)) != 7`.
+
+Lingvamyxa / LMX, explicit partial form:
+
+    callable: AddX (int: value) int
+
+    fn: addBase (int: base; int: value) int
+        return: base + value
+    end: addBase
+
+    fn: callAdd (AddX: add) int
+        return: add(3)
+    end: callAdd
+
+    external:
+        fn: main () int
+            return: callAdd(partial(addBase, 4))
+        end: main
+    end: external
+
+This spelling depends on the active profile declaring the `partial` surface form
+in `callable.partial.form`. It uses the same residual-callable materialization
+as the compact `addBase(4)` spelling after the form has been recognized.
 
 The same rule may use declared default argument values while forming the
 residual callable:
@@ -7992,35 +7995,40 @@ different semantic questions:
         `c.closure-struct` or another representation that can store an
         environment.
 
-The canonical set-style registry tables are:
+The canonical set-style registry tables are registry data. When written in
+source, they are L4 frames:
 
-    table:
-        name: `callable.partial`
-        columns: class  (value serial)
-    end: `callable.partial`
+    L4:
+        table:
+            name: `callable.partial`
+            columns: class  (value serial)
+        end: `callable.partial`
 
-    table:
-        name: `callable.capture`
-        columns: class  (value serial)
-    end: `callable.capture`
+        table:
+            name: `callable.capture`
+            columns: class  (value serial)
+        end: `callable.capture`
 
-    table:
-        name: `callable.projection`
-        columns: class  (value projection)
-        rows:
-                 AddX `c.closure-struct`
-    end: `callable.projection`
+        table:
+            name: `callable.projection`
+            columns: class  (value projection)
+            rows:
+                     AddX `c.closure-struct`
+        end: `callable.projection`
+    end: L4
 
 The active profile may also declare which surface forms are admitted for partial
 binding:
 
-    table:
-        name: `callable.partial.form`
-        columns: class (materializer binding)
-        rows:
-                 `call-frame` lm_trans_materialize_call_frame_partial
-                 partial      lm_trans_materialize_partial_callable
-    end: `callable.partial.form`
+    L4:
+        table:
+            name: `callable.partial.form`
+            columns: class (materializer binding)
+            rows:
+                     `call-frame` lm_trans_materialize_call_frame_partial
+                     partial      lm_trans_materialize_partial_callable
+        end: `callable.partial.form`
+    end: L4
 
 The `call-frame` row admits the existing compact callable-slot spelling:
 
