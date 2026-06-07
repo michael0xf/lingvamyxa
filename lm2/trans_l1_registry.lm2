@@ -1,4 +1,4 @@
-@: FILE lm_trans_prelude_output
+FILE: lm_trans_prelude_output
 const: @: char lm_trans_current_source_path
 @: LmOwnPtrStack lm_trans_declared_import_paths
 @: LmOwnPtrStack lm_trans_declared_import_documents

@@ -59,7 +59,7 @@ fn: lm_trans_identifier_same (const: @(LmP0Text left); const: @(LmP0Text right))
     c.lm_trans_text_ref_destroy(@ right_payload)
 return: same
 
-fn: lm_trans_emit_identifier (@: FILE file; const: @(LmP0Text name)) int
+fn: lm_trans_emit_identifier (FILE: file; const: @(LmP0Text name)) int
     @: LmP0Text payload
     int: status
 
@@ -200,27 +200,27 @@ fn: lm_trans_text_all_char (const: @(LmP0Text text); char: ch) int
 
 return: 1
 
-fn: lm_trans_write_all (@: FILE file; const: @(char data); size_t: length) int
+fn: lm_trans_write_all (FILE: file; const: @(char data); size_t: length) int
     if: c.fwrite(data, 1U, length, file) = length
         return: 0
 return: 1
 
-fn: lm_trans_put (@: FILE file; const: @(char text)) int
+fn: lm_trans_put (FILE: file; const: @(char text)) int
     if: c.fputs(text, file) < 0
         return: 1
 return: 0
 
-fn: lm_trans_prelude_file (@: FILE fallback) @: FILE
+fn: lm_trans_prelude_file (FILE: fallback) FILE
     if: c.lm_trans_prelude_output != 0
         return: c.lm_trans_prelude_output
 return: fallback
 
-fn: lm_trans_write_text (@: FILE file; const: @(LmP0Text text)) int
+fn: lm_trans_write_text (FILE: file; const: @(LmP0Text text)) int
     if: text = 0
         return: 1
 return: lm_trans_write_all(file, text\data, text\length)
 
-fn: lm_trans_emit_indent (@: FILE file; unsigned: indent) int
+fn: lm_trans_emit_indent (FILE: file; unsigned: indent) int
     unsigned: i
 
     i: 0U

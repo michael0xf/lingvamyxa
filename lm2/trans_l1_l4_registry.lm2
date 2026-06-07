@@ -291,7 +291,7 @@ fn: lm_trans_sort_layout_fields (@@: LmTransLayoutField fields; size_t: field_co
         i: i + 1U
 return: 0
 
-fn: lm_trans_emit_layout_field (@: FILE file; const: @(LmTransLayoutField field); const: @(LmTransNamespace namespace_); unsigned: indent) int
+fn: lm_trans_emit_layout_field (FILE: file; const: @(LmTransLayoutField field); const: @(LmTransNamespace namespace_); unsigned: indent) int
     @: LmTransCDeclarator declarator
     size_t: effective_address_depth
 
@@ -336,7 +336,7 @@ fn: lm_trans_emit_layout_field (@: FILE file; const: @(LmTransLayoutField field)
 
 return: lm_trans_put(file, ";\n")
 
-fn: lm_trans_emit_layout_fields (@: FILE file; const: @(char layout_name); const: @(LmTransNamespace namespace_); unsigned: indent) int
+fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: @(LmTransNamespace namespace_); unsigned: indent) int
     @@: LmTransLayoutField fields
     size_t: field_capacity
     size_t: field_count
@@ -383,7 +383,7 @@ fn: lm_trans_l4_mark_typedef_emitted_cstr (const: @(char name)) int
     lm_trans_l4_text_view_delete(@ key)
 return: status
 
-fn: lm_trans_emit_layout_definition (@: FILE file; const: @(char layout_name); const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); const: @(LmTransNamespace namespace_)) int
     @: LmTransRegistryFact backend_row
     @: LmTransRegistryFact forward_row
     const: @: LmOwnPtrStack backend_rows
@@ -461,7 +461,7 @@ fn: lm_trans_emit_layout_definition (@: FILE file; const: @(char layout_name); c
     lm_trans_l4_text_view_delete(@ layout_text)
 return: status
 
-fn: lm_trans_emit_l4_layout_typedefs (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_layout_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     size_t: i
     const: @: char name
@@ -533,7 +533,7 @@ fn: lm_trans_registry_collect_constant_define_names (@: LmOwnPtrStack names; con
     lm_trans_l4_text_view_delete(@ key_text)
 return: 0
 
-fn: lm_trans_emit_l4_constant_defines (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_constant_defines (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     size_t: i
     const: @: char name
@@ -569,7 +569,7 @@ fn: lm_trans_emit_l4_constant_defines (@: FILE file; const: @(LmTransNamespace n
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_define_table (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_define_table (FILE: file; const: @(LmTransNamespace namespace_)) int
     const: @: LmOwnPtrStack rows
     @: LmTransRegistryFact row
     size_t: i
@@ -705,7 +705,7 @@ fn: lm_trans_l4_is_function_pointer_type (const: @(LmTransNamespace namespace_);
     lm_trans_l4_text_view_delete(@ name_text)
 return: found
 
-fn: lm_trans_emit_abi_typed_name (@: FILE file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) int
+fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) int
     size_t: i
     size_t: effective_address_depth
     @: LmP0Text class_text
@@ -846,7 +846,7 @@ fn: lm_trans_collect_abi_params (@@: LmTransAbiParam params; size_t: capacity; @
     lm_trans_l4_text_view_delete(@ param_text)
 return: status
 
-fn: lm_trans_emit_abi_params (@: FILE file; @@: LmTransAbiParam params; size_t: count) int
+fn: lm_trans_emit_abi_params (FILE: file; @@: LmTransAbiParam params; size_t: count) int
     size_t: i
 
     if: file = 0 || (params = 0 && count != 0U)
@@ -864,7 +864,7 @@ fn: lm_trans_emit_abi_params (@: FILE file; @@: LmTransAbiParam params; size_t: 
         i: i + 1U
 return: 0
 
-fn: lm_trans_emit_l4_alias_typedefs (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     const: @: LmOwnPtrStack target_rows
     const: @: LmOwnPtrStack address_depth_rows
@@ -921,7 +921,7 @@ fn: lm_trans_emit_l4_alias_typedefs (@: FILE file; const: @(LmTransNamespace nam
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_forward_typedefs (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     const: @: LmOwnPtrStack backend_rows
     @: LmTransRegistryFact backend_row
@@ -969,7 +969,7 @@ fn: lm_trans_emit_l4_forward_typedefs (@: FILE file; const: @(LmTransNamespace n
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_abi_return_type (@: FILE file; const: @(LmTransNamespace namespace_); const: @(char owner_name); const: @(char error_name)) int
+fn: lm_trans_emit_abi_return_type (FILE: file; const: @(LmTransNamespace namespace_); const: @(char owner_name); const: @(char error_name)) int
     @: LmP0Text owner_text
     const: @: LmOwnPtrStack class_rows
     const: @: LmOwnPtrStack address_depth_rows
@@ -1012,7 +1012,7 @@ fn: lm_trans_emit_abi_return_type (@: FILE file; const: @(LmTransNamespace names
     lm_trans_l4_text_view_delete(@ return_key)
 return: status
 
-fn: lm_trans_emit_l4_prototype_name (@: FILE file; const: @(LmTransNamespace namespace_); const: @(char name); const: @(char error_name)) int
+fn: lm_trans_emit_l4_prototype_name (FILE: file; const: @(LmTransNamespace namespace_); const: @(char name); const: @(char error_name)) int
     @@: LmTransAbiParam params
     size_t: param_capacity
     size_t: param_count
@@ -1046,7 +1046,7 @@ fn: lm_trans_emit_l4_prototype_name (@: FILE file; const: @(LmTransNamespace nam
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: status
 
-fn: lm_trans_emit_l4_prototypes (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_prototypes (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     const: @: char name
     size_t: i
@@ -1437,7 +1437,7 @@ fn: lm_trans_declare_l4_fn_descriptors (@: LmTransNamespace namespace_) int
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_function_pointer_type_name (@: FILE file; const: @(LmTransNamespace namespace_); const: @(char name); const: @(char error_name)) int
+fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: @(LmTransNamespace namespace_); const: @(char name); const: @(char error_name)) int
     @@: LmTransAbiParam params
     size_t: param_capacity
     size_t: param_count
@@ -1454,7 +1454,7 @@ fn: lm_trans_emit_l4_function_pointer_type_name (@: FILE file; const: @(LmTransN
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: status
 
-fn: lm_trans_emit_l4_function_pointer_type_field (@: FILE file; const: @(LmTransNamespace namespace_); const: @(char type_name); const: @(char field_name); const: @(char error_name)) int
+fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: @(LmTransNamespace namespace_); const: @(char type_name); const: @(char field_name); const: @(char error_name)) int
     @@: LmTransAbiParam params
     size_t: param_capacity
     size_t: param_count
@@ -1471,7 +1471,7 @@ fn: lm_trans_emit_l4_function_pointer_type_field (@: FILE file; const: @(LmTrans
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: status
 
-fn: lm_trans_emit_l4_function_pointer_type_typedefs (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_function_pointer_type_typedefs (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     const: @: char name
     size_t: i
@@ -1497,10 +1497,10 @@ fn: lm_trans_emit_l4_function_pointer_type_typedefs (@: FILE file; const: @(LmTr
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_fn_descriptors (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_fn_descriptors (FILE: file; const: @(LmTransNamespace namespace_)) int
 return: lm_trans_emit_l4_function_pointer_type_typedefs(file, namespace_)
 
-fn: lm_trans_emit_l4_guard_markers (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_guard_markers (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     const: @: char name
     size_t: i
@@ -1526,7 +1526,7 @@ fn: lm_trans_emit_l4_guard_markers (@: FILE file; const: @(LmTransNamespace name
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_extern_c_markers (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_extern_c_markers (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
 
     names: lm_trans_ptr_stack_new(lm_trans_free_any)
@@ -1543,7 +1543,7 @@ fn: lm_trans_emit_l4_extern_c_markers (@: FILE file; const: @(LmTransNamespace n
     lm_trans_ptr_stack_delete(@ names)
 return: 0
 
-fn: lm_trans_emit_l4_units (@: FILE file; const: @(LmTransNamespace namespace_)) int
+fn: lm_trans_emit_l4_units (FILE: file; const: @(LmTransNamespace namespace_)) int
     @: LmOwnPtrStack names
     const: @: LmOwnPtrStack backend_rows
     const: @: LmOwnPtrStack payload_rows
@@ -3023,7 +3023,7 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
         return: 1
 return: 0
 
-fn: lm_trans_emit_module_prelude_plan (@: FILE file) int
+fn: lm_trans_emit_module_prelude_plan (FILE: file) int
     @: LmTransNamespace namespace_
     int: emitted
     int: status
@@ -3046,10 +3046,10 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     @: LmP0Document document
     const: @: LmP0Diagnostic diagnostic
     const: @: LmP0Node root
-    @: FILE output
-    @: FILE prelude_output
-    @: FILE body_output
-    @: FILE previous_prelude_output
+    FILE: output
+    FILE: prelude_output
+    FILE: body_output
+    FILE: previous_prelude_output
     @: char prelude_path
     @: char body_path
     int: status

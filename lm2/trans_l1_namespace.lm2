@@ -226,7 +226,7 @@ return: 0
 fn: lm_trans_text_is_operator_atom (const: @(LmP0Text text)) int
 return: lm_trans_registry_has_any_expr_emitter_binding(text)
 
-fn: lm_trans_copy_stream (@: FILE target; @: FILE source) int
+fn: lm_trans_copy_stream (FILE: target; FILE: source) int
     [4096]: char buffer
     size_t: count
 
@@ -938,12 +938,12 @@ fn: lm_trans_loop_cleanup_base (const: @(LmTransNamespace namespace_)) size_t
         return: loop\cleanup_base
 return: namespace_\cleanups\count
 
-fn: lm_trans_emit_sync_name (@: FILE file; unsigned: id) int
+fn: lm_trans_emit_sync_name (FILE: file; unsigned: id) int
     if: c.fprintf(file, "lm_sync_%u", id) < 0
         return: 1
 return: 0
 
-fn: lm_trans_emit_return_name (@: FILE file; unsigned: id) int
+fn: lm_trans_emit_return_name (FILE: file; unsigned: id) int
     if: c.fprintf(file, "lm_return_%u", id) < 0
         return: 1
 return: 0
@@ -1226,7 +1226,7 @@ fn: lm_trans_builtin_c_type_name (const: @(LmP0Text name)) int
 
 return: lm_trans_builtin_c_type_tail(name)
 
-fn: lm_trans_emit_name (@: FILE file; const: @(LmP0Text name)) int
+fn: lm_trans_emit_name (FILE: file; const: @(LmP0Text name)) int
     const: @: char spelling
     @: LmP0Text tail
     int: status
@@ -1248,7 +1248,7 @@ fn: lm_trans_emit_name (@: FILE file; const: @(LmP0Text name)) int
 
 return: lm_trans_emit_identifier(file, name)
 
-fn: lm_trans_emit_type_name (@: FILE file; const: @(LmP0Text name)) int
+fn: lm_trans_emit_type_name (FILE: file; const: @(LmP0Text name)) int
     const: @: char spelling
     @: LmP0Text tail
     int: status
