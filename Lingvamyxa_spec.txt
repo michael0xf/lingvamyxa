@@ -129,7 +129,7 @@ The row values are visually aligned under the corresponding schema fields from
 comes from ordinary whitespace-separated row fields and the column count. A
 profile must not infer missing cells from the physical source line. If a table
 needs an empty or absent cell in a dense row, write an explicit value such as
-`NULL`.
+`None`.
 
 Exact quoted identifiers such as `north field` and `river lowland` keep
 multi-word field values atomic.
@@ -470,7 +470,7 @@ L4:
                  path_sep       lm_build_path_sep            '\\'          '/'
                  getcwd         lm_build_platform_getcwd     _getcwd       getcwd
                  chdir          lm_build_platform_chdir      _chdir        chdir
-                 include        NULL                         "<direct.h>"  "<unistd.h>"
+                 include        None                         "<direct.h>"  "<unistd.h>"
     end: BUILD
 end: L4
 
@@ -706,6 +706,47 @@ Examples of L0 artifacts:
 1.2. L1
 
 L1 is an external bootstrap, implementation and lowering layer. It may host initial parsers, translators, runtime components and receivers. L1 has its own syntax and semantics and is not part of the Lingvamyxa source-semantic core described by this document.
+
+The implementation source of Lingvamyxa is Lingvamyxa.
+
+A hosted bootstrap distribution may include generated C snapshots. These
+snapshots are portable lowering artifacts, not the source-semantic
+implementation of the language.
+
+On a new platform, CMake and a C compiler may build the snapshot compiler.
+That compiler then rebuilds the Lingvamyxa sources through the normal LMX
+pipeline.
+
+Lingvamyxa is source-self-hosting at the level of its own source code: the
+compiler core is written in Lingvamyxa, while the hosted bootstrap profile
+lowers it through an external L1 substrate selected by the L2-to-L1 projection
+profile. In this implementation, that low-level cross-platform implementation
+substrate is ANSI C / C99. This does not make ANSI C the semantic parent of
+Lingvamyxa, and it does not turn the generated C projection into the compiler's
+source implementation. It means that the L2 bootstrap is not bound to one
+particular operating system, CPU family, binary format, ABI or native code
+generator, but to a portable implementation substrate - in this case, a
+C99-compatible one.
+
+The LMX semantic machine begins at the Lingvamyxa L2 level. LMX lowers its own
+L2 machine through a selected external L1 substrate. In the hosted bootstrap
+profile described here, that substrate is ANSI C / C99. The external L1/C99
+substrate is not the VM of the language and is not its semantic parent.
+
+L3, L4 and L5 may be interpreted, validated, resolved or compiled by machinery
+written in Lingvamyxa itself. The external L1/C99 substrate only materializes
+that machinery on a host platform.
+
+In this sense, Lingvamyxa self-hosting is more hermetic at the level of
+substrate abstraction and more portable than a platform-bound native-only
+self-hosting chain. The Lingvamyxa sources, registry tables and L1 projection
+rules remain the same across platforms, while platform-specific differences are
+delegated below the Lingvamyxa semantic boundary to the selected multiplatform
+L1 toolchain: the C99 compiler, C runtime/library, linker and target ABI.
+
+The LMX levels L3, L4 and L5 are even more hermetic: they are bound to the L2
+semantics and to the L2-to-L1 projection contract, not to a particular operating
+system, ABI, binary format or CPU family.
 
 This document does not specify the L1 target language, physical calling convention, memory ownership rules or low-level runtime representation. Those belong to translator and runtime specifications.
 
@@ -2042,7 +2083,7 @@ Bare identifiers are single tokens. Exact quoted identifiers are atomic name tok
 
 Example:
 
-    if( i = 1, print(choose, hello), print(choose, world) )
+    route( i = 1, print(choose, hello), print(choose, world) )
 
 Logical argument sections:
 
@@ -2052,11 +2093,11 @@ Logical argument sections:
 
 Receiver-signature roles:
 
-    field0 -> condition
-    field1 -> then
-    field2 -> else
+    field0 -> selector
+    field1 -> onTrue
+    field2 -> onFalse
 
-The names `condition`, `then` and `else` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `if` receiver. The internal layout of the expression Structure is outside this structural-core document.
+The names `selector`, `onTrue` and `onFalse` are not created by the parser alone. They are assigned by receiver-signature normalization for the active `route` receiver. The internal layout of the expression Structure is outside this structural-core document.
 
 4.5. Vertical Source Levels: Canonical Source-Level Notation and Relaxed Indentation Notation
 
@@ -2462,22 +2503,22 @@ A separator effect is just a visible down/up level transition.
 
 For example:
 
-if: condition
+branch: condition
     ---
-        thenBody
+        firstBody
     ---
-        elseBody
-end: if
+        secondBody
+end: branch
 
 means:
 
-    level 0: if
+    level 0: branch
     level 1: explicit marker
     level 2: first anonymous body
     level 1: explicit marker
     level 2: second anonymous body
 
-The second `---` is not a special `else` separator. It is the visible level-1 point between two level-2 anonymous bodies. It closes the first anonymous body and, because the next source item is deeper, opens the next anonymous body.
+The second `---` is not a special control-flow separator. It is the visible level-1 point between two level-2 anonymous bodies. It closes the first anonymous body and, because the next source item is deeper, opens the next anonymous body.
 
 Example with four positional arguments and no anonymous branch Structures:
 
@@ -2492,43 +2533,43 @@ Conceptual normal form:
 
     match(value, 1, print(World), 2, print(Hello))
 
-Example with two positional branch Structures in an `if` receiver:
+Example with two positional branch Structures in an ordinary receiver:
 
-if: condition
+branch: condition
     ---
-        thenBody
+        firstBody
     ---
-        elseBody
-end: if
+        secondBody
+end: branch
 
-The two `---` sections are two anonymous Structure arguments of `if` after the condition.
+The two `---` sections are two anonymous Structure arguments of `branch` after the condition.
 
 Equivalent named-argument form in canonical source-level notation:
 
-if: a
-. then:
+branch: a
+. first:
 . . doSomething
-. else:
+. second:
 . . doOtherThing
-end: if
+end: branch
 
 Relaxed indentation notation with explicit delimiter followed by a named continuation receiver:
 
-if: condition
+branch: condition
     ---
         # doSomething
     ---
         # doOtherThing
-end: if
+end: branch
 
-if: condition
+branch: condition
     ---
         # doSomething
-    else: # This "else" is at the correct level and therefore automatically closes the previous block.
+    second: # This named receiver is at the correct level and therefore automatically closes the previous block.
         # doOtherThing
-end: if
+end: branch
 
-The line `else:` is at the same source level as the preceding anonymous section. It therefore closes/separates that anonymous section and starts the ordinary nested Structure `else:`. The active `if` receiver may consume `else(...)` as a semantic field. A spelling such as `---else:` is invalid because `---` must be alone on its delimiter line, except for an optional trailing `#` comment.
+The line `second:` is at the same source level as the preceding anonymous section. It therefore closes/separates that anonymous section and starts the ordinary nested Structure `second:`. The active `branch` receiver may consume `second(...)` as a semantic field. A spelling such as `---second:` is invalid because `---` must be alone on its delimiter line, except for an optional trailing `#` comment.
 
 Example with an explicit nameless close after a nested `if`:
 
@@ -2660,39 +2701,39 @@ Some receivers expect positional Structure arguments whose semantic role is assi
 
 Canonical source-level notation single-body example:
 
-if: a
+branch: a
 . doSomething
-end: if
+end: branch
 
-Under an `if(condition, thenBody, elseBody)` receiver signature, this builds:
+Under a `branch(selector, firstBody, secondBody)` receiver signature, this builds:
 
-    if(
+    branch(
       a,
       (
         doSomething
       )
     )
 
-The name `thenBody` is assigned by the `if` receiver signature. It is not a surface keyword in this form.
+The name `firstBody` is assigned by the `branch` receiver signature. It is not a surface keyword in this form.
 
 Relaxed indentation notation:
 
-if: a
+branch: a
     doSomething
-end: if
+end: branch
 
 Two-body positional example using relaxed anonymous sections:
 
-if: a
+branch: a
     ---
         doSomething
     ---
         doOtherThing
-end: if
+end: branch
 
-Under the same `if(condition, thenBody, elseBody)` receiver signature, this builds:
+Under the same `branch(selector, firstBody, secondBody)` receiver signature, this builds:
 
-    if(
+    branch(
       a,
       (
         doSomething
@@ -2704,29 +2745,29 @@ Under the same `if(condition, thenBody, elseBody)` receiver signature, this buil
 
 The same branches may also be written as explicit named argument Structures:
 
-if: a
-. then:
+branch: a
+. first:
 . . doSomething
-. else:
+. second:
 . . doOtherThing
-end: if
+end: branch
 
 or in relaxed indentation notation:
 
-if: a
-    then:
+branch: a
+    first:
         doSomething
-    else:
+    second:
         doOtherThing
-end: if
+end: branch
 
-The names `then` and `else` are ordinary nested Structures consumed by the active `if` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
+The names `first` and `second` are ordinary nested Structures consumed by the active `branch` receiver as semantic fields. They are not global reserved words. If the first branch is written in named form, following branches in that same argument sequence must also be written in named form according to the named-argument ordering rule.
 
 A one-line form is also possible when the receiver defines it:
 
-    if: a doSomething
+    branch: a doSomething
 
-This builds a Frame whose final meaning is assigned by the active `if` receiver.
+This builds a Frame whose final meaning is assigned by the active `branch` receiver.
 
 A receiver call has one logical argument Structure. A source form that appears to pass several arguments and a source form that appears to pass one anonymous Structure wrapper around those arguments are not separate semantic categories. The argument list itself is a Structure. Therefore a sole anonymous Structure in the positional argument-container position is consumed as the argument sequence itself, as described in section 4.0.1.
 
@@ -2778,23 +2819,23 @@ A Structure may contain positional fields. A receiver may assign semantic names 
 
 Example:
 
-if: a
+branch: a
     doSomething
     doOtherThing
-end: if
+end: branch
 
-With an `if(condition, thenBody, elseBody)` receiver signature, the two vertical child items are consumed positionally as `thenBody` and `elseBody`.
+With a `branch(selector, firstBody, secondBody)` receiver signature, the two vertical child items are consumed positionally as `firstBody` and `secondBody`.
 
 Named vertical form:
 
-if: a
-    then:
+branch: a
+    first:
         doSomething
-    else:
+    second:
         doOtherThing
-end: if
+end: branch
 
-Here `then` and `else` are explicit nested Structures consumed as named semantic fields.
+Here `first` and `second` are explicit nested Structures consumed as named semantic fields.
 
 Explicit semantic field-like input should be represented by nested Structures:
 
@@ -2840,29 +2881,29 @@ The `%` marker does not contribute to source level. The source level of a disabl
 
 Example:
 
-%if: mode = debug
-    then:
+%branch: mode = debug
+    first:
         print: debug branch
     ---
-    else:
+    second:
         print: release branch
     ---
 
 
-This whole `if` Structure is disabled, but the parser still verifies the syntax and closing structure.
+This whole `branch` Structure is disabled, but the parser still verifies the syntax and closing structure.
 
 Example inside an enabled block:
 
-if: mode = debug
-    %then:
-        print: disabled then branch
+branch: mode = debug
+    %first:
+        print: disabled first branch
     ---
-    else:
-        print: active else branch
+    second:
+        print: active second branch
     ---
 
 
-Here only the `then` Structure is disabled. Its body is still parsed and syntax-checked.
+Here only the `first` Structure is disabled. Its body is still parsed and syntax-checked.
 
 The `%` marker is not a receiver, not an operator and not a runtime action. It is a source-control marker handled before receiver consumption.
 
@@ -2978,21 +3019,21 @@ signature names that position as its statement tail and lowers it as the loop
 body. The compact body example uses only compact Frames and contains no inline
 short colon-form.
 
-5.4. Example: `if`
+5.4. Example: Profile-Level Branch Receiver
 
-For a computational L3 `if`, the receiver may define fields:
+For a computational profile-level branch receiver, the receiver may define fields:
 
     condition
-    then
-    else
+    first
+    second
 
 and consume them as:
 
     condition -> boolean-producing expression
-    then      -> statement Structure
-    else      -> statement Structure
+    first     -> statement Structure
+    second    -> statement Structure
 
-During translation, the receiver lowers these fields into target control flow. During interpretation, the receiver evaluates the condition and then interprets only the selected body.
+During translation, the receiver lowers these fields into target control flow. During interpretation, the receiver evaluates the condition and then interprets only the selected body. This example illustrates receiver-signature field assignment; the concrete L2/L3 `if` control receiver is described in chapter 19 and may use a separate sibling `else` receiver.
 
 5.5. Example: `fn`
 
@@ -3575,6 +3616,152 @@ provide the corresponding width. If a target cannot provide an exact-width
 storage type, the profile must reject that alias or define an explicit emulation
 backend.
 
+Fixed-width C spellings are projection aliases, not the semantic foundation of
+LMX integers. The semantic model should describe the useful class, range,
+representation, ABI boundary and serialization contract explicitly. A selected
+projection profile then chooses whether that class lowers to `int`, `size_t`,
+`uint32_t`, a library-backed value, a checked wrapper or another admitted
+storage spelling.
+
+Registry profiles should keep these concerns in separate relations. For
+example, `class.category` may expose small `categoryFlag` facets over `uint8`
+such as value, numeric, integer, floating, reference, callable and descriptor;
+those `0` and `1` cells are ordinary facts, not a global nullable encoding for
+all `uint8` values. If an L4 table profile wants a typed cell spelling that does
+not materialize a row, it declares that under `None.cell`; expression-level
+`None` values live separately under `None.value` or under a target class's own
+context-literal table. `class.semantic` describes the abstract value family,
+`class.range` describes the admitted range, `class.c.projection` describes the
+selected C/L1 storage spelling, `printf.format` describes C formatted-output
+spellings, and `serialization.codec` describes portable LMX persistence. A type
+may be semantically compatible even when a selected projection profile cannot
+lower it; that is a projection failure, not a parser fact.
+
+Contextual literals are ordinary L4 registry facts, not parser keywords. A
+contextual literal is a class/key whose concrete payload is selected by the
+expected target class supplied by a declaration, assignment target, call slot,
+operator slot, comparison peer or other consumer.
+
+To introduce a new contextual literal such as `None`, `true`, `false`, `OK` or
+a profile-defined name:
+
+    1. Declare the literal name as a `contextualLiteral` class/key. The usual
+       place is the `class` table:
+
+           table:
+               name: class
+               columns: class (kind class)
+               rows:
+                        None  contextualLiteral
+                        OK    contextualLiteral
+                        false contextualLiteral
+                        true  contextualLiteral
+           end: class
+
+    2. For each target value class that wants a class-local meaning, add rows to
+       that target class table. The conventional column descriptor is
+       `context literal` plus the target class:
+
+           table:
+               name: int8
+               columns: class  (`context literal` int8)
+               rows:
+           end: int8
+
+           join: (int8) Boolean
+               columns: class  (`context literal` int8)
+               rows:
+                        None  -1
+                        false 0
+                        true  1
+                        OK    1
+           end: Boolean
+
+       In this example `Boolean[None] = -1`, `Boolean[false] = 0`,
+       `Boolean[true] = 1` and `Boolean[OK] = 1`. The numeric cells are ordinary
+       payloads. They are not a global empty-cell encoding.
+
+    3. If the literal also has a fallback mapping, register it in
+       `contextual.literal.value`. The payload points to a value table keyed by
+       the expected target class:
+
+           table:
+               name: `contextual.literal.value`
+               columns: class (value relation)
+               rows:
+                        None  `None.value`
+                        OK    `OK.value`
+                        false `false.value`
+                        true  `true.value`
+           end: `contextual.literal.value`
+
+           table:
+               name: `None.value`
+               columns: class (value char)
+               rows:
+                        int     0
+                        int8    0
+                        Boolean -1
+           end: `None.value`
+
+       A class-local row in the expected target table is preferred. The fallback
+       path is used only when the consumer still has an expected class but the
+       class table does not define a more local contextual value.
+
+    4. If the literal may appear as an expression atom, bind it through the
+       active expression profile, for example `expr.atom`:
+
+           table:
+               name: `expr.atom`
+               columns: class (ansi_c char) (emitter binding)
+               rows:
+                        None  None  lm_trans_expr_emit_contextual_literal
+                        OK    OK    lm_trans_expr_emit_contextual_literal
+           end: `expr.atom`
+
+    5. If the literal may be used as a statement receiver for contextual
+       assignment, bind the receiver vocabulary as ordinary namespace data:
+
+           table:
+               name: namespace
+               columns: class (receiver.type relation)
+               rows:
+                        None `receiver.statement`
+                        OK   `receiver.statement`
+           end: namespace
+
+           table:
+               name: `receiver.statement`
+               columns: class (receiver binding)
+               rows:
+                        None lm_trans_statement_emit_contextual_literal_assignment
+                        OK   lm_trans_statement_emit_contextual_literal_assignment
+           end: `receiver.statement`
+
+With those rows, `None: target`, `Boolean: flag OK`, a call argument containing
+`None` and `if: value = None` all use the same table-driven path. The syntax
+supplies the surrounding consumer; the registry supplies the contextual value.
+Adding another name such as `Red` or `Maybe` is another set of rows, not a
+parser change. Empty source cells in tables remain a separate table-loading
+concern and should be declared through `None.cell` when a typed empty cell must
+not materialize a row.
+
+Formatted-output validation is likewise table data. A profile may use
+`printf.format` for recommended class-to-spelling projection and a separate
+`printf.argument.class` relation for spelling-to-expected-argument-class
+validation. For example, `%zu` may map to `size_t` and `%lu` may map to `ulong`;
+passing a known `size_t` value to a `%lu` slot is then a validation failure in
+the selected C99 projection profile, not a style warning.
+
+C99 undefined-behavior policy is not a global promise that no generated program
+can ever enter a bad state. It is ordinary profile validation vocabulary. A
+profile may declare rows such as `c99.ub.policy[c99.format-mismatch] =
+diagnostic`, `c99.ub.policy[c99.null-dereference] = diagnostic` or
+`c99.ub.policy[c99.signed-overflow] = profile-defined`, and may bind concrete
+validators through `profile.validator`. The C99 projection profile must not use
+undefined behavior as a semantic mechanism; known dangerous projection patterns
+are rejected, guarded, checked or explicitly delegated to a profile rule.
+
 The `i/u` family denotes implementation-profile integer types over C integer
 storage. A concrete profile may define names such as `i`, `u`, `i32`, `u64`,
 `isize` and `usize` as separate type constructors or as aliases over a smaller
@@ -3859,7 +4046,7 @@ L2:
         c.printf: "Hello C\n"
         c.printf: "%s\n" "message"
         size_t: n c.strlen("abc")
-        @: FILE file
+        FILE: file
         c.puts: "Hello C"
         return: 0
     end: main
@@ -4527,6 +4714,13 @@ Conceptual registry rows produced by this consumption may be:
     callableResult[AddX] -> int
     callableKind[AddX]   -> callableDescriptor
 
+The callable descriptor is the semantic object. C99 forms such as
+`int (*add)(int)`, a `typedef`, a function symbol, a trampoline or a closure
+structure are projection spellings selected by the active L2-to-L1 profile.
+They may be recorded in registry relations such as `callable.projection`, but
+they are not separate source-level callable kinds and are not the semantic
+parent of the descriptor.
+
 The descriptor is data. It does not define an implementation and cannot be
 called merely because its name is visible. It may be used as a compatibility
 descriptor for arguments, return values, local bindings, table rows, validators
@@ -4598,7 +4792,7 @@ Keep this distinct from the two other deferred/result mechanisms:
         reply ProposedMessage only when the message boundary supplies a reply
         target, future, continuation or correlation id.
 
-7.2.3. Callable Descriptor Argument Consumption and Lazy Binding
+7.2.3. Callable Descriptor Argument Consumption and Partial Binding
 
 When a receiver/function parameter is declared with a callable descriptor, the
 argument position expects a callable value compatible with that descriptor. A
@@ -4624,10 +4818,13 @@ callable value for `five`. The call to `five` happens only inside
 `callSource`, where `source()` is explicitly called.
 
 If a compact call appears in a callable-descriptor argument position, the active
-L2 profile may consume it as a lazy binding/residual callable when the remaining
-unbound parameters match the expected descriptor:
+L2 profile may consume it as a partial binding/residual callable. The expected
+descriptor must admit `callable.partial`, the remaining unbound parameters must
+match the expected descriptor, and `callable.projection` must select a
+representation that can store the bound environment. The descriptor receiver
+head `callable:` declares the common closure-capable bundle:
 
-    `lazy fn`: AddX (int: value) int
+    callable: AddX (int: value) int
 
     fn: addBase (int: base; int: value) int
         return: base + value
@@ -4642,6 +4839,33 @@ unbound parameters match the expected descriptor:
 Here `addBase(4)` is not executed at the argument site. The argument site binds
 `base = 4` and produces a residual callable compatible with `AddX`; later
 `callAdd` calls that residual callable with `value = 3`.
+
+In the current bootstrap profile, `callable: AddX ...` materializes the registry
+facts that make this legal:
+
+    callable.partial[AddX] = 1
+    callable.capture[AddX] = 1
+    callable.projection[AddX] = c.closure-struct
+
+The same operation may be written explicitly when the active profile admits the
+`partial` row in `callable.partial.form`. This profile switch is an L4 registry
+declaration, not an L2 statement table:
+
+    L4:
+        table:
+            name: `callable.partial.form`
+            columns: class (materializer binding)
+            rows:
+                     `call-frame` lm_trans_materialize_call_frame_partial
+                     partial      lm_trans_materialize_partial_callable
+        end: `callable.partial.form`
+    end: L4
+
+    callAdd(partial(addBase, 4))
+
+The `call-frame` row admits the compact sugar `addBase(4)` in a callable slot.
+The `partial` row admits the explicit Python-like spelling. Both forms use the
+same residual-callable builder after the surface form has been recognized.
 
 Informative line-count comparison:
 
@@ -4681,9 +4905,9 @@ Java:
     var add4 = (IntUnaryOperator) (value -> addBase.applyAsInt(4, value));
     System.out.println(add4.applyAsInt(3)); // 7
 
-Lingvamyxa / LMX:
+Lingvamyxa / LMX, compact callable receiver form:
 
-    `lazy fn`: AddX (int: value) int
+    callable: AddX (int: value) int
 
     fn: addBase (int: base; int: value) int
         return: base + value
@@ -4700,9 +4924,32 @@ Lingvamyxa / LMX:
     end: external
 
 In the LMX example, `AddX` is visible in the signature of `callAdd`, and
-`` `lazy fn` `` marks the descriptor as able to carry the residual environment.
-The expression `callAdd(addBase(4))` returns `7`; an executable test that uses C
-process exit status would normally write `return: callAdd(addBase(4)) != 7`.
+the `callable:` descriptor receiver marks the descriptor as able to carry a
+residual environment. The expression `callAdd(addBase(4))` returns `7`; an
+executable test that uses C process exit status would normally write
+`return: callAdd(addBase(4)) != 7`.
+
+Lingvamyxa / LMX, explicit partial form:
+
+    callable: AddX (int: value) int
+
+    fn: addBase (int: base; int: value) int
+        return: base + value
+    end: addBase
+
+    fn: callAdd (AddX: add) int
+        return: add(3)
+    end: callAdd
+
+    external:
+        fn: main () int
+            return: callAdd(partial(addBase, 4))
+        end: main
+    end: external
+
+This spelling depends on the active profile declaring the `partial` surface form
+in `callable.partial.form`. It uses the same residual-callable materialization
+as the compact `addBase(4)` spelling after the form has been recognized.
 
 The same rule may use declared default argument values while forming the
 residual callable:
@@ -4726,17 +4973,17 @@ incompatible function.
 
 Example source:
 
-sub: l5_if (boolean(condition)) then else
+sub: l5_branch (boolean(condition)) on_true on_false
 return
 
 Strict conceptual form:
 
     sub(
-      name(l5_if),
+      name(l5_branch),
       args(
         boolean(condition),
-        then,
-        else
+        on_true,
+        on_false
       ),
       body(...)
     )
@@ -4744,16 +4991,16 @@ Strict conceptual form:
 Explicit nested-source form:
 
 sub:
-    name: l5_if
+    name: l5_branch
     args:
         boolean: condition
-        then
-        else
+        on_true
+        on_false
     body:
         return
-end: l5_if
+end: l5_branch
 
-The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `then` and `else` are structural arguments. No `Struct then` annotation is required.
+The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `on_true` and `on_false` are structural arguments. No `Struct on_true` annotation is required.
 
 7.3.1. Shared Lexical Namespace View and No Silent Shadowing
 
@@ -4918,9 +5165,19 @@ Examples:
 if: condition
     bodyCall()
 end: if
+else:
+    fallbackCall()
+end: else
 
-Here `if` has no separate `name` argument, so the core `if` receiver exposes its
-head spelling as the close target.
+or with ordinary source-level cuts:
+
+if: condition
+    bodyCall()
+else:
+    fallbackCall()
+
+Here `if` and `else` have no separate `name` argument, so the core receivers
+expose their head spellings as close targets.
 
 fn: myFunc (int(i)) (int(r))
     return: i
@@ -5486,15 +5743,26 @@ A receiver such as `fn`, `sub`, `autoModel` or `args` may consume these Structur
 10. Conditional Structures: L3 Core Extract
 10.1. L3 `if`
 
-L3 `if` is a computational control-flow receiver. It consumes:
+L3 `if` is a computational control-flow statement receiver. In the current
+core form it consumes:
 
     condition -> boolean-producing expression
-    then      -> statement Structure consumed by `if`
-    else      -> statement Structure consumed by `if`
+    body      -> statement Structure consumed by `if`
 
-At interpretation time, only the selected body is interpreted.
+`else` is a separate sibling statement receiver. It may immediately follow an
+`if` at the same statement level and consumes:
 
-At translation time, the receiver lowers the condition and statement Structures into target control flow.
+    body      -> statement Structure consumed by `else`
+
+At interpretation time, the `if` condition is evaluated once. If the condition
+is true, the `if` body is interpreted and the following sibling `else` body is
+skipped. If the condition is false, the `if` body is skipped and the following
+sibling `else` body, when present, is interpreted.
+
+At translation time, the two receivers lower to adjacent target control-flow
+forms such as `if (...) { ... } else { ... }`. If another statement separates
+`if` and `else`, the pair is no longer adjacent and the target/profile
+validator may reject the resulting control flow.
 
 10.2. Conditional Forms
 
@@ -5502,33 +5770,40 @@ Short positional conditional form:
 
 if: mode = debug
     build: debugTarget
+
+else:
     build: releaseTarget
 
-Normal form under signature `if(condition, thenBody, elseBody)`:
+Normal receiver sequence:
 
     if(
       <expression Structure for `mode = debug`>,
-      (build(debugTarget)),
+      (build(debugTarget))
+    )
+    else(
       (build(releaseTarget))
     )
 
-The same conditional may be written with explicit named branch Structures:
+A profile may also define an independent branch-like receiver with explicit
+named branch Structures:
 
-if: mode = debug
-    then:
+branch: mode = debug
+    first:
         build: debugTarget
-    else:
+    second:
         build: releaseTarget
+end: branch
 
 This builds:
 
-    if(
+    branch(
       <expression Structure for `mode = debug`>,
-      then(build(debugTarget)),
-      else(build(releaseTarget))
+      first(build(debugTarget)),
+      second(build(releaseTarget))
     )
 
-The short positional form is valid when the active `if` receiver assigns sibling child Structures to semantic fields by signature order. Named vertical form remains available for readability or when a style/profile requires explicit names.
+The named vertical form is an ordinary receiver-signature pattern. It is not
+required for the current core `if`/`else` statement pair.
 
 11. L2 Addresses
 
@@ -5653,6 +5928,71 @@ The prefix expression form `@x` remains the depth-1 address-of operation. Higher
 This keeps prefix address-of simple while preserving arbitrary address depth in declarations.
 
 The implementation of `@ⁿ` may be represented by reserved operator descriptors in the L2 operator table. The source semantics only require that `@ⁿ` is parsed as a reserved operator family and that its declaration form produces typed address slots compatible with the active L2 memory profile.
+
+Address-depth projection composes with the base type category. A primitive base
+type starts at address depth 0. External scalar L1 base types imported by a
+projection profile, such as `size_t` in the hosted C99 profile, also start at
+address depth 0. A reference-class base type denotes a source-level reference
+by its bare name and therefore starts at address depth 1 in an ANSI C pointer
+projection. This includes ordinary Lingvamyxa layout/classes such as `User`
+and opaque imported L1 object/layout types such as ANSI C `FILE`. An opaque
+reference-class may be stored, passed and addressed by LMX code. Its fields are
+not visible in the hosted C99 profile because the ANSI C/C99 substrate does not
+publish a portable field layout for that object type; this is not a separate
+LMX restriction. A profile/import that explicitly declares layout metadata for
+an opaque object type may make typed field-follow available for that imported
+layout. Explicit address-depth and array-like receivers add further address
+layers on top of that base category.
+
+Primitive/scalar types are still registry classes. They are not a Java-style
+separate universe outside the language model. A primitive class may have facts
+such as `class.range`, `None.cell`, `class.c.projection` and
+`serialization.codec` exactly like other classes; the selected profile then
+uses those facts to validate and lower the value. The difference is projection
+and storage shape, not source-level ontology.
+
+Examples in the hosted ANSI C profile:
+
+    char          -> char
+    @: char       -> char *
+    []: char      -> char *
+
+    FILE          -> FILE *      # opaque imported reference-class
+    @: FILE       -> FILE **     # address of a `FILE` reference slot
+
+    User          -> User *      # `User` is a reference-class, not a primitive
+    @: User       -> User **     # address of a `User` reference slot
+    []: User      -> User **     # array/layer of `User` references
+
+The hosted C99 profile distinguishes three related, but not identical,
+reference/layout cases:
+
+1. A registered Lingvamyxa layout/reference-class has visible layout metadata
+   in the registry. For example `User` may publish `User.field.class(age)`,
+   `User.field.address-depth(age)` and related facts. Typed field-follow may
+   use those facts to determine the result type of `user\age`.
+
+2. An opaque imported reference-class, such as `FILE`, is a reference-class for
+   storage and call signatures, but the selected ANSI C/C99 L1 substrate does
+   not publish portable field metadata for it. Therefore `FILE: file` lowers as
+   `FILE *file`, and `fopen(...)` may return `FILE`, but no portable
+   `FILE.field.class(...)` facts are available unless a profile/import
+   explicitly declares them.
+
+3. A projection-only pointer-follow may lower `a\b` to the selected L1 pointer
+   member spelling, for example `a->b` in the hosted C99 profile, without
+   requiring the LMX translator to prove the field layout. In this case the
+   selected L1 toolchain validates the projected spelling. For an opaque C99
+   type such as `FILE`, an attempted `file\some_field` in such a projection
+   path is accepted or rejected by the C compiler according to the platform's
+   visible C declarations.
+
+Typed lookup is required when the translator needs the result type before L1
+compilation. Examples include a field-chain used as a callable head, such as
+`binding\handler(...)`; a local named structure escaping through `return:
+User`; and inferred named-structure fields whose class is derived from an
+existing binding. In those cases the translator consults namespace and registry
+facts such as `variable.type` and `<Class>.field.class`.
 
 11.3. Address-of, Raw Load and Callable References
 
@@ -6898,7 +7238,7 @@ separate parser syntax.
 
 Operator summary:
 
-    0.  if / then / else                                  L2/L3
+    0.  if / else                                         L2/L3
     1.  match / default-pattern receivers                 L2/L3
     2.  while                                             L2/L3
     3.  until                                             L2/L3
@@ -6919,46 +7259,42 @@ Operator summary:
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
-19.1. `if`, `then` and `else`
+19.1. `if` and `else`
 
-`if` consumes a condition and one or two statement Structures.
+`if` is a statement receiver. It consumes a condition expression and a statement
+Structure for the true branch. `else` is a separate sibling statement receiver.
+It may immediately follow an `if` at the same statement level and consumes the
+false-branch statement Structure.
 
 Semantic form:
 
-    if(condition, thenBody, elseBody?)
+    if(condition, body)
+    else(body)?
 
-Explicit form:
+Compact sibling form:
 
 if: condition
-    then:
-        thenBody
-    else:
-        elseBody
+    trueBody
+
+else:
+    falseBody
+
+Explicit named-close form, useful for long blocks or diagnostics:
+
+if: condition
+    trueBody
 end: if
+else:
+    falseBody
+end: else
 
-
-Short positional form:
-
-if: condition
-    thenBody
-
-    elseBody
-
-Nested short positional form:
+Nested form:
 
     if: condition
-        thenBody
-    ---
-        elseBody
-    ---
+        trueBody
 
-Nested explicit `else` form:
-
-    if: condition
-        thenBody
     else:
-        elseBody
-    ---
+        falseBody
 
 
 Single-line form:
@@ -6969,9 +7305,13 @@ The condition is evaluated once before branch selection.
 
 Only the selected body is executed.
 
-If no `else` body is provided and the condition is false, `if` completes normally without executing a body.
+If no following sibling `else` receiver is provided and the condition is false, `if` completes normally without executing a body.
 
-In named form, `then` and `else` are structural section markers inside `if`. They are not ordinary runtime calls when consumed by the `if` receiver. In positional form, sibling child Structures are mapped to `thenBody` and `elseBody` by receiver signature order.
+`else` is not parser syntax and not a reserved P0 word. It is an ordinary
+namespace receiver whose registered statement semantics are meaningful when it
+appears as the following sibling of an `if` in the selected profile. If another
+statement separates `if` and `else`, the pair is not adjacent; the target
+projection or profile validator may reject the resulting control flow.
 
 19.2. `match` and default-pattern receivers
 
@@ -7635,53 +7975,105 @@ consume the next step. This is different from Haskell-style global laziness:
 Lingvamyxa does not make every argument and every data field lazy by default.
 That keeps effects, ownership, validation and message scheduling explicit.
 
-Lazy callable descriptor marker
+Callable partial/capture capability tables
 
-`lazy` is a descriptor declaration modifier. It is not an ordinary runtime call
-and does not execute the named callable. In the first L2 translator profile,
-`lazy` is accepted only as part of the quoted callable descriptor receiver head
-being materialized:
+Partial application and escaping closure capture are separate descriptor
+capabilities. They may use the same backend representation, but they answer
+different semantic questions:
 
-    `lazy fn`: AddX (int: value) int
+    callable.partial
+        A callable descriptor may consume a call-shaped argument such as
+        `addBase(4)` or an explicit `partial(addBase, 4)` as a residual callable.
 
-The active profile records the marker in the registry while consuming that
-descriptor declaration. The effective lazy/eager state of the descriptor must be
-known before expressions are type-checked and lowered.
+    callable.capture
+        A callable descriptor may receive a nested callable whose environment
+        escapes the defining scope.
 
-The canonical set-style registry table for this marker is:
+    callable.projection
+        The backend representation selected for the descriptor. In the first C
+        projection profile, `callable.partial` and `callable.capture` require
+        `c.closure-struct` or another representation that can store an
+        environment.
 
-    table:
-        name: `callable.lazy`
-        columns: class  (value serial)
-    end: `callable.lazy`
+The canonical set-style registry tables are registry data. When written in
+source, they are L4 frames:
 
-For the first L2 translator profile, post-declaration marker operations are
+    L4:
+        table:
+            name: `callable.partial`
+            columns: class  (value serial)
+        end: `callable.partial`
+
+        table:
+            name: `callable.capture`
+            columns: class  (value serial)
+        end: `callable.capture`
+
+        table:
+            name: `callable.projection`
+            columns: class  (value projection)
+            rows:
+                     AddX `c.closure-struct`
+        end: `callable.projection`
+    end: L4
+
+The active profile may also declare which surface forms are admitted for partial
+binding:
+
+    L4:
+        table:
+            name: `callable.partial.form`
+            columns: class (materializer binding)
+            rows:
+                     `call-frame` lm_trans_materialize_call_frame_partial
+                     partial      lm_trans_materialize_partial_callable
+        end: `callable.partial.form`
+    end: L4
+
+The `call-frame` row admits the existing compact callable-slot spelling:
+
+    callAdd(addBase(4))
+
+The `partial` row admits the explicit spelling:
+
+    callAdd(partial(addBase, 4))
+
+The descriptor receiver head:
+
+    callable: AddX (int: value) int
+
+is compact sugar for the common closure-capable callable descriptor bundle. In
+the current bootstrap profile it materializes:
+
+    callable.partial[AddX] = 1
+    callable.capture[AddX] = 1
+    callable.projection[AddX] = c.closure-struct
+
+Semantic rules should test `callable.partial` and `callable.capture`
+separately.
+
+For the first L2 translator profile, post-declaration marker operations remain
 reserved but rejected:
 
     lazy X
     eager X
 
-That is, `lazy` may not be applied to an already-declared descriptor, and
-`eager` is not yet accepted as a source form. Future profiles may admit
-post-declaration set/override operations, but such operations are still
-compile-time or registry-materialization operations, not runtime switches.
+That is, these words may not yet be applied to an already-declared descriptor as
+source-level modifiers. Future profiles may admit post-declaration set/override
+operations, but such operations are still compile-time or registry-materializing
+operations, not runtime switches.
 
-A lazy-marked callable descriptor admits call-shaped arguments as residual
-callables when the remaining unbound parameters match the expected descriptor.
-For example, if `AddX` is lazy-compatible, `addBase(4)` in an `AddX` argument
-position may bind `base = 4` and produce a residual callable instead of invoking
-`addBase` at the argument site.
+A descriptor without `callable.partial` does not admit the residual-callable
+interpretation through the first L2 translator profile. A compact call in that
+position must either be consumed by another explicitly declared
+descriptor/receiver protocol or be lowered as an ordinary value-producing call
+according to the expected argument type.
 
-A descriptor without an effective `callable.lazy` marker does not admit this
-residual-callable interpretation through the first L2 translator profile. A
-compact call in that position must either be consumed by another explicitly
-declared descriptor/receiver protocol or be lowered as an ordinary
-value-producing call according to the expected argument type.
-
-Marking a descriptor lazy does not by itself make a bare C function pointer able
-to store an environment. A profile that represents a descriptor as a bare C
-function pointer must reject lazy partial binding for that descriptor unless an
-explicit adapter or closure representation is also selected.
+A descriptor without `callable.capture` does not admit returning an escaping
+nested callable with captured environment. A descriptor whose
+`callable.projection` is a bare C function pointer must reject partial binding
+and escaping capture unless an explicit adapter or closure representation is
+also selected.
 
 19.15.1. Iterator function
 
@@ -8402,7 +8794,7 @@ L4:
         columns: class              (l2 binding)                (win char)  (unix char)
         rows:
                  exe_suffix         lm_build_exe_suffix         ".exe"     ""
-                 platform_absolute  lm_build_platform_absolute  NULL       NULL
+                 platform_absolute  lm_build_platform_absolute  None       None
     end: BUILD
 end: L4
 
@@ -8418,9 +8810,12 @@ example `(l2 binding)` names column `l2` and records descriptor `binding`.
 
 Rows are dense. The number of row cells must be divisible by the number of
 columns. The loader does not use physical source lines to infer missing cells.
-Use an explicit service atom such as `NULL` when a relation cell is intentionally
-empty or absent. A table pretty-printer may align columns for readability, but
-that alignment is not semantic.
+The preferred empty-cell spelling is `None`; if a table profile wants a typed
+cell to omit materializing a row, it declares that behavior through `None.cell`.
+For expression and assignment contexts, `None` is resolved through the target
+class's contextual literal table or through `None.value`. A hosted bootstrap
+loader uses `None`, not a separate semantic class. A table pretty-printer may
+align columns for readability, but that alignment is not semantic.
 
 A bootstrap implementation may still lower these table Structures to a flat
 `row: table key payload` internal representation. That is a temporary storage
@@ -8525,7 +8920,7 @@ still compose with the same operator-token consumption model.
 
 The minimal L2 executable-body control set is:
 
-    if / then / else
+    if / else
     while
     synchronized
     until
@@ -8534,7 +8929,9 @@ The minimal L2 executable-body control set is:
     break
     continue
 
-These are source-level control receivers/parser forms. They are not raw jumps in the source semantics, even if a translator lowers them to labels and branches.
+These are source-level control receivers. They are not raw jumps in the source
+semantics, even if a translator lowers them to labels and branches. In
+particular, `else` is a receiver in the namespace, not parser syntax.
 
 The first ANSI C bootstrap translator needs only:
 
@@ -8548,13 +8945,19 @@ The first ANSI C bootstrap translator needs only:
 `until` and `for` remain part of the minimal L2 semantic set, but may be added
 after the first procedural bootstrap subset.
 
-20.5.1. `if`, `then` and `else`
+20.5.1. `if` and `else`
 
 L2 `if` consumes:
 
     condition -> boolean-producing expression
-    then      -> statement Structure consumed by the `if` receiver
-    else      -> optional statement Structure consumed by the `if` receiver
+    body      -> statement Structure consumed by the `if` receiver
+
+L2 `else` is a separate statement receiver. It consumes:
+
+    body      -> statement Structure consumed by the `else` receiver
+
+`else` is valid as the false branch only when it immediately follows an `if`
+statement at the same statement level.
 
 Example:
 
@@ -8562,15 +8965,13 @@ if: count > 0
     print: count
 
 
-Explicit branch example:
+With a following sibling `else`:
 
 if: count > 0
-    then:
-        print: count
-    ---
-    else:
-        print: 0
-    ---
+    print: count
+
+else:
+    print: 0
 
 
 20.5.2. `while`

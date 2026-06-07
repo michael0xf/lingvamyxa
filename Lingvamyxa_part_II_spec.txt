@@ -129,7 +129,7 @@ type. The following names may all be classes in this general sense:
     Message
     Validator
     AuthTicket
-    NULL
+    None
     FORBIDDEN
     spelling
     implementation
@@ -252,19 +252,129 @@ registry classes/keys. The strings `"uint8_t"` and `"uint16_t"` are terminal
 primitive payloads for the active L2/L1 lowering profile unless another table
 explicitly treats those spellings as registry classes.
 
-`NULL` is the standard empty cell value. At the LMX semantic lookup boundary, a
-missing row, missing column, missing cell and an SQL-style NULL cell all
-normalize to `NULL`. An implementation resolver may still distinguish
-"not found in this overlay" from "found NULL" internally in order to support
-imports, overlays and masking, but `ABSENT` is not a separate semantic class in
-the core table model.
+An empty table cell is interpreted through the declared class/domain of that
+cell. A table profile may define its typed empty-cell behavior through
+`None.cell`; expression-level `None` values are defined through `None.value` or
+through the target class's contextual-literal table. Primitive classes are still
+ordinary registry classes, not a separate Java-style type universe. A hosted
+bootstrap implementation uses `None`, not a separate semantic class of absence.
+
+Contextual literals are ordinary L4 registry facts, not parser keywords. A
+contextual literal is a class/key whose concrete payload is selected by the
+expected target class supplied by a declaration, assignment target, call slot,
+operator slot, comparison peer or other consumer.
+
+To introduce a new contextual literal such as `None`, `true`, `false`, `OK` or
+a profile-defined name:
+
+    1. Declare the literal name as a `contextualLiteral` class/key. The usual
+       place is the `class` table:
+
+           table:
+               name: class
+               columns: class (kind class)
+               rows:
+                        None  contextualLiteral
+                        OK    contextualLiteral
+                        false contextualLiteral
+                        true  contextualLiteral
+           end: class
+
+    2. For each target value class that wants a class-local meaning, add rows to
+       that target class table. The conventional column descriptor is
+       `context literal` plus the target class:
+
+           table:
+               name: int8
+               columns: class  (`context literal` int8)
+               rows:
+           end: int8
+
+           join: (int8) Boolean
+               columns: class  (`context literal` int8)
+               rows:
+                        None  -1
+                        false 0
+                        true  1
+                        OK    1
+           end: Boolean
+
+       In this example `Boolean[None] = -1`, `Boolean[false] = 0`,
+       `Boolean[true] = 1` and `Boolean[OK] = 1`. The numeric cells are ordinary
+       payloads. They are not a global empty-cell encoding.
+
+    3. If the literal also has a fallback mapping, register it in
+       `contextual.literal.value`. The payload points to a value table keyed by
+       the expected target class:
+
+           table:
+               name: `contextual.literal.value`
+               columns: class (value relation)
+               rows:
+                        None  `None.value`
+                        OK    `OK.value`
+                        false `false.value`
+                        true  `true.value`
+           end: `contextual.literal.value`
+
+           table:
+               name: `None.value`
+               columns: class (value char)
+               rows:
+                        int     0
+                        int8    0
+                        Boolean -1
+           end: `None.value`
+
+       A class-local row in the expected target table is preferred. The fallback
+       path is used only when the consumer still has an expected class but the
+       class table does not define a more local contextual value.
+
+    4. If the literal may appear as an expression atom, bind it through the
+       active expression profile, for example `expr.atom`:
+
+           table:
+               name: `expr.atom`
+               columns: class (ansi_c char) (emitter binding)
+               rows:
+                        None  None  lm_trans_expr_emit_contextual_literal
+                        OK    OK    lm_trans_expr_emit_contextual_literal
+           end: `expr.atom`
+
+    5. If the literal may be used as a statement receiver for contextual
+       assignment, bind the receiver vocabulary as ordinary namespace data:
+
+           table:
+               name: namespace
+               columns: class (receiver.type relation)
+               rows:
+                        None `receiver.statement`
+                        OK   `receiver.statement`
+           end: namespace
+
+           table:
+               name: `receiver.statement`
+               columns: class (receiver binding)
+               rows:
+                        None lm_trans_statement_emit_contextual_literal_assignment
+                        OK   lm_trans_statement_emit_contextual_literal_assignment
+           end: `receiver.statement`
+
+With those rows, `None: target`, `Boolean: flag OK`, a call argument containing
+`None` and `if: value = None` all use the same table-driven path. The syntax
+supplies the surrounding consumer; the registry supplies the contextual value.
+Adding another name such as `Red` or `Maybe` is another set of rows, not a
+parser change. Empty source cells in tables remain a separate table-loading
+concern and should be declared through `None.cell` when a typed empty cell must
+not materialize a row.
 
 `FORBIDDEN` is the standard explicit prohibition class/value. It is different
-from `NULL`: `NULL` means no value is present, while `FORBIDDEN` means the
-relation is present and explicitly denied.
+from `None`: `None` is the typed empty/contextual value selected by the active
+table profile, while `FORBIDDEN` means the relation is present and explicitly
+denied.
 
 Adding a new class does not require adding it to every table. Missing cells
-become `NULL` after the full lookup path is exhausted.
+become the resolver's empty result after the full lookup path is exhausted.
 
 The same information may be viewed through another table, for example a
 class-centered view:
@@ -371,10 +481,10 @@ the resolver performs:
     column = class(b)
     cell = plus[row][column]
 
-If the full lookup path returns `NULL`, the expression is invalid in that
-registry unless the consuming receiver/profile explicitly admits `NULL`. If the
+If the full lookup path returns `None`, the expression is invalid in that
+registry unless the consuming receiver/profile explicitly admits `None`. If the
 selected cell is `FORBIDDEN`, the expression is rejected with an explicit
-prohibition diagnostic. If exactly one non-NULL cell is selected, the expression
+prohibition diagnostic. If exactly one non-None cell is selected, the expression
 becomes resolved. If a table profile admits multiple candidates, priority/cost
 tables must reduce them to one candidate or report ambiguity.
 
@@ -440,7 +550,11 @@ Mandatory payload kinds are:
         the resolver may continue through tables selected by the consuming
         profile. Structured descriptor records, callable descriptor payloads,
         provider descriptor records and other descriptor forms are reserved for
-        later revisions.
+        later revisions. A descriptor is the semantic entity or materialized
+        semantic view selected by the cell: it may summarize registry rows,
+        inferred facts, profile data and validation evidence. It is not merely a
+        table-walking cursor. If the payload exists only to continue lookup
+        through another table coordinate, use `tableKey`.
 
     expression
         An L2/L3/L4/L5 expression Structure admitted by the selected profile.
@@ -449,7 +563,9 @@ Mandatory payload kinds are:
 
     tableKey
         An intermediate registry class/key used to continue n-ary or graph
-        resolution through another table.
+        resolution through another table. A `tableKey` is resolver navigation
+        state, not the final semantic descriptor selected for execution,
+        validation or projection.
 
     validator
         A validator target or validation expression that may produce acceptance,
@@ -462,10 +578,11 @@ Mandatory payload kinds are:
         A rejection, missing relation, ambiguity, conflict or profile-defined
         diagnostic Structure.
 
-    null
-        The standard empty result. Missing row, missing column, missing cell and
-        SQL-style NULL cell all normalize to `NULL` after the full lookup path
-        is exhausted.
+    None
+        The standard empty result of resolution. Missing row, missing column or
+        missing cell normalize to the resolver's empty result after the full
+        lookup path is exhausted. In table source, an intentionally empty cell
+        is expressed through `None.cell`.
 
     forbidden
         Explicit prohibition. `FORBIDDEN` is not an empty value; it means the
@@ -480,8 +597,8 @@ A short source spelling may normalize directly to a payload. Examples:
         name: plus
         columns: class (int char) (u32 char)
         rows:
-            decimal decimal_int_add NULL
-            u32     NULL            plus_u32_u32_l2
+            decimal decimal_int_add None
+            u32     None            plus_u32_u32_l2
     end: plus
 
 may normalize conceptually as:
@@ -1117,12 +1234,18 @@ A validator is not required to be a boolean predicate. It may produce:
     stronger evidence;
     obligation for a later stage;
     tableKey for continued resolution;
-    conflict/NULL/FORBIDDEN payload.
+    conflict/None/FORBIDDEN payload.
 
 Validator dependencies are ordinary registry graph dependencies. The
 Validator/Merge driver must therefore define cycle detection, memoization of
 evidence and termination/diagnostic rules, but it does not need custom
 semantics for each validator class.
+
+Projection validators are ordinary validators. For example, a hosted C99
+profile may expose `c99.ub.policy` rows for dangerous projection patterns and
+`profile.validator` rows for concrete checks such as formatted-output argument
+validation. These rows are profile vocabulary, not a separate hidden C static
+analyzer inside the language core.
 
 5.4. Evidence Lifetime (old 18.3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1345,6 +1468,18 @@ explicit codec rows if they are serializable.
 Persistent registry rows may be stored as LMX files, generated database rows
 or cached binary indexes. LMX remains the source form.
 
+Portable persistence is structural LMX serialization, not memory imaging. A
+runtime may materialize structures in memory using whatever representation the
+selected L1 substrate provides, but a portable persistent form records admitted
+LMX Structures, registry rows, messages, evidence and L5 Thread logical state
+through codec receivers such as `toLmx` and `fromLmx`. Raw process memory,
+allocator state, native handles, alignment, endian order and ABI layout are not
+portable LMX state unless a profile admits an explicit codec for them.
+
+Binary serialization, if introduced, is a profile-specific codec. Endian and
+binary layout belong to that codec profile, not to ordinary LMX source
+semantics.
+
 
 9. L4/L5 Canonical Examples (old 23.4-23.6)
 -------------------------------------------
@@ -1358,8 +1493,8 @@ Example operator cell:
         name: equals
         columns: class (u32 char) (decimal char)
         rows:
-            u32     u32_eq NULL
-            decimal NULL decimal_eq
+            u32     u32_eq None
+            decimal None decimal_eq
     end: equals
 
 Example L5 conditional route:
