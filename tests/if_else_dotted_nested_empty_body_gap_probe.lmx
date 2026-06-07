@@ -1,0 +1,7 @@
+root:
+. outer:
+. . if: condition
+. . . bodyCall()
+. . else:
+
+. . . fallbackCall()
