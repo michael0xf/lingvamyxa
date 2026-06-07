@@ -225,12 +225,12 @@ L4:
         columns: class             (depth serial)
         rows:
                  source            1
-                 root              1
-                 diagnostic        1
-                 source_owner      1
-                 token_arena       1
-                 tree_arena        1
-                 diagnostic_arena  1
+                 root              0
+                 diagnostic        0
+                 source_owner      0
+                 token_arena       0
+                 tree_arena        0
+                 diagnostic_arena  0
     end: `LmP0Document.field.address-depth`
 
     table:
@@ -253,7 +253,7 @@ L4:
         name: `LmP0PendingDelimiter.field.address-depth`
         columns: class  (depth serial)
         rows:
-                 event  1
+                 event  0
     end: `LmP0PendingDelimiter.field.address-depth`
 
     table:
@@ -278,7 +278,7 @@ L4:
         name: `LmP0PendingMix.field.address-depth`
         columns: class  (depth serial)
         rows:
-                 events 1
+                 events 0
     end: `LmP0PendingMix.field.address-depth`
 
     table:
@@ -352,8 +352,8 @@ L4:
         name: `LmP0Stack.field.address-depth`
         columns: class    (depth serial)
         rows:
-                 parents  2
-                 owners   2
+                 parents  1
+                 owners   1
                  hard     1
     end: `LmP0Stack.field.address-depth`
 
@@ -412,10 +412,10 @@ L4:
         name: `LmP0DumpFrame.field.address-depth`
         columns: class      (depth serial)
         rows:
-                 node       1
-                 structure  1
-                 trailer    1
-                 field      1
+                 node       0
+                 structure  0
+                 trailer    0
+                 field      0
     end: `LmP0DumpFrame.field.address-depth`
 
     table:
@@ -484,10 +484,10 @@ L4:
         name: `LmP0FieldParseLoopFrame.field.address-depth`
         columns: class       (depth serial)
         rows:
-                 indent_stack 1
-                 structure    1
+                 indent_stack 0
+                 structure    0
                  text         1
-                 node         1
+                 node         0
     end: `LmP0FieldParseLoopFrame.field.address-depth`
 
     table:
@@ -548,8 +548,8 @@ L4:
         name: `LmP0Registry.field.address-depth`
         columns: class    (depth serial)
         rows:
-                 rows     1
-                 l4_loader 1
+                 rows     0
+                 l4_loader 0
     end: `LmP0Registry.field.address-depth`
 
     table:
@@ -578,10 +578,10 @@ L4:
         name: `LmP0PostprocessFrame.field.address-depth`
         columns: class      (depth serial)
         rows:
-                 node       1
-                 structure  1
-                 trailer    1
-                 field      1
+                 node       0
+                 structure  0
+                 trailer    0
+                 field      0
     end: `LmP0PostprocessFrame.field.address-depth`
 end: L4
 

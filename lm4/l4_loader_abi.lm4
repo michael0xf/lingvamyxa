@@ -170,8 +170,8 @@ table:
     name: `LmL4Column.field.address-depth`
     columns: class        (depth serial)
     rows:
-             name         1
-             descriptors  1
+             name         0
+             descriptors  0
 end: `LmL4Column.field.address-depth`
 
 table:

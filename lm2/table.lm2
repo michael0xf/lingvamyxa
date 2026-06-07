@@ -45,7 +45,7 @@ L4:
         name: LmTableColumnSpellingFrame
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 field  LmP0Field              0                       1                                1
+                 field  LmP0Field              0                       0                                1
                  phase  int                    1                       0                                0
                  first  int                    2                       0                                0
     end: LmTableColumnSpellingFrame
@@ -54,15 +54,15 @@ L4:
         name: LmTableEmitTablesFrame
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 field  LmP0Field              0                       1                                1
+                 field  LmP0Field              0                       0                                1
     end: LmTableEmitTablesFrame
 
     table:
         name: LmTableLmxFrame
         columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 field    LmP0Field              0                       1                                1
-                 trailer  LmP0Trailer            1                       1                                1
+                 field    LmP0Field              0                       0                                1
+                 trailer  LmP0Trailer            1                       0                                1
                  phase    int                    2                       0                                0
                  first    int                    3                       0                                0
     end: LmTableLmxFrame

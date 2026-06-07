@@ -337,7 +337,7 @@ typedef struct LmTransExprCallArgsJob {
 } LmTransExprCallArgsJob;
 struct LmTransExprAtomLowering {
     int (*emit)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
-    int (*update)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
+    int (*update)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
     LmP0Text *text;
 };
 struct LmTransExprPiece {
@@ -442,7 +442,7 @@ typedef struct LmTransBinding {
     int (*call_lowering)(const LmP0Text *head, const LmTransSymbol *symbol, LmTransCallLowering *out);
     int (*expr_frame)(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
     int (*expr_emit)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
-    int (*expr_state)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
+    int (*expr_state)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
     int (*statement_frame)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
     int (*function_receiver)(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
     int (*type_emit)(FILE *file, const LmP0Node *type_node);
@@ -528,7 +528,7 @@ typedef int (*LmTransExprSegmentMaterializer)(FILE *file, LmTransExprStack *stac
 typedef int (*LmTransCallLoweringHandler)(const LmP0Text *head, const LmTransSymbol *symbol, LmTransCallLowering *out);
 typedef int (*LmTransExprFrameHandler)(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 typedef int (*LmTransExprAtomEmitHandler)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
-typedef int (*LmTransExprAtomStateHandler)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
+typedef int (*LmTransExprAtomStateHandler)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
 typedef int (*LmTransExprPieceEmitHandler)(FILE *file, LmTransExprStack *stack, LmTransExprLoweredRange *lowered, const LmTransExprPiece *piece, const LmTransNamespace *namespace_, int *out_suspend);
 typedef int (*LmTransExprJobHandler)(FILE *file, LmTransExprStack *stack, LmTransExprJob *job, const LmTransNamespace *namespace_);
 typedef void (*LmTransExprJobDestroyHandler)(LmTransExprJob *job);
@@ -24012,32 +24012,42 @@ static void lm_trans_l4_text_view_delete(LmP0Text * *view) {
 
 static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace * namespace_, const char *class_name) {
     LmP0Text * class_text;
-    const char *backend;
+    const char *semantic;
     int result;
-    if (namespace_ == 0 || class_name == 0) {
+    if (class_name == 0) {
         return 0;
     }
     class_text = lm_trans_l4_text_view_new(class_name);
     if (class_text == 0) {
         return 0;
     }
-    backend = lm_trans_namespace_registry_lookup(namespace_, class_text, "layout.backend");
-    result = lm_trans_layout_backend_is_supported(backend);
+    result = lm_trans_class_is_reference_base(class_text);
+    if (result == 0 && namespace_ != 0) {
+        result = lm_trans_namespace_registry_lookup(namespace_, class_text, "class.reference-base") != 0;
+    }
+    if (result == 0 && namespace_ != 0) {
+        semantic = lm_trans_namespace_registry_lookup(namespace_, class_text, "class.semantic");
+        if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
+            result = 1;
+        }
+    }
     lm_trans_l4_text_view_delete(&class_text);
     return result;
 }
 
 static size_t lm_trans_layout_field_effective_address_depth(const LmTransLayoutField * field, const LmTransNamespace * namespace_) {
+    size_t depth;
     if (field == 0) {
         return 0U;
     }
-    if (field -> is_union || field -> address_depth != 0U) {
-        return field -> address_depth;
+    depth = field -> address_depth;
+    if (field -> is_union) {
+        return depth;
     }
     if (lm_trans_layout_class_requires_pointer_field(namespace_, field -> class_name)) {
-        return 1U;
+        return depth + 1U;
     }
-    return 0U;
+    return depth;
 }
 
 static LmTransAbiParam * * lm_trans_l4_abi_params_new(size_t capacity) {

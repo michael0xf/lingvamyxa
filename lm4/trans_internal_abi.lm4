@@ -276,7 +276,7 @@ table:
     name: `LmTransRegistryImportFrame.field.address-depth`
     columns: class        (depth serial)
     rows:
-             field        1
+             field        0
 end: `LmTransRegistryImportFrame.field.address-depth`
 
 table:
