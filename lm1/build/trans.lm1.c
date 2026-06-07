@@ -7081,11 +7081,14 @@ static int lm_trans_emit_callable_adapter_args(FILE *file, LmTransAbiParam **par
 }
 
 static size_t lm_trans_layout_type_implicit_address_depth(const LmP0Text *class_name) {
-    if (class_name == 0 || lm_trans_builtin_c_type_name(class_name)) {
+    if (class_name == 0) {
         return 0U;
     }
     if (lm_trans_class_is_reference_base(class_name)) {
         return 1U;
+    }
+    if (lm_trans_builtin_c_type_name(class_name)) {
+        return 0U;
     }
     return 0U;
 }
@@ -10816,7 +10819,7 @@ static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespac
             }
             return lm_trans_namespace_declare_storage_binding(namespace_, name_node -> as -> atom, current -> as -> frame -> head);
         }
-        if ((lm_trans_emit_name(file, current -> as -> frame -> head) != 0)) {
+        if ((lm_trans_emit_type_head_only(file, current -> as -> frame -> head) != 0)) {
             return 1;
         }
         if ((lm_trans_put(file, " ") != 0)) {
