@@ -1,0 +1,42 @@
+import: "lm2/mix/ArrayEnumeration.lm2"
+
+external:
+    fn: main () int
+        [3]: @: void items
+        LmArrayEnumeration: enumeration
+        int: first 10
+        int: second 20
+        int: third 30
+        @: int value
+
+        items[0]: @ first
+        items[1]: @ second
+        items[2]: @ third
+
+        assert: lm_array_elements(items, 3U, @ enumeration) = 0
+
+        items[1]: @ third
+
+        assert: lm_array_enumeration_has_more_elements(@ enumeration) != 0
+        value: cast: (@: int) lm_array_enumeration_next_element(@ enumeration)
+        assert: value[0] = 10
+
+        assert: lm_array_enumeration_has_more_elements(@ enumeration) != 0
+        value: cast: (@: int) lm_array_enumeration_next_element(@ enumeration)
+        assert: value[0] = 20
+
+        assert: lm_array_enumeration_has_more_elements(@ enumeration) != 0
+        value: cast: (@: int) lm_array_enumeration_next_element(@ enumeration)
+        assert: value[0] = 30
+
+        assert: lm_array_enumeration_has_more_elements(@ enumeration) = 0
+        assert: lm_array_enumeration_next_element(@ enumeration) = 0
+
+        lm_array_enumeration_reset(@ enumeration)
+        value: cast: (@: int) lm_array_enumeration_next_element(@ enumeration)
+        assert: value[0] = 10
+
+        lm_array_enumeration_destroy(@ enumeration)
+        return: 0
+    end: main
+end: external
