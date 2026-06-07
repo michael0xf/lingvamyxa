@@ -187,9 +187,9 @@ table:
     name: `LmP0Structure.field.address-depth`
     columns: class        (depth serial)
     rows:
-             first_field  1
-             last_field   1
-             trailer      1
+             first_field  0
+             last_field   0
+             trailer      0
 end: `LmP0Structure.field.address-depth`
 
 table:
@@ -214,8 +214,8 @@ table:
     name: `LmP0Trailer.field.address-depth`
     columns: class     (depth serial)
     rows:
-             spelling  1
-             body      1
+             spelling  0
+             body      0
 end: `LmP0Trailer.field.address-depth`
 
 table:
@@ -242,9 +242,9 @@ table:
     name: `LmP0Frame.field.address-depth`
     columns: class    (depth serial)
     rows:
-             head     1
-             body     1
-             trailer  1
+             head     0
+             body     0
+             trailer  0
 end: `LmP0Frame.field.address-depth`
 
 table:
@@ -271,8 +271,8 @@ table:
     name: `LmP0Node.field.address-depth`
     columns: class  (depth serial)
     rows:
-             span   1
-             as     1
+             span   0
+             as     0
 end: `LmP0Node.field.address-depth`
 
 table:
@@ -297,9 +297,9 @@ table:
     name: `LmP0NodeAs.field.address-depth`
     columns: class      (depth serial)
     rows:
-             structure  1
-             frame      1
-             atom       1
+             structure  0
+             frame      0
+             atom       0
 end: `LmP0NodeAs.field.address-depth`
 
 table:
@@ -322,8 +322,8 @@ table:
     name: `LmP0Field.field.address-depth`
     columns: class  (depth serial)
     rows:
-             value  1
-             next   1
+             value  0
+             next   0
 end: `LmP0Field.field.address-depth`
 
 table:

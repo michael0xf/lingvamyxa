@@ -1381,7 +1381,7 @@ fn: lm_trans_emit_raw_callable_return_statement (
     if: symbol = 0 || lm_trans_symbol_is_executable_callable(symbol) = 0 || lm_trans_callable_signature_matches_descriptor_name(descriptor_type, symbol, namespace_) = 0
         return: 0
 
-    if: symbol\has_env_arg || lm_trans_symbol_is(symbol, "closure")
+    if: symbol\has_env_arg || lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
         c.fprintf(
             c.stderr,
             "trans L2 error: cannot return capturing callable %.*s as raw descriptor %.*s; use `lazy fn`\n",

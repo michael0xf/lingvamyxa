@@ -1217,6 +1217,9 @@ fn: lm_trans_class_is_reference_base (const: (LmP0Text: name)) int
     backend: lm_trans_registry_lookup(name, "layout.backend")
     if: lm_trans_layout_backend_is_reference_value(backend)
         return: 1
+    backend: lm_trans_registry_lookup(name, "forward.backend")
+    if: lm_trans_layout_backend_is_reference_value(backend)
+        return: 1
 return: 0
 
 fn: lm_trans_builtin_c_type_tail (const: (LmP0Text: name)) int

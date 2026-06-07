@@ -188,7 +188,7 @@ table:
     columns: class    (depth serial)
     rows:
              address  1
-             owner    1
+             owner    0
 end: `LmOwnAllocationDescriptor.field.address-depth`
 
 table:
@@ -219,8 +219,8 @@ table:
     name: `LmOwnLazyEdge.field.address-depth`
     columns: class         (depth serial)
     rows:
-             source_owner  1
-             target_owner  1
+             source_owner  0
+             target_owner  0
              source        1
              patch_slot    2
 end: `LmOwnLazyEdge.field.address-depth`
@@ -257,9 +257,9 @@ table:
     name: `LmOwnArena.field.address-depth`
     columns: class                   (depth serial)
     rows:
-             allocations             1
-             allocation_descriptors  1
-             lazy_edges              1
+             allocations             0
+             allocation_descriptors  0
+             lazy_edges              0
 end: `LmOwnArena.field.address-depth`
 
 table:

@@ -93,6 +93,10 @@ table:
              i64                        primitive
 
              callableDescriptor         descriptor
+             function                   descriptor
+             procedure                  descriptor
+             functionPointer            descriptor
+             closure                    descriptor
              fn                         descriptor
              fm                         descriptor
              sub                        descriptor

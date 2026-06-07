@@ -41,7 +41,7 @@ L4:
         name: LmRegistryControlColumnSpellingFrame
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 field  LmP0Field              0                       1                                1
+                 field  LmP0Field              0                       0                                1
                  first  int                    1                       0                                0
     end: LmRegistryControlColumnSpellingFrame
 
@@ -49,8 +49,8 @@ L4:
         name: LmRegistryControlNodeLmxFrame
         columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 field    LmP0Field              0                       1                                1
-                 trailer  LmP0Trailer            1                       1                                1
+                 field    LmP0Field              0                       0                                1
+                 trailer  LmP0Trailer            1                       0                                1
                  phase    int                    2                       0                                0
                  first    int                    3                       0                                0
     end: LmRegistryControlNodeLmxFrame
@@ -59,14 +59,14 @@ L4:
         name: LmRegistryControlRenameDescriptorFrame
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 field  LmP0Field              0                       1                                1
+                 field  LmP0Field              0                       0                                1
     end: LmRegistryControlRenameDescriptorFrame
 
     table:
         name: LmRegistryControlRenameStructureFrame
         columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
         rows:
-                 field  LmP0Field              0                       1                                1
+                 field  LmP0Field              0                       0                                1
     end: LmRegistryControlRenameStructureFrame
 
     table:

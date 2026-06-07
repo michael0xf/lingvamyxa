@@ -27,13 +27,16 @@ fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: name
 return: result
 
 fn: lm_trans_layout_field_effective_address_depth (const: (LmTransLayoutField: field); const: (LmTransNamespace: namespace_)) size_t
+    size_t: depth
+
     if: field = 0
         return: 0U
-    if: field\is_union || field\address_depth != 0U
-        return: field\address_depth
+    depth: field\address_depth
+    if: field\is_union
+        return: depth
     if: lm_trans_layout_class_requires_pointer_field(namespace_, field\class_name)
-        return: 1U
-return: 0U
+        return: depth + 1U
+return: depth
 
 fn: lm_trans_l4_abi_params_new (size_t: capacity) @: LmTransAbiParam
     @: LmTransAbiParam params
@@ -865,6 +868,38 @@ fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: cou
         i: i + 1U
 return: 0
 
+fn: lm_trans_emit_abi_raw_typed_name (FILE: file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) int
+    size_t: i
+    LmP0Text: class_text
+
+    if: file = 0 || class_name = 0
+        return: 1
+
+    if: is_const && lm_trans_put(file, "const ") != 0
+        return: 1
+    class_text: lm_trans_l4_text_view_new(class_name)
+    if: class_text = 0
+        return: 1
+    if: lm_trans_emit_type_head_only_raw(file, class_text) != 0
+        lm_trans_l4_text_view_delete(@ class_text)
+        return: 1
+    if: (address_depth != 0U || name != 0) && lm_trans_put(file, " ") != 0
+        lm_trans_l4_text_view_delete(@ class_text)
+        return: 1
+    i: 0U
+    while: i < address_depth
+        if: lm_trans_put(file, "*") != 0
+            lm_trans_l4_text_view_delete(@ class_text)
+            return: 1
+        i: i + 1U
+    if: name != 0
+        if: lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0
+            lm_trans_l4_text_view_delete(@ class_text)
+            return: 1
+    ---
+    lm_trans_l4_text_view_delete(@ class_text)
+return: 0
+
 fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
     LmOwnPtrStack: names
     const: LmOwnPtrStack: target_rows
@@ -908,7 +943,7 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
-        if: lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target_row\payload, address_depth, const_flag != 0U, name) != 0 || lm_trans_put(file, ";\n") != 0
+        if: lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_raw_typed_name(file, target_row\payload, address_depth, const_flag != 0U, name) != 0 || lm_trans_put(file, ";\n") != 0
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
