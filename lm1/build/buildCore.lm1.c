@@ -216,7 +216,7 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fprintf(file, "$parserLib = '%s'\n", parser_library);
     fprintf(file, "$ownLib = '%s'\n", own_library);
     fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file);
-    fputs("$parserSkip = @('if_else_dotted_empty_body_gap_probe.lmx')\n", file);
+    fputs("$parserSkip = @()\n", file);
     fputs("$transSkip = @('trans_callable_force_argument.lm2', 'trans_callable_lazy_bind.lm2', 'trans_contextual_literal_none_ok.lmx', 'trans_default_arguments.lm2', 'trans_double_semicolon_params.lm2', 'trans_fn_descriptor_only.lm2', 'trans_l4_abi_receivers.lm2')\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
     fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
@@ -339,7 +339,7 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
     fputs("for src in tests/*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);
-    fputs("    case \"$name\" in trans_*|if_else_dotted_empty_body_gap_probe.lmx) continue ;; esac\n", file);
+    fputs("    case \"$name\" in trans_*) continue ;; esac\n", file);
     fputs("    if \"$printTree\" \"$src\" >/dev/null 2>&1; then code=0; else code=$?; fi\n", file);
     fputs("    case \"$name\" in\n", file);
     fputs("        invalid_*) if [ \"$code\" -eq 0 ]; then echo \"negative parser test unexpectedly passed: $name\" >&2; exit 1; fi ;;\n", file);
