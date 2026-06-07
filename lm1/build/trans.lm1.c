@@ -7096,9 +7096,6 @@ static size_t lm_trans_layout_type_implicit_address_depth(const LmP0Text *class_
 }
 
 static size_t lm_trans_effective_address_depth(const LmP0Text *class_name, size_t explicit_depth) {
-    if (explicit_depth != 0U) {
-        return explicit_depth;
-    }
     return explicit_depth + lm_trans_layout_type_implicit_address_depth(class_name);
 }
 
@@ -10217,10 +10214,7 @@ static int lm_trans_emit_type_node(FILE * file, const LmP0Node *type_node) {
             break;
         }
         if ((current -> kind == LM_P0_NODE_ATOM)) {
-            implicit_depth = 0U;
-            if (suffixes == 0 || suffixes -> count == 0U) {
-                implicit_depth = lm_trans_layout_type_implicit_address_depth(current -> as -> atom);
-            }
+            implicit_depth = lm_trans_layout_type_implicit_address_depth(current -> as -> atom);
             if (implicit_depth != 0U && lm_trans_type_suffix_stack_push(&suffixes, implicit_depth) != 0) {
                 status = 1;
                 break;
@@ -10480,16 +10474,11 @@ static int lm_trans_array_type_node_info(const LmP0Node *type_node, const LmP0No
 
 static int lm_trans_emit_type_and_name(FILE * file, const LmP0Node *type_node, const LmP0Text *name, size_t pointer_depth, const LmTransNamespace *namespace_) {
     size_t i;
-    int use_raw_atom;
     if ((type_node == 0)) {
         return 1;
     }
     namespace_ = namespace_;
-    use_raw_atom = pointer_depth != 0U && type_node -> kind == LM_P0_NODE_ATOM;
-    if (use_raw_atom && lm_trans_emit_type_name(file, type_node -> as -> atom) != 0) {
-        return 1;
-    }
-    if (use_raw_atom == 0 && lm_trans_emit_type_node(file, type_node) != 0) {
+    if ((lm_trans_emit_type_node(file, type_node) != 0)) {
         return 1;
     }
     if ((lm_trans_put(file, " ") != 0)) {
