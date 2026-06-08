@@ -129,14 +129,6 @@ L2:
         \out_length: atom\length
     return: 1
 
-    fn: lm_l4_identifier_equals (const: (LmP0Text: atom); const: @(char value)) int
-        const: @: char data
-        size_t: length
-
-        if: lm_l4_identifier_payload(atom, @ data, @ length) = 0
-            return: 0
-    return: lm_l4_text_slice_equals(data, length, value)
-
     fn: lm_l4_identifier_same (const: (LmP0Text: left); const: (LmP0Text: right)) int
         const: @: char left_data
         const: @: char right_data
@@ -279,13 +271,6 @@ L2:
                 \out_count: count
             field: field\next
 
-        if: count < 2U
-            lm_l4_error(loader, "table expects at least two columns")
-            return: -1
-        if: lm_l4_identifier_equals(columns[0]\name, "class") = 0
-            lm_l4_error(loader, "first table column must be class")
-            return: -1
-
         \out_count: count
     return: 1
 
@@ -349,9 +334,14 @@ L2:
         if: loader = 0 || loader\push_cell = 0
             lm_l4_error(loader, "cell consumer is not configured")
             return: -1
-        if: columns = 0 || column_count < 2U
-            lm_l4_error(loader, "rows require at least two columns")
-            return: -1
+        if: columns = 0 || column_count = 0U
+            field: lm_l4_frame_body(frame)\first_field
+            while: field != 0
+                if: field\value != 0 && lm_l4_node_is_ignored(field\value) = 0
+                    lm_l4_error(loader, "rows require columns before cells")
+                    return: -1
+                field: field\next
+            return: 1
 
         field_index: 0U
         key_node: 0

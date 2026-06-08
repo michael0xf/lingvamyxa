@@ -831,7 +831,6 @@ static void lm_l4_error(const LmL4Loader * loader, const char *message);
 static const LmP0Field * lm_l4_nth_field(const LmP0Structure * structure, size_t index);
 static int lm_l4_trailer_single_atom(const LmP0Trailer * trailer, const LmP0Text * *out_text);
 static int lm_l4_identifier_payload(const LmP0Text * atom, const char **out_data, size_t *out_length);
-static int lm_l4_identifier_equals(const LmP0Text * atom, const char *value);
 static int lm_l4_identifier_same(const LmP0Text * left, const LmP0Text * right);
 static int lm_l4_frame_single_atom(const LmP0Frame * frame, const char *head, const LmP0Text * *out_atom);
 static int lm_l4_column_name(const LmP0Field * field, LmL4Column * out_column);
@@ -1007,15 +1006,6 @@ static int lm_l4_identifier_payload(const LmP0Text * atom, const char **out_data
     return 1;
 }
 
-static int lm_l4_identifier_equals(const LmP0Text * atom, const char *value) {
-    const char *data;
-    size_t length;
-    if (lm_l4_identifier_payload(atom, &data, &length) == 0) {
-        return 0;
-    }
-    return lm_l4_text_slice_equals(data, length, value);
-}
-
 static int lm_l4_identifier_same(const LmP0Text * left, const LmP0Text * right) {
     const char *left_data;
     const char *right_data;
@@ -1172,14 +1162,6 @@ static int lm_l4_columns_from_frame(const LmL4Loader * loader, const LmP0Frame *
         }
         field = field -> next;
     }
-    if (count < 2U) {
-        lm_l4_error(loader, "table expects at least two columns");
-        return -1;
-    }
-    if (lm_l4_identifier_equals(columns[0] -> name, "class") == 0) {
-        lm_l4_error(loader, "first table column must be class");
-        return -1;
-    }
     *(out_count) = count;
     return 1;
 }
@@ -1250,9 +1232,16 @@ static int lm_l4_rows_from_frame(const LmL4Loader * loader, void *context, const
         lm_l4_error(loader, "cell consumer is not configured");
         return -1;
     }
-    if (columns == 0 || column_count < 2U) {
-        lm_l4_error(loader, "rows require at least two columns");
-        return -1;
+    if (columns == 0 || column_count == 0U) {
+        field = lm_l4_frame_body(frame) -> first_field;
+        while (field != 0) {
+            if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
+                lm_l4_error(loader, "rows require columns before cells");
+                return -1;
+            }
+            field = field -> next;
+        }
+        return 1;
     }
     field_index = 0U;
     key_node = 0;

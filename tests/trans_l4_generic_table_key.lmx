@@ -1,0 +1,16 @@
+L4:
+    table:
+        name: `registry.generic-key.smoke`
+        columns: key  (value char)
+        rows:
+                 sample  ok
+    end: `registry.generic-key.smoke`
+end: L4
+
+L2:
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
