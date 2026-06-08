@@ -1499,8 +1499,8 @@ Syntactically anonymous Structures are not semantically ownerless. Every
 Structure is reached through a parent edge: a receiver body, a declared argument
 position, a positional argument index, a rest/list argument, an array index, a table
 row, a document root or another consumer-defined edge. That edge gives the
-Structure its semantic identity. For example, in `token: (@ lock)`, the bounded
-Structure `(@ lock)` is still an argument of the `token` Frame. A receiver or
+Structure its semantic identity. For example, in `token: (@lock)`, the bounded
+Structure `(@lock)` is still an argument of the `token` Frame. A receiver or
 function signature may consume an ordinary argument named exactly `name`; some
 receivers also define their first positional field as their `name` argument.
 The value of that argument is used as the visible semantic name / close target
@@ -6550,14 +6550,18 @@ Short-form transitions:
         is complete and the next item is handled by ordinary sibling, cut or
         receiver-trailer rules.
 
-    COMMA at the current scan depth separates fields and does not append an
-    empty field. It is an ordinary bounded/sequence separator or a cosmetic
-    trailing marker according to the surrounding context.
+    COMMA at the current scan depth separates fields and does not terminate an
+    open short form. A single comma does not append an empty field. Repeated
+    explicit separators may materialize positional skips where the consuming
+    profile admits them.
 
     SEMICOLON at the current scan depth terminates the current open short form.
-    It does not append an empty field. If no short form is open at that scan
-    depth, it is an explicit source-item separator or a cosmetic trailing marker
-    according to the surrounding context.
+    It does not append a field to that short form. After terminating the short
+    form, it separates the next source item/argument segment at the same scan
+    depth. If no short form is open at that scan depth, it is an explicit
+    source-item/argument-segment separator or a cosmetic trailing marker
+    according to the surrounding context. Repeated explicit separators may
+    materialize positional skips where the consuming profile admits them.
 
 Bounded-form transitions:
 
@@ -6701,7 +6705,9 @@ Output invariants:
 
     line_frame          ::= source_level line_item_sequence newline
 
-    line_item_sequence  ::= source_item { ";" source_item } [ ";" ]
+    line_item_sequence  ::= source_item
+                            { semicolon_segment_separator source_item }
+                            [ semicolon_segment_separator ]
 
     source_item         ::= colon_frame_body
                           | nullary_line_body
@@ -6709,8 +6715,13 @@ Output invariants:
 
     colon_frame_body    ::= head ":" [ line_arguments ]
 
-    // Semicolon terminates the current source_item at the current scan depth.
-    // Comma is an ordinary field separator.
+    semicolon_segment_separator
+                         ::= ";"
+
+    // Semicolon terminates the current open short form/source item at the
+    // current scan depth and separates the next source item or argument
+    // segment. Comma is an ordinary field separator and never terminates the
+    // current open short form.
 
     head                ::= bare_identifier
                           | exact_identifier
@@ -6723,13 +6734,21 @@ Output invariants:
 
     line_arguments      ::= short_tail
 
-    short_tail          ::= short_field { (horizontal_space+ | ",") short_field } [ "," ]
+    short_tail          ::= short_field
+                            { short_tail_field_separator short_field }
+                            [ "," ]
+
+    short_tail_field_separator
+                         ::= horizontal_space+
+                          | ","
 
     short_field         ::= colon_frame_body
                           | structural_value
 
     // In ordinary physical short-line form, comma separates fields in the
-    // current short form. Semicolon terminates the current short form.
+    // current short form. Semicolon is not a short-tail field separator: it
+    // terminates the current short form and exposes the following segment at
+    // the surrounding scan depth.
     // Physical newline is not a short-form trailer; after newline, the next
     // source-level event decides whether the open frame receives more fields
     // or is completed by level rules.
@@ -6743,9 +6762,12 @@ Output invariants:
 
     bounded_item_separator
                          ::= horizontal_space+
-                          | ","
-                          | ";"
+                          | comma_field_separator
+                          | semicolon_segment_separator
                           | newline/source-level composition
+
+    comma_field_separator
+                         ::= ","
 
     bounded_item        ::= colon_frame_body
                           | nullary_line_body
@@ -6755,7 +6777,9 @@ Output invariants:
     // Horizontal whitespace separates simple bounded fields only when no
     // short colon-form is open. Inside an open short colon-form it remains
     // the short-tail field separator. Comma is also a short-tail field
-    // separator. Semicolon terminates an open short form at any scan depth.
+    // separator and never closes the short form. Semicolon terminates an open
+    // short form at any scan depth and then separates the following bounded
+    // item/argument segment.
     // Newline/source-level composition is not a short-form
     // trailer by itself; the following source level determines continuation
     // or closure. Inside a bounded form that continues across a physical
@@ -6924,8 +6948,8 @@ The notation uses `Structure(...)` and `Frame(...)` as semantic constructors:
 This semantic EBNF is read with these structural rules:
 
     ShortTail
-        ::= Field { (HorizontalSpace+ | COMMA_SEPARATOR) Field }
-            [ COMMA_SEPARATOR ]
+        ::= Field { (HorizontalSpace+ | COMMA_FIELD_SEPARATOR) Field }
+            [ COMMA_FIELD_SEPARATOR ]
 
     BoundedBody
         ::= [ BoundedElement { BoundedSeparator BoundedElement }
@@ -6933,9 +6957,18 @@ This semantic EBNF is read with these structural rules:
 
     BoundedSeparator
         ::= HorizontalSpace+
-         |  COMMA_SEPARATOR
-         |  SEMICOLON_SEPARATOR
+         |  COMMA_FIELD_SEPARATOR
+         |  SEMICOLON_SEGMENT_SEPARATOR
          |  NewlineSourceComposition
+
+    COMMA_FIELD_SEPARATOR
+        ::= COMMA_SEPARATOR
+
+    SEMICOLON_SEGMENT_SEPARATOR
+        ::= SEMICOLON_SEPARATOR
+
+    SEMICOLON_SHORT
+        ::= SEMICOLON_SEPARATOR
 
     FrameTrailer
         ::= SEMICOLON_SHORT
@@ -6954,15 +6987,27 @@ This semantic EBNF is read with these structural rules:
 
 Comma and semicolon semantics:
 
-    COMMA_SEPARATOR appends/separates fields in the open ShortTail. It never
-    terminates the current open short form.
+    COMMA_FIELD_SEPARATOR appends/separates fields in the open ShortTail. It
+    never terminates the current open short form.
 
-    SEMICOLON_SHORT never appends a field to the open ShortTail. It terminates
-    the current open short form at any scan depth.
+    SEMICOLON_SEGMENT_SEPARATOR first acts as SEMICOLON_SHORT if a short form
+    is open at the current scan depth. It never appends a field to that
+    ShortTail. After the short form is materialized, the same semicolon
+    separates the following source item or argument segment.
 
     When no short form is open at the current scan depth, comma may act as
     ordinary separator notation and semicolon may act as an explicit source-item
     separator or cosmetic trailing marker.
+
+    Therefore:
+
+        call(cast: Type value, other)
+
+    has one semantic argument segment for `call`, because `other` is still a
+    field of the open `cast` short form. To end `cast` and supply `other` as the
+    next argument segment, use semicolon:
+
+        call(cast: Type value; other)
 
 Physical newline semantics:
 
@@ -8483,7 +8528,7 @@ Meanings:
 The first ANSI C bootstrap projection accepts an explicit element type:
 
     []: int values 3 1 2 3
-    []: @ int pointers 2 @ a @ b
+    []: @ int pointers 2 @a @b
     [][][]: char cube x y z
     [x][y][z]: char: cube2
 
@@ -8895,6 +8940,12 @@ The minimal L2 primitive operator profile assigns explicit operator roles:
     postfix         expr++, expr--
     infix           +, -, *, /, %, =, !=, <, <=, >, >=, &&, ||, &, |, ^
 
+Source style: prefix operator spellings such as `@`, `\`, `++`, `--`, `!` and
+`~` should be written adjacent to their operand when the operand is on the same
+physical line, for example `@slot`, `\item`, `++index` and `!ready`. This is a
+style convention, not a P0 tokenization requirement; P0 still tokenizes
+operator spellings as separate operator-token fields where appropriate.
+
 Indexing is a postfix expression operator with the bracket form `target[index]`,
 specified with storage and address forms above. The `index` part is consumed as
 its own expression range by the active L2 expression profile. Nested index
@@ -9107,16 +9158,16 @@ Inline fields remain ordinary fields of that Structure. If an inline object
 expression is followed by a child source level, that child part is materialized
 as a nested Structure field; therefore:
 
-    synchronized: @ lock
+    synchronized: @lock
         break
 
 is structurally equivalent to:
 
-    synchronized: @ lock (break)
+    synchronized: @lock (break)
 
 while:
 
-    synchronized: @ lock break
+    synchronized: @lock break
 
 keeps `break` in the inline object-expression field sequence. A receiver may
 then reject that expression semantically, but P0 must not silently reinterpret
@@ -9126,7 +9177,7 @@ single-Structure-as-N-arguments rule.
 
 Example:
 
-synchronized: @ object
+synchronized: @object
     updateObject: object
 
 The first ANSI C bootstrap projection may lower this to runtime hooks:
