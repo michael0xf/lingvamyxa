@@ -4964,6 +4964,7 @@ return: lm_trans_emit_contextual_literal_assignment(file, frame, indent, namespa
 
 fn: lm_trans_statement_lowering_from_head (
     const: LmP0Text: head
+    const: LmTransNamespace: namespace_
     LmTransStatementLowering: out
 ) int
     LmTransHeadBinding: binding
@@ -4976,7 +4977,7 @@ fn: lm_trans_statement_lowering_from_head (
         return: 0
     finally: lm_own_delete(binding, 0)
 
-    if: lm_trans_head_binding_resolve(0, head, binding) != 0
+    if: lm_trans_head_binding_resolve(namespace_, head, binding) != 0
         return: 0
     if: binding\statement_frame = 0
         return: 0
@@ -4984,60 +4985,82 @@ fn: lm_trans_statement_lowering_from_head (
     out\emit: binding\statement_frame
 return: 1
 
+fn: lm_trans_statement_canonical_receiver_head_new (const: LmP0Text: head) LmP0Text
+    if: lm_trans_text_all_char(head, '@')
+        return: lm_trans_text_from_cstr("@")
+    if: lm_trans_text_is_array_receiver_head(head)
+        return: lm_trans_text_from_cstr("[]")
+return: 0
+
 fn: lm_trans_lower_statement_frame (
     const: LmP0Frame: frame
     const: LmTransNamespace: namespace_
     LmTransStatementLowering: out
 ) int
     const: LmTransSymbol: symbol
-    LmTransFunctionHeader: function
-    int: function_status
+    LmP0Text: dispatch_head
+    LmP0Text: family_head
 
     if: frame = 0 || out = 0
         return: 1
 
+    dispatch_head: frame\head
+    family_head: 0
+    finally: lm_trans_text_ref_destroy(@ family_head)
+
     symbol: lm_trans_namespace_find(namespace_, frame\head)
+    if: symbol = 0
+        family_head: lm_trans_statement_canonical_receiver_head_new(frame\head)
+        if: family_head != 0
+            symbol: lm_trans_namespace_find(namespace_, family_head)
+            if: symbol != 0
+                dispatch_head: family_head
+            ---
+        ---
+    ---
+
     if: symbol != 0
+        if: lm_trans_symbol_is(symbol, "receiver.statement")
+            if: lm_trans_text_equals(dispatch_head, "@")
+                out\emit: @lm_trans_statement_emit_pointer_declaration
+                return: 0
+            if: lm_trans_statement_lowering_from_head(dispatch_head, namespace_, out)
+                return: 0
+            c.fprintf(c.stderr, "trans registry inconsistency: receiver.statement \"%.*s\" has no statement binding\n", (cast: int dispatch_head\length), dispatch_head\data)
+            return: 1
+        if: lm_trans_symbol_is(symbol, "receiver.function")
+            out\emit: @lm_trans_statement_emit_nested_function
+            return: 0
+        if: lm_trans_symbol_is_executable_callable(symbol)
+            out\emit: @lm_trans_statement_emit_call
+            return: 0
         if: lm_trans_symbol_is(symbol, "variable")
             out\emit: @lm_trans_statement_emit_assignment
             return: 0
-        if: lm_trans_symbol_is(symbol, "function") || lm_trans_symbol_is(symbol, "procedure")
-            out\emit: @lm_trans_statement_emit_call
-            return: 0
-
+        if: lm_trans_symbol_is(symbol, "class") || lm_trans_symbol_is(symbol, "callableDescriptor")
+            if: lm_trans_frame_looks_storage_declaration(frame, namespace_)
+                out\emit: @lm_trans_statement_emit_storage_declaration
+                return: 0
+            c.fprintf(c.stderr, "trans L2 error: \"%.*s\" is %s, not a declaration frame\n", (cast: int frame\head\length), frame\head\data, lm_trans_symbol_class_name(symbol\class_name))
+            return: 1
+        ---
     ---
-    function: lm_trans_statement_function_header_new()
-    if: function = 0
-        return: 1
-    finally: lm_own_delete(function, 0)
 
-    function_status: lm_trans_function_header_from_frame(frame, 0, function)
-    if: function_status < 0
-        return: 1
-    if: function_status > 0
-        out\emit: @lm_trans_statement_emit_nested_function
-        return: 0
-
-    if: lm_trans_statement_lowering_from_head(frame\head, out)
-        return: 0
-    if: lm_trans_text_is_array_receiver_head(frame\head)
-        out\emit: @lm_trans_statement_emit_array_declaration
-        return: 0
-
-    if: lm_trans_frame_looks_storage_declaration(frame, namespace_)
-        out\emit: @lm_trans_statement_emit_storage_declaration
-        return: 0
-    if: lm_trans_text_all_char(frame\head, '@')
-        out\emit: @lm_trans_statement_emit_pointer_declaration
-        return: 0
     if: lm_trans_head_looks_assignable_target(frame\head)
         out\emit: @lm_trans_statement_emit_target_assignment
         return: 0
-    if: lm_trans_frame_looks_named_structure_layout_declaration(frame, namespace_)
-        out\emit: @lm_trans_statement_emit_named_structure
-        return: 0
     if: lm_trans_is_c_reference_name(frame\head)
+        if: lm_trans_statement_lowering_from_head(frame\head, namespace_, out)
+            return: 0
         out\emit: @lm_trans_statement_emit_call
+        return: 0
+    if: symbol = 0 && lm_trans_statement_lowering_from_head(frame\head, namespace_, out)
+        return: 0
+    if: lm_trans_frame_looks_storage_declaration(frame, namespace_)
+        out\emit: @lm_trans_statement_emit_storage_declaration
+        return: 0
+    if: lm_trans_frame_looks_named_structure_declaration(frame)
+        out\emit: @lm_trans_statement_emit_named_structure
         return: 0
 
     if: symbol = 0
