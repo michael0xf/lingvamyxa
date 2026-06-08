@@ -1,0 +1,462 @@
+import: "lm2/own.lm2"
+import: "lm2/mix/ArrayEnumeration.lm2"
+
+L4:
+    table:
+        name: LmArray
+        columns: class     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 items     void    0  2
+                 amount    size_t  1  0
+                 capacity  size_t  2  0
+    end: LmArray
+
+    table:
+        name: `layout.backend`
+        columns: class   (backend class)
+        rows:
+                 LmArray c.struct
+    end: `layout.backend`
+
+end: L4
+
+external:
+    fn: lm_array_default_capacity () size_t
+        return: 32U
+    end: lm_array_default_capacity
+end: external
+
+external:
+    fn: lm_array_get_max_block_length () size_t
+        return: 65536U
+    end: lm_array_get_max_block_length
+end: external
+
+external:
+    fn: lm_array_resize (@: LmArray array; size_t: capacity) int
+        @@: void items
+        size_t: bytes
+        size_t: copy_count
+
+        if: array = 0
+            return: 1
+        if: capacity = array\capacity
+            return: 0
+
+        if: capacity = 0U
+            c.free(array\items)
+            array\items: 0
+            array\amount: 0U
+            array\capacity: 0U
+            return: 0
+
+        if: lm_own_size_multiply(capacity, c.sizeof(items[0]), @bytes) != 0
+            return: 1
+
+        items: cast: (@@: void) lm_own_new_zero(bytes)
+        if: items = 0
+            return: 1
+
+        copy_count: array\amount
+        if: copy_count > capacity
+            copy_count: capacity
+        if: array\items != 0 && copy_count > 0U
+            c.memcpy(items, array\items, copy_count * c.sizeof(items[0]))
+        c.free(array\items)
+
+        array\items: items
+        array\amount: copy_count
+        array\capacity: capacity
+    return: 0
+end: external
+
+external:
+    fn: lm_array_init (@: LmArray array; size_t: capacity) int
+        if: array = 0
+            return: 1
+
+        array\items: 0
+        array\amount: 0U
+        array\capacity: 0U
+    return: lm_array_resize(array, capacity)
+end: external
+
+external:
+    fn: lm_array_init_default (@: LmArray array) int
+        return: lm_array_init(array, lm_array_default_capacity())
+    end: lm_array_init_default
+end: external
+
+external:
+    sub: lm_array_destroy (@: LmArray array)
+        if: array != 0
+            c.free(array\items)
+            array\items: 0
+            array\amount: 0U
+            array\capacity: 0U
+    end: lm_array_destroy
+end: external
+
+external:
+    sub: lm_array_clear (@: LmArray array)
+        if: array != 0
+            array\amount: 0U
+    end: lm_array_clear
+end: external
+
+external:
+    sub: lm_array_remove_all_elements (@: LmArray array)
+        lm_array_clear(array)
+    end: lm_array_remove_all_elements
+end: external
+
+external:
+    fn: lm_array_size (@: LmArray array) size_t
+        if: array = 0
+            return: 0U
+    return: array\amount
+end: external
+
+external:
+    fn: lm_array_luxuriance (@: LmArray array) size_t
+        if: array = 0
+            return: 0U
+    return: array\capacity
+end: external
+
+external:
+    fn: lm_array_expand (@: LmArray array) int
+        size_t: capacity
+        size_t: additional
+
+        if: array = 0
+            return: 1
+
+        capacity: array\capacity
+        if: capacity > array\amount
+            return: 0
+
+        if: capacity = 0U
+            additional: 2U
+        if: capacity != 0U
+            additional: capacity
+        if: additional > lm_array_get_max_block_length()
+            additional: lm_array_get_max_block_length()
+    return: lm_array_resize(array, capacity + additional)
+end: external
+
+external:
+    fn: lm_array_expand_to (@: LmArray array; size_t: index) int
+        size_t: capacity
+        size_t: diff
+
+        if: array = 0
+            return: 1
+
+        capacity: array\capacity
+        if: index < capacity
+            return: lm_array_expand(array)
+
+        if: capacity = 0U
+            capacity: 2U
+            while: index >= capacity
+                capacity: capacity * 2U
+            ---
+            return: lm_array_resize(array, capacity)
+
+        diff: index - capacity + 1U
+        if: diff < lm_array_get_max_block_length() && diff < capacity
+            diff: capacity
+    return: lm_array_resize(array, capacity + diff)
+end: external
+
+external:
+    fn: lm_array_add_element (@: LmArray array; @: void item) int
+        size_t: index
+
+        if: array = 0
+            return: -1
+        if: lm_array_expand(array) != 0
+            return: -1
+
+        index: array\amount
+        array\items[index]: item
+        array\amount: index + 1U
+    return: cast: int array\amount
+end: external
+
+external:
+    fn: lm_array_element_at (@: LmArray array; size_t: index) @: void
+        if: array = 0 || index >= array\amount
+            return: 0
+    return: array\items[index]
+end: external
+
+external:
+    fn: lm_array_first_element (@: LmArray array) @: void
+        return: lm_array_element_at(array, 0U)
+    end: lm_array_first_element
+end: external
+
+external:
+    fn: lm_array_last_element (@: LmArray array) @: void
+        if: array = 0 || array\amount = 0U
+            return: 0
+    return: array\items[array\amount - 1U]
+end: external
+
+external:
+    fn: lm_array_pop (@: LmArray array) @: void
+        @: void item
+
+        if: array = 0 || array\amount = 0U
+            return: 0
+
+        array\amount: array\amount - 1U
+        item: array\items[array\amount]
+        array\items[array\amount]: 0
+    return: item
+end: external
+
+external:
+    fn: lm_array_set_element_at (@: LmArray array; @: void item; size_t: index) @: void
+        @: void previous
+        size_t: i
+
+        if: array = 0
+            return: 0
+        if: lm_array_expand_to(array, index) != 0
+            return: 0
+
+        previous: 0
+        if: index < array\amount
+            previous: array\items[index]
+        if: index >= array\amount
+            i: array\amount
+            while: i < index
+                array\items[i]: 0
+                i: i + 1U
+            ---
+            array\amount: index + 1U
+
+        array\items[index]: item
+    return: previous
+end: external
+
+external:
+    fn: lm_array_insert_element_at (@: LmArray array; @: void item; size_t: index) int
+        size_t: amount
+        size_t: move_count
+
+        if: array = 0
+            return: 1
+        if: lm_array_expand_to(array, index) != 0
+            return: 1
+
+        amount: array\amount
+        if: index < amount
+            move_count: amount - index
+            c.memmove(array\items + index + 1U, array\items + index, move_count * c.sizeof(array\items[0]))
+
+        array\items[index]: item
+        amount: amount + 1U
+        if: amount <= index
+            amount: index + 1U
+        array\amount: amount
+    return: 0
+end: external
+
+external:
+    fn: lm_array_remove_element_at (@: LmArray array; size_t: index) @: void
+        @: void item
+        size_t: move_count
+
+        if: array = 0 || index >= array\amount
+            return: 0
+
+        item: array\items[index]
+        move_count: array\amount - index - 1U
+        if: move_count > 0U
+            c.memmove(array\items + index, array\items + index + 1U, move_count * c.sizeof(array\items[0]))
+        array\amount: array\amount - 1U
+        array\items[array\amount]: 0
+    return: item
+end: external
+
+external:
+    fn: lm_array_remove_elements_from (@: LmArray array; size_t: index; size_t: count) size_t
+        size_t: move_count
+
+        if: array = 0 || index >= array\amount || count = 0U
+            return: 0U
+
+        if: count > array\amount - index
+            count: array\amount - index
+
+        move_count: array\amount - index - count
+        if: move_count > 0U
+            c.memmove(array\items + index, array\items + index + count, move_count * c.sizeof(array\items[0]))
+
+        array\amount: array\amount - count
+        c.memset(array\items + array\amount, 0, count * c.sizeof(array\items[0]))
+    return: count
+end: external
+
+external:
+    fn: lm_array_remove_up_to (@: LmArray array; size_t: index) size_t
+        return: lm_array_remove_elements_from(array, 0U, index + 1U)
+    end: lm_array_remove_up_to
+end: external
+
+external:
+    fn: lm_array_clear_from_at (@: LmArray array; size_t: begin) size_t
+        size_t: removed
+
+        if: array = 0 || begin >= array\amount
+            return: 0U
+
+        removed: array\amount - begin
+        array\amount: begin
+        c.memset(array\items + array\amount, 0, removed * c.sizeof(array\items[0]))
+    return: removed
+end: external
+
+external:
+    fn: lm_array_copy_from (@: LmArray array; @@: void source; size_t: source_count; size_t: offset; size_t: to_index; size_t: count) size_t
+        size_t: new_length
+        size_t: capacity
+
+        if: array = 0 || source = 0 || count = 0U || offset >= source_count
+            return: 0U
+
+        if: count > source_count - offset
+            count: source_count - offset
+
+        new_length: to_index + count
+        if: new_length > array\capacity
+            capacity: new_length
+            if: capacity < array\capacity * 2U
+                capacity: array\capacity * 2U
+            if: lm_array_resize(array, capacity) != 0
+                return: 0U
+            ---
+
+        c.memcpy(array\items + to_index, source + offset, count * c.sizeof(array\items[0]))
+        if: new_length > array\amount
+            array\amount: new_length
+    return: count
+end: external
+
+external:
+    fn: lm_array_insert_array (@: LmArray array; @@: void source; size_t: source_count; size_t: offset; size_t: to_index; size_t: count) size_t
+        size_t: new_length
+        size_t: capacity
+        size_t: move_count
+
+        if: array = 0 || source = 0 || count = 0U || offset >= source_count
+            return: 0U
+
+        if: count > source_count - offset
+            count: source_count - offset
+
+        if: to_index <= array\amount
+            new_length: array\amount + count
+        if: to_index > array\amount
+            new_length: to_index + count
+
+        if: new_length > array\capacity
+            capacity: new_length
+            if: capacity < array\capacity * 2U
+                capacity: array\capacity * 2U
+            if: lm_array_resize(array, capacity) != 0
+                return: 0U
+            ---
+
+        if: to_index < array\amount
+            move_count: array\amount - to_index
+            c.memmove(array\items + to_index + count, array\items + to_index, move_count * c.sizeof(array\items[0]))
+
+        c.memcpy(array\items + to_index, source + offset, count * c.sizeof(array\items[0]))
+        array\amount: new_length
+    return: count
+end: external
+
+external:
+    fn: lm_array_copy_to (@: LmArray array; @@: void target; size_t: target_count) size_t
+        size_t: count
+
+        if: array = 0 || target = 0 || target_count = 0U
+            return: 0U
+
+        count: array\amount
+        if: count > target_count
+            count: target_count
+        if: count > 0U
+            c.memcpy(target, array\items, count * c.sizeof(target[0]))
+    return: count
+end: external
+
+external:
+    fn: lm_array_add_to (@: LmArray source; @: LmArray target) size_t
+        if: source = 0 || target = 0
+            return: 0U
+    return: lm_array_copy_from(target, source\items, source\amount, 0U, target\amount, source\amount)
+end: external
+
+external:
+    fn: lm_array_clone_items (@: LmArray array) @@: void
+        @@: void items
+        size_t: bytes
+
+        if: array = 0 || array\amount = 0U
+            return: 0
+        if: lm_own_size_multiply(array\amount, c.sizeof(items[0]), @bytes) != 0
+            return: 0
+
+        items: cast: (@@: void) lm_own_new_zero(bytes)
+        if: items = 0
+            return: 0
+        c.memcpy(items, array\items, bytes)
+    return: items
+end: external
+
+external:
+    fn: lm_array_to_array (@: LmArray array) @@: void
+        return: lm_array_clone_items(array)
+    end: lm_array_to_array
+end: external
+
+external:
+    fn: lm_array_elements_from_array (@: LmArray array; @: LmArrayEnumeration enumeration) int
+        if: array = 0
+            return: lm_array_enumeration_init(enumeration, 0, 0U)
+    return: lm_array_enumeration_init(enumeration, array\items, array\amount)
+end: external
+
+external:
+    sub: lm_array_reverse (@: LmArray array; size_t: index; size_t: new_index)
+        @: void item
+        size_t: count
+
+        if: array = 0 || index >= array\amount || new_index >= array\amount || index = new_index
+            return
+
+        item: array\items[index]
+        if: new_index < index
+            count: index - new_index
+            c.memmove(array\items + new_index + 1U, array\items + new_index, count * c.sizeof(array\items[0]))
+            array\items[new_index]: item
+        if: index < new_index
+            count: new_index - index
+            if: count > 0U
+                c.memmove(array\items + index, array\items + index + 1U, count * c.sizeof(array\items[0]))
+            ---
+            array\items[new_index]: item
+    end: lm_array_reverse
+end: external
+
+external:
+    fn: lm_array_offset () int
+        return: 0
+    end: lm_array_offset
+end: external
