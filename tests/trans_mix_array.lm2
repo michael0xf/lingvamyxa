@@ -1,15 +1,32 @@
 import: "lm2/mix/Array.lm2"
 
+fn: lm_test_int_ptr_equals (@: void left; @: void right) int
+    @: int left_int
+    @: int right_int
+
+    if: left = 0 || right = 0
+        return: left = right
+
+    left_int: cast: (@: int) left
+    right_int: cast: (@: int) right
+return: left_int[0] = right_int[0]
+
+fn: lm_test_int_ptr_equals_ref () LmArrayEquals
+    return: c.lm_test_int_ptr_equals
+end: lm_test_int_ptr_equals_ref
+
 external:
     fn: main () int
         LmArray: array
         LmArray: target_array
         LmArrayEnumeration: enumeration
+        LmArrayEquals: equals lm_test_int_ptr_equals_ref()
         int: ten 10
         int: fifteen 15
         int: twenty 20
         int: thirty 30
         int: forty 40
+        int: missing 99
         @: int value
         @: void removed
         @: void previous
@@ -32,6 +49,8 @@ external:
         assert: value[0] = 10
         value: cast: (@: int) lm_array_last_element(@array)
         assert: value[0] = 30
+        assert: lm_array_index_of(@array, @twenty, equals) = 1
+        assert: lm_array_contains(@array, @missing, equals) = 0
 
         previous: lm_array_set_element_at(@array, @forty, 4U)
         assert: previous = 0
@@ -50,10 +69,9 @@ external:
         assert: value[0] = 30
         assert: lm_array_size(@array) = 5U
 
-        removed: lm_array_remove_element_at(@array, 4U)
-        value: cast: (@: int) removed
-        assert: value[0] = 40
+        assert: lm_array_remove_element(@array, @forty, equals) = 4
         assert: lm_array_size(@array) = 4U
+        assert: lm_array_contains(@array, 0, equals) != 0
         assert: lm_array_pop(@array) = 0
         removed: lm_array_pop(@array)
         value: cast: (@: int) removed

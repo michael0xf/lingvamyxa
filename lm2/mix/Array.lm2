@@ -18,6 +18,15 @@ L4:
                  LmArray c.struct
     end: `layout.backend`
 
+    table:
+        name: functionPointerType
+        columns: class          (value serial)
+        rows:
+                 LmArrayEquals 1
+    end: functionPointerType
+
+    fn: LmArrayEquals (@: void left; @: void right) int
+
 end: L4
 
 external:
@@ -453,6 +462,75 @@ external:
             ---
             array\items[new_index]: item
     end: lm_array_reverse
+end: external
+
+external:
+    fn: lm_array_find (@@: void items; size_t: amount; @: void item; LmArrayEquals: equals) int
+        size_t: index
+
+        if: items = 0
+            return: -1
+
+        index: 0U
+        while: index < amount
+            if: item = 0
+                if: items[index] = 0
+                    return: cast: int index
+                ---
+            if: item != 0 && equals != 0
+                if: c.equals(item, items[index]) != 0
+                    return: cast: int index
+                ---
+            index: index + 1U
+        ---
+    return: -1
+end: external
+
+external:
+    fn: lm_array_find_last (@@: void items; size_t: amount; @: void item; LmArrayEquals: equals) int
+        size_t: index
+
+        if: items = 0
+            return: -1
+
+        index: amount
+        while: index > 0U
+            index: index - 1U
+            if: item = 0
+                if: items[index] = 0
+                    return: cast: int index
+                ---
+            if: item != 0 && equals != 0
+                if: c.equals(item, items[index]) != 0
+                    return: cast: int index
+                ---
+        ---
+    return: -1
+end: external
+
+external:
+    fn: lm_array_index_of (@: LmArray array; @: void item; LmArrayEquals: equals) int
+        if: array = 0
+            return: -1
+    return: lm_array_find(array\items, array\amount, item, equals)
+end: external
+
+external:
+    fn: lm_array_contains (@: LmArray array; @: void item; LmArrayEquals: equals) int
+        return: lm_array_index_of(array, item, equals) >= 0
+    end: lm_array_contains
+end: external
+
+external:
+    fn: lm_array_remove_element (@: LmArray array; @: void item; LmArrayEquals: equals) int
+        int: index
+
+        if: array = 0
+            return: -1
+        index: lm_array_find_last(array\items, array\amount, item, equals)
+        if: index >= 0
+            lm_array_remove_element_at(array, cast: size_t index)
+    return: index
 end: external
 
 external:
