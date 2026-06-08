@@ -1402,7 +1402,7 @@ sub: lm_trans_function_emit_frame_delete_any (@: void item)
     lm_own_delete(frame, 0)
 end: lm_trans_function_emit_frame_delete_any
 
-fn: lm_trans_function_emit_frame_new (const: (LmTransFunctionHeader: function); LmTransNamespace: namespace_) LmTransFunctionEmitFrame
+fn: lm_trans_function_emit_frame_new (const: (LmTransFunctionHeader: function); LmTransNamespace: namespace_; unsigned: nested_level) LmTransFunctionEmitFrame
     LmTransFunctionEmitFrame: frame
     LmOwnPtrStack: capture_candidates
 
@@ -1417,6 +1417,7 @@ fn: lm_trans_function_emit_frame_new (const: (LmTransFunctionHeader: function); 
         return: 0
     frame\function: function
     frame\phase: 0
+    frame\nested_level: nested_level
 
     frame\hoisted_functions: lm_trans_ptr_stack_new(@lm_trans_hoisted_function_delete_any)
     if: frame\hoisted_functions = 0
@@ -1430,7 +1431,7 @@ fn: lm_trans_function_emit_frame_new (const: (LmTransFunctionHeader: function); 
         lm_trans_ptr_stack_delete(@ capture_candidates)
         lm_trans_function_emit_frame_delete_any(frame)
         return: 0
-    if: lm_trans_collect_hoisted_functions_from_fields(frame\hoisted_functions, function\c_name, capture_candidates, namespace_, function\body_start) != 0
+    if: lm_trans_collect_hoisted_functions_from_fields(frame\hoisted_functions, function\c_name, nested_level + 1U, capture_candidates, namespace_, function\body_start) != 0
         lm_trans_ptr_stack_delete(@ capture_candidates)
         lm_trans_function_emit_frame_delete_any(frame)
         return: 0
@@ -1448,7 +1449,7 @@ fn: lm_trans_emit_function (FILE: file; const: (LmTransFunctionHeader: function)
     stack: lm_trans_ptr_stack_new(@lm_trans_function_emit_frame_delete_any)
     if: stack = 0
         return: 1
-    frame: lm_trans_function_emit_frame_new(function, namespace_)
+    frame: lm_trans_function_emit_frame_new(function, namespace_, 0U)
     if: frame = 0
         lm_trans_ptr_stack_delete(@ stack)
         return: 1
@@ -1470,7 +1471,7 @@ fn: lm_trans_emit_function (FILE: file; const: (LmTransFunctionHeader: function)
                 if: hoisted = 0 || hoisted\function = 0
                     status: 1
                     break
-                child: lm_trans_function_emit_frame_new(hoisted\function, namespace_)
+                child: lm_trans_function_emit_frame_new(hoisted\function, namespace_, frame\nested_level + 1U)
                 if: child = 0
                     status: 1
                     break

@@ -6513,6 +6513,7 @@ return: -1
 fn: lm_trans_hoisted_c_name_new (
     const: LmP0Text: parent_name
     const: LmP0Text: child_name
+    unsigned: nested_level
     size_t: index
 ) @: char
     @: char name
@@ -6520,14 +6521,14 @@ fn: lm_trans_hoisted_c_name_new (
 
     if: parent_name = 0 || child_name = 0
         return: 0
-    needed: c.snprintf(0, 0, "lm_%.*s_%.*s_%zu", (cast: int parent_name\length), parent_name\data, (cast: int child_name\length), child_name\data, index)
+    needed: c.snprintf(0, 0, "lm_lmx_nested_l%u_parent_%.*s_child_%.*s_i%zu", nested_level, (cast: int parent_name\length), parent_name\data, (cast: int child_name\length), child_name\data, index)
     if: needed < 0
         return: 0
 
     name: (cast: (@: char) lm_own_new_zero((cast: size_t needed) + 1U))
     if: name = 0
         return: 0
-    if: c.snprintf(name, (cast: size_t needed) + 1U, "lm_%.*s_%.*s_%zu", (cast: int parent_name\length), parent_name\data, (cast: int child_name\length), child_name\data, index) != needed
+    if: c.snprintf(name, (cast: size_t needed) + 1U, "lm_lmx_nested_l%u_parent_%.*s_child_%.*s_i%zu", nested_level, (cast: int parent_name\length), parent_name\data, (cast: int child_name\length), child_name\data, index) != needed
         lm_own_delete(name, 0)
         return: 0
 return: name
@@ -6974,6 +6975,7 @@ return: status
 fn: lm_trans_collect_hoisted_functions_from_fields (
     LmOwnPtrStack: hoisted_functions
     const: LmP0Text: parent_c_name
+    unsigned: nested_level
     LmOwnPtrStack: candidates
     const: LmTransNamespace: namespace_
     const: LmP0Field: field
@@ -6982,7 +6984,7 @@ fn: lm_trans_collect_hoisted_functions_from_fields (
 
     current: field
     while: current != 0
-        if: lm_trans_collect_hoisted_functions_from_node(hoisted_functions, parent_c_name, candidates, namespace_, current\value) != 0
+        if: lm_trans_collect_hoisted_functions_from_node(hoisted_functions, parent_c_name, nested_level, candidates, namespace_, current\value) != 0
             return: 1
         current: current\next
 return: 0
@@ -6990,6 +6992,7 @@ return: 0
 fn: lm_trans_collect_hoisted_function (
     LmOwnPtrStack: hoisted_functions
     const: LmP0Text: parent_c_name
+    unsigned: nested_level
     const: LmOwnPtrStack: candidates
     const: LmTransNamespace: namespace_
     const: LmP0Frame: frame
@@ -7021,7 +7024,7 @@ fn: lm_trans_collect_hoisted_function (
     if: hoisted_functions != 0
         index: hoisted_functions\count
 
-    c_name: lm_trans_hoisted_c_name_new(parent_c_name, function\name, index)
+    c_name: lm_trans_hoisted_c_name_new(parent_c_name, function\name, nested_level, index)
     if: c_name = 0
         return: 1
     closure_call_name: lm_trans_hoisted_suffix_name_new(lm_trans_text_from_cstr(c_name), "_closure_call")
@@ -7078,6 +7081,7 @@ return: 0
 fn: lm_trans_collect_hoisted_functions_from_frame (
     LmOwnPtrStack: hoisted_functions
     const: LmP0Text: parent_c_name
+    unsigned: nested_level
     LmOwnPtrStack: candidates
     const: LmTransNamespace: namespace_
     const: LmP0Frame: frame
@@ -7103,7 +7107,7 @@ fn: lm_trans_collect_hoisted_functions_from_frame (
         if: status < 0
             return: 1
         if: status > 0
-            return: lm_trans_collect_hoisted_function(hoisted_functions, parent_c_name, candidates, namespace_, frame, function)
+            return: lm_trans_collect_hoisted_function(hoisted_functions, parent_c_name, nested_level, candidates, namespace_, frame, function)
 
     ---
     if: lm_trans_capture_from_decl_frame(frame, namespace_, ignored_capture)
@@ -7115,13 +7119,14 @@ fn: lm_trans_collect_hoisted_functions_from_frame (
     first_field: 0
     if: frame != 0
         first_field: frame\body\first_field
-    status: lm_trans_collect_hoisted_functions_from_fields(hoisted_functions, parent_c_name, candidates, namespace_, first_field)
+    status: lm_trans_collect_hoisted_functions_from_fields(hoisted_functions, parent_c_name, nested_level, candidates, namespace_, first_field)
     lm_own_ptr_stack_truncate(candidates, scope_base)
 return: status
 
 fn: lm_trans_collect_hoisted_functions_from_node (
     LmOwnPtrStack: hoisted_functions
     const: LmP0Text: parent_c_name
+    unsigned: nested_level
     LmOwnPtrStack: candidates
     const: LmTransNamespace: namespace_
     const: LmP0Node: node
@@ -7133,13 +7138,13 @@ fn: lm_trans_collect_hoisted_functions_from_node (
         return: 0
 
     if: node\kind = c.LM_P0_NODE_FRAME
-        return: lm_trans_collect_hoisted_functions_from_frame(hoisted_functions, parent_c_name, candidates, namespace_, node\as\frame)
+        return: lm_trans_collect_hoisted_functions_from_frame(hoisted_functions, parent_c_name, nested_level, candidates, namespace_, node\as\frame)
 
     if: node\kind = c.LM_P0_NODE_STRUCTURE
         scope_base: 0U
         if: candidates != 0
             scope_base: candidates\count
-        status: lm_trans_collect_hoisted_functions_from_fields(hoisted_functions, parent_c_name, candidates, namespace_, node\as\structure\first_field)
+        status: lm_trans_collect_hoisted_functions_from_fields(hoisted_functions, parent_c_name, nested_level, candidates, namespace_, node\as\structure\first_field)
         lm_own_ptr_stack_truncate(candidates, scope_base)
         return: status
 return: 0

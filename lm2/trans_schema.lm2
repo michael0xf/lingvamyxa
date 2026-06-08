@@ -807,6 +807,7 @@ L4:
                  hoisted_functions LmOwnPtrStack        1                 0                                0
                  hoisted_index     size_t               2                 0                                0
                  phase             int                  3                 0                                0
+                 nested_level      unsigned             4                 0                                0
     end: LmTransFunctionEmitFrame
 
     table:

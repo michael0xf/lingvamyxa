@@ -663,6 +663,7 @@ fn: lm_trans_captured_expr_new (
 fn: lm_trans_hoisted_c_name_new (
     const: LmP0Text: parent_name
     const: LmP0Text: child_name
+    unsigned: nested_level
     size_t: index
 ) @: char
 
@@ -717,6 +718,7 @@ fn: lm_trans_capture_candidates_add_params (
 fn: lm_trans_collect_hoisted_functions_from_fields (
     LmOwnPtrStack: hoisted_functions
     const: LmP0Text: parent_c_name
+    unsigned: nested_level
     LmOwnPtrStack: candidates
     const: LmTransNamespace: namespace_
     const: LmP0Field: field
