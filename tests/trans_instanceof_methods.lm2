@@ -1,0 +1,47 @@
+L4:
+    table:
+        name: Equatable
+        columns: class  (`requires.method` class)
+        rows:
+                 equals 1
+    end: Equatable
+
+    table:
+        name: Hashable
+        columns: class  (`requires.method` class)
+        rows:
+                 hashCode 1
+    end: Hashable
+
+    table:
+        name: default
+        columns: class  (method binding)
+        rows:
+                 hashCode lm_default_hash_code
+    end: default
+
+    table:
+        name: User
+        columns: class  (method binding)
+        rows:
+                 equals lm_user_equals
+    end: User
+
+    table:
+        name: Plain
+        columns: class  (method binding)
+        rows:
+                 toString lm_plain_to_string
+    end: Plain
+end: L4
+
+external:
+    fn: main () int
+        assert: instanceof(User, Equatable) = 1
+        assert: instanceof(Plain, Equatable) = 0
+        assert: instanceof(Plain, Hashable) = 1
+        assert: instanceof(User, User) = 1
+        assert: instanceof(User, Missing) = 0
+        return: 0
+    end: main
+end: external

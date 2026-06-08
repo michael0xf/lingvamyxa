@@ -77,6 +77,8 @@ table:
              `callable.partial`         relation
              `callable.capture`         relation
              `callable.partial.form`    relation
+             method                     relation
+             `requires.method`          relation
              `c99.ub.policy`            relation
              `profile.validator`        relation
              `class.present`            relation

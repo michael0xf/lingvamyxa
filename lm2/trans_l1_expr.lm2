@@ -3557,6 +3557,146 @@ fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTrans
     return: 0
 end: lm_trans_cast_type_is_allowed
 
+fn: lm_trans_instanceof_find_method (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name); const: (LmP0Text: method_name)) LmTransRegistryFact
+    const: LmOwnPtrStack: stack
+    LmTransRegistryFact: row
+    LmP0Text: default_key
+
+    if: class_name = 0 || method_name = 0
+        return: 0
+
+    stack: lm_trans_namespace_registry_relation_stack(namespace_, class_name, "method")
+    row: lm_trans_registry_relation_stack_latest_row(stack, method_name)
+    if: row != 0
+        return: row
+
+    stack: lm_trans_namespace_registry_relation_stack(namespace_, class_name, "row")
+    row: lm_trans_registry_relation_stack_latest_row(stack, method_name)
+    if: row != 0
+        return: row
+
+    if: lm_trans_text_equals(class_name, "default") != 0
+        return: 0
+
+    default_key: lm_trans_text_from_cstr("default")
+    if: default_key = 0
+        return: 0
+    row: lm_trans_registry_relation_stack_latest_row(lm_trans_namespace_registry_relation_stack(namespace_, default_key, "method"), method_name)
+    if: row = 0
+        row: lm_trans_registry_relation_stack_latest_row(lm_trans_namespace_registry_relation_stack(namespace_, default_key, "row"), method_name)
+    lm_trans_text_ref_destroy(@ default_key)
+return: row
+
+fn: lm_trans_instanceof_requirement_stack (const: (LmTransNamespace: namespace_); const: (LmP0Text: protocol_name)) const: LmOwnPtrStack
+    const: LmOwnPtrStack: stack
+
+    if: protocol_name = 0
+        return: 0
+
+    stack: lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "requires.method")
+    if: stack != 0 && stack\count != 0U
+        return: stack
+return: lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "row")
+
+fn: lm_trans_instanceof (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name); const: (LmP0Text: protocol_name)) int
+    const: LmOwnPtrStack: requirements
+    LmTransRegistryFact: requirement
+    LmP0Text: method_key
+    size_t: i
+
+    if: class_name = 0 || protocol_name = 0
+        return: 0
+
+    if: lm_trans_text_same(class_name, protocol_name) != 0
+        return: 1
+
+    requirements: lm_trans_instanceof_requirement_stack(namespace_, protocol_name)
+    if: requirements = 0 || requirements\count = 0U
+        return: 0
+
+    method_key: lm_trans_text_ref_new_cstr("")
+    if: method_key = 0
+        return: 0
+
+    i: 0U
+    while: i < requirements\count
+        requirement: lm_own_ptr_stack_at(requirements, i)
+        if: requirement = 0 || requirement\key = 0
+            lm_trans_text_ref_destroy(@ method_key)
+            return: 0
+
+        method_key\data: requirement\key
+        method_key\length: c.strlen(requirement\key)
+        if: lm_trans_instanceof_find_method(namespace_, class_name, method_key) = 0
+            lm_trans_text_ref_destroy(@ method_key)
+            return: 0
+
+        i: i + 1U
+
+    lm_trans_text_ref_destroy(@ method_key)
+return: 1
+
+fn: lm_trans_instanceof_arg_key (const: (LmP0Field: first); const: (LmP0Field: stop); LmP0Text: out_key) int
+    const: LmP0Node: node
+
+    if: out_key != 0
+        out_key\data: ""
+        out_key\length: 0U
+    if: out_key = 0
+        return: 0
+
+    node: lm_trans_c_arg_single_node(first, stop)
+    if: node = 0
+        return: 0
+return: lm_trans_cast_type_base_key(node, out_key)
+
+fn: lm_trans_expr_emit_instanceof_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
+    const: LmP0Field: class_first
+    const: LmP0Field: class_stop
+    const: LmP0Field: protocol_first
+    const: LmP0Field: protocol_stop
+    const: LmP0Field: extra_first
+    const: LmP0Field: extra_stop
+    LmP0Text: class_key
+    LmP0Text: protocol_key
+    int: result
+    int: status
+
+    if: frame = 0
+        return: 0
+
+    if: stack = 0
+        c.fprintf(c.stderr, "trans internal error: instanceof receiver requires an expression stack\n")
+        return: 1
+
+    if: lm_trans_c_call_arg_segment_at(frame\body, 0U, @ class_first, @ class_stop) = 0 || lm_trans_c_call_arg_segment_at(frame\body, 1U, @ protocol_first, @ protocol_stop) = 0 || lm_trans_c_call_arg_segment_at(frame\body, 2U, @ extra_first, @ extra_stop) != 0
+        c.fprintf(c.stderr, "trans L2 error: instanceof expects exactly two class arguments\n")
+        return: 1
+
+    class_key: lm_trans_text_ref_new_cstr("")
+    protocol_key: lm_trans_text_ref_new_cstr("")
+    if: class_key = 0 || protocol_key = 0
+        lm_trans_text_ref_destroy(@ class_key)
+        lm_trans_text_ref_destroy(@ protocol_key)
+        return: 1
+
+    status: 0
+    if: lm_trans_instanceof_arg_key(class_first, class_stop, class_key) = 0 || lm_trans_instanceof_arg_key(protocol_first, protocol_stop, protocol_key) = 0
+        c.fprintf(c.stderr, "trans L2 error: instanceof expects class-like atoms\n")
+        status: 1
+    else:
+        result: lm_trans_instanceof(namespace_, class_key, protocol_key)
+        if: result != 0
+            status: lm_trans_put(file, "1") != 0
+        else:
+            status: lm_trans_put(file, "0") != 0
+        ---
+    ---
+
+    lm_trans_text_ref_destroy(@ class_key)
+    lm_trans_text_ref_destroy(@ protocol_key)
+return: status
+
 fn: lm_trans_expr_emit_cast_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
     const: LmP0Field: type_field
     const: LmP0Field: expr_first

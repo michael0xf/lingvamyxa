@@ -91,6 +91,8 @@ table:
              `callable.partial`         relation
              `callable.capture`         relation
              `callable.partial.form`    relation
+             method                     relation
+             `requires.method`          relation
              `cast.target`              relation
              `operator.prefix`          relation
              `operator.postfix`         relation
@@ -660,6 +662,7 @@ table:
     columns: class  (receiver binding)
     rows:
              cast   lm_trans_expr_emit_cast_frame
+             instanceof lm_trans_expr_emit_instanceof_frame
 end: `receiver.expr`
 
 table:
