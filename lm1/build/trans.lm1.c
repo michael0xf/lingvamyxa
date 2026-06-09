@@ -8637,6 +8637,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
     LmP0Text * name;
     LmP0Text * adapter_name;
     LmP0Text * binder_name;
+    LmTransCallableValue * callable_value;
     size_t chain_depth;
     size_t explicit_bound_count;
     size_t bound_count;
@@ -8655,12 +8656,14 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
     name = lm_trans_text_ref_new_cstr("");
     adapter_name = lm_trans_text_ref_new_cstr("");
     binder_name = lm_trans_text_ref_new_cstr("");
-    if ((((((descriptor_name == 0) || (atom == 0)) || (name == 0)) || (adapter_name == 0)) || (binder_name == 0))) {
+    callable_value = lm_trans_callable_value_new();
+    if (((((((descriptor_name == 0) || (atom == 0)) || (name == 0)) || (adapter_name == 0)) || (binder_name == 0)) || (callable_value == 0))) {
         lm_trans_text_ref_destroy(&descriptor_name);
         lm_trans_text_ref_destroy(&atom);
         lm_trans_text_ref_destroy(&name);
         lm_trans_text_ref_destroy(&adapter_name);
         lm_trans_text_ref_destroy(&binder_name);
+        lm_trans_callable_value_delete(callable_value);
         return 1;
     }
     consumed = 0;
@@ -8827,14 +8830,14 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                 else {
                     symbol = lm_trans_namespace_find(namespace_, atom);
                     if (((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol))) {
-                        if (symbol -> has_c_name) {
-                            name[0] = symbol -> c_name[0];
+                        if (lm_trans_callable_value_from_symbol(symbol, atom, callable_value) != 0) {
+                            status = 1;
                         }
                         else {
-                            name[0] = atom[0];
+                            name[0] = callable_value -> code_name[0];
                         }
-                        if (lm_trans_callable_signature_matches_descriptor_name(descriptor_name, symbol, namespace_)) {
-                            if ((lm_trans_callable_descriptor_is_raw_function_reference(namespace_, descriptor_name) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0))) {
+                        if (status == 0 && lm_trans_callable_signature_matches_descriptor_name(descriptor_name, symbol, namespace_)) {
+                            if ((lm_trans_callable_descriptor_is_raw_function_reference(namespace_, descriptor_name) && (callable_value -> uses_closure_struct == 0))) {
                                 if ((lm_trans_expr_stack_push_name_text(stack, name) != 0)) {
                                     status = 1;
                                 }
@@ -8843,7 +8846,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                                 }
                             }
                             else {
-                                if (((descriptor_is_function_pointer == 0) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0))) {
+                                if (((descriptor_is_function_pointer == 0) && (callable_value -> uses_closure_struct == 0))) {
                                     if ((lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, 0U, binder_name) != 0)) {
                                         status = 1;
                                     }
@@ -8867,7 +8870,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                             }
                         }
                         else {
-                            if (((descriptor_is_function_pointer && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0)) && lm_trans_callable_return_chain_depth_to_descriptor(symbol, descriptor_name, namespace_, &chain_depth))) {
+                            if (((status == 0) && descriptor_is_function_pointer && (callable_value -> uses_closure_struct == 0) && lm_trans_callable_return_chain_depth_to_descriptor(symbol, descriptor_name, namespace_, &chain_depth))) {
                                 if (((lm_trans_emit_callable_return_chain_adapter(file, namespace_, name, symbol, descriptor_name, chain_depth, adapter_name) != 0) || (lm_trans_expr_stack_push_name_text(stack, adapter_name) != 0))) {
                                     status = 1;
                                 }
@@ -8876,8 +8879,10 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                                 }
                             }
                             else {
-                                fprintf(stderr, "trans L2 error: \"%.*s\" neither matches callable descriptor %.*s nor has a no-argument return chain to it\n", (((int)atom -> length)), atom -> data, (((int)descriptor_name -> length)), descriptor_name -> data);
-                                status = 1;
+                                if (status == 0) {
+                                    fprintf(stderr, "trans L2 error: \"%.*s\" neither matches callable descriptor %.*s nor has a no-argument return chain to it\n", (((int)atom -> length)), atom -> data, (((int)descriptor_name -> length)), descriptor_name -> data);
+                                    status = 1;
+                                }
                             }
                         }
                     }
@@ -8893,6 +8898,7 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
     lm_trans_text_ref_destroy(&name);
     lm_trans_text_ref_destroy(&adapter_name);
     lm_trans_text_ref_destroy(&binder_name);
+    lm_trans_callable_value_delete(callable_value);
     return status;
 }
 
