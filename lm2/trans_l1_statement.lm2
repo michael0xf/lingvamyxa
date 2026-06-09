@@ -7022,6 +7022,65 @@ fn: lm_trans_collect_hoisted_functions_from_fields (
         current: current\next
 return: 0
 
+fn: lm_trans_hoisted_function_from_header (
+    const: LmP0Text: parent_c_name
+    unsigned: nested_level
+    size_t: index
+    const: LmP0Frame: frame
+    const: LmTransFunctionHeader: function
+) LmTransHoistedFunction
+    LmTransHoistedFunction: hoisted
+    LmTransHoistedFunction: result
+    @: char c_name
+    @: char closure_call_name
+
+    if: function = 0
+        return: 0
+
+    c_name: 0
+    closure_call_name: 0
+    hoisted: 0
+    result: 0
+    finally: lm_own_delete(c_name, 0)
+    finally: lm_own_delete(closure_call_name, 0)
+    finally: lm_trans_hoisted_function_destroy(hoisted)
+
+    c_name: lm_trans_hoisted_c_name_new(parent_c_name, function\name, nested_level, index)
+    if: c_name = 0
+        return: 0
+    closure_call_name: lm_trans_hoisted_suffix_name_new(lm_trans_text_from_cstr(c_name), "_closure_call")
+    if: closure_call_name = 0
+        return: 0
+
+    hoisted: (cast: (LmTransHoistedFunction) lm_own_new_zero(c.sizeof(hoisted[0])))
+    if: hoisted = 0
+        return: 0
+    hoisted\env_var_name: lm_trans_text_ref_new_cstr("")
+    hoisted\closure_call_name: lm_trans_text_ref_new_cstr("")
+    if: hoisted\env_var_name = 0 || hoisted\closure_call_name = 0
+        return: 0
+
+    hoisted\c_name_storage: c_name
+    c_name: 0
+    hoisted\closure_call_storage: closure_call_name
+    closure_call_name: 0
+
+    hoisted\function: lm_trans_function_header_new()
+    if: hoisted\function = 0 || lm_trans_function_header_copy(hoisted\function, function) != 0
+        return: 0
+    hoisted\function\frame: frame
+    lm_trans_text_assign_cstr(hoisted\function\c_name, hoisted\c_name_storage)
+    hoisted\function\is_external: 0
+    hoisted\function\declare_self_alias: 1
+    hoisted\captures: lm_trans_ptr_stack_new(lm_trans_capture_delete_any)
+    if: hoisted\captures = 0
+        return: 0
+    lm_trans_text_assign_cstr(hoisted\closure_call_name, hoisted\closure_call_storage)
+
+    result: hoisted
+    hoisted: 0
+return: result
+
 fn: lm_trans_collect_hoisted_function (
     LmOwnPtrStack: hoisted_functions
     const: LmP0Text: parent_c_name
@@ -7032,23 +7091,17 @@ fn: lm_trans_collect_hoisted_function (
     const: LmTransFunctionHeader: function
 ) int
     LmTransHoistedFunction: hoisted
-    @: char c_name
     @: char env_type_name
     @: char env_var_name
-    @: char closure_call_name
     size_t: index
 
     if: function = 0 || function\is_descriptor_only
         c.fprintf(c.stderr, "trans L2 error: nested descriptor-only fn is not supported yet\n")
         return: 1
 
-    c_name: 0
-    closure_call_name: 0
     env_type_name: 0
     env_var_name: 0
     hoisted: 0
-    finally: lm_own_delete(c_name, 0)
-    finally: lm_own_delete(closure_call_name, 0)
     finally: lm_own_delete(env_type_name, 0)
     finally: lm_own_delete(env_var_name, 0)
     finally: lm_trans_hoisted_function_destroy(hoisted)
@@ -7057,37 +7110,9 @@ fn: lm_trans_collect_hoisted_function (
     if: hoisted_functions != 0
         index: hoisted_functions\count
 
-    c_name: lm_trans_hoisted_c_name_new(parent_c_name, function\name, nested_level, index)
-    if: c_name = 0
-        return: 1
-    closure_call_name: lm_trans_hoisted_suffix_name_new(lm_trans_text_from_cstr(c_name), "_closure_call")
-    if: closure_call_name = 0
-        return: 1
-
-    hoisted: (cast: (LmTransHoistedFunction) lm_own_new_zero(c.sizeof(hoisted[0])))
+    hoisted: lm_trans_hoisted_function_from_header(parent_c_name, nested_level, index, frame, function)
     if: hoisted = 0
         return: 1
-    hoisted\env_var_name: lm_trans_text_ref_new_cstr("")
-    hoisted\closure_call_name: lm_trans_text_ref_new_cstr("")
-    if: hoisted\env_var_name = 0 || hoisted\closure_call_name = 0
-        return: 1
-
-    hoisted\c_name_storage: c_name
-    c_name: 0
-    hoisted\closure_call_storage: closure_call_name
-    closure_call_name: 0
-
-    hoisted\function: lm_trans_function_header_new()
-    if: hoisted\function = 0 || lm_trans_function_header_copy(hoisted\function, function) != 0
-        return: 1
-    hoisted\function\frame: frame
-    lm_trans_text_assign_cstr(hoisted\function\c_name, hoisted\c_name_storage)
-    hoisted\function\is_external: 0
-    hoisted\function\declare_self_alias: 1
-    hoisted\captures: lm_trans_ptr_stack_new(lm_trans_capture_delete_any)
-    if: hoisted\captures = 0
-        return: 1
-    lm_trans_text_assign_cstr(hoisted\closure_call_name, hoisted\closure_call_storage)
 
     if: lm_trans_analyze_function_captures(hoisted, candidates, namespace_) != 0
         return: 1
