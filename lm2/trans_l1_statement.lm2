@@ -7081,38 +7081,18 @@ fn: lm_trans_hoisted_function_from_header (
     hoisted: 0
 return: result
 
-fn: lm_trans_collect_hoisted_function (
-    LmOwnPtrStack: hoisted_functions
-    const: LmP0Text: parent_c_name
-    unsigned: nested_level
+fn: lm_trans_hoisted_function_finalize_captures (
+    LmTransHoistedFunction: hoisted
     const: LmOwnPtrStack: candidates
     const: LmTransNamespace: namespace_
-    const: LmP0Frame: frame
-    const: LmTransFunctionHeader: function
 ) int
-    LmTransHoistedFunction: hoisted
     @: char env_type_name
     @: char env_var_name
-    size_t: index
-
-    if: function = 0 || function\is_descriptor_only
-        c.fprintf(c.stderr, "trans L2 error: nested descriptor-only fn is not supported yet\n")
-        return: 1
 
     env_type_name: 0
     env_var_name: 0
-    hoisted: 0
     finally: lm_own_delete(env_type_name, 0)
     finally: lm_own_delete(env_var_name, 0)
-    finally: lm_trans_hoisted_function_destroy(hoisted)
-
-    index: 0U
-    if: hoisted_functions != 0
-        index: hoisted_functions\count
-
-    hoisted: lm_trans_hoisted_function_from_header(parent_c_name, nested_level, index, frame, function)
-    if: hoisted = 0
-        return: 1
 
     if: lm_trans_analyze_function_captures(hoisted, candidates, namespace_) != 0
         return: 1
@@ -7130,6 +7110,38 @@ fn: lm_trans_collect_hoisted_function (
         lm_trans_text_assign_cstr(hoisted\function\env_type_name, hoisted\env_type_storage)
         hoisted\function\captures: hoisted\captures
         hoisted\function\has_env: 1
+
+return: 0
+
+fn: lm_trans_collect_hoisted_function (
+    LmOwnPtrStack: hoisted_functions
+    const: LmP0Text: parent_c_name
+    unsigned: nested_level
+    const: LmOwnPtrStack: candidates
+    const: LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+    const: LmTransFunctionHeader: function
+) int
+    LmTransHoistedFunction: hoisted
+    size_t: index
+
+    if: function = 0 || function\is_descriptor_only
+        c.fprintf(c.stderr, "trans L2 error: nested descriptor-only fn is not supported yet\n")
+        return: 1
+
+    hoisted: 0
+    finally: lm_trans_hoisted_function_destroy(hoisted)
+
+    index: 0U
+    if: hoisted_functions != 0
+        index: hoisted_functions\count
+
+    hoisted: lm_trans_hoisted_function_from_header(parent_c_name, nested_level, index, frame, function)
+    if: hoisted = 0
+        return: 1
+
+    if: lm_trans_hoisted_function_finalize_captures(hoisted, candidates, namespace_) != 0
+        return: 1
 
     if: lm_own_ptr_stack_push(hoisted_functions, hoisted) != 0
         return: 1

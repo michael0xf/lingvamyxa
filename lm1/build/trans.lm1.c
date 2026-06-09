@@ -2629,6 +2629,7 @@ static int lm_trans_collect_capture_uses_from_node(LmOwnPtrStack * captures, con
 static int lm_trans_analyze_function_captures(LmTransHoistedFunction * hoisted, const LmOwnPtrStack * candidates, const LmTransNamespace * namespace_);
 static int lm_trans_collect_hoisted_functions_from_fields(LmOwnPtrStack * hoisted_functions, const LmP0Text * parent_c_name, unsigned nested_level, LmOwnPtrStack * candidates, const LmTransNamespace * namespace_, const LmP0Field * field);
 static LmTransHoistedFunction * lm_trans_hoisted_function_from_header(const LmP0Text * parent_c_name, unsigned nested_level, size_t index, const LmP0Frame * frame, const LmTransFunctionHeader * function);
+static int lm_trans_hoisted_function_finalize_captures(LmTransHoistedFunction * hoisted, const LmOwnPtrStack * candidates, const LmTransNamespace * namespace_);
 static int lm_trans_collect_hoisted_function(LmOwnPtrStack * hoisted_functions, const LmP0Text * parent_c_name, unsigned nested_level, const LmOwnPtrStack * candidates, const LmTransNamespace * namespace_, const LmP0Frame * frame, const LmTransFunctionHeader * function);
 static int lm_trans_collect_hoisted_functions_from_frame(LmOwnPtrStack * hoisted_functions, const LmP0Text * parent_c_name, unsigned nested_level, LmOwnPtrStack * candidates, const LmTransNamespace * namespace_, const LmP0Frame * frame);
 static int lm_trans_collect_hoisted_functions_from_node(LmOwnPtrStack * hoisted_functions, const LmP0Text * parent_c_name, unsigned nested_level, LmOwnPtrStack * candidates, const LmTransNamespace * namespace_, const LmP0Node * node);
@@ -20790,39 +20791,17 @@ static LmTransHoistedFunction * lm_trans_hoisted_function_from_header(const LmP0
     }
 }
 
-static int lm_trans_collect_hoisted_function(LmOwnPtrStack * hoisted_functions, const LmP0Text * parent_c_name, unsigned nested_level, const LmOwnPtrStack * candidates, const LmTransNamespace * namespace_, const LmP0Frame * frame, const LmTransFunctionHeader * function) {
-    LmTransHoistedFunction * hoisted;
+static int lm_trans_hoisted_function_finalize_captures(LmTransHoistedFunction * hoisted, const LmOwnPtrStack * candidates, const LmTransNamespace * namespace_) {
     char *env_type_name;
     char *env_var_name;
-    size_t index;
-    if (function == 0 || function -> is_descriptor_only) {
-        fprintf(stderr, "trans L2 error: nested descriptor-only fn is not supported yet\n");
-        return 1;
-    }
     env_type_name = 0;
     env_var_name = 0;
-    hoisted = 0;
-    index = 0U;
-    if (hoisted_functions != 0) {
-        index = hoisted_functions -> count;
-    }
-    hoisted = lm_trans_hoisted_function_from_header(parent_c_name, nested_level, index, frame, function);
-    if (hoisted == 0) {
+    if (lm_trans_analyze_function_captures(hoisted, candidates, namespace_) != 0) {
         {
             int lm_return_0 = 1;
-            lm_trans_hoisted_function_destroy(hoisted);
             lm_own_delete(env_var_name, 0);
             lm_own_delete(env_type_name, 0);
             return lm_return_0;
-        }
-    }
-    if (lm_trans_analyze_function_captures(hoisted, candidates, namespace_) != 0) {
-        {
-            int lm_return_1 = 1;
-            lm_trans_hoisted_function_destroy(hoisted);
-            lm_own_delete(env_var_name, 0);
-            lm_own_delete(env_type_name, 0);
-            return lm_return_1;
         }
     }
     if (hoisted -> captures -> count > 0U) {
@@ -20830,11 +20809,10 @@ static int lm_trans_collect_hoisted_function(LmOwnPtrStack * hoisted_functions, 
         env_var_name = lm_trans_hoisted_suffix_name_new(hoisted -> function -> c_name, "_env");
         if (env_type_name == 0 || env_var_name == 0) {
             {
-                int lm_return_2 = 1;
-                lm_trans_hoisted_function_destroy(hoisted);
+                int lm_return_1 = 1;
                 lm_own_delete(env_var_name, 0);
                 lm_own_delete(env_type_name, 0);
-                return lm_return_2;
+                return lm_return_1;
             }
         }
         hoisted->env_type_storage = env_type_name;
@@ -20846,22 +20824,53 @@ static int lm_trans_collect_hoisted_function(LmOwnPtrStack * hoisted_functions, 
         hoisted->function->captures = hoisted -> captures;
         hoisted->function->has_env = 1;
     }
+    {
+        int lm_return_2 = 0;
+        lm_own_delete(env_var_name, 0);
+        lm_own_delete(env_type_name, 0);
+        return lm_return_2;
+    }
+}
+
+static int lm_trans_collect_hoisted_function(LmOwnPtrStack * hoisted_functions, const LmP0Text * parent_c_name, unsigned nested_level, const LmOwnPtrStack * candidates, const LmTransNamespace * namespace_, const LmP0Frame * frame, const LmTransFunctionHeader * function) {
+    LmTransHoistedFunction * hoisted;
+    size_t index;
+    if (function == 0 || function -> is_descriptor_only) {
+        fprintf(stderr, "trans L2 error: nested descriptor-only fn is not supported yet\n");
+        return 1;
+    }
+    hoisted = 0;
+    index = 0U;
+    if (hoisted_functions != 0) {
+        index = hoisted_functions -> count;
+    }
+    hoisted = lm_trans_hoisted_function_from_header(parent_c_name, nested_level, index, frame, function);
+    if (hoisted == 0) {
+        {
+            int lm_return_0 = 1;
+            lm_trans_hoisted_function_destroy(hoisted);
+            return lm_return_0;
+        }
+    }
+    if (lm_trans_hoisted_function_finalize_captures(hoisted, candidates, namespace_) != 0) {
+        {
+            int lm_return_1 = 1;
+            lm_trans_hoisted_function_destroy(hoisted);
+            return lm_return_1;
+        }
+    }
     if (lm_own_ptr_stack_push(hoisted_functions, hoisted) != 0) {
         {
-            int lm_return_3 = 1;
+            int lm_return_2 = 1;
             lm_trans_hoisted_function_destroy(hoisted);
-            lm_own_delete(env_var_name, 0);
-            lm_own_delete(env_type_name, 0);
-            return lm_return_3;
+            return lm_return_2;
         }
     }
     hoisted = 0;
     {
-        int lm_return_4 = 0;
+        int lm_return_3 = 0;
         lm_trans_hoisted_function_destroy(hoisted);
-        lm_own_delete(env_var_name, 0);
-        lm_own_delete(env_type_name, 0);
-        return lm_return_4;
+        return lm_return_3;
     }
 }
 
