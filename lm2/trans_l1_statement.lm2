@@ -5506,6 +5506,17 @@ fn: lm_trans_lower_atom_statement (const: (LmP0Text: atom)) LmTransAtomStatement
         return: 0
 return: @lm_trans_emit_atom_expr_statement
 
+fn: lm_trans_namespace_publish_function_callable (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+    const: LmP0Text: code_name
+) int
+    if: namespace_ = 0 || function = 0 || code_name = 0
+        return: 1
+    if: lm_trans_namespace_declare_c_name(namespace_, function\name, function\symbol_class, code_name) != 0
+        return: 1
+return: lm_trans_namespace_set_callable_shape(namespace_, function)
+
 fn: lm_trans_namespace_publish_hoisted_callable (
     LmTransNamespace: namespace_
     const: LmTransFunctionHeader: function
@@ -5522,7 +5533,7 @@ fn: lm_trans_namespace_publish_hoisted_callable (
     finally: lm_own_delete(env_arg, 0)
     finally: lm_trans_text_ref_destroy(@ env_arg_text)
 
-    if: lm_trans_namespace_declare_c_name(namespace_, function\name, function\symbol_class, hoisted\function\c_name) != 0
+    if: lm_trans_namespace_publish_function_callable(namespace_, function, hoisted\function\c_name) != 0
         return: 1
 
     if: hoisted\function\has_env
@@ -5538,7 +5549,7 @@ fn: lm_trans_namespace_publish_hoisted_callable (
     ---
     if: lm_trans_namespace_set_closure_call_name(namespace_, function\name, hoisted\closure_call_name) != 0
         return: 1
-return: lm_trans_namespace_set_callable_shape(namespace_, function)
+return: 0
 
 fn: lm_trans_statement_emit_nested_function (
     FILE: file

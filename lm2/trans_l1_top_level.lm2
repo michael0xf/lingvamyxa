@@ -1240,7 +1240,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         return: 1
     lm_trans_namespace_enter_scope(namespace_)
     if: function\declare_self_alias
-        if: lm_trans_namespace_declare_c_name(namespace_, function\name, function\symbol_class, function\c_name) != 0 || lm_trans_namespace_set_callable_shape(namespace_, function) != 0
+        if: lm_trans_namespace_publish_function_callable(namespace_, function, function\c_name) != 0
             lm_trans_namespace_leave_scope(namespace_)
             lm_trans_ptr_stack_delete(@ hoisted_functions)
             return: 1

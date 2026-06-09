@@ -1361,7 +1361,7 @@ fn: lm_trans_declare_l4_sub_descriptor (LmTransNamespace: namespace_; const: @(c
     function\is_descriptor_only: 1
     function\is_external: lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0
 
-    status: lm_trans_namespace_declare_c_name(namespace_, function\name, function\symbol_class, function\c_name) != 0 || lm_trans_namespace_set_callable_shape(namespace_, function) != 0
+    status: lm_trans_namespace_publish_function_callable(namespace_, function, function\c_name) != 0
 
     lm_trans_function_header_destroy(function)
     lm_trans_l4_text_view_delete(@ name_text)
@@ -1414,7 +1414,7 @@ fn: lm_trans_declare_l4_fn_descriptor (LmTransNamespace: namespace_; const: @(ch
     function\symbol_class: "function"
     function\is_external: lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0
 
-    status: lm_trans_namespace_declare_c_name(namespace_, function\name, function\symbol_class, function\c_name) != 0 || lm_trans_namespace_set_callable_shape(namespace_, function) != 0
+    status: lm_trans_namespace_publish_function_callable(namespace_, function, function\c_name) != 0
 
     lm_trans_function_header_destroy(function)
     lm_trans_l4_text_view_delete(@ name_text)

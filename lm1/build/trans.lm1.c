@@ -2564,6 +2564,7 @@ static int lm_trans_atom_statement_emit_sequence_prelude(FILE * file, const LmP0
 static int lm_trans_emit_configured_prelude_sequences(FILE * file, LmTransNamespace * namespace_, int *out_emitted);
 static LmTransAtomStatementHandler lm_trans_atom_statement_binding_handler(const char *binding);
 static LmTransAtomStatementHandler lm_trans_lower_atom_statement(const LmP0Text * atom);
+static int lm_trans_namespace_publish_function_callable(LmTransNamespace * namespace_, const LmTransFunctionHeader * function, const LmP0Text * code_name);
 static int lm_trans_namespace_publish_hoisted_callable(LmTransNamespace * namespace_, const LmTransFunctionHeader * function, const LmTransHoistedFunction * hoisted);
 static int lm_trans_statement_emit_nested_function(FILE * file, LmTransStatementStack * stack, const LmP0Frame * frame, unsigned indent, LmTransNamespace * namespace_);
 static int lm_trans_statement_stack_emit_node(FILE * file, LmTransStatementStack * stack, const LmP0Node * node, unsigned indent, const LmP0Frame * repeat_frame, LmTransNamespace * namespace_);
@@ -18983,6 +18984,16 @@ static LmTransAtomStatementHandler lm_trans_lower_atom_statement(const LmP0Text 
     return &lm_trans_emit_atom_expr_statement;
 }
 
+static int lm_trans_namespace_publish_function_callable(LmTransNamespace * namespace_, const LmTransFunctionHeader * function, const LmP0Text * code_name) {
+    if (namespace_ == 0 || function == 0 || code_name == 0) {
+        return 1;
+    }
+    if (lm_trans_namespace_declare_c_name(namespace_, function -> name, function -> symbol_class, code_name) != 0) {
+        return 1;
+    }
+    return lm_trans_namespace_set_callable_shape(namespace_, function);
+}
+
 static int lm_trans_namespace_publish_hoisted_callable(LmTransNamespace * namespace_, const LmTransFunctionHeader * function, const LmTransHoistedFunction * hoisted) {
     char *env_arg;
     LmP0Text * env_arg_text;
@@ -18991,7 +19002,7 @@ static int lm_trans_namespace_publish_hoisted_callable(LmTransNamespace * namesp
     }
     env_arg = 0;
     env_arg_text = 0;
-    if (lm_trans_namespace_declare_c_name(namespace_, function -> name, function -> symbol_class, hoisted -> function -> c_name) != 0) {
+    if (lm_trans_namespace_publish_function_callable(namespace_, function, hoisted -> function -> c_name) != 0) {
         {
             int lm_return_0 = 1;
             lm_trans_text_ref_destroy(&env_arg_text);
@@ -19036,7 +19047,7 @@ static int lm_trans_namespace_publish_hoisted_callable(LmTransNamespace * namesp
         }
     }
     {
-        int lm_return_5 = lm_trans_namespace_set_callable_shape(namespace_, function);
+        int lm_return_5 = 0;
         lm_trans_text_ref_destroy(&env_arg_text);
         lm_own_delete(env_arg, 0);
         return lm_return_5;
@@ -22373,7 +22384,7 @@ static int lm_trans_emit_function_with_hoisted(FILE * file, const LmTransFunctio
     }
     lm_trans_namespace_enter_scope(namespace_);
     if (function -> declare_self_alias) {
-        if (lm_trans_namespace_declare_c_name(namespace_, function -> name, function -> symbol_class, function -> c_name) != 0 || lm_trans_namespace_set_callable_shape(namespace_, function) != 0) {
+        if (lm_trans_namespace_publish_function_callable(namespace_, function, function -> c_name) != 0) {
             lm_trans_namespace_leave_scope(namespace_);
             lm_trans_ptr_stack_delete(&hoisted_functions);
             return 1;
@@ -26725,7 +26736,7 @@ static int lm_trans_declare_l4_sub_descriptor(LmTransNamespace * namespace_, con
     function->is_sub = 1;
     function->is_descriptor_only = 1;
     function->is_external = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0;
-    status = lm_trans_namespace_declare_c_name(namespace_, function -> name, function -> symbol_class, function -> c_name) != 0 || lm_trans_namespace_set_callable_shape(namespace_, function) != 0;
+    status = lm_trans_namespace_publish_function_callable(namespace_, function, function -> c_name) != 0;
     lm_trans_function_header_destroy(function);
     lm_trans_l4_text_view_delete(&name_text);
     return status;
@@ -26778,7 +26789,7 @@ static int lm_trans_declare_l4_fn_descriptor(LmTransNamespace * namespace_, cons
     function->return_node = return_node;
     function->symbol_class = "function";
     function->is_external = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0;
-    status = lm_trans_namespace_declare_c_name(namespace_, function -> name, function -> symbol_class, function -> c_name) != 0 || lm_trans_namespace_set_callable_shape(namespace_, function) != 0;
+    status = lm_trans_namespace_publish_function_callable(namespace_, function, function -> c_name) != 0;
     lm_trans_function_header_destroy(function);
     lm_trans_l4_text_view_delete(&name_text);
     return status;
