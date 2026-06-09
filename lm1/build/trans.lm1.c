@@ -6160,7 +6160,6 @@ static int lm_trans_call_lower_value(const LmP0Text * head, const LmTransSymbol 
         return 1;
     }
     out->signature = symbol;
-    out->is_closure = lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct");
     return 0;
 }
 
@@ -6177,7 +6176,6 @@ static int lm_trans_call_lower_statement(const LmP0Text * head, const LmTransSym
         return 1;
     }
     out->signature = symbol;
-    out->is_closure = lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct");
     return 0;
 }
 

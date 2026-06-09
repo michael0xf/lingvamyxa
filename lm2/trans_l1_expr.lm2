@@ -236,7 +236,6 @@ fn: lm_trans_call_lower_value (const: (LmP0Text: head); const: (LmTransSymbol: s
         c.fprintf(c.stderr, "trans L2 error: \"%.*s\" is %s, not a value-returning function\n", (cast: int head\length), head\data, lm_trans_symbol_class_name(symbol\class_name))
         return: 1
     out\signature: symbol
-    out\is_closure: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
     return: 0
 end: lm_trans_call_lower_value
 
@@ -250,7 +249,6 @@ fn: lm_trans_call_lower_statement (const: (LmP0Text: head); const: (LmTransSymbo
         c.fprintf(c.stderr, "trans L2 error: \"%.*s\" is %s, not a callable\n", (cast: int head\length), head\data, lm_trans_symbol_class_name(symbol\class_name))
         return: 1
     out\signature: symbol
-    out\is_closure: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
     return: 0
 end: lm_trans_call_lower_statement
 
