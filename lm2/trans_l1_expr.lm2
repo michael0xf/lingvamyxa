@@ -2278,6 +2278,7 @@ end: lm_trans_param_descriptor_matches_return
 
 fn: lm_trans_should_force_zero_arg_callable (const: (LmTransExprSegment: segment); const: (LmTransNamespace: namespace_); LmP0Text: out_name; const: @(LmTransSymbol out_symbol)) int
     const: LmTransSymbol: symbol
+    LmTransCallableValue: callable_value
     LmP0Text: atom
     if: (out_name != 0)
         out_name\data: ""
@@ -2293,12 +2294,16 @@ fn: lm_trans_should_force_zero_arg_callable (const: (LmTransExprSegment: segment
     if: (((lm_trans_symbol_is_value_callable(symbol) = 0) || (lm_trans_callable_has_no_params(symbol) = 0)) || (lm_trans_param_descriptor_matches_return(segment\expected_param, symbol\callable_return_node, namespace_) = 0))
         lm_trans_text_ref_destroy(@ atom)
         return: 0
+    callable_value: lm_trans_callable_value_new()
+    if: callable_value = 0
+        lm_trans_text_ref_destroy(@ atom)
+        return: 0
+    finally: lm_trans_callable_value_delete(callable_value)
+    if: lm_trans_callable_value_from_symbol(symbol, atom, callable_value) != 0
+        lm_trans_text_ref_destroy(@ atom)
+        return: 0
     if: (out_name != 0)
-        if: symbol\has_c_name
-            out_name[0]: symbol\c_name[0]
-        else:
-            out_name[0]: atom[0]
-        ---
+        out_name[0]: callable_value\code_name[0]
     if: (out_symbol != 0)
         out_symbol[0]: symbol
     lm_trans_text_ref_destroy(@ atom)
@@ -2306,15 +2311,22 @@ fn: lm_trans_should_force_zero_arg_callable (const: (LmTransExprSegment: segment
 end: lm_trans_should_force_zero_arg_callable
 
 fn: lm_trans_expr_stack_push_forced_zero_arg_callable (LmTransExprStack: stack; const: (LmP0Text: name); const: (LmTransSymbol: symbol)) int
+    LmTransCallableValue: callable_value
     if: ((stack = 0) || (symbol = 0))
+        return: 1
+    callable_value: lm_trans_callable_value_new()
+    if: callable_value = 0
+        return: 1
+    finally: lm_trans_callable_value_delete(callable_value)
+    if: lm_trans_callable_value_from_symbol(symbol, name, callable_value) != 0
         return: 1
     if: (lm_trans_expr_stack_push_text(stack, ")") != 0)
         return: 1
-    if: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
-        if: ((((lm_trans_expr_stack_push_text(stack, "->env") != 0) || (lm_trans_expr_stack_push_name_text(stack, name) != 0)) || (lm_trans_expr_stack_push_text(stack, "->call(") != 0)) || (lm_trans_expr_stack_push_name_text(stack, name) != 0))
+    if: callable_value\uses_closure_struct
+        if: ((((lm_trans_expr_stack_push_text(stack, "->env") != 0) || (lm_trans_expr_stack_push_name_text(stack, callable_value\code_name) != 0)) || (lm_trans_expr_stack_push_text(stack, "->call(") != 0)) || (lm_trans_expr_stack_push_name_text(stack, callable_value\code_name) != 0))
             return: 1
         return: 0
-    if: ((lm_trans_expr_stack_push_text(stack, "(") != 0) || (lm_trans_expr_stack_push_name_text(stack, name) != 0))
+    if: ((lm_trans_expr_stack_push_text(stack, "(") != 0) || (lm_trans_expr_stack_push_name_text(stack, callable_value\code_name) != 0))
         return: 1
     return: 0
 end: lm_trans_expr_stack_push_forced_zero_arg_callable

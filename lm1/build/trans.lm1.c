@@ -8559,6 +8559,7 @@ static int lm_trans_param_descriptor_matches_return(const LmP0Node * param, cons
 
 static int lm_trans_should_force_zero_arg_callable(const LmTransExprSegment * segment, const LmTransNamespace * namespace_, LmP0Text * out_name, const LmTransSymbol * *out_symbol) {
     const LmTransSymbol * symbol;
+    LmTransCallableValue * callable_value;
     LmP0Text * atom;
     if ((out_name != 0)) {
         out_name->data = "";
@@ -8579,38 +8580,84 @@ static int lm_trans_should_force_zero_arg_callable(const LmTransExprSegment * se
         lm_trans_text_ref_destroy(&atom);
         return 0;
     }
+    callable_value = lm_trans_callable_value_new();
+    if (callable_value == 0) {
+        lm_trans_text_ref_destroy(&atom);
+        return 0;
+    }
+    if (lm_trans_callable_value_from_symbol(symbol, atom, callable_value) != 0) {
+        lm_trans_text_ref_destroy(&atom);
+        {
+            int lm_return_0 = 0;
+            lm_trans_callable_value_delete(callable_value);
+            return lm_return_0;
+        }
+    }
     if ((out_name != 0)) {
-        if (symbol -> has_c_name) {
-            out_name[0] = symbol -> c_name[0];
-        }
-        else {
-            out_name[0] = atom[0];
-        }
+        out_name[0] = callable_value -> code_name[0];
     }
     if ((out_symbol != 0)) {
         out_symbol[0] = symbol;
     }
     lm_trans_text_ref_destroy(&atom);
-    return 1;
+    {
+        int lm_return_1 = 1;
+        lm_trans_callable_value_delete(callable_value);
+        return lm_return_1;
+    }
+    lm_trans_callable_value_delete(callable_value);
 }
 
 static int lm_trans_expr_stack_push_forced_zero_arg_callable(LmTransExprStack * stack, const LmP0Text * name, const LmTransSymbol * symbol) {
+    LmTransCallableValue * callable_value;
     if (((stack == 0) || (symbol == 0))) {
         return 1;
     }
-    if ((lm_trans_expr_stack_push_text(stack, ")") != 0)) {
+    callable_value = lm_trans_callable_value_new();
+    if (callable_value == 0) {
         return 1;
     }
-    if (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")) {
-        if (((((lm_trans_expr_stack_push_text(stack, "->env") != 0) || (lm_trans_expr_stack_push_name_text(stack, name) != 0)) || (lm_trans_expr_stack_push_text(stack, "->call(") != 0)) || (lm_trans_expr_stack_push_name_text(stack, name) != 0))) {
-            return 1;
+    if (lm_trans_callable_value_from_symbol(symbol, name, callable_value) != 0) {
+        {
+            int lm_return_0 = 1;
+            lm_trans_callable_value_delete(callable_value);
+            return lm_return_0;
         }
-        return 0;
     }
-    if (((lm_trans_expr_stack_push_text(stack, "(") != 0) || (lm_trans_expr_stack_push_name_text(stack, name) != 0))) {
-        return 1;
+    if ((lm_trans_expr_stack_push_text(stack, ")") != 0)) {
+        {
+            int lm_return_1 = 1;
+            lm_trans_callable_value_delete(callable_value);
+            return lm_return_1;
+        }
     }
-    return 0;
+    if (callable_value -> uses_closure_struct) {
+        if (((((lm_trans_expr_stack_push_text(stack, "->env") != 0) || (lm_trans_expr_stack_push_name_text(stack, callable_value -> code_name) != 0)) || (lm_trans_expr_stack_push_text(stack, "->call(") != 0)) || (lm_trans_expr_stack_push_name_text(stack, callable_value -> code_name) != 0))) {
+            {
+                int lm_return_2 = 1;
+                lm_trans_callable_value_delete(callable_value);
+                return lm_return_2;
+            }
+        }
+        {
+            int lm_return_3 = 0;
+            lm_trans_callable_value_delete(callable_value);
+            return lm_return_3;
+        }
+    }
+    if (((lm_trans_expr_stack_push_text(stack, "(") != 0) || (lm_trans_expr_stack_push_name_text(stack, callable_value -> code_name) != 0))) {
+        {
+            int lm_return_4 = 1;
+            lm_trans_callable_value_delete(callable_value);
+            return lm_return_4;
+        }
+    }
+    {
+        int lm_return_5 = 0;
+        lm_trans_callable_value_delete(callable_value);
+        return lm_return_5;
+    }
+    lm_trans_callable_value_delete(callable_value);
 }
 
 static int lm_trans_materialize_zero_arg_callable(FILE * file, LmTransExprStack * stack, const LmTransExprSegment * segment, const LmTransNamespace * namespace_, int *out_consumed) {
