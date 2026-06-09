@@ -8783,13 +8783,13 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                                             status = 1;
                                         }
                                         else {
-                                            if (symbol -> has_c_name) {
-                                                name[0] = symbol -> c_name[0];
+                                            if (lm_trans_callable_value_from_symbol(symbol, atom, callable_value) != 0) {
+                                                status = 1;
                                             }
                                             else {
-                                                name[0] = atom[0];
+                                                name[0] = callable_value -> code_name[0];
                                             }
-                                            if ((lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, bound_count, binder_name) != 0)) {
+                                            if (((status == 0) && (lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, bound_count, binder_name) != 0))) {
                                                 status = 1;
                                             }
                                             if (((status == 0) && (binder_name -> length == 0U))) {
@@ -8812,20 +8812,20 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
             }
             else {
                 symbol = lm_trans_namespace_find(namespace_, frame -> head);
+                if (((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol))) {
+                    if (lm_trans_callable_value_from_symbol(symbol, frame -> head, callable_value) != 0) {
+                        status = 1;
+                    }
+                }
                 if ((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && lm_trans_node_callable_descriptor_name(symbol -> callable_return_node, namespace_, atom) && lm_trans_identifier_same(atom, descriptor_name))) {
                     symbol = symbol;
                 }
                 else {
-                    if (((((((((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) == 0)) && (descriptor_is_function_pointer == 0)) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0)) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count)) && (symbol -> param_names -> count >= descriptor_param_count))) {
+                    if ((((((((((status == 0) && (symbol != 0)) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) == 0)) && (descriptor_is_function_pointer == 0)) && (callable_value -> uses_closure_struct == 0)) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count)) && (symbol -> param_names -> count >= descriptor_param_count))) {
                         bound_count = (symbol -> param_names -> count - descriptor_param_count);
                         if ((explicit_bound_count <= bound_count)) {
-                            if (symbol -> has_c_name) {
-                                name[0] = symbol -> c_name[0];
-                            }
-                            else {
-                                name[0] = frame -> head[0];
-                            }
-                            if ((lm_trans_emit_callable_default_adapter(file, namespace_, name, symbol, descriptor_name, frame -> body, bound_count, adapter_name) != 0)) {
+                            name[0] = callable_value -> code_name[0];
+                            if (((status == 0) && (lm_trans_emit_callable_default_adapter(file, namespace_, name, symbol, descriptor_name, frame -> body, bound_count, adapter_name) != 0))) {
                                 status = 1;
                             }
                             if (((status == 0) && (adapter_name -> length != 0U))) {
@@ -8846,20 +8846,15 @@ static int lm_trans_materialize_callable_descriptor_value(FILE * file, LmTransEx
                         fprintf(stderr, "trans L2 error: callable descriptor %.*s admits callable.partial but callable.projection is not c.closure-struct\n", (((int)descriptor_name -> length)), descriptor_name -> data);
                         status = 1;
                     }
-                    if (((status == 0) && (consumed == 0) && lm_trans_callable_partial_call_frame_enabled(namespace_) && lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) && lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) && (descriptor_is_function_pointer == 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct") == 0) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count) && (symbol -> param_names -> count >= descriptor_param_count))) {
+                    if (((status == 0) && (consumed == 0) && lm_trans_callable_partial_call_frame_enabled(namespace_) && lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) && lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) && (descriptor_is_function_pointer == 0) && (symbol != 0) && lm_trans_symbol_is_executable_callable(symbol) && (callable_value -> uses_closure_struct == 0) && lm_trans_call_body_positional_arg_count(frame -> body, &explicit_bound_count) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, &descriptor_param_count) && (symbol -> param_names -> count >= descriptor_param_count))) {
                         bound_count = (symbol -> param_names -> count - descriptor_param_count);
                         if ((explicit_bound_count > bound_count)) {
                             fprintf(stderr, "trans L2 error: too many lazy-bind arguments for callable descriptor %.*s\n", (((int)descriptor_name -> length)), descriptor_name -> data);
                             status = 1;
                         }
                         else {
-                            if (symbol -> has_c_name) {
-                                name[0] = symbol -> c_name[0];
-                            }
-                            else {
-                                name[0] = frame -> head[0];
-                            }
-                            if ((lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, bound_count, binder_name) != 0)) {
+                            name[0] = callable_value -> code_name[0];
+                            if (((status == 0) && (lm_trans_emit_callable_binder(file, namespace_, name, symbol, descriptor_name, bound_count, binder_name) != 0))) {
                                 status = 1;
                             }
                             if (((status == 0) && (binder_name -> length != 0U))) {
