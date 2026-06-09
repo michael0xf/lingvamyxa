@@ -6203,6 +6203,7 @@ static int lm_trans_lower_call(const LmP0Text * head, const LmTransNamespace * n
     const char *binding;
     const char *effective_lowering_class;
     LmTransCallLoweringHandler handler;
+    LmTransCallableValue * value;
     int status;
     if ((out == 0)) {
         return 1;
@@ -6228,8 +6229,23 @@ static int lm_trans_lower_call(const LmP0Text * head, const LmTransNamespace * n
     }
     symbol = lm_trans_namespace_find(namespace_, head);
     status = handler(head, symbol, out);
-    if ((((status == 0) && (symbol != 0)) && symbol -> has_c_name)) {
-        out->name[0] = symbol -> c_name[0];
+    if (((status == 0) && (symbol != 0))) {
+        value = lm_trans_callable_value_new();
+        if (value == 0) {
+            return 1;
+        }
+        if (lm_trans_callable_value_from_symbol(symbol, head, value) != 0) {
+            {
+                int lm_return_0 = 1;
+                lm_trans_callable_value_delete(value);
+                return lm_return_0;
+            }
+        }
+        if (value -> code_name != 0) {
+            out->name[0] = value -> code_name[0];
+        }
+        out->is_closure = value -> uses_closure_struct;
+        lm_trans_callable_value_delete(value);
     }
     return status;
 }
