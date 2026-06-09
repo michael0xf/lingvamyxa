@@ -31,6 +31,7 @@ typedef struct LmTransNamespace LmTransNamespace;
 typedef struct LmTransRegistryCloneFrame LmTransRegistryCloneFrame;
 typedef struct LmTransExprSegment LmTransExprSegment;
 typedef struct LmTransCallLowering LmTransCallLowering;
+typedef struct LmTransCallableValue LmTransCallableValue;
 typedef struct LmTransExprAtomLowering LmTransExprAtomLowering;
 typedef struct LmTransExprLoweredRange LmTransExprLoweredRange;
 typedef struct LmTransExprPiece LmTransExprPiece;
@@ -314,6 +315,15 @@ struct LmTransCallLowering {
     LmP0Text * name;
     const LmTransSymbol * signature;
     int is_closure;
+};
+struct LmTransCallableValue {
+    const LmTransSymbol * symbol;
+    const LmP0Text * code_name;
+    const LmP0Text * closure_call_name;
+    const LmP0Text * env_arg;
+    int has_env_arg;
+    int has_closure_call;
+    int uses_closure_struct;
 };
 struct LmTransExprLoweredRange {
     LmOwnPtrStack * pieces;
@@ -693,6 +703,9 @@ static int lm_trans_symbol_class_is(const char *class_name, const char *expected
 static int lm_trans_symbol_is(const LmTransSymbol *symbol, const char *class_name);
 static int lm_trans_symbol_is_executable_callable(const LmTransSymbol *symbol);
 static int lm_trans_symbol_is_value_callable(const LmTransSymbol *symbol);
+static LmTransCallableValue * lm_trans_callable_value_new(void);
+static void lm_trans_callable_value_delete(LmTransCallableValue *value);
+static int lm_trans_callable_value_from_symbol(const LmTransSymbol *symbol, const LmP0Text *fallback_name, LmTransCallableValue *out);
 static LmTransSymbol * lm_trans_symbol_new(const LmP0Text *name, const char *kind, unsigned depth);
 static void lm_trans_symbol_destroy_fields(LmTransSymbol *symbol);
 static void lm_trans_symbol_destroy_fields_any(void *object);
@@ -2951,6 +2964,9 @@ static int lm_trans_callable_projection_is_executable(const char *projection);
 static int lm_trans_symbol_has_callable_projection(const LmTransSymbol * symbol, const char *projection);
 static int lm_trans_symbol_is_executable_callable(const LmTransSymbol * symbol);
 static int lm_trans_symbol_is_value_callable(const LmTransSymbol * symbol);
+static LmTransCallableValue * lm_trans_callable_value_new(void);
+static void lm_trans_callable_value_delete(LmTransCallableValue * value);
+static int lm_trans_callable_value_from_symbol(const LmTransSymbol * symbol, const LmP0Text * fallback_name, LmTransCallableValue * out);
 static void lm_trans_symbol_destroy_fields(LmTransSymbol * symbol);
 static void lm_trans_symbol_destroy_fields_any(void *object);
 static void lm_trans_symbol_destroy(LmTransSymbol * symbol);
@@ -13845,9 +13861,9 @@ static int lm_trans_current_return_is_callable_descriptor(const LmTransNamespace
 static int lm_trans_emit_raw_callable_return_statement(FILE * file, const LmP0Field * return_fields, unsigned indent, LmTransNamespace * namespace_, int *out_consumed) {
     LmP0Text * atom;
     LmP0Text * descriptor_type;
-    LmP0Text * name;
     LmP0Text * return_name;
     const LmTransSymbol * symbol;
+    LmTransCallableValue * value;
     char return_name_storage[64];
     unsigned return_id;
     if (out_consumed != 0) {
@@ -13868,8 +13884,8 @@ static int lm_trans_emit_raw_callable_return_statement(FILE * file, const LmP0Fi
             return lm_return_0;
         }
     }
-    name = lm_trans_statement_text_new();
-    if (name == 0) {
+    value = lm_trans_callable_value_new();
+    if (value == 0) {
         {
             int lm_return_1 = 1;
             lm_trans_text_ref_destroy(&descriptor_type);
@@ -13881,7 +13897,7 @@ static int lm_trans_emit_raw_callable_return_statement(FILE * file, const LmP0Fi
     if (return_name == 0) {
         {
             int lm_return_2 = 1;
-            lm_trans_text_ref_destroy(&name);
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_2;
@@ -13891,7 +13907,7 @@ static int lm_trans_emit_raw_callable_return_statement(FILE * file, const LmP0Fi
         {
             int lm_return_3 = 0;
             lm_trans_text_ref_destroy(&return_name);
-            lm_trans_text_ref_destroy(&name);
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_3;
@@ -13902,98 +13918,104 @@ static int lm_trans_emit_raw_callable_return_statement(FILE * file, const LmP0Fi
         {
             int lm_return_4 = 0;
             lm_trans_text_ref_destroy(&return_name);
-            lm_trans_text_ref_destroy(&name);
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_4;
         }
     }
-    if (symbol -> has_env_arg || lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")) {
-        fprintf(stderr, "trans L2 error: cannot return capturing callable %.*s as raw descriptor %.*s; descriptor must admit callable.capture\n", (((int)atom -> length)), atom -> data, (((int)descriptor_type -> length)), descriptor_type -> data);
+    if (lm_trans_callable_value_from_symbol(symbol, atom, value) != 0) {
         {
             int lm_return_5 = 1;
             lm_trans_text_ref_destroy(&return_name);
-            lm_trans_text_ref_destroy(&name);
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_5;
         }
     }
-    name[0] = atom[0];
-    if (symbol -> has_c_name) {
-        name[0] = symbol -> c_name[0];
+    if (value -> has_env_arg || value -> uses_closure_struct) {
+        fprintf(stderr, "trans L2 error: cannot return capturing callable %.*s as raw descriptor %.*s; descriptor must admit callable.capture\n", (((int)atom -> length)), atom -> data, (((int)descriptor_type -> length)), descriptor_type -> data);
+        {
+            int lm_return_6 = 1;
+            lm_trans_text_ref_destroy(&return_name);
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_6;
+        }
     }
     if (namespace_ != 0 && namespace_ -> cleanups -> count > 0U) {
         return_id = namespace_ -> next_return_id;
         namespace_->next_return_id = namespace_ -> next_return_id + 1U;
         if (lm_trans_return_name_text(return_id, return_name_storage, sizeof(return_name_storage), return_name) != 0) {
             {
-                int lm_return_6 = 1;
-                lm_trans_text_ref_destroy(&return_name);
-                lm_trans_text_ref_destroy(&name);
-                lm_trans_text_ref_destroy(&descriptor_type);
-                lm_trans_text_ref_destroy(&atom);
-                return lm_return_6;
-            }
-        }
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0) {
-            {
                 int lm_return_7 = 1;
                 lm_trans_text_ref_destroy(&return_name);
-                lm_trans_text_ref_destroy(&name);
+                lm_trans_callable_value_delete(value);
                 lm_trans_text_ref_destroy(&descriptor_type);
                 lm_trans_text_ref_destroy(&atom);
                 return lm_return_7;
             }
         }
-        if (lm_trans_emit_raw_callable_declarator(file, namespace_, descriptor_type, return_name, "raw callable return") != 0) {
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0) {
             {
                 int lm_return_8 = 1;
                 lm_trans_text_ref_destroy(&return_name);
-                lm_trans_text_ref_destroy(&name);
+                lm_trans_callable_value_delete(value);
                 lm_trans_text_ref_destroy(&descriptor_type);
                 lm_trans_text_ref_destroy(&atom);
                 return lm_return_8;
             }
         }
-        if (lm_trans_put(file, " = ") != 0 || lm_trans_write_text(file, name) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+        if (lm_trans_emit_raw_callable_declarator(file, namespace_, descriptor_type, return_name, "raw callable return") != 0) {
             {
                 int lm_return_9 = 1;
                 lm_trans_text_ref_destroy(&return_name);
-                lm_trans_text_ref_destroy(&name);
+                lm_trans_callable_value_delete(value);
                 lm_trans_text_ref_destroy(&descriptor_type);
                 lm_trans_text_ref_destroy(&atom);
                 return lm_return_9;
             }
         }
+        if (lm_trans_put(file, " = ") != 0 || lm_trans_write_text(file, value -> code_name) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+            {
+                int lm_return_10 = 1;
+                lm_trans_text_ref_destroy(&return_name);
+                lm_trans_callable_value_delete(value);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_text_ref_destroy(&atom);
+                return lm_return_10;
+            }
+        }
         out_consumed[0] = 1;
         {
-            int lm_return_10 = 0;
+            int lm_return_11 = 0;
             lm_trans_text_ref_destroy(&return_name);
-            lm_trans_text_ref_destroy(&name);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_10;
-        }
-    }
-    if (lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_write_text(file, name) != 0 || lm_trans_put(file, ";\n") != 0) {
-        {
-            int lm_return_11 = 1;
-            lm_trans_text_ref_destroy(&return_name);
-            lm_trans_text_ref_destroy(&name);
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_11;
         }
     }
+    if (lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_write_text(file, value -> code_name) != 0 || lm_trans_put(file, ";\n") != 0) {
+        {
+            int lm_return_12 = 1;
+            lm_trans_text_ref_destroy(&return_name);
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_12;
+        }
+    }
     out_consumed[0] = 1;
     {
-        int lm_return_12 = 0;
+        int lm_return_13 = 0;
         lm_trans_text_ref_destroy(&return_name);
-        lm_trans_text_ref_destroy(&name);
+        lm_trans_callable_value_delete(value);
         lm_trans_text_ref_destroy(&descriptor_type);
         lm_trans_text_ref_destroy(&atom);
-        return lm_return_12;
+        return lm_return_13;
     }
 }
 
@@ -14001,6 +14023,7 @@ static int lm_trans_emit_closure_return_statement(FILE * file, const LmP0Field *
     LmP0Text * atom;
     LmP0Text * descriptor_type;
     const LmTransSymbol * symbol;
+    LmTransCallableValue * value;
     unsigned return_id;
     if (out_consumed != 0) {
         out_consumed[0] = 0;
@@ -14020,39 +14043,70 @@ static int lm_trans_emit_closure_return_statement(FILE * file, const LmP0Field *
             return lm_return_0;
         }
     }
-    if (lm_trans_return_fields_single_atom(return_fields, atom) == 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) == 0) {
+    value = lm_trans_callable_value_new();
+    if (value == 0) {
         {
-            int lm_return_1 = 0;
+            int lm_return_1 = 1;
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_1;
         }
     }
-    symbol = lm_trans_namespace_find(namespace_, atom);
-    if (symbol == 0 || lm_trans_symbol_is(symbol, "function") == 0 || symbol -> has_closure_call_name == 0) {
+    if (lm_trans_return_fields_single_atom(return_fields, atom) == 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) == 0) {
         {
             int lm_return_2 = 0;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_2;
         }
     }
-    if (lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_type) == 0) {
-        fprintf(stderr, "trans L2 error: callable descriptor %.*s does not admit callable.capture for returned closure %.*s\n", (((int)descriptor_type -> length)), descriptor_type -> data, (((int)atom -> length)), atom -> data);
+    symbol = lm_trans_namespace_find(namespace_, atom);
+    if (symbol == 0 || lm_trans_symbol_is(symbol, "function") == 0) {
         {
-            int lm_return_3 = 1;
+            int lm_return_3 = 0;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_3;
         }
     }
-    if (lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_type) == 0) {
-        fprintf(stderr, "trans L2 error: callable descriptor %.*s admits callable.capture but callable.projection is not c.closure-struct\n", (((int)descriptor_type -> length)), descriptor_type -> data);
+    if (lm_trans_callable_value_from_symbol(symbol, atom, value) != 0) {
         {
             int lm_return_4 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_4;
+        }
+    }
+    if (value -> has_closure_call == 0) {
+        {
+            int lm_return_5 = 0;
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_5;
+        }
+    }
+    if (lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_type) == 0) {
+        fprintf(stderr, "trans L2 error: callable descriptor %.*s does not admit callable.capture for returned closure %.*s\n", (((int)descriptor_type -> length)), descriptor_type -> data, (((int)atom -> length)), atom -> data);
+        {
+            int lm_return_6 = 1;
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_6;
+        }
+    }
+    if (lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_type) == 0) {
+        fprintf(stderr, "trans L2 error: callable descriptor %.*s admits callable.capture but callable.projection is not c.closure-struct\n", (((int)descriptor_type -> length)), descriptor_type -> data);
+        {
+            int lm_return_7 = 1;
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_7;
         }
     }
     out_consumed[0] = 1;
@@ -14060,193 +14114,217 @@ static int lm_trans_emit_closure_return_statement(FILE * file, const LmP0Field *
     namespace_->next_return_id = namespace_ -> next_return_id + 1U;
     if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0) {
         {
-            int lm_return_5 = 1;
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_5;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, descriptor_type) != 0) {
-        {
-            int lm_return_6 = 1;
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_6;
-        }
-    }
-    if (lm_trans_put(file, " ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0) {
-        {
-            int lm_return_7 = 1;
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_7;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
-        {
             int lm_return_8 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_8;
         }
     }
-    if (lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, descriptor_type) != 0) {
         {
             int lm_return_9 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_9;
         }
     }
-    if (lm_trans_put(file, ")lm_own_new_zero(sizeof(*") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "));\n") != 0) {
+    if (lm_trans_put(file, " ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0) {
         {
             int lm_return_10 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_10;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
         {
             int lm_return_11 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_11;
         }
     }
-    if (lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, " == 0) {\n") != 0) {
+    if (lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0) {
         {
             int lm_return_12 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_12;
         }
     }
-    if (lm_trans_emit_cleanups_until(file, indent + 2U, namespace_, 0U) != 0) {
+    if (lm_trans_put(file, ")lm_own_new_zero(sizeof(*") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "));\n") != 0) {
         {
             int lm_return_13 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_13;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "return 0;\n") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (") != 0) {
         {
             int lm_return_14 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_14;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0) {
+    if (lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, " == 0) {\n") != 0) {
         {
             int lm_return_15 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_15;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
+    if (lm_trans_emit_cleanups_until(file, indent + 2U, namespace_, 0U) != 0) {
         {
             int lm_return_16 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_16;
         }
     }
-    if (lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, symbol -> closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0) {
+    if (lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "return 0;\n") != 0) {
         {
             int lm_return_17 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_17;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "->env = ") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0) {
         {
             int lm_return_18 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_18;
         }
     }
-    if (symbol -> has_env_arg && lm_trans_write_text(file, symbol -> env_arg) != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
         {
             int lm_return_19 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_19;
         }
     }
-    if (symbol -> has_env_arg == 0 && lm_trans_put(file, "0") != 0) {
+    if (lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, value -> closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0) {
         {
             int lm_return_20 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_20;
         }
     }
-    if (lm_trans_put(file, ";\n") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "->env = ") != 0) {
         {
             int lm_return_21 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_21;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
+    if (value -> has_env_arg && lm_trans_write_text(file, value -> env_arg) != 0) {
         {
             int lm_return_22 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_22;
         }
     }
-    if (lm_trans_put(file, "->destroy = 0;\n") != 0) {
+    if (value -> has_env_arg == 0 && lm_trans_put(file, "0") != 0) {
         {
             int lm_return_23 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_23;
         }
     }
-    if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
+    if (lm_trans_put(file, ";\n") != 0) {
         {
             int lm_return_24 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_24;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
         {
             int lm_return_25 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_25;
         }
     }
-    if (lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0) {
+    if (lm_trans_put(file, "->destroy = 0;\n") != 0) {
         {
             int lm_return_26 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_26;
         }
     }
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+    if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
         {
             int lm_return_27 = 1;
+            lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_27;
         }
     }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0) {
+        {
+            int lm_return_28 = 1;
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_28;
+        }
+    }
+    if (lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0) {
+        {
+            int lm_return_29 = 1;
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_29;
+        }
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+        {
+            int lm_return_30 = 1;
+            lm_trans_callable_value_delete(value);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_text_ref_destroy(&atom);
+            return lm_return_30;
+        }
+    }
     {
-        int lm_return_28 = 0;
+        int lm_return_31 = 0;
+        lm_trans_callable_value_delete(value);
         lm_trans_text_ref_destroy(&descriptor_type);
         lm_trans_text_ref_destroy(&atom);
-        return lm_return_28;
+        return lm_return_31;
     }
 }
 
@@ -29009,6 +29087,45 @@ static int lm_trans_symbol_is_executable_callable(const LmTransSymbol * symbol) 
 
 static int lm_trans_symbol_is_value_callable(const LmTransSymbol * symbol) {
     return lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol -> callable_returns_value != 0;
+}
+
+static LmTransCallableValue * lm_trans_callable_value_new(void) {
+    LmTransCallableValue * value;
+    value = lm_own_new_zero(sizeof(value[0]));
+    return value;
+}
+
+static void lm_trans_callable_value_delete(LmTransCallableValue * value) {
+    lm_own_delete(value, 0);
+}
+
+static int lm_trans_callable_value_from_symbol(const LmTransSymbol * symbol, const LmP0Text * fallback_name, LmTransCallableValue * out) {
+    if (out == 0) {
+        return 1;
+    }
+    out->symbol = symbol;
+    out->code_name = fallback_name;
+    out->closure_call_name = 0;
+    out->env_arg = 0;
+    out->has_env_arg = 0;
+    out->has_closure_call = 0;
+    out->uses_closure_struct = 0;
+    if (symbol == 0) {
+        return 0;
+    }
+    if (symbol -> has_c_name) {
+        out->code_name = symbol -> c_name;
+    }
+    if (symbol -> has_closure_call_name) {
+        out->closure_call_name = symbol -> closure_call_name;
+        out->has_closure_call = 1;
+    }
+    if (symbol -> has_env_arg) {
+        out->env_arg = symbol -> env_arg;
+        out->has_env_arg = 1;
+    }
+    out->uses_closure_struct = lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct");
+    return 0;
 }
 
 static void lm_trans_symbol_destroy_fields(LmTransSymbol * symbol) {

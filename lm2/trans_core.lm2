@@ -58,6 +58,46 @@ return: symbol != 0 && symbol\has_callable_shape != 0 && lm_trans_callable_proje
 fn: lm_trans_symbol_is_value_callable (const: (LmTransSymbol: symbol)) int
 return: lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol\callable_returns_value != 0
 
+fn: lm_trans_callable_value_new () LmTransCallableValue
+    LmTransCallableValue: value
+
+    value: lm_own_new_zero(c.sizeof(value[0]))
+return: value
+
+sub: lm_trans_callable_value_delete (LmTransCallableValue: value)
+    lm_own_delete(value, 0)
+end: lm_trans_callable_value_delete
+
+fn: lm_trans_callable_value_from_symbol (
+    const: LmTransSymbol: symbol
+    const: LmP0Text: fallback_name
+    LmTransCallableValue: out
+) int
+    if: out = 0
+        return: 1
+
+    out\symbol: symbol
+    out\code_name: fallback_name
+    out\closure_call_name: 0
+    out\env_arg: 0
+    out\has_env_arg: 0
+    out\has_closure_call: 0
+    out\uses_closure_struct: 0
+
+    if: symbol = 0
+        return: 0
+
+    if: symbol\has_c_name
+        out\code_name: symbol\c_name
+    if: symbol\has_closure_call_name
+        out\closure_call_name: symbol\closure_call_name
+        out\has_closure_call: 1
+    if: symbol\has_env_arg
+        out\env_arg: symbol\env_arg
+        out\has_env_arg: 1
+    out\uses_closure_struct: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
+return: 0
+
 sub: lm_trans_symbol_destroy_fields (LmTransSymbol: symbol)
     if: symbol != 0
         c.lm_trans_text_ref_destroy(c.&symbol->name)

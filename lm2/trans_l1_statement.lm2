@@ -1439,9 +1439,9 @@ fn: lm_trans_emit_raw_callable_return_statement (
 ) int
     LmP0Text: atom
     LmP0Text: descriptor_type
-    LmP0Text: name
     LmP0Text: return_name
     const: LmTransSymbol: symbol
+    LmTransCallableValue: value
     [64]: char return_name_storage
     unsigned: return_id
 
@@ -1460,10 +1460,10 @@ fn: lm_trans_emit_raw_callable_return_statement (
         return: 1
     finally: lm_trans_text_ref_destroy(@ descriptor_type)
 
-    name: lm_trans_statement_text_new()
-    if: name = 0
+    value: lm_trans_callable_value_new()
+    if: value = 0
         return: 1
-    finally: lm_trans_text_ref_destroy(@ name)
+    finally: lm_trans_callable_value_delete(value)
 
     return_name: lm_trans_statement_text_new()
     if: return_name = 0
@@ -1477,7 +1477,10 @@ fn: lm_trans_emit_raw_callable_return_statement (
     if: symbol = 0 || lm_trans_symbol_is_executable_callable(symbol) = 0 || lm_trans_callable_signature_matches_descriptor_name(descriptor_type, symbol, namespace_) = 0
         return: 0
 
-    if: symbol\has_env_arg || lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
+    if: lm_trans_callable_value_from_symbol(symbol, atom, value) != 0
+        return: 1
+
+    if: value\has_env_arg || value\uses_closure_struct
         c.fprintf(
             c.stderr,
             "trans L2 error: cannot return capturing callable %.*s as raw descriptor %.*s; descriptor must admit callable.capture\n",
@@ -1488,10 +1491,6 @@ fn: lm_trans_emit_raw_callable_return_statement (
         )
         return: 1
 
-    name[0]: atom[0]
-    if: symbol\has_c_name
-        name[0]: symbol\c_name[0]
-
     if: namespace_ != 0 && namespace_\cleanups\count > 0U
         return_id: namespace_\next_return_id
         namespace_\next_return_id: namespace_\next_return_id + 1U
@@ -1501,12 +1500,12 @@ fn: lm_trans_emit_raw_callable_return_statement (
             return: 1
         if: lm_trans_emit_raw_callable_declarator(file, namespace_, descriptor_type, return_name, "raw callable return") != 0
             return: 1
-        if: lm_trans_put(file, " = ") != 0 || lm_trans_write_text(file, name) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        if: lm_trans_put(file, " = ") != 0 || lm_trans_write_text(file, value\code_name) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
         out_consumed[0]: 1
         return: 0
 
-    if: lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_write_text(file, name) != 0 || lm_trans_put(file, ";\n") != 0
+    if: lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_write_text(file, value\code_name) != 0 || lm_trans_put(file, ";\n") != 0
         return: 1
 
     out_consumed[0]: 1
@@ -1522,6 +1521,7 @@ fn: lm_trans_emit_closure_return_statement (
     LmP0Text: atom
     LmP0Text: descriptor_type
     const: LmTransSymbol: symbol
+    LmTransCallableValue: value
     unsigned: return_id
 
     if: out_consumed != 0
@@ -1539,10 +1539,19 @@ fn: lm_trans_emit_closure_return_statement (
         return: 1
     finally: lm_trans_text_ref_destroy(@ descriptor_type)
 
+    value: lm_trans_callable_value_new()
+    if: value = 0
+        return: 1
+    finally: lm_trans_callable_value_delete(value)
+
     if: lm_trans_return_fields_single_atom(return_fields, atom) = 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) = 0
         return: 0
     symbol: lm_trans_namespace_find(namespace_, atom)
-    if: symbol = 0 || lm_trans_symbol_is(symbol, "function") = 0 || symbol\has_closure_call_name = 0
+    if: symbol = 0 || lm_trans_symbol_is(symbol, "function") = 0
+        return: 0
+    if: lm_trans_callable_value_from_symbol(symbol, atom, value) != 0
+        return: 1
+    if: value\has_closure_call = 0
         return: 0
     if: lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_type) = 0
         c.fprintf(
@@ -1591,13 +1600,13 @@ fn: lm_trans_emit_closure_return_statement (
         return: 1
     if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0
         return: 1
-    if: lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, symbol\closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0
+    if: lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, value\closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "->env = ") != 0
         return: 1
-    if: symbol\has_env_arg && lm_trans_write_text(file, symbol\env_arg) != 0
+    if: value\has_env_arg && lm_trans_write_text(file, value\env_arg) != 0
         return: 1
-    if: symbol\has_env_arg = 0 && lm_trans_put(file, "0") != 0
+    if: value\has_env_arg = 0 && lm_trans_put(file, "0") != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
         return: 1

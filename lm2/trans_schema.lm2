@@ -9,6 +9,7 @@ L4:
                  LmTransRegistryCloneFrame   c.struct
                  LmTransExprSegment          c.struct
                  LmTransCallLowering         c.struct
+                 LmTransCallableValue        c.struct
                  LmTransExprAtomLowering     c.struct
                  LmTransExprLoweredRange     c.struct
                  LmTransExprPiece            c.struct
@@ -231,6 +232,7 @@ L4:
                  LmTransExprSegment             c.struct
                  LmTransStructReturnFieldValue  c.struct
                  LmTransCallLowering            c.struct
+                 LmTransCallableValue           c.struct
                  LmTransExprLoweredRange        c.named-struct
                  LmTransExprStack               c.named-struct
                  LmTransArrayStructureValueFillFrame c.struct
@@ -283,6 +285,7 @@ L4:
                  LmTransExprSegment             1
                  LmTransStructReturnFieldValue  1
                  LmTransCallLowering            1
+                 LmTransCallableValue           1
                  LmTransExprLoweredRange        1
                  LmTransExprStack               1
                  LmTransArrayStructureValueFillFrame 1
@@ -520,6 +523,19 @@ L4:
                  signature  LmTransSymbol          1                       0                                1
                  is_closure int                    2                       0                                0
     end: LmTransCallLowering
+
+    table:
+        name: LmTransCallableValue
+        columns: class               (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        rows:
+                 symbol              LmTransSymbol          0                       0                                1
+                 code_name           LmP0Text               1                       0                                1
+                 closure_call_name   LmP0Text               2                       0                                1
+                 env_arg             LmP0Text               3                       0                                1
+                 has_env_arg         int                    4                       0                                0
+                 has_closure_call    int                    5                       0                                0
+                 uses_closure_struct int                    6                       0                                0
+    end: LmTransCallableValue
 
     table:
         name: LmTransExprLoweredRange
