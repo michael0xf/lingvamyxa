@@ -5506,6 +5506,40 @@ fn: lm_trans_lower_atom_statement (const: (LmP0Text: atom)) LmTransAtomStatement
         return: 0
 return: @lm_trans_emit_atom_expr_statement
 
+fn: lm_trans_namespace_publish_hoisted_callable (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+    const: LmTransHoistedFunction: hoisted
+) int
+    @: char env_arg
+    LmP0Text: env_arg_text
+
+    if: namespace_ = 0 || function = 0 || hoisted = 0 || hoisted\function = 0
+        return: 1
+
+    env_arg: 0
+    env_arg_text: 0
+    finally: lm_own_delete(env_arg, 0)
+    finally: lm_trans_text_ref_destroy(@ env_arg_text)
+
+    if: lm_trans_namespace_declare_c_name(namespace_, function\name, function\symbol_class, hoisted\function\c_name) != 0
+        return: 1
+
+    if: hoisted\function\has_env
+        env_arg: lm_trans_env_arg_new(hoisted\env_var_name)
+        if: env_arg = 0
+            return: 1
+        env_arg_text: lm_trans_text_ref_new_cstr(env_arg)
+        if: env_arg_text = 0
+            return: 1
+        if: lm_trans_namespace_set_env_arg(namespace_, function\name, env_arg_text) != 0
+            return: 1
+
+    ---
+    if: lm_trans_namespace_set_closure_call_name(namespace_, function\name, hoisted\closure_call_name) != 0
+        return: 1
+return: lm_trans_namespace_set_callable_shape(namespace_, function)
+
 fn: lm_trans_statement_emit_nested_function (
     FILE: file
     LmTransStatementStack: stack
@@ -5516,17 +5550,10 @@ fn: lm_trans_statement_emit_nested_function (
     LmTransFunctionHeader: function
     const: LmTransHoistedFunction: hoisted
     const: LmTransCapture: capture
-    @: char env_arg
-    LmP0Text: env_arg_text
     size_t: capture_index
 
     if: stack != 0 && stack = 0
         return: 1
-
-    env_arg: 0
-    env_arg_text: 0
-    finally: lm_own_delete(env_arg, 0)
-    finally: lm_trans_text_ref_destroy(@ env_arg_text)
 
     function: lm_trans_statement_function_header_new()
     if: function = 0
@@ -5569,27 +5596,13 @@ fn: lm_trans_statement_emit_nested_function (
             capture_index: capture_index + 1U
 
     ---
-    if: lm_trans_namespace_declare_c_name(namespace_, function\name, function\symbol_class, hoisted\function\c_name) != 0
-        return: 1
-
-    if: hoisted\function\has_env
-        env_arg: lm_trans_env_arg_new(hoisted\env_var_name)
-        if: env_arg = 0
-            return: 1
-        env_arg_text: lm_trans_text_ref_new_cstr(env_arg)
-        if: env_arg_text = 0
-            return: 1
-        if: lm_trans_namespace_set_env_arg(namespace_, function\name, env_arg_text) != 0
-            return: 1
-
-    ---
-    if: lm_trans_namespace_set_closure_call_name(namespace_, function\name, hoisted\closure_call_name) != 0
+    if: lm_trans_namespace_publish_hoisted_callable(namespace_, function, hoisted) != 0
         return: 1
 
     if: hoisted\function\is_sub = 0 && hoisted\function\is_struct_return = 0 && hoisted\function\return_node != 0
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)") != 0 || lm_trans_write_text(file, hoisted\closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
-return: lm_trans_namespace_set_callable_shape(namespace_, function)
+return: 0
 
 fn: lm_trans_statement_stack_emit_node (
     FILE: file
