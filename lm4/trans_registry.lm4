@@ -559,7 +559,7 @@ end: `receiver.function`
 
 table:
     name: namespace
-    columns: class         (`receiver.type` class)
+    columns((class: class) (class: `receiver.type`))
     rows:
              L1            `receiver.level`
              L2            `receiver.level`
@@ -604,7 +604,7 @@ end: namespace
 
 table:
     name: `receiver.type`
-    columns: class                 (dispatcher binding)
+    columns((class: class) (binding: dispatcher))
     rows:
              `receiver.level`      lm_trans_dispatch_level_receiver
              `receiver.function`   lm_trans_dispatch_function_receiver
@@ -615,7 +615,7 @@ end: `receiver.type`
 
 table:
     name: `receiver.level`
-    columns: class  (receiver binding)
+    columns((class: class) (binding: receiver))
     rows:
              L1     lm_trans_emit_l1_frame
              L2     lm_trans_emit_l2_frame
@@ -623,7 +623,7 @@ end: `receiver.level`
 
 table:
     name: `receiver.statement`
-    columns: class         (receiver binding)
+    columns((class: class) (binding: receiver))
     rows:
              table         lm_trans_statement_emit_table
              if            lm_trans_statement_emit_if
@@ -659,7 +659,7 @@ end: `receiver.statement`
 
 table:
     name: `receiver.expr`
-    columns: class  (receiver binding)
+    columns((class: class) (binding: receiver))
     rows:
              cast   lm_trans_expr_emit_cast_frame
              instanceof lm_trans_expr_emit_instanceof_frame
@@ -667,7 +667,7 @@ end: `receiver.expr`
 
 table:
     name: `namespace.l4`
-    columns: class  (L4 binding marker)
+    columns((class: class) (@: char L4))
     rows:
              table  `l4.frame`
              join   `l4.frame`
@@ -679,7 +679,7 @@ end: `namespace.l4`
 
 table:
     name: `namespace.l4.root`
-    columns: class     (L4 binding marker)
+    columns((class: class) (@: char L4))
     rows:
              L4        `l4.root`
              registry  `l4.root`
@@ -687,14 +687,14 @@ end: `namespace.l4.root`
 
 table:
     name: `namespace.l4.atom`
-    columns: class        (L4 binding marker)
+    columns((class: class) (@: char L4))
     rows:
              loadHeaders  `l4.atom`
 end: `namespace.l4.atom`
 
 table:
     name: `namespace.l4.payload`
-    columns: class   (L4 binding marker)
+    columns((class: class) (@: char L4))
     rows:
              import  `l4.payload`
              L2      `l4.payload`
@@ -702,7 +702,7 @@ end: `namespace.l4.payload`
 
 table:
     name: `receiver.atom.statement`
-    columns: class           (receiver binding)
+    columns((class: class) (binding: receiver))
     rows:
              include          lm_trans_atom_statement_emit_include_prelude
              define           lm_trans_atom_statement_emit_define_prelude
@@ -721,7 +721,7 @@ end: `receiver.atom.statement`
 
 table:
     name: `loadHeaders.item`
-    columns: class      (index decimal)
+    columns((class: class) (size_t: index))
     rows:
              include    0
              define     1
@@ -738,7 +738,7 @@ end: `loadHeaders.item`
 
 table:
     name: `receiver.positional-name`
-    columns: class         (argument class)  (index decimal)
+    columns((class: class) (class: argument)  (size_t: index))
     rows:
              fn            name              0
              fm            name              0
@@ -752,14 +752,14 @@ end: `receiver.positional-name`
 
 table:
     name: `receiver.formal-param.unwrap`
-    columns: class  (index decimal)
+    columns((class: class) (size_t: index))
     rows:
              const  0
 end: `receiver.formal-param.unwrap`
 
 table:
     name: `expr_spelling_binding`
-    columns: class               (binding_table class)
+    columns((class: class) (class: binding_table))
     rows:
              `operator.prefix`   `operator.prefix.ansi_c`
              `operator.postfix`  `operator.postfix.ansi_c`
@@ -770,14 +770,14 @@ end: `expr_spelling_binding`
 
 table:
     name: `receiver.modifier`
-    columns: class     (receiver binding)
+    columns((class: class) (binding: receiver))
     rows:
              external  lm_trans_top_level_function_header
 end: `receiver.modifier`
 
 table:
     name: `receiver.trailer`
-    columns: class  (receiver binding)
+    columns((class: class) (binding: receiver))
     rows:
              `end`  lm_trans_validate_end_trailer
              `until`  lm_trans_validate_end_trailer
@@ -785,7 +785,7 @@ end: `receiver.trailer`
 
 table:
     name: `call.lowering`
-    columns: class     (handler binding)
+    columns((class: class) (binding: handler))
     rows:
              function  lm_trans_call_lower_value
              callable  lm_trans_call_lower_statement
@@ -793,7 +793,7 @@ end: `call.lowering`
 
 table:
     name: `materialize.argument`
-    columns: class                      (materializer binding)
+    columns((class: class) (binding: materializer))
     rows:
              `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
              `callable.descriptor.value` lm_trans_materialize_callable_descriptor_value
@@ -802,7 +802,7 @@ end: `materialize.argument`
 
 table:
     name: `callable.partial.form`
-    columns: class       (materializer binding)
+    columns((class: class) (binding: materializer))
     rows:
              `call-frame` lm_trans_materialize_call_frame_partial
              partial      lm_trans_materialize_partial_callable
@@ -810,7 +810,7 @@ end: `callable.partial.form`
 
 table:
     name: `cast.target`
-    columns: class                    (value decimal)
+    columns((class: class) (int: value))
     rows:
              char                     1
              uchar                    1
@@ -954,7 +954,7 @@ end: `cast.target`
 
 table:
     name: `operator.prefix`
-    columns: class  (ansi_c char)  (emitter binding)
+    columns((class: class) (@: char ansi_c)  (binding: emitter))
     rows:
              `++`   "++"           lm_trans_expr_emit_operator
              `--`   "--"           lm_trans_expr_emit_operator
@@ -968,7 +968,7 @@ end: `operator.prefix`
 
 table:
     name: expr_emitter_binding
-    columns: class               (binding_table class)
+    columns((class: class) (class: binding_table))
     rows:
              `operator.prefix`   `operator.prefix.emitter`
              `operator.postfix`  `operator.postfix.emitter`
@@ -979,7 +979,7 @@ end: expr_emitter_binding
 
 table:
     name: `operator.postfix`
-    columns: class  (ansi_c char)  (emitter binding)
+    columns((class: class) (@: char ansi_c)  (binding: emitter))
     rows:
              `++`   "++"           lm_trans_expr_emit_operator
              `--`   "--"           lm_trans_expr_emit_operator
@@ -987,7 +987,7 @@ end: `operator.postfix`
 
 table:
     name: `operator.infix`
-    columns: class  (ansi_c char)  (emitter binding)
+    columns((class: class) (@: char ansi_c)  (binding: emitter))
     rows:
              `+`    "+"            lm_trans_expr_emit_operator
              `-`    "-"            lm_trans_expr_emit_operator
@@ -1012,7 +1012,7 @@ end: `operator.infix`
 
 table:
     name: `operator.index`
-    columns: class  (ansi_c char)  (emitter binding)
+    columns((class: class) (@: char ansi_c)  (binding: emitter))
     rows:
              `[`    "["            lm_trans_expr_emit_operator
              `]`    "]"            lm_trans_expr_emit_operator
@@ -1020,7 +1020,7 @@ end: `operator.index`
 
 table:
     name: `expr.atom`
-    columns: class  (ansi_c char)  (emitter binding)
+    columns((class: class) (@: char ansi_c)  (binding: emitter))
     rows:
              `.`    "."            lm_trans_expr_emit_c_dot
              None   "None"         lm_trans_expr_emit_contextual_literal
