@@ -3,14 +3,14 @@ import: "lm2/own.lm2"
 L4:
     table:
         name: `callable.capture`
-        columns: class (value serial)
+        columns((class: class) (int: value))
         rows:
                  AddX 1
     end: `callable.capture`
 
     table:
         name: `callable.projection`
-        columns: class (value projection)
+        columns((class: class) (projection: value))
         rows:
                  AddX `c.closure-struct`
     end: `callable.projection`

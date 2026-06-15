@@ -1,14 +1,14 @@
 L4:
     table:
         name: namespace
-        columns: class  (`receiver.type` class)
+        columns((class: class) (class: `receiver.type`))
         rows:
                  default  `receiver.statement`
     end: namespace
 
     table:
         name: `receiver.statement`
-        columns: class  (receiver binding)
+        columns((class: class) (binding: receiver))
         rows:
                  default  lm_trans_statement_emit_assert
     end: `receiver.statement`

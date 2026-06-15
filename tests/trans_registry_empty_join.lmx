@@ -1,12 +1,12 @@
 L4:
     table:
         name: int8
-        columns: class  (`context literal` int8)
+        columns((class: class) (int8: `context literal`))
         rows:
     end: int8
 
     join: (int8) Boolean
-        columns: class  (`context literal` int8)
+        columns((class: class) (int8: `context literal`))
         rows:
                  None    -1
                  false   0

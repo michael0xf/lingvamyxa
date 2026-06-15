@@ -1,7 +1,7 @@
 L4:
     table:
         name: `registry.multicolumn.smoke`
-        columns: class  (left char)  (right char)
+        columns((class: class) (@: char left)  (@: char right))
         rows:
                  sample        one          None
     end: `registry.multicolumn.smoke`

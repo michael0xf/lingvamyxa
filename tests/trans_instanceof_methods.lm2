@@ -1,35 +1,35 @@
 L4:
     table:
         name: Equatable
-        columns: class  (`requires.method` class)
+        columns((class: class) (class: `requires.method`))
         rows:
                  equals 1
     end: Equatable
 
     table:
         name: Hashable
-        columns: class  (`requires.method` class)
+        columns((class: class) (class: `requires.method`))
         rows:
                  hashCode 1
     end: Hashable
 
     table:
         name: default
-        columns: class  (method binding)
+        columns((class: class) (binding: method))
         rows:
                  hashCode lm_default_hash_code
     end: default
 
     table:
         name: User
-        columns: class  (method binding)
+        columns((class: class) (binding: method))
         rows:
                  equals lm_user_equals
     end: User
 
     table:
         name: Plain
-        columns: class  (method binding)
+        columns((class: class) (binding: method))
         rows:
                  toString lm_plain_to_string
     end: Plain

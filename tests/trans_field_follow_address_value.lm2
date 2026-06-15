@@ -1,7 +1,7 @@
 L4:
 . table:
 . . name: LmTestText
-. . columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+. . columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
 . . rows:
 . . . length  unsigned  0  0
 . end: LmTestText

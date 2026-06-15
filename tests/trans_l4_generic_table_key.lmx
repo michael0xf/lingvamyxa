@@ -1,7 +1,7 @@
 L4:
     table:
         name: `registry.generic-key.smoke`
-        columns: key  (value char)
+        columns((@: char key) (@: char value))
         rows:
                  sample  ok
     end: `registry.generic-key.smoke`
