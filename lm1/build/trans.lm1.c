@@ -2009,6 +2009,9 @@ static int lm_trans_registry_push_row_atoms(const LmP0Text * table_atom, const L
 static int lm_trans_registry_column_has_descriptor(const LmL4Column * column, const char *descriptor);
 static int lm_trans_registry_column_is_class_typed(const LmL4Column * column);
 static const char * lm_trans_registry_column_serialization_codec(const LmL4Column * column);
+static int lm_trans_registry_descriptor_payload_is_numeric(const LmP0Text * payload);
+static int lm_trans_registry_column_is_numeric_typed(const LmL4Column * column);
+static int lm_trans_registry_text_is_numeric_atom(const LmP0Text * text);
 static int lm_trans_registry_cell_none_cell_matches(const LmP0Text * payload, const LmP0Text * class_atom);
 static int lm_trans_registry_cell_is_null(const LmP0Text * atom, const LmL4Column * column);
 static int lm_trans_registry_cell_value(const LmP0Text * atom, const LmL4Column * column, LmP0Text * out_value);
@@ -3805,6 +3808,91 @@ static const char * lm_trans_registry_column_serialization_codec(const LmL4Colum
     return 0;
 }
 
+static int lm_trans_registry_descriptor_payload_is_numeric(const LmP0Text * payload) {
+    const char *codec;
+    if (payload == 0) {
+        return 0;
+    }
+    if (lm_trans_text_equals(payload, "int") != 0 || lm_trans_text_equals(payload, "size_t") != 0 || lm_trans_text_equals(payload, "int8") != 0 || lm_trans_text_equals(payload, "uint8") != 0 || lm_trans_text_equals(payload, "categoryFlag") != 0 || lm_trans_text_equals(payload, "decimal") != 0 || lm_trans_text_equals(payload, "serial") != 0) {
+        return 1;
+    }
+    codec = lm_trans_registry_lookup(payload, "serialization.codec");
+    if (codec != 0 && strcmp(codec, "lmx.decimal-atom") == 0) {
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_registry_column_is_numeric_typed(const LmL4Column * column) {
+    LmP0Text * payload;
+    size_t i;
+    int result;
+    if (column == 0) {
+        return 0;
+    }
+    payload = lm_trans_text_ref_new_cstr("");
+    if (payload == 0) {
+        return 0;
+    }
+    result = 0;
+    i = 0U;
+    while (result == 0 && i < column -> descriptor_count) {
+        if (column -> descriptors[i] != 0 && lm_trans_registry_identifier_value(column -> descriptors[i], payload) != 0 && lm_trans_registry_descriptor_payload_is_numeric(payload) != 0) {
+            result = 1;
+        }
+        i = i + 1U;
+    }
+    if (result == 0 && column -> name != 0 && lm_trans_registry_identifier_value(column -> name, payload) != 0 && lm_trans_registry_descriptor_payload_is_numeric(payload) != 0) {
+        result = 1;
+    }
+    lm_trans_text_ref_destroy(&payload);
+    return result;
+}
+
+static int lm_trans_registry_text_is_numeric_atom(const LmP0Text * text) {
+    size_t i;
+    int saw_digit;
+    int saw_dot;
+    char ch;
+    if (text == 0 || text -> data == 0 || text -> length == 0U) {
+        return 0;
+    }
+    i = 0U;
+    if (text -> data[i] == '-' || text -> data[i] == '+') {
+        i = i + 1U;
+    }
+    if (i >= text -> length) {
+        return 0;
+    }
+    saw_digit = 0;
+    saw_dot = 0;
+    while (i < text -> length) {
+        ch = text -> data[i];
+        if (ch >= '0' && ch <= '9') {
+            saw_digit = 1;
+            i = i + 1U;
+            continue;
+        }
+        if (ch == '.' && saw_dot == 0) {
+            saw_dot = 1;
+            i = i + 1U;
+            continue;
+        }
+        break;
+    }
+    if (saw_digit == 0) {
+        return 0;
+    }
+    while (i < text -> length) {
+        ch = text -> data[i];
+        if (ch != 'u' && ch != 'U' && ch != 'l' && ch != 'L' && ch != 'f' && ch != 'F') {
+            return 0;
+        }
+        i = i + 1U;
+    }
+    return 1;
+}
+
 static int lm_trans_registry_cell_none_cell_matches(const LmP0Text * payload, const LmP0Text * class_atom) {
     LmP0Text * class_name;
     const char *none_value;
@@ -3862,6 +3950,7 @@ static int lm_trans_registry_cell_is_null(const LmP0Text * atom, const LmL4Colum
 
 static int lm_trans_registry_cell_value(const LmP0Text * atom, const LmL4Column * column, LmP0Text * out_value) {
     const char *codec;
+    int numeric_typed;
     if (lm_trans_registry_cell_is_null(atom, column) != 0) {
         return 0;
     }
@@ -3872,7 +3961,11 @@ static int lm_trans_registry_cell_value(const LmP0Text * atom, const LmL4Column 
         }
         return -1;
     }
+    numeric_typed = lm_trans_registry_column_is_numeric_typed(column);
     if (lm_trans_registry_identifier_value(atom, out_value) != 0) {
+        if (numeric_typed != 0 && lm_trans_registry_text_is_numeric_atom(out_value) == 0) {
+            return -1;
+        }
         return 1;
     }
     return -1;
