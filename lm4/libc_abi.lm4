@@ -1,6 +1,6 @@
 table:
     name: include
-    columns: class       (target char)
+    columns((class: class) (@: char target))
     rows:
              libc_stdio  "<stdio.h>"
              libc_stdlib "<stdlib.h>"
@@ -29,7 +29,7 @@ end: `fn.external`
 
 table:
     name: class
-    columns: class  (kind class)
+    columns((class: class) (class: kind))
     rows:
              FILE   opaqueReference
 end: class
