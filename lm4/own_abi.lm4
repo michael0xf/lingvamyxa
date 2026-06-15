@@ -1,13 +1,13 @@
 table:
     name: include
-    columns: class         (target char)
+    columns((class: class) (@: char target))
     rows:
              own_stddef    "<stddef.h>"
 end: include
 
 table:
     name: functionPointerType
-    columns: class               (value serial)
+    columns((class: class) (int: value))
     rows:
              LmOwnDestroyFields  1
              LmOwnDelete         1
@@ -18,28 +18,28 @@ fn: LmOwnDelete (@: void object) void
 
 table:
     name: class
-    columns: class   (kind class)
+    columns((class: class) (class: kind))
     rows:
              LmSlice  layout
 end: class
 
 table:
     name: `alias.backend`
-    columns: class          (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmOwnEdgeKind  c.typedef
 end: `alias.backend`
 
 table:
     name: `alias.target`
-    columns: class          (target class)
+    columns((class: class) (class: target))
     rows:
              LmOwnEdgeKind  int
 end: `alias.target`
 
 table:
     name: `forward.backend`
-    columns: class                      (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmOwnPtrStack              c.struct
              LmOwnValueStack            c.struct
@@ -50,7 +50,7 @@ end: `forward.backend`
 
 table:
     name: `constant.backend`
-    columns: class                   (backend class)
+    columns((class: class) (class: backend))
     rows:
              LM_OWN_EDGE_BORROWED    c.define
              LM_OWN_EDGE_OWNED       c.define
@@ -60,7 +60,7 @@ end: `constant.backend`
 
 table:
     name: `constant.value`
-    columns: class                   (value char)
+    columns((class: class) (int: value))
     rows:
              LM_OWN_EDGE_BORROWED    1
              LM_OWN_EDGE_OWNED       2
@@ -70,7 +70,7 @@ end: `constant.value`
 
 table:
     name: `layout.backend`
-    columns: class                      (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmSlice                    c.struct
              LmOwnPtrStack              c.struct
@@ -82,7 +82,7 @@ end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns: class                      (value serial)
+    columns((class: class) (int: value))
     rows:
              LmSlice                    1
              LmOwnPtrStack              1
@@ -94,7 +94,7 @@ end: `class.reference-base`
 
 table:
     name: `LmSlice.field.class`
-    columns: class   (field class)
+    columns((class: class) (class: field))
     rows:
              ptr     void
              length  size_t
@@ -102,7 +102,7 @@ end: `LmSlice.field.class`
 
 table:
     name: `LmSlice.field.index`
-    columns: class   (index serial)
+    columns((class: class) (size_t: index))
     rows:
              ptr     0
              length  1
@@ -110,14 +110,14 @@ end: `LmSlice.field.index`
 
 table:
     name: `LmSlice.field.address-depth`
-    columns: class  (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              ptr    1
 end: `LmSlice.field.address-depth`
 
 table:
     name: `LmOwnPtrStack.field.class`
-    columns: class        (field class)
+    columns((class: class) (class: field))
     rows:
              items        void
              count        size_t
@@ -127,7 +127,7 @@ end: `LmOwnPtrStack.field.class`
 
 table:
     name: `LmOwnPtrStack.field.index`
-    columns: class        (index serial)
+    columns((class: class) (size_t: index))
     rows:
              items        0
              count        1
@@ -137,14 +137,14 @@ end: `LmOwnPtrStack.field.index`
 
 table:
     name: `LmOwnPtrStack.field.address-depth`
-    columns: class  (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              items  2
 end: `LmOwnPtrStack.field.address-depth`
 
 table:
     name: `LmOwnValueStack.field.class`
-    columns: class      (field class)
+    columns((class: class) (class: field))
     rows:
              items      void
              count      size_t
@@ -154,7 +154,7 @@ end: `LmOwnValueStack.field.class`
 
 table:
     name: `LmOwnValueStack.field.index`
-    columns: class      (index serial)
+    columns((class: class) (size_t: index))
     rows:
              items      0
              count      1
@@ -164,14 +164,14 @@ end: `LmOwnValueStack.field.index`
 
 table:
     name: `LmOwnValueStack.field.address-depth`
-    columns: class  (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              items  1
 end: `LmOwnValueStack.field.address-depth`
 
 table:
     name: `LmOwnAllocationDescriptor.field.class`
-    columns: class         (field class)
+    columns((class: class) (class: field))
     rows:
              address       void
              owner         LmOwnArena
@@ -184,7 +184,7 @@ end: `LmOwnAllocationDescriptor.field.class`
 
 table:
     name: `LmOwnAllocationDescriptor.field.index`
-    columns: class         (index serial)
+    columns((class: class) (size_t: index))
     rows:
              address       0
              owner         1
@@ -197,7 +197,7 @@ end: `LmOwnAllocationDescriptor.field.index`
 
 table:
     name: `LmOwnAllocationDescriptor.field.address-depth`
-    columns: class    (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              address  1
              owner    0
@@ -205,7 +205,7 @@ end: `LmOwnAllocationDescriptor.field.address-depth`
 
 table:
     name: `LmOwnLazyEdge.field.class`
-    columns: class         (field class)
+    columns((class: class) (class: field))
     rows:
              kind          LmOwnEdgeKind
              source_owner  LmOwnArena
@@ -217,7 +217,7 @@ end: `LmOwnLazyEdge.field.class`
 
 table:
     name: `LmOwnLazyEdge.field.index`
-    columns: class         (index serial)
+    columns((class: class) (size_t: index))
     rows:
              kind          0
              source_owner  1
@@ -229,7 +229,7 @@ end: `LmOwnLazyEdge.field.index`
 
 table:
     name: `LmOwnLazyEdge.field.address-depth`
-    columns: class         (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              source_owner  0
              target_owner  0
@@ -239,7 +239,7 @@ end: `LmOwnLazyEdge.field.address-depth`
 
 table:
     name: `LmOwnLazyEdge.field.const`
-    columns: class       (value serial)
+    columns((class: class) (int: value))
     rows:
              source      1
              patch_slot  1
@@ -247,7 +247,7 @@ end: `LmOwnLazyEdge.field.const`
 
 table:
     name: `LmOwnArena.field.class`
-    columns: class                   (field class)
+    columns((class: class) (class: field))
     rows:
              allocations             LmOwnPtrStack
              allocation_descriptors  LmOwnPtrStack
@@ -257,7 +257,7 @@ end: `LmOwnArena.field.class`
 
 table:
     name: `LmOwnArena.field.index`
-    columns: class                   (index serial)
+    columns((class: class) (size_t: index))
     rows:
              allocations             0
              allocation_descriptors  1
@@ -267,7 +267,7 @@ end: `LmOwnArena.field.index`
 
 table:
     name: `LmOwnArena.field.address-depth`
-    columns: class                   (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              allocations             0
              allocation_descriptors  0
@@ -276,7 +276,7 @@ end: `LmOwnArena.field.address-depth`
 
 table:
     name: `fn.external`
-    columns: class                     (value serial)
+    columns((class: class) (int: value))
     rows:
              lm_own_new_zero           1
              lm_own_resize             1
