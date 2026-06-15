@@ -507,6 +507,18 @@ fn: lm_trans_callable_value_from_symbol (
     LmTransCallableValue: out
 ) int
 
+fn: lm_trans_callable_value_from_resolved_symbol (
+    const: LmTransSymbol: symbol
+    const: LmP0Text: fallback_name
+    LmTransCallableValue: out
+) int
+
+fn: lm_trans_callable_value_resolve (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransCallableValue: out
+) const: LmTransSymbol
+
 fn: lm_trans_symbol_new (
     const: LmP0Text: name
     const: @: char kind

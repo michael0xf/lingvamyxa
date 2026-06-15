@@ -1473,12 +1473,9 @@ fn: lm_trans_emit_raw_callable_return_statement (
     if: lm_trans_return_fields_single_atom(return_fields, atom) = 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) = 0 || lm_trans_registry_is_function_pointer_type_name(namespace_, descriptor_type) || lm_trans_callable_descriptor_is_raw_function_reference(namespace_, descriptor_type) = 0
         return: 0
 
-    symbol: lm_trans_namespace_find(namespace_, atom)
+    symbol: lm_trans_callable_value_resolve(namespace_, atom, value)
     if: symbol = 0 || lm_trans_symbol_is_executable_callable(symbol) = 0 || lm_trans_callable_signature_matches_descriptor_name(descriptor_type, symbol, namespace_) = 0
         return: 0
-
-    if: lm_trans_callable_value_from_symbol(symbol, atom, value) != 0
-        return: 1
 
     if: value\has_env_arg || value\uses_closure_struct
         c.fprintf(
@@ -1546,11 +1543,9 @@ fn: lm_trans_emit_closure_return_statement (
 
     if: lm_trans_return_fields_single_atom(return_fields, atom) = 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) = 0
         return: 0
-    symbol: lm_trans_namespace_find(namespace_, atom)
+    symbol: lm_trans_callable_value_resolve(namespace_, atom, value)
     if: symbol = 0 || lm_trans_symbol_is(symbol, "function") = 0
         return: 0
-    if: lm_trans_callable_value_from_symbol(symbol, atom, value) != 0
-        return: 1
     if: value\has_closure_call = 0
         return: 0
     if: lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_type) = 0

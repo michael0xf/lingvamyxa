@@ -98,6 +98,25 @@ fn: lm_trans_callable_value_from_symbol (
     out\uses_closure_struct: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
 return: 0
 
+fn: lm_trans_callable_value_from_resolved_symbol (
+    const: LmTransSymbol: symbol
+    const: LmP0Text: fallback_name
+    LmTransCallableValue: out
+) int
+return: lm_trans_callable_value_from_symbol(symbol, fallback_name, out)
+
+fn: lm_trans_callable_value_resolve (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransCallableValue: out
+) const: LmTransSymbol
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: lm_trans_callable_value_from_resolved_symbol(symbol, name, out) != 0
+        return: 0
+return: symbol
+
 sub: lm_trans_symbol_destroy_fields (LmTransSymbol: symbol)
     if: symbol != 0
         c.lm_trans_text_ref_destroy(c.&symbol->name)
