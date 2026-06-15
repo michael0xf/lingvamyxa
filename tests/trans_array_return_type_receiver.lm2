@@ -24,9 +24,9 @@ external:
         @: int p
         @@: int m
         @@@: int cube
-        const: @: LmOwnAllocationDescriptor pDesc
-        const: @: LmOwnAllocationDescriptor rowDesc
-        const: @: LmOwnAllocationDescriptor cubeDesc
+        const: LmOwnAllocationDescriptor: pDesc
+        const: LmOwnAllocationDescriptor: rowDesc
+        const: LmOwnAllocationDescriptor: cubeDesc
         p: values()
         m: matrix()
         cube: cubeValues()

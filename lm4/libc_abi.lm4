@@ -27,6 +27,20 @@ table:
              strcmp  1
 end: `fn.external`
 
+table:
+    name: class
+    columns: class  (kind class)
+    rows:
+             FILE   opaqueReference
+end: class
+
+table:
+    name: `class.reference-base`
+    columns: class  (value serial)
+    rows:
+             FILE   1
+end: `class.reference-base`
+
 fn: getenv (const: @(char name)) @: char
 fn: strlen (const: @(char text)) size_t
 fn: strchr (const: @(char text); int: value) @: char
@@ -35,9 +49,9 @@ fn: strcpy (@: char target; const: @(char source)) @: char
 fn: strcat (@: char target; const: @(char source)) @: char
 fn: system (const: @(char command)) int
 fn: remove (const: @(char path)) int
-fn: fopen (const: @(char path); const: @(char mode)) @: FILE
-fn: fclose (@: FILE file) int
-fn: fread (@: void buffer; size_t: item_size; size_t: item_count; @: FILE file) size_t
-fn: fwrite (const: @(void buffer); size_t: item_size; size_t: item_count; @: FILE file) size_t
-fn: ferror (@: FILE file) int
+fn: fopen (const: @(char path); const: @(char mode)) FILE
+fn: fclose (FILE: file) int
+fn: fread (@: void buffer; size_t: item_size; size_t: item_count; FILE: file) size_t
+fn: fwrite (const: @(void buffer); size_t: item_size; size_t: item_count; FILE: file) size_t
+fn: ferror (FILE: file) int
 fn: strcmp (const: @(char left); const: @(char right)) int

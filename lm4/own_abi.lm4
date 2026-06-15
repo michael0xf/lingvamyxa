@@ -81,6 +81,18 @@ table:
 end: `layout.backend`
 
 table:
+    name: `class.reference-base`
+    columns: class                      (value serial)
+    rows:
+             LmSlice                    1
+             LmOwnPtrStack              1
+             LmOwnValueStack            1
+             LmOwnAllocationDescriptor  1
+             LmOwnLazyEdge              1
+             LmOwnArena                 1
+end: `class.reference-base`
+
+table:
     name: `LmSlice.field.class`
     columns: class   (field class)
     rows:
@@ -188,7 +200,7 @@ table:
     columns: class    (depth serial)
     rows:
              address  1
-             owner    1
+             owner    0
 end: `LmOwnAllocationDescriptor.field.address-depth`
 
 table:
@@ -219,8 +231,8 @@ table:
     name: `LmOwnLazyEdge.field.address-depth`
     columns: class         (depth serial)
     rows:
-             source_owner  1
-             target_owner  1
+             source_owner  0
+             target_owner  0
              source        1
              patch_slot    2
 end: `LmOwnLazyEdge.field.address-depth`
@@ -257,9 +269,9 @@ table:
     name: `LmOwnArena.field.address-depth`
     columns: class                   (depth serial)
     rows:
-             allocations             1
-             allocation_descriptors  1
-             lazy_edges              1
+             allocations             0
+             allocation_descriptors  0
+             lazy_edges              0
 end: `LmOwnArena.field.address-depth`
 
 table:
@@ -308,36 +320,35 @@ fn: lm_own_new_zero (size_t: size) @: void
 fn: lm_own_resize (@: void object; size_t: size) @: void
 fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
 fn: lm_own_array_new_zero (size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
-fn: lm_own_allocation_descriptor (const: @(void address)) const: @: LmOwnAllocationDescriptor
+fn: lm_own_allocation_descriptor (const: @(void address)) const: LmOwnAllocationDescriptor
 fn: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields) void
 fn: lm_own_delete_plain (@: void object) void
 fn: lm_own_pointer_array_delete (@@: void items; size_t: count; LmOwnDelete: delete_item) void
-fn: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item) void
-fn: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack) void
-fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
-fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
-fn: lm_own_ptr_stack_at (const: @(LmOwnPtrStack stack); size_t: index) @: void
-fn: lm_own_ptr_stack_top (const: @(LmOwnPtrStack stack)) @: void
-fn: lm_own_ptr_stack_truncate (@: LmOwnPtrStack stack; size_t: count) void
-fn: lm_own_value_stack_init (@: LmOwnValueStack stack; size_t: item_size) void
-fn: lm_own_value_stack_destroy (@: LmOwnValueStack stack) void
-fn: lm_own_value_stack_push (@: LmOwnValueStack stack; const: @(void item)) int
-fn: lm_own_value_stack_resize_zero (@: LmOwnValueStack stack; size_t: count) int
-fn: lm_own_value_stack_pop (@: LmOwnValueStack stack; @: void out_item) int
-fn: lm_own_value_stack_at (const: @(LmOwnValueStack stack); size_t: index) @: void
-fn: lm_own_value_stack_top (const: @(LmOwnValueStack stack)) @: void
-fn: lm_own_value_stack_truncate (@: LmOwnValueStack stack; size_t: count) void
-fn: lm_own_arena_init (@: LmOwnArena arena) int
-fn: lm_own_arena_destroy (@: LmOwnArena arena) void
-fn: lm_own_arena_new_zero (@: LmOwnArena arena; size_t: size) @: void
-fn: lm_own_arena_array_new_zero (@: LmOwnArena arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
-fn: lm_own_arena_allocation_descriptor (const: @(LmOwnArena arena); const: @(void address)) const: @: LmOwnAllocationDescriptor
-fn: lm_own_arena_copy_bytes (@: LmOwnArena arena; const: @(char source); size_t: length) @: char
-fn: lm_own_arena_add_lazy_edge (@: LmOwnArena target; @: LmOwnArena source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
-fn: lm_own_arena_promote_lazy_edges (@: LmOwnArena arena) int
-fn: lm_own_arena_absorb (@: LmOwnArena target; @: LmOwnArena source) int
-fn: lm_own_arena_freeze (@: LmOwnArena arena) void
-fn: lm_own_arena_is_frozen (const: @(LmOwnArena arena)) int
-fn: lm_own_tree_cut (@: LmOwnArena arena) int
-fn: lm_own_tree_cut_promote_lazy_edges (@: LmOwnArena arena) int
-
+fn: lm_own_ptr_stack_init (LmOwnPtrStack: stack; LmOwnDelete: delete_item) void
+fn: lm_own_ptr_stack_destroy (LmOwnPtrStack: stack) void
+fn: lm_own_ptr_stack_push (LmOwnPtrStack: stack; @: void item) int
+fn: lm_own_ptr_stack_pop (LmOwnPtrStack: stack) @: void
+fn: lm_own_ptr_stack_at (const: (LmOwnPtrStack: stack); size_t: index) @: void
+fn: lm_own_ptr_stack_top (const: (LmOwnPtrStack: stack)) @: void
+fn: lm_own_ptr_stack_truncate (LmOwnPtrStack: stack; size_t: count) void
+fn: lm_own_value_stack_init (LmOwnValueStack: stack; size_t: item_size) void
+fn: lm_own_value_stack_destroy (LmOwnValueStack: stack) void
+fn: lm_own_value_stack_push (LmOwnValueStack: stack; const: @(void item)) int
+fn: lm_own_value_stack_resize_zero (LmOwnValueStack: stack; size_t: count) int
+fn: lm_own_value_stack_pop (LmOwnValueStack: stack; @: void out_item) int
+fn: lm_own_value_stack_at (const: (LmOwnValueStack: stack); size_t: index) @: void
+fn: lm_own_value_stack_top (const: (LmOwnValueStack: stack)) @: void
+fn: lm_own_value_stack_truncate (LmOwnValueStack: stack; size_t: count) void
+fn: lm_own_arena_init (LmOwnArena: arena) int
+fn: lm_own_arena_destroy (LmOwnArena: arena) void
+fn: lm_own_arena_new_zero (LmOwnArena: arena; size_t: size) @: void
+fn: lm_own_arena_array_new_zero (LmOwnArena: arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
+fn: lm_own_arena_allocation_descriptor (const: (LmOwnArena: arena); const: @(void address)) const: LmOwnAllocationDescriptor
+fn: lm_own_arena_copy_bytes (LmOwnArena: arena; const: @(char source); size_t: length) @: char
+fn: lm_own_arena_add_lazy_edge (LmOwnArena: target; LmOwnArena: source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
+fn: lm_own_arena_promote_lazy_edges (LmOwnArena: arena) int
+fn: lm_own_arena_absorb (LmOwnArena: target; LmOwnArena: source) int
+fn: lm_own_arena_freeze (LmOwnArena: arena) void
+fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
+fn: lm_own_tree_cut (LmOwnArena: arena) int
+fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int

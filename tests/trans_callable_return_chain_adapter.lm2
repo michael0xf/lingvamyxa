@@ -6,7 +6,7 @@ end: delete_factory
 
 external:
     fn: main () int
-        @: LmOwnPtrStack stack
+        LmOwnPtrStack: stack
 
         stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
         if: stack = 0

@@ -1,4 +1,11 @@
 #include <stddef.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <setjmp.h>
+
+#include <stddef.h>
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
@@ -32,7 +39,7 @@ struct LmOwnValueStack {
 };
 struct LmOwnAllocationDescriptor {
     void *address;
-    LmOwnArena *owner;
+    LmOwnArena * owner;
     size_t bytes;
     size_t element_size;
     size_t count;
@@ -41,20 +48,21 @@ struct LmOwnAllocationDescriptor {
 };
 struct LmOwnLazyEdge {
     LmOwnEdgeKind kind;
-    LmOwnArena *source_owner;
-    LmOwnArena *target_owner;
+    LmOwnArena * source_owner;
+    LmOwnArena * target_owner;
     const void *source;
     size_t size;
     const void **patch_slot;
 };
 struct LmOwnArena {
-    LmOwnPtrStack *allocations;
-    LmOwnPtrStack *allocation_descriptors;
-    LmOwnPtrStack *lazy_edges;
+    LmOwnPtrStack * allocations;
+    LmOwnPtrStack * allocation_descriptors;
+    LmOwnPtrStack * lazy_edges;
     int frozen;
 };
 typedef struct LmBuildOptions {
     int full_build;
+    int next_build;
 } LmBuildOptions;
 
 typedef void (*LmOwnDestroyFields)(void *object);
@@ -114,6 +122,13 @@ static int lm_build_has_qt_cmake(void);
 static int lm_build_has_qt_mingw_make(void);
 static int lm_build_has_qt_gcc(void);
 static int lm_build_has_qt_gxx(void);
+static char * lm_build_platform_canary_command_format(void);
+static char * lm_build_platform_canary_script_path(void);
+static char * lm_build_platform_canary_command_path(char *canary_path);
+static int lm_build_prepare_platform_canary(char *canary_path);
+static char * lm_build_platform_tests_script_path(void);
+static char * lm_build_platform_tests_command_format(void);
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(void) {
     return ".exe";
@@ -136,7 +151,7 @@ static int lm_build_platform_absolute(char *path) {
 }
 
 static int lm_build_file_exists(char *path) {
-    FILE *file;
+    FILE * file;
     file = fopen(path, "rb");
     if (file == 0) {
         return 0;
@@ -160,6 +175,82 @@ static int lm_build_has_qt_gcc(void) {
 static int lm_build_has_qt_gxx(void) {
     return lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe");
 }
+
+static char * lm_build_platform_canary_command_format(void) {
+    return "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\"";
+}
+
+static char * lm_build_platform_canary_script_path(void) {
+    return "build/obj/run_lm0_canary.ps1";
+}
+
+static char * lm_build_platform_canary_command_path(char *canary_path) {
+    canary_path = canary_path;
+    return lm_build_platform_canary_script_path();
+}
+
+static int lm_build_prepare_platform_canary(char *canary_path) {
+    FILE * file;
+    file = fopen(lm_build_platform_canary_script_path(), "wb");
+    if (file == 0) {
+        fprintf(stderr, "buildCore.lm0: cannot write canary script %s\n", lm_build_platform_canary_script_path());
+        return 1;
+    }
+    fprintf(file, "$exe = (Resolve-Path -LiteralPath '%s').Path\n", canary_path);
+    fputs("$p = Start-Process -FilePath $exe -ArgumentList '--next' -WorkingDirectory (Get-Location).Path -PassThru\n", file);
+    fputs("if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }\n", file);
+    fputs("exit $p.ExitCode\n", file);
+    if (fclose(file) != 0) {
+        fprintf(stderr, "buildCore.lm0: cannot close canary script %s\n", lm_build_platform_canary_script_path());
+        return 1;
+    }
+    return 0;
+}
+
+static char * lm_build_platform_tests_script_path(void) {
+    return "build/obj/tests/run_lm0_tests.ps1";
+}
+
+static char * lm_build_platform_tests_command_format(void) {
+    return "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\"";
+}
+
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library) {
+    fputs("$ErrorActionPreference = 'Continue'\n", file);
+    fprintf(file, "$printTree = '%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "$trans = '%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "$make = '%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "$parserLib = '%s'\n", parser_library);
+    fprintf(file, "$ownLib = '%s'\n", own_library);
+    fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file);
+    fputs("$parserSkip = @()\n", file);
+    fputs("$transSkip = @()\n", file);
+    fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2')\n", file);
+    fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
+    fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
+    fputs("    if ($parserSkip -contains $testFile.Name) { continue }\n", file);
+    fputs("    & $printTree $testFile.FullName *> $null\n", file);
+    fputs("    $code = $LASTEXITCODE\n", file);
+    fputs("    if ($testFile.Name -like 'invalid_*') {\n", file);
+    fputs("        if ($code -eq 0) { throw ('negative parser test unexpectedly passed: ' + $testFile.Name) }\n", file);
+    fputs("    }\n", file);
+    fputs("    elseif ($code -ne 0) { throw ('positive parser test failed: ' + $testFile.Name) }\n", file);
+    fputs("}\n", file);
+    fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File | Where-Object { $_.Name -like 'trans_*' -and ($_.Extension -eq '.lm2' -or $_.Extension -eq '.lmx') } | Sort-Object Name) {\n", file);
+    fputs("    if ($transSkip -contains $testFile.Name) { continue }\n", file);
+    fputs("    $cPath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.c')\n", file);
+    fputs("    $exePath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.exe')\n", file);
+    fputs("    & $trans $testFile.FullName $cPath\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke translation failed: ' + $testFile.Name) }\n", file);
+    fputs("    if ($transTranslationOnly -contains $testFile.Name) { continue }\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Ilm1' $cPath $parserLib $ownLib '-o' $exePath\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke link failed: ' + $testFile.Name) }\n", file);
+    fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + $testFile.Name) }\n", file);
+    fputs("}\n", file);
+    fputs("Write-Host 'lm0 staged tests passed'\n", file);
+    return 0;
+}
 #else
 #include <unistd.h>
 static char * lm_build_exe_suffix(void);
@@ -172,6 +263,12 @@ static int lm_build_has_qt_cmake(void);
 static int lm_build_has_qt_mingw_make(void);
 static int lm_build_has_qt_gcc(void);
 static int lm_build_has_qt_gxx(void);
+static char * lm_build_platform_canary_command_format(void);
+static char * lm_build_platform_canary_command_path(char *canary_path);
+static int lm_build_prepare_platform_canary(char *canary_path);
+static char * lm_build_platform_tests_script_path(void);
+static char * lm_build_platform_tests_command_format(void);
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(void) {
     return "";
@@ -194,7 +291,7 @@ static int lm_build_platform_absolute(char *path) {
 }
 
 static int lm_build_file_exists(char *path) {
-    FILE *file;
+    FILE * file;
     file = fopen(path, "rb");
     if (file == 0) {
         return 0;
@@ -218,9 +315,63 @@ static int lm_build_has_qt_gcc(void) {
 static int lm_build_has_qt_gxx(void) {
     return 0;
 }
+
+static char * lm_build_platform_canary_command_format(void) {
+    return "timeout 120s \"%s\" --next";
+}
+
+static char * lm_build_platform_canary_command_path(char *canary_path) {
+    return canary_path;
+}
+
+static int lm_build_prepare_platform_canary(char *canary_path) {
+    canary_path = canary_path;
+    return 0;
+}
+
+static char * lm_build_platform_tests_script_path(void) {
+    return "build/obj/tests/run_lm0_tests.sh";
+}
+
+static char * lm_build_platform_tests_command_format(void) {
+    return "sh \"%s\"";
+}
+
+static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library) {
+    fputs("set -eu\n", file);
+    fprintf(file, "printTree='%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "trans='%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "make_tool='%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix());
+    fprintf(file, "parserLib='%s'\n", parser_library);
+    fprintf(file, "ownLib='%s'\n", own_library);
+    fputs("mkdir -p build/obj/tests\n", file);
+    fputs("for src in tests/*.lmx; do\n", file);
+    fputs("    [ -e \"$src\" ] || continue\n", file);
+    fputs("    name=${src##*/}\n", file);
+    fputs("    case \"$name\" in trans_*) continue ;; esac\n", file);
+    fputs("    if \"$printTree\" \"$src\" >/dev/null 2>&1; then code=0; else code=$?; fi\n", file);
+    fputs("    case \"$name\" in\n", file);
+    fputs("        invalid_*) if [ \"$code\" -eq 0 ]; then echo \"negative parser test unexpectedly passed: $name\" >&2; exit 1; fi ;;\n", file);
+    fputs("        *) if [ \"$code\" -ne 0 ]; then echo \"positive parser test failed: $name\" >&2; exit 1; fi ;;\n", file);
+    fputs("    esac\n", file);
+    fputs("done\n", file);
+    fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file);
+    fputs("    [ -e \"$src\" ] || continue\n", file);
+    fputs("    name=${src##*/}\n", file);
+    fputs("    base=${name%.*}\n", file);
+    fputs("    c_path=\"build/obj/tests/$base.c\"\n", file);
+    fputs("    exe_path=\"build/obj/tests/$base\"\n", file);
+    fputs("    \"$trans\" \"$src\" \"$c_path\"\n", file);
+    fputs("    case \"$name\" in trans_l4_abi_receivers.lm2) continue ;; esac\n", file);
+    fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
+    fputs("    \"$exe_path\"\n", file);
+    fputs("done\n", file);
+    fputs("echo 'lm0 staged tests passed'\n", file);
+    return 0;
+}
 #endif
 static LmBuildOptions * lm_build_options_new(void);
-static void lm_build_options_delete(LmBuildOptions *options);
+static void lm_build_options_delete(LmBuildOptions * options);
 static int lm_build_is_path_separator(char value);
 static int lm_build_has_path_separator(char *path);
 static int lm_build_is_absolute_path(char *path);
@@ -235,7 +386,8 @@ static char * lm_build_default_make_program(void);
 static char * lm_build_default_cc(void);
 static char * lm_build_default_cxx(void);
 static void lm_build_print_usage(void);
-static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options);
+static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options);
+static char * lm_build_output_dir(LmBuildOptions * options);
 static size_t lm_build_append(char *buffer, size_t size, size_t used, char *text);
 static size_t lm_build_append_arg(char *buffer, size_t size, size_t used, char *arg);
 static size_t lm_build_append_prefixed_arg(char *buffer, size_t size, size_t used, char *prefix, char *value);
@@ -243,24 +395,63 @@ static int lm_build_run(char *command);
 static int lm_build_make(char *make_tool, char *operation, char *args);
 static int lm_build_trans(char *trans_tool, char *source_path, char *output_path);
 static int lm_build_generate_all(char *trans_tool);
-static int lm_build_parser_library(char *make_tool);
-static int lm_build_own_library(char *make_tool);
-static int lm_build_compile_trans(char *make_tool, char *parser_library, char *own_library);
-static int lm_build_compile_generated_tools(char *make_tool);
+static int lm_build_parser_library(char *make_tool, char *output_dir);
+static int lm_build_own_library(char *make_tool, char *output_dir);
+static int lm_build_compile_trans(char *make_tool, char *output_dir, char *parser_library, char *own_library);
+static int lm_build_compile_generated_tools(char *make_tool, char *output_dir, char *parser_library, char *own_library);
+static int lm_build_run_canary(void);
+static int lm_build_write_staged_tests_script(char *output_dir, char *parser_library, char *own_library);
+static int lm_build_run_staged_tests(char *make_tool, char *output_dir, char *parser_library, char *own_library);
 static int lm_build_defer_finalize(void);
 static int lm_build_extract_third_party_zips(void);
 static int lm_build_clear_full_cmake_cache(char *cmake_tool, char *build_dir);
 static int lm_build_full_configure(void);
 static int lm_build_full_build(void);
 static int lm_build_full_project(void);
-static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans);
+static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans);
 int main(int argc, char **argv);
+
+typedef struct LmL5ExecutionContext LmL5ExecutionContext;
+typedef struct LmL5Thread LmL5Thread;
+struct LmL5ExecutionContext {
+    jmp_buf diagnostic_root;
+    int diagnostic_code;
+    const char *diagnostic_label;
+    const char *diagnostic_file;
+    int diagnostic_line;
+    const char *diagnostic_expr;
+};
+struct LmL5Thread {
+    LmL5ExecutionContext main_context;
+    LmL5ExecutionContext *current;
+};
+static LmL5Thread lm_l5_main_thread_storage;
+static inline LmL5Thread *lm_l5_main_thread(void) {
+    return &lm_l5_main_thread_storage;
+}
+static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
+    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+        return 1;
+    }
+    return thread->current->diagnostic_code;
+}
+static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {
+    if (thread == 0 || thread->current == 0) {
+        abort();
+    }
+    thread->current->diagnostic_code = 1;
+    thread->current->diagnostic_label = "AssertionViolation";
+    thread->current->diagnostic_file = file;
+    thread->current->diagnostic_line = line;
+    thread->current->diagnostic_expr = expr;
+    longjmp(thread->current->diagnostic_root, 1);
+}
 
 static LmBuildOptions * lm_build_options_new(void) {
     return lm_own_new_zero(sizeof(LmBuildOptions));
 }
 
-static void lm_build_options_delete(LmBuildOptions *options) {
+static void lm_build_options_delete(LmBuildOptions * options) {
     lm_own_delete(options, 0);
 }
 
@@ -420,14 +611,16 @@ static char * lm_build_default_cxx(void) {
 }
 
 static void lm_build_print_usage(void) {
-    printf("usage: buildCore.lm0 [--build] [--full]\n");
+    printf("usage: buildCore.lm0 [--build] [--full] [--next]\n");
     printf("  --build refresh the L0 bootstrap tools\n");
     printf("  --full  refresh L0 tools, then build the bundled third_party profile\n");
+    printf("  --next  verify the staged L0 bootstrap tools without installing them\n");
 }
 
-static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options) {
+static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options) {
     int index;
     options->full_build = 0;
+    options->next_build = 0;
     index = 1;
     while (index < argc) {
         if (strcmp(argv[index], "--build") == 0) {
@@ -435,11 +628,14 @@ static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options
         if (strcmp(argv[index], "--full") == 0) {
             options->full_build = 1;
         }
+        if (strcmp(argv[index], "--next") == 0) {
+            options->next_build = 1;
+        }
         if (strcmp(argv[index], "--help") == 0 || strcmp(argv[index], "-h") == 0) {
             lm_build_print_usage();
             return 2;
         }
-        if (strcmp(argv[index], "--build") != 0 && strcmp(argv[index], "--full") != 0 && strcmp(argv[index], "--help") != 0 && strcmp(argv[index], "-h") != 0) {
+        if (strcmp(argv[index], "--build") != 0 && strcmp(argv[index], "--full") != 0 && strcmp(argv[index], "--next") != 0 && strcmp(argv[index], "--help") != 0 && strcmp(argv[index], "-h") != 0) {
             fprintf(stderr, "buildCore.lm0: unknown option: %s\n", argv[index]);
             lm_build_print_usage();
             return 1;
@@ -447,6 +643,13 @@ static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options
         index = index + 1;
     }
     return 0;
+}
+
+static char * lm_build_output_dir(LmBuildOptions * options) {
+    if (options -> next_build) {
+        return "build/lm0/next/check";
+    }
+    return "build/lm0/next";
 }
 
 static size_t lm_build_append(char *buffer, size_t size, size_t used, char *text) {
@@ -568,62 +771,115 @@ static int lm_build_generate_all(char *trans_tool) {
     return 0;
 }
 
-static int lm_build_parser_library(char *make_tool) {
+static int lm_build_parser_library(char *make_tool, char *output_dir) {
+    char library_path[512];
+    char command[4096];
+    snprintf(library_path, sizeof(library_path), "%s/libparser.lm0.a", output_dir);
     if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0) {
         return 1;
     }
-    remove("build/lm0/libparser.lm0.a");
-    if (lm_build_make(make_tool, "ar", "rcs \"build/lm0/libparser.lm0.a\" \"build/obj/parser.lm1.o\"") != 0) {
+    remove(library_path);
+    snprintf(command, sizeof(command), "rcs \"%s\" \"build/obj/parser.lm1.o\"", library_path);
+    if (lm_build_make(make_tool, "ar", command) != 0) {
         return 1;
     }
-    return lm_build_make(make_tool, "ranlib", "\"build/lm0/libparser.lm0.a\"");
+    snprintf(command, sizeof(command), "\"%s\"", library_path);
+    return lm_build_make(make_tool, "ranlib", command);
 }
 
-static int lm_build_own_library(char *make_tool) {
+static int lm_build_own_library(char *make_tool, char *output_dir) {
+    char library_path[512];
+    char command[4096];
+    snprintf(library_path, sizeof(library_path), "%s/libown.lm0.a", output_dir);
     if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0) {
         return 1;
     }
-    remove("build/lm0/libown.lm0.a");
-    if (lm_build_make(make_tool, "ar", "rcs \"build/lm0/libown.lm0.a\" \"build/obj/own.lm1.o\"") != 0) {
+    remove(library_path);
+    snprintf(command, sizeof(command), "rcs \"%s\" \"build/obj/own.lm1.o\"", library_path);
+    if (lm_build_make(make_tool, "ar", command) != 0) {
         return 1;
     }
-    return lm_build_make(make_tool, "ranlib", "\"build/lm0/libown.lm0.a\"");
+    snprintf(command, sizeof(command), "\"%s\"", library_path);
+    return lm_build_make(make_tool, "ranlib", command);
 }
 
-static int lm_build_compile_trans(char *make_tool, char *parser_library, char *own_library) {
+static int lm_build_compile_trans(char *make_tool, char *output_dir, char *parser_library, char *own_library) {
     char command[4096];
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/trans.lm1.c\" \"%s\" \"%s\" -o \"build/lm0/trans.lm0%s\"", parser_library, own_library, lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/trans.lm1.c\" \"%s\" \"%s\" -o \"%s/trans.lm0%s\"", parser_library, own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
     return 0;
 }
 
-static int lm_build_compile_generated_tools(char *make_tool) {
+static int lm_build_compile_generated_tools(char *make_tool, char *output_dir, char *parser_library, char *own_library) {
     char command[4096];
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" -o \"build/lm0/make.next.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" -o \"%s/make.lm0%s\"", output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" -o \"build/lm0/finalize.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" -o \"%s/finalize.lm0%s\"", output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/vcpkgFetch.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/vcpkgFetch.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/vcpkgFetch.lm1.c\" \"%s\" -o \"%s/vcpkgFetch.lm0%s\"", own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/printTree.lm1.c\" \"build/lm0/libparser.lm0.a\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/printTree.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/printTree.lm1.c\" \"%s\" \"%s\" -o \"%s/printTree.lm0%s\"", parser_library, own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/buildCore.lm1.c\" \"build/lm0/libown.lm0.a\" -o \"build/lm0/buildCore.next.lm0%s\"", lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/buildCore.lm1.c\" \"%s\" -o \"%s/buildCore.lm0%s\"", own_library, output_dir, lm_build_exe_suffix());
     return lm_build_make(make_tool, "link", command);
+}
+
+static int lm_build_run_canary(void) {
+    char canary_path[512];
+    char *command_path;
+    char command[4096];
+    snprintf(canary_path, sizeof(canary_path), "build/lm0/next/buildCore.lm0%s", lm_build_exe_suffix());
+    if (lm_build_prepare_platform_canary(canary_path) != 0) {
+        return 1;
+    }
+    command_path = lm_build_platform_canary_command_path(canary_path);
+    snprintf(command, sizeof(command), lm_build_platform_canary_command_format(), command_path);
+    return lm_build_run(command);
+}
+
+static int lm_build_write_staged_tests_script(char *output_dir, char *parser_library, char *own_library) {
+    FILE * file;
+    file = fopen(lm_build_platform_tests_script_path(), "wb");
+    if (file == 0) {
+        fprintf(stderr, "buildCore.lm0: cannot write staged tests script %s\n", lm_build_platform_tests_script_path());
+        return 1;
+    }
+    if (lm_build_write_platform_tests_script(file, output_dir, parser_library, own_library) != 0) {
+        fclose(file);
+        return 1;
+    }
+    if (fclose(file) != 0) {
+        fprintf(stderr, "buildCore.lm0: cannot close staged tests script %s\n", lm_build_platform_tests_script_path());
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_build_run_staged_tests(char *make_tool, char *output_dir, char *parser_library, char *own_library) {
+    char command[512];
+    if (lm_build_make(make_tool, "mkdir", "\"build/obj/tests\"") != 0) {
+        return 1;
+    }
+    if (lm_build_write_staged_tests_script(output_dir, parser_library, own_library) != 0) {
+        return 1;
+    }
+    snprintf(command, sizeof(command), lm_build_platform_tests_command_format(), lm_build_platform_tests_script_path());
+    return lm_build_run(command);
 }
 
 static int lm_build_defer_finalize(void) {
     char command[256];
-    snprintf(command, sizeof(command), "build%slm0%sfinalize.lm0%s --defer", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "build%slm0%snext%sfinalize.lm0%s --defer", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
     return lm_build_run(command);
 }
 
@@ -861,35 +1117,52 @@ static int lm_build_full_project(void) {
     return lm_build_full_build();
 }
 
-static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans) {
-    if (lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\"") != 0) {
+static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans) {
+    char *output_dir;
+    char parser_library[512];
+    char own_library[512];
+    output_dir = lm_build_output_dir(options);
+    snprintf(parser_library, sizeof(parser_library), "%s/libparser.lm0.a", output_dir);
+    snprintf(own_library, sizeof(own_library), "%s/libown.lm0.a", output_dir);
+    if (lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0) {
         return 1;
     }
     if (lm_build_generate_all(built_trans) != 0) {
         return 1;
     }
-    if (lm_build_parser_library(trusted_make) != 0) {
+    if (lm_build_parser_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_own_library(trusted_make) != 0) {
+    if (lm_build_own_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a", "build/lm0/libown.lm0.a") != 0) {
+    if (lm_build_compile_trans(trusted_make, output_dir, parser_library, own_library) != 0) {
         return 1;
     }
     if (lm_build_generate_all(built_trans) != 0) {
         return 1;
     }
-    if (lm_build_parser_library(trusted_make) != 0) {
+    if (lm_build_parser_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_own_library(trusted_make) != 0) {
+    if (lm_build_own_library(trusted_make, output_dir) != 0) {
         return 1;
     }
-    if (lm_build_compile_trans(trusted_make, "build/lm0/libparser.lm0.a", "build/lm0/libown.lm0.a") != 0) {
+    if (lm_build_compile_trans(trusted_make, output_dir, parser_library, own_library) != 0) {
         return 1;
     }
-    if (lm_build_compile_generated_tools(trusted_make) != 0) {
+    if (lm_build_compile_generated_tools(trusted_make, output_dir, parser_library, own_library) != 0) {
+        return 1;
+    }
+    if (options -> next_build) {
+        return 0;
+    }
+    if (lm_build_run_canary() != 0) {
+        fprintf(stderr, "buildCore.lm0: staged bootstrap tools failed the --next rebuild; live tools were not overwritten\n");
+        return 1;
+    }
+    if (lm_build_run_staged_tests(trusted_make, output_dir, parser_library, own_library) != 0) {
+        fprintf(stderr, "buildCore.lm0: staged bootstrap tools failed tests; live tools were not overwritten\n");
         return 1;
     }
     if (options -> full_build) {
@@ -902,10 +1175,16 @@ static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, c
 }
 
 int main(int argc, char **argv) {
+    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
+    lm_l5_thread->current = &lm_l5_thread->main_context;
+    lm_l5_thread->main_context.diagnostic_code = 0;
+    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
+        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
+    }
     char *trusted_make;
     char trusted_make_buffer[128];
     char built_trans_buffer[128];
-    LmBuildOptions *options;
+    LmBuildOptions * options;
     int parse_status;
     int result;
     options = lm_build_options_new();
@@ -927,6 +1206,10 @@ int main(int argc, char **argv) {
     }
     snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
     snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+    if (options -> next_build) {
+        snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%snext%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+        snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%snext%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+    }
     trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
     result = lm_build_run_bootstrap(options, trusted_make, built_trans_buffer);
     lm_build_options_delete(options);

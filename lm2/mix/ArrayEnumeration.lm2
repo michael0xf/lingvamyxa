@@ -1,0 +1,91 @@
+import: "lm2/own.lm2"
+
+L4:
+    table:
+        name: LmArrayEnumeration
+        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        rows:
+                 items  void    0  2
+                 count  size_t  1  0
+                 index  size_t  2  0
+    end: LmArrayEnumeration
+
+    table:
+        name: `layout.backend`
+        columns: class                (backend class)
+        rows:
+                 LmArrayEnumeration  c.struct
+    end: `layout.backend`
+end: L4
+
+external:
+    sub: lm_array_enumeration_destroy (@: LmArrayEnumeration enumeration)
+        if: enumeration != 0
+            if: enumeration\items != 0
+                c.free(enumeration\items)
+            enumeration\items: 0
+            enumeration\count: 0U
+            enumeration\index: 0U
+    end: lm_array_enumeration_destroy
+end: external
+
+external:
+    fn: lm_array_enumeration_init (@: LmArrayEnumeration enumeration; @@: void items; size_t: count) int
+        @@: void copy
+        size_t: bytes
+
+        if: enumeration = 0
+            return: 1
+
+        enumeration\items: 0
+        enumeration\count: 0U
+        enumeration\index: 0U
+
+        if: count = 0U
+            return: 0
+        if: items = 0
+            return: 1
+
+        bytes: count * c.sizeof(copy[0])
+        copy: cast: (@@: void) lm_own_new_zero(bytes)
+        if: copy = 0
+            return: 1
+
+        c.memcpy(copy, items, bytes)
+        enumeration\items: copy
+        enumeration\count: count
+        enumeration\index: 0U
+    return: 0
+end: external
+
+external:
+    fn: lm_array_elements (@@: void items; size_t: count; @: LmArrayEnumeration enumeration) int
+        return: lm_array_enumeration_init(enumeration, items, count)
+    end: lm_array_elements
+end: external
+
+external:
+    fn: lm_array_enumeration_has_more_elements (const: @: LmArrayEnumeration enumeration) int
+        if: enumeration = 0
+            return: 0
+    return: enumeration\index < enumeration\count
+end: external
+
+external:
+    fn: lm_array_enumeration_next_element (@: LmArrayEnumeration enumeration) @: void
+        @: void item
+
+        if: lm_array_enumeration_has_more_elements(enumeration) = 0
+            return: 0
+
+        item: enumeration\items[enumeration\index]
+        enumeration\index: enumeration\index + 1U
+    return: item
+end: external
+
+external:
+    sub: lm_array_enumeration_reset (@: LmArrayEnumeration enumeration)
+        if: enumeration != 0
+            enumeration\index: 0U
+    end: lm_array_enumeration_reset
+end: external

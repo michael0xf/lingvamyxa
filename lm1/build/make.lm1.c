@@ -1,3 +1,10 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <setjmp.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +32,42 @@ static int lm_make_run_tool(char *tool, int argc, char **argv, int start);
 static int lm_make_copy_file(char *source_path, char *output_path);
 static void lm_make_print_usage(void);
 int main(int argc, char **argv);
+
+typedef struct LmL5ExecutionContext LmL5ExecutionContext;
+typedef struct LmL5Thread LmL5Thread;
+struct LmL5ExecutionContext {
+    jmp_buf diagnostic_root;
+    int diagnostic_code;
+    const char *diagnostic_label;
+    const char *diagnostic_file;
+    int diagnostic_line;
+    const char *diagnostic_expr;
+};
+struct LmL5Thread {
+    LmL5ExecutionContext main_context;
+    LmL5ExecutionContext *current;
+};
+static LmL5Thread lm_l5_main_thread_storage;
+static inline LmL5Thread *lm_l5_main_thread(void) {
+    return &lm_l5_main_thread_storage;
+}
+static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
+    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+        return 1;
+    }
+    return thread->current->diagnostic_code;
+}
+static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {
+    if (thread == 0 || thread->current == 0) {
+        abort();
+    }
+    thread->current->diagnostic_code = 1;
+    thread->current->diagnostic_label = "AssertionViolation";
+    thread->current->diagnostic_file = file;
+    thread->current->diagnostic_line = line;
+    thread->current->diagnostic_expr = expr;
+    longjmp(thread->current->diagnostic_root, 1);
+}
 
 static char * lm_make_env_or_default(char *name, char *fallback) {
     char *value;
@@ -91,8 +134,8 @@ static int lm_make_run_tool(char *tool, int argc, char **argv, int start) {
 
 static int lm_make_copy_file(char *source_path, char *output_path) {
     char buffer[32768];
-    FILE *source;
-    FILE *output;
+    FILE * source;
+    FILE * output;
     size_t count;
     int status;
     source = fopen(source_path, "rb");
@@ -140,6 +183,12 @@ static void lm_make_print_usage(void) {
 }
 
 int main(int argc, char **argv) {
+    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
+    lm_l5_thread->current = &lm_l5_thread->main_context;
+    lm_l5_thread->main_context.diagnostic_code = 0;
+    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
+        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
+    }
     char *cmake;
     char *cc;
     char *ar;

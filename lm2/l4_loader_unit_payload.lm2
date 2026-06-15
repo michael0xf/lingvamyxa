@@ -1,17 +1,17 @@
 L2:
     import: "lm4/own_abi.lm4"
 
-    @: LmOwnPtrStack lm_l4_seen_tables
+    LmOwnPtrStack: lm_l4_seen_tables
 
-    fn: lm_l4_seen_tables_get () @: LmOwnPtrStack
-    return: lm_l4_seen_tables
+    fn: lm_l4_seen_tables_get () LmOwnPtrStack
+        return: lm_l4_seen_tables
 
-    sub: lm_l4_seen_tables_set (@: LmOwnPtrStack seen_tables)
+    sub: lm_l4_seen_tables_set (LmOwnPtrStack: seen_tables)
         lm_l4_seen_tables: seen_tables
     end: lm_l4_seen_tables_set
 
 
-    fn: lm_l4_text_equals (const: @(LmP0Text text); const: @(char value)) int
+    fn: lm_l4_text_equals (const: (LmP0Text: text); const: @(char value)) int
         size_t: length
 
         if: text = 0 || value = 0
@@ -37,55 +37,55 @@ L2:
             return: 1
     return: c.memcmp(left_data, right_data, left_length) = 0
 
-    fn: lm_l4_node_is_ignored (const: @(LmP0Node node)) int
+    fn: lm_l4_node_is_ignored (const: (LmP0Node: node)) int
     return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
 
-    fn: lm_l4_node_structure (const: @(LmP0Node node)) const: @: LmP0Structure
+    fn: lm_l4_node_structure (const: (LmP0Node: node)) const: LmP0Structure
         if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE
             return: 0
     return: node\as\structure
 
-    fn: lm_l4_node_frame (const: @(LmP0Node node)) const: @: LmP0Frame
+    fn: lm_l4_node_frame (const: (LmP0Node: node)) const: LmP0Frame
         if: node = 0 || node\kind != c.LM_P0_NODE_FRAME
             return: 0
     return: node\as\frame
 
-    fn: lm_l4_node_atom (const: @(LmP0Node node)) const: @: LmP0Text
+    fn: lm_l4_node_atom (const: (LmP0Node: node)) const: LmP0Text
         if: node = 0 || (node\kind != c.LM_P0_NODE_ATOM && node\kind != c.LM_P0_NODE_DISABLED)
             return: 0
     return: node\as\atom
 
-    fn: lm_l4_frame_head (const: @(LmP0Frame frame)) const: @: LmP0Text
+    fn: lm_l4_frame_head (const: (LmP0Frame: frame)) const: LmP0Text
         if: frame = 0
             return: 0
     return: frame\head
 
-    fn: lm_l4_frame_body (const: @(LmP0Frame frame)) const: @: LmP0Structure
+    fn: lm_l4_frame_body (const: (LmP0Frame: frame)) const: LmP0Structure
         if: frame = 0
             return: 0
     return: frame\body
 
-    fn: lm_l4_trailer_spelling (const: @(LmP0Trailer trailer)) const: @: LmP0Text
+    fn: lm_l4_trailer_spelling (const: (LmP0Trailer: trailer)) const: LmP0Text
         if: trailer = 0
             return: 0
     return: trailer\spelling
 
-    fn: lm_l4_trailer_body (const: @(LmP0Trailer trailer)) const: @: LmP0Structure
+    fn: lm_l4_trailer_body (const: (LmP0Trailer: trailer)) const: LmP0Structure
         if: trailer = 0
             return: 0
     return: trailer\body
 
-    fn: lm_l4_error_prefix (const: @(LmL4Loader loader)) const: @: char
+    fn: lm_l4_error_prefix (const: (LmL4Loader: loader)) const: @: char
         if: loader != 0 && loader\error_prefix != 0
             return: loader\error_prefix
     return: "L4"
 
-    sub: lm_l4_error (const: @(LmL4Loader loader); const: @(char message))
+    sub: lm_l4_error (const: (LmL4Loader: loader); const: @(char message))
         c.fprintf(c.stderr, "%s registry error: %s\n", lm_l4_error_prefix(loader), message)
     end: lm_l4_error
 
-    fn: lm_l4_nth_field (const: @(LmP0Structure structure); size_t: index) const: @: LmP0Field
-        const: @: LmP0Field field
+    fn: lm_l4_nth_field (const: (LmP0Structure: structure); size_t: index) const: LmP0Field
+        const: LmP0Field: field
         size_t: i
 
         if: structure = 0
@@ -99,9 +99,9 @@ L2:
 
     return: field
 
-    fn: lm_l4_trailer_single_atom (const: @(LmP0Trailer trailer); const: @@(LmP0Text out_text)) int
-        const: @: LmP0Field field
-        const: @: LmP0Text atom
+    fn: lm_l4_trailer_single_atom (const: (LmP0Trailer: trailer); const: @(LmP0Text out_text)) int
+        const: LmP0Field: field
+        const: LmP0Text: atom
 
         if: trailer = 0 || out_text = 0
             return: 0
@@ -116,7 +116,7 @@ L2:
         \out_text: atom
     return: 1
 
-    fn: lm_l4_identifier_payload (const: @(LmP0Text atom); const: @@(char out_data); @: size_t out_length) int
+    fn: lm_l4_identifier_payload (const: (LmP0Text: atom); const: @@(char out_data); @: size_t out_length) int
         if: atom = 0 || out_data = 0 || out_length = 0 || atom\data = 0
             return: 0
 
@@ -129,15 +129,7 @@ L2:
         \out_length: atom\length
     return: 1
 
-    fn: lm_l4_identifier_equals (const: @(LmP0Text atom); const: @(char value)) int
-        const: @: char data
-        size_t: length
-
-        if: lm_l4_identifier_payload(atom, @ data, @ length) = 0
-            return: 0
-    return: lm_l4_text_slice_equals(data, length, value)
-
-    fn: lm_l4_identifier_same (const: @(LmP0Text left); const: @(LmP0Text right)) int
+    fn: lm_l4_identifier_same (const: (LmP0Text: left); const: (LmP0Text: right)) int
         const: @: char left_data
         const: @: char right_data
         size_t: left_length
@@ -147,10 +139,10 @@ L2:
             return: 0
     return: lm_l4_text_slice_same(left_data, left_length, right_data, right_length)
 
-    fn: lm_l4_frame_single_atom (const: @(LmP0Frame frame); const: @(char head); const: @@(LmP0Text out_atom)) int
-        const: @: LmP0Field field
-        const: @: LmP0Text frame_head
-        const: @: LmP0Text atom
+    fn: lm_l4_frame_single_atom (const: (LmP0Frame: frame); const: @(char head); const: @(LmP0Text out_atom)) int
+        const: LmP0Field: field
+        const: LmP0Text: frame_head
+        const: LmP0Text: atom
 
         if: frame = 0 || out_atom = 0
             return: 0
@@ -168,12 +160,12 @@ L2:
         \out_atom: atom
     return: 1
 
-    fn: lm_l4_column_name (const: @(LmP0Field field); @: LmL4Column out_column) int
-        const: @: LmP0Node node
-        const: @: LmP0Frame node_frame
-        const: @: LmP0Structure node_structure
-        const: @: LmP0Field body_field
-        const: @: LmP0Text atom
+    fn: lm_l4_column_name (const: (LmP0Field: field); LmL4Column: out_column) int
+        const: LmP0Node: node
+        const: LmP0Frame: node_frame
+        const: LmP0Structure: node_structure
+        const: LmP0Field: body_field
+        const: LmP0Text: atom
         size_t: descriptor_count
 
         if: field = 0 || out_column = 0
@@ -235,7 +227,7 @@ L2:
         out_column\descriptor_count: descriptor_count
     return: 1
 
-    sub: lm_l4_columns_destroy (@@: LmL4Column columns; size_t: count)
+    sub: lm_l4_columns_destroy (@: LmL4Column columns; size_t: count)
         size_t: index
 
         if: columns = 0
@@ -248,9 +240,9 @@ L2:
         lm_own_delete(columns, 0)
     end: lm_l4_columns_destroy
 
-    fn: lm_l4_columns_from_frame (const: @(LmL4Loader loader); const: @(LmP0Frame frame); @@: LmL4Column columns; size_t: columns_capacity; @: size_t out_count) int
-        const: @: LmP0Field field
-        @: LmL4Column column
+    fn: lm_l4_columns_from_frame (const: (LmL4Loader: loader); const: (LmP0Frame: frame); @: LmL4Column columns; size_t: columns_capacity; @: size_t out_count) int
+        const: LmP0Field: field
+        LmL4Column: column
         size_t: count
         int: status
 
@@ -279,18 +271,11 @@ L2:
                 \out_count: count
             field: field\next
 
-        if: count < 2U
-            lm_l4_error(loader, "table expects at least two columns")
-            return: -1
-        if: lm_l4_identifier_equals(columns[0]\name, "class") = 0
-            lm_l4_error(loader, "first table column must be class")
-            return: -1
-
         \out_count: count
     return: 1
 
-    fn: lm_l4_validate_named_trailer (const: @(LmL4Loader loader); const: @(LmP0Frame frame); const: @(LmP0Text expected_name)) int
-        const: @: LmP0Text actual
+    fn: lm_l4_validate_named_trailer (const: (LmL4Loader: loader); const: (LmP0Frame: frame); const: (LmP0Text: expected_name)) int
+        const: LmP0Text: actual
 
         if: frame = 0 || frame\trailer = 0
             return: 0
@@ -305,12 +290,12 @@ L2:
 
     return: 0
 
-    fn: lm_l4_row_from_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
-        const: @: LmP0Field table_field
-        const: @: LmP0Field key_field
-        const: @: LmP0Field payload_field
-        const: @: LmP0Text table_atom
-        const: @: LmP0Text key_atom
+    fn: lm_l4_row_from_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
+        const: LmP0Field: table_field
+        const: LmP0Field: key_field
+        const: LmP0Field: payload_field
+        const: LmP0Text: table_atom
+        const: LmP0Text: key_atom
 
         if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "row") = 0
             return: 0
@@ -335,11 +320,11 @@ L2:
 
     return: 1
 
-    fn: lm_l4_rows_from_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame); const: @(LmP0Text table_name); @@: LmL4Column columns; size_t: column_count) int
-        const: @: LmP0Field field
-        const: @: LmP0Node key_node
-        const: @: LmP0Node cell_node
-        const: @: LmP0Text key_atom
+    fn: lm_l4_rows_from_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame); const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) int
+        const: LmP0Field: field
+        const: LmP0Node: key_node
+        const: LmP0Node: cell_node
+        const: LmP0Text: key_atom
         size_t: field_index
         size_t: column_index
         int: split_by_column
@@ -349,9 +334,14 @@ L2:
         if: loader = 0 || loader\push_cell = 0
             lm_l4_error(loader, "cell consumer is not configured")
             return: -1
-        if: columns = 0 || column_count < 2U
-            lm_l4_error(loader, "rows require at least two columns")
-            return: -1
+        if: columns = 0 || column_count = 0U
+            field: lm_l4_frame_body(frame)\first_field
+            while: field != 0
+                if: field\value != 0 && lm_l4_node_is_ignored(field\value) = 0
+                    lm_l4_error(loader, "rows require columns before cells")
+                    return: -1
+                field: field\next
+            return: 1
 
         field_index: 0U
         key_node: 0
@@ -382,20 +372,17 @@ L2:
             field: field\next
 
         if: (field_index % column_count) != 0U
-            lm_l4_error(loader, "rows field count is not divisible by column count; use explicit NULL for empty cells")
-            return: -1
-        if: field_index = 0U
-            lm_l4_error(loader, "table rows must not be empty")
+            lm_l4_error(loader, "rows field count is not divisible by column count; use explicit None for empty cells")
             return: -1
 
     return: 1
 
-    fn: lm_l4_table_from_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
-        const: @: LmP0Field field
-        const: @: LmP0Node node
-        const: @: LmP0Frame node_frame
-        @@: LmL4Column columns
-        const: @: LmP0Text table_name
+    fn: lm_l4_table_from_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
+        const: LmP0Field: field
+        const: LmP0Node: node
+        const: LmP0Frame: node_frame
+        @: LmL4Column columns
+        const: LmP0Text: table_name
         size_t: column_count
         int: have_name
         int: have_columns
@@ -477,7 +464,7 @@ L2:
         lm_l4_columns_destroy(columns, column_count)
     return: 1
 
-    fn: lm_l4_seen_table_add (@: LmOwnPtrStack seen; const: @(LmP0Text table_name)) int
+    fn: lm_l4_seen_table_add (LmOwnPtrStack: seen; const: (LmP0Text: table_name)) int
         const: @: char payload_data
         @: char name
         size_t: i
@@ -507,11 +494,11 @@ L2:
             return: -1
     return: 0
 
-    fn: lm_l4_check_table_frame_unique (const: @(LmL4Loader loader); const: @(LmP0Frame frame); @: LmOwnPtrStack seen) int
-        const: @: LmP0Field field
-        const: @: LmP0Node node
-        const: @: LmP0Frame node_frame
-        const: @: LmP0Text table_name
+    fn: lm_l4_check_table_frame_unique (const: (LmL4Loader: loader); const: (LmP0Frame: frame); LmOwnPtrStack: seen) int
+        const: LmP0Field: field
+        const: LmP0Node: node
+        const: LmP0Frame: node_frame
+        const: LmP0Text: table_name
         int: status
 
         if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "table") = 0
@@ -546,22 +533,22 @@ L2:
 
     return: 0
 
-    fn: lm_l4_next_present_field (const: @(LmP0Field field)) const: @: LmP0Field
+    fn: lm_l4_next_present_field (const: (LmP0Field: field)) const: LmP0Field
         while: field != 0 && (field\value = 0 || lm_l4_node_is_ignored(field\value) != 0)
             field: field\next
     return: field
 
     fn: lm_l4_join_header (
-        const: @(LmP0Frame frame)
-        const: @@(LmP0Structure out_sources)
-        const: @@(LmP0Text out_target)
-        const: @@(LmP0Structure out_body)
+        const: LmP0Frame: frame
+        const: @(LmP0Structure out_sources)
+        const: @(LmP0Text out_target)
+        const: @(LmP0Structure out_body)
     ) int
-        const: @: LmP0Field field
-        const: @: LmP0Structure frame_body
-        const: @: LmP0Structure sources
-        const: @: LmP0Text target
-        const: @: LmP0Structure body
+        const: LmP0Field: field
+        const: LmP0Structure: frame_body
+        const: LmP0Structure: sources
+        const: LmP0Text: target
+        const: LmP0Structure: body
 
         if: frame = 0 || out_sources = 0 || out_target = 0 || out_body = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "join") = 0
             return: 0
@@ -599,10 +586,10 @@ L2:
         \out_body: body
     return: 1
 
-    fn: lm_l4_join_sources_into_target (const: @(LmL4Loader loader); @: void context; const: @(LmP0Structure sources); const: @(LmP0Text target_name)) int
-        const: @: LmP0Field field
-        const: @: LmP0Node node
-        const: @: LmP0Text source_name
+    fn: lm_l4_join_sources_into_target (const: (LmL4Loader: loader); @: void context; const: (LmP0Structure: sources); const: (LmP0Text: target_name)) int
+        const: LmP0Field: field
+        const: LmP0Node: node
+        const: LmP0Text: source_name
 
         if: loader = 0 || loader\join_table = 0
             lm_l4_error(loader, "join consumer is not configured")
@@ -625,15 +612,15 @@ L2:
 
     return: 0
 
-    fn: lm_l4_join_from_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
-        const: @: LmP0Field field
-        const: @: LmP0Node node
-        const: @: LmP0Frame node_frame
-        const: @: LmP0Structure sources
-        const: @: LmP0Structure body
-        @@: LmL4Column columns
-        const: @: LmP0Text target_name
-        const: @: LmP0Frame rows_frame
+    fn: lm_l4_join_from_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
+        const: LmP0Field: field
+        const: LmP0Node: node
+        const: LmP0Frame: node_frame
+        const: LmP0Structure: sources
+        const: LmP0Structure: body
+        @: LmL4Column columns
+        const: LmP0Text: target_name
+        const: LmP0Frame: rows_frame
         size_t: column_count
         int: have_columns
         int: have_rows
@@ -721,10 +708,10 @@ L2:
         lm_l4_columns_destroy(columns, column_count)
     return: 1
 
-    fn: lm_l4_check_join_frame_unique (const: @(LmL4Loader loader); const: @(LmP0Frame frame); @: LmOwnPtrStack seen) int
-        const: @: LmP0Structure sources
-        const: @: LmP0Structure body
-        const: @: LmP0Text target_name
+    fn: lm_l4_check_join_frame_unique (const: (LmL4Loader: loader); const: (LmP0Frame: frame); LmOwnPtrStack: seen) int
+        const: LmP0Structure: sources
+        const: LmP0Structure: body
+        const: LmP0Text: target_name
         int: status
 
         if: frame = 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "join") = 0
@@ -750,8 +737,8 @@ L2:
 
     return: 0
 
-    fn: lm_l4_receiver_table (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
-        @: LmOwnPtrStack seen
+    fn: lm_l4_receiver_table (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
+        LmOwnPtrStack: seen
         int: status
 
         seen: lm_l4_seen_tables_get()
@@ -765,8 +752,8 @@ L2:
             return: 1
     return: 0
 
-    fn: lm_l4_receiver_join (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
-        @: LmOwnPtrStack seen
+    fn: lm_l4_receiver_join (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
+        LmOwnPtrStack: seen
         int: status
 
         seen: lm_l4_seen_tables_get()
@@ -780,7 +767,7 @@ L2:
             return: 1
     return: 0
 
-    fn: lm_l4_receiver_row (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
+    fn: lm_l4_receiver_row (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
         int: status
 
         status: lm_l4_row_from_frame(loader, context, frame)
@@ -790,12 +777,12 @@ L2:
             return: 1
     return: 0
 
-    fn: lm_l4_receiver_ignore (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
+    fn: lm_l4_receiver_ignore (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
         if: loader != 0 || context != 0 || frame != 0
             return: 0
     return: 0
 
-    fn: lm_l4_dispatch_frame (const: @(LmL4Loader loader); @: void context; const: @(LmP0Frame frame)) int
+    fn: lm_l4_dispatch_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
         if: frame = 0
             return: 1
         if: loader = 0 || loader\dispatch_frame = 0
@@ -803,11 +790,11 @@ L2:
             return: 1
     return: c.loader->dispatch_frame(loader, context, frame)
 
-    fn: lm_l4_load_rows (const: @(LmL4Loader loader); @: void context; const: @(LmP0Structure structure)) int
-        const: @: LmP0Field field
-        const: @: LmP0Node node
-        @: LmOwnPtrStack seen
-        @: LmOwnPtrStack previous_seen
+    fn: lm_l4_load_rows (const: (LmL4Loader: loader); @: void context; const: (LmP0Structure: structure)) int
+        const: LmP0Field: field
+        const: LmP0Node: node
+        LmOwnPtrStack: seen
+        LmOwnPtrStack: previous_seen
         int: owns_seen
         int: status
 
@@ -847,11 +834,11 @@ L2:
             lm_own_delete(seen, 0)
     return: status
 
-    fn: lm_l4_load_root (const: @(LmL4Loader loader); @: void context; const: @(LmP0Node root); int: implicit_l4) int
-        const: @: LmP0Field field
-        const: @: LmP0Node node
-        @: LmOwnPtrStack seen
-        @: LmOwnPtrStack previous_seen
+    fn: lm_l4_load_root (const: (LmL4Loader: loader); @: void context; const: (LmP0Node: root); int: implicit_l4) int
+        const: LmP0Field: field
+        const: LmP0Node: node
+        LmOwnPtrStack: seen
+        LmOwnPtrStack: previous_seen
         int: loaded
         int: status
 

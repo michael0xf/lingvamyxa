@@ -1,0 +1,123 @@
+import: "lm2/mix/Array.lm2"
+
+fn: lm_test_int_ptr_equals (@: void left; @: void right) int
+    @: int left_int
+    @: int right_int
+
+    if: left = 0 || right = 0
+        return: left = right
+
+    left_int: cast: (@: int) left
+    right_int: cast: (@: int) right
+return: left_int[0] = right_int[0]
+
+fn: lm_test_int_ptr_equals_ref () LmArrayEquals
+    return: c.lm_test_int_ptr_equals
+end: lm_test_int_ptr_equals_ref
+
+external:
+    fn: main () int
+        LmArray: array
+        LmArray: target_array
+        LmArrayEnumeration: enumeration
+        LmArrayEquals: equals lm_test_int_ptr_equals_ref()
+        int: ten 10
+        int: fifteen 15
+        int: twenty 20
+        int: thirty 30
+        int: forty 40
+        int: missing 99
+        @: int value
+        @: void removed
+        @: void previous
+        [3]: @: void source
+        [5]: @: void target
+        @@: void clone
+
+        source[0]: @ten
+        source[1]: @twenty
+        source[2]: @thirty
+
+        assert: lm_array_init(@array, 2U) = 0
+        assert: lm_array_add_element(@array, @ten) = 1
+        assert: lm_array_add_element(@array, @twenty) = 2
+        assert: lm_array_add_element(@array, @thirty) = 3
+        assert: lm_array_size(@array) = 3U
+        assert: lm_array_luxuriance(@array) >= 3U
+
+        value: cast: (@: int) lm_array_first_element(@array)
+        assert: value[0] = 10
+        value: cast: (@: int) lm_array_last_element(@array)
+        assert: value[0] = 30
+        assert: lm_array_index_of(@array, @twenty, equals) = 1
+        assert: lm_array_contains(@array, @missing, equals) = 0
+
+        previous: lm_array_set_element_at(@array, @forty, 4U)
+        assert: previous = 0
+        assert: lm_array_size(@array) = 5U
+        assert: lm_array_element_at(@array, 3U) = 0
+        value: cast: (@: int) lm_array_element_at(@array, 4U)
+        assert: value[0] = 40
+
+        assert: lm_array_insert_element_at(@array, @fifteen, 1U) = 0
+        assert: lm_array_size(@array) = 6U
+        value: cast: (@: int) lm_array_element_at(@array, 1U)
+        assert: value[0] = 15
+
+        removed: lm_array_remove_element_at(@array, 3U)
+        value: cast: (@: int) removed
+        assert: value[0] = 30
+        assert: lm_array_size(@array) = 5U
+
+        assert: lm_array_remove_element(@array, @forty, equals) = 4
+        assert: lm_array_size(@array) = 4U
+        assert: lm_array_contains(@array, 0, equals) != 0
+        assert: lm_array_pop(@array) = 0
+        removed: lm_array_pop(@array)
+        value: cast: (@: int) removed
+        assert: value[0] = 20
+        assert: lm_array_size(@array) = 2U
+
+        lm_array_clear(@array)
+        assert: lm_array_copy_from(@array, cast: (@@: void) source; 3U, 0U, 0U, 3U) = 3U
+        assert: lm_array_size(@array) = 3U
+        assert: lm_array_insert_array(@array, cast: (@@: void) source; 3U, 1U, 1U, 2U) = 2U
+        assert: lm_array_size(@array) = 5U
+        lm_array_reverse(@array, 0U, 4U)
+        value: cast: (@: int) lm_array_element_at(@array, 0U)
+        assert: value[0] = 20
+        value: cast: (@: int) lm_array_element_at(@array, 4U)
+        assert: value[0] = 10
+
+        assert: lm_array_copy_to(@array, cast: (@@: void) target; 5U) = 5U
+        value: cast: (@: int) target[0]
+        assert: value[0] = 20
+        value: cast: (@: int) target[4]
+        assert: value[0] = 10
+
+        clone: lm_array_clone_items(@array)
+        assert: clone != 0
+        value: cast: (@: int) clone[4]
+        assert: value[0] = 10
+        c.free(clone)
+
+        assert: lm_array_elements_from_array(@array, @enumeration) = 0
+        lm_array_set_element_at(@array, @ten, 0U)
+        value: cast: (@: int) lm_array_enumeration_next_element(@enumeration)
+        assert: value[0] = 20
+        lm_array_enumeration_destroy(@enumeration)
+
+        assert: lm_array_init(@target_array, 0U) = 0
+        assert: lm_array_add_to(@array, @target_array) = lm_array_size(@array)
+        assert: lm_array_size(@target_array) = lm_array_size(@array)
+        lm_array_destroy(@target_array)
+
+        assert: lm_array_clear_from_at(@array, 1U) = 4U
+        assert: lm_array_size(@array) = 1U
+        assert: lm_array_remove_up_to(@array, 0U) = 1U
+        assert: lm_array_size(@array) = 0U
+
+        lm_array_destroy(@array)
+        return: 0
+    end: main
+end: external

@@ -1,12 +1,12 @@
-fn: lm_trans_node_is_ignored (const: @(LmP0Node node)) int
+fn: lm_trans_node_is_ignored (const: (LmP0Node: node)) int
 return: node = 0 || (node\flags & (c.LM_P0_NODE_INACTIVE | c.LM_P0_NODE_MIX)) != 0U
 
-fn: lm_trans_node_is_positional_skip (const: @(LmP0Node node)) int
+fn: lm_trans_node_is_positional_skip (const: (LmP0Node: node)) int
 return: node != 0 && (node\flags & c.LM_P0_NODE_POSITIONAL_SKIP) != 0U
 
-fn: lm_trans_trailer_single_atom (const: @(LmP0Trailer trailer); @: LmP0Text out_text) int
-    const: @: LmP0Text atom
-    const: @: LmP0Field field
+fn: lm_trans_trailer_single_atom (const: (LmP0Trailer: trailer); LmP0Text: out_text) int
+    const: LmP0Text: atom
+    const: LmP0Field: field
 
     if: trailer = 0 || out_text = 0
         return: 0
@@ -27,16 +27,97 @@ return: "symbol"
 fn: lm_trans_symbol_class_is (const: @(char class_name); const: @(char expected)) int
 return: class_name != 0 && expected != 0 && c.strcmp(class_name, expected) = 0
 
-fn: lm_trans_symbol_is (const: @(LmTransSymbol symbol); const: @(char class_name)) int
+fn: lm_trans_symbol_is (const: (LmTransSymbol: symbol); const: @(char class_name)) int
 return: symbol != 0 && lm_trans_symbol_class_is(symbol\class_name, class_name) != 0
 
-fn: lm_trans_symbol_is_executable_callable (const: @(LmTransSymbol symbol)) int
-return: symbol != 0 && symbol\has_callable_shape != 0 && (lm_trans_symbol_is(symbol, "function") != 0 || lm_trans_symbol_is(symbol, "procedure") != 0 || lm_trans_symbol_is(symbol, "closure") != 0 || lm_trans_symbol_is(symbol, "functionPointer") != 0)
+fn: lm_trans_symbol_callable_projection (const: (LmTransSymbol: symbol)) const: @: char
+    if: symbol = 0 || symbol\class_name = 0
+        return: 0
+return: lm_trans_registry_lookup(lm_trans_text_from_cstr(symbol\class_name), "callable.projection")
 
-fn: lm_trans_symbol_is_value_callable (const: @(LmTransSymbol symbol)) int
+fn: lm_trans_callable_projection_class_is (const: @(char class_name); const: @(char projection)) int
+    const: @: char actual
+
+    if: class_name = 0 || projection = 0
+        return: 0
+    actual: lm_trans_registry_lookup(lm_trans_text_from_cstr(class_name), "callable.projection")
+return: actual != 0 && c.strcmp(actual, projection) = 0
+
+fn: lm_trans_callable_projection_is_executable (const: @(char projection)) int
+return: projection != 0 && (c.strcmp(projection, "c.function-symbol") = 0 || c.strcmp(projection, "c.procedure-symbol") = 0 || c.strcmp(projection, "c.function-pointer") = 0 || c.strcmp(projection, "c.closure-struct") = 0)
+
+fn: lm_trans_symbol_has_callable_projection (const: (LmTransSymbol: symbol); const: @(char projection)) int
+    const: @: char actual
+
+    actual: lm_trans_symbol_callable_projection(symbol)
+return: actual != 0 && projection != 0 && c.strcmp(actual, projection) = 0
+
+fn: lm_trans_symbol_is_executable_callable (const: (LmTransSymbol: symbol)) int
+return: symbol != 0 && symbol\has_callable_shape != 0 && lm_trans_callable_projection_is_executable(lm_trans_symbol_callable_projection(symbol)) != 0
+
+fn: lm_trans_symbol_is_value_callable (const: (LmTransSymbol: symbol)) int
 return: lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol\callable_returns_value != 0
 
-sub: lm_trans_symbol_destroy_fields (@: LmTransSymbol symbol)
+fn: lm_trans_callable_value_new () LmTransCallableValue
+    LmTransCallableValue: value
+
+    value: lm_own_new_zero(c.sizeof(value[0]))
+return: value
+
+sub: lm_trans_callable_value_delete (LmTransCallableValue: value)
+    lm_own_delete(value, 0)
+end: lm_trans_callable_value_delete
+
+fn: lm_trans_callable_value_from_symbol (
+    const: LmTransSymbol: symbol
+    const: LmP0Text: fallback_name
+    LmTransCallableValue: out
+) int
+    if: out = 0
+        return: 1
+
+    out\symbol: symbol
+    out\code_name: fallback_name
+    out\closure_call_name: 0
+    out\env_arg: 0
+    out\has_env_arg: 0
+    out\has_closure_call: 0
+    out\uses_closure_struct: 0
+
+    if: symbol = 0
+        return: 0
+
+    if: symbol\has_c_name
+        out\code_name: symbol\c_name
+    if: symbol\has_closure_call_name
+        out\closure_call_name: symbol\closure_call_name
+        out\has_closure_call: 1
+    if: symbol\has_env_arg
+        out\env_arg: symbol\env_arg
+        out\has_env_arg: 1
+    out\uses_closure_struct: lm_trans_symbol_has_callable_projection(symbol, "c.closure-struct")
+return: 0
+
+fn: lm_trans_callable_value_from_resolved_symbol (
+    const: LmTransSymbol: symbol
+    const: LmP0Text: fallback_name
+    LmTransCallableValue: out
+) int
+return: lm_trans_callable_value_from_symbol(symbol, fallback_name, out)
+
+fn: lm_trans_callable_value_resolve (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransCallableValue: out
+) const: LmTransSymbol
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: lm_trans_callable_value_from_resolved_symbol(symbol, name, out) != 0
+        return: 0
+return: symbol
+
+sub: lm_trans_symbol_destroy_fields (LmTransSymbol: symbol)
     if: symbol != 0
         c.lm_trans_text_ref_destroy(c.&symbol->name)
         lm_own_delete(symbol\name_storage, 0)
@@ -63,18 +144,18 @@ sub: lm_trans_symbol_destroy_fields (@: LmTransSymbol symbol)
 end: lm_trans_symbol_destroy_fields
 
 sub: lm_trans_symbol_destroy_fields_any (@: void object)
-    @: LmTransSymbol symbol
+    LmTransSymbol: symbol
 
     symbol: object
     lm_trans_symbol_destroy_fields(symbol)
 end: lm_trans_symbol_destroy_fields_any
 
-sub: lm_trans_symbol_destroy (@: LmTransSymbol symbol)
+sub: lm_trans_symbol_destroy (LmTransSymbol: symbol)
     lm_own_delete(symbol, c.lm_trans_symbol_destroy_fields_any)
 end: lm_trans_symbol_destroy
 
 sub: lm_trans_symbol_delete_any (@: void object)
-    @: LmTransSymbol symbol
+    LmTransSymbol: symbol
 
     symbol: object
     lm_trans_symbol_destroy(symbol)

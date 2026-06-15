@@ -1,8 +1,8 @@
 import: "lm2/own.lm2"
 
-fn: IntSource () int
+callable: IntSource () int
 
-`lazy fn`: AddX (int: value) int
+callable: AddX (int: value) int
 
 fn: five () int
     return: 5
@@ -22,6 +22,6 @@ end: callAdd
 
 external:
     fn: main () int
-        return: callSource(five) != 5 || callAdd(addBase(4)) != 7
+        return: callSource(five) != 5 || callAdd(addBase(4)) != 7 || callAdd(partial(addBase, 4)) != 7
     end: main
 end: external

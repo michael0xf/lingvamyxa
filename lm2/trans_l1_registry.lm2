@@ -1,25 +1,26 @@
-@: FILE lm_trans_prelude_output
+FILE: lm_trans_prelude_output
 const: @: char lm_trans_current_source_path
-@: LmOwnPtrStack lm_trans_declared_import_paths
-@: LmOwnPtrStack lm_trans_declared_import_documents
-@: LmOwnPtrStack lm_trans_emitted_import_prelude_paths
-@: LmOwnPtrStack lm_trans_emitted_import_function_paths
-@: LmOwnPtrStack lm_trans_emitted_callable_adapters
-@: LmOwnPtrStack lm_trans_emitted_callable_binders
-@: LmOwnPtrStack lm_trans_emitted_array_value_helpers
-@: LmOwnPtrStack lm_trans_emitted_function_return_structs
+LmOwnPtrStack: lm_trans_declared_import_paths
+LmOwnPtrStack: lm_trans_declared_import_documents
+LmOwnPtrStack: lm_trans_emitted_import_prelude_paths
+LmOwnPtrStack: lm_trans_emitted_import_function_paths
+LmOwnPtrStack: lm_trans_emitted_callable_adapters
+LmOwnPtrStack: lm_trans_emitted_callable_binders
+LmOwnPtrStack: lm_trans_emitted_array_value_helpers
+LmOwnPtrStack: lm_trans_emitted_function_return_structs
+int: lm_trans_emitted_l5_runtime_prelude
 unsigned: lm_trans_next_callable_adapter_id
 unsigned: lm_trans_next_array_value_helper_id
 unsigned: lm_trans_next_l2_structure_object_id
 
-@: LmTransRegistry lm_trans_registry
+LmTransRegistry: lm_trans_registry
 
 sub: lm_trans_import_document_delete (@: void document)
-    lm_p0_document_destroy(cast: (@: LmP0Document) document)
+    lm_p0_document_destroy(cast: (LmP0Document) document)
 end: lm_trans_import_document_delete
 
-fn: lm_trans_registry_new_text () @: LmP0Text
-    @: LmP0Text text
+fn: lm_trans_registry_new_text () LmP0Text
+    LmP0Text: text
 
     text: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(text[0]))
     if: text != 0
@@ -27,11 +28,11 @@ fn: lm_trans_registry_new_text () @: LmP0Text
         text\length: 0U
 return: text
 
-fn: lm_trans_registry_new_structure () @: LmP0Structure
-return: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(c.LmP0Structure))
+fn: lm_trans_registry_new_structure () LmP0Structure
+    return: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(c.LmP0Structure))
 
-fn: lm_trans_registry_new_frame () @: LmP0Frame
-    @: LmP0Frame frame
+fn: lm_trans_registry_new_frame () LmP0Frame
+    LmP0Frame: frame
 
     frame: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(frame[0]))
     if: frame = 0
@@ -42,8 +43,8 @@ fn: lm_trans_registry_new_frame () @: LmP0Frame
         return: 0
 return: frame
 
-fn: lm_trans_registry_new_trailer () @: LmP0Trailer
-    @: LmP0Trailer trailer
+fn: lm_trans_registry_new_trailer () LmP0Trailer
+    LmP0Trailer: trailer
 
     trailer: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, c.sizeof(trailer[0]))
     if: trailer = 0
@@ -54,8 +55,8 @@ fn: lm_trans_registry_new_trailer () @: LmP0Trailer
         return: 0
 return: trailer
 
-fn: lm_trans_registry_clone_frame_new_structure (const: @(LmP0Structure source); @: LmP0Structure copy) @: LmTransRegistryCloneFrame
-    @: LmTransRegistryCloneFrame frame
+fn: lm_trans_registry_clone_frame_new_structure (const: (LmP0Structure: source); LmP0Structure: copy) LmTransRegistryCloneFrame
+    LmTransRegistryCloneFrame: frame
 
     frame: lm_own_new_zero(c.sizeof(frame[0]))
     if: frame = 0
@@ -65,8 +66,8 @@ fn: lm_trans_registry_clone_frame_new_structure (const: @(LmP0Structure source);
     frame\copy_structure: copy
 return: frame
 
-fn: lm_trans_registry_clone_frame_new_trailer (const: @(LmP0Trailer source); @@(LmP0Trailer copy_slot)) @: LmTransRegistryCloneFrame
-    @: LmTransRegistryCloneFrame frame
+fn: lm_trans_registry_clone_frame_new_trailer (const: (LmP0Trailer: source); @(LmP0Trailer copy_slot)) LmTransRegistryCloneFrame
+    LmTransRegistryCloneFrame: frame
 
     frame: lm_own_new_zero(c.sizeof(frame[0]))
     if: frame = 0
@@ -76,7 +77,7 @@ fn: lm_trans_registry_clone_frame_new_trailer (const: @(LmP0Trailer source); @@(
     frame\copy_trailer_slot: copy_slot
 return: frame
 
-fn: lm_trans_registry_clone_push_frame (@: LmOwnPtrStack stack; @: LmTransRegistryCloneFrame frame) int
+fn: lm_trans_registry_clone_push_frame (LmOwnPtrStack: stack; LmTransRegistryCloneFrame: frame) int
     if: stack = 0 || frame = 0
         lm_own_delete(frame, 0)
         return: 1
@@ -85,10 +86,10 @@ fn: lm_trans_registry_clone_push_frame (@: LmOwnPtrStack stack; @: LmTransRegist
         return: 1
 return: 0
 
-fn: lm_trans_registry_clone_push_structure (@: LmOwnPtrStack stack; const: @(LmP0Structure source); @: LmP0Structure copy) int
+fn: lm_trans_registry_clone_push_structure (LmOwnPtrStack: stack; const: (LmP0Structure: source); LmP0Structure: copy) int
 return: lm_trans_registry_clone_push_frame(stack, lm_trans_registry_clone_frame_new_structure(source, copy))
 
-fn: lm_trans_registry_clone_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer source); @@(LmP0Trailer copy_slot)) int
+fn: lm_trans_registry_clone_push_trailer (LmOwnPtrStack: stack; const: (LmP0Trailer: source); @(LmP0Trailer copy_slot)) int
     if: copy_slot = 0
         return: 1
     \copy_slot: 0
@@ -96,10 +97,10 @@ fn: lm_trans_registry_clone_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0T
         return: 0
 return: lm_trans_registry_clone_push_frame(stack, lm_trans_registry_clone_frame_new_trailer(source, copy_slot))
 
-fn: lm_trans_registry_clone_process_structure (const: @(LmP0Structure source); @: LmP0Structure copy; @: LmOwnPtrStack stack) int
-    const: @: LmP0Field source_field
-    @: LmP0Field copy_field
-    @: LmP0Field previous_field
+fn: lm_trans_registry_clone_process_structure (const: (LmP0Structure: source); LmP0Structure: copy; LmOwnPtrStack: stack) int
+    const: LmP0Field: source_field
+    LmP0Field: copy_field
+    LmP0Field: previous_field
 
     if: copy = 0
         return: 1
@@ -132,8 +133,8 @@ fn: lm_trans_registry_clone_process_structure (const: @(LmP0Structure source); @
         return: 1
 return: 0
 
-fn: lm_trans_registry_clone_process_trailer (const: @(LmP0Trailer source); @@(LmP0Trailer copy_slot); @: LmOwnPtrStack stack) int
-    @: LmP0Trailer copy
+fn: lm_trans_registry_clone_process_trailer (const: (LmP0Trailer: source); @(LmP0Trailer copy_slot); LmOwnPtrStack: stack) int
+    LmP0Trailer: copy
 
     if: copy_slot = 0
         return: 1
@@ -151,8 +152,8 @@ fn: lm_trans_registry_clone_process_trailer (const: @(LmP0Trailer source); @@(Lm
         return: 1
 return: lm_trans_registry_clone_push_structure(stack, source\body, copy\body)
 
-fn: lm_trans_registry_clone_node_shallow (const: @(LmP0Node source); @: LmOwnPtrStack stack) @: LmP0Node
-    @: LmP0Node copy
+fn: lm_trans_registry_clone_node_shallow (const: (LmP0Node: source); LmOwnPtrStack: stack) LmP0Node
+    LmP0Node: copy
 
     if: source = 0
         return: 0
@@ -197,8 +198,8 @@ fn: lm_trans_registry_clone_node_shallow (const: @(LmP0Node source); @: LmOwnPtr
 
 return: 0
 
-fn: lm_trans_registry_clone_run (@: LmOwnPtrStack stack) int
-    @: LmTransRegistryCloneFrame frame
+fn: lm_trans_registry_clone_run (LmOwnPtrStack: stack) int
+    LmTransRegistryCloneFrame: frame
     int: status
     int: handled
 
@@ -223,8 +224,8 @@ fn: lm_trans_registry_clone_run (@: LmOwnPtrStack stack) int
 
 return: status
 
-fn: lm_trans_registry_clone_stack_new () @: LmOwnPtrStack
-    @: LmOwnPtrStack stack
+fn: lm_trans_registry_clone_stack_new () LmOwnPtrStack
+    LmOwnPtrStack: stack
 
     stack: lm_own_new_zero(c.sizeof(stack[0]))
     if: stack = 0
@@ -232,47 +233,16 @@ fn: lm_trans_registry_clone_stack_new () @: LmOwnPtrStack
     lm_own_ptr_stack_init(stack, c.lm_own_delete_plain)
 return: stack
 
-sub: lm_trans_registry_clone_stack_delete (@@(LmOwnPtrStack stack))
+sub: lm_trans_registry_clone_stack_delete (@(LmOwnPtrStack stack))
     if: stack != 0 && \stack != 0
         lm_own_ptr_stack_destroy(\stack)
         lm_own_delete(\stack, 0)
         \stack: 0
 end: lm_trans_registry_clone_stack_delete
 
-fn: lm_trans_registry_clone_trailer (const: @(LmP0Trailer source)) @: LmP0Trailer
-    @: LmOwnPtrStack stack
-    @: LmP0Trailer copy
-
-    if: source = 0
-        return: 0
-
-    stack: lm_trans_registry_clone_stack_new()
-    if: stack = 0
-        return: 0
-
-    copy: 0
-    if: lm_trans_registry_clone_push_trailer(stack, source, @ copy) != 0 || lm_trans_registry_clone_run(stack) != 0
-        lm_trans_registry_clone_stack_delete(@ stack)
-        return: 0
-
-    lm_trans_registry_clone_stack_delete(@ stack)
-return: copy
-
-fn: lm_trans_registry_clone_structure (const: @(LmP0Structure source); @: LmP0Structure out_structure) int
-    @: LmOwnPtrStack stack
-    int: status
-
-    stack: lm_trans_registry_clone_stack_new()
-    if: stack = 0
-        return: 1
-
-    status: lm_trans_registry_clone_push_structure(stack, source, out_structure) || lm_trans_registry_clone_run(stack)
-    lm_trans_registry_clone_stack_delete(@ stack)
-return: status
-
-fn: lm_trans_registry_clone_node (const: @(LmP0Node source)) @: LmP0Node
-    @: LmOwnPtrStack stack
-    @: LmP0Node copy
+fn: lm_trans_registry_clone_node (const: (LmP0Node: source)) LmP0Node
+    LmOwnPtrStack: stack
+    LmP0Node: copy
 
     if: source = 0
         return: 0
@@ -289,10 +259,10 @@ fn: lm_trans_registry_clone_node (const: @(LmP0Node source)) @: LmP0Node
     lm_trans_registry_clone_stack_delete(@ stack)
 return: copy
 
-fn: lm_trans_registry_index_row_relation (const: @(LmP0Text card_name); const: @(char relation_name); @: LmTransRegistryFact row) int
-    @: LmTransRegistry registry
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
+fn: lm_trans_registry_index_row_relation (const: (LmP0Text: card_name); const: @(char relation_name); LmTransRegistryFact: row) int
+    LmTransRegistry: registry
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
 
     if: row = 0 || relation_name = 0
         return: 1
@@ -307,9 +277,9 @@ fn: lm_trans_registry_index_row_relation (const: @(LmP0Text card_name); const: @
         return: 1
 return: lm_own_ptr_stack_push(relation\symbols, row)
 
-fn: lm_trans_registry_index_row_table_view (@: LmTransRegistryFact row) int
+fn: lm_trans_registry_index_row_table_view (LmTransRegistryFact: row) int
     const: @: char dot
-    @: LmP0Text table_name
+    LmP0Text: table_name
     const: @: char relation_name
     int: status
 
@@ -334,11 +304,11 @@ fn: lm_trans_registry_index_row_table_view (@: LmTransRegistryFact row) int
     lm_trans_text_ref_destroy(@ table_name)
 return: status
 
-fn: lm_trans_registry_index_row (@: LmTransRegistryFact row) int
-    @: LmTransRegistry registry
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
-    @: LmP0Text key_name
+fn: lm_trans_registry_index_row (LmTransRegistryFact: row) int
+    LmTransRegistry: registry
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
+    LmP0Text: key_name
     int: status
 
     if: row = 0 || row\table = 0 || row\key = 0
@@ -366,9 +336,9 @@ fn: lm_trans_registry_index_row (@: LmTransRegistryFact row) int
     lm_trans_text_ref_destroy(@ key_name)
 return: status
 
-fn: lm_trans_registry_push_row_values (const: @(LmP0Text table_value); const: @(LmP0Text key_value); const: @(LmP0Text payload_value)) int
-    @: LmTransRegistry registry
-    @: LmTransRegistryFact row
+fn: lm_trans_registry_push_row_values (const: (LmP0Text: table_value); const: (LmP0Text: key_value); const: (LmP0Text: payload_value)) int
+    LmTransRegistry: registry
+    LmTransRegistryFact: row
 
     registry: c.lm_trans_registry
     row: lm_own_arena_new_zero(registry\value_arena, c.sizeof(row[0]))
@@ -387,10 +357,10 @@ fn: lm_trans_registry_push_row_values (const: @(LmP0Text table_value); const: @(
     registry\loaded_fact_count: registry\loaded_fact_count + 1U
 return: 0
 
-fn: lm_trans_registry_push_row_node_values (const: @(LmP0Text table_value); const: @(LmP0Text key_value); const: @(LmP0Node payload_node)) int
-    @: LmTransRegistry registry
-    @: LmTransRegistryFact row
-    @: LmP0Node payload_copy
+fn: lm_trans_registry_push_row_node_values (const: (LmP0Text: table_value); const: (LmP0Text: key_value); const: (LmP0Node: payload_node)) int
+    LmTransRegistry: registry
+    LmTransRegistryFact: row
+    LmP0Node: payload_copy
 
     if: payload_node = 0
         return: -1
@@ -416,7 +386,7 @@ fn: lm_trans_registry_push_row_node_values (const: @(LmP0Text table_value); cons
     registry\loaded_fact_count: registry\loaded_fact_count + 1U
 return: 0
 
-fn: lm_trans_registry_join_relation_matches (const: @(char relation_name); const: @(LmP0Text source_name); const: @@(char out_suffix)) int
+fn: lm_trans_registry_join_relation_matches (const: @(char relation_name); const: (LmP0Text: source_name); const: @@(char out_suffix)) int
     size_t: relation_length
 
     if: relation_name = 0 || source_name = 0 || source_name\data = 0 || out_suffix = 0
@@ -430,7 +400,7 @@ fn: lm_trans_registry_join_relation_matches (const: @(char relation_name); const
         return: 1
 return: 0
 
-fn: lm_trans_registry_join_target_relation_new (const: @(LmP0Text target_name); const: @(char suffix)) @: char
+fn: lm_trans_registry_join_target_relation_new (const: (LmP0Text: target_name); const: @(char suffix)) @: char
     size_t: suffix_length
     size_t: length
     @: char relation_name
@@ -449,12 +419,12 @@ fn: lm_trans_registry_join_target_relation_new (const: @(LmP0Text target_name); 
     relation_name[length]: '\0'
 return: relation_name
 
-fn: lm_trans_registry_join_copy_row (const: @(LmTransRegistryFact row); const: @(LmP0Text source_name); const: @(LmP0Text target_name); @: size_t copied) int
+fn: lm_trans_registry_join_copy_row (const: (LmTransRegistryFact: row); const: (LmP0Text: source_name); const: (LmP0Text: target_name); @: size_t copied) int
     const: @: char suffix
     @: char target_relation
-    @: LmP0Text target_relation_text
-    @: LmP0Text key_text
-    @: LmP0Text payload_text
+    LmP0Text: target_relation_text
+    LmP0Text: key_text
+    LmP0Text: payload_text
     int: status
 
     if: row = 0 || row\table = 0 || row\key = 0 || (row\payload_node = 0 && row\payload = 0)
@@ -487,13 +457,13 @@ fn: lm_trans_registry_join_copy_row (const: @(LmTransRegistryFact row); const: @
     copied[0]: copied[0] + 1U
 return: 0
 
-fn: lm_trans_registry_join_table (const: @(LmP0Text source_table); const: @(LmP0Text target_table)) int
-    @: LmP0Text source_name
-    @: LmP0Text target_name
-    @: LmTransIdentifierTable identifiers
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
-    @: LmTransRegistryFact row
+fn: lm_trans_registry_join_table (const: (LmP0Text: source_table); const: (LmP0Text: target_table)) int
+    LmP0Text: source_name
+    LmP0Text: target_name
+    LmTransIdentifierTable: identifiers
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
+    LmTransRegistryFact: row
     const: @: char relation_suffix
     size_t: bucket_index
     size_t: relation_bucket_index
@@ -540,23 +510,19 @@ fn: lm_trans_registry_join_table (const: @(LmP0Text source_table); const: @(LmP0
                             ---
                             relation: relation\next
                         relation_bucket_index: relation_bucket_index + 1U
-            ---
+                ---
                 card: card\next
             bucket_index: bucket_index + 1U
 
     ---
-    if: status = 0 && copied = 0U
-        c.fprintf(c.stderr, "trans registry error: join source table \"%.*s\" has no rows\n", (cast: int source_name\length), source_name\data)
-        status: 1
-
     lm_trans_text_ref_destroy(@ source_name)
     lm_trans_text_ref_destroy(@ target_name)
 return: status
 
-fn: lm_trans_registry_push_row_atoms (const: @(LmP0Text table_atom); const: @(LmP0Text key_atom); const: @(LmP0Text payload_atom)) int
-    @: LmP0Text table_value
-    @: LmP0Text key_value
-    @: LmP0Text payload_value
+fn: lm_trans_registry_push_row_atoms (const: (LmP0Text: table_atom); const: (LmP0Text: key_atom); const: (LmP0Text: payload_atom)) int
+    LmP0Text: table_value
+    LmP0Text: key_value
+    LmP0Text: payload_value
     int: status
 
     if: lm_trans_registry_payload_is_null(payload_atom) != 0
@@ -577,9 +543,9 @@ fn: lm_trans_registry_push_row_atoms (const: @(LmP0Text table_atom); const: @(Lm
     lm_trans_text_ref_destroy(@ payload_value)
 return: status
 
-fn: lm_trans_registry_column_has_descriptor (const: @(LmTransRegistryColumn column); const: @(char descriptor)) int
+fn: lm_trans_registry_column_has_descriptor (const: (LmL4Column: column); const: @(char descriptor)) int
     size_t: i
-    @: LmP0Text payload
+    LmP0Text: payload
 
     if: column = 0 || descriptor = 0
         return: 0
@@ -596,8 +562,8 @@ fn: lm_trans_registry_column_has_descriptor (const: @(LmTransRegistryColumn colu
     lm_trans_text_ref_destroy(@ payload)
 return: 0
 
-fn: lm_trans_registry_column_is_class_typed (const: @(LmTransRegistryColumn column)) int
-    @: LmP0Text payload
+fn: lm_trans_registry_column_is_class_typed (const: (LmL4Column: column)) int
+    LmP0Text: payload
     int: is_class
 
     if: column = 0
@@ -611,10 +577,93 @@ fn: lm_trans_registry_column_is_class_typed (const: @(LmTransRegistryColumn colu
     lm_trans_text_ref_destroy(@ payload)
 return: is_class || lm_trans_registry_column_has_descriptor(column, "class")
 
-fn: lm_trans_registry_cell_value (const: @(LmP0Text atom); const: @(LmTransRegistryColumn column); @: LmP0Text out_value) int
-    if: lm_trans_registry_payload_is_null(atom) != 0
+fn: lm_trans_registry_column_serialization_codec (const: (LmL4Column: column)) const: @: char
+    LmP0Text: payload
+    const: @: char codec
+    size_t: i
+
+    if: column = 0
         return: 0
-    if: lm_trans_registry_column_has_descriptor(column, "char") != 0
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+
+    i: 0U
+    while: i < column\descriptor_count
+        if: column\descriptors[i] != 0 && lm_trans_registry_identifier_value(column\descriptors[i], payload) != 0
+            codec: lm_trans_registry_lookup(payload, "serialization.codec")
+            if: codec != 0
+                lm_trans_text_ref_destroy(@ payload)
+                return: codec
+            ---
+        ---
+        i: i + 1U
+
+    if: column\name != 0 && lm_trans_registry_identifier_value(column\name, payload) != 0
+        codec: lm_trans_registry_lookup(payload, "serialization.codec")
+        if: codec != 0
+            lm_trans_text_ref_destroy(@ payload)
+            return: codec
+        ---
+    ---
+
+    lm_trans_text_ref_destroy(@ payload)
+return: 0
+
+fn: lm_trans_registry_cell_none_cell_matches (const: (LmP0Text: payload); const: (LmP0Text: class_atom)) int
+    LmP0Text: class_name
+    const: @: char none_value
+    int: result
+
+    if: payload = 0 || class_atom = 0
+        return: 0
+    class_name: lm_trans_text_ref_new_cstr("")
+    if: class_name = 0
+        return: 0
+    result: 0
+    if: lm_trans_registry_identifier_value(class_atom, class_name) != 0
+        none_value: lm_trans_registry_lookup(class_name, "None.cell")
+        if: none_value != 0 && lm_trans_text_equals(payload, none_value) != 0
+            result: 1
+    ---
+    lm_trans_text_ref_destroy(@ class_name)
+return: result
+
+fn: lm_trans_registry_cell_is_null (const: (LmP0Text: atom); const: (LmL4Column: column)) int
+    LmP0Text: payload
+    size_t: i
+    int: result
+
+    if: lm_trans_registry_payload_is_null(atom) != 0
+        return: 1
+    if: atom = 0 || column = 0
+        return: 0
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    if: lm_trans_registry_identifier_value(atom, payload) = 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+
+    result: 0
+    if: column\name != 0 && lm_trans_registry_cell_none_cell_matches(payload, column\name) != 0
+        result: 1
+    i: 0U
+    while: result = 0 && i < column\descriptor_count
+        if: column\descriptors[i] != 0 && lm_trans_registry_cell_none_cell_matches(payload, column\descriptors[i]) != 0
+            result: 1
+        i: i + 1U
+
+    lm_trans_text_ref_destroy(@ payload)
+return: result
+
+fn: lm_trans_registry_cell_value (const: (LmP0Text: atom); const: (LmL4Column: column); LmP0Text: out_value) int
+    const: @: char codec
+
+    if: lm_trans_registry_cell_is_null(atom, column) != 0
+        return: 0
+    codec: lm_trans_registry_column_serialization_codec(column)
+    if: (codec != 0 && c.strcmp(codec, "lmx.char") = 0) || lm_trans_registry_column_has_descriptor(column, "char") != 0
         if: lm_trans_registry_literal_value(atom, out_value) != 0
             return: 1
         return: -1
@@ -622,12 +671,12 @@ fn: lm_trans_registry_cell_value (const: @(LmP0Text atom); const: @(LmTransRegis
         return: 1
 return: -1
 
-fn: lm_trans_registry_push_table_cell (const: @(LmP0Text table_name); const: @(LmTransRegistryColumn column); int: split_by_column; const: @(LmP0Text key_atom); const: @(LmP0Node payload_node); int: allow_node_cells) int
-    @: LmP0Text table_payload
-    @: LmP0Text column_payload
-    @: LmP0Text key_payload
-    @: LmP0Text payload_value
-    @: LmP0Text relation_table
+fn: lm_trans_registry_push_table_cell (const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Node: payload_node); int: allow_node_cells) int
+    LmP0Text: table_payload
+    LmP0Text: column_payload
+    LmP0Text: key_payload
+    LmP0Text: payload_value
+    LmP0Text: relation_table
     @: char relation_name
     size_t: relation_length
     int: status
@@ -775,9 +824,9 @@ fn: lm_trans_registry_push_table_cell (const: @(LmP0Text table_name); const: @(L
     lm_trans_text_ref_destroy(@ payload_value)
 return: status
 
-fn: lm_trans_registry_note_class_kind (const: @(LmP0Text name); const: @(char kind)) int
-    @: LmP0Text table
-    @: LmP0Text payload
+fn: lm_trans_registry_note_class_kind (const: (LmP0Text: name); const: @(char kind)) int
+    LmP0Text: table
+    LmP0Text: payload
     int: status
 
     if: kind = 0
@@ -794,10 +843,26 @@ fn: lm_trans_registry_note_class_kind (const: @(LmP0Text name); const: @(char ki
     lm_trans_text_ref_destroy(@ payload)
 return: status
 
-fn: lm_trans_registry_note_class_present (const: @(LmP0Text name)) int
-    @: LmP0Text table
-    @: LmP0Text payload
-    @: LmP0Text class_text
+fn: lm_trans_registry_note_class_reference_base (const: (LmP0Text: name)) int
+    LmP0Text: table
+    LmP0Text: payload
+    int: status
+
+    table: lm_trans_text_from_cstr("class.reference-base")
+    payload: lm_trans_text_from_cstr("1")
+    if: table = 0 || payload = 0
+        lm_trans_text_ref_destroy(@ table)
+        lm_trans_text_ref_destroy(@ payload)
+        return: 1
+    status: lm_trans_registry_push_row_atoms(table, name, payload) != 0
+    lm_trans_text_ref_destroy(@ table)
+    lm_trans_text_ref_destroy(@ payload)
+return: status
+
+fn: lm_trans_registry_note_class_present (const: (LmP0Text: name)) int
+    LmP0Text: table
+    LmP0Text: payload
+    LmP0Text: class_text
     int: status
 
     payload: lm_trans_text_ref_new_cstr("")
@@ -820,9 +885,9 @@ fn: lm_trans_registry_note_class_present (const: @(LmP0Text name)) int
     lm_trans_text_ref_destroy(@ class_text)
 return: status
 
-fn: lm_trans_registry_lookup_row_in_identifiers (const: @(LmTransIdentifierTable identifiers); const: @(LmP0Text key); const: @(char table)) @: LmTransRegistryFact
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
+fn: lm_trans_registry_lookup_row_in_identifiers (const: (LmTransIdentifierTable: identifiers); const: (LmP0Text: key); const: @(char table)) LmTransRegistryFact
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
 
     if: table = 0
         return: 0
@@ -835,9 +900,23 @@ fn: lm_trans_registry_lookup_row_in_identifiers (const: @(LmTransIdentifierTable
         return: 0
 return: lm_own_ptr_stack_top(relation\symbols)
 
-fn: lm_trans_registry_relation_stack_in_identifiers (const: @(LmTransIdentifierTable identifiers); const: @(LmP0Text key); const: @(char relation_name)) const: @: LmOwnPtrStack
-    @: LmTransIdentifierCard card
-    @: LmTransIdentifierRelation relation
+fn: lm_trans_registry_lookup_default_row_in_identifiers (const: (LmTransIdentifierTable: identifiers); const: @(char table)) LmTransRegistryFact
+    LmP0Text: default_key
+    LmTransRegistryFact: row
+
+    if: table = 0
+        return: 0
+
+    default_key: lm_trans_text_from_cstr("default")
+    if: default_key = 0
+        return: 0
+    row: lm_trans_registry_lookup_row_in_identifiers(identifiers, default_key, table)
+    lm_trans_text_ref_destroy(@ default_key)
+return: row
+
+fn: lm_trans_registry_relation_stack_in_identifiers (const: (LmTransIdentifierTable: identifiers); const: (LmP0Text: key); const: @(char relation_name)) const: LmOwnPtrStack
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
 
     if: relation_name = 0
         return: 0
@@ -851,11 +930,11 @@ fn: lm_trans_registry_relation_stack_in_identifiers (const: @(LmTransIdentifierT
         return: relation\symbols
 return: 0
 
-fn: lm_trans_registry_relation_stack (const: @(LmP0Text key); const: @(char relation_name)) const: @: LmOwnPtrStack
-return: lm_trans_registry_relation_stack_in_identifiers(c.lm_trans_registry->identifiers, key, relation_name)
+fn: lm_trans_registry_relation_stack (const: (LmP0Text: key); const: @(char relation_name)) const: LmOwnPtrStack
+    return: lm_trans_registry_relation_stack_in_identifiers(c.lm_trans_registry->identifiers, key, relation_name)
 
-fn: lm_trans_namespace_registry_relation_stack (const: @(LmTransNamespace namespace_); const: @(LmP0Text key); const: @(char relation_name)) const: @: LmOwnPtrStack
-    const: @: LmOwnPtrStack stack
+fn: lm_trans_namespace_registry_relation_stack (const: (LmTransNamespace: namespace_); const: (LmP0Text: key); const: @(char relation_name)) const: LmOwnPtrStack
+    const: LmOwnPtrStack: stack
 
     if: namespace_ != 0 && namespace_\registry_identifiers != 0
         stack: lm_trans_registry_relation_stack_in_identifiers(namespace_\registry_identifiers, key, relation_name)
@@ -865,11 +944,11 @@ fn: lm_trans_namespace_registry_relation_stack (const: @(LmTransNamespace namesp
     ---
 return: lm_trans_registry_relation_stack(key, relation_name)
 
-fn: lm_trans_registry_relation_stack_for_table (const: @(char table)) const: @: LmOwnPtrStack
+fn: lm_trans_registry_relation_stack_for_table (const: @(char table)) const: LmOwnPtrStack
     const: @: char dot
-    @: LmP0Text table_name
+    LmP0Text: table_name
     const: @: char relation_name
-    const: @: LmOwnPtrStack stack
+    const: LmOwnPtrStack: stack
 
     if: table = 0
         return: 0
@@ -893,10 +972,10 @@ fn: lm_trans_registry_relation_stack_for_table (const: @(char table)) const: @: 
     lm_trans_text_ref_destroy(@ table_name)
 return: stack
 
-fn: lm_trans_registry_relation_stack_latest_row (const: @(LmOwnPtrStack stack); const: @(LmP0Text key)) @: LmTransRegistryFact
+fn: lm_trans_registry_relation_stack_latest_row (const: (LmOwnPtrStack: stack); const: (LmP0Text: key)) LmTransRegistryFact
     size_t: i
-    @: LmTransRegistryFact row
-    @: LmP0Text key_payload
+    LmTransRegistryFact: row
+    LmP0Text: key_payload
 
     key_payload: lm_trans_text_ref_new_cstr("")
     if: stack = 0 || key_payload = 0 || lm_trans_identifier_payload(key, key_payload) = 0
@@ -915,8 +994,8 @@ fn: lm_trans_registry_relation_stack_latest_row (const: @(LmOwnPtrStack stack); 
     lm_trans_text_ref_destroy(@ key_payload)
 return: 0
 
-fn: lm_trans_registry_lookup (const: @(LmP0Text key); const: @(char table)) const: @: char
-    @: LmTransRegistryFact row
+fn: lm_trans_registry_lookup_exact (const: (LmP0Text: key); const: @(char table)) const: @: char
+    LmTransRegistryFact: row
 
     row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, key, table)
     if: row != 0
@@ -924,11 +1003,28 @@ fn: lm_trans_registry_lookup (const: @(LmP0Text key); const: @(char table)) cons
 
 return: 0
 
-fn: lm_trans_registry_has (const: @(LmP0Text key); const: @(char table)) int
+fn: lm_trans_registry_lookup_default (const: @(char table)) const: @: char
+    LmTransRegistryFact: row
+
+    row: lm_trans_registry_lookup_default_row_in_identifiers(c.lm_trans_registry->identifiers, table)
+    if: row != 0
+        return: row\payload
+
+return: 0
+
+fn: lm_trans_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: @: char
+    const: @: char payload
+
+    payload: lm_trans_registry_lookup_exact(key, table)
+    if: payload != 0
+        return: payload
+return: lm_trans_registry_lookup_default(table)
+
+fn: lm_trans_registry_has (const: (LmP0Text: key); const: @(char table)) int
 return: lm_trans_registry_lookup(key, table) != 0
 
 fn: lm_trans_registry_table_has_rows (const: @(char table)) int
-    const: @: LmOwnPtrStack stack
+    const: LmOwnPtrStack: stack
 
     if: table = 0
         return: 0
@@ -936,8 +1032,8 @@ fn: lm_trans_registry_table_has_rows (const: @(char table)) int
     stack: lm_trans_registry_relation_stack_for_table(table)
 return: stack != 0 && stack\count != 0U
 
-fn: lm_trans_registry_assert_selected_table_link (const: @(char source_table); const: @(LmP0Text key); const: @(char target_class_table); const: @(char target_table)) int
-    @: LmP0Text target_key
+fn: lm_trans_registry_assert_selected_table_link (const: @(char source_table); const: (LmP0Text: key); const: @(char target_class_table); const: @(char target_table)) int
+    LmP0Text: target_key
     int: target_has_class_row
 
     if: source_table = 0 || target_table = 0
@@ -957,7 +1053,7 @@ fn: lm_trans_registry_assert_selected_table_link (const: @(char source_table); c
         return: 1
 return: 0
 
-fn: lm_trans_registry_assert_payload_table_exists (const: @(char source_table); const: @(LmP0Text key); const: @(char target_table)) int
+fn: lm_trans_registry_assert_payload_table_exists (const: @(char source_table); const: (LmP0Text: key); const: @(char target_table)) int
     if: source_table = 0 || target_table = 0
         return: 1
     if: lm_trans_registry_table_has_rows(target_table) = 0
@@ -965,7 +1061,7 @@ fn: lm_trans_registry_assert_payload_table_exists (const: @(char source_table); 
         return: 1
 return: 0
 
-fn: lm_trans_registry_lookup_table_link_checked (const: @(LmP0Text key); const: @(char source_table); const: @(char target_class_table)) const: @: char
+fn: lm_trans_registry_lookup_table_link_checked (const: (LmP0Text: key); const: @(char source_table); const: @(char target_class_table)) const: @: char
     const: @: char target_table
 
     target_table: lm_trans_registry_lookup(key, source_table)
@@ -973,18 +1069,29 @@ fn: lm_trans_registry_lookup_table_link_checked (const: @(LmP0Text key); const: 
         c.exit(2)
 return: target_table
 
-fn: lm_trans_namespace_registry_lookup (const: @(LmTransNamespace namespace_); const: @(LmP0Text key); const: @(char table)) const: @: char
-    @: LmTransRegistryFact row
+fn: lm_trans_namespace_registry_lookup (const: (LmTransNamespace: namespace_); const: (LmP0Text: key); const: @(char table)) const: @: char
+    LmTransRegistryFact: row
+    const: @: char payload
 
     if: namespace_ != 0 && namespace_\registry_identifiers != 0
         row: lm_trans_registry_lookup_row_in_identifiers(namespace_\registry_identifiers, key, table)
         if: row != 0
             return: row\payload
-
     ---
-return: lm_trans_registry_lookup(key, table)
 
-fn: lm_trans_namespace_registry_lookup_table_link_checked (const: @(LmTransNamespace namespace_); const: @(LmP0Text key); const: @(char source_table); const: @(char target_class_table)) const: @: char
+    payload: lm_trans_registry_lookup_exact(key, table)
+    if: payload != 0
+        return: payload
+
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0
+        row: lm_trans_registry_lookup_default_row_in_identifiers(namespace_\registry_identifiers, table)
+        if: row != 0
+            return: row\payload
+    ---
+
+return: lm_trans_registry_lookup_default(table)
+
+fn: lm_trans_namespace_registry_lookup_table_link_checked (const: (LmTransNamespace: namespace_); const: (LmP0Text: key); const: @(char source_table); const: @(char target_class_table)) const: @: char
     const: @: char target_table
 
     target_table: lm_trans_namespace_registry_lookup(namespace_, key, source_table)
@@ -992,7 +1099,7 @@ fn: lm_trans_namespace_registry_lookup_table_link_checked (const: @(LmTransNames
         c.exit(2)
 return: target_table
 
-fn: lm_trans_array_head_find_close (const: @(LmP0Text text); size_t: open_index; @: size_t out_close_index) int
+fn: lm_trans_array_head_find_close (const: (LmP0Text: text); size_t: open_index; @: size_t out_close_index) int
     size_t: i
     size_t: depth
     char: quote
@@ -1041,7 +1148,7 @@ fn: lm_trans_array_head_find_close (const: @(LmP0Text text); size_t: open_index;
         i: i + 1U
 return: 0
 
-fn: lm_trans_array_head_next_dimension (const: @(LmP0Text head); @: size_t index; @: LmP0Text out_dimension) int
+fn: lm_trans_array_head_next_dimension (const: (LmP0Text: head); @: size_t index; LmP0Text: out_dimension) int
     size_t: close_index
 
     if: head = 0 || index = 0 || out_dimension = 0 || index[0] >= head\length || head\data[index[0]] != '['
@@ -1054,10 +1161,10 @@ fn: lm_trans_array_head_next_dimension (const: @(LmP0Text head); @: size_t index
     index[0]: close_index + 1U
 return: 1
 
-fn: lm_trans_text_is_array_receiver_head (const: @(LmP0Text head)) int
+fn: lm_trans_text_is_array_receiver_head (const: (LmP0Text: head)) int
     size_t: index
     size_t: count
-    @: LmP0Text dimension
+    LmP0Text: dimension
 
     index: 0U
     count: 0U

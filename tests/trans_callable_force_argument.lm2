@@ -7,7 +7,7 @@ fn
 layout
 prototype
 
-fn: IntSource () int
+callable: IntSource () int
 
 fn: source () int
     return: 5

@@ -24,12 +24,29 @@ table:
              role                relation
              `allow-bare`        relation
              target              relation
+             `None.cell`         relation
+             decimal             literal
+             boolean             literal
+             serial              decimal
+             nodeKind            decimal
+             nodeFlag            decimal
+             frameFlag           decimal
+             trailerFlag         decimal
              `p0.compact-token`  relation
 end: class
 
 table:
+    name: `None.cell`
+    columns: class       (value decimal)
+    rows:
+             nodeFlag    0
+             frameFlag   0
+             trailerFlag 0
+end: `None.cell`
+
+table:
     name: `p0.compact-token`
-    columns: class  (value serial)
+    columns: class  (value boolean)
     rows:
              `!=`   1
              `<=`   1
@@ -44,27 +61,33 @@ table:
 end: `p0.compact-token`
 
 table:
-    name: node
-    columns: class              (kind serial)  (flag serial)
+    name: `node.kind`
+    columns: class              (value nodeKind)
     rows:
-             structure          1              NULL
-             frame              2              NULL
-             atom               3              NULL
-             disabled           4              NULL
-             inactive           NULL           1
-             mix                NULL           2
-             `positional-skip`  NULL           4
-end: node
+             structure          1
+             frame              2
+             atom               3
+             disabled           4
+end: `node.kind`
 
 table:
-    name: frame
-    columns: class               (flag serial)
+    name: `node.flag`
+    columns: class              (value nodeFlag)
+    rows:
+             inactive           1
+             mix                2
+             `positional-skip`  4
+end: `node.flag`
+
+table:
+    name: `frame.flag`
+    columns: class               (value frameFlag)
     rows:
              colon               1
              compact             2
              `inline-body`       4
              `separator-closed`  8
-end: frame
+end: `frame.flag`
 
 table:
     name: namespace
@@ -76,11 +99,33 @@ table:
 end: namespace
 
 table:
-    name: trailer
-    columns: class             (flag serial)  (role binding)             (`allow-bare` serial)  (target char)
+    name: `trailer.flag`
+    columns: class             (value trailerFlag)
     rows:
-             `tail-cutter`     1              NULL                       NULL                   NULL
-             `trailer.end`     NULL           LM_P0_TRAILER_ROLE_END     0                      NULL
-             `trailer.return`  NULL           LM_P0_TRAILER_ROLE_RETURN  1                      fn
-             `trailer.until`   NULL           LM_P0_TRAILER_ROLE_UNTIL   0                      NULL
-end: trailer
+             `tail-cutter`     1
+end: `trailer.flag`
+
+table:
+    name: `trailer.role`
+    columns: class             (value binding)
+    rows:
+             `trailer.end`     LM_P0_TRAILER_ROLE_END
+             `trailer.return`  LM_P0_TRAILER_ROLE_RETURN
+             `trailer.until`   LM_P0_TRAILER_ROLE_UNTIL
+end: `trailer.role`
+
+table:
+    name: `trailer.allow-bare`
+    columns: class             (value boolean)
+    rows:
+             `trailer.end`     0
+             `trailer.return`  1
+             `trailer.until`   0
+end: `trailer.allow-bare`
+
+table:
+    name: `trailer.target`
+    columns: class             (value char)
+    rows:
+             `trailer.return`  fn
+end: `trailer.target`

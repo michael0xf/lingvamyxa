@@ -6,9 +6,14 @@ table:
              c.union                    descriptor
              c.enum                     descriptor
              function                   descriptor
+             procedure                  descriptor
+             functionPointer            descriptor
+             closure                    descriptor
              callable                   descriptor
              `callable.zero-arg.value`  descriptor
              `callable.descriptor.value` descriptor
+             opaqueReference            class
+             FILE                       opaqueReference
 
              emit                       relation
              structure_value_alloc      relation
@@ -22,9 +27,44 @@ table:
              materializer               relation
              ansi_c                     relation
              emitter                    relation
+             semantic                   class
+             range                      class
+             codec                      class
+             projection                 class
+             printfFormat               class
+             contextualLiteral          class
 
              `class.spelling`           relation
              `class.cTail`              relation
+             `printf.format`            relation
+             `printf.argument.class`    relation
+             `printf.conversion.rule.expected` relation
+             `printf.conversion.rule.profile` relation
+             `class.category.value`     relation
+             `class.category.numeric`   relation
+             `class.category.integer`   relation
+             `class.category.floating`  relation
+             `class.category.reference` relation
+             `class.category.opaque`    relation
+             `class.category.callable`  relation
+             `class.category.descriptor` relation
+             `class.category.fixedWidth` relation
+             `class.category.profileWidth` relation
+             `class.semantic`           relation
+             `class.range`              relation
+             `class.c.projection`       relation
+             `core.c.include`           relation
+             `None.cell`                relation
+             `serialization.codec`      relation
+             `contextual.literal.value` relation
+             `None.value`               relation
+             `OK.value`                 relation
+             `false.value`              relation
+             `true.value`               relation
+             `callable.projection`      relation
+             `c99.ub.policy`            relation
+             `profile.validator`        relation
+             `class.reference-base`      relation
              `class.receiver`           relation
              `receiver.type`            relation
              `receiver.level`           relation
@@ -48,7 +88,11 @@ table:
              expr_emitter_binding       relation
              `call.lowering`            relation
              `materialize.argument`     relation
-             `callable.lazy`            relation
+             `callable.partial`         relation
+             `callable.capture`         relation
+             `callable.partial.form`    relation
+             method                     relation
+             `requires.method`          relation
              `cast.target`              relation
              `operator.prefix`          relation
              `operator.postfix`         relation
@@ -72,12 +116,139 @@ table:
              `column.index`             relation
              `column.descriptor.count`  relation
              `column.descriptor`        relation
+
+             ubPattern                  class
+             validatorPolicy            class
+             profileRule                class
+             decimal                    literal
+             boolean                    literal
+             serial                     decimal
+             diagnostic                 validatorPolicy
+             checked                    validatorPolicy
+             `profile-defined`          validatorPolicy
+             `c99.null-dereference`     ubPattern
+             `c99.signed-overflow`      ubPattern
+             `c99.shift-count-range`    ubPattern
+             `c99.format-mismatch`      ubPattern
+             `c99.invalid-pointer-cast` ubPattern
+             None                       contextualLiteral
+             OK                         contextualLiteral
+             false                      contextualLiteral
+             true                       contextualLiteral
+             `%d`                       printfFormat
+             `%i`                       printfFormat
+             `%u`                       printfFormat
+             `%o`                       printfFormat
+             `%x`                       printfFormat
+             `%X`                       printfFormat
+             `%ld`                      printfFormat
+             `%li`                      printfFormat
+             `%lu`                      printfFormat
+             `%lo`                      printfFormat
+             `%lx`                      printfFormat
+             `%lX`                      printfFormat
+             `%zu`                      printfFormat
+             `%zo`                      printfFormat
+             `%zx`                      printfFormat
+             `%zX`                      printfFormat
+             `%c`                       printfFormat
+             `%s`                       printfFormat
+             `%f`                       printfFormat
+             `%F`                       printfFormat
+             `%e`                       printfFormat
+             `%E`                       printfFormat
+             `%g`                       printfFormat
+             `%G`                       printfFormat
+             `%a`                       printfFormat
+             `%A`                       printfFormat
+             int8                      primitive
+             Boolean                   primitive
 end: class
+
+table:
+    name: `class.category`
+    columns: class            (value categoryFlag)  (numeric categoryFlag)  (integer categoryFlag)  (floating categoryFlag)  (reference categoryFlag)  (opaque categoryFlag)  (callable categoryFlag)  (descriptor categoryFlag)  (fixedWidth categoryFlag)  (profileWidth categoryFlag)
+    rows:
+             int              1              1                1                0                 0                 0               0                0                  0                  1
+             u32              1              1                1                0                 0                 0               0                0                  1                  0
+             uint8            1              1                1                0                 0                 0               0                0                  1                  0
+             int8             1              1                1                0                 0                 0               0                0                  1                  0
+             Boolean          1              0                0                0                 0                 0               0                0                  1                  0
+             double           1              1                0                1                 0                 0               0                0                  0                  0
+             FILE             1              0                0                0                 1                 1               0                0                  0                  0
+             functionPointer  0              0                0                0                 1                 0               1                1                  0                  0
+             closure          0              0                0                0                 1                 0               1                1                  0                  0
+end: `class.category`
+
+table:
+    name: `class.semantic`
+    columns: class  (value char)
+    rows:
+             void      none
+             char      integer
+             short     integer
+             int       integer
+             long      integer
+             float     floating
+             double    floating
+             signed    integer
+             unsigned  integer
+             uchar     integer
+             ulong     integer
+             size_t    count
+             categoryFlag flag
+             uint8     integer
+             int8      integer
+             Boolean   flag
+             u8        integer
+             u16       integer
+             u32       integer
+             u64       integer
+             i8        integer
+             i16       integer
+             i32       integer
+             i64       integer
+             FILE      opaqueHandle
+end: `class.semantic`
+
+table:
+    name: `class.range`
+    columns: class  (value char)
+    rows:
+             char      "C99-char(profile)"
+             short     "C99-short(profile)"
+             int       "C99-int(profile)"
+             long      "C99-long(profile)"
+             float     "C99-float(profile)"
+             double    "C99-double(profile)"
+             signed    "C99-signed-int(profile)"
+             unsigned  "C99-unsigned-int(profile)"
+             uchar     "0..UCHAR_MAX(profile)"
+             ulong     "0..ULONG_MAX(profile)"
+             size_t    "0..SIZE_MAX(profile)"
+             categoryFlag "0..1"
+             uint8     "0..UINT8_MAX"
+             int8      "INT8_MIN..INT8_MAX"
+             Boolean   "-1..1"
+             u8        "0..UINT8_MAX"
+             u16       "0..UINT16_MAX"
+             u32       "0..UINT32_MAX"
+             u64       "0..UINT64_MAX"
+             i8        "INT8_MIN..INT8_MAX"
+             i16       "INT16_MIN..INT16_MAX"
+             i32       "INT32_MIN..INT32_MAX"
+             i64       "INT64_MIN..INT64_MAX"
+             FILE      opaque
+end: `class.range`
 
 table:
     name: `class.spelling`
     columns: class  (spelling char)
     rows:
+             categoryFlag uint8_t
+             uint8  uint8_t
+             int8   int8_t
+             Boolean int8_t
              u8     uint8_t
              u16    uint16_t
              u32    uint32_t
@@ -89,6 +260,261 @@ table:
              uchar  "unsigned char"
              ulong  "unsigned long"
 end: `class.spelling`
+
+table:
+    name: `printf.format`
+    columns: class  (spelling char)
+    rows:
+             int       "%d"
+             unsigned  "%u"
+             long      "%ld"
+             ulong     "%lu"
+             size_t    "%zu"
+             u64       PRIu64
+             i64       PRId64
+end: `printf.format`
+
+table:
+    name: `printf.argument.class`
+    columns: class  (value class)
+    rows:
+             `%d`   int
+             `%i`   int
+             `%u`   unsigned
+             `%o`   unsigned
+             `%x`   unsigned
+             `%X`   unsigned
+             `%ld`  long
+             `%li`  long
+             `%lu`  ulong
+             `%lo`  ulong
+             `%lx`  ulong
+             `%lX`  ulong
+             `%zu`  size_t
+             `%zo`  size_t
+             `%zx`  size_t
+             `%zX`  size_t
+             `%c`   int
+             `%s`   char
+             `%f`   double
+             `%F`   double
+             `%e`   double
+             `%E`   double
+             `%g`   double
+             `%G`   double
+             `%a`   double
+             `%A`   double
+end: `printf.argument.class`
+
+table:
+    name: `printf.conversion.rule`
+    columns: class  (expected class)  (profile profileRule)
+    rows:
+             `%d`   int       `c99.format-mismatch`
+             `%i`   int       `c99.format-mismatch`
+             `%u`   unsigned  `c99.format-mismatch`
+             `%o`   unsigned  `c99.format-mismatch`
+             `%x`   unsigned  `c99.format-mismatch`
+             `%X`   unsigned  `c99.format-mismatch`
+             `%ld`  long      `c99.format-mismatch`
+             `%li`  long      `c99.format-mismatch`
+             `%lu`  ulong     `c99.format-mismatch`
+             `%lo`  ulong     `c99.format-mismatch`
+             `%lx`  ulong     `c99.format-mismatch`
+             `%lX`  ulong     `c99.format-mismatch`
+             `%zu`  size_t    `c99.format-mismatch`
+             `%zo`  size_t    `c99.format-mismatch`
+             `%zx`  size_t    `c99.format-mismatch`
+             `%zX`  size_t    `c99.format-mismatch`
+             `%c`   int       `c99.format-mismatch`
+             `%s`   char      `c99.format-mismatch`
+             `%f`   double    `c99.format-mismatch`
+             `%F`   double    `c99.format-mismatch`
+             `%e`   double    `c99.format-mismatch`
+             `%E`   double    `c99.format-mismatch`
+             `%g`   double    `c99.format-mismatch`
+             `%G`   double    `c99.format-mismatch`
+             `%a`   double    `c99.format-mismatch`
+             `%A`   double    `c99.format-mismatch`
+end: `printf.conversion.rule`
+
+table:
+    name: `class.c.projection`
+    columns: class  (spelling char)
+    rows:
+             void      void
+             char      char
+             short     short
+             int       int
+             long      long
+             float     float
+             double    double
+             signed    signed
+             unsigned  unsigned
+             uchar     "unsigned char"
+             ulong     "unsigned long"
+             size_t    size_t
+             FILE      FILE
+             categoryFlag uint8_t
+             uint8     uint8_t
+             int8      int8_t
+             Boolean   int8_t
+             u8        uint8_t
+             u16       uint16_t
+             u32       uint32_t
+             u64       uint64_t
+             i8        int8_t
+             i16       int16_t
+             i32       int32_t
+             i64       int64_t
+end: `class.c.projection`
+
+table:
+    name: `core.c.include`
+    columns: class  (target char)
+    rows:
+             core_stddef   "<stddef.h>"
+             core_stdint   "<stdint.h>"
+             core_inttypes "<inttypes.h>"
+             core_stdio    "<stdio.h>"
+             core_stdlib   "<stdlib.h>"
+             core_setjmp   "<setjmp.h>"
+end: `core.c.include`
+
+table:
+    name: `serialization.codec`
+    columns: class  (codec char)
+    rows:
+             char      lmx.char
+             short     lmx.decimal-atom
+             int       lmx.decimal-atom
+             long      lmx.decimal-atom
+             float     lmx.decimal-atom
+             double    lmx.decimal-atom
+             signed    lmx.decimal-atom
+             unsigned  lmx.decimal-atom
+             uchar     lmx.decimal-atom
+             ulong     lmx.decimal-atom
+             size_t    lmx.decimal-atom
+             categoryFlag lmx.decimal-atom
+             uint8     lmx.decimal-atom
+             int8      lmx.decimal-atom
+             Boolean   lmx.decimal-atom
+             u8        lmx.decimal-atom
+             u16       lmx.decimal-atom
+             u32       lmx.decimal-atom
+             u64       lmx.decimal-atom
+             i8        lmx.decimal-atom
+             i16       lmx.decimal-atom
+             i32       lmx.decimal-atom
+             i64       lmx.decimal-atom
+             FILE      lmx.opaque-handle
+end: `serialization.codec`
+
+table:
+    name: int8
+    columns: class  (`context literal` int8)
+    rows:
+end: int8
+
+join: (int8) Boolean
+    columns: class  (`context literal` int8)
+    rows:
+             None    -1
+             false   0
+             true    1
+             OK      1
+end: Boolean
+
+table:
+    name: `contextual.literal.value`
+    columns: class  (value relation)
+    rows:
+             None    `None.value`
+             OK      `OK.value`
+             false   `false.value`
+             true    `true.value`
+end: `contextual.literal.value`
+
+table:
+    name: `None.value`
+    columns: class  (value char)
+    rows:
+             int              0
+             u32              0
+             uint8            0
+             int8             0
+             Boolean          -1
+             categoryFlag     0
+             double           0
+             FILE             0
+             functionPointer  0
+             closure          0
+end: `None.value`
+
+table:
+    name: `OK.value`
+    columns: class  (value char)
+    rows:
+             int              1
+             u32              1
+             uint8            1
+             int8             1
+             Boolean          1
+             categoryFlag     1
+             double           1
+end: `OK.value`
+
+table:
+    name: `false.value`
+    columns: class  (value char)
+    rows:
+             Boolean          0
+             int8             0
+end: `false.value`
+
+table:
+    name: `true.value`
+    columns: class  (value char)
+    rows:
+             Boolean          1
+             int8             1
+end: `true.value`
+
+table:
+    name: `callable.projection`
+    columns: class  (projection char)
+    rows:
+             fn                         c.function-symbol
+             function                   c.function-symbol
+             sub                        c.procedure-symbol
+             procedure                  c.procedure-symbol
+             functionPointerType        c.function-pointer
+             functionPointer            c.function-pointer
+             callableDescriptor         lmx.callable-descriptor
+             closureType                c.closure-struct
+             closure                    c.closure-struct
+             `callable.zero-arg.value`  lmx.callable-value
+             `callable.descriptor.value` lmx.callable-value
+end: `callable.projection`
+
+table:
+    name: `c99.ub.policy`
+    columns: class                     (policy class)
+    rows:
+             `c99.null-dereference`     diagnostic
+             `c99.signed-overflow`      `profile-defined`
+             `c99.shift-count-range`    diagnostic
+             `c99.format-mismatch`      diagnostic
+             `c99.invalid-pointer-cast` diagnostic
+end: `c99.ub.policy`
+
+table:
+    name: `profile.validator`
+    columns: class                  (binding char)
+    rows:
+             `c99.format-mismatch`  lm_trans_validate_c_printf_call
+end: `profile.validator`
 
 table:
     name: `class.cTail`
@@ -108,6 +534,13 @@ table:
 end: `class.cTail`
 
 table:
+    name: `class.reference-base`
+    columns: class  (value decimal)
+    rows:
+             FILE   1
+end: `class.reference-base`
+
+table:
     name: `class.receiver`
     columns: class  (emit binding)                     (structure_value_alloc binding)                     (structure_value_fill binding)
     rows:
@@ -119,7 +552,7 @@ table:
     columns: class  (receiver binding)
     rows:
              fn     lm_trans_receiver_fn
-             `lazy fn` lm_trans_receiver_lazy_fn
+             callable lm_trans_receiver_callable
              fm     lm_trans_receiver_fm
              sub    lm_trans_receiver_sub
 end: `receiver.function`
@@ -131,7 +564,7 @@ table:
              L1            `receiver.level`
              L2            `receiver.level`
              fn            `receiver.function`
-             `lazy fn`     `receiver.function`
+             callable      `receiver.function`
              fm            `receiver.function`
              sub           `receiver.function`
              table         `receiver.statement`
@@ -143,6 +576,7 @@ table:
              continue      `receiver.statement`
              synchronized  `receiver.statement`
              finally       `receiver.statement`
+             assert        `receiver.statement`
              include       `receiver.statement`
              define        `receiver.statement`
              `ifndef-default` `receiver.statement`
@@ -153,6 +587,10 @@ table:
              ifdef         `receiver.statement`
              guard         `receiver.statement`
              extern_c      `receiver.statement`
+             None          `receiver.statement`
+             OK            `receiver.statement`
+             false         `receiver.statement`
+             true          `receiver.statement`
              const         `receiver.statement`
              `()`          `receiver.statement`
              `[]`          `receiver.statement`
@@ -196,6 +634,7 @@ table:
              continue      lm_trans_statement_emit_loop_jump
              synchronized  lm_trans_statement_emit_synchronized
              finally       lm_trans_statement_emit_finally
+             assert        lm_trans_statement_emit_assert
              include       lm_trans_statement_emit_include_prelude
              define        lm_trans_statement_emit_define_prelude
              `ifndef-default` lm_trans_statement_emit_ifndef_default_prelude
@@ -206,6 +645,10 @@ table:
              ifdef         lm_trans_statement_emit_ifdef_prelude
              guard         lm_trans_statement_emit_guard_prelude
              extern_c      lm_trans_statement_emit_extern_c_prelude
+             None          lm_trans_statement_emit_contextual_literal_assignment
+             OK            lm_trans_statement_emit_contextual_literal_assignment
+             false         lm_trans_statement_emit_contextual_literal_assignment
+             true          lm_trans_statement_emit_contextual_literal_assignment
              const         lm_trans_statement_emit_const_declaration
              `()`          lm_trans_statement_emit_structure_declaration
              `[]`          lm_trans_statement_emit_array_declaration
@@ -219,6 +662,7 @@ table:
     columns: class  (receiver binding)
     rows:
              cast   lm_trans_expr_emit_cast_frame
+             instanceof lm_trans_expr_emit_instanceof_frame
 end: `receiver.expr`
 
 table:
@@ -229,7 +673,7 @@ table:
              join   `l4.frame`
              row    `l4.frame`
              fn     `l4.frame`
-             `lazy fn` `l4.frame`
+             callable `l4.frame`
              sub    `l4.frame`
 end: `namespace.l4`
 
@@ -277,7 +721,7 @@ end: `receiver.atom.statement`
 
 table:
     name: `loadHeaders.item`
-    columns: class      (index serial)
+    columns: class      (index decimal)
     rows:
              include    0
              define     1
@@ -294,7 +738,7 @@ end: `loadHeaders.item`
 
 table:
     name: `receiver.positional-name`
-    columns: class         (argument class)  (index serial)
+    columns: class         (argument class)  (index decimal)
     rows:
              fn            name              0
              fm            name              0
@@ -308,7 +752,7 @@ end: `receiver.positional-name`
 
 table:
     name: `receiver.formal-param.unwrap`
-    columns: class  (index serial)
+    columns: class  (index decimal)
     rows:
              const  0
 end: `receiver.formal-param.unwrap`
@@ -357,8 +801,16 @@ table:
 end: `materialize.argument`
 
 table:
+    name: `callable.partial.form`
+    columns: class       (materializer binding)
+    rows:
+             `call-frame` lm_trans_materialize_call_frame_partial
+             partial      lm_trans_materialize_partial_callable
+end: `callable.partial.form`
+
+table:
     name: `cast.target`
-    columns: class                    (value serial)
+    columns: class                    (value decimal)
     rows:
              char                     1
              uchar                    1
@@ -372,6 +824,10 @@ table:
              double                   1
              size_t                   1
              FILE                     1
+             categoryFlag             1
+             uint8                    1
+             int8                     1
+             Boolean                  1
              u8                       1
              u16                      1
              u32                      1
@@ -518,6 +974,7 @@ table:
              `operator.postfix`  `operator.postfix.emitter`
              `operator.infix`    `operator.infix.emitter`
              `operator.index`    `operator.index.emitter`
+             `expr.atom`         `expr.atom.emitter`
 end: expr_emitter_binding
 
 table:
@@ -566,4 +1023,8 @@ table:
     columns: class  (ansi_c char)  (emitter binding)
     rows:
              `.`    "."            lm_trans_expr_emit_c_dot
+             None   "None"         lm_trans_expr_emit_contextual_literal
+             OK     "OK"           lm_trans_expr_emit_contextual_literal
+             false  "false"        lm_trans_expr_emit_contextual_literal
+             true   "true"         lm_trans_expr_emit_contextual_literal
 end: `expr.atom`
