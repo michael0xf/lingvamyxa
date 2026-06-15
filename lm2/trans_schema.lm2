@@ -1,7 +1,7 @@
 L4:
     table:
         name: `forward.backend`
-        columns: class                       (backend class)
+        columns((class: class) (class: backend))
         rows:
                  LmTransIdentifierRelation   c.struct
                  LmTransIdentifierCard       c.struct
@@ -29,21 +29,21 @@ L4:
 
     table:
         name: `alias.backend`
-        columns: class                  (backend class)
+        columns((class: class) (class: backend))
         rows:
                  LmTransRegistryColumn  c.typedef
     end: `alias.backend`
 
     table:
         name: `alias.target`
-        columns: class                  (target class)
+        columns((class: class) (class: target))
         rows:
                  LmTransRegistryColumn  LmL4Column
     end: `alias.target`
 
     table:
         name: functionPointerType
-        columns: class                                (value serial)
+        columns((class: class) (int: value))
         rows:
                  LmTransExprSegmentMaterializer       1
                  LmTransCallLoweringHandler           1
@@ -70,7 +70,7 @@ L4:
 
     table:
         name: `define.value`
-        columns: class                         (value char)
+        columns((class: class) (@: char value))
         rows:
                  LM_TRANS_REGISTRY_CLONE_STRUCTURE 1
                  LM_TRANS_REGISTRY_CLONE_TRAILER   2
@@ -214,7 +214,7 @@ L4:
 
     table:
         name: `layout.backend`
-        columns: class                          (backend class)
+        columns((class: class) (class: backend))
         rows:
                  LmTransIdentifierRelation      c.struct
                  LmTransIdentifierCard          c.struct
@@ -267,7 +267,7 @@ L4:
 
     table:
         name: `class.reference-base`
-        columns: class                          (value serial)
+        columns((class: class) (int: value))
         rows:
                  LmTransIdentifierRelation      1
                  LmTransIdentifierCard          1
@@ -320,7 +320,7 @@ L4:
 
     table:
         name: LmTransIdentifierRelation
-        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  name     char                   0                       1                                1
                  symbols  LmOwnPtrStack          1                       0                                0
@@ -329,7 +329,7 @@ L4:
 
     table:
         name: LmTransIdentifierCard
-        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  name                  LmP0Text              0                       0
                  name_storage          char                  1                       1
@@ -342,7 +342,7 @@ L4:
 
     table:
         name: LmTransIdentifierTable
-        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  buckets       LmTransIdentifierCard 0                   1
                  bucket_count  size_t                1                   0
@@ -351,7 +351,7 @@ L4:
 
     table:
         name: LmTransRegistry
-        columns: class              (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  identifiers        LmTransIdentifierTable 0             0
                  value_arena        LmOwnArena            1              0
@@ -369,7 +369,7 @@ L4:
 
     table:
         name: LmTransRegistryFact
-        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  table         char                   0                       1                                0
                  key           char                   1                       1                                0
@@ -379,7 +379,7 @@ L4:
 
     table:
         name: LmTransPointerBinding
-        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  name          char                   0                       1                                1
                  value         LmTransBinding         1                       0                                0
@@ -387,7 +387,7 @@ L4:
 
     table:
         name: LmTransRegistryCloneFrame
-        columns: class            (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  phase            int                    0                       0                                0
                  source_structure LmP0Structure          1                       0                                1
@@ -398,7 +398,7 @@ L4:
 
     table:
         name: LmTransLayoutField
-        columns: class              (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  name               char                   0                       1                                1
                  class_name         char                   1                       1                                1
@@ -413,7 +413,7 @@ L4:
 
     table:
         name: LmTransCDeclarator
-        columns: class                     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  type_node                 LmP0Node               0                       0                                1
                  expression_dimensions     LmP0Field              1                       0                                1
@@ -428,14 +428,14 @@ L4:
 
     table:
         name: `LmTransCDeclarator.field.array-count`
-        columns: class               (count serial)
+        columns((class: class) (size_t: count))
         rows:
                  literal_dimensions  8
     end: `LmTransCDeclarator.field.array-count`
 
     table:
         name: LmTransAbiParam
-        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  name           char                   0                       1                                1
                  class_name     char                   1                       1                                1
@@ -446,7 +446,7 @@ L4:
 
     table:
         name: LmTransL4CallableType
-        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  class_name     LmP0Text               0                       0                                0
                  address_depth  size_t                 1                       0                                0
@@ -455,7 +455,7 @@ L4:
 
     table:
         name: LmTransSymbol
-        columns: class                    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  name                     LmP0Text               0                       0                                0
                  name_storage             char                   1                       1                                0
@@ -482,7 +482,7 @@ L4:
 
     table:
         name: LmTransCleanup
-        columns: class        (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  id           unsigned               0                       0                                0
                  scope_depth  unsigned               1                       0                                0
@@ -491,14 +491,14 @@ L4:
 
     table:
         name: LmTransLoop
-        columns: class         (`field.class` class)  (`field.index` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`))
         rows:
                  cleanup_base  size_t                 0
     end: LmTransLoop
 
     table:
         name: LmTransExprSegment
-        columns: class           (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  first           LmP0Field              0                       0                                1
                  stop            LmP0Field              1                       0                                1
@@ -508,7 +508,7 @@ L4:
 
     table:
         name: LmTransStructReturnFieldValue
-        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  first    LmP0Field              0                       0                                1
                  stop     LmP0Field              1                       0                                1
@@ -517,7 +517,7 @@ L4:
 
     table:
         name: LmTransCallLowering
-        columns: class      (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  name       LmP0Text               0                       0                                0
                  signature  LmTransSymbol          1                       0                                1
@@ -526,7 +526,7 @@ L4:
 
     table:
         name: LmTransCallableValue
-        columns: class               (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  symbol              LmTransSymbol          0                       0                                1
                  code_name           LmP0Text               1                       0                                1
@@ -539,7 +539,7 @@ L4:
 
     table:
         name: LmTransExprLoweredRange
-        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  pieces  LmOwnPtrStack          0                       0
                  index   size_t                 1                       0
@@ -547,14 +547,14 @@ L4:
 
     table:
         name: LmTransExprStack
-        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  jobs   LmOwnPtrStack          0                       0
     end: LmTransExprStack
 
     table:
         name: LmTransExprRangeJob
-        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  field                LmP0Field              0                       0                                1
                  stop                 LmP0Field              1                       0                                1
@@ -568,7 +568,7 @@ L4:
 
     table:
         name: LmTransExprCallArgsJob
-        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  body    LmP0Structure          0                       0                                1
                  callee  LmTransSymbol          1                       0                                1
@@ -577,7 +577,7 @@ L4:
 
     table:
         name: LmTransExprAtomLowering
-        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  emit    LmTransExprAtomEmitHandler   0                  0                                0
                  update  LmTransExprAtomStateHandler  1                  0                                0
@@ -587,7 +587,7 @@ L4:
 
     table:
         name: LmTransExprPiece
-        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  emit           LmTransExprPieceEmitHandler 0                  0                                0
                  leading_space  int                         1                  0                                0
@@ -599,7 +599,7 @@ L4:
 
     table:
         name: LmTransExprJob
-        columns: class          (`field.class` class)       (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  run            LmTransExprJobHandler       0                       0                                0
                  destroy        LmTransExprJobDestroyHandler 1                       0                                0
@@ -614,7 +614,7 @@ L4:
 
     table:
         name: LmTransStatementListJob
-        columns: class                   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  field                   LmP0Field              0                       0                                1
                  indent                  unsigned               1                       0                                0
@@ -624,7 +624,7 @@ L4:
 
     table:
         name: LmTransStatementNodeJob
-        columns: class         (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  node          LmP0Node               0                       0                                1
                  indent        unsigned               1                       0                                0
@@ -633,7 +633,7 @@ L4:
 
     table:
         name: LmTransStatementFrameJob
-        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  frame   LmP0Frame              0                       0                                1
                  indent  unsigned               1                       0                                0
@@ -641,7 +641,7 @@ L4:
 
     table:
         name: LmTransStatementTextJob
-        columns: class   (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  indent  unsigned               0                       0                                0
                  text    char                   1                       1                                1
@@ -649,14 +649,14 @@ L4:
 
     table:
         name: LmTransStatementStack
-        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  jobs   LmOwnPtrStack          0                       0
     end: LmTransStatementStack
 
     table:
         name: LmTransArrayStructureValueFillFrame
-        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  field  LmP0Field              0                       0                                1
                  depth  size_t                 1                       0                                0
@@ -665,7 +665,7 @@ L4:
 
     table:
         name: LmTransStatementJob
-        columns: class       (`field.class` class)            (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  run         LmTransStatementJobHandler        0                       0
                  destroy     LmTransStatementJobDestroyHandler 1                       0
@@ -677,14 +677,14 @@ L4:
 
     table:
         name: LmTransStatementLowering
-        columns: class  (`field.class` class)  (`field.index` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`))
         rows:
                  emit   LmTransStatementFrameHandler  0
     end: LmTransStatementLowering
 
     table:
         name: LmTransFunctionState
-        columns: class                       (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  previous_return_type_node   LmP0Node               0                       0                                1
                  previous_return_type_is_struct int                 1                       0                                0
@@ -699,7 +699,7 @@ L4:
 
     table:
         name: LmTransFunctionHeader
-        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  frame                 LmP0Frame              0                       0                                1
                  name                  LmP0Text               1                       0                                0
@@ -721,7 +721,7 @@ L4:
 
     table:
         name: LmTransCapture
-        columns: class          (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  name           LmP0Text               0                       0                                0
                  type_head      LmP0Text               1                       0                                0
@@ -732,7 +732,7 @@ L4:
 
     table:
         name: LmTransHoistedFunction
-        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  function              LmTransFunctionHeader  0                       0                                0
                  captures              LmOwnPtrStack          1                       0                                0
@@ -746,7 +746,7 @@ L4:
 
     table:
         name: LmTransBinding
-        columns: class                       (`field.class` class)  (`field.index` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`))
         rows:
                  call_lowering               LmTransCallLoweringHandler              0
                  expr_frame                  LmTransExprFrameHandler                 1
@@ -763,7 +763,7 @@ L4:
 
     table:
         name: LmTransHeadBinding
-        columns: class                      (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  symbol                     LmTransSymbol          0                       0                                1
                  receiver_type              char                   1                       1                                1
@@ -775,7 +775,7 @@ L4:
 
     table:
         name: LmTransL4HeadBinding
-        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  receiver_type        char                   0                       1                                1
                  receiver_binding     char                   1                       1                                1
@@ -784,7 +784,7 @@ L4:
 
     table:
         name: LmTransL4AtomBinding
-        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  receiver_type        char                   0                       1                                1
                  receiver_binding     char                   1                       1                                1
@@ -793,7 +793,7 @@ L4:
 
     table:
         name: LmTransL4PayloadPointerBinding
-        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  head                 char                   0                       1                                1
                  receiver_type        char                   1                       1                                1
@@ -802,7 +802,7 @@ L4:
 
     table:
         name: LmTransTopLevelItem
-        columns: class                 (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  declare               LmTransTopLevelDeclareHandler 0                 0                                0
                  emit_before_functions LmTransTopLevelEmitHandler    1                 0                                0
@@ -817,7 +817,7 @@ L4:
 
     table:
         name: LmTransFunctionEmitFrame
-        columns: class             (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  function          LmTransFunctionHeader 0                 0                                1
                  hoisted_functions LmOwnPtrStack        1                 0                                0
@@ -828,14 +828,14 @@ L4:
 
     table:
         name: LmTransTypePointerSuffix
-        columns: class             (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  depth             size_t               0                 0                                0
     end: LmTransTypePointerSuffix
 
     table:
         name: LmTransNamespace
-        columns: class                (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  items                LmOwnPtrStack          0                       0                                0
                  identifiers          LmTransIdentifierTable 1                       0                                0
@@ -853,7 +853,7 @@ L4:
 
     table:
         name: LmTransL4LoadContext
-        columns: class             (`field.class` class)  (`field.index` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`))
         rows:
                  allow_node_cells  int                    0
     end: LmTransL4LoadContext
