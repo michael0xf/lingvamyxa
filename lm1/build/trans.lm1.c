@@ -848,6 +848,9 @@ static const LmP0Field * lm_l4_nth_field(const LmP0Structure * structure, size_t
 static int lm_l4_trailer_single_atom(const LmP0Trailer * trailer, const LmP0Text * *out_text);
 static int lm_l4_identifier_payload(const LmP0Text * atom, const char **out_data, size_t *out_length);
 static int lm_l4_identifier_same(const LmP0Text * left, const LmP0Text * right);
+static int lm_l4_text_all_char(const LmP0Text * text, char ch);
+static int lm_l4_column_name_from_param_frame(const LmP0Frame * frame, LmL4Column * out_column);
+static int lm_l4_structure_single_visible_frame(const LmP0Structure * structure, const LmP0Frame * *out_frame);
 static int lm_l4_frame_single_atom(const LmP0Frame * frame, const char *head, const LmP0Text * *out_atom);
 static int lm_l4_column_name(const LmP0Field * field, LmL4Column * out_column);
 static void lm_l4_columns_destroy(LmL4Column * *columns, size_t count);
@@ -1033,6 +1036,91 @@ static int lm_l4_identifier_same(const LmP0Text * left, const LmP0Text * right) 
     return lm_l4_text_slice_same(left_data, left_length, right_data, right_length);
 }
 
+static int lm_l4_text_all_char(const LmP0Text * text, char ch) {
+    size_t i;
+    if (text == 0 || text -> length == 0U) {
+        return 0;
+    }
+    i = 0U;
+    while (i < text -> length) {
+        if (text -> data[i] != ch) {
+            return 0;
+        }
+        i = i + 1U;
+    }
+    return 1;
+}
+
+static int lm_l4_column_name_from_param_frame(const LmP0Frame * frame, LmL4Column * out_column) {
+    const LmP0Field * field0;
+    const LmP0Field * field1;
+    const LmP0Text * atom;
+    if (frame == 0 || out_column == 0) {
+        return 0;
+    }
+    field0 = lm_l4_frame_body(frame) -> first_field;
+    while (field0 != 0 && lm_l4_node_is_ignored(field0 -> value) != 0) {
+        field0 = field0 -> next;
+    }
+    if (field0 == 0 || field0 -> value == 0) {
+        return -1;
+    }
+    if (lm_l4_text_all_char(lm_l4_frame_head(frame), '@') != 0) {
+        field1 = field0 -> next;
+        while (field1 != 0 && lm_l4_node_is_ignored(field1 -> value) != 0) {
+            field1 = field1 -> next;
+        }
+        if (field1 == 0 || field1 -> value == 0 || field1 -> value -> kind != LM_P0_NODE_ATOM) {
+            return -1;
+        }
+        atom = lm_l4_node_atom(field1 -> value);
+        if (atom == 0) {
+            return -1;
+        }
+        out_column->name = atom;
+        if (field0 -> value -> kind == LM_P0_NODE_ATOM) {
+            out_column->descriptors[0] = lm_l4_node_atom(field0 -> value);
+            out_column->descriptor_count = 1U;
+        }
+        return 1;
+    }
+    if (field0 -> value -> kind != LM_P0_NODE_ATOM) {
+        return -1;
+    }
+    atom = lm_l4_node_atom(field0 -> value);
+    if (atom == 0) {
+        return -1;
+    }
+    out_column->name = atom;
+    out_column->descriptors[0] = lm_l4_frame_head(frame);
+    out_column->descriptor_count = 1U;
+    return 1;
+}
+
+static int lm_l4_structure_single_visible_frame(const LmP0Structure * structure, const LmP0Frame * *out_frame) {
+    const LmP0Field * field;
+    const LmP0Field * next_field;
+    if (structure == 0 || out_frame == 0) {
+        return 0;
+    }
+    field = structure -> first_field;
+    while (field != 0 && lm_l4_node_is_ignored(field -> value) != 0) {
+        field = field -> next;
+    }
+    if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_FRAME) {
+        return 0;
+    }
+    next_field = field -> next;
+    while (next_field != 0 && lm_l4_node_is_ignored(next_field -> value) != 0) {
+        next_field = next_field -> next;
+    }
+    if (next_field != 0) {
+        return 0;
+    }
+    *(out_frame) = lm_l4_node_frame(field -> value);
+    return 1;
+}
+
 static int lm_l4_frame_single_atom(const LmP0Frame * frame, const char *head, const LmP0Text * *out_atom) {
     const LmP0Field * field;
     const LmP0Text * frame_head;
@@ -1063,6 +1151,7 @@ static int lm_l4_column_name(const LmP0Field * field, LmL4Column * out_column) {
     const LmP0Field * body_field;
     const LmP0Text * atom;
     size_t descriptor_count;
+    int status;
     if (field == 0 || out_column == 0) {
         return 0;
     }
@@ -1081,13 +1170,7 @@ static int lm_l4_column_name(const LmP0Field * field, LmL4Column * out_column) {
     }
     if (node -> kind == LM_P0_NODE_FRAME) {
         node_frame = lm_l4_node_frame(node);
-        if (lm_l4_frame_single_atom(node_frame, 0, &atom) <= 0) {
-            return -1;
-        }
-        out_column->name = atom;
-        out_column->descriptors[0] = lm_l4_frame_head(node_frame);
-        out_column->descriptor_count = 1U;
-        return 1;
+        return lm_l4_column_name_from_param_frame(node_frame, out_column);
     }
     if (node -> kind != LM_P0_NODE_STRUCTURE) {
         return -1;
@@ -1095,6 +1178,10 @@ static int lm_l4_column_name(const LmP0Field * field, LmL4Column * out_column) {
     node_structure = lm_l4_node_structure(node);
     if (node_structure == 0) {
         return -1;
+    }
+    status = lm_l4_structure_single_visible_frame(node_structure, &node_frame);
+    if (status != 0) {
+        return lm_l4_column_name_from_param_frame(node_frame, out_column);
     }
     body_field = node_structure -> first_field;
     while (body_field != 0 && lm_l4_node_is_ignored(body_field -> value) != 0) {
