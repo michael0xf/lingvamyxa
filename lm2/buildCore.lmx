@@ -3,7 +3,7 @@ L4: loadHeaders
 L4:
     table:
         name: LmBuildOptions
-        columns: class       (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  full_build  int                    0                       0
                  next_build  int                    1                       0
@@ -11,21 +11,21 @@ L4:
 
     table:
         name: `layout.backend`
-        columns: class           (backend class)
+        columns((class: class) (class: backend))
         rows:
                  LmBuildOptions  c.struct
     end: `layout.backend`
 
     table:
         name: `class.reference-base`
-        columns: class           (value serial)
+        columns((class: class) (int: value))
         rows:
                  LmBuildOptions  1
     end: `class.reference-base`
 
     table:
         name: BUILD
-        columns: class              (l2 binding)                (win char)                                       (unix char)
+        columns((class: class) (binding: l2)                (@: char win)                                       (@: char unix))
         rows:
                  exe_suffix         lm_build_exe_suffix         ".exe"                                           ""
                  path_sep           lm_build_path_sep           '\\'                                             '/'

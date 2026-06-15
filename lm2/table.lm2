@@ -3,7 +3,7 @@ L4: loadHeaders
 L4:
     table:
         name: `constant.backend`
-        columns: class                                      (backend class)
+        columns((class: class) (class: backend))
         rows:
                  LM_TABLE_COLUMN_SPELLING_STRUCTURE         c.define
                  LM_TABLE_COLUMN_SPELLING_FRAME_CLOSE       c.define
@@ -14,7 +14,7 @@ L4:
 
     table:
         name: `constant.value`
-        columns: class                                      (value literal)
+        columns((class: class) (int: value))
         rows:
                  LM_TABLE_COLUMN_SPELLING_STRUCTURE         1
                  LM_TABLE_COLUMN_SPELLING_FRAME_CLOSE       2
@@ -25,7 +25,7 @@ L4:
 
     table:
         name: LmTableBuffer
-        columns: class     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  data      char                   0                       1
                  length    size_t                 1                       0
@@ -35,7 +35,7 @@ L4:
 
     table:
         name: LmTableColumn
-        columns: class     (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  spelling  char                   0                       1
                  width     size_t                 1                       0
@@ -43,7 +43,7 @@ L4:
 
     table:
         name: LmTableColumnSpellingFrame
-        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  field  LmP0Field              0                       0                                1
                  phase  int                    1                       0                                0
@@ -52,14 +52,14 @@ L4:
 
     table:
         name: LmTableEmitTablesFrame
-        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  field  LmP0Field              0                       0                                1
     end: LmTableEmitTablesFrame
 
     table:
         name: LmTableLmxFrame
-        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  field    LmP0Field              0                       0                                1
                  trailer  LmP0Trailer            1                       0                                1
@@ -69,14 +69,14 @@ L4:
 
     table:
         name: LmTableError
-        columns: class    (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)  (`field.const` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
         rows:
                  message  char                   0                       1                                1
     end: LmTableError
 
     table:
         name: `layout.backend`
-        columns: class          (backend class)
+        columns((class: class) (class: backend))
         rows:
                  LmTableBuffer  c.struct
                  LmTableColumn  c.struct
@@ -88,7 +88,7 @@ L4:
 
     table:
         name: `class.reference-base`
-        columns: class          (value serial)
+        columns((class: class) (int: value))
         rows:
                  LmTableBuffer  1
                  LmTableColumn  1
