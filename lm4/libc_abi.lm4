@@ -9,7 +9,7 @@ end: include
 
 table:
     name: `fn.external`
-    columns: class  (value serial)
+    columns((class: class) (int: value))
     rows:
              getenv  1
              strlen  1
@@ -36,7 +36,7 @@ end: class
 
 table:
     name: `class.reference-base`
-    columns: class  (value serial)
+    columns((class: class) (int: value))
     rows:
              FILE   1
 end: `class.reference-base`
