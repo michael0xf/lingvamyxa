@@ -1,6 +1,6 @@
 table:
     name: class
-    columns: class                      (kind class)
+    columns((class: class) (class: kind))
     rows:
              c.struct                   descriptor
              c.union                    descriptor
@@ -167,7 +167,7 @@ end: class
 
 table:
     name: `class.category`
-    columns: class            (value categoryFlag)  (numeric categoryFlag)  (integer categoryFlag)  (floating categoryFlag)  (reference categoryFlag)  (opaque categoryFlag)  (callable categoryFlag)  (descriptor categoryFlag)  (fixedWidth categoryFlag)  (profileWidth categoryFlag)
+    columns((class: class) (categoryFlag: value)  (categoryFlag: numeric)  (categoryFlag: integer)  (categoryFlag: floating)  (categoryFlag: reference)  (categoryFlag: opaque)  (categoryFlag: callable)  (categoryFlag: descriptor)  (categoryFlag: fixedWidth)  (categoryFlag: profileWidth))
     rows:
              int              1              1                1                0                 0                 0               0                0                  0                  1
              u32              1              1                1                0                 0                 0               0                0                  1                  0
@@ -182,7 +182,7 @@ end: `class.category`
 
 table:
     name: `class.semantic`
-    columns: class  (value char)
+    columns((class: class) (@: char value))
     rows:
              void      none
              char      integer
@@ -213,7 +213,7 @@ end: `class.semantic`
 
 table:
     name: `class.range`
-    columns: class  (value char)
+    columns((class: class) (@: char value))
     rows:
              char      "C99-char(profile)"
              short     "C99-short(profile)"
@@ -243,7 +243,7 @@ end: `class.range`
 
 table:
     name: `class.spelling`
-    columns: class  (spelling char)
+    columns((class: class) (@: char spelling))
     rows:
              categoryFlag uint8_t
              uint8  uint8_t
@@ -263,7 +263,7 @@ end: `class.spelling`
 
 table:
     name: `printf.format`
-    columns: class  (spelling char)
+    columns((class: class) (@: char spelling))
     rows:
              int       "%d"
              unsigned  "%u"
@@ -276,7 +276,7 @@ end: `printf.format`
 
 table:
     name: `printf.argument.class`
-    columns: class  (value class)
+    columns((class: class) (class: value))
     rows:
              `%d`   int
              `%i`   int
@@ -308,7 +308,7 @@ end: `printf.argument.class`
 
 table:
     name: `printf.conversion.rule`
-    columns: class  (expected class)  (profile profileRule)
+    columns((class: class) (class: expected)  (profileRule: profile))
     rows:
              `%d`   int       `c99.format-mismatch`
              `%i`   int       `c99.format-mismatch`
@@ -340,7 +340,7 @@ end: `printf.conversion.rule`
 
 table:
     name: `class.c.projection`
-    columns: class  (spelling char)
+    columns((class: class) (@: char spelling))
     rows:
              void      void
              char      char
@@ -371,7 +371,7 @@ end: `class.c.projection`
 
 table:
     name: `core.c.include`
-    columns: class  (target char)
+    columns((class: class) (@: char target))
     rows:
              core_stddef   "<stddef.h>"
              core_stdint   "<stdint.h>"
@@ -383,7 +383,7 @@ end: `core.c.include`
 
 table:
     name: `serialization.codec`
-    columns: class  (codec char)
+    columns((class: class) (@: char codec))
     rows:
              char      lmx.char
              short     lmx.decimal-atom
@@ -413,12 +413,12 @@ end: `serialization.codec`
 
 table:
     name: int8
-    columns: class  (`context literal` int8)
+    columns((class: class) (int8: `context literal`))
     rows:
 end: int8
 
 join: (int8) Boolean
-    columns: class  (`context literal` int8)
+    columns((class: class) (int8: `context literal`))
     rows:
              None    -1
              false   0
@@ -428,7 +428,7 @@ end: Boolean
 
 table:
     name: `contextual.literal.value`
-    columns: class  (value relation)
+    columns((class: class) (relation: value))
     rows:
              None    `None.value`
              OK      `OK.value`
@@ -438,7 +438,7 @@ end: `contextual.literal.value`
 
 table:
     name: `None.value`
-    columns: class  (value char)
+    columns((class: class) (@: char value))
     rows:
              int              0
              u32              0
@@ -454,7 +454,7 @@ end: `None.value`
 
 table:
     name: `OK.value`
-    columns: class  (value char)
+    columns((class: class) (@: char value))
     rows:
              int              1
              u32              1
@@ -467,7 +467,7 @@ end: `OK.value`
 
 table:
     name: `false.value`
-    columns: class  (value char)
+    columns((class: class) (@: char value))
     rows:
              Boolean          0
              int8             0
@@ -475,7 +475,7 @@ end: `false.value`
 
 table:
     name: `true.value`
-    columns: class  (value char)
+    columns((class: class) (@: char value))
     rows:
              Boolean          1
              int8             1
@@ -483,7 +483,7 @@ end: `true.value`
 
 table:
     name: `callable.projection`
-    columns: class  (projection char)
+    columns((class: class) (@: char projection))
     rows:
              fn                         c.function-symbol
              function                   c.function-symbol
@@ -500,7 +500,7 @@ end: `callable.projection`
 
 table:
     name: `c99.ub.policy`
-    columns: class                     (policy class)
+    columns((class: class) (class: policy))
     rows:
              `c99.null-dereference`     diagnostic
              `c99.signed-overflow`      `profile-defined`
@@ -511,14 +511,14 @@ end: `c99.ub.policy`
 
 table:
     name: `profile.validator`
-    columns: class                  (binding char)
+    columns((class: class) (@: char binding))
     rows:
              `c99.format-mismatch`  lm_trans_validate_c_printf_call
 end: `profile.validator`
 
 table:
     name: `class.cTail`
-    columns: class     (spelling char)
+    columns((class: class) (@: char spelling))
     rows:
              void      void
              char      char
@@ -535,21 +535,21 @@ end: `class.cTail`
 
 table:
     name: `class.reference-base`
-    columns: class  (value decimal)
+    columns((class: class) (int: value))
     rows:
              FILE   1
 end: `class.reference-base`
 
 table:
     name: `class.receiver`
-    columns: class  (emit binding)                     (structure_value_alloc binding)                     (structure_value_fill binding)
+    columns((class: class) (binding: emit)                     (binding: structure_value_alloc)                     (binding: structure_value_fill))
     rows:
              `[]`   lm_trans_type_receiver_array_emit  lm_trans_type_receiver_array_structure_value_alloc  lm_trans_type_receiver_array_structure_value_fill
 end: `class.receiver`
 
 table:
     name: `receiver.function`
-    columns: class  (receiver binding)
+    columns((class: class) (binding: receiver))
     rows:
              fn     lm_trans_receiver_fn
              callable lm_trans_receiver_callable
