@@ -5,8 +5,6 @@ L4:
         name: `constant.backend`
         columns((class: class) (class: backend))
         rows:
-                 LM_TABLE_COLUMN_SPELLING_STRUCTURE         c.define
-                 LM_TABLE_COLUMN_SPELLING_FRAME_CLOSE       c.define
                  LM_TABLE_LMX_STRUCTURE                    c.define
                  LM_TABLE_LMX_FIELD_LIST                   c.define
                  LM_TABLE_LMX_TRAILER_START                c.define
@@ -16,11 +14,9 @@ L4:
         name: `constant.value`
         columns((class: class) (int: value))
         rows:
-                 LM_TABLE_COLUMN_SPELLING_STRUCTURE         1
-                 LM_TABLE_COLUMN_SPELLING_FRAME_CLOSE       2
-                 LM_TABLE_LMX_STRUCTURE                    3
-                 LM_TABLE_LMX_FIELD_LIST                   4
-                 LM_TABLE_LMX_TRAILER_START                5
+                 LM_TABLE_LMX_STRUCTURE                    1
+                 LM_TABLE_LMX_FIELD_LIST                   2
+                 LM_TABLE_LMX_TRAILER_START                3
     end: `constant.value`
 
     table:
@@ -40,15 +36,6 @@ L4:
                  spelling  char                   0                       1
                  width     size_t                 1                       0
     end: LmTableColumn
-
-    table:
-        name: LmTableColumnSpellingFrame
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
-        rows:
-                 field  LmP0Field              0                       0                                1
-                 phase  int                    1                       0                                0
-                 first  int                    2                       0                                0
-    end: LmTableColumnSpellingFrame
 
     table:
         name: LmTableEmitTablesFrame
@@ -80,7 +67,6 @@ L4:
         rows:
                  LmTableBuffer  c.struct
                  LmTableColumn  c.struct
-                 LmTableColumnSpellingFrame c.struct
                  LmTableEmitTablesFrame c.struct
                  LmTableLmxFrame c.struct
                  LmTableError   c.struct
@@ -92,7 +78,6 @@ L4:
         rows:
                  LmTableBuffer  1
                  LmTableColumn  1
-                 LmTableColumnSpellingFrame 1
                  LmTableEmitTablesFrame 1
                  LmTableLmxFrame 1
                  LmTableError   1
@@ -288,151 +273,32 @@ fn: lm_table_name_from_frame (const: (LmP0Frame: table_frame); const: @@(char ou
     out_name_length[0]: name_node\as\atom\length
 return: 1
 
-fn: lm_table_column_spelling_frame_new (const: (LmP0Field: field); int: phase; int: first) LmTableColumnSpellingFrame
-    LmTableColumnSpellingFrame: frame
-
-    frame: lm_own_new_zero(c.sizeof(c.LmTableColumnSpellingFrame))
-    if: frame = 0
-        return: 0
-    frame\field: field
-    frame\phase: phase
-    frame\first: first
-return: frame
-
-fn: lm_table_column_spelling_append_node (LmTableBuffer: buffer; const: (LmP0Node: node)) int
-    LmTableColumnSpellingFrame: frame
-    LmOwnPtrStack: stack
-    const: LmP0Node: argument
-    const: LmP0Node: current
-    int: done
-    int: status
-
-    if: node = 0
-        return: 0
-
-    stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
-    if: stack = 0
-        return: 0
-    lm_own_ptr_stack_init(stack, c.lm_own_delete_plain)
-
-    current: node
-    done: 0
-    status: 1
-    while: status != 0 && done = 0
-        if: current != 0
-            if: current\kind = c.LM_P0_NODE_ATOM
-                lm_table_buffer_append_text(buffer, current\as\atom\data, current\as\atom\length)
-                if: buffer\failed != 0
-                    status: 0
-                current: 0
-                continue
-
-            if: current\kind = c.LM_P0_NODE_STRUCTURE
-                lm_table_buffer_append_cstr(buffer, "(")
-                if: buffer\failed != 0
-                    status: 0
-                    current: 0
-                    continue
-                frame: lm_table_column_spelling_frame_new(current\as\structure\first_field, c.LM_TABLE_COLUMN_SPELLING_STRUCTURE, 1)
-                if: frame = 0
-                    status: 0
-                    current: 0
-                    continue
-                if: lm_own_ptr_stack_push(stack, frame) != 0
-                    lm_own_delete(frame, 0)
-                    status: 0
-                    current: 0
-                    continue
-                current: 0
-                continue
-
-            if: current\kind = c.LM_P0_NODE_FRAME
-                argument: lm_table_single_body_node(current\as\frame)
-                if: argument = 0
-                    status: 0
-                    current: 0
-                    continue
-                lm_table_buffer_append_text(buffer, current\as\frame\head\data, current\as\frame\head\length)
-                lm_table_buffer_append_cstr(buffer, "(")
-                if: buffer\failed != 0
-                    status: 0
-                    current: 0
-                    continue
-                frame: lm_table_column_spelling_frame_new(0, c.LM_TABLE_COLUMN_SPELLING_FRAME_CLOSE, 0)
-                if: frame = 0
-                    status: 0
-                    current: 0
-                    continue
-                if: lm_own_ptr_stack_push(stack, frame) != 0
-                    lm_own_delete(frame, 0)
-                    status: 0
-                    current: 0
-                    continue
-                current: argument
-                continue
-
-            status: 0
-            current: 0
-            continue
-
-        frame: lm_own_ptr_stack_top(stack)
-        if: frame = 0
-            done: 1
-            continue
-
-        if: frame\phase = c.LM_TABLE_COLUMN_SPELLING_FRAME_CLOSE
-            lm_table_buffer_append_cstr(buffer, ")")
-            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
-            if: buffer\failed != 0
-                status: 0
-            continue
-
-        while: frame\field != 0 && lm_table_node_ignored(frame\field\value) != 0
-            frame\field: frame\field\next
-
-        if: frame\field = 0
-            if: frame\first
-                status: 0
-                continue
-            lm_table_buffer_append_cstr(buffer, ")")
-            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
-            if: buffer\failed != 0
-                status: 0
-            continue
-
-        if: frame\first = 0
-            lm_table_buffer_append_cstr(buffer, " ")
-            if: buffer\failed != 0
-                status: 0
-                continue
-            ---
-
-        current: frame\field\value
-        frame\field: frame\field\next
-        frame\first: 0
-
-    lm_own_ptr_stack_destroy(stack)
-    lm_own_delete(stack, 0)
-return: status != 0 && buffer\failed = 0
-
 fn: lm_table_column_spelling_alloc (const: (LmP0Node: node); LmTableError: error) @: char
-    LmTableBuffer: buffer
     @: char result
 
-    buffer: lm_table_buffer_new()
-    if: buffer = 0
-        lm_table_error_set(error, "out of memory while creating column formatter")
-        return: 0
-    finally: lm_table_buffer_delete(buffer)
-
-    if: lm_table_column_spelling_append_node(buffer, node) = 0
-        lm_table_error_set(error, "columns: fields must be atoms or descriptor structures")
+    if: lm_table_column_param_frame(node) = 0
+        lm_table_error_set(error, "columns: expected parameter declarations like (type: name)")
         return: 0
 
-    result: lm_table_buffer_take(buffer)
+    result: lm_table_node_lmx_alloc(node, error)
     if: result = 0
         lm_table_error_set(error, "out of memory while formatting column")
 return: result
+
+fn: lm_table_column_param_frame (const: (LmP0Node: node)) const: LmP0Frame
+    const: LmP0Node: field_node
+
+    if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    if: lm_table_visible_field_count(node\as\structure) != 1U
+        return: 0
+
+    field_node: lm_table_nth_visible_field(node\as\structure, 0U)
+    if: field_node = 0 || field_node\kind != c.LM_P0_NODE_FRAME
+        return: 0
+    if: lm_table_visible_field_count(field_node\as\frame\body) = 0U
+        return: 0
+return: field_node\as\frame
 
 sub: lm_table_columns_destroy (@: LmTableColumn columns; size_t: count)
     size_t: index
@@ -480,6 +346,9 @@ fn: lm_table_columns_from_frame (
     index: 0U
     while: index < count
         node: lm_table_nth_visible_field(columns_frame\body, index)
+        if: lm_table_column_param_frame(node) = 0
+            lm_table_error_set(error, "columns: expected parameter declarations like (type: name)")
+            return: 0
         columns[index]: lm_own_new_zero(c.sizeof(c.LmTableColumn))
         if: columns[index] = 0
             lm_table_error_set(error, "out of memory while reading columns")
@@ -722,7 +591,7 @@ fn: lm_table_emit_columns (LmTableBuffer: buffer; @: LmTableColumn columns; size
     size_t: index
     size_t: length
 
-    lm_table_buffer_append_cstr(buffer, "    columns: ")
+    lm_table_buffer_append_cstr(buffer, "    columns(")
     index: 0U
     while: index < column_count
         length: c.strlen(columns[index]\spelling)
@@ -731,7 +600,7 @@ fn: lm_table_emit_columns (LmTableBuffer: buffer; @: LmTableColumn columns; size
             lm_table_buffer_append_spaces(buffer, columns[index]\width - length + 2U)
         index: index + 1U
 
-    lm_table_buffer_append_cstr(buffer, "\n")
+    lm_table_buffer_append_cstr(buffer, ")\n")
 return: buffer\failed = 0
 
 fn: lm_table_emit_rows (
