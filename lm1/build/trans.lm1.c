@@ -1909,6 +1909,9 @@ static LmP0Node * lm_trans_registry_clone_node(const LmP0Node * source);
 static int lm_trans_registry_index_row_relation(const LmP0Text * card_name, const char *relation_name, LmTransRegistryFact * row);
 static int lm_trans_registry_index_row_table_view(LmTransRegistryFact * row);
 static int lm_trans_registry_index_row(LmTransRegistryFact * row);
+static int lm_trans_registry_table_declares_class_kind(const LmP0Text * table_value);
+static int lm_trans_registry_class_kind_conflicts_with(const LmP0Text * name, const LmP0Text * kind, const char *table_name);
+static int lm_trans_registry_validate_class_kind_row(const LmP0Text * name, const LmP0Text * kind);
 static int lm_trans_registry_push_row_values(const LmP0Text * table_value, const LmP0Text * key_value, const LmP0Text * payload_value);
 static int lm_trans_registry_push_row_node_values(const LmP0Text * table_value, const LmP0Text * key_value, const LmP0Node * payload_node);
 static int lm_trans_registry_join_relation_matches(const char *relation_name, const LmP0Text * source_name, const char **out_suffix);
@@ -3373,9 +3376,49 @@ static int lm_trans_registry_index_row(LmTransRegistryFact * row) {
     return status;
 }
 
+static int lm_trans_registry_table_declares_class_kind(const LmP0Text * table_value) {
+    if (table_value == 0) {
+        return 0;
+    }
+    if (lm_trans_text_equals(table_value, "class") != 0) {
+        return 1;
+    }
+    return lm_trans_text_equals(table_value, "class.kind");
+}
+
+static int lm_trans_registry_class_kind_conflicts_with(const LmP0Text * name, const LmP0Text * kind, const char *table_name) {
+    const char *existing_kind;
+    existing_kind = lm_trans_registry_lookup_exact(name, table_name);
+    if (existing_kind != 0 && lm_trans_text_equals(kind, existing_kind) == 0) {
+        fprintf(stderr, "trans registry class error: class %.*s has conflicting kinds %s and %.*s\n", (((int)name -> length)), name -> data, existing_kind, (((int)kind -> length)), kind -> data);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_registry_validate_class_kind_row(const LmP0Text * name, const LmP0Text * kind) {
+    if (name == 0 || kind == 0 || name -> data == 0 || kind -> data == 0 || name -> length == 0U || kind -> length == 0U) {
+        fprintf(stderr, "trans registry class error: class rows require non-empty class and kind\n");
+        return 1;
+    }
+    if (lm_trans_registry_class_kind_conflicts_with(name, kind, "class") != 0) {
+        return 1;
+    }
+    if (lm_trans_registry_class_kind_conflicts_with(name, kind, "class.kind") != 0) {
+        return 1;
+    }
+    if (lm_trans_registry_note_class_present(name) != 0 || lm_trans_registry_note_class_present(kind) != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_registry_push_row_values(const LmP0Text * table_value, const LmP0Text * key_value, const LmP0Text * payload_value) {
     LmTransRegistry * registry;
     LmTransRegistryFact * row;
+    if (lm_trans_registry_table_declares_class_kind(table_value) != 0 && lm_trans_registry_validate_class_kind_row(key_value, payload_value) != 0) {
+        return -1;
+    }
     registry = lm_trans_registry;
     row = lm_own_arena_new_zero(registry -> value_arena, sizeof(row[0]));
     if (row == 0) {

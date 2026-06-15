@@ -336,9 +336,40 @@ fn: lm_trans_registry_index_row (LmTransRegistryFact: row) int
     lm_trans_text_ref_destroy(@ key_name)
 return: status
 
+fn: lm_trans_registry_table_declares_class_kind (const: (LmP0Text: table_value)) int
+    if: table_value = 0
+        return: 0
+    if: lm_trans_text_equals(table_value, "class") != 0
+        return: 1
+return: lm_trans_text_equals(table_value, "class.kind")
+
+fn: lm_trans_registry_class_kind_conflicts_with (const: (LmP0Text: name); const: (LmP0Text: kind); const: @(char table_name)) int
+    const: @: char existing_kind
+
+    existing_kind: lm_trans_registry_lookup_exact(name, table_name)
+    if: existing_kind != 0 && lm_trans_text_equals(kind, existing_kind) = 0
+        c.fprintf(c.stderr, "trans registry class error: class %.*s has conflicting kinds %s and %.*s\n", (cast: int name\length), name\data, existing_kind, (cast: int kind\length), kind\data)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_validate_class_kind_row (const: (LmP0Text: name); const: (LmP0Text: kind)) int
+    if: name = 0 || kind = 0 || name\data = 0 || kind\data = 0 || name\length = 0U || kind\length = 0U
+        c.fprintf(c.stderr, "trans registry class error: class rows require non-empty class and kind\n")
+        return: 1
+    if: lm_trans_registry_class_kind_conflicts_with(name, kind, "class") != 0
+        return: 1
+    if: lm_trans_registry_class_kind_conflicts_with(name, kind, "class.kind") != 0
+        return: 1
+    if: lm_trans_registry_note_class_present(name) != 0 || lm_trans_registry_note_class_present(kind) != 0
+        return: 1
+return: 0
+
 fn: lm_trans_registry_push_row_values (const: (LmP0Text: table_value); const: (LmP0Text: key_value); const: (LmP0Text: payload_value)) int
     LmTransRegistry: registry
     LmTransRegistryFact: row
+
+    if: lm_trans_registry_table_declares_class_kind(table_value) != 0 && lm_trans_registry_validate_class_kind_row(key_value, payload_value) != 0
+        return: -1
 
     registry: c.lm_trans_registry
     row: lm_own_arena_new_zero(registry\value_arena, c.sizeof(row[0]))
