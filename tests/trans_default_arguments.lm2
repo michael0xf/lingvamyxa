@@ -28,6 +28,14 @@ fn: pickGenerated ([]: int values defaultValues(); int: index 2) int
     return: values[index]
 end: pickGenerated
 
+fn: pickSliceDefault ([]: int values [5 5 5]; int: index 2) int
+    return: values[index]
+end: pickSliceDefault
+
+fn: pickMatrixDefault ([][]: int matrix [[5 4] [5 3] [5 2]]; int: row 2; int: col 1) int
+    return: matrix[row][col]
+end: pickMatrixDefault
+
 fn: callSource (IntSource: source five) int
     return: source()
 end: callSource
@@ -38,6 +46,6 @@ end: callAdd
 
 external:
     fn: main () int
-        return: addDefault() != 7 || addDefault(10) != 13 || addDefault(; 8) != 12 || addDefault(value: 8) != 12 || callSource() != 5 || callAdd(addBase()) != 7 || pickLiteral() != 4 || pickLiteral(index: 2) != 6 || pickLiteral([2 4 6], 0) != 2 || pickGenerated() != 6
+        return: addDefault() != 7 || addDefault(10) != 13 || addDefault(; 8) != 12 || addDefault(value: 8) != 12 || callSource() != 5 || callAdd(addBase()) != 7 || pickLiteral() != 4 || pickLiteral(index: 2) != 6 || pickLiteral([2 4 6], 0) != 2 || pickGenerated() != 6 || pickSliceDefault() != 5 || pickSliceDefault([7 8 9], 1) != 8 || pickMatrixDefault() != 2 || pickMatrixDefault([[9 8] [7 6]], 1, 0) != 7
     end: main
 end: external
