@@ -34,7 +34,7 @@ dataset: harvest
     ---
 
     table:
-        columns: int(id)  Text(region)        Text(crop)  real(tons)  decimal(moisture)
+        columns((int: id)  (Text: region)        (Text: crop)  (real: tons)  (decimal: moisture))
         rows:
                  1        `north field`       wheat       12.50       0.14
                  2        `south field`       corn         8.75       0.19

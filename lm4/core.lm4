@@ -1,6 +1,6 @@
 table:
     name: class
-    columns: class                      (kind class)
+    columns((class: class) (class: kind))
     rows:
              class                      core
              core                       class

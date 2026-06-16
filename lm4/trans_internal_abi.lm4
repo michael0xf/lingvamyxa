@@ -172,7 +172,7 @@ fn: lm_trans_l4_root_head_binding_resolve (
 
 table:
     name: `layout.backend`
-    columns: class                         (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmTransL4FramePointerBinding  c.struct
              LmTransL4AtomPointerBinding   c.struct
@@ -181,7 +181,7 @@ end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns: class                         (value serial)
+    columns((class: class) (int: value))
     rows:
              LmTransL4FramePointerBinding  1
              LmTransL4AtomPointerBinding   1
@@ -190,7 +190,7 @@ end: `class.reference-base`
 
 table:
     name: `LmTransL4FramePointerBinding.field.class`
-    columns: class          (field class)
+    columns((class: class) (class: field))
     rows:
              head           char
              receiver_type  char
@@ -199,7 +199,7 @@ end: `LmTransL4FramePointerBinding.field.class`
 
 table:
     name: `LmTransL4FramePointerBinding.field.index`
-    columns: class          (index serial)
+    columns((class: class) (size_t: index))
     rows:
              head           0
              receiver_type  1
@@ -208,7 +208,7 @@ end: `LmTransL4FramePointerBinding.field.index`
 
 table:
     name: `LmTransL4FramePointerBinding.field.address-depth`
-    columns: class          (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              head           1
              receiver_type  1
@@ -216,7 +216,7 @@ end: `LmTransL4FramePointerBinding.field.address-depth`
 
 table:
     name: `LmTransL4FramePointerBinding.field.const`
-    columns: class          (value serial)
+    columns((class: class) (int: value))
     rows:
              head           1
              receiver_type  1
@@ -224,7 +224,7 @@ end: `LmTransL4FramePointerBinding.field.const`
 
 table:
     name: `LmTransL4AtomPointerBinding.field.class`
-    columns: class          (field class)
+    columns((class: class) (class: field))
     rows:
              atom           char
              receiver_type  char
@@ -233,7 +233,7 @@ end: `LmTransL4AtomPointerBinding.field.class`
 
 table:
     name: `LmTransL4AtomPointerBinding.field.index`
-    columns: class          (index serial)
+    columns((class: class) (size_t: index))
     rows:
              atom           0
              receiver_type  1
@@ -242,7 +242,7 @@ end: `LmTransL4AtomPointerBinding.field.index`
 
 table:
     name: `LmTransL4AtomPointerBinding.field.address-depth`
-    columns: class          (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              atom           1
              receiver_type  1
@@ -250,7 +250,7 @@ end: `LmTransL4AtomPointerBinding.field.address-depth`
 
 table:
     name: `LmTransL4AtomPointerBinding.field.const`
-    columns: class          (value serial)
+    columns((class: class) (int: value))
     rows:
              atom           1
              receiver_type  1
@@ -258,7 +258,7 @@ end: `LmTransL4AtomPointerBinding.field.const`
 
 table:
     name: `LmTransRegistryImportFrame.field.class`
-    columns: class        (field class)
+    columns((class: class) (class: field))
     rows:
              field        LmP0Field
              descend_l2   int
@@ -266,7 +266,7 @@ end: `LmTransRegistryImportFrame.field.class`
 
 table:
     name: `LmTransRegistryImportFrame.field.index`
-    columns: class        (index serial)
+    columns((class: class) (size_t: index))
     rows:
              field        0
              descend_l2   1
@@ -274,14 +274,14 @@ end: `LmTransRegistryImportFrame.field.index`
 
 table:
     name: `LmTransRegistryImportFrame.field.address-depth`
-    columns: class        (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              field        0
 end: `LmTransRegistryImportFrame.field.address-depth`
 
 table:
     name: `LmTransRegistryImportFrame.field.const`
-    columns: class        (value serial)
+    columns((class: class) (int: value))
     rows:
              field        1
 end: `LmTransRegistryImportFrame.field.const`
@@ -563,7 +563,7 @@ sub: lm_trans_statement_c_declarator_destroy (
 
 fn: lm_trans_emit_c_declarator (
     FILE: file
-    LmTransCDeclarator: declarator
+    const: LmTransCDeclarator: declarator
     const: LmTransNamespace: namespace_
     const: @: char error_name
 ) int
@@ -615,9 +615,19 @@ fn: lm_trans_node_callable_descriptor_name (
     LmP0Text: out_name
 ) int
 
-fn: lm_trans_params_has_any (
-    const: LmP0Node: params
+fn: lm_trans_formal_param_list_has_any (
+    const: LmTransFormalParamList: params
 ) int
+
+sub: lm_trans_formal_param_list_delete (
+    LmTransFormalParamList: list
+)
+
+fn: lm_trans_formal_param_list_from_node (
+    const: LmP0Node: params
+    int: allow_unnamed
+    const: @: char error_name
+) LmTransFormalParamList
 
 fn: lm_trans_emit_callable_descriptor_param_type (
     FILE: file
@@ -735,8 +745,7 @@ fn: lm_trans_capture_candidates_add_decl (
 
 fn: lm_trans_capture_candidates_add_params (
     LmOwnPtrStack: candidates
-    const: LmP0Node: params
-    const: LmTransNamespace: namespace_
+    const: LmTransFormalParamList: params
 ) int
 
 fn: lm_trans_collect_hoisted_functions_from_fields (

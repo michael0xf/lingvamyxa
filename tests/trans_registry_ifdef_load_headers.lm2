@@ -1,14 +1,14 @@
 L4:
     table:
         name: include
-        columns: class  (target char)
+        columns((class: class) (@: char target))
         rows:
                  stdio  "<stdio.h>"
     end: include
 
     table:
         name: ifdef
-        columns: class              (body node)
+        columns((class: class) (node: body))
         rows:
                  `defined(_WIN32)`
                  L2:

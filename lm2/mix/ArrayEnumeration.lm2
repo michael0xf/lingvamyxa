@@ -3,7 +3,7 @@ import: "lm2/own.lm2"
 L4:
     table:
         name: LmArrayEnumeration
-        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
         rows:
                  items  void    0  2
                  count  size_t  1  0
@@ -12,7 +12,7 @@ L4:
 
     table:
         name: `layout.backend`
-        columns: class                (backend class)
+        columns((class: class) (class: backend))
         rows:
                  LmArrayEnumeration  c.struct
     end: `layout.backend`

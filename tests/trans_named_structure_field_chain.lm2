@@ -1,14 +1,14 @@
 L4:
 . table:
 . . name: Leaf
-. . columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+. . columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
 . . rows:
 . . . value  int  0  0
 . end: Leaf
 .
 . table:
 . . name: Branch
-. . columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+. . columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
 . . rows:
 . . . leaf  Leaf  0  1
 . end: Branch

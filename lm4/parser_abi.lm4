@@ -1,13 +1,13 @@
 table:
     name: include
-    columns: class          (target char)
+    columns((class: class) (@: char target))
     rows:
              parser_stddef  "<stddef.h>"
 end: include
 
 table:
     name: `alias.backend`
-    columns: class              (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmP0NodeKind       c.typedef
              LmP0FrameFlags     c.typedef
@@ -17,7 +17,7 @@ end: `alias.backend`
 
 table:
     name: `alias.target`
-    columns: class              (target class)
+    columns((class: class) (class: target))
     rows:
              LmP0NodeKind       int
              LmP0FrameFlags     unsigned
@@ -27,7 +27,7 @@ end: `alias.target`
 
 table:
     name: `constant.backend`
-    columns: class                         (backend class)
+    columns((class: class) (class: backend))
     rows:
              LM_P0_NODE_STRUCTURE          c.define
              LM_P0_NODE_FRAME              c.define
@@ -45,7 +45,7 @@ end: `constant.backend`
 
 table:
     name: `constant.value`
-    columns: class                         (value char)
+    columns((class: class) (int: value))
     rows:
              LM_P0_NODE_STRUCTURE          1
              LM_P0_NODE_FRAME              2
@@ -63,7 +63,7 @@ end: `constant.value`
 
 table:
     name: `forward.backend`
-    columns: class         (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmP0Node      c.struct
              LmP0Field     c.struct
@@ -73,7 +73,7 @@ end: `forward.backend`
 
 table:
     name: `layout.backend`
-    columns: class           (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmP0Text        c.struct
              LmP0Span        c.struct
@@ -88,7 +88,7 @@ end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns: class         (value serial)
+    columns((class: class) (int: value))
     rows:
              LmP0Text      1
              LmP0Span      1
@@ -104,7 +104,7 @@ end: `class.reference-base`
 
 table:
     name: `LmP0Text.field.class`
-    columns: class   (field class)
+    columns((class: class) (class: field))
     rows:
              data    char
              length  size_t
@@ -112,7 +112,7 @@ end: `LmP0Text.field.class`
 
 table:
     name: `LmP0Text.field.index`
-    columns: class   (index serial)
+    columns((class: class) (size_t: index))
     rows:
              data    0
              length  1
@@ -120,21 +120,21 @@ end: `LmP0Text.field.index`
 
 table:
     name: `LmP0Text.field.address-depth`
-    columns: class  (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              data   1
 end: `LmP0Text.field.address-depth`
 
 table:
     name: `LmP0Text.field.const`
-    columns: class  (value serial)
+    columns((class: class) (int: value))
     rows:
              data   1
 end: `LmP0Text.field.const`
 
 table:
     name: `LmP0Span.field.class`
-    columns: class   (field class)
+    columns((class: class) (class: field))
     rows:
              line    size_t
              column  size_t
@@ -144,7 +144,7 @@ end: `LmP0Span.field.class`
 
 table:
     name: `LmP0Span.field.index`
-    columns: class   (index serial)
+    columns((class: class) (size_t: index))
     rows:
              line    0
              column  1
@@ -154,7 +154,7 @@ end: `LmP0Span.field.index`
 
 table:
     name: `LmP0Diagnostic.field.class`
-    columns: class    (field class)
+    columns((class: class) (class: field))
     rows:
              code     int
              line     size_t
@@ -164,7 +164,7 @@ end: `LmP0Diagnostic.field.class`
 
 table:
     name: `LmP0Diagnostic.field.index`
-    columns: class    (index serial)
+    columns((class: class) (size_t: index))
     rows:
              code     0
              line     1
@@ -174,14 +174,14 @@ end: `LmP0Diagnostic.field.index`
 
 table:
     name: `LmP0Diagnostic.field.array-count`
-    columns: class    (count serial)
+    columns((class: class) (size_t: count))
     rows:
              message  256
 end: `LmP0Diagnostic.field.array-count`
 
 table:
     name: `LmP0Structure.field.class`
-    columns: class        (field class)
+    columns((class: class) (class: field))
     rows:
              first_field  LmP0Field
              last_field   LmP0Field
@@ -191,7 +191,7 @@ end: `LmP0Structure.field.class`
 
 table:
     name: `LmP0Structure.field.index`
-    columns: class        (index serial)
+    columns((class: class) (size_t: index))
     rows:
              first_field  0
              last_field   1
@@ -201,7 +201,7 @@ end: `LmP0Structure.field.index`
 
 table:
     name: `LmP0Structure.field.address-depth`
-    columns: class        (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              first_field  0
              last_field   0
@@ -210,7 +210,7 @@ end: `LmP0Structure.field.address-depth`
 
 table:
     name: `LmP0Trailer.field.class`
-    columns: class     (field class)
+    columns((class: class) (class: field))
     rows:
              spelling  LmP0Text
              flags     unsigned
@@ -219,7 +219,7 @@ end: `LmP0Trailer.field.class`
 
 table:
     name: `LmP0Trailer.field.index`
-    columns: class     (index serial)
+    columns((class: class) (size_t: index))
     rows:
              spelling  0
              flags     1
@@ -228,7 +228,7 @@ end: `LmP0Trailer.field.index`
 
 table:
     name: `LmP0Trailer.field.address-depth`
-    columns: class     (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              spelling  0
              body      0
@@ -236,7 +236,7 @@ end: `LmP0Trailer.field.address-depth`
 
 table:
     name: `LmP0Frame.field.class`
-    columns: class    (field class)
+    columns((class: class) (class: field))
     rows:
              head     LmP0Text
              flags    unsigned
@@ -246,7 +246,7 @@ end: `LmP0Frame.field.class`
 
 table:
     name: `LmP0Frame.field.index`
-    columns: class    (index serial)
+    columns((class: class) (size_t: index))
     rows:
              head     0
              flags    1
@@ -256,7 +256,7 @@ end: `LmP0Frame.field.index`
 
 table:
     name: `LmP0Frame.field.address-depth`
-    columns: class    (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              head     0
              body     0
@@ -265,7 +265,7 @@ end: `LmP0Frame.field.address-depth`
 
 table:
     name: `LmP0Node.field.class`
-    columns: class  (field class)
+    columns((class: class) (class: field))
     rows:
              kind   LmP0NodeKind
              flags  unsigned
@@ -275,7 +275,7 @@ end: `LmP0Node.field.class`
 
 table:
     name: `LmP0Node.field.index`
-    columns: class  (index serial)
+    columns((class: class) (size_t: index))
     rows:
              kind   0
              flags  1
@@ -285,7 +285,7 @@ end: `LmP0Node.field.index`
 
 table:
     name: `LmP0Node.field.address-depth`
-    columns: class  (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              span   0
              as     0
@@ -293,7 +293,7 @@ end: `LmP0Node.field.address-depth`
 
 table:
     name: `LmP0NodeAs.field.class`
-    columns: class      (field class)
+    columns((class: class) (class: field))
     rows:
              structure  LmP0Structure
              frame      LmP0Frame
@@ -302,7 +302,7 @@ end: `LmP0NodeAs.field.class`
 
 table:
     name: `LmP0NodeAs.field.index`
-    columns: class      (index serial)
+    columns((class: class) (size_t: index))
     rows:
              structure  0
              frame      1
@@ -311,7 +311,7 @@ end: `LmP0NodeAs.field.index`
 
 table:
     name: `LmP0NodeAs.field.address-depth`
-    columns: class      (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              structure  0
              frame      0
@@ -320,7 +320,7 @@ end: `LmP0NodeAs.field.address-depth`
 
 table:
     name: `LmP0Field.field.class`
-    columns: class  (field class)
+    columns((class: class) (class: field))
     rows:
              value  LmP0Node
              next   LmP0Field
@@ -328,7 +328,7 @@ end: `LmP0Field.field.class`
 
 table:
     name: `LmP0Field.field.index`
-    columns: class  (index serial)
+    columns((class: class) (size_t: index))
     rows:
              value  0
              next   1
@@ -336,7 +336,7 @@ end: `LmP0Field.field.index`
 
 table:
     name: `LmP0Field.field.address-depth`
-    columns: class  (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              value  0
              next   0
@@ -344,7 +344,7 @@ end: `LmP0Field.field.address-depth`
 
 table:
     name: `fn.external`
-    columns: class                     (value serial)
+    columns((class: class) (int: value))
     rows:
              lm_p0_parse_string        1
              lm_p0_parse_bytes         1

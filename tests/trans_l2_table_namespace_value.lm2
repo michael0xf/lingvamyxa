@@ -1,0 +1,19 @@
+L2:
+    table:
+        name: sampleTable
+        columns((int: id) (const: (@: char label)))
+        rows:
+                 7  "seven"
+                 9  "nine"
+    end: sampleTable
+
+    external:
+        fn: main () int
+            if: sampleTable\id != 7
+                return: 1
+            if: sampleTable\label[0] != 's'
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L2

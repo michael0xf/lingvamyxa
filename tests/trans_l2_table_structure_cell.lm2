@@ -1,0 +1,60 @@
+L4:
+    table:
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 Point  layout
+    end: class
+
+    table:
+        name: Point
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+        rows:
+                 x  int  0  0
+                 y  int  1  0
+    end: Point
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 Point  c.struct
+    end: `layout.backend`
+
+    table:
+        name: `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+                 Point  1
+    end: `class.reference-base`
+end: L4
+
+L1:
+===
+typedef struct Point {
+    int x;
+    int y;
+} Point;
+===
+
+L2:
+    table:
+        name: pointTable
+        columns((Point: point) (int: tag))
+        rows:
+                 Point:
+                     x: 3
+                     y: 4
+                 11
+    end: pointTable
+
+    external:
+        fn: main () int
+            if: pointTable\point\x != 3
+                return: 1
+            if: pointTable\tag != 11
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L2

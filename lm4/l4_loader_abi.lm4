@@ -1,6 +1,6 @@
 table:
     name: include
-    columns: class             (target char)
+    columns((class: class) (@: char target))
     rows:
              l4_loader_stddef  "<stddef.h>"
              l4_loader_stdio   "<stdio.h>"
@@ -10,7 +10,7 @@ end: include
 
 table:
     name: functionPointerType
-    columns: class                  (value serial)
+    columns((class: class) (int: value))
     rows:
              LmL4PushRow            1
              LmL4PushCell           1
@@ -18,12 +18,20 @@ table:
              LmL4PushColumnMetadata 1
              LmL4JoinTable          1
              LmL4FrameReceiver      1
+             LmL4FrameIndexRule     1
 end: functionPointerType
 
 fn: LmL4FrameReceiver (
     const: LmL4Loader: loader
     @: void context
     const: LmP0Frame: frame
+) int
+
+fn: LmL4FrameIndexRule (
+    const: LmL4Loader: loader
+    @: void context
+    const: LmP0Frame: frame
+    @: size_t out_index
 ) int
 
 fn: LmL4PushRow (
@@ -119,7 +127,7 @@ fn: lm_l4_receiver_ignore (
 
 table:
     name: `forward.backend`
-    columns: class       (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmL4Column  c.struct
              LmL4Loader  c.struct
@@ -127,7 +135,7 @@ end: `forward.backend`
 
 table:
     name: `layout.backend`
-    columns: class       (backend class)
+    columns((class: class) (class: backend))
     rows:
              LmL4Column  c.struct
              LmL4Loader  c.struct
@@ -135,7 +143,7 @@ end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns: class       (value serial)
+    columns((class: class) (int: value))
     rows:
              LmL4Column  1
              LmL4Loader  1
@@ -143,7 +151,7 @@ end: `class.reference-base`
 
 table:
     name: `LmL4Column.field.class`
-    columns: class             (field class)
+    columns((class: class) (class: field))
     rows:
              name              LmP0Text
              descriptors       LmP0Text
@@ -152,7 +160,7 @@ end: `LmL4Column.field.class`
 
 table:
     name: `LmL4Column.field.index`
-    columns: class             (index serial)
+    columns((class: class) (size_t: index))
     rows:
              name              0
              descriptors       1
@@ -161,14 +169,14 @@ end: `LmL4Column.field.index`
 
 table:
     name: `LmL4Column.field.array-count`
-    columns: class        (count serial)
+    columns((class: class) (size_t: count))
     rows:
              descriptors  16
 end: `LmL4Column.field.array-count`
 
 table:
     name: `LmL4Column.field.address-depth`
-    columns: class        (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              name         0
              descriptors  0
@@ -176,7 +184,7 @@ end: `LmL4Column.field.address-depth`
 
 table:
     name: `LmL4Column.field.const`
-    columns: class        (value serial)
+    columns((class: class) (int: value))
     rows:
              name         1
              descriptors  1
@@ -184,7 +192,7 @@ end: `LmL4Column.field.const`
 
 table:
     name: `LmL4Loader.field.class`
-    columns: class                 (field class)
+    columns((class: class) (class: field))
     rows:
              error_prefix          char
              push_row              LmL4PushRow
@@ -193,11 +201,13 @@ table:
              push_column_metadata  LmL4PushColumnMetadata
              join_table            LmL4JoinTable
              dispatch_frame        LmL4FrameReceiver
+             formal_param_unwrap_index LmL4FrameIndexRule
+             positional_name_index LmL4FrameIndexRule
 end: `LmL4Loader.field.class`
 
 table:
     name: `LmL4Loader.field.index`
-    columns: class                 (index serial)
+    columns((class: class) (size_t: index))
     rows:
              error_prefix          0
              push_row              1
@@ -206,32 +216,34 @@ table:
              push_column_metadata  4
              join_table            5
              dispatch_frame        6
+             formal_param_unwrap_index 7
+             positional_name_index 8
 end: `LmL4Loader.field.index`
 
 table:
     name: `LmL4Loader.field.address-depth`
-    columns: class         (depth serial)
+    columns((class: class) (size_t: depth))
     rows:
              error_prefix  1
 end: `LmL4Loader.field.address-depth`
 
 table:
     name: `LmL4Loader.field.const`
-    columns: class         (value serial)
+    columns((class: class) (int: value))
     rows:
              error_prefix  1
 end: `LmL4Loader.field.const`
 
 table:
     name: `unit.backend`
-    columns: class                (backend class)
+    columns((class: class) (class: backend))
     rows:
              lm_l4_loader_static  c.static-unit
 end: `unit.backend`
 
 table:
     name: `unit.payload`
-    columns: class                (payload node)
+    columns((class: class) (node: payload))
     rows:
              lm_l4_loader_static
              import: "lm2/l4_loader_unit_payload.lm2"

@@ -38,6 +38,20 @@ fn: lm_trans_callable_type_reset (LmTransL4CallableType: type) int
     return: 0
 end: lm_trans_callable_type_reset
 
+fn: lm_trans_callable_type_copy (LmTransL4CallableType: target; const: (LmTransL4CallableType: source)) int
+    if: target = 0
+        return: 1
+    if: lm_trans_callable_type_reset(target) != 0
+        return: 1
+    if: source = 0
+        return: 0
+    if: source\class_name != 0
+        target\class_name[0]: source\class_name[0]
+    target\address_depth: source\address_depth
+    target\is_const: source\is_const
+    return: 0
+end: lm_trans_callable_type_copy
+
 fn: lm_trans_expr_callable_type_new () LmTransL4CallableType
     LmTransL4CallableType: type
     type: (cast: (LmTransL4CallableType) lm_own_new_zero(c.sizeof(type[0])))
@@ -130,10 +144,10 @@ fn: lm_trans_expr_atom_lowering_new () LmTransExprAtomLowering
     lowering: (cast: (LmTransExprAtomLowering) lm_own_new_zero(c.sizeof(lowering[0])))
     if: (lowering != 0)
         lowering\text: lm_trans_text_ref_new_cstr("")
-        lowering\expected_class: lm_trans_text_ref_new_cstr("")
-        if: (lowering\text = 0) || (lowering\expected_class = 0)
+        lowering\expected_type: lm_trans_expr_callable_type_new()
+        if: (lowering\text = 0) || (lowering\expected_type = 0)
             lm_trans_text_ref_destroy(@ lowering\text)
-            lm_trans_text_ref_destroy(@ lowering\expected_class)
+            lm_trans_expr_callable_type_delete(lowering\expected_type)
             lm_own_delete(lowering, 0)
             return: 0
         ---
@@ -143,7 +157,7 @@ end: lm_trans_expr_atom_lowering_new
 sub: lm_trans_expr_atom_lowering_destroy_fields (LmTransExprAtomLowering: lowering)
     if: (lowering != 0)
         lm_trans_text_ref_destroy(@ lowering\text)
-        lm_trans_text_ref_destroy(@ lowering\expected_class)
+        lm_trans_expr_callable_type_delete(lowering\expected_type)
     ---
 end: lm_trans_expr_atom_lowering_destroy_fields
 
@@ -154,28 +168,20 @@ end: lm_trans_expr_atom_lowering_delete
 
 fn: lm_trans_expr_atom_lowering_copy (LmTransExprAtomLowering: target; const: (LmTransExprAtomLowering: source)) int
     LmP0Text: text
-    LmP0Text: expected_class
-    if: (((target = 0) || (source = 0)) || (target\text = 0)) || (target\expected_class = 0)
+    LmTransL4CallableType: expected_type
+    if: (((target = 0) || (source = 0)) || (target\text = 0)) || (target\expected_type = 0)
         return: 1
     text: target\text
-    expected_class: target\expected_class
+    expected_type: target\expected_type
     target[0]: source[0]
     target\text: text
-    target\expected_class: expected_class
+    target\expected_type: expected_type
     if: (source\text != 0)
         target\text[0]: source\text[0]
     else:
         target\text\data: ""
         target\text\length: 0U
-    if: expected_class != 0
-        if: source\expected_class != 0
-            expected_class[0]: source\expected_class[0]
-        else:
-            expected_class\data: ""
-            expected_class\length: 0U
-        ---
-    return: 0
-end: lm_trans_expr_atom_lowering_copy
+return: lm_trans_callable_type_copy(expected_type, source\expected_type)
 
 fn: lm_trans_atom_starts_string (const: (LmP0Text: text)) int
     return: (((text != 0) && (text\length > 0U)) && ((text\data[0] = '"') || (text\data[0] = '\'')))
@@ -624,7 +630,7 @@ fn: lm_trans_expr_stack_push_range (LmTransExprStack: stack; const: (LmP0Field: 
     range\expect_field_name: 0
     range\expect_c_field_name: 0
     range\c_dot_path: 0
-    range\expected_class: 0
+    range\expected_type: 0
     status: lm_trans_expr_stack_push_range_state(stack, range)
     lm_own_delete(range, 0)
     return: status
@@ -738,6 +744,7 @@ end: lm_trans_callable_param_node_at
 fn: lm_trans_formal_param_default_fields (const: (LmP0Node: node); const: @(LmP0Field out_first)) int
     const: LmP0Structure: body
     const: LmP0Node: current
+    const: LmP0Frame: frame
     const: LmP0Field: field0
     const: LmP0Field: field1
     const: LmP0Field: inner_field
@@ -747,6 +754,8 @@ fn: lm_trans_formal_param_default_fields (const: (LmP0Node: node); const: @(LmP0
     if: (out_first = 0)
         return: 0
     out_first[0]: 0
+    if: lm_trans_formal_param_terminal_frame(node, @ frame) && lm_trans_formal_param_named_value_first(frame, out_first)
+        return: 1
     current: node
     while: (((current != 0) && (current\kind = c.LM_P0_NODE_FRAME)) && lm_trans_text_equals(current\as\frame\head, "const"))
         field0: current\as\frame\body\first_field
@@ -3920,26 +3929,21 @@ fn: lm_trans_contextual_literal_value (
         return: 0
 return: lm_trans_namespace_registry_lookup(namespace_, expected_class, table_name)
 
-fn: lm_trans_contextual_literal_set_expected_class (LmTransExprAtomLowering: lowering; const: (LmP0Text: expected_class)) int
-    if: lowering = 0 || lowering\expected_class = 0
+fn: lm_trans_contextual_literal_set_expected_type (LmTransExprAtomLowering: lowering; const: (LmTransL4CallableType: expected_type)) int
+    if: lowering = 0 || lowering\expected_type = 0
         return: 1
-    if: expected_class != 0
-        lowering\expected_class[0]: expected_class[0]
-    else:
-        lowering\expected_class\data: ""
-        lowering\expected_class\length: 0U
-return: 0
+return: lm_trans_callable_type_copy(lowering\expected_type, expected_type)
 
 fn: lm_trans_expr_emit_contextual_literal (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
     const: @: char value
     if: (lowering = 0) || (lowering\text = 0)
         return: 1
-    if: lowering\expected_class = 0 || lowering\expected_class\length = 0U
-        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" requires an expected class\n", (cast: int lowering\text\length), lowering\text\data)
+    if: lowering\expected_type = 0 || lowering\expected_type\class_name = 0 || lowering\expected_type\class_name\length = 0U
+        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" requires an expected type\n", (cast: int lowering\text\length), lowering\text\data)
         return: 1
-    value: lm_trans_contextual_literal_value(namespace_, lowering\text, lowering\expected_class)
+    value: lm_trans_contextual_literal_value(namespace_, lowering\text, lowering\expected_type\class_name)
     if: value = 0
-        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" has no contextual value for class \"%.*s\"\n", (cast: int lowering\text\length), lowering\text\data, (cast: int lowering\expected_class\length), lowering\expected_class\data)
+        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" has no contextual value for type \"%.*s\"\n", (cast: int lowering\text\length), lowering\text\data, (cast: int lowering\expected_type\class_name\length), lowering\expected_type\class_name\data)
         return: 1
     return: lm_trans_put(file, value)
 end: lm_trans_expr_emit_contextual_literal
@@ -4228,7 +4232,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     const: LmP0Field: field
     const: LmP0Node: node
     const: LmP0Node: previous_operand
-    LmP0Text: pending_expected_class
+    LmTransL4CallableType: pending_expected_type
     LmP0Text: operand_class
     int: expect_field_name
     int: expect_c_field_name
@@ -4242,15 +4246,18 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     atom: lm_trans_expr_atom_lowering_new()
     if: (atom = 0)
         return: 1
-    pending_expected_class: lm_trans_text_ref_new_cstr("")
+    pending_expected_type: lm_trans_expr_callable_type_new()
     operand_class: lm_trans_text_ref_new_cstr("")
-    if: pending_expected_class = 0 || operand_class = 0
+    if: pending_expected_type = 0 || operand_class = 0
         lm_trans_expr_atom_lowering_delete(atom)
-        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
         lm_trans_text_ref_destroy(@ operand_class)
         return: 1
-    if: range\expected_class != 0
-        pending_expected_class[0]: range\expected_class[0]
+    if: lm_trans_callable_type_copy(pending_expected_type, range\expected_type) != 0
+        lm_trans_expr_atom_lowering_delete(atom)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
+        lm_trans_text_ref_destroy(@ operand_class)
+        return: 1
     field: range\field
     previous_operand: range\previous_operand
     expect_field_name: range\expect_field_name
@@ -4266,19 +4273,19 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                 if: (previous_operand = 0)
                     c.fprintf(c.stderr, "trans L2 error: index operator expects a target expression\n")
                     lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_expr_callable_type_delete(pending_expected_type)
                     lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 close: lm_trans_find_matching_index_close(field, range\stop)
                 if: (close = 0)
                     c.fprintf(c.stderr, "trans L2 error: unclosed index operator\n")
                     lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_expr_callable_type_delete(pending_expected_type)
                     lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 if: (lm_trans_expr_lowered_range_append_index(lowered, field\next, close) != 0)
                     lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_expr_callable_type_delete(pending_expected_type)
                     lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 previous_operand: close\value
@@ -4293,13 +4300,13 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                     piece_leading_space: wrote
                     if: (lm_trans_lower_expr_atom(node, previous_operand, expect_field_name, expect_c_field_name, c_dot_path, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     if: atom\emit = @lm_trans_expr_emit_contextual_literal
-                        if: lm_trans_contextual_literal_set_expected_class(atom, pending_expected_class) != 0
+                        if: lm_trans_contextual_literal_set_expected_type(atom, pending_expected_type) != 0
                             lm_trans_expr_atom_lowering_delete(atom)
-                            lm_trans_text_ref_destroy(@ pending_expected_class)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
                             lm_trans_text_ref_destroy(@ operand_class)
                             return: 1
                         ---
@@ -4309,12 +4316,17 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         piece_leading_space: 0
                     if: (lm_trans_text_equals(node\as\atom, "=") || lm_trans_text_equals(node\as\atom, "!=")) && previous_operand != 0 && previous_operand\kind = c.LM_P0_NODE_ATOM
                         if: lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class)
-                            pending_expected_class[0]: operand_class[0]
+                            if: lm_trans_callable_type_reset(pending_expected_type) != 0
+                                lm_trans_expr_atom_lowering_delete(atom)
+                                lm_trans_expr_callable_type_delete(pending_expected_type)
+                                lm_trans_text_ref_destroy(@ operand_class)
+                                return: 1
+                            pending_expected_type\class_name[0]: operand_class[0]
                         ---
                     ---
                     if: (lm_trans_update_expr_atom_lowering_state(atom, node, @ previous_operand, @ expect_field_name, @ expect_c_field_name, @ c_dot_path) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     if: lm_trans_text_equals(node\as\atom, "@")
@@ -4325,14 +4337,14 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         ---
                     if: (lm_trans_expr_lowered_range_append_atom(lowered, piece_leading_space, node, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     ---
                 else:
                     if: (lm_trans_expr_lowered_range_append_node(lowered, wrote, node) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     previous_operand: node
@@ -4346,17 +4358,17 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     if: expect_field_name
         c.fprintf(c.stderr, "trans L2 error: field-follow expects a field name\n")
         lm_trans_expr_atom_lowering_delete(atom)
-        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
         lm_trans_text_ref_destroy(@ operand_class)
         return: 1
     if: expect_c_field_name
         c.fprintf(c.stderr, "trans L2 error: C value-field dot expects a field name\n")
         lm_trans_expr_atom_lowering_delete(atom)
-        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
         lm_trans_text_ref_destroy(@ operand_class)
         return: 1
     lm_trans_expr_atom_lowering_delete(atom)
-    lm_trans_text_ref_destroy(@ pending_expected_class)
+    lm_trans_expr_callable_type_delete(pending_expected_type)
     lm_trans_text_ref_destroy(@ operand_class)
     return: 0
 end: lm_trans_expr_lowered_range_build
@@ -4591,12 +4603,12 @@ fn: lm_trans_emit_expr_range (FILE: file; const: (LmP0Field: first); const: (LmP
     job\range\expect_field_name: 0
     job\range\expect_c_field_name: 0
     job\range\c_dot_path: 0
-    job\range\expected_class: 0
+    job\range\expected_type: 0
     status: lm_trans_emit_expr_stack_run(file, job, namespace_)
     return: status
 end: lm_trans_emit_expr_range
 
-fn: lm_trans_emit_expr_range_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
+fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmTransL4CallableType: expected_type)) int
     LmTransExprJob: job
     int: status
     job: lm_trans_expr_job_new()
@@ -4615,14 +4627,10 @@ fn: lm_trans_emit_expr_range_with_expected_class (FILE: file; const: (LmP0Field:
     job\range\expect_field_name: 0
     job\range\expect_c_field_name: 0
     job\range\c_dot_path: 0
-    job\range\expected_class: expected_class
+    job\range\expected_type: expected_type
     status: lm_trans_emit_expr_stack_run(file, job, namespace_)
     return: status
-end: lm_trans_emit_expr_range_with_expected_class
-
-fn: lm_trans_emit_expr_fields_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
-    return: lm_trans_emit_expr_range_with_expected_class(file, first, 0, namespace_, expected_class)
-end: lm_trans_emit_expr_fields_with_expected_class
+end: lm_trans_emit_expr_range_with_expected_type
 
 fn: lm_trans_frame_receiver_key (const: (LmP0Frame: frame); LmP0Text: out_key) int
     if: ((frame = 0) || (out_key = 0))
@@ -5076,10 +5084,11 @@ fn: lm_trans_emit_c_dimension_text (FILE: file; const: (LmP0Text: dimension); co
     return: 0
 end: lm_trans_emit_c_dimension_text
 
-fn: lm_trans_emit_c_declarator (FILE: file; LmTransCDeclarator: declarator; const: (LmTransNamespace: namespace_); const: @(char error_name)) int
+fn: lm_trans_emit_c_declarator (FILE: file; const: (LmTransCDeclarator: declarator); const: (LmTransNamespace: namespace_); const: @(char error_name)) int
     size_t: i
     size_t: head_index
     LmP0Text: head_dimension
+    const: LmP0Field: expression_dimension
     const: @: char effective_dimension_error_name
     if: ((file = 0) || (declarator = 0))
         return: 1
@@ -5111,6 +5120,7 @@ fn: lm_trans_emit_c_declarator (FILE: file; LmTransCDeclarator: declarator; cons
         effective_dimension_error_name: error_name
     if: (declarator\array_head = 0)
         return: 1
+    expression_dimension: declarator\expression_dimensions
     while: lm_trans_array_head_next_dimension(declarator\array_head, @ head_index, head_dimension)
         if: (lm_trans_put(file, "[") != 0)
             lm_trans_text_ref_destroy(@ head_dimension)
@@ -5121,14 +5131,20 @@ fn: lm_trans_emit_c_declarator (FILE: file; LmTransCDeclarator: declarator; cons
                 return: 1
             ---
         else:
-            if: ((declarator\expression_dimensions = 0) || (declarator\expression_dimensions\value = 0))
+            if: expression_dimension = 0 || expression_dimension\value = 0 || (declarator\atom_dimensions_only && lm_trans_array_body_dimension_can_consume(expression_dimension) = 0)
+                if: declarator\allow_empty_dimensions
+                    if: (lm_trans_put(file, "]") != 0)
+                        lm_trans_text_ref_destroy(@ head_dimension)
+                        return: 1
+                    continue
+                ---
                 c.fprintf(c.stderr, "trans L2 error: %s expects a size expression\n", effective_dimension_error_name)
                 lm_trans_text_ref_destroy(@ head_dimension)
                 return: 1
-            if: (lm_trans_emit_expr_node(file, declarator\expression_dimensions\value, namespace_) != 0)
+            if: (lm_trans_emit_expr_node(file, expression_dimension\value, namespace_) != 0)
                 lm_trans_text_ref_destroy(@ head_dimension)
                 return: 1
-            declarator\expression_dimensions: declarator\expression_dimensions\next
+            expression_dimension: expression_dimension\next
         if: (lm_trans_put(file, "]") != 0)
             lm_trans_text_ref_destroy(@ head_dimension)
             return: 1
@@ -5142,164 +5158,79 @@ fn: lm_trans_emit_c_declarator (FILE: file; LmTransCDeclarator: declarator; cons
     return: 0
 end: lm_trans_emit_c_declarator
 
-fn: lm_trans_emit_array_param (FILE: file; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
-    const: LmP0Structure: body
-    const: LmP0Field: field
-    const: LmP0Field: type_field
-    const: LmP0Field: name_field
-    const: LmP0Field: dimension_field
-    const: LmP0Node: name_node
-    const: LmP0Node: type_node
-    LmP0Text: head_dimension
+fn: lm_trans_c_declarator_expression_dimension_tail (const: (LmTransCDeclarator: declarator)) const: LmP0Field
+    const: LmP0Field: dimension
     size_t: head_index
-    size_t: pointer_depth
-    if: (frame = 0)
-        return: 1
-    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
-    if: (body != 0)
-        field: body\first_field
-    else:
-        field: 0
-    pointer_depth: 0U
-    while: ((((field != 0) && (field\value != 0)) && (field\value\kind = c.LM_P0_NODE_ATOM)) && lm_trans_text_all_char(field\value\as\atom, '@'))
-        pointer_depth: pointer_depth + field\value\as\atom\length
-        field: field\next
-    type_field: field
-    if: (type_field != 0)
-        name_field: type_field\next
-    else:
-        name_field: 0
-    if: ((((type_field = 0) || (name_field = 0)) || (name_field\value = 0)) || (name_field\value\kind != c.LM_P0_NODE_ATOM))
-        c.fprintf(c.stderr, "trans L2 error: [] parameter expects [@...] type name [dimensions...]\n")
-        return: 1
-    type_node: type_field\value
-    name_node: name_field\value
-    if: (lm_trans_emit_type_and_name(file, type_node, name_node\as\atom, pointer_depth, namespace_) != 0)
-        return: 1
-    dimension_field: name_field\next
+    LmP0Text: head_dimension
+
+    if: declarator = 0
+        return: 0
+
+    dimension: declarator\expression_dimensions
+    if: declarator\array_head = 0
+        return: dimension
+
     head_index: 0U
     head_dimension: lm_trans_text_ref_new_cstr("")
-    if: (head_dimension = 0)
-        return: 1
-    while: lm_trans_array_head_next_dimension(frame\head, @ head_index, head_dimension)
-        if: (lm_trans_put(file, "[") != 0)
-            lm_trans_text_ref_destroy(@ head_dimension)
-            return: 1
-        if: (head_dimension\length != 0U)
-            LmP0Document: dimension_document
-            const: LmP0Diagnostic: diagnostic
-            const: LmP0Node: dimension_root
-            int: parse_status
-            dimension_document: 0
-            parse_status: lm_p0_parse_bytes(head_dimension\data, head_dimension\length, @ dimension_document)
-            if: (parse_status != 0)
-                if: (dimension_document != 0)
-                    diagnostic: lm_p0_document_diagnostic(dimension_document)
-                else:
-                    diagnostic: 0
-                if: (diagnostic != 0)
-                    c.fprintf(c.stderr, "trans L2 error: array parameter dimension parse error %d at %zu:%zu: %s\n", diagnostic\code, diagnostic\line, diagnostic\column, diagnostic\message)
-                else:
-                    c.fprintf(c.stderr, "trans L2 error: array parameter dimension parse failed\n")
-                if: (dimension_document != 0)
-                    lm_p0_document_destroy(dimension_document)
-                lm_trans_text_ref_destroy(@ head_dimension)
-                return: 1
-            dimension_root: lm_p0_document_root(dimension_document)
-            if: (((dimension_root = 0) || (dimension_root\kind != c.LM_P0_NODE_STRUCTURE)) || (dimension_root\as\structure\first_field = 0))
-                c.fprintf(c.stderr, "trans L2 error: array parameter dimension must not be empty\n")
-                lm_p0_document_destroy(dimension_document)
-                lm_trans_text_ref_destroy(@ head_dimension)
-                return: 1
-            if: (lm_trans_emit_expr_fields(file, dimension_root\as\structure\first_field, namespace_) != 0)
-                lm_p0_document_destroy(dimension_document)
-                lm_trans_text_ref_destroy(@ head_dimension)
-                return: 1
-            lm_p0_document_destroy(dimension_document)
-        else:
-            if: lm_trans_array_body_dimension_can_consume(dimension_field)
-                if: (lm_trans_emit_expr_node(file, dimension_field\value, namespace_) != 0)
-                    lm_trans_text_ref_destroy(@ head_dimension)
-                    return: 1
-                dimension_field: dimension_field\next
-            ---
-        if: (lm_trans_put(file, "]") != 0)
-            lm_trans_text_ref_destroy(@ head_dimension)
-            return: 1
+    if: head_dimension = 0
+        return: dimension
+    finally: lm_trans_text_ref_destroy(@ head_dimension)
+
+    while: lm_trans_array_head_next_dimension(declarator\array_head, @ head_index, head_dimension)
+        if: head_dimension\length = 0U && dimension != 0 && dimension\value != 0 && (declarator\atom_dimensions_only = 0 || lm_trans_array_body_dimension_can_consume(dimension))
+            dimension: dimension\next
         ---
-    lm_trans_text_ref_destroy(@ head_dimension)
-    if: ((type_node != 0) && (type_node\kind = c.LM_P0_NODE_ATOM))
-        return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, type_node\as\atom)
-    return: lm_trans_namespace_declare(namespace_, name_node\as\atom, "variable")
+
+    return: dimension
+
+fn: lm_trans_emit_array_param (FILE: file; const: (LmTransFormalParam: param); LmTransNamespace: namespace_) int
+    const: LmTransCDeclarator: declarator
+
+    if: param = 0 || param\declarator = 0 || param\has_name = 0
+        return: 1
+
+    declarator: param\declarator
+    if: lm_trans_emit_c_declarator(file, declarator, namespace_, "array parameter dimension") != 0
+        return: 1
+
+    if: declarator\type_is_head
+        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_head)
+    if: declarator\type_node != 0 && declarator\type_node\kind = c.LM_P0_NODE_ATOM
+        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_node\as\atom)
+    return: lm_trans_namespace_declare(namespace_, param\name, "variable")
 end: lm_trans_emit_array_param
 
-fn: lm_trans_emit_param (FILE: file; const: (LmP0Node: node); LmTransNamespace: namespace_) int
-    const: LmP0Node: current
-    const: LmP0Field: field0
-    const: LmP0Field: field1
-    const: LmP0Field: inner_field
-    const: LmP0Node: param_node
-    const: LmP0Node: name_node
-    if: ((node = 0) || (node\kind != c.LM_P0_NODE_FRAME))
-        if: lm_trans_node_is_positional_skip(node)
+fn: lm_trans_emit_formal_param (
+    FILE: file
+    const: LmTransFormalParam: param
+    LmTransNamespace: namespace_
+) int
+    int: status
+
+    if: param = 0
+        return: 1
+
+    if: param\source_node = 0 || param\source_node\kind != c.LM_P0_NODE_FRAME
+        if: lm_trans_node_is_positional_skip(param\source_node)
             c.fprintf(c.stderr, "trans L2 error: skipped function parameter has no default declaration in this profile\n")
             return: 1
         c.fprintf(c.stderr, "trans L2 error: parameter must be a typed frame\n")
         return: 1
-    current: node
-    while: (((current != 0) && (current\kind = c.LM_P0_NODE_FRAME)) && lm_trans_text_equals(current\as\frame\head, "const"))
-        field0: current\as\frame\body\first_field
-        param_node: 0
-        if: (((field0 != 0) && (field0\next = 0)) && (field0\value != 0))
-            if: (field0\value\kind = c.LM_P0_NODE_FRAME)
-                param_node: field0\value
-            else:
-                if: (field0\value\kind = c.LM_P0_NODE_STRUCTURE)
-                    inner_field: field0\value\as\structure\first_field
-                    if: ((((inner_field != 0) && (inner_field\next = 0)) && (inner_field\value != 0)) && (inner_field\value\kind = c.LM_P0_NODE_FRAME))
-                        param_node: inner_field\value
-                    ---
-                ---
-            ---
-        if: (param_node = 0)
-            c.fprintf(c.stderr, "trans L2 error: const parameter expects exactly one parameter declaration\n")
-            return: 1
-        if: (lm_trans_put(file, "const ") != 0)
-            return: 1
-        current: param_node
-    if: ((current = 0) || (current\kind != c.LM_P0_NODE_FRAME))
-        c.fprintf(c.stderr, "trans L2 error: parameter must be a typed frame\n")
+
+    if: param\is_array
+        return: lm_trans_emit_array_param(file, param, namespace_)
+
+    if: param\has_name = 0
+        c.fprintf(c.stderr, "trans L2 error: typed parameter expects a name\n")
         return: 1
-    field0: lm_trans_nth_field(current\as\frame\body, 0U)
-    field1: lm_trans_nth_field(current\as\frame\body, 1U)
-    if: lm_trans_head_can_declare_storage(current\as\frame\head, namespace_)
-        if: (((field0 = 0) || (field0\value = 0)) || (field0\value\kind != c.LM_P0_NODE_ATOM))
-            c.fprintf(c.stderr, "trans L2 error: typed parameter expects a name\n")
+
+    if: (lm_trans_symbol_is(lm_trans_namespace_find(namespace_, param\type\class_name), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, param\type\class_name))
+        if: (lm_trans_emit_raw_callable_declarator(file, namespace_, param\type\class_name, param\name, "callable descriptor parameter") != 0)
             return: 1
-        name_node: field0\value
-        if: (lm_trans_symbol_is(lm_trans_namespace_find(namespace_, current\as\frame\head), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, current\as\frame\head))
-            if: (lm_trans_emit_raw_callable_declarator(file, namespace_, current\as\frame\head, name_node\as\atom, "callable descriptor parameter") != 0)
-                return: 1
-            return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, current\as\frame\head)
-        if: (lm_trans_emit_type_head_only(file, current\as\frame\head) != 0)
-            return: 1
-        if: (lm_trans_put(file, " ") != 0)
-            return: 1
-        if: (lm_trans_emit_identifier(file, name_node\as\atom) != 0)
-            return: 1
-        return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, current\as\frame\head)
-    if: lm_trans_text_all_char(current\as\frame\head, '@')
-        if: ((((field0 = 0) || (field1 = 0)) || (field1\value = 0)) || (field1\value\kind != c.LM_P0_NODE_ATOM))
-            c.fprintf(c.stderr, "trans L2 error: @ parameter expects type and name\n")
-            return: 1
-        name_node: field1\value
-        if: (lm_trans_emit_type_and_name(file, field0\value, name_node\as\atom, current\as\frame\head\length, namespace_) != 0)
-            return: 1
-        if: ((field0\value != 0) && (field0\value\kind = c.LM_P0_NODE_ATOM))
-            return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, field0\value\as\atom)
-        return: lm_trans_namespace_declare(namespace_, name_node\as\atom, "variable")
-    if: lm_trans_text_is_array_receiver_head(current\as\frame\head)
-        return: lm_trans_emit_array_param(file, current\as\frame, namespace_)
-    c.fprintf(c.stderr, "trans L2 error: unsupported parameter head\n")
-    return: 1
-end: lm_trans_emit_param
+        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, param\type\class_name)
+
+    status: lm_trans_emit_callable_type_named(file, param\type, param\name)
+    if: status = 0
+        status: lm_trans_namespace_declare_storage_binding(namespace_, param\name, param\type\class_name)
+    return: status
+end: lm_trans_emit_formal_param

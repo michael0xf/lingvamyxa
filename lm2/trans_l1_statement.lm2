@@ -106,8 +106,8 @@ fn: lm_trans_statement_node_as_new () LmP0NodeAs
 fn: lm_trans_statement_frame_new () LmP0Frame
     return: (cast: (LmP0Frame) lm_own_new_zero(c.sizeof(c.LmP0Frame)))
 
-fn: lm_trans_params_has_any (const: (LmP0Node: params)) int
-return: params != 0 && params\kind = c.LM_P0_NODE_STRUCTURE && params\as\structure\first_field != 0
+fn: lm_trans_formal_param_list_has_any (const: (LmTransFormalParamList: params)) int
+return: params != 0 && params\count != 0U
 
 fn: lm_trans_emit_capture_field (
     FILE: file
@@ -286,29 +286,72 @@ fn: lm_trans_frame_formal_param_unwrap_index (const: (LmP0Frame: frame); @: size
         c.exit(2)
 return: 1
 
+fn: lm_trans_frame_arg_frame (
+    const: LmP0Frame: frame
+    const: @(char name)
+    const: @(LmP0Frame out_arg)
+) int
+    const: LmP0Field: field
+    const: LmP0Frame: child_frame
+
+    if: frame = 0 || name = 0 || out_arg = 0
+        return: 0
+
+    field: frame\body\first_field
+    while: field != 0
+        if: field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+            child_frame: field\value\as\frame
+            if: lm_trans_text_equals(child_frame\head, name)
+                out_arg[0]: child_frame
+                return: 1
+            ---
+        ---
+        field: field\next
+return: 0
+
+fn: lm_trans_frame_arg_single_node (
+    const: LmP0Frame: frame
+    const: @(char name)
+    const: @(LmP0Node out_node)
+) int
+    const: LmP0Frame: arg_frame
+    const: LmP0Field: field
+
+    if: out_node = 0
+        return: 0
+    if: lm_trans_frame_arg_frame(frame, name, @ arg_frame) = 0
+        return: 0
+
+    field: arg_frame\body\first_field
+    if: field = 0 || field\next != 0 || field\value = 0
+        return: 0
+    out_node[0]: field\value
+return: 1
+
+fn: lm_trans_frame_arg_atom_payload (
+    const: LmP0Frame: frame
+    const: @(char name)
+    LmP0Text: out_payload
+) int
+    const: LmP0Node: node
+
+    if: out_payload = 0
+        return: 0
+    if: lm_trans_frame_arg_single_node(frame, name, @ node) = 0
+        return: 0
+    if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: lm_trans_registry_literal_value(node\as\atom, out_payload)
+
 fn: lm_trans_name_argument_from_frame (const: (LmP0Frame: frame); LmP0Text: out_name) int
     const: LmP0Field: field
-    const: LmP0Field: name_field
-    const: LmP0Frame: child_frame
     size_t: name_index
 
     if: frame = 0 || out_name = 0
         return: 0
 
-    field: frame\body\first_field
-    while: field != 0
-        if: field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
-            field: field\next
-            continue
-        child_frame: field\value\as\frame
-        if: lm_trans_text_equals(child_frame\head, "name") = 0
-            field: field\next
-            continue
-        name_field: child_frame\body\first_field
-        if: name_field != 0 && name_field\next = 0 && name_field\value != 0 && name_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_name_argument_is_valid(name_field\value\as\atom)
-            out_name[0]: name_field\value\as\atom[0]
-            return: 1
-        field: field\next
+    if: lm_trans_frame_arg_atom_payload(frame, "name", out_name) && lm_trans_name_argument_is_valid(out_name)
+        return: 1
 
     if: lm_trans_frame_positional_name_index(frame, @ name_index) = 0
         return: 0
@@ -1859,6 +1902,7 @@ fn: lm_trans_emit_declaration_with_qualifier (
     const: LmP0Structure: body
     const: LmP0Field: name_field
     const: LmP0Node: name_node
+    LmTransL4CallableType: expected_type
     int: is_raw_callable
 
     body: lm_trans_unwrap_single_anonymous_structure(frame\body)
@@ -1868,6 +1912,9 @@ fn: lm_trans_emit_declaration_with_qualifier (
         return: 1
 
     name_node: name_field\value
+    expected_type: 0
+    finally: lm_trans_expr_callable_type_delete(expected_type)
+
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
     if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
@@ -1883,10 +1930,16 @@ fn: lm_trans_emit_declaration_with_qualifier (
     if: is_raw_callable = 0 && lm_trans_emit_identifier(file, name_node\as\atom) != 0
         return: 1
 
-    if: name_field\next != 0 && lm_trans_put(file, " = ") != 0
-        return: 1
-    if: name_field\next != 0 && lm_trans_emit_expr_fields_with_expected_class(file, name_field\next, namespace_, frame\head) != 0
-        return: 1
+    if: name_field\next != 0
+        expected_type: lm_trans_expr_callable_type_new()
+        if: expected_type = 0
+            return: 1
+        expected_type\class_name[0]: frame\head[0]
+        if: lm_trans_put(file, " = ") != 0
+            return: 1
+        if: lm_trans_emit_expr_range_with_expected_type(file, name_field\next, 0, namespace_, expected_type) != 0
+            return: 1
+    ---
     if: lm_trans_put(file, ";\n") != 0
         return: 1
 return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, frame\head)
@@ -2190,7 +2243,7 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
     if: lm_trans_emit_c_declarator(file, declarator, namespace_, "[] array dimension") != 0
         return: 1
 
-    initializer_field: declarator\expression_dimensions
+    initializer_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
     if: initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
@@ -2392,7 +2445,7 @@ fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
     if: lm_trans_emit_c_declarator(file, declarator, namespace_, "repeated [] array dimension") != 0
         return: 1
 
-    initializer_field: declarator\expression_dimensions
+    initializer_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
     if: initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
@@ -3640,12 +3693,626 @@ fn: lm_trans_emit_l2_structure_frame_storage (
 
 return: 0
 
-fn: lm_trans_emit_l2_table_structure (
+fn: lm_trans_l2_table_child_frame (const: (LmP0Frame: frame); const: @: char head) const: LmP0Frame
+    const: LmP0Field: field
+    const: LmP0Frame: child
+
+    field: 0
+    if: frame != 0
+        field: lm_trans_l2_structure_first_present_field(frame\body)
+    while: field != 0
+        if: field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+            child: field\value\as\frame
+            if: lm_trans_text_equals(child\head, head)
+                return: child
+            ---
+        ---
+        field: lm_trans_l2_structure_next_present_field(field)
+return: 0
+
+fn: lm_trans_l2_table_present_field_count (const: (LmP0Structure: structure)) size_t
+    const: LmP0Field: field
+    size_t: count
+
+    count: 0U
+    field: lm_trans_l2_structure_first_present_field(structure)
+    while: field != 0
+        count: count + 1U
+        field: lm_trans_l2_structure_next_present_field(field)
+return: count
+
+sub: lm_trans_l2_table_columns_destroy (@: LmTransL4CallableType types; @: LmP0Text names; size_t: count)
+    size_t: i
+    LmP0Text: name
+
+    i: 0U
+    while: i < count
+        if: types != 0
+            lm_trans_expr_callable_type_delete(types[i])
+        if: names != 0
+            name: names[i]
+            lm_trans_text_ref_destroy(@ name)
+            names[i]: 0
+        i: i + 1U
+    lm_own_delete(types, 0)
+    lm_own_delete(names, 0)
+end: lm_trans_l2_table_columns_destroy
+
+fn: lm_trans_l2_table_read_columns (
+    const: LmP0Frame: table_frame
+    @@: LmTransL4CallableType out_types
+    @@: LmP0Text out_names
+    @: size_t out_count
+) int
+    const: LmP0Frame: columns_frame
+    LmTransFormalParamList: params
+    LmTransFormalParam: param
+    @: LmTransL4CallableType types
+    @: LmP0Text names
+    size_t: count
+    size_t: index
+
+    if: out_types = 0 || out_names = 0 || out_count = 0
+        return: 1
+    out_types[0]: 0
+    out_names[0]: 0
+    out_count[0]: 0U
+
+    columns_frame: lm_trans_l2_table_child_frame(table_frame, "columns")
+    if: columns_frame = 0
+        c.fprintf(c.stderr, "trans L2 table error: table must contain columns\n")
+        return: 1
+
+    params: lm_trans_formal_param_list_from_structure(columns_frame\body, 0, "table columns")
+    if: params = 0
+        return: 1
+    finally: lm_trans_formal_param_list_delete(params)
+
+    count: params\count
+    if: count = 0U
+        c.fprintf(c.stderr, "trans L2 table error: columns must not be empty\n")
+        return: 1
+
+    types: (cast: (@: LmTransL4CallableType) lm_own_new_zero(count * c.sizeof(types[0])))
+    names: (cast: (@: LmP0Text) lm_own_new_zero(count * c.sizeof(names[0])))
+    if: types = 0 || names = 0
+        lm_trans_l2_table_columns_destroy(types, names, count)
+        return: 1
+    finally: lm_trans_l2_table_columns_destroy(types, names, count)
+
+    index: 0U
+    while: index < count
+        param: params\params[index]
+        types[index]: lm_trans_expr_callable_type_new()
+        names[index]: lm_trans_statement_text_new()
+        if: types[index] = 0 || names[index] = 0
+            return: 1
+        if: lm_trans_callable_type_copy(types[index], param\type) != 0
+            return: 1
+        names[index][0]: param\name[0]
+        if: lm_trans_atom_can_be_new_binding_name(names[index]) = 0
+            c.fprintf(c.stderr, "trans L2 table error: column name must be an identifier\n")
+            return: 1
+        index: index + 1U
+
+    out_types[0]: types
+    out_names[0]: names
+    out_count[0]: count
+    types: 0
+    names: 0
+return: 0
+
+fn: lm_trans_l2_table_rows_frame (const: (LmP0Frame: table_frame)) const: LmP0Frame
+    const: LmP0Frame: rows_frame
+
+    rows_frame: lm_trans_l2_table_child_frame(table_frame, "rows")
+    if: rows_frame = 0
+        c.fprintf(c.stderr, "trans L2 table error: table must contain rows\n")
+return: rows_frame
+
+fn: lm_trans_l2_table_row_count (const: (LmP0Frame: rows_frame); size_t: column_count; @: size_t out_row_count) int
+    size_t: cell_count
+
+    if: out_row_count = 0 || rows_frame = 0 || column_count = 0U
+        return: 1
+    cell_count: lm_trans_l2_table_present_field_count(rows_frame\body)
+    if: cell_count = 0U
+        out_row_count[0]: 0U
+        return: 0
+    if: (cell_count % column_count) != 0U
+        c.fprintf(c.stderr, "trans L2 table error: rows cell count must be divisible by column count\n")
+        return: 1
+    out_row_count[0]: cell_count / column_count
+return: 0
+
+fn: lm_trans_l2_table_object_name_new (const: (LmP0Text: table_name)) @: char
+return: lm_trans_l2_c_identifier_new("lm_l2_table_", table_name, "")
+
+fn: lm_trans_l2_table_row_type_name_new (const: (LmP0Text: table_name)) @: char
+return: lm_trans_l2_c_identifier_new("lm_l2_table_", table_name, "_row")
+
+fn: lm_trans_l2_table_storage_name_new (const: (LmP0Text: table_name)) @: char
+return: lm_trans_l2_c_identifier_new("lm_l2_table_", table_name, "_storage")
+
+fn: lm_trans_l2_table_note_row_layout (
+    LmTransNamespace: namespace_
+    const: LmP0Text: row_type
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+) int
+    LmP0Text: layout_backend_table
+    LmP0Text: backend_payload
+    size_t: index
+    int: status
+
+    namespace_: namespace_
+    if: row_type = 0 || column_types = 0 || column_names = 0
+        return: 1
+
+    layout_backend_table: lm_trans_text_from_cstr("layout.backend")
+    backend_payload: lm_trans_text_from_cstr("c.struct")
+    if: layout_backend_table = 0 || backend_payload = 0
+        lm_trans_text_ref_destroy(@ layout_backend_table)
+        lm_trans_text_ref_destroy(@ backend_payload)
+        return: 1
+    finally:
+        lm_trans_text_ref_destroy(@ layout_backend_table)
+        lm_trans_text_ref_destroy(@ backend_payload)
+
+    status: lm_trans_registry_note_class_present(row_type) != 0 || lm_trans_registry_note_class_kind(row_type, "layout") != 0 || lm_trans_registry_note_class_reference_base(row_type) != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, row_type, backend_payload) != 0
+    index: 0U
+    while: status = 0 && index < column_count
+        status: lm_trans_named_structure_push_field_relations(row_type, column_names[index], column_types[index], index)
+        index: index + 1U
+return: status != 0
+
+fn: lm_trans_declare_l2_table (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+    const: LmP0Text: table_name
+    const: LmP0Frame: rows_frame
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    size_t: row_count
+    @: char object_name
+    @: char row_type_name
+    LmP0Text: object_name_text
+    LmP0Text: row_type_text
+    int: status
+
+    if: namespace_ = 0 || frame = 0
+        return: 1
+
+    table_name: lm_trans_l2_table_name_atom(frame)
+    if: table_name = 0 || lm_trans_atom_can_be_new_binding_name(table_name) = 0
+        c.fprintf(c.stderr, "trans L2 table error: table name must be an identifier\n")
+        return: 1
+
+    column_types: 0
+    column_names: 0
+    column_count: 0U
+    finally: lm_trans_l2_table_columns_destroy(column_types, column_names, column_count)
+    if: lm_trans_l2_table_read_columns(frame, @ column_types, @ column_names, @ column_count) != 0
+        return: 1
+
+    rows_frame: lm_trans_l2_table_rows_frame(frame)
+    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+        return: 1
+
+    object_name: lm_trans_l2_table_object_name_new(table_name)
+    row_type_name: lm_trans_l2_table_row_type_name_new(table_name)
+    if: object_name = 0 || row_type_name = 0
+        lm_own_delete(object_name, 0)
+        lm_own_delete(row_type_name, 0)
+        return: 1
+    finally:
+        lm_own_delete(object_name, 0)
+        lm_own_delete(row_type_name, 0)
+
+    object_name_text: lm_trans_text_from_cstr(object_name)
+    row_type_text: lm_trans_text_from_cstr(row_type_name)
+    if: object_name_text = 0 || row_type_text = 0
+        lm_trans_text_ref_destroy(@ object_name_text)
+        lm_trans_text_ref_destroy(@ row_type_text)
+        return: 1
+    finally:
+        lm_trans_text_ref_destroy(@ object_name_text)
+        lm_trans_text_ref_destroy(@ row_type_text)
+
+    status: lm_trans_l2_table_note_row_layout(namespace_, row_type_text, column_types, column_names, column_count) != 0 || lm_trans_namespace_declare_c_name(namespace_, table_name, "variable", object_name_text) != 0 || lm_trans_namespace_declare_relation_text(namespace_, table_name, "variable.type", row_type_text) != 0
+    row_count: row_count
+return: status != 0
+
+fn: lm_trans_emit_l2_table_row_type (
+    FILE: file
+    const: @(char row_type_name)
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    unsigned: indent
+) int
+    size_t: index
+
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "typedef struct ") != 0 || lm_trans_put(file, row_type_name) != 0 || lm_trans_put(file, " {\n") != 0
+        return: 1
+    index: 0U
+    while: index < column_count
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_callable_type_named(file, column_types[index], column_names[index]) != 0 || lm_trans_put(file, ";\n") != 0
+            return: 1
+        index: index + 1U
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} ") != 0 || lm_trans_put(file, row_type_name) != 0 || lm_trans_put(file, ";\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_l2_table_cell_inline_layout_body (
+    const: LmP0Node: node
+    const: LmTransL4CallableType: expected_type
+    const: LmTransNamespace: namespace_
+) const: LmP0Structure
+    const: @: char backend
+
+    if: node = 0 || expected_type = 0 || expected_type\class_name = 0
+        return: 0
+    if: lm_trans_effective_address_depth(expected_type\class_name, expected_type\address_depth) != 1U
+        return: 0
+    backend: lm_trans_namespace_registry_lookup(namespace_, expected_type\class_name, "layout.backend")
+    if: backend = 0 || lm_trans_layout_backend_is_supported(backend) = 0
+        return: 0
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        return: node\as\structure
+    if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_identifier_same(node\as\frame\head, expected_type\class_name)
+        return: node\as\frame\body
+return: 0
+
+fn: lm_trans_l2_table_cell_storage_name_new (const: @(char object_name); size_t: row_index; size_t: column_index) @: char
+    [64]: char suffix
+
+    c.snprintf(suffix, c.sizeof(suffix), "_r%zu_c%zu", row_index, column_index)
+return: lm_trans_l2_object_suffix_name_new(object_name, suffix)
+
+fn: lm_trans_l2_table_layout_field_type (
+    const: LmP0Text: owner
+    const: LmP0Text: field_name
+    const: LmTransNamespace: namespace_
+    LmTransL4CallableType: out_type
+) int
+    @: char relation_name
+    const: @: char field_class
+    const: @: char payload
+    size_t: address_depth
+    size_t: const_flag
+
+    if: owner = 0 || field_name = 0 || namespace_ = 0 || out_type = 0
+        return: 0
+
+    relation_name: lm_trans_registry_relation_name_new(owner, ".field.class")
+    if: relation_name = 0
+        return: 0
+    field_class: lm_trans_namespace_registry_lookup(namespace_, field_name, relation_name)
+    lm_own_delete(relation_name, 0)
+    if: field_class = 0
+        c.fprintf(c.stderr, "trans L2 table error: inline row value field \"%.*s\" is not declared on \"%.*s\"\n", (cast: int field_name\length), field_name\data, (cast: int owner\length), owner\data)
+        return: 0
+
+    address_depth: 0U
+    relation_name: lm_trans_registry_relation_name_new(owner, ".field.address-depth")
+    if: relation_name = 0
+        return: 0
+    payload: lm_trans_namespace_registry_lookup(namespace_, field_name, relation_name)
+    lm_own_delete(relation_name, 0)
+    if: payload != 0 && lm_trans_parse_size_payload(payload, @ address_depth) = 0
+        c.fprintf(c.stderr, "trans L2 table error: inline row value field \"%.*s\" on \"%.*s\" has invalid field.address-depth\n", (cast: int field_name\length), field_name\data, (cast: int owner\length), owner\data)
+        return: 0
+
+    const_flag: 0U
+    relation_name: lm_trans_registry_relation_name_new(owner, ".field.const")
+    if: relation_name = 0
+        return: 0
+    payload: lm_trans_namespace_registry_lookup(namespace_, field_name, relation_name)
+    lm_own_delete(relation_name, 0)
+    if: payload != 0 && lm_trans_parse_size_payload(payload, @ const_flag) = 0
+        c.fprintf(c.stderr, "trans L2 table error: inline row value field \"%.*s\" on \"%.*s\" has invalid field.const\n", (cast: int field_name\length), field_name\data, (cast: int owner\length), owner\data)
+        return: 0
+
+return: lm_trans_named_structure_type_set_cstr(out_type, field_class, address_depth, const_flag != 0U)
+
+fn: lm_trans_emit_l2_table_expr_with_expected_type (
+    FILE: file
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    LmTransNamespace: namespace_
+    const: LmTransL4CallableType: expected_type
+) int
+    if: expected_type = 0 || expected_type\class_name = 0
+        return: 1
+return: lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, expected_type)
+
+fn: lm_trans_emit_l2_table_inline_layout_initializer (
+    FILE: file
+    const: LmP0Structure: body
+    const: LmTransL4CallableType: expected_type
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    const: LmP0Frame: field_frame
+    const: LmP0Field: initializer
+    LmTransL4CallableType: field_type
+    int: wrote
+
+    if: expected_type = 0 || expected_type\class_name = 0
+        return: 1
+    if: lm_trans_put(file, " = {") != 0
+        return: 1
+
+    field_type: lm_trans_expr_callable_type_new()
+    if: field_type = 0
+        return: 1
+    finally: lm_trans_expr_callable_type_delete(field_type)
+
+    field: 0
+    if: body != 0
+        field: body\first_field
+    wrote: 0
+    while: field != 0
+        if: lm_trans_node_is_ignored(field\value) = 0
+            if: field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
+                c.fprintf(c.stderr, "trans L2 table error: inline row value expects field frames\n")
+                return: 1
+            field_frame: field\value\as\frame
+            if: (field_frame\flags & c.LM_P0_FRAME_COLON) = 0U
+                c.fprintf(c.stderr, "trans L2 table error: inline row value field \"%.*s\" must use ':'\n", (cast: int field_frame\head\length), field_frame\head\data)
+                return: 1
+            initializer: field_frame\body\first_field
+            if: initializer = 0
+                c.fprintf(c.stderr, "trans L2 table error: inline row value field \"%.*s\" requires a value\n", (cast: int field_frame\head\length), field_frame\head\data)
+                return: 1
+            if: lm_trans_l2_table_layout_field_type(expected_type\class_name, field_frame\head, namespace_, field_type) = 0
+                return: 1
+            if: wrote && lm_trans_put(file, ", ") != 0
+                return: 1
+            if: lm_trans_put(file, ".") != 0 || lm_trans_emit_identifier(file, field_frame\head) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_l2_table_expr_with_expected_type(file, initializer, 0, namespace_, field_type) != 0
+                return: 1
+            wrote: 1
+        ---
+        field: field\next
+    if: wrote = 0 && lm_trans_put(file, "0") != 0
+        return: 1
+return: lm_trans_put(file, "}")
+
+fn: lm_trans_emit_l2_table_cell_backing_storage (
+    FILE: file
+    const: @(char object_name)
+    const: LmP0Node: cell_node
+    const: LmTransL4CallableType: expected_type
+    size_t: row_index
+    size_t: column_index
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Structure: body
+    @: char cell_name
+
+    body: lm_trans_l2_table_cell_inline_layout_body(cell_node, expected_type, namespace_)
+    if: body = 0
+        return: 0
+
+    cell_name: lm_trans_l2_table_cell_storage_name_new(object_name, row_index, column_index)
+    if: cell_name = 0
+        return: 1
+    finally: lm_own_delete(cell_name, 0)
+
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static ") != 0 || lm_trans_emit_type_name(file, expected_type\class_name) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, cell_name) != 0
+        return: 1
+    if: lm_trans_emit_l2_table_inline_layout_initializer(file, body, expected_type, namespace_) != 0
+        return: 1
+    if: lm_trans_put(file, ";\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_emit_l2_table_cell_backing_storages (
+    FILE: file
+    const: LmP0Frame: rows_frame
+    const: @(char object_name)
+    @: LmTransL4CallableType column_types
+    size_t: column_count
+    size_t: row_count
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: cell
+    size_t: row_index
+    size_t: column_index
+
+    cell: lm_trans_l2_structure_first_present_field(rows_frame\body)
+    row_index: 0U
+    while: row_index < row_count
+        column_index: 0U
+        while: column_index < column_count
+            if: cell = 0 || cell\value = 0
+                return: 1
+            if: lm_trans_emit_l2_table_cell_backing_storage(file, object_name, cell\value, column_types[column_index], row_index, column_index, indent, namespace_) != 0
+                return: 1
+            cell: lm_trans_l2_structure_next_present_field(cell)
+            column_index: column_index + 1U
+        row_index: row_index + 1U
+return: 0
+
+fn: lm_trans_emit_l2_table_cell_value (
+    FILE: file
+    const: @(char object_name)
+    const: LmP0Field: cell
+    const: LmP0Field: next_cell
+    const: LmTransL4CallableType: expected_type
+    size_t: row_index
+    size_t: column_index
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Structure: inline_body
+    @: char cell_name
+
+    if: cell = 0 || cell\value = 0 || expected_type = 0
+        return: 1
+
+    inline_body: lm_trans_l2_table_cell_inline_layout_body(cell\value, expected_type, namespace_)
+    if: inline_body != 0
+        cell_name: lm_trans_l2_table_cell_storage_name_new(object_name, row_index, column_index)
+        if: cell_name = 0
+            return: 1
+        if: lm_trans_put(file, "&") != 0 || lm_trans_put(file, cell_name) != 0
+            lm_own_delete(cell_name, 0)
+            return: 1
+        lm_own_delete(cell_name, 0)
+        return: 0
+    ---
+
+return: lm_trans_emit_l2_table_expr_with_expected_type(file, cell, next_cell, namespace_, expected_type)
+
+fn: lm_trans_emit_l2_table_row_initializer (
+    FILE: file
+    const: @(char object_name)
+    const: LmP0Field: first_cell
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    size_t: row_index
+    LmTransNamespace: namespace_
+    const: @(LmP0Field out_next_cell)
+) int
+    const: LmP0Field: cell
+    const: LmP0Field: next_cell
+    size_t: column_index
+
+    if: out_next_cell = 0
+        return: 1
+    cell: first_cell
+    if: lm_trans_put(file, "{") != 0
+        return: 1
+    column_index: 0U
+    while: column_index < column_count
+        if: cell = 0 || cell\value = 0
+            return: 1
+        next_cell: lm_trans_l2_structure_next_present_field(cell)
+        if: column_index != 0U && lm_trans_put(file, ", ") != 0
+            return: 1
+        if: lm_trans_put(file, ".") != 0 || lm_trans_emit_identifier(file, column_names[column_index]) != 0 || lm_trans_put(file, " = ") != 0
+            return: 1
+        if: lm_trans_emit_l2_table_cell_value(file, object_name, cell, next_cell, column_types[column_index], row_index, column_index, namespace_) != 0
+            return: 1
+        cell: next_cell
+        column_index: column_index + 1U
+    if: lm_trans_put(file, "}") != 0
+        return: 1
+    out_next_cell[0]: cell
+return: 0
+
+fn: lm_trans_emit_l2_table_storage (
+    FILE: file
+    const: LmP0Frame: rows_frame
+    const: @(char object_name)
+    const: @(char row_type_name)
+    const: @(char storage_name)
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    size_t: row_count
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: cell
+    size_t: row_index
+
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static const ") != 0 || lm_trans_put(file, row_type_name) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, storage_name) != 0 || lm_trans_put(file, "[] = ") != 0
+        return: 1
+    if: row_count = 0U
+        return: lm_trans_put(file, "{{0}};\n")
+    if: lm_trans_put(file, "{\n") != 0
+        return: 1
+    cell: lm_trans_l2_structure_first_present_field(rows_frame\body)
+    row_index: 0U
+    while: row_index < row_count
+        if: lm_trans_emit_indent(file, indent + 1U) != 0
+            return: 1
+        if: lm_trans_emit_l2_table_row_initializer(file, object_name, cell, column_types, column_names, column_count, row_index, namespace_, @ cell) != 0
+            return: 1
+        if: row_index + 1U < row_count && lm_trans_put(file, ",") != 0
+            return: 1
+        if: lm_trans_put(file, "\n") != 0
+            return: 1
+        row_index: row_index + 1U
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "};\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_emit_l2_table_pointer (
+    FILE: file
+    const: @(char row_type_name)
+    const: @(char object_name)
+    const: @(char storage_name)
+    unsigned: indent
+) int
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static const ") != 0 || lm_trans_put(file, row_type_name) != 0 || lm_trans_put(file, " *const ") != 0 || lm_trans_put(file, object_name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_put(file, storage_name) != 0 || lm_trans_put(file, ";\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_emit_l2_table_storage_value (
     FILE: file
     const: LmP0Frame: frame
     unsigned: indent
+    LmTransNamespace: namespace_
 ) int
-return: lm_trans_emit_l2_structure_frame_storage(file, frame, indent, "lm_l2_table_", lm_trans_l2_table_name_atom(frame))
+    const: LmP0Text: table_name
+    const: LmP0Frame: rows_frame
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    size_t: row_count
+    @: char object_name
+    @: char row_type_name
+    @: char storage_name
+
+    table_name: lm_trans_l2_table_name_atom(frame)
+    if: table_name = 0 || lm_trans_atom_can_be_new_binding_name(table_name) = 0
+        c.fprintf(c.stderr, "trans L2 table error: table name must be an identifier\n")
+        return: 1
+
+    column_types: 0
+    column_names: 0
+    column_count: 0U
+    finally: lm_trans_l2_table_columns_destroy(column_types, column_names, column_count)
+    if: lm_trans_l2_table_read_columns(frame, @ column_types, @ column_names, @ column_count) != 0
+        return: 1
+
+    rows_frame: lm_trans_l2_table_rows_frame(frame)
+    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+        return: 1
+
+    object_name: lm_trans_l2_table_object_name_new(table_name)
+    row_type_name: lm_trans_l2_table_row_type_name_new(table_name)
+    storage_name: lm_trans_l2_table_storage_name_new(table_name)
+    if: object_name = 0 || row_type_name = 0 || storage_name = 0
+        lm_own_delete(object_name, 0)
+        lm_own_delete(row_type_name, 0)
+        lm_own_delete(storage_name, 0)
+        return: 1
+    finally:
+        lm_own_delete(object_name, 0)
+        lm_own_delete(row_type_name, 0)
+        lm_own_delete(storage_name, 0)
+
+    if: indent != 0U && lm_trans_declare_l2_table(namespace_, frame) != 0
+        return: 1
+    if: lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent) != 0
+        return: 1
+    if: lm_trans_emit_l2_table_cell_backing_storages(file, rows_frame, object_name, column_types, column_count, row_count, indent, namespace_) != 0
+        return: 1
+    if: lm_trans_emit_l2_table_storage(file, rows_frame, object_name, row_type_name, storage_name, column_types, column_names, column_count, row_count, indent, namespace_) != 0
+        return: 1
+    if: lm_trans_emit_l2_table_pointer(file, row_type_name, object_name, storage_name, indent) != 0
+        return: 1
+return: 0
 
 fn: lm_trans_emit_l2_join_structure (
     FILE: file
@@ -4814,7 +5481,7 @@ fn: lm_trans_statement_emit_table (
         return: 1
     if: namespace_ != 0 && namespace_ = 0
         return: 1
-return: lm_trans_emit_l2_table_structure(file, frame, indent)
+return: lm_trans_emit_l2_table_storage_value(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_join (
     FILE: file
@@ -5839,37 +6506,26 @@ return: status
 
 fn: lm_trans_emit_params_body (
     FILE: file
-    const: LmP0Node: params
+    const: LmTransFormalParamList: list
     LmTransNamespace: namespace_
     int: emit_void_when_empty
 ) int
-    const: LmP0Field: field
-    int: first
+    size_t: index
 
-    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
-        c.fprintf(c.stderr, "trans L2 error: function parameters must be a Structure\n")
+    if: list = 0
         return: 1
 
-    first: 1
-    field: params\as\structure\first_field
-    while: field != 0
-        if: first = 0 && lm_trans_put(file, ", ") != 0
+    index: 0U
+    while: index < list\count
+        if: index != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: lm_trans_emit_param(file, field\value, namespace_) != 0
+        if: lm_trans_emit_formal_param(file, list\params[index], namespace_) != 0
             return: 1
-        first: 0
-        field: field\next
+        index: index + 1U
 
-    if: first && emit_void_when_empty
+    if: list\count = 0U && emit_void_when_empty
         return: lm_trans_put(file, "void")
 return: 0
-
-fn: lm_trans_emit_params (
-    FILE: file
-    const: LmP0Node: params
-    LmTransNamespace: namespace_
-) int
-return: lm_trans_emit_params_body(file, params, namespace_, 1)
 
 fn: lm_trans_emit_function_params (
     FILE: file
@@ -5881,42 +6537,33 @@ fn: lm_trans_emit_function_params (
     if: function = 0
         return: 1
 
-    has_user_params: lm_trans_params_has_any(function\params_node)
+    has_user_params: lm_trans_formal_param_list_has_any(function\params)
     if: function\has_env
         if: lm_trans_write_text(file, function\env_type_name) != 0 || lm_trans_put(file, " *lm_env") != 0
             return: 1
         if: has_user_params && lm_trans_put(file, ", ") != 0
             return: 1
-        return: lm_trans_emit_params_body(file, function\params_node, namespace_, 0)
-return: lm_trans_emit_params(file, function\params_node, namespace_)
+        return: lm_trans_emit_params_body(file, function\params, namespace_, 0)
+return: lm_trans_emit_params_body(file, function\params, namespace_, 1)
 
 fn: lm_trans_emit_param_name_list (
     FILE: file
-    const: LmP0Node: params
+    const: LmTransFormalParamList: list
 ) int
-    const: LmP0Field: field
-    LmP0Text: name
-    int: first
+    LmTransFormalParam: param
+    size_t: index
 
-    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
+    if: list = 0
         return: 1
 
-    name: lm_trans_statement_text_new()
-    if: name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ name)
-
-    first: 1
-    field: params\as\structure\first_field
-    while: field != 0
-        if: lm_trans_formal_param_name(field\value, name) = 0
+    index: 0U
+    while: index < list\count
+        param: list\params[index]
+        if: index != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: first = 0 && lm_trans_put(file, ", ") != 0
+        if: lm_trans_emit_identifier(file, param\name) != 0
             return: 1
-        if: lm_trans_emit_identifier(file, name) != 0
-            return: 1
-        first: 0
-        field: field\next
+        index: index + 1U
 return: 0
 
 fn: lm_trans_emit_closure_call_wrapper (
@@ -5935,10 +6582,10 @@ fn: lm_trans_emit_closure_call_wrapper (
 
     if: lm_trans_put(file, "static ") != 0 || lm_trans_emit_type_node(file, function\return_node) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, hoisted\closure_call_name) != 0 || lm_trans_put(file, "(void *lm_env") != 0
         return: 1
-    has_params: lm_trans_params_has_any(function\params_node)
+    has_params: lm_trans_formal_param_list_has_any(function\params)
     if: has_params && lm_trans_put(file, ", ") != 0
         return: 1
-    if: lm_trans_emit_params_body(file, function\params_node, namespace_, 0) != 0 || lm_trans_put(file, ") {\n") != 0
+    if: lm_trans_emit_params_body(file, function\params, namespace_, 0) != 0 || lm_trans_put(file, ") {\n") != 0
         return: 1
     if: function\has_env = 0
         if: lm_trans_put(file, "    (void)lm_env;\n") != 0
@@ -5952,7 +6599,7 @@ fn: lm_trans_emit_closure_call_wrapper (
         if: has_params && lm_trans_put(file, ", ") != 0
             return: 1
     ---
-    if: lm_trans_emit_param_name_list(file, function\params_node) != 0
+    if: lm_trans_emit_param_name_list(file, function\params) != 0
         return: 1
 return: lm_trans_put(file, ");\n}\n")
 
@@ -5978,18 +6625,16 @@ fn: lm_trans_single_frame_node (
         return: 1
 return: 0
 
-fn: lm_trans_formal_param_name (
+fn: lm_trans_formal_param_terminal_frame (
     const: LmP0Node: node
-    LmP0Text: out_name
+    const: @(LmP0Frame out_frame)
 ) int
     const: LmP0Node: current
     const: LmP0Frame: frame
     const: LmP0Field: field
-    const: LmP0Field: name_field
-    size_t: name_index
     size_t: unwrap_index
 
-    if: out_name = 0
+    if: out_frame = 0
         return: 0
 
     current: node
@@ -6010,19 +6655,304 @@ fn: lm_trans_formal_param_name (
             return: 0
         current: field\value
 
-    if: lm_trans_single_frame_node(current, @ frame) = 0
+return: lm_trans_single_frame_node(current, out_frame)
+
+fn: lm_trans_formal_param_named_value_first (
+    const: LmP0Frame: frame
+    const: @(LmP0Field out_first)
+) int
+    const: LmP0Frame: value_frame
+
+    if: out_first = 0
         return: 0
-
-    if: lm_trans_frame_positional_name_index(frame, @ name_index)
-        name_field: lm_trans_nth_field(frame\body, name_index)
-    else:
-        name_field: lm_trans_nth_field(frame\body, 0U)
-
-    if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+    out_first[0]: 0
+    if: lm_trans_frame_arg_frame(frame, "value", @ value_frame) = 0
         return: 0
-
-    out_name[0]: name_field\value\as\atom[0]
+    if: value_frame = 0 || value_frame\body = 0 || value_frame\body\first_field = 0
+        return: 0
+    out_first[0]: value_frame\body\first_field
 return: 1
+
+fn: lm_trans_formal_param_read (
+    const: LmP0Node: node
+    LmTransL4CallableType: out_type
+    LmP0Text: out_name
+    @: int out_has_name
+    const: @(LmP0Field out_value_first)
+) int
+    const: LmP0Frame: frame
+    const: LmP0Field: name_field
+    size_t: name_index
+    int: has_name
+    int: named_name
+
+    if: out_has_name != 0
+        out_has_name[0]: 0
+    if: out_value_first != 0
+        out_value_first[0]: 0
+    if: out_name != 0
+        out_name\data: ""
+        out_name\length: 0U
+
+    if: out_type != 0 && lm_trans_l4_callable_type_from_node(node, out_type) = 0
+        return: 0
+
+    frame: 0
+    lm_trans_formal_param_terminal_frame(node, @ frame)
+    if: frame = 0
+        return: 1
+
+    has_name: 0
+    named_name: 0
+    if: out_name != 0
+        if: lm_trans_frame_arg_atom_payload(frame, "name", out_name) && lm_trans_name_argument_is_valid(out_name)
+            has_name: 1
+            named_name: 1
+        else:
+            if: lm_trans_frame_positional_name_index(frame, @ name_index) = 0
+                name_index: 0U
+            name_field: lm_trans_nth_field(frame\body, name_index)
+            if: name_field != 0 && name_field\value != 0 && name_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_name_argument_is_valid(name_field\value\as\atom)
+                out_name[0]: name_field\value\as\atom[0]
+                has_name: 1
+            ---
+        ---
+
+    if: out_has_name != 0
+        out_has_name[0]: has_name
+
+    if: out_value_first != 0
+        if: lm_trans_formal_param_named_value_first(frame, out_value_first)
+            return: 1
+        if: named_name = 0
+            lm_trans_formal_param_default_fields(node, out_value_first)
+        ---
+
+return: 1
+
+fn: lm_trans_formal_param_name (
+    const: LmP0Node: node
+    LmP0Text: out_name
+) int
+    int: has_name
+
+    if: lm_trans_formal_param_read(node, 0, out_name, @ has_name, 0) = 0
+        return: 0
+return: has_name
+
+fn: lm_trans_formal_param_new () LmTransFormalParam
+    LmTransFormalParam: param
+
+    param: (cast: (LmTransFormalParam) lm_own_new_zero(c.sizeof(param[0])))
+    if: param != 0
+        param\type: lm_trans_expr_callable_type_new()
+        param\name: lm_trans_statement_text_new()
+        param\declarator: lm_trans_statement_c_declarator_new()
+        if: param\type = 0 || param\name = 0 || param\declarator = 0
+            lm_trans_formal_param_delete(param)
+            return: 0
+    ---
+return: param
+
+sub: lm_trans_formal_param_delete (LmTransFormalParam: param)
+    if: param != 0
+        lm_trans_expr_callable_type_delete(param\type)
+        param\type: 0
+        lm_trans_text_ref_destroy(@ param\name)
+        lm_trans_statement_c_declarator_destroy(param\declarator)
+        param\declarator: 0
+    lm_own_delete(param, 0)
+end: lm_trans_formal_param_delete
+
+fn: lm_trans_formal_param_read_array_declarator (
+    LmTransFormalParam: param
+    const: LmP0Frame: frame
+) int
+    const: LmP0Structure: body
+    const: LmP0Field: field
+    const: LmP0Field: type_field
+    const: LmP0Field: name_field
+    const: LmP0Node: name_node
+    size_t: pointer_depth
+
+    if: param = 0 || param\declarator = 0 || frame = 0
+        return: 1
+
+    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
+    if: body != 0
+        field: body\first_field
+    else:
+        field: 0
+
+    pointer_depth: 0U
+    while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_all_char(field\value\as\atom, '@')
+        pointer_depth: pointer_depth + field\value\as\atom\length
+        field: field\next
+
+    type_field: field
+    if: type_field != 0
+        name_field: type_field\next
+    else:
+        name_field: 0
+
+    if: type_field = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+        c.fprintf(c.stderr, "trans L2 error: [] parameter expects [@...] type name [dimensions...]\n")
+        return: 1
+
+    name_node: name_field\value
+    param\declarator\type_node: type_field\value
+    param\declarator\name[0]: name_node\as\atom[0]
+    param\declarator\array_head[0]: frame\head[0]
+    param\declarator\pointer_depth: pointer_depth
+    param\declarator\expression_dimensions: name_field\next
+    param\declarator\type_is_head: 0
+    param\declarator\allow_empty_dimensions: 1
+    param\declarator\atom_dimensions_only: 1
+return: 0
+
+fn: lm_trans_formal_param_read_into (
+    LmTransFormalParam: param
+    const: LmP0Node: node
+) int
+    const: LmP0Frame: frame
+    int: has_name
+    const: LmP0Field: value_first
+
+    if: param = 0 || node = 0
+        return: 1
+
+    value_first: 0
+    if: lm_trans_formal_param_read(node, param\type, param\name, @ has_name, @ value_first) = 0
+        return: 1
+
+    frame: 0
+    lm_trans_formal_param_terminal_frame(node, @ frame)
+
+    param\source_node: node
+    param\terminal_frame: frame
+    param\value_first: value_first
+    param\has_name: has_name
+    param\is_array: frame != 0 && lm_trans_text_is_array_receiver_head(frame\head)
+    if: param\is_array && lm_trans_formal_param_read_array_declarator(param, frame) != 0
+        return: 1
+    if: param\is_array && param\has_name
+        param\declarator\name[0]: param\name[0]
+return: 0
+
+fn: lm_trans_formal_param_list_new (size_t: count) LmTransFormalParamList
+    LmTransFormalParamList: list
+    size_t: index
+
+    list: (cast: (LmTransFormalParamList) lm_own_new_zero(c.sizeof(list[0])))
+    if: list = 0
+        return: 0
+
+    list\count: count
+    if: count = 0U
+        return: list
+
+    list\params: (cast: (@: LmTransFormalParam) lm_own_new_zero(c.sizeof(list\params[0]) * count))
+    if: list\params = 0
+        lm_trans_formal_param_list_delete(list)
+        return: 0
+
+    index: 0U
+    while: index < count
+        list\params[index]: lm_trans_formal_param_new()
+        if: list\params[index] = 0
+            lm_trans_formal_param_list_delete(list)
+            return: 0
+        index: index + 1U
+return: list
+
+sub: lm_trans_formal_param_list_delete (LmTransFormalParamList: list)
+    size_t: index
+
+    if: list != 0
+        index: 0U
+        while: index < list\count
+            lm_trans_formal_param_delete(list\params[index])
+            index: index + 1U
+        lm_own_delete(list\params, 0)
+        list\params: 0
+        list\count: 0U
+    lm_own_delete(list, 0)
+end: lm_trans_formal_param_list_delete
+
+fn: lm_trans_formal_param_list_present_count (const: LmP0Structure: structure) size_t
+    const: LmP0Field: field
+    size_t: count
+
+    count: 0U
+    if: structure = 0
+        return: 0U
+
+    field: structure\first_field
+    while: field != 0
+        if: lm_trans_node_is_ignored(field\value) = 0
+            count: count + 1U
+        field: field\next
+return: count
+
+fn: lm_trans_formal_param_list_from_structure (
+    const: LmP0Structure: structure
+    int: allow_unnamed
+    const: @(char error_name)
+) LmTransFormalParamList
+    const: LmP0Field: field
+    LmTransFormalParamList: list
+    LmTransFormalParam: param
+    size_t: index
+    const: @: char label
+
+    label: error_name
+    if: label = 0
+        label: "formal parameter list"
+
+    if: structure = 0
+        c.fprintf(c.stderr, "trans L2 error: %s expects a parameter Structure\n", label)
+        return: 0
+
+    list: lm_trans_formal_param_list_new(lm_trans_formal_param_list_present_count(structure))
+    if: list = 0
+        return: 0
+
+    index: 0U
+    field: structure\first_field
+    while: field != 0
+        if: lm_trans_node_is_ignored(field\value)
+            field: field\next
+            continue
+        ---
+
+        param: list\params[index]
+        if: lm_trans_formal_param_read_into(param, field\value) != 0
+            c.fprintf(c.stderr, "trans L2 error: %s parameter %zu has unsupported descriptor\n", label, index)
+            lm_trans_formal_param_list_delete(list)
+            return: 0
+        if: allow_unnamed = 0 && param\has_name = 0
+            c.fprintf(c.stderr, "trans L2 error: %s parameter %zu must expose a binding name\n", label, index)
+            lm_trans_formal_param_list_delete(list)
+            return: 0
+        index: index + 1U
+        field: field\next
+return: list
+
+fn: lm_trans_formal_param_list_from_node (
+    const: LmP0Node: params
+    int: allow_unnamed
+    const: @(char error_name)
+) LmTransFormalParamList
+    const: @: char label
+
+    label: error_name
+    if: label = 0
+        label: "formal parameter list"
+
+    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
+        c.fprintf(c.stderr, "trans L2 error: %s expects a parameter Structure\n", label)
+        return: 0
+return: lm_trans_formal_param_list_from_structure(params\as\structure, allow_unnamed, label)
 
 fn: lm_trans_namespace_set_signature (
     LmTransNamespace: namespace_
@@ -6031,8 +6961,8 @@ fn: lm_trans_namespace_set_signature (
 ) int
     LmTransSymbol: symbol
     const: LmP0Field: params_field
-    const: LmP0Field: field
-    LmP0Text: param_name
+    LmTransFormalParamList: params
+    LmTransFormalParam: param
     LmOwnPtrStack: param_names
     LmP0Text: param_name_ref
     LmP0Text: existing_param_name_ref
@@ -6052,42 +6982,35 @@ fn: lm_trans_namespace_set_signature (
         c.fprintf(c.stderr, "trans L2 error: fn/sub expects a parameter Structure\n")
         return: 1
 
-    param_name: lm_trans_statement_text_new()
-    if: param_name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ param_name)
-
     param_names: lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any)
     if: param_names = 0
         return: 1
     finally: lm_trans_ptr_stack_delete(@ param_names)
 
     allow_unnamed_params: lm_trans_symbol_is(symbol, "callableDescriptor")
-    index: 0U
-    field: params_field\value\as\structure\first_field
-    while: field != 0
-        if: lm_trans_formal_param_name(field\value, param_name) = 0
-            if: allow_unnamed_params = 0
-                c.fprintf(c.stderr, "trans L2 error: function \"%.*s\" parameter %zu must expose a binding name\n", (cast: int name\length), name\data, index)
-                return: 1
-            lm_trans_text_assign_cstr(param_name, "")
+    params: lm_trans_formal_param_list_from_node(params_field\value, allow_unnamed_params, "function signature")
+    if: params = 0
+        return: 1
+    finally: lm_trans_formal_param_list_delete(params)
 
+    index: 0U
+    while: index < params\count
+        param: params\params[index]
         i: 0U
         while: i < index
             param_name_ref: (cast: (LmP0Text) lm_own_ptr_stack_at(param_names, i))
-            if: param_name\length != 0U && param_name_ref != 0 && lm_trans_identifier_same(param_name_ref, param_name)
+            if: param\name\length != 0U && param_name_ref != 0 && lm_trans_identifier_same(param_name_ref, param\name)
                 c.fprintf(c.stderr, "trans L2 error: duplicate function parameter name\n")
                 return: 1
             i: i + 1U
 
-        param_name_ref: lm_trans_text_ref_new(param_name)
+        param_name_ref: lm_trans_text_ref_new(param\name)
         if: param_name_ref = 0
             return: 1
         if: lm_own_ptr_stack_push(param_names, param_name_ref) != 0
             lm_trans_text_ref_delete_any(param_name_ref)
             return: 1
         index: index + 1U
-        field: field\next
 
     if: symbol\has_signature
         if: symbol\param_names = 0 || symbol\param_names\count != param_names\count
@@ -6132,6 +7055,21 @@ fn: lm_trans_namespace_set_callable_shape (
     symbol\callable_is_external: function\is_external
 return: 0
 
+fn: lm_trans_function_header_read_params (LmTransFunctionHeader: function) int
+    int: allow_unnamed
+
+    if: function = 0
+        return: 1
+
+    lm_trans_formal_param_list_delete(function\params)
+    function\params: 0
+
+    allow_unnamed: function\is_descriptor_only || function\is_callable_descriptor
+    function\params: lm_trans_formal_param_list_from_node(function\params_node, allow_unnamed, "function parameters")
+    if: function\params = 0
+        return: 1
+return: 0
+
 fn: lm_trans_function_header_common (
     const: LmP0Frame: frame
     int: is_external
@@ -6163,6 +7101,7 @@ fn: lm_trans_function_header_common (
     name: out\name
     c_name: out\c_name
     env_type_name: out\env_type_name
+    lm_trans_formal_param_list_delete(out\params)
     c.memset(out, 0, c.sizeof(out[0]))
     out\name: name
     out\c_name: c_name
@@ -6189,6 +7128,8 @@ fn: lm_trans_function_header_common (
             out\body_start: params_field\next
         if: out\body_start = 0
             out\is_descriptor_only: 1
+        if: lm_trans_function_header_read_params(out) != 0
+            return: -1
         return: 1
 
     return_field: lm_trans_nth_field(frame\body, 2U)
@@ -6208,6 +7149,8 @@ fn: lm_trans_function_header_common (
         out\is_descriptor_only: 1
     if: is_callable_descriptor && out\is_descriptor_only = 0
         c.fprintf(c.stderr, "trans L2 error: callable is supported only for descriptor-only fn declarations in this profile\n")
+        return: -1
+    if: lm_trans_function_header_read_params(out) != 0
         return: -1
 return: 1
 
@@ -6795,24 +7738,39 @@ fn: lm_trans_capture_candidates_add_decl (
         return: 1
 return: 0
 
-fn: lm_trans_capture_candidates_add_params (
+fn: lm_trans_capture_candidates_add_formal_param (
     LmOwnPtrStack: candidates
-    const: LmP0Node: params
-    const: LmTransNamespace: namespace_
+    const: LmTransFormalParam: param
 ) int
-    const: LmP0Field: field
-    const: LmP0Frame: frame
+    LmTransCapture: stored
 
-    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
+    if: candidates = 0 || param = 0 || param\has_name = 0 || param\type = 0
+        return: 0
+    if: lm_trans_capture_stack_find(candidates, param\name) != 0
         return: 0
 
-    field: params\as\structure\first_field
-    while: field != 0
-        if: lm_trans_single_frame_node(field\value, @ frame)
-            if: lm_trans_capture_candidates_add_decl(candidates, frame, namespace_) != 0
-                return: 1
-        ---
-        field: field\next
+    stored: lm_trans_capture_new(param\name, param\type\class_name, 0, param\type\address_depth, 1)
+    if: stored = 0
+        return: 1
+    if: lm_own_ptr_stack_push(candidates, stored) != 0
+        lm_trans_capture_destroy(stored)
+        return: 1
+return: 0
+
+fn: lm_trans_capture_candidates_add_params (
+    LmOwnPtrStack: candidates
+    const: LmTransFormalParamList: params
+) int
+    size_t: index
+
+    if: params = 0
+        return: 0
+
+    index: 0U
+    while: index < params\count
+        if: lm_trans_capture_candidates_add_formal_param(candidates, params\params[index]) != 0
+            return: 1
+        index: index + 1U
 return: 0
 
 fn: lm_trans_capture_candidates_add_captures (
@@ -6968,8 +7926,8 @@ fn: lm_trans_analyze_function_captures (
     const: LmTransNamespace: namespace_
 ) int
     LmOwnPtrStack: local_names
-    const: LmP0Field: field
-    LmP0Text: param_name
+    LmTransFormalParam: param
+    size_t: index
     int: status
 
     if: hoisted = 0
@@ -6980,19 +7938,14 @@ fn: lm_trans_analyze_function_captures (
         return: 1
     finally: lm_trans_ptr_stack_delete(@ local_names)
 
-    param_name: lm_trans_statement_text_new()
-    if: param_name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ param_name)
-
     status: 0
-    if: hoisted\function\params_node != 0 && hoisted\function\params_node\kind = c.LM_P0_NODE_STRUCTURE
-        field: hoisted\function\params_node\as\structure\first_field
-        while: status = 0 && field != 0
-            if: lm_trans_formal_param_name(field\value, param_name)
-                status: lm_trans_local_name_stack_add(local_names, param_name)
-            field: field\next
-
+    if: hoisted\function\params != 0
+        index: 0U
+        while: status = 0 && index < hoisted\function\params\count
+            param: hoisted\function\params\params[index]
+            if: param != 0 && param\has_name
+                status: lm_trans_local_name_stack_add(local_names, param\name)
+            index: index + 1U
     ---
     if: status = 0
         status: lm_trans_collect_local_names_from_fields(local_names, hoisted\function\body_start, namespace_)
