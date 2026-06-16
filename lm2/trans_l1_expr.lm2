@@ -5261,51 +5261,37 @@ fn: lm_trans_emit_array_param (FILE: file; const: (LmP0Frame: frame); LmTransNam
     return: lm_trans_namespace_declare(namespace_, name_node\as\atom, "variable")
 end: lm_trans_emit_array_param
 
-fn: lm_trans_emit_param (FILE: file; const: (LmP0Node: node); LmTransNamespace: namespace_) int
-    LmTransL4CallableType: type
-    LmP0Text: name
-    const: LmP0Frame: frame
-    int: has_name
+fn: lm_trans_emit_formal_param (
+    FILE: file
+    const: LmTransFormalParam: param
+    LmTransNamespace: namespace_
+) int
     int: status
 
-    if: ((node = 0) || (node\kind != c.LM_P0_NODE_FRAME))
-        if: lm_trans_node_is_positional_skip(node)
+    if: param = 0
+        return: 1
+
+    if: param\source_node = 0 || param\source_node\kind != c.LM_P0_NODE_FRAME
+        if: lm_trans_node_is_positional_skip(param\source_node)
             c.fprintf(c.stderr, "trans L2 error: skipped function parameter has no default declaration in this profile\n")
             return: 1
         c.fprintf(c.stderr, "trans L2 error: parameter must be a typed frame\n")
         return: 1
 
-    frame: 0
-    if: lm_trans_formal_param_terminal_frame(node, @ frame) = 0
-        c.fprintf(c.stderr, "trans L2 error: parameter must be a typed frame\n")
-        return: 1
-    if: lm_trans_text_is_array_receiver_head(frame\head)
-        return: lm_trans_emit_array_param(file, frame, namespace_)
+    if: param\is_array
+        return: lm_trans_emit_array_param(file, param\terminal_frame, namespace_)
 
-    type: lm_trans_expr_callable_type_new()
-    name: lm_trans_text_ref_new_cstr("")
-    if: type = 0 || name = 0
-        lm_trans_expr_callable_type_delete(type)
-        lm_trans_text_ref_destroy(@ name)
-        return: 1
-    finally:
-        lm_trans_expr_callable_type_delete(type)
-        lm_trans_text_ref_destroy(@ name)
-
-    if: lm_trans_formal_param_read(node, type, name, @ has_name, 0) = 0
-        c.fprintf(c.stderr, "trans L2 error: unsupported parameter head\n")
-        return: 1
-    if: has_name = 0
+    if: param\has_name = 0
         c.fprintf(c.stderr, "trans L2 error: typed parameter expects a name\n")
         return: 1
 
-    if: (lm_trans_symbol_is(lm_trans_namespace_find(namespace_, type\class_name), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, type\class_name))
-        if: (lm_trans_emit_raw_callable_declarator(file, namespace_, type\class_name, name, "callable descriptor parameter") != 0)
+    if: (lm_trans_symbol_is(lm_trans_namespace_find(namespace_, param\type\class_name), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, param\type\class_name))
+        if: (lm_trans_emit_raw_callable_declarator(file, namespace_, param\type\class_name, param\name, "callable descriptor parameter") != 0)
             return: 1
-        return: lm_trans_namespace_declare_storage_binding(namespace_, name, type\class_name)
+        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, param\type\class_name)
 
-    status: lm_trans_emit_callable_type_named(file, type, name)
+    status: lm_trans_emit_callable_type_named(file, param\type, param\name)
     if: status = 0
-        status: lm_trans_namespace_declare_storage_binding(namespace_, name, type\class_name)
+        status: lm_trans_namespace_declare_storage_binding(namespace_, param\name, param\type\class_name)
     return: status
-end: lm_trans_emit_param
+end: lm_trans_emit_formal_param

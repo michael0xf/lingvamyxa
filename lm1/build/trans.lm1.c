@@ -41,6 +41,8 @@ typedef struct LmTransArrayStructureValueFillFrame LmTransArrayStructureValueFil
 typedef struct LmTransStatementStack LmTransStatementStack;
 typedef struct LmTransStatementJob LmTransStatementJob;
 typedef struct LmTransFunctionHeader LmTransFunctionHeader;
+typedef struct LmTransFormalParam LmTransFormalParam;
+typedef struct LmTransFormalParamList LmTransFormalParamList;
 typedef struct LmTransL4HeadBinding LmTransL4HeadBinding;
 typedef struct LmTransL4AtomBinding LmTransL4AtomBinding;
 typedef struct LmTransL4PayloadPointerBinding LmTransL4PayloadPointerBinding;
@@ -271,6 +273,19 @@ typedef struct LmTransL4CallableType {
     size_t address_depth;
     int is_const;
 } LmTransL4CallableType;
+struct LmTransFormalParam {
+    const LmP0Node * source_node;
+    const LmP0Frame * terminal_frame;
+    LmTransL4CallableType * type;
+    LmP0Text * name;
+    const LmP0Field * value_first;
+    int has_name;
+    int is_array;
+};
+struct LmTransFormalParamList {
+    LmTransFormalParam * *params;
+    size_t count;
+};
 typedef struct LmTransSymbol {
     LmP0Text * name;
     char *name_storage;
@@ -2592,7 +2607,7 @@ static int lm_trans_emit_type_head_only(FILE *file, const LmP0Text *type_head);
 static int lm_trans_emit_c_dimension_text(FILE *file, const LmP0Text *dimension, const LmTransNamespace *namespace_, const char *error_name);
 static int lm_trans_emit_c_declarator(FILE *file, LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name);
 static int lm_trans_emit_array_param(FILE *file, const LmP0Frame *frame, LmTransNamespace *namespace_);
-static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespace *namespace_);
+static int lm_trans_emit_formal_param(FILE *file, const LmTransFormalParam *param, LmTransNamespace *namespace_);
 
 
 static LmP0Text * lm_trans_statement_text_new(void);
@@ -2883,6 +2898,14 @@ static int lm_trans_formal_param_terminal_frame(const LmP0Node *node, const LmP0
 static int lm_trans_formal_param_named_value_first(const LmP0Frame *frame, const LmP0Field **out_first);
 static int lm_trans_formal_param_read(const LmP0Node *node, LmTransL4CallableType *out_type, LmP0Text *out_name, int *out_has_name, const LmP0Field **out_value_first);
 static int lm_trans_formal_param_name(const LmP0Node *node, LmP0Text *out_name);
+static LmTransFormalParam * lm_trans_formal_param_new(void);
+static void lm_trans_formal_param_delete(LmTransFormalParam *param);
+static int lm_trans_formal_param_read_into(LmTransFormalParam *param, const LmP0Node *node);
+static LmTransFormalParamList * lm_trans_formal_param_list_new(size_t count);
+static void lm_trans_formal_param_list_delete(LmTransFormalParamList *list);
+static size_t lm_trans_formal_param_list_present_count(const LmP0Structure *structure);
+static LmTransFormalParamList * lm_trans_formal_param_list_from_structure(const LmP0Structure *structure, int allow_unnamed, const char *error_name);
+static LmTransFormalParamList * lm_trans_formal_param_list_from_node(const LmP0Node *params, int allow_unnamed, const char *error_name);
 static int lm_trans_namespace_set_signature(LmTransNamespace *namespace_, const LmP0Text *name, const LmP0Frame *function_frame);
 static int lm_trans_namespace_set_callable_shape(LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_function_header_common(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out, int is_sub, int is_struct_return, int is_callable_descriptor);
@@ -3172,7 +3195,7 @@ static char * lm_trans_registry_relation_name_new(const LmP0Text *owner, const c
 static int lm_trans_registry_push_owner_relation_text(const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload);
 static int lm_trans_registry_push_owner_relation_size(const LmP0Text *owner, const char *suffix, const LmP0Text *key, size_t value);
 static int lm_trans_l4_callable_type_from_node(const LmP0Node *node, LmTransL4CallableType *out);
-static int lm_trans_registry_materialize_fn_descriptor_param(const LmP0Text *function_name, const LmP0Node *param_node, size_t index);
+static int lm_trans_registry_materialize_fn_descriptor_param(const LmP0Text *function_name, const LmTransFormalParam *param, size_t index);
 static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *frame);
 static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *frame);
 static const LmL4Loader * lm_trans_registry_l4_loader_get(void);
@@ -12557,81 +12580,37 @@ static int lm_trans_emit_array_param(FILE *file, const LmP0Frame *frame, LmTrans
     return lm_trans_namespace_declare(namespace_, name_node -> as -> atom, "variable");
 }
 
-static int lm_trans_emit_param(FILE *file, const LmP0Node *node, LmTransNamespace *namespace_) {
-    LmTransL4CallableType * type;
-    LmP0Text * name;
-    const LmP0Frame * frame;
-    int has_name;
+static int lm_trans_emit_formal_param(FILE *file, const LmTransFormalParam *param, LmTransNamespace *namespace_) {
     int status;
-    if (((node == 0) || (node -> kind != LM_P0_NODE_FRAME))) {
-        if (lm_trans_node_is_positional_skip(node)) {
+    if (param == 0) {
+        return 1;
+    }
+    if (param -> source_node == 0 || param -> source_node -> kind != LM_P0_NODE_FRAME) {
+        if (lm_trans_node_is_positional_skip(param -> source_node)) {
             fprintf(stderr, "trans L2 error: skipped function parameter has no default declaration in this profile\n");
             return 1;
         }
         fprintf(stderr, "trans L2 error: parameter must be a typed frame\n");
         return 1;
     }
-    frame = 0;
-    if (lm_trans_formal_param_terminal_frame(node, &frame) == 0) {
-        fprintf(stderr, "trans L2 error: parameter must be a typed frame\n");
-        return 1;
+    if (param -> is_array) {
+        return lm_trans_emit_array_param(file, param -> terminal_frame, namespace_);
     }
-    if (lm_trans_text_is_array_receiver_head(frame -> head)) {
-        return lm_trans_emit_array_param(file, frame, namespace_);
-    }
-    type = lm_trans_expr_callable_type_new();
-    name = lm_trans_text_ref_new_cstr("");
-    if (type == 0 || name == 0) {
-        lm_trans_expr_callable_type_delete(type);
-        lm_trans_text_ref_destroy(&name);
-        return 1;
-    }
-    if (lm_trans_formal_param_read(node, type, name, &has_name, 0) == 0) {
-        fprintf(stderr, "trans L2 error: unsupported parameter head\n");
-        {
-            int lm_return_0 = 1;
-            lm_trans_expr_callable_type_delete(type);
-            lm_trans_text_ref_destroy(&name);
-            return lm_return_0;
-        }
-    }
-    if (has_name == 0) {
+    if (param -> has_name == 0) {
         fprintf(stderr, "trans L2 error: typed parameter expects a name\n");
-        {
-            int lm_return_1 = 1;
-            lm_trans_expr_callable_type_delete(type);
-            lm_trans_text_ref_destroy(&name);
-            return lm_return_1;
-        }
+        return 1;
     }
-    if ((lm_trans_symbol_is(lm_trans_namespace_find(namespace_, type -> class_name), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, type -> class_name))) {
-        if ((lm_trans_emit_raw_callable_declarator(file, namespace_, type -> class_name, name, "callable descriptor parameter") != 0)) {
-            {
-                int lm_return_2 = 1;
-                lm_trans_expr_callable_type_delete(type);
-                lm_trans_text_ref_destroy(&name);
-                return lm_return_2;
-            }
+    if ((lm_trans_symbol_is(lm_trans_namespace_find(namespace_, param -> type -> class_name), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, param -> type -> class_name))) {
+        if ((lm_trans_emit_raw_callable_declarator(file, namespace_, param -> type -> class_name, param -> name, "callable descriptor parameter") != 0)) {
+            return 1;
         }
-        {
-            int lm_return_3 = lm_trans_namespace_declare_storage_binding(namespace_, name, type -> class_name);
-            lm_trans_expr_callable_type_delete(type);
-            lm_trans_text_ref_destroy(&name);
-            return lm_return_3;
-        }
+        return lm_trans_namespace_declare_storage_binding(namespace_, param -> name, param -> type -> class_name);
     }
-    status = lm_trans_emit_callable_type_named(file, type, name);
+    status = lm_trans_emit_callable_type_named(file, param -> type, param -> name);
     if (status == 0) {
-        status = lm_trans_namespace_declare_storage_binding(namespace_, name, type -> class_name);
+        status = lm_trans_namespace_declare_storage_binding(namespace_, param -> name, param -> type -> class_name);
     }
-    {
-        int lm_return_4 = status;
-        lm_trans_expr_callable_type_delete(type);
-        lm_trans_text_ref_destroy(&name);
-        return lm_return_4;
-    }
-    lm_trans_expr_callable_type_delete(type);
-    lm_trans_text_ref_destroy(&name);
+    return status;
 }
 
 static LmP0Text * lm_trans_statement_text_new(void) {
@@ -17462,12 +17441,12 @@ static void lm_trans_l2_table_columns_destroy(LmTransL4CallableType **types, LmP
 
 static int lm_trans_l2_table_read_columns(const LmP0Frame *table_frame, LmTransL4CallableType ***out_types, LmP0Text ***out_names, size_t *out_count) {
     const LmP0Frame * columns_frame;
-    const LmP0Field * field;
+    LmTransFormalParamList * params;
+    LmTransFormalParam * param;
     LmTransL4CallableType * *types;
     LmP0Text * *names;
     size_t count;
     size_t index;
-    int has_name;
     if (out_types == 0 || out_names == 0 || out_count == 0) {
         return 1;
     }
@@ -17479,61 +17458,60 @@ static int lm_trans_l2_table_read_columns(const LmP0Frame *table_frame, LmTransL
         fprintf(stderr, "trans L2 table error: table must contain columns\n");
         return 1;
     }
-    count = lm_trans_l2_table_present_field_count(columns_frame -> body);
+    params = lm_trans_formal_param_list_from_structure(columns_frame -> body, 0, "table columns");
+    if (params == 0) {
+        return 1;
+    }
+    count = params -> count;
     if (count == 0U) {
         fprintf(stderr, "trans L2 table error: columns must not be empty\n");
-        return 1;
+        {
+            int lm_return_0 = 1;
+            lm_trans_formal_param_list_delete(params);
+            return lm_return_0;
+        }
     }
     types = (((LmTransL4CallableType * *)lm_own_new_zero(count * sizeof(types[0]))));
     names = (((LmP0Text * *)lm_own_new_zero(count * sizeof(names[0]))));
     if (types == 0 || names == 0) {
         lm_trans_l2_table_columns_destroy(types, names, count);
-        return 1;
+        {
+            int lm_return_1 = 1;
+            lm_trans_formal_param_list_delete(params);
+            return lm_return_1;
+        }
     }
-    field = lm_trans_l2_structure_first_present_field(columns_frame -> body);
     index = 0U;
     while (index < count) {
-        if (field == 0 || field -> value == 0) {
-            {
-                int lm_return_0 = 1;
-                lm_trans_l2_table_columns_destroy(types, names, count);
-                return lm_return_0;
-            }
-        }
+        param = params -> params[index];
         types[index] = lm_trans_expr_callable_type_new();
         names[index] = lm_trans_statement_text_new();
         if (types[index] == 0 || names[index] == 0) {
             {
-                int lm_return_1 = 1;
-                lm_trans_l2_table_columns_destroy(types, names, count);
-                return lm_return_1;
-            }
-        }
-        if (lm_trans_formal_param_read(field -> value, types[index], names[index], &has_name, 0) == 0) {
-            fprintf(stderr, "trans L2 table error: column descriptor expects a type\n");
-            {
                 int lm_return_2 = 1;
                 lm_trans_l2_table_columns_destroy(types, names, count);
+                lm_trans_formal_param_list_delete(params);
                 return lm_return_2;
             }
         }
-        if (has_name == 0) {
-            fprintf(stderr, "trans L2 table error: column descriptor expects a parameter name\n");
+        if (lm_trans_callable_type_copy(types[index], param -> type) != 0) {
             {
                 int lm_return_3 = 1;
                 lm_trans_l2_table_columns_destroy(types, names, count);
+                lm_trans_formal_param_list_delete(params);
                 return lm_return_3;
             }
         }
+        names[index][0] = param -> name[0];
         if (lm_trans_atom_can_be_new_binding_name(names[index]) == 0) {
             fprintf(stderr, "trans L2 table error: column name must be an identifier\n");
             {
                 int lm_return_4 = 1;
                 lm_trans_l2_table_columns_destroy(types, names, count);
+                lm_trans_formal_param_list_delete(params);
                 return lm_return_4;
             }
         }
-        field = lm_trans_l2_structure_next_present_field(field);
         index = index + 1U;
     }
     out_types[0] = types;
@@ -17544,6 +17522,7 @@ static int lm_trans_l2_table_read_columns(const LmP0Frame *table_frame, LmTransL
     {
         int lm_return_5 = 0;
         lm_trans_l2_table_columns_destroy(types, names, count);
+        lm_trans_formal_param_list_delete(params);
         return lm_return_5;
     }
 }
@@ -20575,28 +20554,42 @@ static int lm_trans_emit_statement_list(FILE *file, const LmP0Field *first, unsi
 }
 
 static int lm_trans_emit_params_body(FILE *file, const LmP0Node *params, LmTransNamespace *namespace_, int emit_void_when_empty) {
-    const LmP0Field * field;
-    int first;
-    if (params == 0 || params -> kind != LM_P0_NODE_STRUCTURE) {
-        fprintf(stderr, "trans L2 error: function parameters must be a Structure\n");
+    LmTransFormalParamList * list;
+    size_t index;
+    list = lm_trans_formal_param_list_from_node(params, 0, "function parameters");
+    if (list == 0) {
         return 1;
     }
-    first = 1;
-    field = params -> as -> structure -> first_field;
-    while (field != 0) {
-        if (first == 0 && lm_trans_put(file, ", ") != 0) {
-            return 1;
+    index = 0U;
+    while (index < list -> count) {
+        if (index != 0U && lm_trans_put(file, ", ") != 0) {
+            {
+                int lm_return_0 = 1;
+                lm_trans_formal_param_list_delete(list);
+                return lm_return_0;
+            }
         }
-        if (lm_trans_emit_param(file, field -> value, namespace_) != 0) {
-            return 1;
+        if (lm_trans_emit_formal_param(file, list -> params[index], namespace_) != 0) {
+            {
+                int lm_return_1 = 1;
+                lm_trans_formal_param_list_delete(list);
+                return lm_return_1;
+            }
         }
-        first = 0;
-        field = field -> next;
+        index = index + 1U;
     }
-    if (first && emit_void_when_empty) {
-        return lm_trans_put(file, "void");
+    if (list -> count == 0U && emit_void_when_empty) {
+        {
+            int lm_return_2 = lm_trans_put(file, "void");
+            lm_trans_formal_param_list_delete(list);
+            return lm_return_2;
+        }
     }
-    return 0;
+    {
+        int lm_return_3 = 0;
+        lm_trans_formal_param_list_delete(list);
+        return lm_return_3;
+    }
 }
 
 static int lm_trans_emit_params(FILE *file, const LmP0Node *params, LmTransNamespace *namespace_) {
@@ -20622,47 +20615,36 @@ static int lm_trans_emit_function_params(FILE *file, const LmTransFunctionHeader
 }
 
 static int lm_trans_emit_param_name_list(FILE *file, const LmP0Node *params) {
-    const LmP0Field * field;
-    LmP0Text * name;
-    int first;
-    if (params == 0 || params -> kind != LM_P0_NODE_STRUCTURE) {
+    LmTransFormalParamList * list;
+    LmTransFormalParam * param;
+    size_t index;
+    list = lm_trans_formal_param_list_from_node(params, 0, "function parameter names");
+    if (list == 0) {
         return 1;
     }
-    name = lm_trans_statement_text_new();
-    if (name == 0) {
-        return 1;
-    }
-    first = 1;
-    field = params -> as -> structure -> first_field;
-    while (field != 0) {
-        if (lm_trans_formal_param_name(field -> value, name) == 0) {
+    index = 0U;
+    while (index < list -> count) {
+        param = list -> params[index];
+        if (index != 0U && lm_trans_put(file, ", ") != 0) {
             {
                 int lm_return_0 = 1;
-                lm_trans_text_ref_destroy(&name);
+                lm_trans_formal_param_list_delete(list);
                 return lm_return_0;
             }
         }
-        if (first == 0 && lm_trans_put(file, ", ") != 0) {
+        if (lm_trans_emit_identifier(file, param -> name) != 0) {
             {
                 int lm_return_1 = 1;
-                lm_trans_text_ref_destroy(&name);
+                lm_trans_formal_param_list_delete(list);
                 return lm_return_1;
             }
         }
-        if (lm_trans_emit_identifier(file, name) != 0) {
-            {
-                int lm_return_2 = 1;
-                lm_trans_text_ref_destroy(&name);
-                return lm_return_2;
-            }
-        }
-        first = 0;
-        field = field -> next;
+        index = index + 1U;
     }
     {
-        int lm_return_3 = 0;
-        lm_trans_text_ref_destroy(&name);
-        return lm_return_3;
+        int lm_return_2 = 0;
+        lm_trans_formal_param_list_delete(list);
+        return lm_return_2;
     }
 }
 
@@ -20841,11 +20823,170 @@ static int lm_trans_formal_param_name(const LmP0Node *node, LmP0Text *out_name) 
     return has_name;
 }
 
+static LmTransFormalParam * lm_trans_formal_param_new(void) {
+    LmTransFormalParam * param;
+    param = (((LmTransFormalParam *)lm_own_new_zero(sizeof(param[0]))));
+    if (param != 0) {
+        param->type = lm_trans_expr_callable_type_new();
+        param->name = lm_trans_statement_text_new();
+        if (param -> type == 0 || param -> name == 0) {
+            lm_trans_formal_param_delete(param);
+            return 0;
+        }
+    }
+    return param;
+}
+
+static void lm_trans_formal_param_delete(LmTransFormalParam *param) {
+    if (param != 0) {
+        lm_trans_expr_callable_type_delete(param -> type);
+        param->type = 0;
+        lm_trans_text_ref_destroy(&param -> name);
+    }
+    lm_own_delete(param, 0);
+}
+
+static int lm_trans_formal_param_read_into(LmTransFormalParam *param, const LmP0Node *node) {
+    const LmP0Frame * frame;
+    int has_name;
+    const LmP0Field * value_first;
+    if (param == 0 || node == 0) {
+        return 1;
+    }
+    value_first = 0;
+    if (lm_trans_formal_param_read(node, param -> type, param -> name, &has_name, &value_first) == 0) {
+        return 1;
+    }
+    frame = 0;
+    lm_trans_formal_param_terminal_frame(node, &frame);
+    param->source_node = node;
+    param->terminal_frame = frame;
+    param->value_first = value_first;
+    param->has_name = has_name;
+    param->is_array = frame != 0 && lm_trans_text_is_array_receiver_head(frame -> head);
+    return 0;
+}
+
+static LmTransFormalParamList * lm_trans_formal_param_list_new(size_t count) {
+    LmTransFormalParamList * list;
+    size_t index;
+    list = (((LmTransFormalParamList *)lm_own_new_zero(sizeof(list[0]))));
+    if (list == 0) {
+        return 0;
+    }
+    list->count = count;
+    if (count == 0U) {
+        return list;
+    }
+    list->params = (((LmTransFormalParam * *)lm_own_new_zero(sizeof(list -> params[0]) * count)));
+    if (list -> params == 0) {
+        lm_trans_formal_param_list_delete(list);
+        return 0;
+    }
+    index = 0U;
+    while (index < count) {
+        list->params[index] = lm_trans_formal_param_new();
+        if (list -> params[index] == 0) {
+            lm_trans_formal_param_list_delete(list);
+            return 0;
+        }
+        index = index + 1U;
+    }
+    return list;
+}
+
+static void lm_trans_formal_param_list_delete(LmTransFormalParamList *list) {
+    size_t index;
+    if (list != 0) {
+        index = 0U;
+        while (index < list -> count) {
+            lm_trans_formal_param_delete(list -> params[index]);
+            index = index + 1U;
+        }
+        lm_own_delete(list -> params, 0);
+        list->params = 0;
+        list->count = 0U;
+    }
+    lm_own_delete(list, 0);
+}
+
+static size_t lm_trans_formal_param_list_present_count(const LmP0Structure *structure) {
+    const LmP0Field * field;
+    size_t count;
+    count = 0U;
+    if (structure == 0) {
+        return 0U;
+    }
+    field = structure -> first_field;
+    while (field != 0) {
+        if (lm_trans_node_is_ignored(field -> value) == 0) {
+            count = count + 1U;
+        }
+        field = field -> next;
+    }
+    return count;
+}
+
+static LmTransFormalParamList * lm_trans_formal_param_list_from_structure(const LmP0Structure *structure, int allow_unnamed, const char *error_name) {
+    const LmP0Field * field;
+    LmTransFormalParamList * list;
+    LmTransFormalParam * param;
+    size_t index;
+    const char *label;
+    label = error_name;
+    if (label == 0) {
+        label = "formal parameter list";
+    }
+    if (structure == 0) {
+        fprintf(stderr, "trans L2 error: %s expects a parameter Structure\n", label);
+        return 0;
+    }
+    list = lm_trans_formal_param_list_new(lm_trans_formal_param_list_present_count(structure));
+    if (list == 0) {
+        return 0;
+    }
+    index = 0U;
+    field = structure -> first_field;
+    while (field != 0) {
+        if (lm_trans_node_is_ignored(field -> value)) {
+            field = field -> next;
+            continue;
+        }
+        param = list -> params[index];
+        if (lm_trans_formal_param_read_into(param, field -> value) != 0) {
+            fprintf(stderr, "trans L2 error: %s parameter %zu has unsupported descriptor\n", label, index);
+            lm_trans_formal_param_list_delete(list);
+            return 0;
+        }
+        if (allow_unnamed == 0 && param -> has_name == 0) {
+            fprintf(stderr, "trans L2 error: %s parameter %zu must expose a binding name\n", label, index);
+            lm_trans_formal_param_list_delete(list);
+            return 0;
+        }
+        index = index + 1U;
+        field = field -> next;
+    }
+    return list;
+}
+
+static LmTransFormalParamList * lm_trans_formal_param_list_from_node(const LmP0Node *params, int allow_unnamed, const char *error_name) {
+    const char *label;
+    label = error_name;
+    if (label == 0) {
+        label = "formal parameter list";
+    }
+    if (params == 0 || params -> kind != LM_P0_NODE_STRUCTURE) {
+        fprintf(stderr, "trans L2 error: %s expects a parameter Structure\n", label);
+        return 0;
+    }
+    return lm_trans_formal_param_list_from_structure(params -> as -> structure, allow_unnamed, label);
+}
+
 static int lm_trans_namespace_set_signature(LmTransNamespace *namespace_, const LmP0Text *name, const LmP0Frame *function_frame) {
     LmTransSymbol * symbol;
     const LmP0Field * params_field;
-    const LmP0Field * field;
-    LmP0Text * param_name;
+    LmTransFormalParamList * params;
+    LmTransFormalParam * param;
     LmOwnPtrStack * param_names;
     LmP0Text * param_name_ref;
     LmP0Text * existing_param_name_ref;
@@ -20864,77 +21005,64 @@ static int lm_trans_namespace_set_signature(LmTransNamespace *namespace_, const 
         fprintf(stderr, "trans L2 error: fn/sub expects a parameter Structure\n");
         return 1;
     }
-    param_name = lm_trans_statement_text_new();
-    if (param_name == 0) {
-        return 1;
-    }
     param_names = lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any);
     if (param_names == 0) {
+        return 1;
+    }
+    allow_unnamed_params = lm_trans_symbol_is(symbol, "callableDescriptor");
+    params = lm_trans_formal_param_list_from_node(params_field -> value, allow_unnamed_params, "function signature");
+    if (params == 0) {
         {
             int lm_return_0 = 1;
-            lm_trans_text_ref_destroy(&param_name);
+            lm_trans_ptr_stack_delete(&param_names);
             return lm_return_0;
         }
     }
-    allow_unnamed_params = lm_trans_symbol_is(symbol, "callableDescriptor");
     index = 0U;
-    field = params_field -> value -> as -> structure -> first_field;
-    while (field != 0) {
-        if (lm_trans_formal_param_name(field -> value, param_name) == 0) {
-            if (allow_unnamed_params == 0) {
-                fprintf(stderr, "trans L2 error: function \"%.*s\" parameter %zu must expose a binding name\n", (((int)name -> length)), name -> data, index);
-                {
-                    int lm_return_1 = 1;
-                    lm_trans_ptr_stack_delete(&param_names);
-                    lm_trans_text_ref_destroy(&param_name);
-                    return lm_return_1;
-                }
-            }
-            lm_trans_text_assign_cstr(param_name, "");
-        }
+    while (index < params -> count) {
+        param = params -> params[index];
         i = 0U;
         while (i < index) {
             param_name_ref = (((LmP0Text *)lm_own_ptr_stack_at(param_names, i)));
-            if (param_name -> length != 0U && param_name_ref != 0 && lm_trans_identifier_same(param_name_ref, param_name)) {
+            if (param -> name -> length != 0U && param_name_ref != 0 && lm_trans_identifier_same(param_name_ref, param -> name)) {
                 fprintf(stderr, "trans L2 error: duplicate function parameter name\n");
                 {
-                    int lm_return_2 = 1;
+                    int lm_return_1 = 1;
+                    lm_trans_formal_param_list_delete(params);
                     lm_trans_ptr_stack_delete(&param_names);
-                    lm_trans_text_ref_destroy(&param_name);
-                    return lm_return_2;
+                    return lm_return_1;
                 }
             }
             i = i + 1U;
         }
-        param_name_ref = lm_trans_text_ref_new(param_name);
+        param_name_ref = lm_trans_text_ref_new(param -> name);
         if (param_name_ref == 0) {
             {
-                int lm_return_3 = 1;
+                int lm_return_2 = 1;
+                lm_trans_formal_param_list_delete(params);
                 lm_trans_ptr_stack_delete(&param_names);
-                lm_trans_text_ref_destroy(&param_name);
-                return lm_return_3;
+                return lm_return_2;
             }
         }
         if (lm_own_ptr_stack_push(param_names, param_name_ref) != 0) {
             lm_trans_text_ref_delete_any(param_name_ref);
             {
-                int lm_return_4 = 1;
+                int lm_return_3 = 1;
+                lm_trans_formal_param_list_delete(params);
                 lm_trans_ptr_stack_delete(&param_names);
-                lm_trans_text_ref_destroy(&param_name);
-                return lm_return_4;
+                return lm_return_3;
             }
         }
         index = index + 1U;
-        field = field -> next;
     }
     if (symbol -> has_signature) {
         if (symbol -> param_names == 0 || symbol -> param_names -> count != param_names -> count) {
             fprintf(stderr, "trans L2 error: os-imported function signatures must match\n");
             {
-                int lm_return_5 = 1;
+                int lm_return_4 = 1;
+                lm_trans_formal_param_list_delete(params);
                 lm_trans_ptr_stack_delete(&param_names);
-                lm_trans_text_ref_destroy(&param_name);
-                return lm_return_5;
+                return lm_return_4;
             }
         }
         i = 0U;
@@ -20944,19 +21072,19 @@ static int lm_trans_namespace_set_signature(LmTransNamespace *namespace_, const 
             if (existing_param_name_ref == 0 || param_name_ref == 0 || lm_trans_identifier_same(existing_param_name_ref, param_name_ref) == 0) {
                 fprintf(stderr, "trans L2 error: os-imported function signatures must match\n");
                 {
-                    int lm_return_6 = 1;
+                    int lm_return_5 = 1;
+                    lm_trans_formal_param_list_delete(params);
                     lm_trans_ptr_stack_delete(&param_names);
-                    lm_trans_text_ref_destroy(&param_name);
-                    return lm_return_6;
+                    return lm_return_5;
                 }
             }
             i = i + 1U;
         }
         {
-            int lm_return_7 = 0;
+            int lm_return_6 = 0;
+            lm_trans_formal_param_list_delete(params);
             lm_trans_ptr_stack_delete(&param_names);
-            lm_trans_text_ref_destroy(&param_name);
-            return lm_return_7;
+            return lm_return_6;
         }
     }
     lm_trans_ptr_stack_delete(&symbol -> param_names);
@@ -20964,10 +21092,10 @@ static int lm_trans_namespace_set_signature(LmTransNamespace *namespace_, const 
     param_names = 0;
     symbol->has_signature = 1;
     {
-        int lm_return_8 = 0;
+        int lm_return_7 = 0;
+        lm_trans_formal_param_list_delete(params);
         lm_trans_ptr_stack_delete(&param_names);
-        lm_trans_text_ref_destroy(&param_name);
-        return lm_return_8;
+        return lm_return_7;
     }
 }
 
@@ -22280,11 +22408,9 @@ static int lm_trans_top_level_declare_generated_return_class(LmTransNamespace *n
 }
 
 static int lm_trans_top_level_declare_function_params(LmTransNamespace *namespace_, const LmTransFunctionHeader *function) {
-    const LmP0Field * field;
-    LmP0Text * name;
-    LmTransL4CallableType * type;
+    LmTransFormalParamList * params;
+    LmTransFormalParam * param;
     size_t index;
-    int has_name;
     int status;
     if (namespace_ == 0 || function == 0) {
         return 1;
@@ -22292,35 +22418,22 @@ static int lm_trans_top_level_declare_function_params(LmTransNamespace *namespac
     if (function -> params_node == 0 || function -> params_node -> kind != LM_P0_NODE_STRUCTURE) {
         return 0;
     }
-    name = lm_trans_text_ref_new_cstr("");
-    type = lm_trans_expr_callable_type_new();
-    if (name == 0 || type == 0) {
-        lm_trans_text_ref_destroy(&name);
-        lm_trans_expr_callable_type_delete(type);
+    params = lm_trans_formal_param_list_from_node(function -> params_node, 0, "function parameters");
+    if (params == 0) {
         return 1;
     }
     status = 0;
     index = 0U;
-    field = function -> params_node -> as -> structure -> first_field;
-    while (status == 0 && field != 0) {
-        if (field -> value != 0) {
-            if (lm_trans_formal_param_read(field -> value, type, name, &has_name, 0) == 0 || has_name == 0) {
-                fprintf(stderr, "trans L2 error: function \"%.*s\" parameter %zu must expose a typed binding name\n", (((int)function -> name -> length)), function -> name -> data, index);
-                status = 1;
-            }
-            else {
-                if (lm_trans_namespace_declare_storage_binding(namespace_, name, type -> class_name) != 0) {
-                    status = 1;
-                }
-            }
+    while (status == 0 && index < params -> count) {
+        param = params -> params[index];
+        if (lm_trans_namespace_declare_storage_binding(namespace_, param -> name, param -> type -> class_name) != 0) {
+            status = 1;
         }
         index = index + 1U;
-        field = field -> next;
     }
     {
         int lm_return_0 = status;
-        lm_trans_expr_callable_type_delete(type);
-        lm_trans_text_ref_destroy(&name);
+        lm_trans_formal_param_list_delete(params);
         return lm_return_0;
     }
 }
@@ -22861,28 +22974,42 @@ static int lm_trans_top_level_emit_registry(FILE *file, LmTransNamespace *namesp
 }
 
 static int lm_trans_emit_callable_descriptor_params_body(FILE *file, const LmP0Node *params, const LmTransNamespace *namespace_, int emit_void_when_empty) {
-    const LmP0Field * field;
-    int first;
-    if (params == 0 || params -> kind != LM_P0_NODE_STRUCTURE) {
-        fprintf(stderr, "trans L2 error: callable descriptor parameters must be a Structure\n");
+    LmTransFormalParamList * list;
+    size_t index;
+    list = lm_trans_formal_param_list_from_node(params, 1, "callable descriptor parameters");
+    if (list == 0) {
         return 1;
     }
-    first = 1;
-    field = params -> as -> structure -> first_field;
-    while (field != 0) {
-        if (first == 0 && lm_trans_put(file, ", ") != 0) {
-            return 1;
+    index = 0U;
+    while (index < list -> count) {
+        if (index != 0U && lm_trans_put(file, ", ") != 0) {
+            {
+                int lm_return_0 = 1;
+                lm_trans_formal_param_list_delete(list);
+                return lm_return_0;
+            }
         }
-        if (lm_trans_emit_callable_descriptor_param_type(file, field -> value, namespace_) != 0) {
-            return 1;
+        if (lm_trans_emit_callable_descriptor_param_type(file, list -> params[index] -> source_node, namespace_) != 0) {
+            {
+                int lm_return_1 = 1;
+                lm_trans_formal_param_list_delete(list);
+                return lm_return_1;
+            }
         }
-        first = 0;
-        field = field -> next;
+        index = index + 1U;
     }
-    if (first && emit_void_when_empty) {
-        return lm_trans_put(file, "void");
+    if (list -> count == 0U && emit_void_when_empty) {
+        {
+            int lm_return_2 = lm_trans_put(file, "void");
+            lm_trans_formal_param_list_delete(list);
+            return lm_return_2;
+        }
     }
-    return 0;
+    {
+        int lm_return_3 = 0;
+        lm_trans_formal_param_list_delete(list);
+        return lm_return_3;
+    }
 }
 
 static int lm_trans_emit_callable_descriptor(FILE *file, const LmTransFunctionHeader *function, const LmTransNamespace *namespace_) {
@@ -28504,31 +28631,23 @@ static int lm_trans_l4_callable_type_from_node(const LmP0Node *node, LmTransL4Ca
     return 0;
 }
 
-static int lm_trans_registry_materialize_fn_descriptor_param(const LmP0Text *function_name, const LmP0Node *param_node, size_t index) {
-    LmTransL4CallableType * param_type;
+static int lm_trans_registry_materialize_fn_descriptor_param(const LmP0Text *function_name, const LmTransFormalParam *param, size_t index) {
     LmP0Text * param_name;
     char fallback_name[32];
-    int has_name;
     int status;
-    param_type = lm_trans_expr_callable_type_new();
     param_name = lm_trans_l4_text_view_new("");
-    if (param_type == 0 || param_name == 0) {
-        lm_trans_expr_callable_type_delete(param_type);
+    if (param == 0 || param -> type == 0 || param_name == 0) {
         lm_trans_l4_text_view_delete(&param_name);
         return 1;
     }
-    if (lm_trans_formal_param_read(param_node, param_type, param_name, &has_name, 0) == 0) {
-        fprintf(stderr, "trans fn descriptor error: parameter descriptor expects a type\n");
-        lm_trans_expr_callable_type_delete(param_type);
-        lm_trans_l4_text_view_delete(&param_name);
-        return 1;
+    if (param -> has_name) {
+        param_name[0] = param -> name[0];
     }
-    if (has_name == 0) {
+    else {
         snprintf(fallback_name, sizeof(fallback_name), "arg%zu", index);
         lm_trans_text_assign_cstr(param_name, fallback_name);
     }
-    status = lm_trans_registry_push_owner_relation_text(function_name, ".param.class", param_name, param_type -> class_name) != 0 || lm_trans_registry_push_owner_relation_size(function_name, ".param.index", param_name, index) != 0 || (param_type -> address_depth != 0U && lm_trans_registry_push_owner_relation_size(function_name, ".param.address-depth", param_name, param_type -> address_depth) != 0) || (param_type -> is_const && lm_trans_registry_push_owner_relation_size(function_name, ".param.const", param_name, 1U) != 0) || lm_trans_registry_note_class_present(param_type -> class_name) != 0;
-    lm_trans_expr_callable_type_delete(param_type);
+    status = lm_trans_registry_push_owner_relation_text(function_name, ".param.class", param_name, param -> type -> class_name) != 0 || lm_trans_registry_push_owner_relation_size(function_name, ".param.index", param_name, index) != 0 || (param -> type -> address_depth != 0U && lm_trans_registry_push_owner_relation_size(function_name, ".param.address-depth", param_name, param -> type -> address_depth) != 0) || (param -> type -> is_const && lm_trans_registry_push_owner_relation_size(function_name, ".param.const", param_name, 1U) != 0) || lm_trans_registry_note_class_present(param -> type -> class_name) != 0;
     lm_trans_l4_text_view_delete(&param_name);
     return status;
 }
@@ -28536,7 +28655,7 @@ static int lm_trans_registry_materialize_fn_descriptor_param(const LmP0Text *fun
 static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *frame) {
     LmTransFunctionHeader * function;
     LmTransL4CallableType * return_type;
-    const LmP0Field * field;
+    LmTransFormalParamList * params;
     size_t index;
     LmP0Text * function_name;
     LmP0Text * receiver_name;
@@ -28599,21 +28718,21 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
         fprintf(stderr, "trans fn descriptor error: parameters must be a Structure\n");
         status = 1;
     }
+    params = 0;
     index = 0U;
     if (status == 0) {
-        field = function -> params_node -> as -> structure -> first_field;
-        while (status == 0 && field != 0) {
-            if (field -> value != 0 && lm_trans_node_is_ignored(field -> value) == 0) {
-                if (lm_trans_registry_materialize_fn_descriptor_param(function_name, field -> value, index) != 0) {
-                    status = 1;
-                }
-                else {
-                    index = index + 1U;
-                }
+        params = lm_trans_formal_param_list_from_node(function -> params_node, 1, "fn descriptor parameters");
+        if (params == 0) {
+            status = 1;
+        }
+        while (status == 0 && index < params -> count) {
+            if (lm_trans_registry_materialize_fn_descriptor_param(function_name, params -> params[index], index) != 0) {
+                status = 1;
             }
-            field = field -> next;
+            index = index + 1U;
         }
     }
+    lm_trans_formal_param_list_delete(params);
     lm_trans_function_header_destroy(function);
     lm_trans_expr_callable_type_delete(return_type);
     lm_trans_l4_text_view_delete(&function_name);
@@ -28623,7 +28742,7 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
 
 static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *frame) {
     LmTransFunctionHeader * function;
-    const LmP0Field * field;
+    LmTransFormalParamList * params;
     size_t index;
     LmP0Text * function_name;
     LmP0Text * receiver_name;
@@ -28659,21 +28778,21 @@ static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *f
         fprintf(stderr, "trans sub descriptor error: parameters must be a Structure\n");
         status = 1;
     }
+    params = 0;
     index = 0U;
     if (status == 0) {
-        field = function -> params_node -> as -> structure -> first_field;
-        while (status == 0 && field != 0) {
-            if (field -> value != 0 && lm_trans_node_is_ignored(field -> value) == 0) {
-                if (lm_trans_registry_materialize_fn_descriptor_param(function_name, field -> value, index) != 0) {
-                    status = 1;
-                }
-                else {
-                    index = index + 1U;
-                }
+        params = lm_trans_formal_param_list_from_node(function -> params_node, 1, "sub descriptor parameters");
+        if (params == 0) {
+            status = 1;
+        }
+        while (status == 0 && index < params -> count) {
+            if (lm_trans_registry_materialize_fn_descriptor_param(function_name, params -> params[index], index) != 0) {
+                status = 1;
             }
-            field = field -> next;
+            index = index + 1U;
         }
     }
+    lm_trans_formal_param_list_delete(params);
     lm_trans_function_header_destroy(function);
     lm_trans_l4_text_view_delete(&function_name);
     lm_trans_l4_text_view_delete(&receiver_name);

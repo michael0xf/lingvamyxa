@@ -19,6 +19,8 @@ L4:
                  LmTransStatementStack       c.struct
                  LmTransStatementJob         c.struct
                  LmTransFunctionHeader       c.struct
+                 LmTransFormalParam          c.struct
+                 LmTransFormalParamList      c.struct
                  LmTransL4HeadBinding        c.struct
                  LmTransL4AtomBinding        c.struct
                  LmTransL4PayloadPointerBinding c.struct
@@ -226,6 +228,8 @@ L4:
                  LmTransCDeclarator             c.struct
                  LmTransAbiParam                c.struct
                  LmTransL4CallableType          c.struct
+                 LmTransFormalParam             c.struct
+                 LmTransFormalParamList         c.struct
                  LmTransSymbol                  c.struct
                  LmTransCleanup                 c.struct
                  LmTransLoop                    c.struct
@@ -279,6 +283,8 @@ L4:
                  LmTransCDeclarator             1
                  LmTransAbiParam                1
                  LmTransL4CallableType          1
+                 LmTransFormalParam             1
+                 LmTransFormalParamList         1
                  LmTransSymbol                  1
                  LmTransCleanup                 1
                  LmTransLoop                    1
@@ -452,6 +458,27 @@ L4:
                  address_depth  size_t                 1                       0                                0
                  is_const       int                    2                       0                                0
     end: LmTransL4CallableType
+
+    table:
+        name: LmTransFormalParam
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+        rows:
+                 source_node     LmP0Node               0                       0                                1
+                 terminal_frame  LmP0Frame              1                       0                                1
+                 type            LmTransL4CallableType  2                       0                                0
+                 name            LmP0Text               3                       0                                0
+                 value_first     LmP0Field              4                       0                                1
+                 has_name        int                    5                       0                                0
+                 is_array        int                    6                       0                                0
+    end: LmTransFormalParam
+
+    table:
+        name: LmTransFormalParamList
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+        rows:
+                 params  LmTransFormalParam  0                       1                                0
+                 count   size_t              1                       0                                0
+    end: LmTransFormalParamList
 
     table:
         name: LmTransSymbol

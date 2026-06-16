@@ -1826,41 +1826,34 @@ fn: lm_trans_l4_callable_type_from_node (const: (LmP0Node: node); LmTransL4Calla
         return: 1
 return: 0
 
-fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: function_name); const: (LmP0Node: param_node); size_t: index) int
-    LmTransL4CallableType: param_type
+fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: function_name); const: (LmTransFormalParam: param); size_t: index) int
     LmP0Text: param_name
     [32]: char fallback_name
-    int: has_name
     int: status
 
-    param_type: lm_trans_expr_callable_type_new()
     param_name: lm_trans_l4_text_view_new("")
-    if: param_type = 0 || param_name = 0
-        lm_trans_expr_callable_type_delete(param_type)
+    if: param = 0 || param\type = 0 || param_name = 0
         lm_trans_l4_text_view_delete(@ param_name)
         return: 1
 
-    if: lm_trans_formal_param_read(param_node, param_type, param_name, @ has_name, 0) = 0
-        c.fprintf(c.stderr, "trans fn descriptor error: parameter descriptor expects a type\n")
-        lm_trans_expr_callable_type_delete(param_type)
-        lm_trans_l4_text_view_delete(@ param_name)
-        return: 1
-    if: has_name = 0
+    if: param\has_name
+        param_name[0]: param\name[0]
+    else:
         c.snprintf:
             fallback_name c.sizeof(fallback_name)
             "arg%zu"
             index
         lm_trans_text_assign_cstr(param_name, fallback_name)
+    ---
 
-    status: lm_trans_registry_push_owner_relation_text(function_name, ".param.class", param_name, param_type\class_name) != 0 || lm_trans_registry_push_owner_relation_size(function_name, ".param.index", param_name, index) != 0 || (param_type\address_depth != 0U && lm_trans_registry_push_owner_relation_size(function_name, ".param.address-depth", param_name, param_type\address_depth) != 0) || (param_type\is_const && lm_trans_registry_push_owner_relation_size(function_name, ".param.const", param_name, 1U) != 0) || lm_trans_registry_note_class_present(param_type\class_name) != 0
-    lm_trans_expr_callable_type_delete(param_type)
+    status: lm_trans_registry_push_owner_relation_text(function_name, ".param.class", param_name, param\type\class_name) != 0 || lm_trans_registry_push_owner_relation_size(function_name, ".param.index", param_name, index) != 0 || (param\type\address_depth != 0U && lm_trans_registry_push_owner_relation_size(function_name, ".param.address-depth", param_name, param\type\address_depth) != 0) || (param\type\is_const && lm_trans_registry_push_owner_relation_size(function_name, ".param.const", param_name, 1U) != 0) || lm_trans_registry_note_class_present(param\type\class_name) != 0
     lm_trans_l4_text_view_delete(@ param_name)
 return: status
 
 fn: lm_trans_registry_materialize_fn_descriptor_frame (const: (LmP0Frame: frame)) int
     LmTransFunctionHeader: function
     LmTransL4CallableType: return_type
-    const: LmP0Field: field
+    LmTransFormalParamList: params
     size_t: index
     LmP0Text: function_name
     LmP0Text: receiver_name
@@ -1914,19 +1907,19 @@ fn: lm_trans_registry_materialize_fn_descriptor_frame (const: (LmP0Frame: frame)
         c.fprintf(c.stderr, "trans fn descriptor error: parameters must be a Structure\n")
         status: 1
 
+    params: 0
     index: 0U
     if: status = 0
-        field: function\params_node\as\structure\first_field
-        while: status = 0 && field != 0
-            if: field\value != 0 && lm_trans_node_is_ignored(field\value) = 0
-                if: lm_trans_registry_materialize_fn_descriptor_param(function_name, field\value, index) != 0
-                    status: 1
-                else:
-                    index: index + 1U
-            ---
-            field: field\next
+        params: lm_trans_formal_param_list_from_node(function\params_node, 1, "fn descriptor parameters")
+        if: params = 0
+            status: 1
+        while: status = 0 && index < params\count
+            if: lm_trans_registry_materialize_fn_descriptor_param(function_name, params\params[index], index) != 0
+                status: 1
+            index: index + 1U
     ---
 
+    lm_trans_formal_param_list_delete(params)
     lm_trans_function_header_destroy(function)
     lm_trans_expr_callable_type_delete(return_type)
     lm_trans_l4_text_view_delete(@ function_name)
@@ -1935,7 +1928,7 @@ return: status
 
 fn: lm_trans_registry_materialize_sub_descriptor_frame (const: (LmP0Frame: frame)) int
     LmTransFunctionHeader: function
-    const: LmP0Field: field
+    LmTransFormalParamList: params
     size_t: index
     LmP0Text: function_name
     LmP0Text: receiver_name
@@ -1969,19 +1962,19 @@ fn: lm_trans_registry_materialize_sub_descriptor_frame (const: (LmP0Frame: frame
         c.fprintf(c.stderr, "trans sub descriptor error: parameters must be a Structure\n")
         status: 1
 
+    params: 0
     index: 0U
     if: status = 0
-        field: function\params_node\as\structure\first_field
-        while: status = 0 && field != 0
-            if: field\value != 0 && lm_trans_node_is_ignored(field\value) = 0
-                if: lm_trans_registry_materialize_fn_descriptor_param(function_name, field\value, index) != 0
-                    status: 1
-                else:
-                    index: index + 1U
-            ---
-            field: field\next
+        params: lm_trans_formal_param_list_from_node(function\params_node, 1, "sub descriptor parameters")
+        if: params = 0
+            status: 1
+        while: status = 0 && index < params\count
+            if: lm_trans_registry_materialize_fn_descriptor_param(function_name, params\params[index], index) != 0
+                status: 1
+            index: index + 1U
     ---
 
+    lm_trans_formal_param_list_delete(params)
     lm_trans_function_header_destroy(function)
     lm_trans_l4_text_view_delete(@ function_name)
     lm_trans_l4_text_view_delete(@ receiver_name)

@@ -903,6 +903,8 @@ table:
              LmTransExprSegment       1
              LmTransExprSegmentMaterializer 1
              LmTransExprStack         1
+             LmTransFormalParam       1
+             LmTransFormalParamList   1
              LmTransFunctionEmitFrame 1
              LmTransFunctionHeader    1
              LmTransFunctionHeaderReceiver 1

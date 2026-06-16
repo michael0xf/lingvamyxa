@@ -3735,12 +3735,12 @@ fn: lm_trans_l2_table_read_columns (
     @: size_t out_count
 ) int
     const: LmP0Frame: columns_frame
-    const: LmP0Field: field
+    LmTransFormalParamList: params
+    LmTransFormalParam: param
     @: LmTransL4CallableType types
     @: LmP0Text names
     size_t: count
     size_t: index
-    int: has_name
 
     if: out_types = 0 || out_names = 0 || out_count = 0
         return: 1
@@ -3753,7 +3753,12 @@ fn: lm_trans_l2_table_read_columns (
         c.fprintf(c.stderr, "trans L2 table error: table must contain columns\n")
         return: 1
 
-    count: lm_trans_l2_table_present_field_count(columns_frame\body)
+    params: lm_trans_formal_param_list_from_structure(columns_frame\body, 0, "table columns")
+    if: params = 0
+        return: 1
+    finally: lm_trans_formal_param_list_delete(params)
+
+    count: params\count
     if: count = 0U
         c.fprintf(c.stderr, "trans L2 table error: columns must not be empty\n")
         return: 1
@@ -3765,25 +3770,19 @@ fn: lm_trans_l2_table_read_columns (
         return: 1
     finally: lm_trans_l2_table_columns_destroy(types, names, count)
 
-    field: lm_trans_l2_structure_first_present_field(columns_frame\body)
     index: 0U
     while: index < count
-        if: field = 0 || field\value = 0
-            return: 1
+        param: params\params[index]
         types[index]: lm_trans_expr_callable_type_new()
         names[index]: lm_trans_statement_text_new()
         if: types[index] = 0 || names[index] = 0
             return: 1
-        if: lm_trans_formal_param_read(field\value, types[index], names[index], @ has_name, 0) = 0
-            c.fprintf(c.stderr, "trans L2 table error: column descriptor expects a type\n")
+        if: lm_trans_callable_type_copy(types[index], param\type) != 0
             return: 1
-        if: has_name = 0
-            c.fprintf(c.stderr, "trans L2 table error: column descriptor expects a parameter name\n")
-            return: 1
+        names[index][0]: param\name[0]
         if: lm_trans_atom_can_be_new_binding_name(names[index]) = 0
             c.fprintf(c.stderr, "trans L2 table error: column name must be an identifier\n")
             return: 1
-        field: lm_trans_l2_structure_next_present_field(field)
         index: index + 1U
 
     out_types[0]: types
@@ -6501,24 +6500,23 @@ fn: lm_trans_emit_params_body (
     LmTransNamespace: namespace_
     int: emit_void_when_empty
 ) int
-    const: LmP0Field: field
-    int: first
+    LmTransFormalParamList: list
+    size_t: index
 
-    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
-        c.fprintf(c.stderr, "trans L2 error: function parameters must be a Structure\n")
+    list: lm_trans_formal_param_list_from_node(params, 0, "function parameters")
+    if: list = 0
         return: 1
+    finally: lm_trans_formal_param_list_delete(list)
 
-    first: 1
-    field: params\as\structure\first_field
-    while: field != 0
-        if: first = 0 && lm_trans_put(file, ", ") != 0
+    index: 0U
+    while: index < list\count
+        if: index != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: lm_trans_emit_param(file, field\value, namespace_) != 0
+        if: lm_trans_emit_formal_param(file, list\params[index], namespace_) != 0
             return: 1
-        first: 0
-        field: field\next
+        index: index + 1U
 
-    if: first && emit_void_when_empty
+    if: list\count = 0U && emit_void_when_empty
         return: lm_trans_put(file, "void")
 return: 0
 
@@ -6552,29 +6550,23 @@ fn: lm_trans_emit_param_name_list (
     FILE: file
     const: LmP0Node: params
 ) int
-    const: LmP0Field: field
-    LmP0Text: name
-    int: first
+    LmTransFormalParamList: list
+    LmTransFormalParam: param
+    size_t: index
 
-    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
+    list: lm_trans_formal_param_list_from_node(params, 0, "function parameter names")
+    if: list = 0
         return: 1
+    finally: lm_trans_formal_param_list_delete(list)
 
-    name: lm_trans_statement_text_new()
-    if: name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ name)
-
-    first: 1
-    field: params\as\structure\first_field
-    while: field != 0
-        if: lm_trans_formal_param_name(field\value, name) = 0
+    index: 0U
+    while: index < list\count
+        param: list\params[index]
+        if: index != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: first = 0 && lm_trans_put(file, ", ") != 0
+        if: lm_trans_emit_identifier(file, param\name) != 0
             return: 1
-        if: lm_trans_emit_identifier(file, name) != 0
-            return: 1
-        first: 0
-        field: field\next
+        index: index + 1U
 return: 0
 
 fn: lm_trans_emit_closure_call_wrapper (
@@ -6751,6 +6743,167 @@ fn: lm_trans_formal_param_name (
         return: 0
 return: has_name
 
+fn: lm_trans_formal_param_new () LmTransFormalParam
+    LmTransFormalParam: param
+
+    param: (cast: (LmTransFormalParam) lm_own_new_zero(c.sizeof(param[0])))
+    if: param != 0
+        param\type: lm_trans_expr_callable_type_new()
+        param\name: lm_trans_statement_text_new()
+        if: param\type = 0 || param\name = 0
+            lm_trans_formal_param_delete(param)
+            return: 0
+    ---
+return: param
+
+sub: lm_trans_formal_param_delete (LmTransFormalParam: param)
+    if: param != 0
+        lm_trans_expr_callable_type_delete(param\type)
+        param\type: 0
+        lm_trans_text_ref_destroy(@ param\name)
+    lm_own_delete(param, 0)
+end: lm_trans_formal_param_delete
+
+fn: lm_trans_formal_param_read_into (
+    LmTransFormalParam: param
+    const: LmP0Node: node
+) int
+    const: LmP0Frame: frame
+    int: has_name
+    const: LmP0Field: value_first
+
+    if: param = 0 || node = 0
+        return: 1
+
+    value_first: 0
+    if: lm_trans_formal_param_read(node, param\type, param\name, @ has_name, @ value_first) = 0
+        return: 1
+
+    frame: 0
+    lm_trans_formal_param_terminal_frame(node, @ frame)
+
+    param\source_node: node
+    param\terminal_frame: frame
+    param\value_first: value_first
+    param\has_name: has_name
+    param\is_array: frame != 0 && lm_trans_text_is_array_receiver_head(frame\head)
+return: 0
+
+fn: lm_trans_formal_param_list_new (size_t: count) LmTransFormalParamList
+    LmTransFormalParamList: list
+    size_t: index
+
+    list: (cast: (LmTransFormalParamList) lm_own_new_zero(c.sizeof(list[0])))
+    if: list = 0
+        return: 0
+
+    list\count: count
+    if: count = 0U
+        return: list
+
+    list\params: (cast: (@: LmTransFormalParam) lm_own_new_zero(c.sizeof(list\params[0]) * count))
+    if: list\params = 0
+        lm_trans_formal_param_list_delete(list)
+        return: 0
+
+    index: 0U
+    while: index < count
+        list\params[index]: lm_trans_formal_param_new()
+        if: list\params[index] = 0
+            lm_trans_formal_param_list_delete(list)
+            return: 0
+        index: index + 1U
+return: list
+
+sub: lm_trans_formal_param_list_delete (LmTransFormalParamList: list)
+    size_t: index
+
+    if: list != 0
+        index: 0U
+        while: index < list\count
+            lm_trans_formal_param_delete(list\params[index])
+            index: index + 1U
+        lm_own_delete(list\params, 0)
+        list\params: 0
+        list\count: 0U
+    lm_own_delete(list, 0)
+end: lm_trans_formal_param_list_delete
+
+fn: lm_trans_formal_param_list_present_count (const: LmP0Structure: structure) size_t
+    const: LmP0Field: field
+    size_t: count
+
+    count: 0U
+    if: structure = 0
+        return: 0U
+
+    field: structure\first_field
+    while: field != 0
+        if: lm_trans_node_is_ignored(field\value) = 0
+            count: count + 1U
+        field: field\next
+return: count
+
+fn: lm_trans_formal_param_list_from_structure (
+    const: LmP0Structure: structure
+    int: allow_unnamed
+    const: @(char error_name)
+) LmTransFormalParamList
+    const: LmP0Field: field
+    LmTransFormalParamList: list
+    LmTransFormalParam: param
+    size_t: index
+    const: @: char label
+
+    label: error_name
+    if: label = 0
+        label: "formal parameter list"
+
+    if: structure = 0
+        c.fprintf(c.stderr, "trans L2 error: %s expects a parameter Structure\n", label)
+        return: 0
+
+    list: lm_trans_formal_param_list_new(lm_trans_formal_param_list_present_count(structure))
+    if: list = 0
+        return: 0
+
+    index: 0U
+    field: structure\first_field
+    while: field != 0
+        if: lm_trans_node_is_ignored(field\value)
+            field: field\next
+            continue
+        ---
+
+        param: list\params[index]
+        if: lm_trans_formal_param_read_into(param, field\value) != 0
+            c.fprintf(c.stderr, "trans L2 error: %s parameter %zu has unsupported descriptor\n", label, index)
+            lm_trans_formal_param_list_delete(list)
+            return: 0
+        if: allow_unnamed = 0 && param\has_name = 0
+            c.fprintf(c.stderr, "trans L2 error: %s parameter %zu must expose a binding name\n", label, index)
+            lm_trans_formal_param_list_delete(list)
+            return: 0
+        index: index + 1U
+        field: field\next
+return: list
+
+fn: lm_trans_formal_param_list_from_node (
+    const: LmP0Node: params
+    int: allow_unnamed
+    const: @(char error_name)
+) LmTransFormalParamList
+    const: @: char label
+
+    label: error_name
+    if: label = 0
+        label: "formal parameter list"
+
+    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
+        c.fprintf(c.stderr, "trans L2 error: %s expects a parameter Structure\n", label)
+        return: 0
+return: lm_trans_formal_param_list_from_structure(params\as\structure, allow_unnamed, label)
+
 fn: lm_trans_namespace_set_signature (
     LmTransNamespace: namespace_
     const: LmP0Text: name
@@ -6758,8 +6911,8 @@ fn: lm_trans_namespace_set_signature (
 ) int
     LmTransSymbol: symbol
     const: LmP0Field: params_field
-    const: LmP0Field: field
-    LmP0Text: param_name
+    LmTransFormalParamList: params
+    LmTransFormalParam: param
     LmOwnPtrStack: param_names
     LmP0Text: param_name_ref
     LmP0Text: existing_param_name_ref
@@ -6779,42 +6932,35 @@ fn: lm_trans_namespace_set_signature (
         c.fprintf(c.stderr, "trans L2 error: fn/sub expects a parameter Structure\n")
         return: 1
 
-    param_name: lm_trans_statement_text_new()
-    if: param_name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ param_name)
-
     param_names: lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any)
     if: param_names = 0
         return: 1
     finally: lm_trans_ptr_stack_delete(@ param_names)
 
     allow_unnamed_params: lm_trans_symbol_is(symbol, "callableDescriptor")
-    index: 0U
-    field: params_field\value\as\structure\first_field
-    while: field != 0
-        if: lm_trans_formal_param_name(field\value, param_name) = 0
-            if: allow_unnamed_params = 0
-                c.fprintf(c.stderr, "trans L2 error: function \"%.*s\" parameter %zu must expose a binding name\n", (cast: int name\length), name\data, index)
-                return: 1
-            lm_trans_text_assign_cstr(param_name, "")
+    params: lm_trans_formal_param_list_from_node(params_field\value, allow_unnamed_params, "function signature")
+    if: params = 0
+        return: 1
+    finally: lm_trans_formal_param_list_delete(params)
 
+    index: 0U
+    while: index < params\count
+        param: params\params[index]
         i: 0U
         while: i < index
             param_name_ref: (cast: (LmP0Text) lm_own_ptr_stack_at(param_names, i))
-            if: param_name\length != 0U && param_name_ref != 0 && lm_trans_identifier_same(param_name_ref, param_name)
+            if: param\name\length != 0U && param_name_ref != 0 && lm_trans_identifier_same(param_name_ref, param\name)
                 c.fprintf(c.stderr, "trans L2 error: duplicate function parameter name\n")
                 return: 1
             i: i + 1U
 
-        param_name_ref: lm_trans_text_ref_new(param_name)
+        param_name_ref: lm_trans_text_ref_new(param\name)
         if: param_name_ref = 0
             return: 1
         if: lm_own_ptr_stack_push(param_names, param_name_ref) != 0
             lm_trans_text_ref_delete_any(param_name_ref)
             return: 1
         index: index + 1U
-        field: field\next
 
     if: symbol\has_signature
         if: symbol\param_names = 0 || symbol\param_names\count != param_names\count
