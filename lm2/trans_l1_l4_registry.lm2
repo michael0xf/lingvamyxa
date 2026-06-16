@@ -1779,6 +1779,9 @@ fn: lm_trans_l4_callable_type_from_node (const: (LmP0Node: node); LmTransL4Calla
     const: LmP0Node: current
     const: LmP0Frame: frame
     const: LmP0Field: field
+    LmP0Text: dimension
+    size_t: dimension_index
+    size_t: rank
 
     if: node = 0 || out = 0
         return: 0
@@ -1828,6 +1831,17 @@ fn: lm_trans_l4_callable_type_from_node (const: (LmP0Node: node); LmTransL4Calla
             field: frame\body\first_field
             if: field = 0 || field\value = 0
                 return: 0
+            dimension: lm_trans_text_ref_new_cstr("")
+            if: dimension = 0
+                return: 0
+            dimension_index: 0U
+            rank: 0U
+            while: lm_trans_array_head_next_dimension(frame\head, @ dimension_index, dimension)
+                rank: rank + 1U
+            lm_trans_text_ref_destroy(@ dimension)
+            if: rank = 0U
+                return: 0
+            out\array_rank: out\array_rank + rank
             out\address_depth: out\address_depth + 1U
             current: field\value
             continue

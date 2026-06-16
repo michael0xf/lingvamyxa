@@ -136,6 +136,17 @@ fn: lm_trans_formal_param_name (
     LmP0Text: out_name
 ) int
 
+fn: lm_trans_formal_param_new () LmTransFormalParam
+
+sub: lm_trans_formal_param_delete (
+    LmTransFormalParam: param
+)
+
+fn: lm_trans_formal_param_read_into (
+    LmTransFormalParam: param
+    const: LmP0Node: node
+) int
+
 fn: lm_trans_receiver_fn (
     const: LmP0Frame: frame
     int: is_external
@@ -631,7 +642,7 @@ fn: lm_trans_formal_param_list_from_node (
 
 fn: lm_trans_emit_callable_descriptor_param_type (
     FILE: file
-    const: LmP0Node: param
+    const: LmTransFormalParam: param
     const: LmTransNamespace: namespace_
 ) int
 

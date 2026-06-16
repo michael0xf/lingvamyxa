@@ -886,6 +886,8 @@ fn: lm_trans_type_receiver_array_structure_value_alloc (
     size_t: rank
     size_t: count
     int: type_status
+    @: char items_name_storage
+    LmP0Text: items_name
 
     if: out_consumed != 0
         out_consumed[0]: 0
@@ -902,8 +904,49 @@ fn: lm_trans_type_receiver_array_structure_value_alloc (
 
     out_consumed[0]: 1
     count: lm_trans_structure_field_count(value)
-    out_needs_null_check[0]: count != 0U
-return: lm_trans_emit_array_structure_value_alloc_assignment(file, indent, target_name, 0, 0U, element_type, rank, rank, count)
+    out_needs_null_check[0]: 1
+
+    items_name_storage: lm_trans_array_items_name_new(target_name)
+    if: items_name_storage = 0
+        return: 1
+    finally: lm_own_delete(items_name_storage, 0)
+
+    items_name: lm_trans_text_from_cstr(items_name_storage)
+    if: items_name = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ items_name)
+
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_array_pointer_type(file, element_type, rank) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, items_name) != 0 || lm_trans_put(file, ";\n") != 0
+        return: 1
+    if: lm_trans_emit_array_structure_value_alloc_assignment(file, indent, items_name, 0, 0U, element_type, rank, rank, count) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: count != 0U
+        if: lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, items_name) != 0 || lm_trans_put(file, " != 0) {\n") != 0
+            return: 1
+        ---
+    else:
+        if: lm_trans_put(file, "if (1) {\n") != 0
+            return: 1
+        ---
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_new_zero(sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " != 0) {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "->ptr = (void *)") != 0 || lm_trans_write_text(file, items_name) != 0 || lm_trans_put(file, ";\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "->length = ") != 0 || lm_trans_emit_size_literal(file, count) != 0 || lm_trans_put(file, ";\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} else {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+return: 0
 
 fn: lm_trans_type_receiver_structure_value_can_consume (
     const: LmP0Node: type_node
@@ -946,6 +989,8 @@ fn: lm_trans_type_receiver_array_structure_value_fill (
     const: LmP0Node: element_type
     size_t: rank
     int: type_status
+    @: char items_name_storage
+    LmP0Text: items_name
 
     if: out_consumed != 0
         out_consumed[0]: 0
@@ -959,7 +1004,16 @@ fn: lm_trans_type_receiver_array_structure_value_fill (
         return: 0
 
     out_consumed[0]: 1
-return: lm_trans_emit_array_structure_value_fill(file, indent, target_name, element_type, rank, value, namespace_)
+    items_name_storage: lm_trans_array_items_name_new(target_name)
+    if: items_name_storage = 0
+        return: 1
+    finally: lm_own_delete(items_name_storage, 0)
+
+    items_name: lm_trans_text_from_cstr(items_name_storage)
+    if: items_name = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ items_name)
+return: lm_trans_emit_array_structure_value_fill(file, indent, items_name, element_type, rank, value, namespace_)
 
 fn: lm_trans_emit_type_receiver_structure_value_alloc (
     FILE: file
@@ -1031,6 +1085,19 @@ fn: lm_trans_expr_segment_single_structure_value (
 
 return: segment\first\value\as\structure
 
+fn: lm_trans_expr_segment_single_atom (
+    const: LmTransExprSegment: segment
+    LmP0Text: out_atom
+) int
+    if: out_atom != 0
+        out_atom\data: ""
+        out_atom\length: 0U
+    if: segment = 0 || out_atom = 0 || segment\first = 0 || segment\first\next != segment\stop || segment\first\value = 0 || segment\first\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+
+    out_atom[0]: segment\first\value\as\atom[0]
+return: 1
+
 fn: lm_trans_array_value_helper_name_new () @: char
     [64]: char buffer
     int: written
@@ -1047,9 +1114,49 @@ fn: lm_trans_array_value_helper_name_new () @: char
     c.memcpy(name, buffer, (cast: size_t written) + 1U)
 return: name
 
+fn: lm_trans_array_formal_param_type_info (
+    const: LmTransFormalParam: param
+    const: @(LmP0Node out_element_type)
+    @: size_t out_rank
+    @: size_t out_pointer_depth
+) int
+    LmP0Text: dimension
+    size_t: dimension_index
+    size_t: rank
+
+    if: out_element_type != 0
+        out_element_type[0]: 0
+    if: out_rank != 0
+        out_rank[0]: 0U
+    if: out_pointer_depth != 0
+        out_pointer_depth[0]: 0U
+
+    if: param = 0 || param\is_array = 0 || param\declarator = 0
+        return: 0
+
+    dimension_index: 0U
+    rank: 0U
+    dimension: lm_trans_text_ref_new_cstr("")
+    if: dimension = 0
+        return: 0
+    while: lm_trans_array_head_next_dimension(param\declarator\array_head, @ dimension_index, dimension)
+        rank: rank + 1U
+    if: rank = 0U
+        lm_trans_text_ref_destroy(@ dimension)
+        return: 0
+
+    if: out_element_type != 0
+        out_element_type[0]: param\declarator\type_node
+    if: out_rank != 0
+        out_rank[0]: rank
+    if: out_pointer_depth != 0
+        out_pointer_depth[0]: param\declarator\pointer_depth
+    lm_trans_text_ref_destroy(@ dimension)
+return: 1
+
 fn: lm_trans_emit_array_value_helper (
     FILE: file
-    const: LmP0Node: param_node
+    const: LmTransFormalParam: param
     const: LmP0Structure: value
     const: LmTransNamespace: namespace_
     LmP0Text: out_name
@@ -1058,6 +1165,7 @@ fn: lm_trans_emit_array_value_helper (
     const: LmP0Node: element_type
     LmP0Text: helper_name_text
     LmP0Text: target_name
+    LmP0Text: slice_name
     @: char helper_name
     size_t: rank
     size_t: pointer_depth
@@ -1066,7 +1174,7 @@ fn: lm_trans_emit_array_value_helper (
     if: out_name != 0
         out_name\data: ""
         out_name\length: 0U
-    if: out_name = 0 || value = 0 || lm_trans_array_param_type_info(param_node, @ element_type, @ rank, @ pointer_depth) = 0
+    if: out_name = 0 || value = 0 || lm_trans_array_formal_param_type_info(param, @ element_type, @ rank, @ pointer_depth) = 0
         return: 1
 
     helper_name: lm_trans_array_value_helper_name_new()
@@ -1076,16 +1184,20 @@ fn: lm_trans_emit_array_value_helper (
 
     helper_name_text: lm_trans_text_ref_new_cstr(helper_name)
     target_name: lm_trans_text_ref_new_cstr("lm_value")
-    if: helper_name_text = 0 || target_name = 0
+    slice_name: lm_trans_text_ref_new_cstr("lm_slice")
+    if: helper_name_text = 0 || target_name = 0 || slice_name = 0
         return: 1
     finally:
         lm_trans_text_ref_destroy(@ helper_name_text)
         lm_trans_text_ref_destroy(@ target_name)
+        lm_trans_text_ref_destroy(@ slice_name)
 
     prelude_file: lm_trans_prelude_file(file)
     count: lm_trans_structure_field_count(value)
 
-    if: lm_trans_put(prelude_file, "static ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_emit_identifier(prelude_file, helper_name_text) != 0 || lm_trans_put(prelude_file, "(void) {\n    ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n") != 0 || lm_trans_emit_array_structure_value_alloc_assignment(prelude_file, 1U, target_name, 0, 0U, element_type, pointer_depth + rank, rank, count) != 0
+    if: lm_trans_put(prelude_file, "static LmSlice *") != 0 || lm_trans_emit_identifier(prelude_file, helper_name_text) != 0 || lm_trans_put(prelude_file, "(void) {\n    ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    LmSlice *") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n") != 0
+        return: 1
+    if: lm_trans_emit_array_structure_value_alloc_assignment(prelude_file, 1U, target_name, 0, 0U, element_type, pointer_depth + rank, rank, count) != 0
         return: 1
 
     if: count != 0U && (lm_trans_put(prelude_file, "    if (") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n") != 0)
@@ -1094,7 +1206,7 @@ fn: lm_trans_emit_array_value_helper (
     if: count != 0U && lm_trans_emit_array_structure_value_fill(prelude_file, 1U, target_name, element_type, rank, value, namespace_) != 0
         return: 1
 
-    if: lm_trans_put(prelude_file, "    return ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0
+    if: lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_new_zero(sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0
         return: 1
 
     if: lm_own_ptr_stack_push(lm_trans_emitted_array_value_helpers, helper_name) != 0
@@ -1113,12 +1225,40 @@ fn: lm_trans_materialize_array_value (
 ) int
     const: LmP0Structure: value
     LmP0Text: helper_name
-    const: LmP0Node: param_node
+    LmP0Text: atom
+    LmP0Text: slice_expr
+    LmP0Text: slice_length
+    const: LmTransFormalParam: param
 
     if: out_consumed != 0
         out_consumed[0]: 0
     if: out_consumed = 0
         return: 1
+
+    atom: lm_trans_statement_text_new()
+    slice_expr: lm_trans_statement_text_new()
+    slice_length: lm_trans_statement_text_new()
+    if: atom = 0 || slice_expr = 0 || slice_length = 0
+        lm_trans_text_ref_destroy(@ atom)
+        lm_trans_text_ref_destroy(@ slice_expr)
+        lm_trans_text_ref_destroy(@ slice_length)
+        return: 1
+    finally:
+        lm_trans_text_ref_destroy(@ atom)
+        lm_trans_text_ref_destroy(@ slice_expr)
+        lm_trans_text_ref_destroy(@ slice_length)
+
+    if: lm_trans_expr_segment_single_atom(segment, atom) && lm_trans_namespace_relation_text_latest(namespace_, atom, "variable.slice-name", slice_expr)
+        if: lm_trans_expr_stack_push_text(stack, slice_expr\data) != 0
+            return: 1
+        out_consumed[0]: 1
+        return: 0
+
+    if: lm_trans_expr_segment_single_atom(segment, atom) && lm_trans_namespace_relation_text_latest(namespace_, atom, "variable.slice-length", slice_length)
+        if: lm_trans_expr_stack_push_text(stack, " }") != 0 || lm_trans_expr_stack_push_text(stack, slice_length\data) != 0 || lm_trans_expr_stack_push_text(stack, ", ") != 0 || lm_trans_expr_stack_push_name_text(stack, atom) != 0 || lm_trans_expr_stack_push_text(stack, "(void *)") != 0 || lm_trans_expr_stack_push_text(stack, "&(LmSlice){ ") != 0
+            return: 1
+        out_consumed[0]: 1
+        return: 0
 
     value: lm_trans_expr_segment_single_structure_value(segment)
     if: value = 0
@@ -1129,10 +1269,10 @@ fn: lm_trans_materialize_array_value (
         return: 1
     finally: lm_trans_text_ref_destroy(@ helper_name)
 
-    param_node: 0
+    param: 0
     if: segment != 0
-        param_node: segment\expected_param
-    if: lm_trans_emit_array_value_helper(file, param_node, value, namespace_, helper_name) != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0 || lm_trans_expr_stack_push_text(stack, "(") != 0 || lm_trans_expr_stack_push_name_text(stack, helper_name) != 0
+        param: segment\expected_param
+    if: lm_trans_emit_array_value_helper(file, param, value, namespace_, helper_name) != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0 || lm_trans_expr_stack_push_text(stack, "(") != 0 || lm_trans_expr_stack_push_name_text(stack, helper_name) != 0
         return: 1
 
     out_consumed[0]: 1
@@ -2137,6 +2277,11 @@ fn: lm_trans_emit_array_initializer (
         return: 1
 return: lm_trans_put(file, "}")
 
+fn: lm_trans_array_declarator_error (const: @(char message)) int
+    if: message != 0
+        c.fprintf(c.stderr, "%s\n", message)
+return: 1
+
 fn: lm_trans_array_declarator_read_from_frame (
     LmTransCDeclarator: declarator
     const: LmP0Frame: frame
@@ -2184,8 +2329,7 @@ fn: lm_trans_array_declarator_read_from_frame (
             if: require_name
                 name_field: inner\body\first_field
                 if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-                    c.fprintf(c.stderr, "%s\n", direct_error)
-                    return: 1
+                    return: lm_trans_array_declarator_error(direct_error)
                 declarator\name[0]: name_field\value\as\atom[0]
                 declarator\expression_dimensions: name_field\next
             ---
@@ -2198,22 +2342,19 @@ fn: lm_trans_array_declarator_read_from_frame (
             if: require_name
                 name_field: lm_trans_nth_field(inner\body, 1U)
                 if: type_field = 0 || type_field\value = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-                    c.fprintf(c.stderr, "%s\n", pointer_error)
-                    return: 1
+                    return: lm_trans_array_declarator_error(pointer_error)
                 declarator\name[0]: name_field\value\as\atom[0]
                 declarator\expression_dimensions: name_field\next
             else:
                 if: type_field = 0 || type_field\value = 0
-                    c.fprintf(c.stderr, "%s\n", pointer_error)
-                    return: 1
+                    return: lm_trans_array_declarator_error(pointer_error)
             ---
             declarator\pointer_depth: inner\head\length
             declarator\type_node: type_field\value
             handled: 1
         ---
         if: handled = 0
-            c.fprintf(c.stderr, "%s\n", nested_error)
-            return: 1
+            return: lm_trans_array_declarator_error(nested_error)
         return: 0
     ---
 
@@ -2229,19 +2370,184 @@ fn: lm_trans_array_declarator_read_from_frame (
         else:
             name_field: 0
         if: type_field = 0 || type_field\value = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-            c.fprintf(c.stderr, "%s\n", direct_error)
-            return: 1
+            return: lm_trans_array_declarator_error(direct_error)
         declarator\name[0]: name_field\value\as\atom[0]
         declarator\expression_dimensions: name_field\next
     else:
         if: type_field = 0 || type_field\value = 0
-            c.fprintf(c.stderr, "%s\n", direct_error)
-            return: 1
+            return: lm_trans_array_declarator_error(direct_error)
     ---
 
     declarator\pointer_depth: pointer_depth
     declarator\type_node: type_field\value
 return: 0
+
+fn: lm_trans_size_literal_cstr_new (size_t: value) @: char
+    [32]: char buffer
+    int: written
+    @: char result
+
+    written: c.snprintf(buffer, c.sizeof(buffer), "%zuU", value)
+    if: written < 0 || (cast: size_t written) >= c.sizeof(buffer)
+        return: 0
+    result: (cast: (@: char) lm_own_new_zero((cast: size_t written) + 1U))
+    if: result = 0
+        return: 0
+    c.memcpy(result, buffer, (cast: size_t written) + 1U)
+return: result
+
+fn: lm_trans_array_declarator_first_length_cstr_new (
+    const: LmTransCDeclarator: declarator
+) @: char
+    LmP0Text: head_dimension
+    size_t: head_index
+    const: LmP0Field: expression_dimension
+
+    if: declarator = 0
+        return: 0
+
+    head_dimension: lm_trans_statement_text_new()
+    if: head_dimension = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ head_dimension)
+
+    head_index: 0U
+    if: declarator\array_head != 0 && lm_trans_array_head_next_dimension(declarator\array_head, @ head_index, head_dimension)
+        if: head_dimension\length != 0U
+            return: lm_trans_text_copy_cstr(head_dimension)
+        expression_dimension: declarator\expression_dimensions
+        if: expression_dimension != 0 && expression_dimension\value != 0 && expression_dimension\value\kind = c.LM_P0_NODE_ATOM && (declarator\atom_dimensions_only = 0 || lm_trans_array_body_dimension_can_consume(expression_dimension))
+            return: lm_trans_text_copy_cstr(expression_dimension\value\as\atom)
+        if: declarator\literal_dimension_count != 0U
+            return: lm_trans_size_literal_cstr_new(declarator\literal_dimensions[0])
+        return: lm_trans_text_copy_cstr_from_cstr("0U")
+    ---
+
+    if: declarator\literal_dimension_count != 0U
+        return: lm_trans_size_literal_cstr_new(declarator\literal_dimensions[0])
+return: lm_trans_text_copy_cstr_from_cstr("0U")
+
+fn: lm_trans_emit_array_slice_sidecar (
+    FILE: file
+    const: LmTransCDeclarator: declarator
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @(char dimension_error_name)
+) int
+    @: char slice_length_storage
+    int: status
+
+    file: file
+    indent: indent
+    dimension_error_name: dimension_error_name
+    if: declarator = 0 || declarator\name = 0
+        return: 1
+
+    slice_length_storage: lm_trans_array_declarator_first_length_cstr_new(declarator)
+    if: slice_length_storage = 0
+        return: 1
+    finally: lm_own_delete(slice_length_storage, 0)
+
+    status: lm_trans_namespace_declare_array_slice_length(namespace_, declarator\name, slice_length_storage)
+return: status
+
+fn: lm_trans_array_declarator_empty_rank (
+    const: LmTransCDeclarator: declarator
+    @: size_t out_rank
+) int
+    LmP0Text: dimension
+    size_t: dimension_index
+    size_t: rank
+
+    if: out_rank != 0
+        out_rank[0]: 0U
+    if: declarator = 0 || declarator\array_head = 0
+        return: 0
+
+    dimension: lm_trans_statement_text_new()
+    if: dimension = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ dimension)
+
+    dimension_index: 0U
+    rank: 0U
+    while: lm_trans_array_head_next_dimension(declarator\array_head, @ dimension_index, dimension)
+        if: dimension\length != 0U
+            return: 0
+        rank: rank + 1U
+    if: rank = 0U
+        return: 0
+    if: out_rank != 0
+        out_rank[0]: rank
+return: 1
+
+fn: lm_trans_array_declarator_single_structure_value (
+    const: LmTransCDeclarator: declarator
+) const: LmP0Structure
+    size_t: rank
+
+    if: lm_trans_array_declarator_empty_rank(declarator, @ rank) = 0
+        return: 0
+return: lm_trans_fields_single_structure_value(declarator\expression_dimensions)
+
+fn: lm_trans_emit_array_slice_value_declaration (
+    FILE: file
+    const: LmTransCDeclarator: declarator
+    const: LmP0Structure: value
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @(char qualifier)
+) int
+    LmTransFormalParam: param
+    LmP0Text: helper_name
+    LmP0Text: slice_type
+    int: status
+
+    if: declarator = 0 || declarator\name = 0 || value = 0
+        return: 1
+    if: declarator\type_node = 0
+        c.fprintf(c.stderr, "trans L2 error: [] slice value declaration expects an element type\n")
+        return: 1
+
+    param: lm_trans_formal_param_new()
+    helper_name: lm_trans_statement_text_new()
+    slice_type: lm_trans_text_ref_new_cstr("LmSlice")
+    if: param = 0 || helper_name = 0 || slice_type = 0
+        lm_trans_formal_param_delete(param)
+        lm_trans_text_ref_destroy(@ helper_name)
+        lm_trans_text_ref_destroy(@ slice_type)
+        return: 1
+    finally:
+        lm_trans_formal_param_delete(param)
+        lm_trans_text_ref_destroy(@ helper_name)
+        lm_trans_text_ref_destroy(@ slice_type)
+
+    param\is_array: 1
+    param\has_name: 1
+    param\name[0]: declarator\name[0]
+    param\declarator\type_node: declarator\type_node
+    param\declarator\expression_dimensions: 0
+    param\declarator\type_head[0]: declarator\type_head[0]
+    param\declarator\name[0]: declarator\name[0]
+    param\declarator\array_head[0]: declarator\array_head[0]
+    param\declarator\pointer_depth: declarator\pointer_depth
+    param\declarator\literal_dimension_count: 0U
+    param\declarator\type_is_head: declarator\type_is_head
+    param\declarator\allow_empty_dimensions: 1
+    param\declarator\atom_dimensions_only: 1
+
+    if: lm_trans_emit_array_value_helper(file, param, value, namespace_, helper_name) != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
+        return: 1
+    if: lm_trans_put(file, "LmSlice *") != 0 || lm_trans_emit_identifier(file, declarator\name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, helper_name) != 0 || lm_trans_put(file, "();\n") != 0
+        return: 1
+
+    status: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, slice_type)
+return: status
 
 fn: lm_trans_emit_array_declaration_with_qualifier (
     FILE: file
@@ -2251,6 +2557,7 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
     const: @(char qualifier)
 ) int
     const: LmP0Field: initializer_field
+    const: LmP0Structure: slice_value
     LmTransCDeclarator: declarator
 
     declarator: lm_trans_statement_c_declarator_new()
@@ -2260,6 +2567,10 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
 
     if: lm_trans_array_declarator_read_from_frame(declarator, frame, namespace_, 1, 1, 1, "trans L2 error: [] declaration expects [@...] type name size...", "trans L2 error: array pointer declaration expects type and name", "trans L2 error: array declaration expects a type/name declaration") != 0
         return: 1
+
+    slice_value: lm_trans_array_declarator_single_structure_value(declarator)
+    if: slice_value != 0
+        return: lm_trans_emit_array_slice_value_declaration(file, declarator, slice_value, indent, namespace_, qualifier)
 
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
@@ -2273,6 +2584,8 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
     if: initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
+        return: 1
+    if: lm_trans_emit_array_slice_sidecar(file, declarator, indent, namespace_, "[] array dimension") != 0
         return: 1
     if: declarator\type_is_head
         return: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, declarator\type_head)
@@ -2396,6 +2709,8 @@ fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
     if: initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
+        return: 1
+    if: lm_trans_emit_array_slice_sidecar(file, declarator, indent, namespace_, "repeated [] array dimension") != 0
         return: 1
     if: declarator\type_is_head
         return: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, declarator\type_head)
@@ -2529,44 +2844,6 @@ return: 0
 
 fn: lm_trans_head_looks_assignable_target (const: (LmP0Text: head)) int
 return: lm_trans_text_contains_char(head, '[') || lm_trans_text_contains_char(head, '\\') || lm_trans_c_reference_has_path_dot(head)
-
-fn: lm_trans_prefixed_identifier_name_new (
-    const: @(char prefix)
-    const: LmP0Text: name
-    const: @(char suffix)
-) @: char
-    LmP0Text: payload
-    @: char result
-    size_t: prefix_length
-    size_t: suffix_length
-    size_t: length
-
-    if: prefix = 0 || name = 0
-        return: 0
-
-    payload: lm_trans_statement_text_new()
-    if: payload = 0
-        return: 0
-    finally: lm_trans_text_ref_destroy(@ payload)
-
-    if: lm_trans_identifier_payload(name, payload) = 0
-        return: 0
-
-    prefix_length: c.strlen(prefix)
-    suffix_length: 0U
-    if: suffix != 0
-        suffix_length: c.strlen(suffix)
-    length: prefix_length + payload\length + suffix_length
-    result: (cast: (@: char) lm_own_new_zero(length + 1U))
-    if: result = 0
-        return: 0
-    c.memcpy(result, prefix, prefix_length)
-    if: payload\length != 0U
-        c.memcpy(result + prefix_length, payload\data, payload\length)
-    if: suffix_length != 0U
-        c.memcpy(result + prefix_length + payload\length, suffix, suffix_length)
-    result[length]: '\0'
-return: result
 
 fn: lm_trans_named_structure_body (const: (LmP0Frame: frame)) const: LmP0Structure
     if: frame = 0
@@ -6499,6 +6776,8 @@ fn: lm_trans_emit_param_name_list (
 ) int
     LmTransFormalParam: param
     size_t: index
+    @: char slice_name_storage
+    LmP0Text: slice_name
 
     if: list = 0
         return: 1
@@ -6508,8 +6787,25 @@ fn: lm_trans_emit_param_name_list (
         param: list\params[index]
         if: index != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: lm_trans_emit_identifier(file, param\name) != 0
-            return: 1
+        if: param\is_array
+            slice_name_storage: lm_trans_array_slice_name_new(param\name)
+            if: slice_name_storage = 0
+                return: 1
+            slice_name: lm_trans_text_from_cstr(slice_name_storage)
+            if: slice_name = 0
+                lm_own_delete(slice_name_storage, 0)
+                return: 1
+            if: lm_trans_emit_identifier(file, slice_name) != 0
+                lm_trans_text_ref_destroy(@ slice_name)
+                lm_own_delete(slice_name_storage, 0)
+                return: 1
+            lm_trans_text_ref_destroy(@ slice_name)
+            lm_own_delete(slice_name_storage, 0)
+        else:
+            if: lm_trans_emit_identifier(file, param\name) != 0
+                return: 1
+            ---
+        ---
         index: index + 1U
 return: 0
 

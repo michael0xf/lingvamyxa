@@ -35,8 +35,83 @@ fn: lm_trans_callable_type_reset (LmTransL4CallableType: type) int
     type\class_name\length: 0U
     type\address_depth: 0U
     type\is_const: 0
+    type\array_rank: 0U
     return: 0
 end: lm_trans_callable_type_reset
+
+fn: lm_trans_prefixed_identifier_name_new (
+    const: @: char prefix
+    const: (LmP0Text: name)
+    const: @: char suffix
+) @: char
+    LmP0Text: payload
+    @: char result
+    size_t: prefix_length
+    size_t: suffix_length
+    size_t: length
+
+    if: prefix = 0 || name = 0
+        return: 0
+
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ payload)
+
+    if: lm_trans_identifier_payload(name, payload) = 0
+        return: 0
+
+    prefix_length: c.strlen(prefix)
+    suffix_length: 0U
+    if: suffix != 0
+        suffix_length: c.strlen(suffix)
+    length: prefix_length + payload\length + suffix_length
+    result: (cast: (@: char) lm_own_new_zero(length + 1U))
+    if: result = 0
+        return: 0
+    c.memcpy(result, prefix, prefix_length)
+    if: payload\length != 0U
+        c.memcpy(result + prefix_length, payload\data, payload\length)
+    if: suffix_length != 0U
+        c.memcpy(result + prefix_length + payload\length, suffix, suffix_length)
+    result[length]: '\0'
+return: result
+
+fn: lm_trans_array_slice_name_new (const: (LmP0Text: name)) @: char
+return: lm_trans_prefixed_identifier_name_new("lm_slice_", name, 0)
+
+fn: lm_trans_array_items_name_new (const: (LmP0Text: name)) @: char
+return: lm_trans_prefixed_identifier_name_new("", name, "_items")
+
+fn: lm_trans_namespace_declare_array_slice_expr (
+    LmTransNamespace: namespace_
+    const: (LmP0Text: name)
+    const: @: char slice_expr
+) int
+    LmP0Text: slice_expr_text
+    int: status
+
+    slice_expr_text: lm_trans_text_from_cstr(slice_expr)
+    if: slice_expr_text = 0
+        return: 1
+    status: lm_trans_namespace_declare_relation_text(namespace_, name, "variable.slice-name", slice_expr_text)
+    lm_trans_text_ref_destroy(@ slice_expr_text)
+return: status
+
+fn: lm_trans_namespace_declare_array_slice_length (
+    LmTransNamespace: namespace_
+    const: (LmP0Text: name)
+    const: @: char slice_length
+) int
+    LmP0Text: slice_length_text
+    int: status
+
+    slice_length_text: lm_trans_text_from_cstr(slice_length)
+    if: slice_length_text = 0
+        return: 1
+    status: lm_trans_namespace_declare_relation_text(namespace_, name, "variable.slice-length", slice_length_text)
+    lm_trans_text_ref_destroy(@ slice_length_text)
+return: status
 
 fn: lm_trans_callable_type_copy (LmTransL4CallableType: target; const: (LmTransL4CallableType: source)) int
     if: target = 0
@@ -49,6 +124,7 @@ fn: lm_trans_callable_type_copy (LmTransL4CallableType: target; const: (LmTransL
         target\class_name[0]: source\class_name[0]
     target\address_depth: source\address_depth
     target\is_const: source\is_const
+    target\array_rank: source\array_rank
     return: 0
 end: lm_trans_callable_type_copy
 
@@ -677,11 +753,22 @@ fn: lm_trans_expr_segment_new () LmTransExprSegment
     return: (cast: (LmTransExprSegment) lm_own_new_zero(c.sizeof(c.LmTransExprSegment)))
 end: lm_trans_expr_segment_new
 
+sub: lm_trans_expr_segment_delete (LmTransExprSegment: segment)
+    if: segment != 0
+        lm_trans_formal_param_delete(segment\expected_param)
+        segment\expected_param: 0
+    lm_own_delete(segment, 0)
+end: lm_trans_expr_segment_delete
+
+sub: lm_trans_expr_segment_delete_any (@: void object)
+    lm_trans_expr_segment_delete((cast: (LmTransExprSegment) object))
+end: lm_trans_expr_segment_delete_any
+
 fn: lm_trans_expr_segment_stack_new () LmOwnPtrStack
     LmOwnPtrStack: segments
     segments: (cast: (LmOwnPtrStack) lm_own_new_zero(c.sizeof(segments[0])))
     if: (segments != 0)
-        lm_own_ptr_stack_init(segments, lm_own_delete_plain)
+        lm_own_ptr_stack_init(segments, lm_trans_expr_segment_delete_any)
     return: segments
 end: lm_trans_expr_segment_stack_new
 
@@ -705,7 +792,7 @@ fn: lm_trans_expr_segments_resize_blank (LmOwnPtrStack: segments; size_t: count)
         if: (segment = 0)
             return: 1
         if: (lm_own_ptr_stack_push(segments, segment) != 0)
-            lm_own_delete(segment, 0)
+            lm_trans_expr_segment_delete(segment)
             return: 1
         ---
     return: 0
@@ -723,7 +810,7 @@ fn: lm_trans_expr_segments_append (LmOwnPtrStack: segments; const: (LmP0Field: f
     segment\present: 1
     status: lm_own_ptr_stack_push(segments, segment)
     if: (status != 0)
-        lm_own_delete(segment, 0)
+        lm_trans_expr_segment_delete(segment)
     return: status
 end: lm_trans_expr_segments_append
 
@@ -740,6 +827,40 @@ fn: lm_trans_callable_param_node_at (const: (LmTransSymbol: symbol); size_t: ind
         return: field\value
     return: 0
 end: lm_trans_callable_param_node_at
+
+fn: lm_trans_callable_formal_param_at (const: (LmTransSymbol: symbol); size_t: index) LmTransFormalParam
+    const: LmP0Node: node
+    LmTransFormalParam: param
+
+    node: lm_trans_callable_param_node_at(symbol, index)
+    if: node = 0
+        return: 0
+
+    param: lm_trans_formal_param_new()
+    if: param = 0
+        return: 0
+
+    if: lm_trans_formal_param_read_into(param, node) != 0
+        lm_trans_formal_param_delete(param)
+        return: 0
+
+    return: param
+end: lm_trans_callable_formal_param_at
+
+fn: lm_trans_expr_segment_set_expected_param (LmTransExprSegment: segment; const: (LmTransSymbol: callee); size_t: index) int
+    LmTransFormalParam: param
+
+    if: segment = 0 || callee = 0
+        return: 0
+
+    param: lm_trans_callable_formal_param_at(callee, index)
+    if: param = 0
+        return: 0
+
+    lm_trans_formal_param_delete(segment\expected_param)
+    segment\expected_param: param
+    return: 1
+end: lm_trans_expr_segment_set_expected_param
 
 fn: lm_trans_formal_param_default_fields (const: (LmP0Node: node); const: @(LmP0Field out_first)) int
     const: LmP0Structure: body
@@ -809,139 +930,56 @@ fn: lm_trans_array_body_dimension_can_consume (const: (LmP0Field: field)) int
     return: (((field != 0) && (field\value != 0)) && (field\value\kind = c.LM_P0_NODE_ATOM))
 end: lm_trans_array_body_dimension_can_consume
 
-fn: lm_trans_array_param_type_info (const: (LmP0Node: node); const: @(LmP0Node out_element_type); @: size_t out_rank; @: size_t out_pointer_depth) int
-    const: LmP0Node: current
+fn: lm_trans_array_param_declarator_from_node (const: (LmP0Node: node); LmTransCDeclarator: declarator) int
     const: LmP0Frame: frame
-    const: LmP0Structure: body
-    const: LmP0Field: field
-    const: LmP0Field: type_field
-    const: LmP0Field: name_field
-    LmP0Text: dimension
-    size_t: dimension_index
-    size_t: pointer_depth
-    size_t: rank
-    if: (out_element_type != 0)
-        out_element_type[0]: 0
-    if: (out_rank != 0)
-        out_rank[0]: 0U
-    if: (out_pointer_depth != 0)
-        out_pointer_depth[0]: 0U
-    current: node
-    while: (((current != 0) && (current\kind = c.LM_P0_NODE_FRAME)) && lm_trans_text_equals(current\as\frame\head, "const"))
-        frame: current\as\frame
-        field: frame\body\first_field
-        if: (((field = 0) || (field\next != 0)) || (field\value = 0))
-            return: 0
-        current: field\value
-    if: ((current = 0) || (current\kind != c.LM_P0_NODE_FRAME))
+
+    if: declarator = 0
         return: 0
-    frame: current\as\frame
-    if: (lm_trans_text_is_array_receiver_head(frame\head) = 0)
+    frame: 0
+    if: lm_trans_formal_param_terminal_frame(node, @ frame) = 0
         return: 0
-    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
-    if: (body != 0)
-        field: body\first_field
-    else:
-        field: 0
-    pointer_depth: 0U
-    while: ((((field != 0) && (field\value != 0)) && (field\value\kind = c.LM_P0_NODE_ATOM)) && lm_trans_text_all_char(field\value\as\atom, '@'))
-        pointer_depth: pointer_depth + field\value\as\atom\length
-        field: field\next
-    type_field: field
-    if: (type_field != 0)
-        name_field: type_field\next
-    else:
-        name_field: 0
-    if: (((((type_field = 0) || (type_field\value = 0)) || (name_field = 0)) || (name_field\value = 0)) || (name_field\value\kind != c.LM_P0_NODE_ATOM))
+    if: frame = 0 || lm_trans_text_is_array_receiver_head(frame\head) = 0
         return: 0
-    dimension_index: 0U
-    rank: 0U
-    dimension: lm_trans_text_ref_new_cstr("")
-    if: (dimension = 0)
+    if: lm_trans_array_declarator_read_from_frame(declarator, frame, 0, 0, 0, 1, 0, 0, 0) != 0
         return: 0
-    while: lm_trans_array_head_next_dimension(frame\head, @ dimension_index, dimension)
-        rank: rank + 1U
-    if: (rank = 0U)
-        lm_trans_text_ref_destroy(@ dimension)
-        return: 0
-    if: (out_element_type != 0)
-        out_element_type[0]: type_field\value
-    if: (out_rank != 0)
-        out_rank[0]: rank
-    if: (out_pointer_depth != 0)
-        out_pointer_depth[0]: pointer_depth
-    lm_trans_text_ref_destroy(@ dimension)
-    return: 1
-end: lm_trans_array_param_type_info
+return: 1
 
 fn: lm_trans_array_param_default_fields (const: (LmP0Node: node); const: @(LmP0Field out_first)) int
-    const: LmP0Node: current
-    const: LmP0Frame: frame
-    const: LmP0Structure: body
-    const: LmP0Field: field
-    const: LmP0Field: type_field
-    const: LmP0Field: name_field
     const: LmP0Field: default_field
-    LmP0Text: dimension
-    size_t: dimension_index
+    LmTransCDeclarator: declarator
+
     if: (out_first != 0)
         out_first[0]: 0
-    if: (((out_first = 0) || (node = 0)) || (node\kind != c.LM_P0_NODE_FRAME))
+    if: out_first = 0
         return: 0
-    current: node
-    while: (((current != 0) && (current\kind = c.LM_P0_NODE_FRAME)) && lm_trans_text_equals(current\as\frame\head, "const"))
-        frame: current\as\frame
-        field: frame\body\first_field
-        if: (((field = 0) || (field\next != 0)) || (field\value = 0))
-            return: 0
-        current: field\value
-    if: ((current = 0) || (current\kind != c.LM_P0_NODE_FRAME))
+
+    declarator: lm_trans_statement_c_declarator_new()
+    if: declarator = 0
         return: 0
-    frame: current\as\frame
-    if: (lm_trans_text_is_array_receiver_head(frame\head) = 0)
+    finally: lm_trans_statement_c_declarator_destroy(declarator)
+    if: lm_trans_array_param_declarator_from_node(node, declarator) = 0
         return: 0
-    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
-    if: (body != 0)
-        field: body\first_field
-    else:
-        field: 0
-    while: ((((field != 0) && (field\value != 0)) && (field\value\kind = c.LM_P0_NODE_ATOM)) && lm_trans_text_all_char(field\value\as\atom, '@'))
-        field: field\next
-    type_field: field
-    if: (type_field != 0)
-        name_field: type_field\next
-    else:
-        name_field: 0
-    if: ((((type_field = 0) || (name_field = 0)) || (name_field\value = 0)) || (name_field\value\kind != c.LM_P0_NODE_ATOM))
-        return: 0
-    default_field: name_field\next
-    dimension_index: 0U
-    dimension: lm_trans_text_ref_new_cstr("")
-    if: (dimension = 0)
-        return: 0
-    while: lm_trans_array_head_next_dimension(frame\head, @ dimension_index, dimension)
-        if: ((dimension\length = 0U) && lm_trans_array_body_dimension_can_consume(default_field))
-            default_field: default_field\next
-        ---
+
+    declarator\allow_empty_dimensions: 1
+    declarator\atom_dimensions_only: 1
+    default_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
     if: (default_field = 0)
-        lm_trans_text_ref_destroy(@ dimension)
         return: 0
     out_first[0]: default_field
-    lm_trans_text_ref_destroy(@ dimension)
     return: 1
 end: lm_trans_array_param_default_fields
 
 fn: lm_trans_expr_segment_set_default (LmTransExprSegment: segment; const: (LmTransSymbol: callee); size_t: index) int
-    const: LmP0Node: param_node
     const: LmP0Field: default_first
     if: ((segment = 0) || (callee = 0))
         return: 0
-    param_node: lm_trans_callable_param_node_at(callee, index)
-    if: (lm_trans_formal_param_default_fields(param_node, @ default_first) = 0)
+    if: lm_trans_expr_segment_set_expected_param(segment, callee, index) = 0
+        return: 0
+    default_first: segment\expected_param\value_first
+    if: default_first = 0
         return: 0
     segment\first: default_first
     segment\stop: 0
-    segment\expected_param: param_node
     segment\present: 1
     return: 1
 end: lm_trans_expr_segment_set_default
@@ -1099,7 +1137,7 @@ fn: lm_trans_expected_param_is_callable_descriptor (const: (LmP0Node: param); co
 end: lm_trans_expected_param_is_callable_descriptor
 
 fn: lm_trans_callable_type_same (const: (LmTransL4CallableType: left); const: (LmTransL4CallableType: right)) int
-    return: (((((left != 0) && (right != 0)) && (left\address_depth = right\address_depth)) && (left\is_const = right\is_const)) && lm_trans_identifier_same(left\class_name, right\class_name))
+    return: ((((((left != 0) && (right != 0)) && (left\address_depth = right\address_depth)) && (left\is_const = right\is_const)) && (left\array_rank = right\array_rank)) && lm_trans_identifier_same(left\class_name, right\class_name))
 end: lm_trans_callable_type_same
 
 fn: lm_trans_callable_return_type_from_node (const: (LmP0Node: node); LmTransL4CallableType: out) int
@@ -1393,6 +1431,24 @@ fn: lm_trans_emit_callable_type_named (FILE: file; const: (LmTransL4CallableType
     size_t: effective_address_depth
     if: ((file = 0) || (type = 0))
         return: 1
+    if: type\array_rank != 0U
+        effective_address_depth: 1U
+        if: type\address_depth > 1U
+            effective_address_depth: effective_address_depth + (type\address_depth - 1U)
+        if: type\is_const && lm_trans_put(file, "const ") != 0
+            return: 1
+        if: lm_trans_put(file, "LmSlice") != 0
+            return: 1
+        if: (lm_trans_put(file, " ") != 0)
+            return: 1
+        i: 0U
+        while: i < effective_address_depth
+            if: lm_trans_put(file, "*") != 0
+                return: 1
+            i: i + 1U
+        if: (((name != 0) && (name\length != 0U)) && (lm_trans_emit_identifier(file, name) != 0))
+            return: 1
+        return: 0
     effective_address_depth: lm_trans_effective_address_depth(type\class_name, type\address_depth)
     if: (type\is_const && (lm_trans_put(file, "const ") != 0))
         return: 1
@@ -2222,7 +2278,9 @@ fn: lm_trans_expr_stack_push_lazy_binder_fields (FILE: file; LmTransExprStack: s
         next: lm_trans_expr_segment_end(field)
         segment\first: field
         segment\stop: next
-        segment\expected_param: lm_trans_callable_param_node_at(source_symbol, index)
+        if: lm_trans_expr_segment_set_expected_param(segment, source_symbol, index) = 0
+            status: 1
+            break
         segment\present: 1
         index: index + 1U
         field: next
@@ -2305,7 +2363,7 @@ fn: lm_trans_should_force_zero_arg_callable (const: (LmTransExprSegment: segment
         return: 0
     finally: lm_trans_callable_value_delete(callable_value)
     symbol: lm_trans_callable_value_resolve(namespace_, atom, callable_value)
-    if: (((lm_trans_symbol_is_value_callable(symbol) = 0) || (lm_trans_callable_has_no_params(symbol) = 0)) || (lm_trans_param_descriptor_matches_return(segment\expected_param, symbol\callable_return_node, namespace_) = 0))
+    if: (((lm_trans_symbol_is_value_callable(symbol) = 0) || (lm_trans_callable_has_no_params(symbol) = 0)) || (lm_trans_param_descriptor_matches_return(segment\expected_param\source_node, symbol\callable_return_node, namespace_) = 0))
         lm_trans_text_ref_destroy(@ atom)
         return: 0
     if: (out_name != 0)
@@ -2362,7 +2420,7 @@ end: lm_trans_materialize_zero_arg_callable
 
 fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack: stack; const: (LmTransExprSegment: segment); const: (LmTransNamespace: namespace_); @: int out_consumed) int
     const: LmTransSymbol: symbol
-    const: LmP0Node: expected_param
+    const: LmP0Node: expected_param_node
     const: LmP0Node: node
     const: LmP0Frame: frame
     LmP0Text: descriptor_name
@@ -2398,10 +2456,10 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
         return: 1
     consumed: 0
     status: 0
-    expected_param: 0
-    if: segment != 0
-        expected_param: segment\expected_param
-    if: ((((lm_trans_node_callable_descriptor_name(expected_param, namespace_, descriptor_name) && (segment != 0)) && (segment\first != 0)) && (segment\first\next = segment\stop)) && (segment\first\value != 0))
+    expected_param_node: 0
+    if: segment != 0 && segment\expected_param != 0
+        expected_param_node: segment\expected_param\source_node
+    if: ((((lm_trans_node_callable_descriptor_name(expected_param_node, namespace_, descriptor_name) && (segment != 0)) && (segment\first != 0)) && (segment\first\next = segment\stop)) && (segment\first\value != 0))
         descriptor_is_function_pointer: lm_trans_registry_is_function_pointer_type_name(namespace_, descriptor_name)
         node: segment\first\value
         if: (node\kind = c.LM_P0_NODE_FRAME)
@@ -2580,7 +2638,8 @@ end: lm_trans_materialize_callable_descriptor_value
 fn: lm_trans_expr_stack_try_materialize_segment (FILE: file; LmTransExprStack: stack; const: (LmTransExprSegment: segment); const: (LmTransNamespace: namespace_); @: int out_consumed) int
     const: @: char binding
     const: @: char class_name
-    const: LmP0Node: expected_param
+    const: LmTransFormalParam: expected_param
+    const: LmP0Node: expected_param_node
     LmTransBinding: resolved
     LmTransExprSegmentMaterializer: materializer
     if: (out_consumed != 0)
@@ -2590,10 +2649,13 @@ fn: lm_trans_expr_stack_try_materialize_segment (FILE: file; LmTransExprStack: s
     expected_param: 0
     if: segment != 0
         expected_param: segment\expected_param
-    if: lm_trans_array_param_type_info(expected_param, 0, 0, 0)
+    expected_param_node: 0
+    if: expected_param != 0
+        expected_param_node: expected_param\source_node
+    if: expected_param != 0 && expected_param\is_array
         class_name: "array.value"
     else:
-        if: lm_trans_expected_param_is_callable_descriptor(expected_param, namespace_)
+        if: lm_trans_expected_param_is_callable_descriptor(expected_param_node, namespace_)
             class_name: "callable.descriptor.value"
         else:
             class_name: "callable.zero-arg.value"
@@ -2688,7 +2750,8 @@ fn: lm_trans_call_args_layout_signature (LmOwnPtrStack: segments; const: (LmP0Fi
             named_frame: field\value\as\frame
             segment\first: named_frame\body\first_field
             segment\stop: 0
-            segment\expected_param: lm_trans_callable_param_node_at(callee, named_index)
+            if: lm_trans_expr_segment_set_expected_param(segment, callee, named_index) = 0
+                return: 1
             segment\present: 1
             if: (named_index = index)
                 index: index + 1U
@@ -2721,7 +2784,8 @@ fn: lm_trans_call_args_layout_signature (LmOwnPtrStack: segments; const: (LmP0Fi
             return: 1
         segment\first: field
         segment\stop: next
-        segment\expected_param: lm_trans_callable_param_node_at(callee, index)
+        if: lm_trans_expr_segment_set_expected_param(segment, callee, index) = 0
+            return: 1
         segment\present: 1
         index: index + 1U
         field: next
@@ -4711,23 +4775,15 @@ end: lm_trans_lookup_type_receiver_binding
 fn: lm_trans_type_receiver_array_emit (FILE: file; const: (LmP0Node: type_node)) int
     const: LmP0Node: element_type
     size_t: rank
-    size_t: i
     int: status
     status: lm_trans_array_type_node_info(type_node, @ element_type, @ rank)
     if: (status <= 0)
         if: (status < 0)
             return: 1
         return: 0
-    if: (lm_trans_emit_type_node(file, element_type) != 0)
-        return: 1
-    if: (lm_trans_put(file, " ") != 0)
-        return: 1
-    i: 0U
-    while: (i < rank)
-        if: (lm_trans_put(file, "*") != 0)
-            return: 1
-        i: i + 1U
-    return: 0
+    element_type: element_type
+    rank: rank
+    return: lm_trans_put(file, "LmSlice *")
 end: lm_trans_type_receiver_array_emit
 
 fn: lm_trans_type_pointer_suffix_new (size_t: depth) LmTransTypePointerSuffix
@@ -4865,83 +4921,12 @@ fn: lm_trans_emit_type_node (FILE: file; const: (LmP0Node: type_node)) int
     return: status
 end: lm_trans_emit_type_node
 
-fn: lm_trans_emit_callable_descriptor_param_type (FILE: file; const: (LmP0Node: param); const: (LmTransNamespace: namespace_)) int
-    const: LmP0Node: current
-    const: LmP0Frame: frame
-    const: LmP0Structure: body
-    const: LmP0Field: field
-    const: LmP0Field: type_field
-    LmOwnPtrStack: suffixes
-    int: status
-    if: (param = 0)
+fn: lm_trans_emit_callable_descriptor_param_type (FILE: file; const: (LmTransFormalParam: param); const: (LmTransNamespace: namespace_)) int
+    namespace_: namespace_
+    if: ((param = 0) || (param\type = 0))
         c.fprintf(c.stderr, "trans L2 error: callable descriptor parameter expects a type\n")
         return: 1
-    current: param
-    suffixes: 0
-    status: 0
-    while: 1
-        if: (current = 0)
-            c.fprintf(c.stderr, "trans L2 error: callable descriptor parameter expects a type\n")
-            status: 1
-            break
-        if: (current\kind = c.LM_P0_NODE_STRUCTURE)
-            field: current\as\structure\first_field
-            if: (((field = 0) || (field\next != 0)) || (field\value = 0))
-                c.fprintf(c.stderr, "trans L2 error: callable descriptor parameter Structure must contain exactly one type\n")
-                status: 1
-                break
-            current: field\value
-            continue
-        if: (current\kind = c.LM_P0_NODE_FRAME)
-            frame: current\as\frame
-            if: lm_trans_text_equals(frame\head, "const")
-                field: frame\body\first_field
-                if: (((field = 0) || (field\next != 0)) || (field\value = 0))
-                    c.fprintf(c.stderr, "trans L2 error: const callable descriptor parameter expects one type\n")
-                    status: 1
-                    break
-                if: (lm_trans_put(file, "const ") != 0)
-                    status: 1
-                    break
-                current: field\value
-                continue
-            body: lm_trans_unwrap_single_anonymous_structure(frame\body)
-            if: (body != 0)
-                type_field: body\first_field
-            else:
-                type_field: 0
-            if: lm_trans_text_all_char(frame\head, '@')
-                if: ((type_field = 0) || (type_field\value = 0))
-                    c.fprintf(c.stderr, "trans L2 error: @ callable descriptor parameter expects a type\n")
-                    status: 1
-                    break
-                if: (lm_trans_type_suffix_stack_push(@ suffixes, frame\head\length) != 0)
-                    status: 1
-                    break
-                current: type_field\value
-                continue
-            if: lm_trans_text_is_array_receiver_head(frame\head)
-                if: ((type_field = 0) || (type_field\value = 0))
-                    c.fprintf(c.stderr, "trans L2 error: [] callable descriptor parameter expects a type\n")
-                    status: 1
-                    break
-                if: (lm_trans_type_suffix_stack_push(@ suffixes, 1U) != 0)
-                    status: 1
-                    break
-                current: type_field\value
-                continue
-            if: lm_trans_head_can_declare_storage(frame\head, namespace_)
-                status: lm_trans_emit_type_name(file, frame\head)
-                break
-            c.fprintf(c.stderr, "trans L2 error: unsupported callable descriptor parameter type\n")
-            status: 1
-            break
-        status: lm_trans_emit_type_node(file, current)
-        break
-    if: (status = 0)
-        status: lm_trans_emit_type_suffixes(file, suffixes)
-    lm_trans_type_suffix_stack_delete(@ suffixes)
-    return: status
+    return: lm_trans_emit_callable_type_named(file, param\type, lm_trans_text_from_cstr(""))
 end: lm_trans_emit_callable_descriptor_param_type
 
 fn: lm_trans_emit_function_return_struct_type_name (FILE: file; const: (LmP0Text: function_name)) int
@@ -5185,19 +5170,39 @@ fn: lm_trans_c_declarator_expression_dimension_tail (const: (LmTransCDeclarator:
 
 fn: lm_trans_emit_array_param (FILE: file; const: (LmTransFormalParam: param); LmTransNamespace: namespace_) int
     const: LmTransCDeclarator: declarator
+    @: char slice_name_storage
+    LmP0Text: slice_name
+    int: status
 
     if: param = 0 || param\declarator = 0 || param\has_name = 0
         return: 1
 
     declarator: param\declarator
-    if: lm_trans_emit_c_declarator(file, declarator, namespace_, "array parameter dimension") != 0
+    slice_name_storage: lm_trans_array_slice_name_new(param\name)
+    if: slice_name_storage = 0
+        return: 1
+    finally: lm_own_delete(slice_name_storage, 0)
+
+    slice_name: lm_trans_text_from_cstr(slice_name_storage)
+    if: slice_name = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ slice_name)
+
+    if: lm_trans_put(file, "LmSlice *") != 0 || lm_trans_emit_identifier(file, slice_name) != 0
         return: 1
 
+    status: 0
     if: declarator\type_is_head
-        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_head)
-    if: declarator\type_node != 0 && declarator\type_node\kind = c.LM_P0_NODE_ATOM
-        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_node\as\atom)
-    return: lm_trans_namespace_declare(namespace_, param\name, "variable")
+        status: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_head)
+    else:
+        if: declarator\type_node != 0 && declarator\type_node\kind = c.LM_P0_NODE_ATOM
+            status: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_node\as\atom)
+        else:
+            status: lm_trans_namespace_declare(namespace_, param\name, "variable")
+        ---
+    if: status != 0
+        return: 1
+    return: lm_trans_namespace_declare_array_slice_expr(namespace_, param\name, slice_name_storage)
 end: lm_trans_emit_array_param
 
 fn: lm_trans_emit_formal_param (
