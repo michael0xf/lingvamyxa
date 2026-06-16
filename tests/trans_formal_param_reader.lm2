@@ -1,0 +1,13 @@
+fn: parenParam (int(n)) int
+    return: n + 1
+end: parenParam
+
+fn: namedDefault (int(name: "base"; value: 4); int(name: "value"; value: 3)) int
+    return: base + value
+end: namedDefault
+
+external:
+    fn: main () int
+        return: parenParam(2) != 3 || namedDefault() != 7 || namedDefault(value: 8) != 12
+    end: main
+end: external

@@ -128,7 +128,7 @@ static char * lm_build_platform_canary_command_path(char *canary_path);
 static int lm_build_prepare_platform_canary(char *canary_path);
 static char * lm_build_platform_tests_script_path(void);
 static char * lm_build_platform_tests_command_format(void);
-static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library);
+static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(void) {
     return ".exe";
@@ -215,7 +215,7 @@ static char * lm_build_platform_tests_command_format(void) {
     return "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\"";
 }
 
-static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library) {
+static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, char *parser_library, char *own_library) {
     fputs("$ErrorActionPreference = 'Continue'\n", file);
     fprintf(file, "$printTree = '%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix());
     fprintf(file, "$trans = '%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix());
@@ -268,7 +268,7 @@ static char * lm_build_platform_canary_command_path(char *canary_path);
 static int lm_build_prepare_platform_canary(char *canary_path);
 static char * lm_build_platform_tests_script_path(void);
 static char * lm_build_platform_tests_command_format(void);
-static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library);
+static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(void) {
     return "";
@@ -337,7 +337,7 @@ static char * lm_build_platform_tests_command_format(void) {
     return "sh \"%s\"";
 }
 
-static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, char *parser_library, char *own_library) {
+static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, char *parser_library, char *own_library) {
     fputs("set -eu\n", file);
     fprintf(file, "printTree='%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix());
     fprintf(file, "trans='%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix());
@@ -371,7 +371,7 @@ static int lm_build_write_platform_tests_script(FILE * file, char *output_dir, c
 }
 #endif
 static LmBuildOptions * lm_build_options_new(void);
-static void lm_build_options_delete(LmBuildOptions * options);
+static void lm_build_options_delete(LmBuildOptions *options);
 static int lm_build_is_path_separator(char value);
 static int lm_build_has_path_separator(char *path);
 static int lm_build_is_absolute_path(char *path);
@@ -386,8 +386,8 @@ static char * lm_build_default_make_program(void);
 static char * lm_build_default_cc(void);
 static char * lm_build_default_cxx(void);
 static void lm_build_print_usage(void);
-static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options);
-static char * lm_build_output_dir(LmBuildOptions * options);
+static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options);
+static char * lm_build_output_dir(LmBuildOptions *options);
 static size_t lm_build_append(char *buffer, size_t size, size_t used, char *text);
 static size_t lm_build_append_arg(char *buffer, size_t size, size_t used, char *arg);
 static size_t lm_build_append_prefixed_arg(char *buffer, size_t size, size_t used, char *prefix, char *value);
@@ -408,7 +408,7 @@ static int lm_build_clear_full_cmake_cache(char *cmake_tool, char *build_dir);
 static int lm_build_full_configure(void);
 static int lm_build_full_build(void);
 static int lm_build_full_project(void);
-static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans);
+static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans);
 int main(int argc, char **argv);
 
 typedef struct LmL5ExecutionContext LmL5ExecutionContext;
@@ -451,7 +451,7 @@ static LmBuildOptions * lm_build_options_new(void) {
     return lm_own_new_zero(sizeof(LmBuildOptions));
 }
 
-static void lm_build_options_delete(LmBuildOptions * options) {
+static void lm_build_options_delete(LmBuildOptions *options) {
     lm_own_delete(options, 0);
 }
 
@@ -617,7 +617,7 @@ static void lm_build_print_usage(void) {
     printf("  --next  verify the staged L0 bootstrap tools without installing them\n");
 }
 
-static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * options) {
+static int lm_build_parse_options(int argc, char **argv, LmBuildOptions *options) {
     int index;
     options->full_build = 0;
     options->next_build = 0;
@@ -645,7 +645,7 @@ static int lm_build_parse_options(int argc, char **argv, LmBuildOptions * option
     return 0;
 }
 
-static char * lm_build_output_dir(LmBuildOptions * options) {
+static char * lm_build_output_dir(LmBuildOptions *options) {
     if (options -> next_build) {
         return "build/lm0/next/check";
     }
@@ -1117,7 +1117,7 @@ static int lm_build_full_project(void) {
     return lm_build_full_build();
 }
 
-static int lm_build_run_bootstrap(LmBuildOptions * options, char *trusted_make, char *built_trans) {
+static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans) {
     char *output_dir;
     char parser_library[512];
     char own_library[512];

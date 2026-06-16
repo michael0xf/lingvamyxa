@@ -1830,6 +1830,7 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: functio
     LmTransL4CallableType: param_type
     LmP0Text: param_name
     [32]: char fallback_name
+    int: has_name
     int: status
 
     param_type: lm_trans_expr_callable_type_new()
@@ -1839,12 +1840,12 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: functio
         lm_trans_l4_text_view_delete(@ param_name)
         return: 1
 
-    if: lm_trans_l4_callable_type_from_node(param_node, param_type) = 0
+    if: lm_trans_formal_param_read(param_node, param_type, param_name, @ has_name, 0) = 0
         c.fprintf(c.stderr, "trans fn descriptor error: parameter descriptor expects a type\n")
         lm_trans_expr_callable_type_delete(param_type)
         lm_trans_l4_text_view_delete(@ param_name)
         return: 1
-    if: lm_trans_formal_param_name(param_node, param_name) = 0
+    if: has_name = 0
         c.snprintf:
             fallback_name c.sizeof(fallback_name)
             "arg%zu"

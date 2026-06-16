@@ -369,67 +369,67 @@ static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP
 static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 
 static LmOwnPtrStack * lm_l4_seen_tables_get(void);
-static void lm_l4_seen_tables_set(LmOwnPtrStack * seen_tables);
-static int lm_l4_text_equals(const LmP0Text * text, const char *value);
+static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables);
+static int lm_l4_text_equals(const LmP0Text *text, const char *value);
 static int lm_l4_text_slice_equals(const char *data, size_t length, const char *value);
 static int lm_l4_text_slice_same(const char *left_data, size_t left_length, const char *right_data, size_t right_length);
-static int lm_l4_node_is_ignored(const LmP0Node * node);
-static const LmP0Structure * lm_l4_node_structure(const LmP0Node * node);
-static const LmP0Frame * lm_l4_node_frame(const LmP0Node * node);
-static const LmP0Text * lm_l4_node_atom(const LmP0Node * node);
-static const LmP0Text * lm_l4_frame_head(const LmP0Frame * frame);
-static const LmP0Structure * lm_l4_frame_body(const LmP0Frame * frame);
-static const LmP0Text * lm_l4_trailer_spelling(const LmP0Trailer * trailer);
-static const LmP0Structure * lm_l4_trailer_body(const LmP0Trailer * trailer);
-static const char * lm_l4_error_prefix(const LmL4Loader * loader);
-static void lm_l4_error(const LmL4Loader * loader, const char *message);
-static const LmP0Field * lm_l4_nth_field(const LmP0Structure * structure, size_t index);
-static int lm_l4_trailer_single_atom(const LmP0Trailer * trailer, const LmP0Text * *out_text);
-static int lm_l4_identifier_payload(const LmP0Text * atom, const char **out_data, size_t *out_length);
-static int lm_l4_identifier_same(const LmP0Text * left, const LmP0Text * right);
-static int lm_l4_text_all_char(const LmP0Text * text, char ch);
-static int lm_l4_text_is_array_receiver_head(const LmP0Text * head);
-static int lm_l4_structure_single_visible_node(const LmP0Structure * structure, const LmP0Node * *out_node);
-static int lm_l4_single_frame_node(const LmP0Node * node, const LmP0Frame * *out_frame);
-static int lm_l4_frame_formal_param_unwrap_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index);
-static int lm_l4_frame_positional_name_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index);
-static int lm_l4_formal_param_name(const LmL4Loader * loader, void *context, const LmP0Node * node, const LmP0Text * *out_name);
-static int lm_l4_column_descriptor_from_param_node(const LmL4Loader * loader, void *context, const LmP0Node * node, const LmP0Text * *out_descriptor);
-static int lm_l4_column_name_from_param_node(const LmL4Loader * loader, void *context, const LmP0Node * node, LmL4Column * out_column);
-static int lm_l4_structure_single_visible_frame(const LmP0Structure * structure, const LmP0Frame * *out_frame);
-static int lm_l4_frame_single_atom(const LmP0Frame * frame, const char *head, const LmP0Text * *out_atom);
-static int lm_l4_column_name(const LmL4Loader * loader, void *context, const LmP0Field * field, LmL4Column * out_column);
-static void lm_l4_columns_destroy(LmL4Column * *columns, size_t count);
-static int lm_l4_columns_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame, LmL4Column * *columns, size_t columns_capacity, size_t *out_count);
-static int lm_l4_validate_named_trailer(const LmL4Loader * loader, const LmP0Frame * frame, const LmP0Text * expected_name);
-static int lm_l4_row_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_rows_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame, const LmP0Text * table_name, LmL4Column * *columns, size_t column_count);
-static int lm_l4_table_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_seen_table_add(LmOwnPtrStack * seen, const LmP0Text * table_name);
-static int lm_l4_check_table_frame_unique(const LmL4Loader * loader, const LmP0Frame * frame, LmOwnPtrStack * seen);
-static const LmP0Field * lm_l4_next_present_field(const LmP0Field * field);
-static int lm_l4_join_header(const LmP0Frame * frame, const LmP0Structure * *out_sources, const LmP0Text * *out_target, const LmP0Structure * *out_body);
-static int lm_l4_join_sources_into_target(const LmL4Loader * loader, void *context, const LmP0Structure * sources, const LmP0Text * target_name);
-static int lm_l4_join_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_check_join_frame_unique(const LmL4Loader * loader, const LmP0Frame * frame, LmOwnPtrStack * seen);
-static int lm_l4_receiver_table(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_receiver_join(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_receiver_row(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_receiver_ignore(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_dispatch_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
-static int lm_l4_load_rows(const LmL4Loader * loader, void *context, const LmP0Structure * structure);
-static int lm_l4_load_root(const LmL4Loader * loader, void *context, const LmP0Node * root, int implicit_l4);
+static int lm_l4_node_is_ignored(const LmP0Node *node);
+static const LmP0Structure * lm_l4_node_structure(const LmP0Node *node);
+static const LmP0Frame * lm_l4_node_frame(const LmP0Node *node);
+static const LmP0Text * lm_l4_node_atom(const LmP0Node *node);
+static const LmP0Text * lm_l4_frame_head(const LmP0Frame *frame);
+static const LmP0Structure * lm_l4_frame_body(const LmP0Frame *frame);
+static const LmP0Text * lm_l4_trailer_spelling(const LmP0Trailer *trailer);
+static const LmP0Structure * lm_l4_trailer_body(const LmP0Trailer *trailer);
+static const char * lm_l4_error_prefix(const LmL4Loader *loader);
+static void lm_l4_error(const LmL4Loader *loader, const char *message);
+static const LmP0Field * lm_l4_nth_field(const LmP0Structure *structure, size_t index);
+static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, const LmP0Text **out_text);
+static int lm_l4_identifier_payload(const LmP0Text *atom, const char **out_data, size_t *out_length);
+static int lm_l4_identifier_same(const LmP0Text *left, const LmP0Text *right);
+static int lm_l4_text_all_char(const LmP0Text *text, char ch);
+static int lm_l4_text_is_array_receiver_head(const LmP0Text *head);
+static int lm_l4_structure_single_visible_node(const LmP0Structure *structure, const LmP0Node **out_node);
+static int lm_l4_single_frame_node(const LmP0Node *node, const LmP0Frame **out_frame);
+static int lm_l4_frame_formal_param_unwrap_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+static int lm_l4_frame_positional_name_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+static int lm_l4_formal_param_name(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_name);
+static int lm_l4_column_descriptor_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_descriptor);
+static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column);
+static int lm_l4_structure_single_visible_frame(const LmP0Structure *structure, const LmP0Frame **out_frame);
+static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, const LmP0Text **out_atom);
+static int lm_l4_column_name(const LmL4Loader *loader, void *context, const LmP0Field *field, LmL4Column *out_column);
+static void lm_l4_columns_destroy(LmL4Column **columns, size_t count);
+static int lm_l4_columns_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, LmL4Column **columns, size_t columns_capacity, size_t *out_count);
+static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, const LmP0Text *expected_name);
+static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
+static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_seen_table_add(LmOwnPtrStack *seen, const LmP0Text *table_name);
+static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
+static const LmP0Field * lm_l4_next_present_field(const LmP0Field *field);
+static int lm_l4_join_header(const LmP0Frame *frame, const LmP0Structure **out_sources, const LmP0Text **out_target, const LmP0Structure **out_body);
+static int lm_l4_join_sources_into_target(const LmL4Loader *loader, void *context, const LmP0Structure *sources, const LmP0Text *target_name);
+static int lm_l4_join_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_check_join_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
+static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_receiver_join(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
+static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
 
 static LmOwnPtrStack * lm_l4_seen_tables;
 static LmOwnPtrStack * lm_l4_seen_tables_get(void) {
     return lm_l4_seen_tables;
 }
 
-static void lm_l4_seen_tables_set(LmOwnPtrStack * seen_tables) {
+static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables) {
     lm_l4_seen_tables = seen_tables;
 }
 
-static int lm_l4_text_equals(const LmP0Text * text, const char *value) {
+static int lm_l4_text_equals(const LmP0Text *text, const char *value) {
     size_t length;
     if (text == 0 || value == 0) {
         return 0;
@@ -460,71 +460,71 @@ static int lm_l4_text_slice_same(const char *left_data, size_t left_length, cons
     return memcmp(left_data, right_data, left_length) == 0;
 }
 
-static int lm_l4_node_is_ignored(const LmP0Node * node) {
+static int lm_l4_node_is_ignored(const LmP0Node *node) {
     return node == 0 || (node -> flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U;
 }
 
-static const LmP0Structure * lm_l4_node_structure(const LmP0Node * node) {
+static const LmP0Structure * lm_l4_node_structure(const LmP0Node *node) {
     if (node == 0 || node -> kind != LM_P0_NODE_STRUCTURE) {
         return 0;
     }
     return node -> as -> structure;
 }
 
-static const LmP0Frame * lm_l4_node_frame(const LmP0Node * node) {
+static const LmP0Frame * lm_l4_node_frame(const LmP0Node *node) {
     if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
         return 0;
     }
     return node -> as -> frame;
 }
 
-static const LmP0Text * lm_l4_node_atom(const LmP0Node * node) {
+static const LmP0Text * lm_l4_node_atom(const LmP0Node *node) {
     if (node == 0 || (node -> kind != LM_P0_NODE_ATOM && node -> kind != LM_P0_NODE_DISABLED)) {
         return 0;
     }
     return node -> as -> atom;
 }
 
-static const LmP0Text * lm_l4_frame_head(const LmP0Frame * frame) {
+static const LmP0Text * lm_l4_frame_head(const LmP0Frame *frame) {
     if (frame == 0) {
         return 0;
     }
     return frame -> head;
 }
 
-static const LmP0Structure * lm_l4_frame_body(const LmP0Frame * frame) {
+static const LmP0Structure * lm_l4_frame_body(const LmP0Frame *frame) {
     if (frame == 0) {
         return 0;
     }
     return frame -> body;
 }
 
-static const LmP0Text * lm_l4_trailer_spelling(const LmP0Trailer * trailer) {
+static const LmP0Text * lm_l4_trailer_spelling(const LmP0Trailer *trailer) {
     if (trailer == 0) {
         return 0;
     }
     return trailer -> spelling;
 }
 
-static const LmP0Structure * lm_l4_trailer_body(const LmP0Trailer * trailer) {
+static const LmP0Structure * lm_l4_trailer_body(const LmP0Trailer *trailer) {
     if (trailer == 0) {
         return 0;
     }
     return trailer -> body;
 }
 
-static const char * lm_l4_error_prefix(const LmL4Loader * loader) {
+static const char * lm_l4_error_prefix(const LmL4Loader *loader) {
     if (loader != 0 && loader -> error_prefix != 0) {
         return loader -> error_prefix;
     }
     return "L4";
 }
 
-static void lm_l4_error(const LmL4Loader * loader, const char *message) {
+static void lm_l4_error(const LmL4Loader *loader, const char *message) {
     fprintf(stderr, "%s registry error: %s\n", lm_l4_error_prefix(loader), message);
 }
 
-static const LmP0Field * lm_l4_nth_field(const LmP0Structure * structure, size_t index) {
+static const LmP0Field * lm_l4_nth_field(const LmP0Structure *structure, size_t index) {
     const LmP0Field * field;
     size_t i;
     if (structure == 0) {
@@ -539,7 +539,7 @@ static const LmP0Field * lm_l4_nth_field(const LmP0Structure * structure, size_t
     return field;
 }
 
-static int lm_l4_trailer_single_atom(const LmP0Trailer * trailer, const LmP0Text * *out_text) {
+static int lm_l4_trailer_single_atom(const LmP0Trailer *trailer, const LmP0Text **out_text) {
     const LmP0Field * field;
     const LmP0Text * atom;
     if (trailer == 0 || out_text == 0) {
@@ -557,7 +557,7 @@ static int lm_l4_trailer_single_atom(const LmP0Trailer * trailer, const LmP0Text
     return 1;
 }
 
-static int lm_l4_identifier_payload(const LmP0Text * atom, const char **out_data, size_t *out_length) {
+static int lm_l4_identifier_payload(const LmP0Text *atom, const char **out_data, size_t *out_length) {
     if (atom == 0 || out_data == 0 || out_length == 0 || atom -> data == 0) {
         return 0;
     }
@@ -571,7 +571,7 @@ static int lm_l4_identifier_payload(const LmP0Text * atom, const char **out_data
     return 1;
 }
 
-static int lm_l4_identifier_same(const LmP0Text * left, const LmP0Text * right) {
+static int lm_l4_identifier_same(const LmP0Text *left, const LmP0Text *right) {
     const char *left_data;
     const char *right_data;
     size_t left_length;
@@ -582,7 +582,7 @@ static int lm_l4_identifier_same(const LmP0Text * left, const LmP0Text * right) 
     return lm_l4_text_slice_same(left_data, left_length, right_data, right_length);
 }
 
-static int lm_l4_text_all_char(const LmP0Text * text, char ch) {
+static int lm_l4_text_all_char(const LmP0Text *text, char ch) {
     size_t i;
     if (text == 0 || text -> length == 0U) {
         return 0;
@@ -597,7 +597,7 @@ static int lm_l4_text_all_char(const LmP0Text * text, char ch) {
     return 1;
 }
 
-static int lm_l4_text_is_array_receiver_head(const LmP0Text * head) {
+static int lm_l4_text_is_array_receiver_head(const LmP0Text *head) {
     size_t i;
     size_t count;
     if (head == 0 || head -> length == 0U) {
@@ -622,7 +622,7 @@ static int lm_l4_text_is_array_receiver_head(const LmP0Text * head) {
     return count > 0U;
 }
 
-static int lm_l4_structure_single_visible_node(const LmP0Structure * structure, const LmP0Node * *out_node) {
+static int lm_l4_structure_single_visible_node(const LmP0Structure *structure, const LmP0Node **out_node) {
     const LmP0Field * field;
     const LmP0Field * next_field;
     if (structure == 0 || out_node == 0) {
@@ -646,7 +646,7 @@ static int lm_l4_structure_single_visible_node(const LmP0Structure * structure, 
     return 1;
 }
 
-static int lm_l4_single_frame_node(const LmP0Node * node, const LmP0Frame * *out_frame) {
+static int lm_l4_single_frame_node(const LmP0Node *node, const LmP0Frame **out_frame) {
     const LmP0Node * inner;
     if (node == 0 || out_frame == 0) {
         return 0;
@@ -665,7 +665,7 @@ static int lm_l4_single_frame_node(const LmP0Node * node, const LmP0Frame * *out
     return 0;
 }
 
-static int lm_l4_frame_formal_param_unwrap_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index) {
+static int lm_l4_frame_formal_param_unwrap_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     if (frame == 0 || out_index == 0) {
         return 0;
     }
@@ -679,7 +679,7 @@ static int lm_l4_frame_formal_param_unwrap_index(const LmL4Loader * loader, void
     return 0;
 }
 
-static int lm_l4_frame_positional_name_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index) {
+static int lm_l4_frame_positional_name_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     if (frame == 0 || out_index == 0) {
         return 0;
     }
@@ -693,7 +693,7 @@ static int lm_l4_frame_positional_name_index(const LmL4Loader * loader, void *co
     return 0;
 }
 
-static int lm_l4_formal_param_name(const LmL4Loader * loader, void *context, const LmP0Node * node, const LmP0Text * *out_name) {
+static int lm_l4_formal_param_name(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_name) {
     const LmP0Node * current;
     const LmP0Frame * frame;
     const LmP0Field * field;
@@ -737,7 +737,7 @@ static int lm_l4_formal_param_name(const LmL4Loader * loader, void *context, con
     return 1;
 }
 
-static int lm_l4_column_descriptor_from_param_node(const LmL4Loader * loader, void *context, const LmP0Node * node, const LmP0Text * *out_descriptor) {
+static int lm_l4_column_descriptor_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_descriptor) {
     const LmP0Node * current;
     const LmP0Frame * frame;
     const LmP0Field * type_field;
@@ -791,7 +791,7 @@ static int lm_l4_column_descriptor_from_param_node(const LmL4Loader * loader, vo
     return 0;
 }
 
-static int lm_l4_column_name_from_param_node(const LmL4Loader * loader, void *context, const LmP0Node * node, LmL4Column * out_column) {
+static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column) {
     const LmP0Text * atom;
     if (node == 0 || out_column == 0) {
         return 0;
@@ -807,7 +807,7 @@ static int lm_l4_column_name_from_param_node(const LmL4Loader * loader, void *co
     return 1;
 }
 
-static int lm_l4_structure_single_visible_frame(const LmP0Structure * structure, const LmP0Frame * *out_frame) {
+static int lm_l4_structure_single_visible_frame(const LmP0Structure *structure, const LmP0Frame **out_frame) {
     const LmP0Field * field;
     const LmP0Field * next_field;
     if (structure == 0 || out_frame == 0) {
@@ -831,7 +831,7 @@ static int lm_l4_structure_single_visible_frame(const LmP0Structure * structure,
     return 1;
 }
 
-static int lm_l4_frame_single_atom(const LmP0Frame * frame, const char *head, const LmP0Text * *out_atom) {
+static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, const LmP0Text **out_atom) {
     const LmP0Field * field;
     const LmP0Text * frame_head;
     const LmP0Text * atom;
@@ -854,7 +854,7 @@ static int lm_l4_frame_single_atom(const LmP0Frame * frame, const char *head, co
     return 1;
 }
 
-static int lm_l4_column_name(const LmL4Loader * loader, void *context, const LmP0Field * field, LmL4Column * out_column) {
+static int lm_l4_column_name(const LmL4Loader *loader, void *context, const LmP0Field *field, LmL4Column *out_column) {
     const LmP0Node * node;
     const LmP0Frame * node_frame;
     const LmP0Structure * node_structure;
@@ -927,7 +927,7 @@ static int lm_l4_column_name(const LmL4Loader * loader, void *context, const LmP
     return 1;
 }
 
-static void lm_l4_columns_destroy(LmL4Column * *columns, size_t count) {
+static void lm_l4_columns_destroy(LmL4Column **columns, size_t count) {
     size_t index;
     if (columns == 0) {
         return;
@@ -940,7 +940,7 @@ static void lm_l4_columns_destroy(LmL4Column * *columns, size_t count) {
     lm_own_delete(columns, 0);
 }
 
-static int lm_l4_columns_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame, LmL4Column * *columns, size_t columns_capacity, size_t *out_count) {
+static int lm_l4_columns_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, LmL4Column **columns, size_t columns_capacity, size_t *out_count) {
     const LmP0Field * field;
     LmL4Column * column;
     size_t count;
@@ -978,7 +978,7 @@ static int lm_l4_columns_from_frame(const LmL4Loader * loader, void *context, co
     return 1;
 }
 
-static int lm_l4_validate_named_trailer(const LmL4Loader * loader, const LmP0Frame * frame, const LmP0Text * expected_name) {
+static int lm_l4_validate_named_trailer(const LmL4Loader *loader, const LmP0Frame *frame, const LmP0Text *expected_name) {
     const LmP0Text * actual;
     if (frame == 0 || frame -> trailer == 0) {
         return 0;
@@ -997,7 +997,7 @@ static int lm_l4_validate_named_trailer(const LmL4Loader * loader, const LmP0Fra
     return 0;
 }
 
-static int lm_l4_row_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     const LmP0Field * table_field;
     const LmP0Field * key_field;
     const LmP0Field * payload_field;
@@ -1029,7 +1029,7 @@ static int lm_l4_row_from_frame(const LmL4Loader * loader, void *context, const 
     return 1;
 }
 
-static int lm_l4_rows_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame, const LmP0Text * table_name, LmL4Column * *columns, size_t column_count) {
+static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, LmL4Column **columns, size_t column_count) {
     const LmP0Field * field;
     const LmP0Node * key_node;
     const LmP0Node * cell_node;
@@ -1095,7 +1095,7 @@ static int lm_l4_rows_from_frame(const LmL4Loader * loader, void *context, const
     return 1;
 }
 
-static int lm_l4_table_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_table_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     const LmP0Field * field;
     const LmP0Node * node;
     const LmP0Frame * node_frame;
@@ -1194,7 +1194,7 @@ static int lm_l4_table_from_frame(const LmL4Loader * loader, void *context, cons
     return 1;
 }
 
-static int lm_l4_seen_table_add(LmOwnPtrStack * seen, const LmP0Text * table_name) {
+static int lm_l4_seen_table_add(LmOwnPtrStack *seen, const LmP0Text *table_name) {
     const char *payload_data;
     char *name;
     size_t i;
@@ -1229,7 +1229,7 @@ static int lm_l4_seen_table_add(LmOwnPtrStack * seen, const LmP0Text * table_nam
     return 0;
 }
 
-static int lm_l4_check_table_frame_unique(const LmL4Loader * loader, const LmP0Frame * frame, LmOwnPtrStack * seen) {
+static int lm_l4_check_table_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen) {
     const LmP0Field * field;
     const LmP0Node * node;
     const LmP0Frame * node_frame;
@@ -1273,14 +1273,14 @@ static int lm_l4_check_table_frame_unique(const LmL4Loader * loader, const LmP0F
     return 0;
 }
 
-static const LmP0Field * lm_l4_next_present_field(const LmP0Field * field) {
+static const LmP0Field * lm_l4_next_present_field(const LmP0Field *field) {
     while (field != 0 && (field -> value == 0 || lm_l4_node_is_ignored(field -> value) != 0)) {
         field = field -> next;
     }
     return field;
 }
 
-static int lm_l4_join_header(const LmP0Frame * frame, const LmP0Structure * *out_sources, const LmP0Text * *out_target, const LmP0Structure * *out_body) {
+static int lm_l4_join_header(const LmP0Frame *frame, const LmP0Structure **out_sources, const LmP0Text **out_target, const LmP0Structure **out_body) {
     const LmP0Field * field;
     const LmP0Structure * frame_body;
     const LmP0Structure * sources;
@@ -1326,7 +1326,7 @@ static int lm_l4_join_header(const LmP0Frame * frame, const LmP0Structure * *out
     return 1;
 }
 
-static int lm_l4_join_sources_into_target(const LmL4Loader * loader, void *context, const LmP0Structure * sources, const LmP0Text * target_name) {
+static int lm_l4_join_sources_into_target(const LmL4Loader *loader, void *context, const LmP0Structure *sources, const LmP0Text *target_name) {
     const LmP0Field * field;
     const LmP0Node * node;
     const LmP0Text * source_name;
@@ -1355,7 +1355,7 @@ static int lm_l4_join_sources_into_target(const LmL4Loader * loader, void *conte
     return 0;
 }
 
-static int lm_l4_join_from_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_join_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     const LmP0Field * field;
     const LmP0Node * node;
     const LmP0Frame * node_frame;
@@ -1463,7 +1463,7 @@ static int lm_l4_join_from_frame(const LmL4Loader * loader, void *context, const
     return 1;
 }
 
-static int lm_l4_check_join_frame_unique(const LmL4Loader * loader, const LmP0Frame * frame, LmOwnPtrStack * seen) {
+static int lm_l4_check_join_frame_unique(const LmL4Loader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen) {
     const LmP0Structure * sources;
     const LmP0Structure * body;
     const LmP0Text * target_name;
@@ -1494,7 +1494,7 @@ static int lm_l4_check_join_frame_unique(const LmL4Loader * loader, const LmP0Fr
     return 0;
 }
 
-static int lm_l4_receiver_table(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     LmOwnPtrStack * seen;
     int status;
     seen = lm_l4_seen_tables_get();
@@ -1511,7 +1511,7 @@ static int lm_l4_receiver_table(const LmL4Loader * loader, void *context, const 
     return 0;
 }
 
-static int lm_l4_receiver_join(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_receiver_join(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     LmOwnPtrStack * seen;
     int status;
     seen = lm_l4_seen_tables_get();
@@ -1528,7 +1528,7 @@ static int lm_l4_receiver_join(const LmL4Loader * loader, void *context, const L
     return 0;
 }
 
-static int lm_l4_receiver_row(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     int status;
     status = lm_l4_row_from_frame(loader, context, frame);
     if (status <= 0) {
@@ -1540,14 +1540,14 @@ static int lm_l4_receiver_row(const LmL4Loader * loader, void *context, const Lm
     return 0;
 }
 
-static int lm_l4_receiver_ignore(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     if (loader != 0 || context != 0 || frame != 0) {
         return 0;
     }
     return 0;
 }
 
-static int lm_l4_dispatch_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     if (frame == 0) {
         return 1;
     }
@@ -1558,7 +1558,7 @@ static int lm_l4_dispatch_frame(const LmL4Loader * loader, void *context, const 
     return loader->dispatch_frame(loader, context, frame);
 }
 
-static int lm_l4_load_rows(const LmL4Loader * loader, void *context, const LmP0Structure * structure) {
+static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure) {
     const LmP0Field * field;
     const LmP0Node * node;
     LmOwnPtrStack * seen;
@@ -1607,7 +1607,7 @@ static int lm_l4_load_rows(const LmL4Loader * loader, void *context, const LmP0S
     return status;
 }
 
-static int lm_l4_load_root(const LmL4Loader * loader, void *context, const LmP0Node * root, int implicit_l4) {
+static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4) {
     const LmP0Field * field;
     const LmP0Node * node;
     LmOwnPtrStack * seen;
@@ -1680,11 +1680,11 @@ static int lm_l4_load_root(const LmL4Loader * loader, void *context, const LmP0N
 
 
 
-static int lm_p0_text_equals(const LmP0Text * text, const char *value);
-static int lm_p0_identifier_payload(const LmP0Text * atom, LmP0Text * out_payload);
-static int lm_p0_registry_identifier_value(const LmP0Text * atom, LmP0Text * out_payload);
-static int lm_p0_registry_literal_value(const LmP0Text * atom, LmP0Text * out_payload);
-static int lm_p0_registry_payload_is_null(const LmP0Text * atom);
+static int lm_p0_text_equals(const LmP0Text *text, const char *value);
+static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payload);
+static int lm_p0_registry_payload_is_null(const LmP0Text *atom);
 static int lm_p0_is_horizontal_space(char value);
 static int lm_p0_is_line_break(char value);
 static size_t lm_p0_line_break_width_at(const char *source, size_t length, size_t index);
@@ -1696,11 +1696,11 @@ static int lm_p0_starts_python_string(const char *text, size_t length, size_t in
 static int lm_p0_is_decimal_digit(char value);
 static char * lm_p0_copy_bytes(const char *source, size_t length);
 static LmP0Text * lm_p0_text_view_new_cstr(const char *text);
-static void lm_p0_text_view_delete(LmP0Text * text);
+static void lm_p0_text_view_delete(LmP0Text *text);
 static LmP0Text * lm_p0_text_from_cstr(const char *text);
-static int lm_p0_text_assign_cstr(LmP0Text * out_text, const char *text);
-static char * lm_p0_text_copy_cstr(const LmP0Text * text);
-static char * lm_p0_registry_value_copy_cstr(const LmP0Text * value);
+static int lm_p0_text_assign_cstr(LmP0Text *out_text, const char *text);
+static char * lm_p0_text_copy_cstr(const LmP0Text *text);
+static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -1713,24 +1713,24 @@ static char * lm_p0_registry_value_copy_cstr(const LmP0Text * value);
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
 #define LM_P0_ENABLE_REGISTRY_COMPARE 1
 #endif
-static int lm_p0_document_init_owners(LmP0Document * document);
-static void lm_p0_document_destroy_owners(LmP0Document * document);
-static void lm_p0_document_freeze_tree(LmP0Document * document);
-static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow * row);
+static int lm_p0_document_init_owners(LmP0Document *document);
+static void lm_p0_document_destroy_owners(LmP0Document *document);
+static void lm_p0_document_freeze_tree(LmP0Document *document);
+static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row);
 static void lm_p0_registry_row_destroy_any(void *object);
-static void lm_p0_indent_stack_free(LmP0IndentStack * stack);
+static void lm_p0_indent_stack_free(LmP0IndentStack *stack);
 static void lm_p0_indent_stack_free_any(void *object);
-static int lm_p0_indent_stack_push(LmP0Document * document, LmP0IndentStack * stack, size_t column, size_t line, size_t source_column);
-static int lm_p0_indent_stack_init(LmP0Document * document, LmP0IndentStack * stack);
+static int lm_p0_indent_stack_push(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column);
+static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack);
 static LmP0IndentStack * lm_p0_indent_stack_new_empty(void);
-static LmP0IndentStack * lm_p0_indent_stack_new(LmP0Document * document);
-static void lm_p0_indent_stack_delete(LmP0IndentStack * stack);
-static int lm_p0_indent_stack_copy(LmP0Document * document, LmP0IndentStack * target, const LmP0IndentStack * source, size_t line, size_t column);
-static LmP0IndentStack * lm_p0_indent_stack_clone(LmP0Document * document, const LmP0IndentStack * source, size_t line, size_t column);
+static LmP0IndentStack * lm_p0_indent_stack_new(LmP0Document *document);
+static void lm_p0_indent_stack_delete(LmP0IndentStack *stack);
+static int lm_p0_indent_stack_copy(LmP0Document *document, LmP0IndentStack *target, const LmP0IndentStack *source, size_t line, size_t column);
+static LmP0IndentStack * lm_p0_indent_stack_clone(LmP0Document *document, const LmP0IndentStack *source, size_t line, size_t column);
 static size_t lm_p0_indent_tab_column(size_t column);
 static void lm_p0_scan_indent_column(const char *source, size_t start, size_t end, size_t *out_offset, size_t *out_column);
 static size_t lm_p0_visual_column_between(const char *source, size_t start, size_t end);
-static const char * lm_p0_registry_lookup(const LmP0Text * key, const char *table);
+static const char * lm_p0_registry_lookup(const LmP0Text *key, const char *table);
 static int lm_p0_registry_table_has_rows(const char *table);
 static int lm_p0_registry_table_has_rows_loaded_or_loading(const char *table);
 static size_t lm_p0_count_line_breaks(const char *source, size_t start, size_t end);
@@ -1745,71 +1745,71 @@ static LmP0TrailerRole lm_p0_trailer_role_from_payload(const char *payload);
 static const char * lm_p0_trailer_role_payload(LmP0TrailerRole role);
 static int lm_p0_registry_trailer_allows_bare(const char *class_name);
 static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role);
-static int lm_p0_node_head_is(const LmP0Node * node, const char *name);
-static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node * target);
-const LmP0Structure * lm_p0_node_structure(const LmP0Node * node);
-const LmP0Frame * lm_p0_node_frame(const LmP0Node * node);
-const LmP0Text * lm_p0_node_atom(const LmP0Node * node);
-const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure * structure);
-const LmP0Text * lm_p0_frame_head(const LmP0Frame * frame);
-const LmP0Structure * lm_p0_frame_body(const LmP0Frame * frame);
-const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame * frame);
-const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer * trailer);
-const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer * trailer);
-static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent * event);
+static int lm_p0_node_head_is(const LmP0Node *node, const char *name);
+static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target);
+const LmP0Structure * lm_p0_node_structure(const LmP0Node *node);
+const LmP0Frame * lm_p0_node_frame(const LmP0Node *node);
+const LmP0Text * lm_p0_node_atom(const LmP0Node *node);
+const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure);
+const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame);
+const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame);
+const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame);
+const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer);
+const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer *trailer);
+static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event);
 static int lm_p0_find_python_string_end(const char *text, size_t length, size_t start, size_t *out_end);
 static size_t lm_p0_skip_python_string_unchecked(const char *text, size_t length, size_t start);
 static void lm_p0_scan_layout_prefix(const char *source, size_t length, size_t start, size_t *out_offset, size_t *out_indent_column, size_t *out_dot_level);
 static int lm_p0_layout_prefix_is_deeper(size_t indent_column, size_t dot_level, size_t base_indent_column, size_t base_dot_level);
 static LmP0DashFenceStatus lm_p0_dash_fence_status(const char *text, size_t length, size_t *out_dash_count);
-static int lm_p0_validate_dash_fence_line(LmP0Document * document, const char *text, size_t length, size_t line, size_t column);
+static int lm_p0_validate_dash_fence_line(LmP0Document *document, const char *text, size_t length, size_t line, size_t column);
 static int lm_p0_match_block_string_fence_line(const char *source, size_t line_start, size_t line_end, size_t eq_count);
 static int lm_p0_match_raw_comment_fence_line(const char *source, size_t line_start, size_t line_end, size_t star_count);
-static void lm_p0_dump_append_size(LmP0Dump * dump, size_t value);
-static void lm_p0_dump_append_field_count_line(LmP0Dump * dump, size_t field_count);
+static void lm_p0_dump_append_size(LmP0Dump *dump, size_t value);
+static void lm_p0_dump_append_field_count_line(LmP0Dump *dump, size_t field_count);
 static int lm_p0_registry_init(void);
 static void lm_p0_registry_destroy(void);
 static LmP0Text * lm_p0_text_ref_new_empty(void);
-static void lm_p0_text_ref_delete(LmP0Text * text);
-static int lm_p0_document_register_lazy_text(LmP0Document * document, const char *source, size_t length, const char **patch_slot, size_t line, size_t column);
-static LmP0Text * lm_p0_new_text(LmP0Document * document, const char *source, size_t length, size_t line, size_t column);
-static LmP0Structure * lm_p0_new_structure(LmP0Document * document, size_t line, size_t column);
-static LmP0Frame * lm_p0_new_frame(LmP0Document * document, size_t line, size_t column);
-static LmP0Trailer * lm_p0_new_trailer(LmP0Document * document, const char *spelling, size_t spelling_length, size_t line, size_t column);
-static void lm_p0_set_diagnostic(LmP0Document * document, int code, size_t line, size_t column, const char *message);
-static int lm_p0_registry_push_row_values(const LmP0Text * table_value, const LmP0Text * key_value, const LmP0Text * payload_value);
-static int lm_p0_registry_push_row_atoms(const LmP0Text * table_atom, const LmP0Text * key_atom, const LmP0Text * payload_atom);
-static int lm_p0_registry_column_has_descriptor(const LmL4Column * column, const char *descriptor);
-static int lm_p0_registry_cell_none_cell_matches(const LmP0Text * payload, const LmP0Text * class_atom);
-static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmL4Column * column);
-static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmL4Column * column, LmP0Text * out_value);
-static int lm_p0_registry_push_table_cell(const LmP0Text * table_name, const LmL4Column * column, int split_by_column, const LmP0Text * key_atom, const LmP0Text * payload_atom);
+static void lm_p0_text_ref_delete(LmP0Text *text);
+static int lm_p0_document_register_lazy_text(LmP0Document *document, const char *source, size_t length, const char **patch_slot, size_t line, size_t column);
+static LmP0Text * lm_p0_new_text(LmP0Document *document, const char *source, size_t length, size_t line, size_t column);
+static LmP0Structure * lm_p0_new_structure(LmP0Document *document, size_t line, size_t column);
+static LmP0Frame * lm_p0_new_frame(LmP0Document *document, size_t line, size_t column);
+static LmP0Trailer * lm_p0_new_trailer(LmP0Document *document, const char *spelling, size_t spelling_length, size_t line, size_t column);
+static void lm_p0_set_diagnostic(LmP0Document *document, int code, size_t line, size_t column, const char *message);
+static int lm_p0_registry_push_row_values(const LmP0Text *table_value, const LmP0Text *key_value, const LmP0Text *payload_value);
+static int lm_p0_registry_push_row_atoms(const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Text *payload_atom);
+static int lm_p0_registry_column_has_descriptor(const LmL4Column *column, const char *descriptor);
+static int lm_p0_registry_cell_none_cell_matches(const LmP0Text *payload, const LmP0Text *class_atom);
+static int lm_p0_registry_cell_is_null(const LmP0Text *atom, const LmL4Column *column);
+static int lm_p0_registry_cell_value(const LmP0Text *atom, const LmL4Column *column, LmP0Text *out_value);
+static int lm_p0_registry_push_table_cell(const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Text *payload_atom);
 static int lm_p0_registry_compare_enabled(void);
 static void lm_p0_registry_compare_fail(const char *table, const char *key, const char *registry_payload, const char *legacy_payload);
 static void lm_p0_trim_right(const char **text, size_t *length);
 static void lm_p0_trim_trailing_line_comment(const char **text, size_t *length);
-static int lm_p0_indent_level_from_column(LmP0Document * document, LmP0IndentStack * stack, size_t column, size_t line, size_t source_column, size_t *out_level);
+static int lm_p0_indent_level_from_column(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column, size_t *out_level);
 static size_t lm_p0_skip_fence_block_unchecked(const char *text, size_t length, size_t start, char fence_char);
 static size_t lm_p0_find_layout_line_end(const char *source, size_t length, size_t start);
 static size_t lm_p0_scan_brace_mark_unchecked(const char *text, size_t length, size_t start, int *closed);
-static int lm_p0_skip_brace_mark_ex(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t *index, size_t line, size_t column, int record);
-static int lm_p0_skip_brace_mark(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t column);
-static int lm_p0_consume_brace_mark(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t *index, size_t line, size_t column);
-static int lm_p0_skip_leading_brace_marks_ex(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *index, int record);
-static int lm_p0_skip_leading_brace_marks(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *index);
-static int lm_p0_line_is_standalone_mix_run(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, int *out_is_mix);
-static int lm_p0_scan_leading_mix_prefix(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *out_prefix_start, size_t *out_prefix_end, size_t *out_anchor);
+static int lm_p0_skip_brace_mark_ex(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t *index, size_t line, size_t column, int record);
+static int lm_p0_skip_brace_mark(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t column);
+static int lm_p0_consume_brace_mark(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t *index, size_t line, size_t column);
+static int lm_p0_skip_leading_brace_marks_ex(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *index, int record);
+static int lm_p0_skip_leading_brace_marks(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *index);
+static int lm_p0_line_is_standalone_mix_run(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, int *out_is_mix);
+static int lm_p0_scan_leading_mix_prefix(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *out_prefix_start, size_t *out_prefix_end, size_t *out_anchor);
 static LmP0DashFenceStatus lm_p0_dash_fence_status_after_comment_trim(const char *text, size_t length, size_t *out_dash_count);
-static int lm_p0_scan_raw_comment_block(LmP0Document * document, const char *source, size_t length, size_t line_start, size_t line, size_t *next_offset, size_t *next_line);
-static int lm_p0_scan_block_string_event(LmP0Document * document, const char *source, size_t length, size_t line_start, size_t line, LmP0StreamEvent * event, size_t *next_offset, size_t *next_line);
-static LmP0Node * lm_p0_new_node(LmP0Document * document, LmP0NodeKind kind);
-static int lm_p0_append_field(LmP0Document * document, LmP0Structure * structure, LmP0Node * node);
-static int lm_p0_pointer_source_offset(const LmP0Document * document, const char *pointer, size_t *out_offset);
+static int lm_p0_scan_raw_comment_block(LmP0Document *document, const char *source, size_t length, size_t line_start, size_t line, size_t *next_offset, size_t *next_line);
+static int lm_p0_scan_block_string_event(LmP0Document *document, const char *source, size_t length, size_t line_start, size_t line, LmP0StreamEvent *event, size_t *next_offset, size_t *next_line);
+static LmP0Node * lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind);
+static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, LmP0Node *node);
+static int lm_p0_pointer_source_offset(const LmP0Document *document, const char *pointer, size_t *out_offset);
 static size_t lm_p0_offset_from_line_column(const char *text, size_t length, size_t line, size_t column);
-static void lm_p0_copy_payload_diagnostic(LmP0Document * document, const LmP0Document * payload_document, size_t payload_offset);
-static void lm_p0_adjust_node_span_to_document(LmP0Document * document, LmP0Node * node, size_t base_offset);
-static void lm_p0_adjust_structure_spans_to_document(LmP0Document * document, LmP0Structure * structure, size_t base_offset);
-static int lm_p0_record_mix_mark(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t start, size_t end);
+static void lm_p0_copy_payload_diagnostic(LmP0Document *document, const LmP0Document *payload_document, size_t payload_offset);
+static void lm_p0_adjust_node_span_to_document(LmP0Document *document, LmP0Node *node, size_t base_offset);
+static void lm_p0_adjust_structure_spans_to_document(LmP0Document *document, LmP0Structure *structure, size_t base_offset);
+static int lm_p0_record_mix_mark(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t start, size_t end);
 static int lm_p0_is_bare_identifier_start(char c);
 static int lm_p0_is_bare_identifier_rest(char c);
 static int lm_p0_is_hex_digit(char c);
@@ -1822,153 +1822,153 @@ static int lm_p0_starts_c_surface_atom(const char *text, size_t end_index, size_
 static int lm_p0_is_c_surface_top_boundary(char value);
 static size_t lm_p0_scan_c_sizeof_surface_atom(const char *text, size_t end_index, size_t start);
 static size_t lm_p0_scan_c_surface_atom(const char *text, size_t end_index, size_t start);
-static int lm_p0_scan_c_char(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t base_column);
-static int lm_p0_scan_c_prefixed_quote(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t base_column);
+static int lm_p0_scan_c_char(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t base_column);
+static int lm_p0_scan_c_prefixed_quote(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t base_column);
 static size_t lm_p0_scan_builtin_compact_atom_piece(const char *text, size_t end_index, size_t start);
 static size_t lm_p0_scan_registry_compact_atom_piece(const char *text, size_t end_index, size_t start);
 static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end_index, size_t start, int allow_signed_number);
-static int lm_p0_append_atom_slice(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index);
-static int lm_p0_append_positional_skip(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t index);
-static int lm_p0_append_compact_atom_pieces(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index);
-static void lm_p0_free_node(LmP0Node * node);
-static int lm_p0_relaxed_level_from_column(LmP0Document * document, LmP0IndentStack * stack, size_t column, size_t base_level, size_t line, size_t source_column, size_t *out_level);
-static int lm_p0_source_level_after_line_break(LmP0Document * document, LmP0IndentStack * indent_stack, const char *text, size_t length, size_t index, size_t line, size_t column, size_t base_level, size_t *content_index, size_t *out_level);
-static int lm_p0_skip_field_space(LmP0Document * document, LmP0IndentStack * indent_stack, LmP0Structure * structure, const char *text, size_t length, size_t *index, size_t line, size_t column, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t *current_source_level, int *stopped_by_source_level);
-static int lm_p0_scan_python_string(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t base_column);
-static int lm_p0_scan_quoted(LmP0Document * document, const char *text, size_t length, size_t *index, char quote, size_t line, size_t base_column);
-static int lm_p0_require_quoted_token_boundary(LmP0Document * document, const char *text, size_t length, size_t index, size_t line, size_t column);
-static int lm_p0_find_matching_paren(LmP0Document * document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index);
-static int lm_p0_find_matching_bracket(LmP0Document * document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index);
-static int lm_p0_find_colon(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *colon_index);
-static int lm_p0_field_start_looks_explicit_frame(LmP0Document * document, const char *text, size_t length, size_t index, size_t line, size_t column);
+static int lm_p0_append_atom_slice(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index);
+static int lm_p0_append_positional_skip(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t index);
+static int lm_p0_append_compact_atom_pieces(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index);
+static void lm_p0_free_node(LmP0Node *node);
+static int lm_p0_relaxed_level_from_column(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t base_level, size_t line, size_t source_column, size_t *out_level);
+static int lm_p0_source_level_after_line_break(LmP0Document *document, LmP0IndentStack *indent_stack, const char *text, size_t length, size_t index, size_t line, size_t column, size_t base_level, size_t *content_index, size_t *out_level);
+static int lm_p0_skip_field_space(LmP0Document *document, LmP0IndentStack *indent_stack, LmP0Structure *structure, const char *text, size_t length, size_t *index, size_t line, size_t column, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t *current_source_level, int *stopped_by_source_level);
+static int lm_p0_scan_python_string(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t base_column);
+static int lm_p0_scan_quoted(LmP0Document *document, const char *text, size_t length, size_t *index, char quote, size_t line, size_t base_column);
+static int lm_p0_require_quoted_token_boundary(LmP0Document *document, const char *text, size_t length, size_t index, size_t line, size_t column);
+static int lm_p0_find_matching_paren(LmP0Document *document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index);
+static int lm_p0_find_matching_bracket(LmP0Document *document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index);
+static int lm_p0_find_colon(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *colon_index);
+static int lm_p0_field_start_looks_explicit_frame(LmP0Document *document, const char *text, size_t length, size_t index, size_t line, size_t column);
 static void lm_p0_field_parse_loop_frame_delete_any(void *object);
-static LmOwnPtrStack * lm_p0_field_parse_loop_stack_new(LmP0Document * document, size_t line, size_t column);
-static void lm_p0_field_parse_loop_stack_delete(LmOwnPtrStack * stack);
-static int lm_p0_field_parse_loop_push(LmP0Document * document, LmOwnPtrStack * stack, LmP0IndentStack * indent_stack, int indent_stack_owned, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t i, size_t current_source_level, int allow_empty_fields, int expect_field, int headless_group_after_separator, LmP0FieldParseLoopContinuation continuation, LmP0Node * node, size_t start, size_t close_index);
-static int lm_p0_field_parse_fail(LmOwnPtrStack * *parse_stack, LmP0IndentStack * *indent_stack, int *indent_stack_owned);
-static int lm_p0_parse_append_node_and_update(LmP0Document * document, LmP0Structure * structure, LmP0Node * node, unsigned flags, int allow_empty_fields, int *expect_field, int *headless_group_after_separator);
-static int lm_p0_parse_fields_until_with_layout(LmP0Document * document, LmP0IndentStack * indent_stack, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t layout_base_level, size_t *index);
-static int lm_p0_parse_fields_until(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t *index);
-static int lm_p0_parse_fields_into(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset);
-static int lm_p0_stack_ensure(LmP0Document * document, LmP0Stack * stack, size_t level);
-static void lm_p0_stack_truncate_deeper(LmP0Stack * stack, size_t level);
-static size_t lm_p0_stack_top_level(const LmP0Stack * stack);
-static int lm_p0_stack_level_is_trailer_body(const LmP0Stack * stack, size_t level);
-static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack * stack, size_t event_level);
+static LmOwnPtrStack * lm_p0_field_parse_loop_stack_new(LmP0Document *document, size_t line, size_t column);
+static void lm_p0_field_parse_loop_stack_delete(LmOwnPtrStack *stack);
+static int lm_p0_field_parse_loop_push(LmP0Document *document, LmOwnPtrStack *stack, LmP0IndentStack *indent_stack, int indent_stack_owned, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t i, size_t current_source_level, int allow_empty_fields, int expect_field, int headless_group_after_separator, LmP0FieldParseLoopContinuation continuation, LmP0Node *node, size_t start, size_t close_index);
+static int lm_p0_field_parse_fail(LmOwnPtrStack **parse_stack, LmP0IndentStack **indent_stack, int *indent_stack_owned);
+static int lm_p0_parse_append_node_and_update(LmP0Document *document, LmP0Structure *structure, LmP0Node *node, unsigned flags, int allow_empty_fields, int *expect_field, int *headless_group_after_separator);
+static int lm_p0_parse_fields_until_with_layout(LmP0Document *document, LmP0IndentStack *indent_stack, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t layout_base_level, size_t *index);
+static int lm_p0_parse_fields_until(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t *index);
+static int lm_p0_parse_fields_into(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset);
+static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t level);
+static void lm_p0_stack_truncate_deeper(LmP0Stack *stack, size_t level);
+static size_t lm_p0_stack_top_level(const LmP0Stack *stack);
+static int lm_p0_stack_level_is_trailer_body(const LmP0Stack *stack, size_t level);
+static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack *stack, size_t event_level);
 static LmP0TrailerRole lm_p0_registry_trailer_role(const char *text, size_t length);
 static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length);
-static void lm_p0_stack_free(LmP0Stack * stack);
+static void lm_p0_stack_free(LmP0Stack *stack);
 static void lm_p0_stack_free_any(void *object);
 static LmP0Stack * lm_p0_stack_new(void);
-static void lm_p0_stack_delete(LmP0Stack * stack);
+static void lm_p0_stack_delete(LmP0Stack *stack);
 static LmP0PendingDelimiter * lm_p0_pending_delimiter_new(void);
 static LmP0StreamEvent * lm_p0_stream_event_new(void);
-static LmP0StreamEvent * lm_p0_stream_event_new_copy(const LmP0StreamEvent * event);
-static void lm_p0_stream_event_delete(LmP0StreamEvent * event);
-static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter * pending);
-static int lm_p0_pending_delimiter_set(LmP0Document * document, LmP0PendingDelimiter * pending, const LmP0StreamEvent * event);
-static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter * pending);
+static LmP0StreamEvent * lm_p0_stream_event_new_copy(const LmP0StreamEvent *event);
+static void lm_p0_stream_event_delete(LmP0StreamEvent *event);
+static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter *pending);
+static int lm_p0_pending_delimiter_set(LmP0Document *document, LmP0PendingDelimiter *pending, const LmP0StreamEvent *event);
+static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter *pending);
 static LmP0PendingMix * lm_p0_pending_mix_new(void);
-static void lm_p0_pending_mix_free(LmP0PendingMix * pending);
+static void lm_p0_pending_mix_free(LmP0PendingMix *pending);
 static void lm_p0_pending_mix_free_any(void *object);
-static void lm_p0_pending_mix_delete(LmP0PendingMix * pending);
-static int lm_p0_pending_mix_push(LmP0Document * document, LmP0PendingMix * pending, const LmP0StreamEvent * event);
+static void lm_p0_pending_mix_delete(LmP0PendingMix *pending);
+static int lm_p0_pending_mix_push(LmP0Document *document, LmP0PendingMix *pending, const LmP0StreamEvent *event);
 static LmP0DisabledState * lm_p0_disabled_state_new(size_t base_level);
-static void lm_p0_disabled_state_delete(LmP0DisabledState * state);
-static int lm_p0_node_keeps_source_child_level(LmP0Node * node);
-static LmP0Structure * lm_p0_node_child_structure(LmP0Node * node);
-static LmP0Node * lm_p0_structure_last_colon_frame(LmP0Structure * structure);
-static int lm_p0_stack_install_node_lineage(LmP0Document * document, LmP0Stack * stack, size_t base_level, LmP0Node * node);
-static int lm_p0_stack_ensure_root_level_alias(LmP0Document * document, LmP0Stack * stack, size_t level);
-static int lm_p0_stack_open_implicit_anonymous(LmP0Document * document, LmP0Stack * stack, size_t parent_level, size_t line, size_t column, size_t offset);
-static LmP0Trailer * * lm_p0_node_trailer_slot(LmP0Node * node);
-static LmP0Trailer * lm_p0_attach_trailer(LmP0Document * document, LmP0Node * node, const char *spelling, size_t spelling_length, unsigned flags, size_t line, size_t column);
-static int lm_p0_parse_trailer_item(LmP0Document * document, LmP0Node * target, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, LmP0Structure * *out_body);
-static int lm_p0_stream_resolve_pending_delimiter(LmP0Document * document, LmP0Stack * stack, LmP0PendingDelimiter * pending, size_t next_level);
-static int lm_p0_stream_apply_item_event(LmP0Document * document, LmP0Stack * stack, const LmP0StreamEvent * event);
-static int lm_p0_stream_apply_mix_event(LmP0Document * document, LmP0Stack * stack, const LmP0StreamEvent * event);
-static int lm_p0_stream_apply_event(LmP0Document * document, LmP0Stack * stack, LmP0PendingDelimiter * pending, const LmP0StreamEvent * event);
-static int lm_p0_pending_mix_flush(LmP0Document * document, LmP0Stack * stack, LmP0PendingDelimiter * pending_delimiter, LmP0PendingMix * pending_mix, size_t level);
-static size_t lm_p0_stream_block_string_level(const LmP0Stack * stack, const LmP0PendingDelimiter * pending);
-static int lm_p0_validate_disabled_item_text(LmP0Document * document, const char *text, size_t length, size_t line, size_t column);
-static int lm_p0_disabled_scan_next_event(LmP0Document * document, LmP0IndentStack * indent_stack, size_t *offset, size_t *line, LmP0StreamEvent * event, int *has_event);
-static int lm_p0_disabled_event_is_tail_cutter(const LmP0StreamEvent * event);
-static int lm_p0_disabled_state_accept_event(LmP0Document * document, LmP0DisabledState * state, LmP0StreamEvent * event, int *done_after_event, int *done_before_event);
-static int lm_p0_validate_disabled_block(LmP0Document * document, const LmP0IndentStack * indent_stack, size_t first_next_offset, size_t first_next_line, size_t base_level, const char *header_text, size_t header_length, size_t header_line, size_t header_column, size_t *out_offset, size_t *out_line);
-static int lm_p0_parse_stream(LmP0Document * document);
-static void lm_p0_structure_recount(LmP0Structure * structure);
+static void lm_p0_disabled_state_delete(LmP0DisabledState *state);
+static int lm_p0_node_keeps_source_child_level(LmP0Node *node);
+static LmP0Structure * lm_p0_node_child_structure(LmP0Node *node);
+static LmP0Node * lm_p0_structure_last_colon_frame(LmP0Structure *structure);
+static int lm_p0_stack_install_node_lineage(LmP0Document *document, LmP0Stack *stack, size_t base_level, LmP0Node *node);
+static int lm_p0_stack_ensure_root_level_alias(LmP0Document *document, LmP0Stack *stack, size_t level);
+static int lm_p0_stack_open_implicit_anonymous(LmP0Document *document, LmP0Stack *stack, size_t parent_level, size_t line, size_t column, size_t offset);
+static LmP0Trailer * * lm_p0_node_trailer_slot(LmP0Node *node);
+static LmP0Trailer * lm_p0_attach_trailer(LmP0Document *document, LmP0Node *node, const char *spelling, size_t spelling_length, unsigned flags, size_t line, size_t column);
+static int lm_p0_parse_trailer_item(LmP0Document *document, LmP0Node *target, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, LmP0Structure **out_body);
+static int lm_p0_stream_resolve_pending_delimiter(LmP0Document *document, LmP0Stack *stack, LmP0PendingDelimiter *pending, size_t next_level);
+static int lm_p0_stream_apply_item_event(LmP0Document *document, LmP0Stack *stack, const LmP0StreamEvent *event);
+static int lm_p0_stream_apply_mix_event(LmP0Document *document, LmP0Stack *stack, const LmP0StreamEvent *event);
+static int lm_p0_stream_apply_event(LmP0Document *document, LmP0Stack *stack, LmP0PendingDelimiter *pending, const LmP0StreamEvent *event);
+static int lm_p0_pending_mix_flush(LmP0Document *document, LmP0Stack *stack, LmP0PendingDelimiter *pending_delimiter, LmP0PendingMix *pending_mix, size_t level);
+static size_t lm_p0_stream_block_string_level(const LmP0Stack *stack, const LmP0PendingDelimiter *pending);
+static int lm_p0_validate_disabled_item_text(LmP0Document *document, const char *text, size_t length, size_t line, size_t column);
+static int lm_p0_disabled_scan_next_event(LmP0Document *document, LmP0IndentStack *indent_stack, size_t *offset, size_t *line, LmP0StreamEvent *event, int *has_event);
+static int lm_p0_disabled_event_is_tail_cutter(const LmP0StreamEvent *event);
+static int lm_p0_disabled_state_accept_event(LmP0Document *document, LmP0DisabledState *state, LmP0StreamEvent *event, int *done_after_event, int *done_before_event);
+static int lm_p0_validate_disabled_block(LmP0Document *document, const LmP0IndentStack *indent_stack, size_t first_next_offset, size_t first_next_line, size_t base_level, const char *header_text, size_t header_length, size_t header_line, size_t header_column, size_t *out_offset, size_t *out_line);
+static int lm_p0_parse_stream(LmP0Document *document);
+static void lm_p0_structure_recount(LmP0Structure *structure);
 static LmP0PostprocessFrame * lm_p0_postprocess_frame_new(int phase);
-static int lm_p0_postprocess_push_frame(LmOwnPtrStack * stack, LmP0PostprocessFrame * frame);
-static int lm_p0_postprocess_push_node(LmOwnPtrStack * stack, LmP0Node * node);
-static int lm_p0_postprocess_push_structure(LmOwnPtrStack * stack, LmP0Structure * structure);
-static int lm_p0_postprocess_push_trailer(LmOwnPtrStack * stack, LmP0Trailer * trailer);
-static int lm_p0_postprocess_push_frame_wrap(LmOwnPtrStack * stack, LmP0Node * node);
+static int lm_p0_postprocess_push_frame(LmOwnPtrStack *stack, LmP0PostprocessFrame *frame);
+static int lm_p0_postprocess_push_node(LmOwnPtrStack *stack, LmP0Node *node);
+static int lm_p0_postprocess_push_structure(LmOwnPtrStack *stack, LmP0Structure *structure);
+static int lm_p0_postprocess_push_trailer(LmOwnPtrStack *stack, LmP0Trailer *trailer);
+static int lm_p0_postprocess_push_frame_wrap(LmOwnPtrStack *stack, LmP0Node *node);
 static LmOwnPtrStack * lm_p0_postprocess_stack_new(void);
-static void lm_p0_postprocess_stack_delete(LmOwnPtrStack * *stack);
-static int lm_p0_postprocess_run(LmP0Document * document, LmOwnPtrStack * stack);
-static int lm_p0_postprocess_node(LmP0Document * document, LmP0Node * node);
-static int lm_p0_wrap_fields_from_line(LmP0Document * document, LmP0Structure * structure, size_t head_line, size_t inline_event_end_offset);
-static int lm_p0_validate_nonempty_colon_frames_in_trailer(LmP0Document * document, const LmP0Trailer * trailer);
-static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document * document, const LmP0Node * node);
-static int lm_p0_validate_nonempty_colon_frames_in_structure(LmP0Document * document, const LmP0Structure * structure);
-int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document * *out_document);
-int lm_p0_parse_string(const char *source, LmP0Document * *out_document);
-int lm_p0_parse_file(const char *path, LmP0Document * *out_document);
-static char * lm_p0_registry_join_text3(const LmP0Text * first, const char *separator, const LmP0Text * second);
+static void lm_p0_postprocess_stack_delete(LmOwnPtrStack **stack);
+static int lm_p0_postprocess_run(LmP0Document *document, LmOwnPtrStack *stack);
+static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node);
+static int lm_p0_wrap_fields_from_line(LmP0Document *document, LmP0Structure *structure, size_t head_line, size_t inline_event_end_offset);
+static int lm_p0_validate_nonempty_colon_frames_in_trailer(LmP0Document *document, const LmP0Trailer *trailer);
+static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, const LmP0Node *node);
+static int lm_p0_validate_nonempty_colon_frames_in_structure(LmP0Document *document, const LmP0Structure *structure);
+int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **out_document);
+int lm_p0_parse_string(const char *source, LmP0Document **out_document);
+int lm_p0_parse_file(const char *path, LmP0Document **out_document);
+static char * lm_p0_registry_join_text3(const LmP0Text *first, const char *separator, const LmP0Text *second);
 static int lm_p0_registry_push_generated_row_cstr(const char *table, const char *key, const char *payload);
-static int lm_p0_registry_push_generated_row_text(const char *table, const char *key, const LmP0Text * payload);
-static int lm_p0_registry_push_column_metadata(const LmP0Text * table_name, LmP0RegistryColumn *columns, size_t column_count);
-static int lm_p0_registry_l4_push_row(void *context, const LmP0Text * table_atom, const LmP0Text * key_atom, const LmP0Node * payload_node);
-static int lm_p0_registry_l4_push_cell(void *context, const LmP0Text * table_name, const LmL4Column * column, int split_by_column, const LmP0Text * key_atom, const LmP0Node * payload_node);
-static int lm_p0_registry_l4_push_column_metadata(void *context, const LmP0Text * table_name, LmL4Column * *columns, size_t column_count);
-static int lm_p0_registry_join_relation_matches(const char *relation_name, const LmP0Text * source_name, const char **out_suffix);
-static char * lm_p0_registry_join_target_relation_new(const LmP0Text * target_name, const char *suffix);
-static int lm_p0_registry_l4_join_table(void *context, const LmP0Text * source_table, const LmP0Text * target_table);
-static int lm_p0_l4_text_all_char(const LmP0Text * text, char ch);
-static int lm_p0_l4_text_is_array_receiver_head(const LmP0Text * head);
-static const LmP0Text * lm_p0_l4_frame_receiver_key(const LmP0Frame * frame);
+static int lm_p0_registry_push_generated_row_text(const char *table, const char *key, const LmP0Text *payload);
+static int lm_p0_registry_push_column_metadata(const LmP0Text *table_name, LmP0RegistryColumn *columns, size_t column_count);
+static int lm_p0_registry_l4_push_row(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
+static int lm_p0_registry_l4_push_cell(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
+static int lm_p0_registry_l4_push_column_metadata(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
+static int lm_p0_registry_join_relation_matches(const char *relation_name, const LmP0Text *source_name, const char **out_suffix);
+static char * lm_p0_registry_join_target_relation_new(const LmP0Text *target_name, const char *suffix);
+static int lm_p0_registry_l4_join_table(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
+static int lm_p0_l4_text_all_char(const LmP0Text *text, char ch);
+static int lm_p0_l4_text_is_array_receiver_head(const LmP0Text *head);
+static const LmP0Text * lm_p0_l4_frame_receiver_key(const LmP0Frame *frame);
 static int lm_p0_l4_parse_size_payload(const char *payload, size_t *out_value);
-static int lm_p0_registry_l4_formal_param_unwrap_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index);
-static int lm_p0_registry_l4_positional_name_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index);
+static int lm_p0_registry_l4_formal_param_unwrap_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+static int lm_p0_registry_l4_positional_name_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 static int lm_p0_registry_seed_l4_receivers(void);
-static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader * loader, const LmP0Text * head);
-static int lm_p0_registry_l4_dispatch_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame);
+static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader *loader, const LmP0Text *head);
+static int lm_p0_registry_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static LmL4Loader * lm_p0_registry_l4_loader_new(void);
 static const LmL4Loader * lm_p0_registry_l4_loader_get(void);
 static int lm_p0_path_has_extension(const char *path, const char *extension);
-static int lm_p0_registry_load_root(const LmP0Node * root, int implicit_l4);
+static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4);
 static int lm_p0_registry_parse_unsigned_payload(const char *payload, unsigned *out_value);
 static const char * lm_p0_registry_lookup_key_by_unsigned_payload(const char *table, unsigned value);
 static int lm_p0_registry_validate_abi_constant(const char *table, const char *key, unsigned expected);
 static int lm_p0_registry_validate_abi_constants(void);
 const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
 static int lm_p0_registry_load_default(void);
-void lm_p0_document_destroy(LmP0Document * document);
-const LmP0Node * lm_p0_document_root(const LmP0Document * document);
-LmP0Node * lm_p0_document_mutable_root(LmP0Document * document);
-const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document * document);
+void lm_p0_document_destroy(LmP0Document *document);
+const LmP0Node * lm_p0_document_root(const LmP0Document *document);
+LmP0Node * lm_p0_document_mutable_root(LmP0Document *document);
+const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document *document);
 void lm_p0_free(void *ptr);
-static int lm_p0_dump_reserve(LmP0Dump * dump, size_t extra);
-static void lm_p0_dump_append(LmP0Dump * dump, const char *text, size_t length);
-static void lm_p0_dump_append_cstr(LmP0Dump * dump, const char *text);
-static void lm_p0_dump_indent(LmP0Dump * dump, size_t indent);
-static void lm_p0_dump_text(LmP0Dump * dump, const LmP0Text * text);
+static int lm_p0_dump_reserve(LmP0Dump *dump, size_t extra);
+static void lm_p0_dump_append(LmP0Dump *dump, const char *text, size_t length);
+static void lm_p0_dump_append_cstr(LmP0Dump *dump, const char *text);
+static void lm_p0_dump_indent(LmP0Dump *dump, size_t indent);
+static void lm_p0_dump_text(LmP0Dump *dump, const LmP0Text *text);
 static LmP0DumpFrame * lm_p0_dump_frame_new(int phase, size_t indent);
-static int lm_p0_dump_push_frame(LmOwnPtrStack * stack, LmP0DumpFrame * frame);
-static int lm_p0_dump_push_node(LmOwnPtrStack * stack, const LmP0Node * node, size_t indent);
-static int lm_p0_dump_push_structure(LmOwnPtrStack * stack, const LmP0Structure * structure, size_t indent);
-static int lm_p0_dump_push_trailer(LmOwnPtrStack * stack, const LmP0Trailer * trailer, size_t indent);
+static int lm_p0_dump_push_frame(LmOwnPtrStack *stack, LmP0DumpFrame *frame);
+static int lm_p0_dump_push_node(LmOwnPtrStack *stack, const LmP0Node *node, size_t indent);
+static int lm_p0_dump_push_structure(LmOwnPtrStack *stack, const LmP0Structure *structure, size_t indent);
+static int lm_p0_dump_push_trailer(LmOwnPtrStack *stack, const LmP0Trailer *trailer, size_t indent);
 static LmOwnPtrStack * lm_p0_dump_stack_new(void);
-static void lm_p0_dump_stack_delete(LmOwnPtrStack * *stack);
-static void lm_p0_dump_run(LmP0Dump * dump, LmOwnPtrStack * stack);
-static void lm_p0_dump_node(LmP0Dump * dump, const LmP0Node * node, size_t indent);
+static void lm_p0_dump_stack_delete(LmOwnPtrStack **stack);
+static void lm_p0_dump_run(LmP0Dump *dump, LmOwnPtrStack *stack);
+static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent);
 static LmP0Dump * lm_p0_dump_new(void);
-static char * lm_p0_dump_take_data(LmP0Dump * dump);
-static void lm_p0_dump_delete(LmP0Dump * dump);
-char * lm_p0_dump_alloc(const LmP0Document * document);
+static char * lm_p0_dump_take_data(LmP0Dump *dump);
+static void lm_p0_dump_delete(LmP0Dump *dump);
+char * lm_p0_dump_alloc(const LmP0Document *document);
 
 static LmP0Registry * lm_p0_registry;
-static int lm_p0_text_equals(const LmP0Text * text, const char *value) {
+static int lm_p0_text_equals(const LmP0Text *text, const char *value) {
     size_t value_length;
     if (text == 0 || value == 0) {
         return 0;
@@ -1977,7 +1977,7 @@ static int lm_p0_text_equals(const LmP0Text * text, const char *value) {
     return text -> length == value_length && memcmp(text -> data, value, value_length) == 0;
 }
 
-static int lm_p0_identifier_payload(const LmP0Text * atom, LmP0Text * out_payload) {
+static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload) {
     if (atom == 0 || out_payload == 0 || atom -> data == 0) {
         return 0;
     }
@@ -1990,7 +1990,7 @@ static int lm_p0_identifier_payload(const LmP0Text * atom, LmP0Text * out_payloa
     return 1;
 }
 
-static int lm_p0_registry_identifier_value(const LmP0Text * atom, LmP0Text * out_payload) {
+static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload) {
     if (atom == 0 || out_payload == 0) {
         return 0;
     }
@@ -2000,7 +2000,7 @@ static int lm_p0_registry_identifier_value(const LmP0Text * atom, LmP0Text * out
     return lm_p0_identifier_payload(atom, out_payload);
 }
 
-static int lm_p0_registry_literal_value(const LmP0Text * atom, LmP0Text * out_payload) {
+static int lm_p0_registry_literal_value(const LmP0Text *atom, LmP0Text *out_payload) {
     char quote;
     if (atom == 0 || out_payload == 0 || atom -> data == 0) {
         return 0;
@@ -2019,7 +2019,7 @@ static int lm_p0_registry_literal_value(const LmP0Text * atom, LmP0Text * out_pa
     return lm_p0_identifier_payload(atom, out_payload);
 }
 
-static int lm_p0_registry_payload_is_null(const LmP0Text * atom) {
+static int lm_p0_registry_payload_is_null(const LmP0Text *atom) {
     LmP0Text * payload;
     int is_null;
     payload = lm_p0_text_view_new_cstr("");
@@ -2111,7 +2111,7 @@ static LmP0Text * lm_p0_text_view_new_cstr(const char *text) {
     return result;
 }
 
-static void lm_p0_text_view_delete(LmP0Text * text) {
+static void lm_p0_text_view_delete(LmP0Text *text) {
     lm_own_delete(text, 0);
 }
 
@@ -2119,7 +2119,7 @@ static LmP0Text * lm_p0_text_from_cstr(const char *text) {
     return lm_p0_text_view_new_cstr(text);
 }
 
-static int lm_p0_text_assign_cstr(LmP0Text * out_text, const char *text) {
+static int lm_p0_text_assign_cstr(LmP0Text *out_text, const char *text) {
     if (out_text == 0) {
         return 0;
     }
@@ -2131,18 +2131,18 @@ static int lm_p0_text_assign_cstr(LmP0Text * out_text, const char *text) {
     return 1;
 }
 
-static char * lm_p0_text_copy_cstr(const LmP0Text * text) {
+static char * lm_p0_text_copy_cstr(const LmP0Text *text) {
     if (text == 0) {
         return 0;
     }
     return lm_p0_copy_bytes(text -> data, text -> length);
 }
 
-static char * lm_p0_registry_value_copy_cstr(const LmP0Text * value) {
+static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value) {
     return lm_p0_text_copy_cstr(value);
 }
 
-static int lm_p0_document_init_owners(LmP0Document * document) {
+static int lm_p0_document_init_owners(LmP0Document *document) {
     if (document == 0) {
         return 1;
     }
@@ -2177,7 +2177,7 @@ static int lm_p0_document_init_owners(LmP0Document * document) {
     return 0;
 }
 
-static void lm_p0_document_destroy_owners(LmP0Document * document) {
+static void lm_p0_document_destroy_owners(LmP0Document *document) {
     if (document != 0 && document -> owners_initialized != 0) {
         lm_own_arena_destroy(document -> diagnostic_arena);
         lm_own_delete(document -> diagnostic_arena, 0);
@@ -2197,7 +2197,7 @@ static void lm_p0_document_destroy_owners(LmP0Document * document) {
     }
 }
 
-static void lm_p0_document_freeze_tree(LmP0Document * document) {
+static void lm_p0_document_freeze_tree(LmP0Document *document) {
     if (document != 0 && document -> owners_initialized != 0) {
         lm_own_arena_freeze(document -> tree_arena);
         lm_own_arena_freeze(document -> source_owner);
@@ -2205,7 +2205,7 @@ static void lm_p0_document_freeze_tree(LmP0Document * document) {
     }
 }
 
-static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow * row) {
+static void lm_p0_registry_row_destroy_fields(LmP0RegistryRow *row) {
     if (row != 0) {
         lm_own_delete(row -> table, 0);
         lm_own_delete(row -> key, 0);
@@ -2223,7 +2223,7 @@ static void lm_p0_registry_row_destroy_any(void *object) {
     lm_own_delete(row, 0);
 }
 
-static void lm_p0_indent_stack_free(LmP0IndentStack * stack) {
+static void lm_p0_indent_stack_free(LmP0IndentStack *stack) {
     lm_own_delete(stack -> columns, 0);
     stack->columns = 0;
     stack->count = 0U;
@@ -2236,7 +2236,7 @@ static void lm_p0_indent_stack_free_any(void *object) {
     lm_p0_indent_stack_free(stack);
 }
 
-static int lm_p0_indent_stack_push(LmP0Document * document, LmP0IndentStack * stack, size_t column, size_t line, size_t source_column) {
+static int lm_p0_indent_stack_push(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column) {
     size_t new_capacity;
     size_t *columns;
     if (stack -> count == stack -> capacity) {
@@ -2259,7 +2259,7 @@ static int lm_p0_indent_stack_push(LmP0Document * document, LmP0IndentStack * st
     return 1;
 }
 
-static int lm_p0_indent_stack_init(LmP0Document * document, LmP0IndentStack * stack) {
+static int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack) {
     memset(stack, 0, sizeof(stack[0]));
     return lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U);
 }
@@ -2268,7 +2268,7 @@ static LmP0IndentStack * lm_p0_indent_stack_new_empty(void) {
     return lm_own_new_zero(1U * sizeof(LmP0IndentStack));
 }
 
-static LmP0IndentStack * lm_p0_indent_stack_new(LmP0Document * document) {
+static LmP0IndentStack * lm_p0_indent_stack_new(LmP0Document *document) {
     LmP0IndentStack * stack;
     stack = lm_p0_indent_stack_new_empty();
     if (stack == 0) {
@@ -2282,11 +2282,11 @@ static LmP0IndentStack * lm_p0_indent_stack_new(LmP0Document * document) {
     return stack;
 }
 
-static void lm_p0_indent_stack_delete(LmP0IndentStack * stack) {
+static void lm_p0_indent_stack_delete(LmP0IndentStack *stack) {
     lm_own_delete(stack, lm_p0_indent_stack_free_any);
 }
 
-static int lm_p0_indent_stack_copy(LmP0Document * document, LmP0IndentStack * target, const LmP0IndentStack * source, size_t line, size_t column) {
+static int lm_p0_indent_stack_copy(LmP0Document *document, LmP0IndentStack *target, const LmP0IndentStack *source, size_t line, size_t column) {
     size_t capacity;
     memset(target, 0, sizeof(target[0]));
     if (source -> capacity > source -> count) {
@@ -2309,7 +2309,7 @@ static int lm_p0_indent_stack_copy(LmP0Document * document, LmP0IndentStack * ta
     return 1;
 }
 
-static LmP0IndentStack * lm_p0_indent_stack_clone(LmP0Document * document, const LmP0IndentStack * source, size_t line, size_t column) {
+static LmP0IndentStack * lm_p0_indent_stack_clone(LmP0Document *document, const LmP0IndentStack *source, size_t line, size_t column) {
     LmP0IndentStack * target;
     target = lm_p0_indent_stack_new_empty();
     if (target == 0) {
@@ -2375,7 +2375,7 @@ static size_t lm_p0_visual_column_between(const char *source, size_t start, size
     return column;
 }
 
-static const char * lm_p0_registry_lookup(const LmP0Text * key, const char *table) {
+static const char * lm_p0_registry_lookup(const LmP0Text *key, const char *table) {
     size_t i;
     LmP0RegistryRow * row;
     LmP0Text * key_payload;
@@ -2612,7 +2612,7 @@ static int lm_p0_trailer_role_is_tail_cutter(LmP0TrailerRole role) {
     return role != LM_P0_TRAILER_ROLE_NONE;
 }
 
-static int lm_p0_node_head_is(const LmP0Node * node, const char *name) {
+static int lm_p0_node_head_is(const LmP0Node *node, const char *name) {
     size_t name_length;
     if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
         return 0;
@@ -2621,7 +2621,7 @@ static int lm_p0_node_head_is(const LmP0Node * node, const char *name) {
     return node -> as -> frame -> head -> length == name_length && memcmp(node -> as -> frame -> head -> data, name, name_length) == 0;
 }
 
-static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node * target) {
+static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Node *target) {
     const char *role_payload;
     const char *target_head;
     role_payload = lm_p0_trailer_role_payload(role);
@@ -2638,70 +2638,70 @@ static int lm_p0_trailer_role_accepts_target(LmP0TrailerRole role, const LmP0Nod
     return lm_p0_trailer_role_is_tail_cutter(role);
 }
 
-const LmP0Structure * lm_p0_node_structure(const LmP0Node * node) {
+const LmP0Structure * lm_p0_node_structure(const LmP0Node *node) {
     if (node == 0 || node -> kind != LM_P0_NODE_STRUCTURE) {
         return 0;
     }
     return node -> as -> structure;
 }
 
-const LmP0Frame * lm_p0_node_frame(const LmP0Node * node) {
+const LmP0Frame * lm_p0_node_frame(const LmP0Node *node) {
     if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
         return 0;
     }
     return node -> as -> frame;
 }
 
-const LmP0Text * lm_p0_node_atom(const LmP0Node * node) {
+const LmP0Text * lm_p0_node_atom(const LmP0Node *node) {
     if (node == 0 || (node -> kind != LM_P0_NODE_ATOM && node -> kind != LM_P0_NODE_DISABLED)) {
         return 0;
     }
     return node -> as -> atom;
 }
 
-const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure * structure) {
+const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure) {
     if (structure == 0) {
         return 0;
     }
     return structure -> trailer;
 }
 
-const LmP0Text * lm_p0_frame_head(const LmP0Frame * frame) {
+const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame) {
     if (frame == 0) {
         return 0;
     }
     return frame -> head;
 }
 
-const LmP0Structure * lm_p0_frame_body(const LmP0Frame * frame) {
+const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame) {
     if (frame == 0) {
         return 0;
     }
     return frame -> body;
 }
 
-const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame * frame) {
+const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame) {
     if (frame == 0) {
         return 0;
     }
     return frame -> trailer;
 }
 
-const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer * trailer) {
+const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer) {
     if (trailer == 0) {
         return 0;
     }
     return trailer -> spelling;
 }
 
-const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer * trailer) {
+const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer *trailer) {
     if (trailer == 0) {
         return 0;
     }
     return trailer -> body;
 }
 
-static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent * event) {
+static int lm_p0_stream_event_is_tail_cutter(const LmP0StreamEvent *event) {
     return event -> kind == LM_P0_STREAM_EVENT_ITEM && lm_p0_trailer_role_is_tail_cutter(lm_p0_trailer_role(event -> text, event -> text_length)) != 0;
 }
 
@@ -2806,7 +2806,7 @@ static LmP0DashFenceStatus lm_p0_dash_fence_status(const char *text, size_t leng
     return LM_P0_DASH_FENCE_VALID;
 }
 
-static int lm_p0_validate_dash_fence_line(LmP0Document * document, const char *text, size_t length, size_t line, size_t column) {
+static int lm_p0_validate_dash_fence_line(LmP0Document *document, const char *text, size_t length, size_t line, size_t column) {
     LmP0DashFenceStatus status;
     status = lm_p0_dash_fence_status_after_comment_trim(text, length, 0);
     if (status == LM_P0_DASH_FENCE_TOO_LONG) {
@@ -2863,7 +2863,7 @@ static int lm_p0_match_raw_comment_fence_line(const char *source, size_t line_st
     return lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end);
 }
 
-static void lm_p0_dump_append_size(LmP0Dump * dump, size_t value) {
+static void lm_p0_dump_append_size(LmP0Dump *dump, size_t value) {
     char buffer[32];
     size_t index;
     if (value == 0U) {
@@ -2879,7 +2879,7 @@ static void lm_p0_dump_append_size(LmP0Dump * dump, size_t value) {
     lm_p0_dump_append(dump, buffer + index, sizeof(buffer) - index);
 }
 
-static void lm_p0_dump_append_field_count_line(LmP0Dump * dump, size_t field_count) {
+static void lm_p0_dump_append_field_count_line(LmP0Dump *dump, size_t field_count) {
     lm_p0_dump_append_cstr(dump, " fields=");
     lm_p0_dump_append_size(dump, field_count);
     lm_p0_dump_append_cstr(dump, "\n");
@@ -2923,11 +2923,11 @@ static LmP0Text * lm_p0_text_ref_new_empty(void) {
     return (((LmP0Text *)lm_own_new_zero(sizeof(LmP0Text))));
 }
 
-static void lm_p0_text_ref_delete(LmP0Text * text) {
+static void lm_p0_text_ref_delete(LmP0Text *text) {
     lm_own_delete(text, 0);
 }
 
-static int lm_p0_document_register_lazy_text(LmP0Document * document, const char *source, size_t length, const char **patch_slot, size_t line, size_t column) {
+static int lm_p0_document_register_lazy_text(LmP0Document *document, const char *source, size_t length, const char **patch_slot, size_t line, size_t column) {
     if ((patch_slot == 0)) {
         return 0;
     }
@@ -2944,7 +2944,7 @@ static int lm_p0_document_register_lazy_text(LmP0Document * document, const char
     return 1;
 }
 
-static LmP0Text * lm_p0_new_text(LmP0Document * document, const char *source, size_t length, size_t line, size_t column) {
+static LmP0Text * lm_p0_new_text(LmP0Document *document, const char *source, size_t length, size_t line, size_t column) {
     LmP0Text * text;
     text = (((LmP0Text *)lm_own_arena_new_zero(document -> tree_arena, sizeof(text[0]))));
     if ((text == 0)) {
@@ -2969,7 +2969,7 @@ static LmP0Text * lm_p0_new_text(LmP0Document * document, const char *source, si
     return text;
 }
 
-static LmP0Structure * lm_p0_new_structure(LmP0Document * document, size_t line, size_t column) {
+static LmP0Structure * lm_p0_new_structure(LmP0Document *document, size_t line, size_t column) {
     LmP0Structure * structure;
     structure = (((LmP0Structure *)lm_own_arena_new_zero(document -> tree_arena, sizeof(structure[0]))));
     if ((structure == 0)) {
@@ -2979,7 +2979,7 @@ static LmP0Structure * lm_p0_new_structure(LmP0Document * document, size_t line,
     return structure;
 }
 
-static LmP0Frame * lm_p0_new_frame(LmP0Document * document, size_t line, size_t column) {
+static LmP0Frame * lm_p0_new_frame(LmP0Document *document, size_t line, size_t column) {
     LmP0Frame * frame;
     frame = (((LmP0Frame *)lm_own_arena_new_zero(document -> tree_arena, sizeof(frame[0]))));
     if ((frame == 0)) {
@@ -2997,7 +2997,7 @@ static LmP0Frame * lm_p0_new_frame(LmP0Document * document, size_t line, size_t 
     return frame;
 }
 
-static LmP0Trailer * lm_p0_new_trailer(LmP0Document * document, const char *spelling, size_t spelling_length, size_t line, size_t column) {
+static LmP0Trailer * lm_p0_new_trailer(LmP0Document *document, const char *spelling, size_t spelling_length, size_t line, size_t column) {
     LmP0Trailer * trailer;
     trailer = (((LmP0Trailer *)lm_own_arena_new_zero(document -> tree_arena, sizeof(trailer[0]))));
     if ((trailer == 0)) {
@@ -3015,7 +3015,7 @@ static LmP0Trailer * lm_p0_new_trailer(LmP0Document * document, const char *spel
     return trailer;
 }
 
-static void lm_p0_set_diagnostic(LmP0Document * document, int code, size_t line, size_t column, const char *message) {
+static void lm_p0_set_diagnostic(LmP0Document *document, int code, size_t line, size_t column, const char *message) {
     if (document == 0 || document -> diagnostic == 0 || document -> diagnostic -> code != 0) {
         return;
     }
@@ -3028,7 +3028,7 @@ static void lm_p0_set_diagnostic(LmP0Document * document, int code, size_t line,
     snprintf(document -> diagnostic -> message, sizeof(document -> diagnostic -> message), "%s", message);
 }
 
-static int lm_p0_registry_push_row_values(const LmP0Text * table_value, const LmP0Text * key_value, const LmP0Text * payload_value) {
+static int lm_p0_registry_push_row_values(const LmP0Text *table_value, const LmP0Text *key_value, const LmP0Text *payload_value) {
     LmP0RegistryRow * row;
     row = (((LmP0RegistryRow *)lm_own_new_zero(sizeof(row[0]))));
     if ((row == 0)) {
@@ -3048,7 +3048,7 @@ static int lm_p0_registry_push_row_values(const LmP0Text * table_value, const Lm
     return 0;
 }
 
-static int lm_p0_registry_push_row_atoms(const LmP0Text * table_atom, const LmP0Text * key_atom, const LmP0Text * payload_atom) {
+static int lm_p0_registry_push_row_atoms(const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Text *payload_atom) {
     LmP0Text * table_value;
     LmP0Text * key_value;
     LmP0Text * payload_value;
@@ -3075,7 +3075,7 @@ static int lm_p0_registry_push_row_atoms(const LmP0Text * table_atom, const LmP0
     return status;
 }
 
-static int lm_p0_registry_column_has_descriptor(const LmL4Column * column, const char *descriptor) {
+static int lm_p0_registry_column_has_descriptor(const LmL4Column *column, const char *descriptor) {
     size_t i;
     LmP0Text * payload;
     int result;
@@ -3099,7 +3099,7 @@ static int lm_p0_registry_column_has_descriptor(const LmL4Column * column, const
     return result;
 }
 
-static int lm_p0_registry_cell_none_cell_matches(const LmP0Text * payload, const LmP0Text * class_atom) {
+static int lm_p0_registry_cell_none_cell_matches(const LmP0Text *payload, const LmP0Text *class_atom) {
     LmP0Text * class_name;
     const char *none_value;
     int result;
@@ -3121,7 +3121,7 @@ static int lm_p0_registry_cell_none_cell_matches(const LmP0Text * payload, const
     return result;
 }
 
-static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmL4Column * column) {
+static int lm_p0_registry_cell_is_null(const LmP0Text *atom, const LmL4Column *column) {
     LmP0Text * payload;
     size_t i;
     int result;
@@ -3154,7 +3154,7 @@ static int lm_p0_registry_cell_is_null(const LmP0Text * atom, const LmL4Column *
     return result;
 }
 
-static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmL4Column * column, LmP0Text * out_value) {
+static int lm_p0_registry_cell_value(const LmP0Text *atom, const LmL4Column *column, LmP0Text *out_value) {
     if (lm_p0_registry_cell_is_null(atom, column)) {
         return 0;
     }
@@ -3170,7 +3170,7 @@ static int lm_p0_registry_cell_value(const LmP0Text * atom, const LmL4Column * c
     return -1;
 }
 
-static int lm_p0_registry_push_table_cell(const LmP0Text * table_name, const LmL4Column * column, int split_by_column, const LmP0Text * key_atom, const LmP0Text * payload_atom) {
+static int lm_p0_registry_push_table_cell(const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Text *payload_atom) {
     LmP0Text * table_payload;
     LmP0Text * column_payload;
     LmP0Text * key_payload;
@@ -3332,7 +3332,7 @@ static void lm_p0_trim_trailing_line_comment(const char **text, size_t *length) 
     }
 }
 
-static int lm_p0_indent_level_from_column(LmP0Document * document, LmP0IndentStack * stack, size_t column, size_t line, size_t source_column, size_t *out_level) {
+static int lm_p0_indent_level_from_column(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column, size_t *out_level) {
     size_t top;
     top = stack -> columns[(stack -> count - 1U)];
     if ((column == top)) {
@@ -3649,7 +3649,7 @@ static size_t lm_p0_scan_brace_mark_unchecked(const char *text, size_t length, s
     return i;
 }
 
-static int lm_p0_skip_brace_mark_ex(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t *index, size_t line, size_t column, int record) {
+static int lm_p0_skip_brace_mark_ex(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t *index, size_t line, size_t column, int record) {
     size_t start;
     size_t end_index;
     int closed;
@@ -3672,15 +3672,15 @@ static int lm_p0_skip_brace_mark_ex(LmP0Document * document, LmP0Structure * str
     return 1;
 }
 
-static int lm_p0_skip_brace_mark(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t column) {
+static int lm_p0_skip_brace_mark(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t column) {
     return lm_p0_skip_brace_mark_ex(document, 0, text, length, index, line, column, 0);
 }
 
-static int lm_p0_consume_brace_mark(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t *index, size_t line, size_t column) {
+static int lm_p0_consume_brace_mark(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t *index, size_t line, size_t column) {
     return lm_p0_skip_brace_mark_ex(document, structure, text, length, index, line, column, 1);
 }
 
-static int lm_p0_skip_leading_brace_marks_ex(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *index, int record) {
+static int lm_p0_skip_leading_brace_marks_ex(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *index, int record) {
     while ((index[0] < length)) {
         while (((index[0] < length) && lm_p0_is_horizontal_space(text[index[0]]))) {
             index[0] = index[0] + 1U;
@@ -3695,11 +3695,11 @@ static int lm_p0_skip_leading_brace_marks_ex(LmP0Document * document, const char
     return 1;
 }
 
-static int lm_p0_skip_leading_brace_marks(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *index) {
+static int lm_p0_skip_leading_brace_marks(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *index) {
     return lm_p0_skip_leading_brace_marks_ex(document, text, length, line, column, index, 0);
 }
 
-static int lm_p0_line_is_standalone_mix_run(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, int *out_is_mix) {
+static int lm_p0_line_is_standalone_mix_run(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, int *out_is_mix) {
     size_t i;
     int saw_mix;
     i = 0U;
@@ -3727,7 +3727,7 @@ static int lm_p0_line_is_standalone_mix_run(LmP0Document * document, const char 
     return 1;
 }
 
-static int lm_p0_scan_leading_mix_prefix(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *out_prefix_start, size_t *out_prefix_end, size_t *out_anchor) {
+static int lm_p0_scan_leading_mix_prefix(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *out_prefix_start, size_t *out_prefix_end, size_t *out_anchor) {
     size_t i;
     size_t prefix_start;
     size_t prefix_end;
@@ -3776,7 +3776,7 @@ static LmP0DashFenceStatus lm_p0_dash_fence_status_after_comment_trim(const char
     return lm_p0_dash_fence_status(trimmed_text, trimmed_length, out_dash_count);
 }
 
-static int lm_p0_scan_raw_comment_block(LmP0Document * document, const char *source, size_t length, size_t line_start, size_t line, size_t *next_offset, size_t *next_line) {
+static int lm_p0_scan_raw_comment_block(LmP0Document *document, const char *source, size_t length, size_t line_start, size_t line, size_t *next_offset, size_t *next_line) {
     size_t line_end;
     size_t star_count;
     size_t scan_start;
@@ -3837,7 +3837,7 @@ static int lm_p0_scan_raw_comment_block(LmP0Document * document, const char *sou
     return 0;
 }
 
-static int lm_p0_scan_block_string_event(LmP0Document * document, const char *source, size_t length, size_t line_start, size_t line, LmP0StreamEvent * event, size_t *next_offset, size_t *next_line) {
+static int lm_p0_scan_block_string_event(LmP0Document *document, const char *source, size_t length, size_t line_start, size_t line, LmP0StreamEvent *event, size_t *next_offset, size_t *next_line) {
     size_t line_end;
     size_t eq_count;
     size_t content_start;
@@ -3910,7 +3910,7 @@ static int lm_p0_scan_block_string_event(LmP0Document * document, const char *so
     return 0;
 }
 
-static LmP0Node * lm_p0_new_node(LmP0Document * document, LmP0NodeKind kind) {
+static LmP0Node * lm_p0_new_node(LmP0Document *document, LmP0NodeKind kind) {
     LmP0Node * node;
     node = (((LmP0Node *)lm_own_arena_new_zero(document -> tree_arena, sizeof(node[0]))));
     if ((node == 0)) {
@@ -3953,7 +3953,7 @@ static LmP0Node * lm_p0_new_node(LmP0Document * document, LmP0NodeKind kind) {
     return node;
 }
 
-static int lm_p0_append_field(LmP0Document * document, LmP0Structure * structure, LmP0Node * node) {
+static int lm_p0_append_field(LmP0Document *document, LmP0Structure *structure, LmP0Node *node) {
     LmP0Field * field;
     field = (((LmP0Field *)lm_own_arena_new_zero(document -> tree_arena, sizeof(field[0]))));
     if ((field == 0)) {
@@ -3986,7 +3986,7 @@ static int lm_p0_append_field(LmP0Document * document, LmP0Structure * structure
     return 1;
 }
 
-static int lm_p0_pointer_source_offset(const LmP0Document * document, const char *pointer, size_t *out_offset) {
+static int lm_p0_pointer_source_offset(const LmP0Document *document, const char *pointer, size_t *out_offset) {
     const char *begin;
     const char *end_index;
     if ((((document == 0) || (document -> source == 0)) || (pointer == 0))) {
@@ -4033,7 +4033,7 @@ static size_t lm_p0_offset_from_line_column(const char *text, size_t length, siz
     return i;
 }
 
-static void lm_p0_copy_payload_diagnostic(LmP0Document * document, const LmP0Document * payload_document, size_t payload_offset) {
+static void lm_p0_copy_payload_diagnostic(LmP0Document *document, const LmP0Document *payload_document, size_t payload_offset) {
     size_t local_offset;
     if ((((((document == 0) || (document -> diagnostic == 0)) || (payload_document == 0)) || (payload_document -> diagnostic == 0)) || (payload_document -> diagnostic -> code == 0))) {
         return;
@@ -4043,7 +4043,7 @@ static void lm_p0_copy_payload_diagnostic(LmP0Document * document, const LmP0Doc
     lm_p0_position_in_slice(document -> source, document -> source_length, (payload_offset + local_offset), 1U, 1U, &document -> diagnostic -> line, &document -> diagnostic -> column);
 }
 
-static void lm_p0_adjust_node_span_to_document(LmP0Document * document, LmP0Node * node, size_t base_offset) {
+static void lm_p0_adjust_node_span_to_document(LmP0Document *document, LmP0Node *node, size_t base_offset) {
     if ((node == 0)) {
         return;
     }
@@ -4065,7 +4065,7 @@ static void lm_p0_adjust_node_span_to_document(LmP0Document * document, LmP0Node
     }
 }
 
-static void lm_p0_adjust_structure_spans_to_document(LmP0Document * document, LmP0Structure * structure, size_t base_offset) {
+static void lm_p0_adjust_structure_spans_to_document(LmP0Document *document, LmP0Structure *structure, size_t base_offset) {
     LmP0Field * field;
     field = structure -> first_field;
     while ((field != 0)) {
@@ -4074,7 +4074,7 @@ static void lm_p0_adjust_structure_spans_to_document(LmP0Document * document, Lm
     }
 }
 
-static int lm_p0_record_mix_mark(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t start, size_t end) {
+static int lm_p0_record_mix_mark(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t start, size_t end) {
     LmP0Node * node;
     size_t span_line;
     size_t span_column;
@@ -4426,7 +4426,7 @@ static size_t lm_p0_scan_c_surface_atom(const char *text, size_t end_index, size
     return i;
 }
 
-static int lm_p0_scan_c_char(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t base_column) {
+static int lm_p0_scan_c_char(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t base_column) {
     size_t end_index;
     end_index = lm_p0_scan_c_char_token(text, length, index[0]);
     if ((end_index <= (index[0] + 1U))) {
@@ -4440,7 +4440,7 @@ static int lm_p0_scan_c_char(LmP0Document * document, const char *text, size_t l
     return 1;
 }
 
-static int lm_p0_scan_c_prefixed_quote(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t base_column) {
+static int lm_p0_scan_c_prefixed_quote(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t base_column) {
     size_t end_index;
     end_index = lm_p0_scan_c_prefixed_quote_token(text, length, index[0]);
     if ((end_index <= (index[0] + 1U))) {
@@ -4546,7 +4546,7 @@ static size_t lm_p0_scan_compact_atom_piece(const char *text, size_t end_index, 
     return lm_p0_scan_registry_compact_atom_piece(text, end_index, start);
 }
 
-static int lm_p0_append_atom_slice(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index) {
+static int lm_p0_append_atom_slice(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index) {
     LmP0Node * node;
     node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
     if ((node == 0)) {
@@ -4564,7 +4564,7 @@ static int lm_p0_append_atom_slice(LmP0Document * document, LmP0Structure * stru
     return lm_p0_append_field(document, structure, node);
 }
 
-static int lm_p0_append_positional_skip(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t index) {
+static int lm_p0_append_positional_skip(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t index) {
     LmP0Node * node;
     node = lm_p0_new_node(document, LM_P0_NODE_ATOM);
     if ((node == 0)) {
@@ -4580,7 +4580,7 @@ static int lm_p0_append_positional_skip(LmP0Document * document, LmP0Structure *
     return lm_p0_append_field(document, structure, node);
 }
 
-static int lm_p0_append_compact_atom_pieces(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index) {
+static int lm_p0_append_compact_atom_pieces(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, size_t start, size_t end_index) {
     size_t i;
     int allow_signed_number;
     i = start;
@@ -4624,11 +4624,11 @@ static int lm_p0_append_compact_atom_pieces(LmP0Document * document, LmP0Structu
     return 1;
 }
 
-static void lm_p0_free_node(LmP0Node * node) {
+static void lm_p0_free_node(LmP0Node *node) {
     node = node;
 }
 
-static int lm_p0_relaxed_level_from_column(LmP0Document * document, LmP0IndentStack * stack, size_t column, size_t base_level, size_t line, size_t source_column, size_t *out_level) {
+static int lm_p0_relaxed_level_from_column(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t base_level, size_t line, size_t source_column, size_t *out_level) {
     size_t i;
     size_t parent_level;
     if ((column == 0U)) {
@@ -4683,7 +4683,7 @@ static int lm_p0_relaxed_level_from_column(LmP0Document * document, LmP0IndentSt
     return 0;
 }
 
-static int lm_p0_source_level_after_line_break(LmP0Document * document, LmP0IndentStack * indent_stack, const char *text, size_t length, size_t index, size_t line, size_t column, size_t base_level, size_t *content_index, size_t *out_level) {
+static int lm_p0_source_level_after_line_break(LmP0Document *document, LmP0IndentStack *indent_stack, const char *text, size_t length, size_t index, size_t line, size_t column, size_t base_level, size_t *content_index, size_t *out_level) {
     size_t p;
     size_t indent_column;
     size_t dot_level;
@@ -4725,7 +4725,7 @@ static int lm_p0_source_level_after_line_break(LmP0Document * document, LmP0Inde
     return lm_p0_relaxed_level_from_column(document, indent_stack, indent_column, base_level, diagnostic_line, diagnostic_column, out_level);
 }
 
-static int lm_p0_skip_field_space(LmP0Document * document, LmP0IndentStack * indent_stack, LmP0Structure * structure, const char *text, size_t length, size_t *index, size_t line, size_t column, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t *current_source_level, int *stopped_by_source_level) {
+static int lm_p0_skip_field_space(LmP0Document *document, LmP0IndentStack *indent_stack, LmP0Structure *structure, const char *text, size_t length, size_t *index, size_t line, size_t column, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t *current_source_level, int *stopped_by_source_level) {
     stopped_by_source_level[0] = 0;
     while ((index[0] < length)) {
         if (lm_p0_is_horizontal_space(text[index[0]])) {
@@ -4770,7 +4770,7 @@ static int lm_p0_skip_field_space(LmP0Document * document, LmP0IndentStack * ind
     return 1;
 }
 
-static int lm_p0_scan_python_string(LmP0Document * document, const char *text, size_t length, size_t *index, size_t line, size_t base_column) {
+static int lm_p0_scan_python_string(LmP0Document *document, const char *text, size_t length, size_t *index, size_t line, size_t base_column) {
     size_t end_index;
     if ((lm_p0_find_python_string_end(text, length, index[0], &end_index) == 0)) {
         size_t diagnostic_line;
@@ -4783,7 +4783,7 @@ static int lm_p0_scan_python_string(LmP0Document * document, const char *text, s
     return 1;
 }
 
-static int lm_p0_scan_quoted(LmP0Document * document, const char *text, size_t length, size_t *index, char quote, size_t line, size_t base_column) {
+static int lm_p0_scan_quoted(LmP0Document *document, const char *text, size_t length, size_t *index, char quote, size_t line, size_t base_column) {
     size_t i;
     if (lm_p0_starts_python_string(text, length, index[0])) {
         return lm_p0_scan_python_string(document, text, length, index, line, base_column);
@@ -4843,7 +4843,7 @@ static int lm_p0_scan_quoted(LmP0Document * document, const char *text, size_t l
     return 0;
 }
 
-static int lm_p0_require_quoted_token_boundary(LmP0Document * document, const char *text, size_t length, size_t index, size_t line, size_t column) {
+static int lm_p0_require_quoted_token_boundary(LmP0Document *document, const char *text, size_t length, size_t index, size_t line, size_t column) {
     size_t diagnostic_line;
     size_t diagnostic_column;
     if (((index >= length) || lm_p0_is_quoted_token_boundary(text[index]))) {
@@ -4854,7 +4854,7 @@ static int lm_p0_require_quoted_token_boundary(LmP0Document * document, const ch
     return 0;
 }
 
-static int lm_p0_find_matching_paren(LmP0Document * document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index) {
+static int lm_p0_find_matching_paren(LmP0Document *document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index) {
     size_t i;
     size_t depth;
     i = open_index;
@@ -4911,7 +4911,7 @@ static int lm_p0_find_matching_paren(LmP0Document * document, const char *text, 
     return 0;
 }
 
-static int lm_p0_find_matching_bracket(LmP0Document * document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index) {
+static int lm_p0_find_matching_bracket(LmP0Document *document, const char *text, size_t length, size_t open_index, size_t line, size_t base_column, size_t *close_index) {
     size_t i;
     size_t bracket_depth;
     size_t paren_depth;
@@ -4989,7 +4989,7 @@ static int lm_p0_find_matching_bracket(LmP0Document * document, const char *text
     return 0;
 }
 
-static int lm_p0_find_colon(LmP0Document * document, const char *text, size_t length, size_t line, size_t column, size_t *colon_index) {
+static int lm_p0_find_colon(LmP0Document *document, const char *text, size_t length, size_t line, size_t column, size_t *colon_index) {
     size_t i;
     size_t depth;
     depth = 0U;
@@ -5077,7 +5077,7 @@ static int lm_p0_find_colon(LmP0Document * document, const char *text, size_t le
     return 0;
 }
 
-static int lm_p0_field_start_looks_explicit_frame(LmP0Document * document, const char *text, size_t length, size_t index, size_t line, size_t column) {
+static int lm_p0_field_start_looks_explicit_frame(LmP0Document *document, const char *text, size_t length, size_t index, size_t line, size_t column) {
     size_t i;
     size_t head_end;
     size_t close_index;
@@ -5151,7 +5151,7 @@ static void lm_p0_field_parse_loop_frame_delete_any(void *object) {
     lm_own_delete(frame, 0);
 }
 
-static LmOwnPtrStack * lm_p0_field_parse_loop_stack_new(LmP0Document * document, size_t line, size_t column) {
+static LmOwnPtrStack * lm_p0_field_parse_loop_stack_new(LmP0Document *document, size_t line, size_t column) {
     LmOwnPtrStack * stack;
     stack = (((LmOwnPtrStack *)lm_own_new_zero(sizeof(stack[0]))));
     if ((stack == 0)) {
@@ -5162,7 +5162,7 @@ static LmOwnPtrStack * lm_p0_field_parse_loop_stack_new(LmP0Document * document,
     return stack;
 }
 
-static void lm_p0_field_parse_loop_stack_delete(LmOwnPtrStack * stack) {
+static void lm_p0_field_parse_loop_stack_delete(LmOwnPtrStack *stack) {
     if ((stack == 0)) {
         return;
     }
@@ -5170,7 +5170,7 @@ static void lm_p0_field_parse_loop_stack_delete(LmOwnPtrStack * stack) {
     lm_own_delete(stack, 0);
 }
 
-static int lm_p0_field_parse_loop_push(LmP0Document * document, LmOwnPtrStack * stack, LmP0IndentStack * indent_stack, int indent_stack_owned, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t i, size_t current_source_level, int allow_empty_fields, int expect_field, int headless_group_after_separator, LmP0FieldParseLoopContinuation continuation, LmP0Node * node, size_t start, size_t close_index) {
+static int lm_p0_field_parse_loop_push(LmP0Document *document, LmOwnPtrStack *stack, LmP0IndentStack *indent_stack, int indent_stack_owned, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t layout_base_level, size_t i, size_t current_source_level, int allow_empty_fields, int expect_field, int headless_group_after_separator, LmP0FieldParseLoopContinuation continuation, LmP0Node *node, size_t start, size_t close_index) {
     LmP0FieldParseLoopFrame * frame;
     frame = (((LmP0FieldParseLoopFrame *)lm_own_new_zero(sizeof(frame[0]))));
     if ((frame == 0)) {
@@ -5205,7 +5205,7 @@ static int lm_p0_field_parse_loop_push(LmP0Document * document, LmOwnPtrStack * 
     return 1;
 }
 
-static int lm_p0_field_parse_fail(LmOwnPtrStack * *parse_stack, LmP0IndentStack * *indent_stack, int *indent_stack_owned) {
+static int lm_p0_field_parse_fail(LmOwnPtrStack **parse_stack, LmP0IndentStack **indent_stack, int *indent_stack_owned) {
     if (((((indent_stack_owned != 0) && indent_stack_owned[0]) && (indent_stack != 0)) && (indent_stack[0] != 0))) {
         lm_p0_indent_stack_delete(indent_stack[0]);
         indent_stack[0] = 0;
@@ -5218,7 +5218,7 @@ static int lm_p0_field_parse_fail(LmOwnPtrStack * *parse_stack, LmP0IndentStack 
     return 0;
 }
 
-static int lm_p0_parse_append_node_and_update(LmP0Document * document, LmP0Structure * structure, LmP0Node * node, unsigned flags, int allow_empty_fields, int *expect_field, int *headless_group_after_separator) {
+static int lm_p0_parse_append_node_and_update(LmP0Document *document, LmP0Structure *structure, LmP0Node *node, unsigned flags, int allow_empty_fields, int *expect_field, int *headless_group_after_separator) {
     if ((lm_p0_append_field(document, structure, node) == 0)) {
         return 0;
     }
@@ -5232,7 +5232,7 @@ static int lm_p0_parse_append_node_and_update(LmP0Document * document, LmP0Struc
     return 1;
 }
 
-static int lm_p0_parse_fields_until_with_layout(LmP0Document * document, LmP0IndentStack * indent_stack, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t layout_base_level, size_t *index) {
+static int lm_p0_parse_fields_until_with_layout(LmP0Document *document, LmP0IndentStack *indent_stack, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t layout_base_level, size_t *index) {
     size_t i;
     size_t start;
     size_t head_end;
@@ -5775,7 +5775,7 @@ static int lm_p0_parse_fields_until_with_layout(LmP0Document * document, LmP0Ind
     return 0;
 }
 
-static int lm_p0_parse_fields_until(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t *index) {
+static int lm_p0_parse_fields_until(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, size_t short_source_level, size_t initial_source_level, size_t *index) {
     LmP0IndentStack * indent_stack;
     int status;
     indent_stack = lm_p0_indent_stack_new_empty();
@@ -5788,13 +5788,13 @@ static int lm_p0_parse_fields_until(LmP0Document * document, LmP0Structure * str
     return status;
 }
 
-static int lm_p0_parse_fields_into(LmP0Document * document, LmP0Structure * structure, const char *text, size_t length, size_t line, size_t column, size_t offset) {
+static int lm_p0_parse_fields_into(LmP0Document *document, LmP0Structure *structure, const char *text, size_t length, size_t line, size_t column, size_t offset) {
     size_t index;
     index = 0U;
     return lm_p0_parse_fields_until(document, structure, text, length, line, column, offset, LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR, 0U, 0U, &index);
 }
 
-static int lm_p0_stack_ensure(LmP0Document * document, LmP0Stack * stack, size_t level) {
+static int lm_p0_stack_ensure(LmP0Document *document, LmP0Stack *stack, size_t level) {
     LmP0Structure * *parents;
     LmP0Node * *owners;
     unsigned char *hard;
@@ -5846,7 +5846,7 @@ static int lm_p0_stack_ensure(LmP0Document * document, LmP0Stack * stack, size_t
     return 1;
 }
 
-static void lm_p0_stack_truncate_deeper(LmP0Stack * stack, size_t level) {
+static void lm_p0_stack_truncate_deeper(LmP0Stack *stack, size_t level) {
     size_t i;
     if ((stack -> capacity <= (level + 1U))) {
         return;
@@ -5860,7 +5860,7 @@ static void lm_p0_stack_truncate_deeper(LmP0Stack * stack, size_t level) {
     }
 }
 
-static size_t lm_p0_stack_top_level(const LmP0Stack * stack) {
+static size_t lm_p0_stack_top_level(const LmP0Stack *stack) {
     size_t i;
     i = stack -> capacity;
     while ((i > 0U)) {
@@ -5872,7 +5872,7 @@ static size_t lm_p0_stack_top_level(const LmP0Stack * stack) {
     return 0U;
 }
 
-static int lm_p0_stack_level_is_trailer_body(const LmP0Stack * stack, size_t level) {
+static int lm_p0_stack_level_is_trailer_body(const LmP0Stack *stack, size_t level) {
     LmP0Node * owner;
     if (((level >= stack -> capacity) || (stack -> parents[level] == 0))) {
         return 0;
@@ -5890,7 +5890,7 @@ static int lm_p0_stack_level_is_trailer_body(const LmP0Stack * stack, size_t lev
     return 0;
 }
 
-static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack * stack, size_t event_level) {
+static size_t lm_p0_stack_collapse_soft_to_event(LmP0Stack *stack, size_t event_level) {
     size_t top_level;
     top_level = lm_p0_stack_top_level(stack);
     while ((((top_level > 0U) && (event_level < top_level)) && (stack -> hard[top_level] == 0U))) {
@@ -5943,7 +5943,7 @@ static LmP0TrailerRole lm_p0_trailer_role(const char *text, size_t length) {
     return registry_role;
 }
 
-static void lm_p0_stack_free(LmP0Stack * stack) {
+static void lm_p0_stack_free(LmP0Stack *stack) {
     lm_own_delete(stack -> parents, 0);
     lm_own_delete(stack -> owners, 0);
     lm_own_delete(stack -> hard, 0);
@@ -5961,7 +5961,7 @@ static LmP0Stack * lm_p0_stack_new(void) {
     return (((LmP0Stack *)lm_own_new_zero(1U * sizeof(LmP0Stack))));
 }
 
-static void lm_p0_stack_delete(LmP0Stack * stack) {
+static void lm_p0_stack_delete(LmP0Stack *stack) {
     lm_own_delete(stack, lm_p0_stack_free_any);
 }
 
@@ -5973,7 +5973,7 @@ static LmP0StreamEvent * lm_p0_stream_event_new(void) {
     return (((LmP0StreamEvent *)lm_own_new_zero(1U * sizeof(LmP0StreamEvent))));
 }
 
-static LmP0StreamEvent * lm_p0_stream_event_new_copy(const LmP0StreamEvent * event) {
+static LmP0StreamEvent * lm_p0_stream_event_new_copy(const LmP0StreamEvent *event) {
     LmP0StreamEvent * copy;
     if ((event == 0)) {
         return 0;
@@ -5985,11 +5985,11 @@ static LmP0StreamEvent * lm_p0_stream_event_new_copy(const LmP0StreamEvent * eve
     return copy;
 }
 
-static void lm_p0_stream_event_delete(LmP0StreamEvent * event) {
+static void lm_p0_stream_event_delete(LmP0StreamEvent *event) {
     lm_own_delete(event, 0);
 }
 
-static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter * pending) {
+static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter *pending) {
     if ((pending != 0)) {
         lm_p0_stream_event_delete(pending -> event);
         pending->event = 0;
@@ -5997,7 +5997,7 @@ static void lm_p0_pending_delimiter_clear(LmP0PendingDelimiter * pending) {
     }
 }
 
-static int lm_p0_pending_delimiter_set(LmP0Document * document, LmP0PendingDelimiter * pending, const LmP0StreamEvent * event) {
+static int lm_p0_pending_delimiter_set(LmP0Document *document, LmP0PendingDelimiter *pending, const LmP0StreamEvent *event) {
     if ((pending == 0)) {
         return 0;
     }
@@ -6025,7 +6025,7 @@ static int lm_p0_pending_delimiter_set(LmP0Document * document, LmP0PendingDelim
     return 1;
 }
 
-static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter * pending) {
+static void lm_p0_pending_delimiter_delete(LmP0PendingDelimiter *pending) {
     if ((pending != 0)) {
         lm_p0_pending_delimiter_clear(pending);
         lm_own_delete(pending, 0);
@@ -6036,7 +6036,7 @@ static LmP0PendingMix * lm_p0_pending_mix_new(void) {
     return (((LmP0PendingMix *)lm_own_new_zero(1U * sizeof(LmP0PendingMix))));
 }
 
-static void lm_p0_pending_mix_free(LmP0PendingMix * pending) {
+static void lm_p0_pending_mix_free(LmP0PendingMix *pending) {
     if ((pending != 0)) {
         lm_own_delete(pending -> events, 0);
         pending->events = 0;
@@ -6049,11 +6049,11 @@ static void lm_p0_pending_mix_free_any(void *object) {
     lm_p0_pending_mix_free(((LmP0PendingMix *)object));
 }
 
-static void lm_p0_pending_mix_delete(LmP0PendingMix * pending) {
+static void lm_p0_pending_mix_delete(LmP0PendingMix *pending) {
     lm_own_delete(pending, lm_p0_pending_mix_free_any);
 }
 
-static int lm_p0_pending_mix_push(LmP0Document * document, LmP0PendingMix * pending, const LmP0StreamEvent * event) {
+static int lm_p0_pending_mix_push(LmP0Document *document, LmP0PendingMix *pending, const LmP0StreamEvent *event) {
     size_t new_capacity;
     LmP0StreamEvent * events;
     if (((pending == 0) || (event == 0))) {
@@ -6091,18 +6091,18 @@ static LmP0DisabledState * lm_p0_disabled_state_new(size_t base_level) {
     return state;
 }
 
-static void lm_p0_disabled_state_delete(LmP0DisabledState * state) {
+static void lm_p0_disabled_state_delete(LmP0DisabledState *state) {
     lm_own_delete(state, 0);
 }
 
-static int lm_p0_node_keeps_source_child_level(LmP0Node * node) {
+static int lm_p0_node_keeps_source_child_level(LmP0Node *node) {
     if ((node -> kind == LM_P0_NODE_FRAME)) {
         return (((node -> as -> frame -> flags & LM_P0_FRAME_COLON) != 0U) && ((node -> as -> frame -> flags & LM_P0_FRAME_SEPARATOR_CLOSED) == 0U));
     }
     return 0;
 }
 
-static LmP0Structure * lm_p0_node_child_structure(LmP0Node * node) {
+static LmP0Structure * lm_p0_node_child_structure(LmP0Node *node) {
     if ((node -> kind == LM_P0_NODE_FRAME)) {
         return node -> as -> frame -> body;
     }
@@ -6112,7 +6112,7 @@ static LmP0Structure * lm_p0_node_child_structure(LmP0Node * node) {
     return 0;
 }
 
-static LmP0Node * lm_p0_structure_last_colon_frame(LmP0Structure * structure) {
+static LmP0Node * lm_p0_structure_last_colon_frame(LmP0Structure *structure) {
     LmP0Node * node;
     if (((structure -> last_field == 0) || (structure -> last_field -> value == 0))) {
         return 0;
@@ -6124,7 +6124,7 @@ static LmP0Node * lm_p0_structure_last_colon_frame(LmP0Structure * structure) {
     return 0;
 }
 
-static int lm_p0_stack_install_node_lineage(LmP0Document * document, LmP0Stack * stack, size_t base_level, LmP0Node * node) {
+static int lm_p0_stack_install_node_lineage(LmP0Document *document, LmP0Stack *stack, size_t base_level, LmP0Node *node) {
     LmP0Node * owner;
     size_t level;
     if ((lm_p0_node_keeps_source_child_level(node) == 0)) {
@@ -6165,7 +6165,7 @@ static int lm_p0_stack_install_node_lineage(LmP0Document * document, LmP0Stack *
     return 1;
 }
 
-static int lm_p0_stack_ensure_root_level_alias(LmP0Document * document, LmP0Stack * stack, size_t level) {
+static int lm_p0_stack_ensure_root_level_alias(LmP0Document *document, LmP0Stack *stack, size_t level) {
     if (((level != 1U) || (stack -> parents[1] != 0))) {
         return 1;
     }
@@ -6178,7 +6178,7 @@ static int lm_p0_stack_ensure_root_level_alias(LmP0Document * document, LmP0Stac
     return 1;
 }
 
-static int lm_p0_stack_open_implicit_anonymous(LmP0Document * document, LmP0Stack * stack, size_t parent_level, size_t line, size_t column, size_t offset) {
+static int lm_p0_stack_open_implicit_anonymous(LmP0Document *document, LmP0Stack *stack, size_t parent_level, size_t line, size_t column, size_t offset) {
     LmP0Node * anonymous_node;
     LmP0Structure * parent;
     parent = stack -> parents[parent_level];
@@ -6208,7 +6208,7 @@ static int lm_p0_stack_open_implicit_anonymous(LmP0Document * document, LmP0Stac
     return 1;
 }
 
-static LmP0Trailer * * lm_p0_node_trailer_slot(LmP0Node * node) {
+static LmP0Trailer * * lm_p0_node_trailer_slot(LmP0Node *node) {
     if ((node -> kind == LM_P0_NODE_FRAME)) {
         return &node -> as -> frame -> trailer;
     }
@@ -6218,7 +6218,7 @@ static LmP0Trailer * * lm_p0_node_trailer_slot(LmP0Node * node) {
     return 0;
 }
 
-static LmP0Trailer * lm_p0_attach_trailer(LmP0Document * document, LmP0Node * node, const char *spelling, size_t spelling_length, unsigned flags, size_t line, size_t column) {
+static LmP0Trailer * lm_p0_attach_trailer(LmP0Document *document, LmP0Node *node, const char *spelling, size_t spelling_length, unsigned flags, size_t line, size_t column) {
     LmP0Trailer * *slot;
     LmP0Trailer * trailer;
     slot = lm_p0_node_trailer_slot(node);
@@ -6239,7 +6239,7 @@ static LmP0Trailer * lm_p0_attach_trailer(LmP0Document * document, LmP0Node * no
     return trailer;
 }
 
-static int lm_p0_parse_trailer_item(LmP0Document * document, LmP0Node * target, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, LmP0Structure * *out_body) {
+static int lm_p0_parse_trailer_item(LmP0Document *document, LmP0Node *target, const char *text, size_t length, size_t line, size_t column, size_t offset, unsigned flags, LmP0Structure **out_body) {
     size_t colon_index;
     size_t spelling_length;
     size_t body_start;
@@ -6312,7 +6312,7 @@ static int lm_p0_parse_trailer_item(LmP0Document * document, LmP0Node * target, 
     return 1;
 }
 
-static int lm_p0_stream_resolve_pending_delimiter(LmP0Document * document, LmP0Stack * stack, LmP0PendingDelimiter * pending, size_t next_level) {
+static int lm_p0_stream_resolve_pending_delimiter(LmP0Document *document, LmP0Stack *stack, LmP0PendingDelimiter *pending, size_t next_level) {
     const LmP0StreamEvent * event;
     size_t top_level;
     LmP0Structure * parent;
@@ -6365,7 +6365,7 @@ static int lm_p0_stream_resolve_pending_delimiter(LmP0Document * document, LmP0S
     return 1;
 }
 
-static int lm_p0_stream_apply_item_event(LmP0Document * document, LmP0Stack * stack, const LmP0StreamEvent * event) {
+static int lm_p0_stream_apply_item_event(LmP0Document *document, LmP0Stack *stack, const LmP0StreamEvent *event) {
     LmP0TrailerRole trailer_role;
     size_t top_level;
     LmP0Structure * parent;
@@ -6506,7 +6506,7 @@ static int lm_p0_stream_apply_item_event(LmP0Document * document, LmP0Stack * st
     return 1;
 }
 
-static int lm_p0_stream_apply_mix_event(LmP0Document * document, LmP0Stack * stack, const LmP0StreamEvent * event) {
+static int lm_p0_stream_apply_mix_event(LmP0Document *document, LmP0Stack *stack, const LmP0StreamEvent *event) {
     size_t top_level;
     LmP0Structure * parent;
     LmP0Field * previous_last;
@@ -6558,7 +6558,7 @@ static int lm_p0_stream_apply_mix_event(LmP0Document * document, LmP0Stack * sta
     return 1;
 }
 
-static int lm_p0_stream_apply_event(LmP0Document * document, LmP0Stack * stack, LmP0PendingDelimiter * pending, const LmP0StreamEvent * event) {
+static int lm_p0_stream_apply_event(LmP0Document *document, LmP0Stack *stack, LmP0PendingDelimiter *pending, const LmP0StreamEvent *event) {
     if ((event -> kind == LM_P0_STREAM_EVENT_DELIM)) {
         if ((lm_p0_stream_resolve_pending_delimiter(document, stack, pending, event -> level) == 0)) {
             return 0;
@@ -6581,7 +6581,7 @@ static int lm_p0_stream_apply_event(LmP0Document * document, LmP0Stack * stack, 
     return lm_p0_stream_apply_item_event(document, stack, event);
 }
 
-static int lm_p0_pending_mix_flush(LmP0Document * document, LmP0Stack * stack, LmP0PendingDelimiter * pending_delimiter, LmP0PendingMix * pending_mix, size_t level) {
+static int lm_p0_pending_mix_flush(LmP0Document *document, LmP0Stack *stack, LmP0PendingDelimiter *pending_delimiter, LmP0PendingMix *pending_mix, size_t level) {
     size_t i;
     if (((pending_mix == 0) || (pending_mix -> count == 0U))) {
         return 1;
@@ -6607,7 +6607,7 @@ static int lm_p0_pending_mix_flush(LmP0Document * document, LmP0Stack * stack, L
     return 1;
 }
 
-static size_t lm_p0_stream_block_string_level(const LmP0Stack * stack, const LmP0PendingDelimiter * pending) {
+static size_t lm_p0_stream_block_string_level(const LmP0Stack *stack, const LmP0PendingDelimiter *pending) {
     size_t level;
     if ((pending -> active && (pending -> event != 0))) {
         return (pending -> event -> level + 1U);
@@ -6622,7 +6622,7 @@ static size_t lm_p0_stream_block_string_level(const LmP0Stack * stack, const LmP
     return 0U;
 }
 
-static int lm_p0_validate_disabled_item_text(LmP0Document * document, const char *text, size_t length, size_t line, size_t column) {
+static int lm_p0_validate_disabled_item_text(LmP0Document *document, const char *text, size_t length, size_t line, size_t column) {
     size_t i;
     i = 0U;
     if ((lm_p0_validate_dash_fence_line(document, text, length, line, column) == 0)) {
@@ -6685,7 +6685,7 @@ static int lm_p0_validate_disabled_item_text(LmP0Document * document, const char
     return 1;
 }
 
-static int lm_p0_disabled_scan_next_event(LmP0Document * document, LmP0IndentStack * indent_stack, size_t *offset, size_t *line, LmP0StreamEvent * event, int *has_event) {
+static int lm_p0_disabled_scan_next_event(LmP0Document *document, LmP0IndentStack *indent_stack, size_t *offset, size_t *line, LmP0StreamEvent *event, int *has_event) {
     const char *source;
     size_t length;
     source = document -> source;
@@ -6807,14 +6807,14 @@ static int lm_p0_disabled_scan_next_event(LmP0Document * document, LmP0IndentSta
     return 1;
 }
 
-static int lm_p0_disabled_event_is_tail_cutter(const LmP0StreamEvent * event) {
+static int lm_p0_disabled_event_is_tail_cutter(const LmP0StreamEvent *event) {
     if ((event -> kind == LM_P0_STREAM_EVENT_DELIM)) {
         return 1;
     }
     return lm_p0_stream_event_is_tail_cutter(event);
 }
 
-static int lm_p0_disabled_state_accept_event(LmP0Document * document, LmP0DisabledState * state, LmP0StreamEvent * event, int *done_after_event, int *done_before_event) {
+static int lm_p0_disabled_state_accept_event(LmP0Document *document, LmP0DisabledState *state, LmP0StreamEvent *event, int *done_after_event, int *done_before_event) {
     int is_tail_cutter;
     done_after_event[0] = 0;
     done_before_event[0] = 0;
@@ -6889,7 +6889,7 @@ static int lm_p0_disabled_state_accept_event(LmP0Document * document, LmP0Disabl
     return 1;
 }
 
-static int lm_p0_validate_disabled_block(LmP0Document * document, const LmP0IndentStack * indent_stack, size_t first_next_offset, size_t first_next_line, size_t base_level, const char *header_text, size_t header_length, size_t header_line, size_t header_column, size_t *out_offset, size_t *out_line) {
+static int lm_p0_validate_disabled_block(LmP0Document *document, const LmP0IndentStack *indent_stack, size_t first_next_offset, size_t first_next_line, size_t base_level, const char *header_text, size_t header_length, size_t header_line, size_t header_column, size_t *out_offset, size_t *out_line) {
     LmP0IndentStack * local_indent;
     LmP0DisabledState * state;
     LmP0StreamEvent * event;
@@ -6960,7 +6960,7 @@ static int lm_p0_validate_disabled_block(LmP0Document * document, const LmP0Inde
     return (status && (document -> diagnostic -> code == 0));
 }
 
-static int lm_p0_parse_stream(LmP0Document * document) {
+static int lm_p0_parse_stream(LmP0Document *document) {
     const char *source;
     size_t length;
     size_t offset;
@@ -7296,7 +7296,7 @@ static int lm_p0_parse_stream(LmP0Document * document) {
     return (status && (document -> diagnostic -> code == 0));
 }
 
-static void lm_p0_structure_recount(LmP0Structure * structure) {
+static void lm_p0_structure_recount(LmP0Structure *structure) {
     LmP0Field * field;
     structure->field_count = 0U;
     structure->last_field = 0;
@@ -7317,7 +7317,7 @@ static LmP0PostprocessFrame * lm_p0_postprocess_frame_new(int phase) {
     return frame;
 }
 
-static int lm_p0_postprocess_push_frame(LmOwnPtrStack * stack, LmP0PostprocessFrame * frame) {
+static int lm_p0_postprocess_push_frame(LmOwnPtrStack *stack, LmP0PostprocessFrame *frame) {
     if (((stack == 0) || (frame == 0))) {
         lm_own_delete(frame, 0);
         return 1;
@@ -7329,7 +7329,7 @@ static int lm_p0_postprocess_push_frame(LmOwnPtrStack * stack, LmP0PostprocessFr
     return 0;
 }
 
-static int lm_p0_postprocess_push_node(LmOwnPtrStack * stack, LmP0Node * node) {
+static int lm_p0_postprocess_push_node(LmOwnPtrStack *stack, LmP0Node *node) {
     LmP0PostprocessFrame * frame;
     if ((node == 0)) {
         return 0;
@@ -7341,7 +7341,7 @@ static int lm_p0_postprocess_push_node(LmOwnPtrStack * stack, LmP0Node * node) {
     return lm_p0_postprocess_push_frame(stack, frame);
 }
 
-static int lm_p0_postprocess_push_structure(LmOwnPtrStack * stack, LmP0Structure * structure) {
+static int lm_p0_postprocess_push_structure(LmOwnPtrStack *stack, LmP0Structure *structure) {
     LmP0PostprocessFrame * frame;
     if ((structure == 0)) {
         return 1;
@@ -7354,7 +7354,7 @@ static int lm_p0_postprocess_push_structure(LmOwnPtrStack * stack, LmP0Structure
     return lm_p0_postprocess_push_frame(stack, frame);
 }
 
-static int lm_p0_postprocess_push_trailer(LmOwnPtrStack * stack, LmP0Trailer * trailer) {
+static int lm_p0_postprocess_push_trailer(LmOwnPtrStack *stack, LmP0Trailer *trailer) {
     LmP0PostprocessFrame * frame;
     if ((trailer == 0)) {
         return 0;
@@ -7366,7 +7366,7 @@ static int lm_p0_postprocess_push_trailer(LmOwnPtrStack * stack, LmP0Trailer * t
     return lm_p0_postprocess_push_frame(stack, frame);
 }
 
-static int lm_p0_postprocess_push_frame_wrap(LmOwnPtrStack * stack, LmP0Node * node) {
+static int lm_p0_postprocess_push_frame_wrap(LmOwnPtrStack *stack, LmP0Node *node) {
     LmP0PostprocessFrame * frame;
     if ((node == 0)) {
         return 1;
@@ -7387,7 +7387,7 @@ static LmOwnPtrStack * lm_p0_postprocess_stack_new(void) {
     return stack;
 }
 
-static void lm_p0_postprocess_stack_delete(LmOwnPtrStack * *stack) {
+static void lm_p0_postprocess_stack_delete(LmOwnPtrStack **stack) {
     if (((stack != 0) && (stack[0] != 0))) {
         lm_own_ptr_stack_destroy(stack[0]);
         lm_own_delete(stack[0], 0);
@@ -7395,7 +7395,7 @@ static void lm_p0_postprocess_stack_delete(LmOwnPtrStack * *stack) {
     }
 }
 
-static int lm_p0_postprocess_run(LmP0Document * document, LmOwnPtrStack * stack) {
+static int lm_p0_postprocess_run(LmP0Document *document, LmOwnPtrStack *stack) {
     LmP0PostprocessFrame * frame;
     LmP0Node * node;
     LmP0Structure * structure;
@@ -7460,7 +7460,7 @@ static int lm_p0_postprocess_run(LmP0Document * document, LmOwnPtrStack * stack)
     return status;
 }
 
-static int lm_p0_postprocess_node(LmP0Document * document, LmP0Node * node) {
+static int lm_p0_postprocess_node(LmP0Document *document, LmP0Node *node) {
     LmOwnPtrStack * stack;
     int status;
     if ((node == 0)) {
@@ -7475,7 +7475,7 @@ static int lm_p0_postprocess_node(LmP0Document * document, LmP0Node * node) {
     return status;
 }
 
-static int lm_p0_wrap_fields_from_line(LmP0Document * document, LmP0Structure * structure, size_t head_line, size_t inline_event_end_offset) {
+static int lm_p0_wrap_fields_from_line(LmP0Document *document, LmP0Structure *structure, size_t head_line, size_t inline_event_end_offset) {
     LmP0Field * field;
     LmP0Field * previous;
     LmP0Field * group_first;
@@ -7524,14 +7524,14 @@ static int lm_p0_wrap_fields_from_line(LmP0Document * document, LmP0Structure * 
     return 1;
 }
 
-static int lm_p0_validate_nonempty_colon_frames_in_trailer(LmP0Document * document, const LmP0Trailer * trailer) {
+static int lm_p0_validate_nonempty_colon_frames_in_trailer(LmP0Document *document, const LmP0Trailer *trailer) {
     if ((trailer == 0)) {
         return 1;
     }
     return lm_p0_validate_nonempty_colon_frames_in_structure(document, trailer -> body);
 }
 
-static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document * document, const LmP0Node * node) {
+static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document *document, const LmP0Node *node) {
     if ((node == 0)) {
         return 1;
     }
@@ -7550,7 +7550,7 @@ static int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document * document,
     return 1;
 }
 
-static int lm_p0_validate_nonempty_colon_frames_in_structure(LmP0Document * document, const LmP0Structure * structure) {
+static int lm_p0_validate_nonempty_colon_frames_in_structure(LmP0Document *document, const LmP0Structure *structure) {
     const LmP0Field * field;
     field = structure -> first_field;
     while ((field != 0)) {
@@ -7562,7 +7562,7 @@ static int lm_p0_validate_nonempty_colon_frames_in_structure(LmP0Document * docu
     return 1;
 }
 
-int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document * *out_document) {
+int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **out_document) {
     LmP0Document * document;
     if ((out_document == 0)) {
         return 1;
@@ -7612,14 +7612,14 @@ int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document * *
     return document -> diagnostic -> code;
 }
 
-int lm_p0_parse_string(const char *source, LmP0Document * *out_document) {
+int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
     if ((source == 0)) {
         source = "";
     }
     return lm_p0_parse_bytes(source, strlen(source), out_document);
 }
 
-int lm_p0_parse_file(const char *path, LmP0Document * *out_document) {
+int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     FILE * file;
     long size;
     char *buffer;
@@ -7663,7 +7663,7 @@ int lm_p0_parse_file(const char *path, LmP0Document * *out_document) {
     return status;
 }
 
-static char * lm_p0_registry_join_text3(const LmP0Text * first, const char *separator, const LmP0Text * second) {
+static char * lm_p0_registry_join_text3(const LmP0Text *first, const char *separator, const LmP0Text *second) {
     size_t separator_length;
     size_t length;
     char *result;
@@ -7687,11 +7687,11 @@ static int lm_p0_registry_push_generated_row_cstr(const char *table, const char 
     return lm_p0_registry_push_row_atoms(lm_p0_text_from_cstr(table), lm_p0_text_from_cstr(key), lm_p0_text_from_cstr(payload));
 }
 
-static int lm_p0_registry_push_generated_row_text(const char *table, const char *key, const LmP0Text * payload) {
+static int lm_p0_registry_push_generated_row_text(const char *table, const char *key, const LmP0Text *payload) {
     return lm_p0_registry_push_row_atoms(lm_p0_text_from_cstr(table), lm_p0_text_from_cstr(key), payload);
 }
 
-static int lm_p0_registry_push_column_metadata(const LmP0Text * table_name, LmP0RegistryColumn *columns, size_t column_count) {
+static int lm_p0_registry_push_column_metadata(const LmP0Text *table_name, LmP0RegistryColumn *columns, size_t column_count) {
     LmP0Text * table_payload;
     LmP0Text * column_payload;
     size_t index;
@@ -7757,7 +7757,7 @@ static int lm_p0_registry_push_column_metadata(const LmP0Text * table_name, LmP0
     return status;
 }
 
-static int lm_p0_registry_l4_push_row(void *context, const LmP0Text * table_atom, const LmP0Text * key_atom, const LmP0Node * payload_node) {
+static int lm_p0_registry_l4_push_row(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node) {
     context = context;
     if (((((table_atom == 0) || (key_atom == 0)) || (payload_node == 0)) || (payload_node -> kind != LM_P0_NODE_ATOM))) {
         fprintf(stderr, "parser registry error: row expects exactly three atom fields\n");
@@ -7766,7 +7766,7 @@ static int lm_p0_registry_l4_push_row(void *context, const LmP0Text * table_atom
     return lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node -> as -> atom);
 }
 
-static int lm_p0_registry_l4_push_cell(void *context, const LmP0Text * table_name, const LmL4Column * column, int split_by_column, const LmP0Text * key_atom, const LmP0Node * payload_node) {
+static int lm_p0_registry_l4_push_cell(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node) {
     context = context;
     if (((((table_name == 0) || (key_atom == 0)) || (payload_node == 0)) || (payload_node -> kind != LM_P0_NODE_ATOM))) {
         fprintf(stderr, "parser registry error: table rows currently expect atom cells\n");
@@ -7775,7 +7775,7 @@ static int lm_p0_registry_l4_push_cell(void *context, const LmP0Text * table_nam
     return lm_p0_registry_push_table_cell(table_name, column, split_by_column, key_atom, payload_node -> as -> atom);
 }
 
-static int lm_p0_registry_l4_push_column_metadata(void *context, const LmP0Text * table_name, LmL4Column * *columns, size_t column_count) {
+static int lm_p0_registry_l4_push_column_metadata(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count) {
     context = context;
     if ((table_name == 0)) {
         return -1;
@@ -7783,7 +7783,7 @@ static int lm_p0_registry_l4_push_column_metadata(void *context, const LmP0Text 
     return lm_p0_registry_push_column_metadata(table_name, columns, column_count);
 }
 
-static int lm_p0_registry_join_relation_matches(const char *relation_name, const LmP0Text * source_name, const char **out_suffix) {
+static int lm_p0_registry_join_relation_matches(const char *relation_name, const LmP0Text *source_name, const char **out_suffix) {
     size_t relation_length;
     if (((((relation_name == 0) || (source_name == 0)) || (source_name -> data == 0)) || (out_suffix == 0))) {
         return 0;
@@ -7800,7 +7800,7 @@ static int lm_p0_registry_join_relation_matches(const char *relation_name, const
     return 0;
 }
 
-static char * lm_p0_registry_join_target_relation_new(const LmP0Text * target_name, const char *suffix) {
+static char * lm_p0_registry_join_target_relation_new(const LmP0Text *target_name, const char *suffix) {
     size_t suffix_length;
     size_t length;
     char *relation_name;
@@ -7823,7 +7823,7 @@ static char * lm_p0_registry_join_target_relation_new(const LmP0Text * target_na
     return relation_name;
 }
 
-static int lm_p0_registry_l4_join_table(void *context, const LmP0Text * source_table, const LmP0Text * target_table) {
+static int lm_p0_registry_l4_join_table(void *context, const LmP0Text *source_table, const LmP0Text *target_table) {
     LmP0Text * source_name;
     LmP0Text * target_name;
     LmP0RegistryRow * row;
@@ -7879,7 +7879,7 @@ static int lm_p0_registry_l4_join_table(void *context, const LmP0Text * source_t
     return status;
 }
 
-static int lm_p0_l4_text_all_char(const LmP0Text * text, char ch) {
+static int lm_p0_l4_text_all_char(const LmP0Text *text, char ch) {
     size_t i;
     if (text == 0 || text -> length == 0U) {
         return 0;
@@ -7894,7 +7894,7 @@ static int lm_p0_l4_text_all_char(const LmP0Text * text, char ch) {
     return 1;
 }
 
-static int lm_p0_l4_text_is_array_receiver_head(const LmP0Text * head) {
+static int lm_p0_l4_text_is_array_receiver_head(const LmP0Text *head) {
     size_t i;
     size_t count;
     if (head == 0 || head -> length == 0U) {
@@ -7919,7 +7919,7 @@ static int lm_p0_l4_text_is_array_receiver_head(const LmP0Text * head) {
     return count > 0U;
 }
 
-static const LmP0Text * lm_p0_l4_frame_receiver_key(const LmP0Frame * frame) {
+static const LmP0Text * lm_p0_l4_frame_receiver_key(const LmP0Frame *frame) {
     if (frame == 0) {
         return 0;
     }
@@ -7947,7 +7947,7 @@ static int lm_p0_l4_parse_size_payload(const char *payload, size_t *out_value) {
     return 1;
 }
 
-static int lm_p0_registry_l4_formal_param_unwrap_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index) {
+static int lm_p0_registry_l4_formal_param_unwrap_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     const char *payload;
     const LmP0Text * key;
     loader = loader;
@@ -7960,7 +7960,7 @@ static int lm_p0_registry_l4_formal_param_unwrap_index(const LmL4Loader * loader
     return lm_p0_l4_parse_size_payload(payload, out_index);
 }
 
-static int lm_p0_registry_l4_positional_name_index(const LmL4Loader * loader, void *context, const LmP0Frame * frame, size_t *out_index) {
+static int lm_p0_registry_l4_positional_name_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     const char *payload;
     const LmP0Text * key;
     loader = loader;
@@ -7982,7 +7982,7 @@ static int lm_p0_registry_seed_l4_receivers(void) {
     return (((((lm_p0_registry_push_generated_row_cstr("namespace.l4", "table", "l4.frame") != 0) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "join", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "row", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "fn", "l4.frame") != 0)) || (lm_p0_registry_push_generated_row_cstr("namespace.l4", "callable", "l4.frame") != 0));
 }
 
-static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader * loader, const LmP0Text * head) {
+static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader *loader, const LmP0Text *head) {
     const char *receiver_type;
     loader = loader;
     receiver_type = lm_p0_registry_lookup(head, "namespace.l4");
@@ -8037,7 +8037,7 @@ static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader * load
     return 0;
 }
 
-static int lm_p0_registry_l4_dispatch_frame(const LmL4Loader * loader, void *context, const LmP0Frame * frame) {
+static int lm_p0_registry_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
     LmL4FrameReceiver receiver;
     if ((frame == 0)) {
         return 1;
@@ -8121,7 +8121,7 @@ static int lm_p0_path_has_extension(const char *path, const char *extension) {
     return 1;
 }
 
-static int lm_p0_registry_load_root(const LmP0Node * root, int implicit_l4) {
+static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
     return lm_l4_load_root(lm_p0_registry_l4_loader_get(), 0, root, implicit_l4);
 }
 
@@ -8299,7 +8299,7 @@ static int lm_p0_registry_load_default(void) {
     return 0;
 }
 
-void lm_p0_document_destroy(LmP0Document * document) {
+void lm_p0_document_destroy(LmP0Document *document) {
     if ((document == 0)) {
         return;
     }
@@ -8307,21 +8307,21 @@ void lm_p0_document_destroy(LmP0Document * document) {
     lm_own_delete(document, 0);
 }
 
-const LmP0Node * lm_p0_document_root(const LmP0Document * document) {
+const LmP0Node * lm_p0_document_root(const LmP0Document *document) {
     if ((document != 0)) {
         return document -> root;
     }
     return 0;
 }
 
-LmP0Node * lm_p0_document_mutable_root(LmP0Document * document) {
+LmP0Node * lm_p0_document_mutable_root(LmP0Document *document) {
     if ((document != 0)) {
         return document -> root;
     }
     return 0;
 }
 
-const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document * document) {
+const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document *document) {
     if ((((document == 0) || (document -> diagnostic == 0)) || (document -> diagnostic -> code == 0))) {
         return 0;
     }
@@ -8332,7 +8332,7 @@ void lm_p0_free(void *ptr) {
     lm_own_delete(ptr, 0);
 }
 
-static int lm_p0_dump_reserve(LmP0Dump * dump, size_t extra) {
+static int lm_p0_dump_reserve(LmP0Dump *dump, size_t extra) {
     char *data;
     size_t new_capacity;
     if (dump -> failed) {
@@ -8360,7 +8360,7 @@ static int lm_p0_dump_reserve(LmP0Dump * dump, size_t extra) {
     return 1;
 }
 
-static void lm_p0_dump_append(LmP0Dump * dump, const char *text, size_t length) {
+static void lm_p0_dump_append(LmP0Dump *dump, const char *text, size_t length) {
     if ((lm_p0_dump_reserve(dump, length) == 0)) {
         return;
     }
@@ -8369,11 +8369,11 @@ static void lm_p0_dump_append(LmP0Dump * dump, const char *text, size_t length) 
     dump->data[dump->length] = '\0';
 }
 
-static void lm_p0_dump_append_cstr(LmP0Dump * dump, const char *text) {
+static void lm_p0_dump_append_cstr(LmP0Dump *dump, const char *text) {
     lm_p0_dump_append(dump, text, strlen(text));
 }
 
-static void lm_p0_dump_indent(LmP0Dump * dump, size_t indent) {
+static void lm_p0_dump_indent(LmP0Dump *dump, size_t indent) {
     size_t i;
     i = 0U;
     while ((i < indent)) {
@@ -8382,7 +8382,7 @@ static void lm_p0_dump_indent(LmP0Dump * dump, size_t indent) {
     }
 }
 
-static void lm_p0_dump_text(LmP0Dump * dump, const LmP0Text * text) {
+static void lm_p0_dump_text(LmP0Dump *dump, const LmP0Text *text) {
     lm_p0_dump_append_cstr(dump, "\"");
     if ((text != 0)) {
         lm_p0_dump_append(dump, text -> data, text -> length);
@@ -8400,7 +8400,7 @@ static LmP0DumpFrame * lm_p0_dump_frame_new(int phase, size_t indent) {
     return frame;
 }
 
-static int lm_p0_dump_push_frame(LmOwnPtrStack * stack, LmP0DumpFrame * frame) {
+static int lm_p0_dump_push_frame(LmOwnPtrStack *stack, LmP0DumpFrame *frame) {
     if (((stack == 0) || (frame == 0))) {
         lm_own_delete(frame, 0);
         return 1;
@@ -8412,7 +8412,7 @@ static int lm_p0_dump_push_frame(LmOwnPtrStack * stack, LmP0DumpFrame * frame) {
     return 0;
 }
 
-static int lm_p0_dump_push_node(LmOwnPtrStack * stack, const LmP0Node * node, size_t indent) {
+static int lm_p0_dump_push_node(LmOwnPtrStack *stack, const LmP0Node *node, size_t indent) {
     LmP0DumpFrame * frame;
     if ((node == 0)) {
         return 0;
@@ -8424,7 +8424,7 @@ static int lm_p0_dump_push_node(LmOwnPtrStack * stack, const LmP0Node * node, si
     return lm_p0_dump_push_frame(stack, frame);
 }
 
-static int lm_p0_dump_push_structure(LmOwnPtrStack * stack, const LmP0Structure * structure, size_t indent) {
+static int lm_p0_dump_push_structure(LmOwnPtrStack *stack, const LmP0Structure *structure, size_t indent) {
     LmP0DumpFrame * frame;
     if ((structure == 0)) {
         return 0;
@@ -8437,7 +8437,7 @@ static int lm_p0_dump_push_structure(LmOwnPtrStack * stack, const LmP0Structure 
     return lm_p0_dump_push_frame(stack, frame);
 }
 
-static int lm_p0_dump_push_trailer(LmOwnPtrStack * stack, const LmP0Trailer * trailer, size_t indent) {
+static int lm_p0_dump_push_trailer(LmOwnPtrStack *stack, const LmP0Trailer *trailer, size_t indent) {
     LmP0DumpFrame * frame;
     if ((trailer == 0)) {
         return 0;
@@ -8458,7 +8458,7 @@ static LmOwnPtrStack * lm_p0_dump_stack_new(void) {
     return stack;
 }
 
-static void lm_p0_dump_stack_delete(LmOwnPtrStack * *stack) {
+static void lm_p0_dump_stack_delete(LmOwnPtrStack **stack) {
     if (((stack != 0) && (stack[0] != 0))) {
         lm_own_ptr_stack_destroy(stack[0]);
         lm_own_delete(stack[0], 0);
@@ -8466,7 +8466,7 @@ static void lm_p0_dump_stack_delete(LmOwnPtrStack * *stack) {
     }
 }
 
-static void lm_p0_dump_run(LmP0Dump * dump, LmOwnPtrStack * stack) {
+static void lm_p0_dump_run(LmP0Dump *dump, LmOwnPtrStack *stack) {
     LmP0DumpFrame * frame;
     const LmP0Node * node;
     const LmP0Structure * structure;
@@ -8587,7 +8587,7 @@ static void lm_p0_dump_run(LmP0Dump * dump, LmOwnPtrStack * stack) {
     }
 }
 
-static void lm_p0_dump_node(LmP0Dump * dump, const LmP0Node * node, size_t indent) {
+static void lm_p0_dump_node(LmP0Dump *dump, const LmP0Node *node, size_t indent) {
     LmOwnPtrStack * stack;
     if ((node == 0)) {
         return;
@@ -8610,7 +8610,7 @@ static LmP0Dump * lm_p0_dump_new(void) {
     return (((LmP0Dump *)lm_own_new_zero(1U * sizeof(LmP0Dump))));
 }
 
-static char * lm_p0_dump_take_data(LmP0Dump * dump) {
+static char * lm_p0_dump_take_data(LmP0Dump *dump) {
     char *data;
     if ((dump == 0)) {
         return 0;
@@ -8622,14 +8622,14 @@ static char * lm_p0_dump_take_data(LmP0Dump * dump) {
     return data;
 }
 
-static void lm_p0_dump_delete(LmP0Dump * dump) {
+static void lm_p0_dump_delete(LmP0Dump *dump) {
     if ((dump != 0)) {
         lm_own_delete(dump -> data, 0);
         lm_own_delete(dump, 0);
     }
 }
 
-char * lm_p0_dump_alloc(const LmP0Document * document) {
+char * lm_p0_dump_alloc(const LmP0Document *document) {
     LmP0Dump * dump;
     char *data;
     dump = lm_p0_dump_new();

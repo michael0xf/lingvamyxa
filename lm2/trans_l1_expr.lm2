@@ -744,6 +744,7 @@ end: lm_trans_callable_param_node_at
 fn: lm_trans_formal_param_default_fields (const: (LmP0Node: node); const: @(LmP0Field out_first)) int
     const: LmP0Structure: body
     const: LmP0Node: current
+    const: LmP0Frame: frame
     const: LmP0Field: field0
     const: LmP0Field: field1
     const: LmP0Field: inner_field
@@ -753,6 +754,8 @@ fn: lm_trans_formal_param_default_fields (const: (LmP0Node: node); const: @(LmP0
     if: (out_first = 0)
         return: 0
     out_first[0]: 0
+    if: lm_trans_formal_param_terminal_frame(node, @ frame) && lm_trans_formal_param_named_value_first(frame, out_first)
+        return: 1
     current: node
     while: (((current != 0) && (current\kind = c.LM_P0_NODE_FRAME)) && lm_trans_text_equals(current\as\frame\head, "const"))
         field0: current\as\frame\body\first_field
@@ -5259,72 +5262,50 @@ fn: lm_trans_emit_array_param (FILE: file; const: (LmP0Frame: frame); LmTransNam
 end: lm_trans_emit_array_param
 
 fn: lm_trans_emit_param (FILE: file; const: (LmP0Node: node); LmTransNamespace: namespace_) int
-    const: LmP0Node: current
-    const: LmP0Field: field0
-    const: LmP0Field: field1
-    const: LmP0Field: inner_field
-    const: LmP0Node: param_node
-    const: LmP0Node: name_node
+    LmTransL4CallableType: type
+    LmP0Text: name
+    const: LmP0Frame: frame
+    int: has_name
+    int: status
+
     if: ((node = 0) || (node\kind != c.LM_P0_NODE_FRAME))
         if: lm_trans_node_is_positional_skip(node)
             c.fprintf(c.stderr, "trans L2 error: skipped function parameter has no default declaration in this profile\n")
             return: 1
         c.fprintf(c.stderr, "trans L2 error: parameter must be a typed frame\n")
         return: 1
-    current: node
-    while: (((current != 0) && (current\kind = c.LM_P0_NODE_FRAME)) && lm_trans_text_equals(current\as\frame\head, "const"))
-        field0: current\as\frame\body\first_field
-        param_node: 0
-        if: (((field0 != 0) && (field0\next = 0)) && (field0\value != 0))
-            if: (field0\value\kind = c.LM_P0_NODE_FRAME)
-                param_node: field0\value
-            else:
-                if: (field0\value\kind = c.LM_P0_NODE_STRUCTURE)
-                    inner_field: field0\value\as\structure\first_field
-                    if: ((((inner_field != 0) && (inner_field\next = 0)) && (inner_field\value != 0)) && (inner_field\value\kind = c.LM_P0_NODE_FRAME))
-                        param_node: inner_field\value
-                    ---
-                ---
-            ---
-        if: (param_node = 0)
-            c.fprintf(c.stderr, "trans L2 error: const parameter expects exactly one parameter declaration\n")
-            return: 1
-        if: (lm_trans_put(file, "const ") != 0)
-            return: 1
-        current: param_node
-    if: ((current = 0) || (current\kind != c.LM_P0_NODE_FRAME))
+
+    frame: 0
+    if: lm_trans_formal_param_terminal_frame(node, @ frame) = 0
         c.fprintf(c.stderr, "trans L2 error: parameter must be a typed frame\n")
         return: 1
-    field0: lm_trans_nth_field(current\as\frame\body, 0U)
-    field1: lm_trans_nth_field(current\as\frame\body, 1U)
-    if: lm_trans_head_can_declare_storage(current\as\frame\head, namespace_)
-        if: (((field0 = 0) || (field0\value = 0)) || (field0\value\kind != c.LM_P0_NODE_ATOM))
-            c.fprintf(c.stderr, "trans L2 error: typed parameter expects a name\n")
+    if: lm_trans_text_is_array_receiver_head(frame\head)
+        return: lm_trans_emit_array_param(file, frame, namespace_)
+
+    type: lm_trans_expr_callable_type_new()
+    name: lm_trans_text_ref_new_cstr("")
+    if: type = 0 || name = 0
+        lm_trans_expr_callable_type_delete(type)
+        lm_trans_text_ref_destroy(@ name)
+        return: 1
+    finally:
+        lm_trans_expr_callable_type_delete(type)
+        lm_trans_text_ref_destroy(@ name)
+
+    if: lm_trans_formal_param_read(node, type, name, @ has_name, 0) = 0
+        c.fprintf(c.stderr, "trans L2 error: unsupported parameter head\n")
+        return: 1
+    if: has_name = 0
+        c.fprintf(c.stderr, "trans L2 error: typed parameter expects a name\n")
+        return: 1
+
+    if: (lm_trans_symbol_is(lm_trans_namespace_find(namespace_, type\class_name), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, type\class_name))
+        if: (lm_trans_emit_raw_callable_declarator(file, namespace_, type\class_name, name, "callable descriptor parameter") != 0)
             return: 1
-        name_node: field0\value
-        if: (lm_trans_symbol_is(lm_trans_namespace_find(namespace_, current\as\frame\head), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, current\as\frame\head))
-            if: (lm_trans_emit_raw_callable_declarator(file, namespace_, current\as\frame\head, name_node\as\atom, "callable descriptor parameter") != 0)
-                return: 1
-            return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, current\as\frame\head)
-        if: (lm_trans_emit_type_head_only(file, current\as\frame\head) != 0)
-            return: 1
-        if: (lm_trans_put(file, " ") != 0)
-            return: 1
-        if: (lm_trans_emit_identifier(file, name_node\as\atom) != 0)
-            return: 1
-        return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, current\as\frame\head)
-    if: lm_trans_text_all_char(current\as\frame\head, '@')
-        if: ((((field0 = 0) || (field1 = 0)) || (field1\value = 0)) || (field1\value\kind != c.LM_P0_NODE_ATOM))
-            c.fprintf(c.stderr, "trans L2 error: @ parameter expects type and name\n")
-            return: 1
-        name_node: field1\value
-        if: (lm_trans_emit_type_and_name(file, field0\value, name_node\as\atom, current\as\frame\head\length, namespace_) != 0)
-            return: 1
-        if: ((field0\value != 0) && (field0\value\kind = c.LM_P0_NODE_ATOM))
-            return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, field0\value\as\atom)
-        return: lm_trans_namespace_declare(namespace_, name_node\as\atom, "variable")
-    if: lm_trans_text_is_array_receiver_head(current\as\frame\head)
-        return: lm_trans_emit_array_param(file, current\as\frame, namespace_)
-    c.fprintf(c.stderr, "trans L2 error: unsupported parameter head\n")
-    return: 1
+        return: lm_trans_namespace_declare_storage_binding(namespace_, name, type\class_name)
+
+    status: lm_trans_emit_callable_type_named(file, type, name)
+    if: status = 0
+        status: lm_trans_namespace_declare_storage_binding(namespace_, name, type\class_name)
+    return: status
 end: lm_trans_emit_param
