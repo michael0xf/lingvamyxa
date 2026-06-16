@@ -18,12 +18,20 @@ table:
              LmL4PushColumnMetadata 1
              LmL4JoinTable          1
              LmL4FrameReceiver      1
+             LmL4FrameIndexRule     1
 end: functionPointerType
 
 fn: LmL4FrameReceiver (
     const: LmL4Loader: loader
     @: void context
     const: LmP0Frame: frame
+) int
+
+fn: LmL4FrameIndexRule (
+    const: LmL4Loader: loader
+    @: void context
+    const: LmP0Frame: frame
+    @: size_t out_index
 ) int
 
 fn: LmL4PushRow (
@@ -193,6 +201,8 @@ table:
              push_column_metadata  LmL4PushColumnMetadata
              join_table            LmL4JoinTable
              dispatch_frame        LmL4FrameReceiver
+             formal_param_unwrap_index LmL4FrameIndexRule
+             positional_name_index LmL4FrameIndexRule
 end: `LmL4Loader.field.class`
 
 table:
@@ -206,6 +216,8 @@ table:
              push_column_metadata  4
              join_table            5
              dispatch_frame        6
+             formal_param_unwrap_index 7
+             positional_name_index 8
 end: `LmL4Loader.field.index`
 
 table:
