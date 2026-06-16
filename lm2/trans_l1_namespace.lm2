@@ -1013,6 +1013,11 @@ fn: lm_trans_is_reserved_head_name (const: (LmP0Text: name)) int
     namespace_class: lm_trans_registry_lookup_table_link_checked(name, "namespace", "receiver.type")
 return: namespace_class != 0
 
+fn: lm_trans_l3_receiver_is_excluded (const: (LmTransNamespace: namespace_); const: (LmP0Text: head)) int
+    if: lm_trans_l3_profile_depth = 0 || head = 0
+        return: 0
+return: lm_trans_namespace_registry_lookup(namespace_, head, "receiver.l3.exclude") != 0
+
 fn: lm_trans_head_binding_resolve (const: (LmTransNamespace: namespace_); const: (LmP0Text: head); LmTransHeadBinding: out) int
     LmTransBinding: resolved
     int: receiver_status
@@ -1025,6 +1030,10 @@ fn: lm_trans_head_binding_resolve (const: (LmTransNamespace: namespace_); const:
         return: 1
     c.memset(out, 0, c.sizeof(out[0]))
     out\symbol: lm_trans_namespace_find(namespace_, head)
+    if: lm_trans_l3_receiver_is_excluded(namespace_, head)
+        lm_own_delete(resolved, 0)
+        return: 0
+
     out\receiver_type: lm_trans_namespace_registry_lookup_table_link_checked(namespace_, head, "namespace", "receiver.type")
 
     out\function_receiver_binding: lm_trans_namespace_registry_lookup(namespace_, head, "receiver.function")

@@ -141,6 +141,10 @@ fn: lm_trans_top_level_emit_l2 (FILE: file; LmTransNamespace: namespace_; const:
     namespace_: namespace_
 return: lm_trans_emit_l2_frame(file, item\frame)
 
+fn: lm_trans_top_level_emit_l3 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    namespace_: namespace_
+return: lm_trans_emit_l3_frame(file, item\frame)
+
 fn: lm_trans_top_level_emit_os (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_os_frame(file, item\frame, namespace_)
 
@@ -473,6 +477,12 @@ return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l1_frame
 fn: lm_trans_frame_is_l2_level_receiver (const: (LmP0Frame: frame)) int
 return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l2_frame")
 
+fn: lm_trans_frame_is_l3_level_receiver (const: (LmP0Frame: frame)) int
+return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l3_frame")
+
+fn: lm_trans_frame_is_l2_or_l3_level_receiver (const: (LmP0Frame: frame)) int
+return: lm_trans_frame_is_l2_level_receiver(frame) || lm_trans_frame_is_l3_level_receiver(frame)
+
 fn: lm_trans_top_level_level_binding (const: (LmTransHeadBinding: binding); LmTransTopLevelItem: out) int
     const: @: char receiver
 
@@ -489,6 +499,10 @@ fn: lm_trans_top_level_level_binding (const: (LmTransHeadBinding: binding); LmTr
         return: 1
     if: lm_trans_frame_is_l2_level_receiver(out\frame)
         out\emit_after_prototypes: @lm_trans_top_level_emit_l2
+        out\emits_top_level: 1
+        return: 1
+    if: lm_trans_frame_is_l3_level_receiver(out\frame)
+        out\emit_after_prototypes: @lm_trans_top_level_emit_l3
         out\emits_top_level: 1
         return: 1
 
@@ -1735,6 +1749,17 @@ fn: lm_trans_emit_l2_frame (FILE: file; const: (LmP0Frame: l2)) int
         return: 1
 return: lm_trans_emit_l2_structure(file, l2\body, l2)
 
+fn: lm_trans_emit_l3_frame (FILE: file; const: (LmP0Frame: l3)) int
+    int: status
+
+    if: l3 = 0
+        return: 1
+
+    lm_trans_l3_profile_depth: lm_trans_l3_profile_depth + 1
+    status: lm_trans_emit_l2_structure(file, l3\body, l3)
+    lm_trans_l3_profile_depth: lm_trans_l3_profile_depth - 1
+return: status
+
 fn: lm_trans_import_source_path () const: @: char
     if: lm_trans_current_source_path != 0
         return: lm_trans_current_source_path
@@ -1863,7 +1888,7 @@ fn: lm_trans_declare_l2_import_root (LmTransNamespace: namespace_; const: (LmP0N
     while: field != 0
         node: field\value
         if: lm_trans_node_is_ignored(node) = 0
-            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
                 if: lm_trans_declare_l2_structure_import(namespace_, node\as\frame\body) != 0
                     return: 1
             ---
@@ -1898,7 +1923,7 @@ fn: lm_trans_emit_l2_import_root_prelude (FILE: file; const: (LmP0Node: root); i
     while: field != 0
         node: field\value
         if: lm_trans_node_is_ignored(node) = 0
-            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
                 status: lm_trans_emit_l2_structure_prelude(file, node\as\frame\body, namespace_)
             else:
                 item: lm_trans_top_level_item_lowered_new(node)
@@ -1939,7 +1964,7 @@ fn: lm_trans_emit_l2_import_root_prototypes (FILE: file; const: (LmP0Node: root)
     while: field != 0
         node: field\value
         if: lm_trans_node_is_ignored(node) = 0
-            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
                 status: lm_trans_emit_l2_structure_prototypes(file, node\as\frame\body, namespace_)
             else:
                 item: lm_trans_top_level_item_lowered_new(node)
@@ -1975,7 +2000,7 @@ fn: lm_trans_emit_l2_import_root_after_prototypes (FILE: file; const: (LmP0Node:
     while: field != 0
         node: field\value
         if: lm_trans_node_is_ignored(node) = 0
-            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
                 status: lm_trans_emit_l2_structure_after_prototypes(file, node\as\frame\body, namespace_)
             else:
                 item: lm_trans_top_level_item_lowered_new(node)
@@ -2017,7 +2042,7 @@ fn: lm_trans_emit_l2_import_root_functions (FILE: file; const: (LmP0Node: root);
     while: field != 0
         node: field\value
         if: lm_trans_node_is_ignored(node) = 0
-            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
                 if: emitted && lm_trans_put(file, "\n") != 0
                     return: 1
                 status: lm_trans_emit_l2_structure_functions(file, node\as\frame\body, namespace_)
@@ -2830,7 +2855,7 @@ return: lm_trans_validate_end_trailer(frame)
 fn: lm_trans_declare_l2_registry_os_node (LmTransNamespace: namespace_; const: (LmP0Node: node)) int
     if: node = 0
         return: 0
-    if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+    if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
         if: lm_trans_declare_l2_structure_import(namespace_, node\as\frame\body) != 0
             return: 1
         return: lm_trans_validate_end_trailer(node\as\frame)
@@ -2953,7 +2978,7 @@ return: 0
 fn: lm_trans_emit_l2_registry_os_node (FILE: output; const: (LmP0Node: node); LmTransNamespace: namespace_) int
     if: node = 0
         return: 0
-    if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+    if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
         return: lm_trans_emit_l2_structure_with_namespace(output, node\as\frame\body, node\as\frame, namespace_, 0)
     if: node\kind = c.LM_P0_NODE_STRUCTURE && lm_trans_os_branch_looks_l2(node\as\structure)
         return: lm_trans_emit_l2_structure_with_namespace(output, node\as\structure, 0, namespace_, 0)
@@ -2975,7 +3000,7 @@ fn: lm_trans_l4_payload_structure_looks_bare_l2 (const: (LmP0Structure: body)) i
             if: node\kind = c.LM_P0_NODE_ATOM
                 return: 0
             if: node\kind = c.LM_P0_NODE_FRAME
-                if: lm_trans_frame_is_l1_level_receiver(node\as\frame) || lm_trans_frame_is_l2_level_receiver(node\as\frame) || lm_trans_text_equals(node\as\frame\head, "include") || lm_trans_text_equals(node\as\frame\head, "os") || lm_trans_text_equals(node\as\frame\head, "ifdef") || lm_trans_end_frame_targets_l1_level_receiver(node\as\frame)
+                if: lm_trans_frame_is_l1_level_receiver(node\as\frame) || lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame) || lm_trans_text_equals(node\as\frame\head, "include") || lm_trans_text_equals(node\as\frame\head, "os") || lm_trans_text_equals(node\as\frame\head, "ifdef") || lm_trans_end_frame_targets_l1_level_receiver(node\as\frame)
                     return: 0
                 found: 1
             else:
@@ -3595,6 +3620,8 @@ fn: lm_trans_emit_l1_node (FILE: output; const: (LmP0Node: node)) int
             return: lm_trans_emit_l1_frame(output, node\as\frame)
         if: lm_trans_frame_is_l2_level_receiver(node\as\frame)
             return: lm_trans_emit_l2_frame(output, node\as\frame)
+        if: lm_trans_frame_is_l3_level_receiver(node\as\frame)
+            return: lm_trans_emit_l3_frame(output, node\as\frame)
         if: lm_trans_text_equals(node\as\frame\head, "os")
             return: lm_trans_emit_l1_os_frame(output, node\as\frame)
         if: lm_trans_text_equals(node\as\frame\head, "ifdef")
@@ -3633,7 +3660,7 @@ fn: lm_trans_root_has_explicit_l2_frame (const: (LmP0Structure: root)) int
     field: root\first_field
     while: field != 0
         node: field\value
-        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node\as\frame)
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && (lm_trans_frame_is_l2_level_receiver(node\as\frame) || lm_trans_frame_is_l3_level_receiver(node\as\frame))
             return: 1
         field: field\next
 return: 0
@@ -3665,7 +3692,7 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                 c.fprintf(c.stderr, "trans error: root raw text must be inside L1\n")
                 return: 1
             if: node\kind != c.LM_P0_NODE_FRAME
-                c.fprintf(c.stderr, "trans error: root field must be L1, L2, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n")
+                c.fprintf(c.stderr, "trans error: root field must be L1, L2, L3, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n")
                 return: 1
 
             l4_root_binding: lm_own_new_zero(c.sizeof(l4_root_binding[0]))
@@ -3686,6 +3713,12 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                 handled: 1
             if: handled = 0 && lm_trans_frame_is_l2_level_receiver(node\as\frame)
                 if: lm_trans_emit_l2_frame(output, node\as\frame) != 0
+                    return: 1
+                if: emitted != 0
+                    emitted[0]: 1
+                handled: 1
+            if: handled = 0 && lm_trans_frame_is_l3_level_receiver(node\as\frame)
+                if: lm_trans_emit_l3_frame(output, node\as\frame) != 0
                     return: 1
                 if: emitted != 0
                     emitted[0]: 1
@@ -3715,7 +3748,7 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                     emitted[0]: 1
                 handled: 1
             if: handled = 0
-                c.fprintf(c.stderr, "trans error: root field must be L1, L2, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n")
+                c.fprintf(c.stderr, "trans error: root field must be L1, L2, L3, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n")
                 return: 1
         ---
         field: field\next
