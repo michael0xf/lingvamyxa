@@ -2723,6 +2723,9 @@ static int lm_trans_array_declarator_read_from_frame(LmTransCDeclarator *declara
 static char * lm_trans_size_literal_cstr_new(size_t value);
 static char * lm_trans_array_declarator_first_length_cstr_new(const LmTransCDeclarator *declarator);
 static int lm_trans_emit_array_slice_sidecar(FILE *file, const LmTransCDeclarator *declarator, unsigned indent, LmTransNamespace *namespace_, const char *dimension_error_name);
+static int lm_trans_array_declarator_empty_rank(const LmTransCDeclarator *declarator, size_t *out_rank);
+static const LmP0Structure * lm_trans_array_declarator_single_structure_value(const LmTransCDeclarator *declarator);
+static int lm_trans_emit_array_slice_value_declaration(FILE *file, const LmTransCDeclarator *declarator, const LmP0Structure *value, unsigned indent, LmTransNamespace *namespace_, const char *qualifier);
 static int lm_trans_emit_array_declaration_with_qualifier(FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_, const char *qualifier);
 static int lm_trans_emit_array_declaration(FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_emit_pointer_declaration_repeat_with_qualifier(FILE *file, const LmP0Frame *template_frame, const LmP0Structure *body, unsigned indent, LmTransNamespace *namespace_, const char *qualifier);
@@ -15855,8 +15858,140 @@ static int lm_trans_emit_array_slice_sidecar(FILE *file, const LmTransCDeclarato
     }
 }
 
+static int lm_trans_array_declarator_empty_rank(const LmTransCDeclarator *declarator, size_t *out_rank) {
+    LmP0Text * dimension;
+    size_t dimension_index;
+    size_t rank;
+    if (out_rank != 0) {
+        out_rank[0] = 0U;
+    }
+    if (declarator == 0 || declarator -> array_head == 0) {
+        return 0;
+    }
+    dimension = lm_trans_statement_text_new();
+    if (dimension == 0) {
+        return 0;
+    }
+    dimension_index = 0U;
+    rank = 0U;
+    while (lm_trans_array_head_next_dimension(declarator -> array_head, &dimension_index, dimension)) {
+        if (dimension -> length != 0U) {
+            {
+                int lm_return_0 = 0;
+                lm_trans_text_ref_destroy(&dimension);
+                return lm_return_0;
+            }
+        }
+        rank = rank + 1U;
+    }
+    if (rank == 0U) {
+        {
+            int lm_return_1 = 0;
+            lm_trans_text_ref_destroy(&dimension);
+            return lm_return_1;
+        }
+    }
+    if (out_rank != 0) {
+        out_rank[0] = rank;
+    }
+    {
+        int lm_return_2 = 1;
+        lm_trans_text_ref_destroy(&dimension);
+        return lm_return_2;
+    }
+}
+
+static const LmP0Structure * lm_trans_array_declarator_single_structure_value(const LmTransCDeclarator *declarator) {
+    size_t rank;
+    if (lm_trans_array_declarator_empty_rank(declarator, &rank) == 0) {
+        return 0;
+    }
+    return lm_trans_fields_single_structure_value(declarator -> expression_dimensions);
+}
+
+static int lm_trans_emit_array_slice_value_declaration(FILE *file, const LmTransCDeclarator *declarator, const LmP0Structure *value, unsigned indent, LmTransNamespace *namespace_, const char *qualifier) {
+    LmTransFormalParam * param;
+    LmP0Text * helper_name;
+    LmP0Text * slice_type;
+    int status;
+    if (declarator == 0 || declarator -> name == 0 || value == 0) {
+        return 1;
+    }
+    if (declarator -> type_node == 0) {
+        fprintf(stderr, "trans L2 error: [] slice value declaration expects an element type\n");
+        return 1;
+    }
+    param = lm_trans_formal_param_new();
+    helper_name = lm_trans_statement_text_new();
+    slice_type = lm_trans_text_ref_new_cstr("LmSlice");
+    if (param == 0 || helper_name == 0 || slice_type == 0) {
+        lm_trans_formal_param_delete(param);
+        lm_trans_text_ref_destroy(&helper_name);
+        lm_trans_text_ref_destroy(&slice_type);
+        return 1;
+    }
+    param->is_array = 1;
+    param->has_name = 1;
+    param->name[0] = declarator -> name[0];
+    param->declarator->type_node = declarator -> type_node;
+    param->declarator->expression_dimensions = 0;
+    param->declarator->type_head[0] = declarator -> type_head[0];
+    param->declarator->name[0] = declarator -> name[0];
+    param->declarator->array_head[0] = declarator -> array_head[0];
+    param->declarator->pointer_depth = declarator -> pointer_depth;
+    param->declarator->literal_dimension_count = 0U;
+    param->declarator->type_is_head = declarator -> type_is_head;
+    param->declarator->allow_empty_dimensions = 1;
+    param->declarator->atom_dimensions_only = 1;
+    if (lm_trans_emit_array_value_helper(file, param, value, namespace_, helper_name) != 0) {
+        {
+            int lm_return_0 = 1;
+            lm_trans_formal_param_delete(param);
+            lm_trans_text_ref_destroy(&helper_name);
+            lm_trans_text_ref_destroy(&slice_type);
+            return lm_return_0;
+        }
+    }
+    if (lm_trans_emit_indent(file, indent) != 0) {
+        {
+            int lm_return_1 = 1;
+            lm_trans_formal_param_delete(param);
+            lm_trans_text_ref_destroy(&helper_name);
+            lm_trans_text_ref_destroy(&slice_type);
+            return lm_return_1;
+        }
+    }
+    if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
+        {
+            int lm_return_2 = 1;
+            lm_trans_formal_param_delete(param);
+            lm_trans_text_ref_destroy(&helper_name);
+            lm_trans_text_ref_destroy(&slice_type);
+            return lm_return_2;
+        }
+    }
+    if (lm_trans_put(file, "LmSlice *") != 0 || lm_trans_emit_identifier(file, declarator -> name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, helper_name) != 0 || lm_trans_put(file, "();\n") != 0) {
+        {
+            int lm_return_3 = 1;
+            lm_trans_formal_param_delete(param);
+            lm_trans_text_ref_destroy(&helper_name);
+            lm_trans_text_ref_destroy(&slice_type);
+            return lm_return_3;
+        }
+    }
+    status = lm_trans_namespace_declare_storage_binding(namespace_, declarator -> name, slice_type);
+    {
+        int lm_return_4 = status;
+        lm_trans_formal_param_delete(param);
+        lm_trans_text_ref_destroy(&helper_name);
+        lm_trans_text_ref_destroy(&slice_type);
+        return lm_return_4;
+    }
+}
+
 static int lm_trans_emit_array_declaration_with_qualifier(FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_, const char *qualifier) {
     const LmP0Field * initializer_field;
+    const LmP0Structure * slice_value;
     LmTransCDeclarator * declarator;
     declarator = lm_trans_statement_c_declarator_new();
     if (declarator == 0) {
@@ -15869,60 +16004,68 @@ static int lm_trans_emit_array_declaration_with_qualifier(FILE *file, const LmP0
             return lm_return_0;
         }
     }
-    if (lm_trans_emit_indent(file, indent) != 0) {
+    slice_value = lm_trans_array_declarator_single_structure_value(declarator);
+    if (slice_value != 0) {
         {
-            int lm_return_1 = 1;
+            int lm_return_1 = lm_trans_emit_array_slice_value_declaration(file, declarator, slice_value, indent, namespace_, qualifier);
             lm_trans_statement_c_declarator_destroy(declarator);
             return lm_return_1;
         }
     }
-    if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
+    if (lm_trans_emit_indent(file, indent) != 0) {
         {
             int lm_return_2 = 1;
             lm_trans_statement_c_declarator_destroy(declarator);
             return lm_return_2;
         }
     }
-    if (lm_trans_emit_c_declarator(file, declarator, namespace_, "[] array dimension") != 0) {
+    if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
         {
             int lm_return_3 = 1;
             lm_trans_statement_c_declarator_destroy(declarator);
             return lm_return_3;
         }
     }
-    initializer_field = lm_trans_c_declarator_expression_dimension_tail(declarator);
-    if (initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0) {
+    if (lm_trans_emit_c_declarator(file, declarator, namespace_, "[] array dimension") != 0) {
         {
             int lm_return_4 = 1;
             lm_trans_statement_c_declarator_destroy(declarator);
             return lm_return_4;
         }
     }
-    if (lm_trans_put(file, ";\n") != 0) {
+    initializer_field = lm_trans_c_declarator_expression_dimension_tail(declarator);
+    if (initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0) {
         {
             int lm_return_5 = 1;
             lm_trans_statement_c_declarator_destroy(declarator);
             return lm_return_5;
         }
     }
-    if (lm_trans_emit_array_slice_sidecar(file, declarator, indent, namespace_, "[] array dimension") != 0) {
+    if (lm_trans_put(file, ";\n") != 0) {
         {
             int lm_return_6 = 1;
             lm_trans_statement_c_declarator_destroy(declarator);
             return lm_return_6;
         }
     }
-    if (declarator -> type_is_head) {
+    if (lm_trans_emit_array_slice_sidecar(file, declarator, indent, namespace_, "[] array dimension") != 0) {
         {
-            int lm_return_7 = lm_trans_namespace_declare_storage_binding(namespace_, declarator -> name, declarator -> type_head);
+            int lm_return_7 = 1;
             lm_trans_statement_c_declarator_destroy(declarator);
             return lm_return_7;
         }
     }
+    if (declarator -> type_is_head) {
+        {
+            int lm_return_8 = lm_trans_namespace_declare_storage_binding(namespace_, declarator -> name, declarator -> type_head);
+            lm_trans_statement_c_declarator_destroy(declarator);
+            return lm_return_8;
+        }
+    }
     {
-        int lm_return_8 = lm_trans_namespace_declare_node_storage_binding(namespace_, declarator -> name, declarator -> type_node);
+        int lm_return_9 = lm_trans_namespace_declare_node_storage_binding(namespace_, declarator -> name, declarator -> type_node);
         lm_trans_statement_c_declarator_destroy(declarator);
-        return lm_return_8;
+        return lm_return_9;
     }
 }
 

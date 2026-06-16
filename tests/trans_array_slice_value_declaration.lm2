@@ -1,0 +1,24 @@
+import: "lm4/own_abi.lm4"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        []: int values [5 5 5]
+        [][]: int matrix [[5 4] [5 3] [5 2]]
+        @: int valueItems
+        @@: int matrixItems
+        if: values = 0 || matrix = 0
+            return: 1
+        valueItems: cast: (@: int) values\ptr
+        matrixItems: cast: (@@: int) matrix\ptr
+        if: valueItems = 0 || matrixItems = 0
+            return: 2
+        return: values\length != 3 || matrix\length != 3 || valueItems[0] != 5 || valueItems[2] != 5 || matrixItems[0][1] != 4 || matrixItems[1][1] != 3 || matrixItems[2][1] != 2
+    end: main
+end: external

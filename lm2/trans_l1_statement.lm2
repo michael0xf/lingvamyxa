@@ -2451,6 +2451,104 @@ fn: lm_trans_emit_array_slice_sidecar (
     status: lm_trans_namespace_declare_array_slice_length(namespace_, declarator\name, slice_length_storage)
 return: status
 
+fn: lm_trans_array_declarator_empty_rank (
+    const: LmTransCDeclarator: declarator
+    @: size_t out_rank
+) int
+    LmP0Text: dimension
+    size_t: dimension_index
+    size_t: rank
+
+    if: out_rank != 0
+        out_rank[0]: 0U
+    if: declarator = 0 || declarator\array_head = 0
+        return: 0
+
+    dimension: lm_trans_statement_text_new()
+    if: dimension = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ dimension)
+
+    dimension_index: 0U
+    rank: 0U
+    while: lm_trans_array_head_next_dimension(declarator\array_head, @ dimension_index, dimension)
+        if: dimension\length != 0U
+            return: 0
+        rank: rank + 1U
+    if: rank = 0U
+        return: 0
+    if: out_rank != 0
+        out_rank[0]: rank
+return: 1
+
+fn: lm_trans_array_declarator_single_structure_value (
+    const: LmTransCDeclarator: declarator
+) const: LmP0Structure
+    size_t: rank
+
+    if: lm_trans_array_declarator_empty_rank(declarator, @ rank) = 0
+        return: 0
+return: lm_trans_fields_single_structure_value(declarator\expression_dimensions)
+
+fn: lm_trans_emit_array_slice_value_declaration (
+    FILE: file
+    const: LmTransCDeclarator: declarator
+    const: LmP0Structure: value
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @(char qualifier)
+) int
+    LmTransFormalParam: param
+    LmP0Text: helper_name
+    LmP0Text: slice_type
+    int: status
+
+    if: declarator = 0 || declarator\name = 0 || value = 0
+        return: 1
+    if: declarator\type_node = 0
+        c.fprintf(c.stderr, "trans L2 error: [] slice value declaration expects an element type\n")
+        return: 1
+
+    param: lm_trans_formal_param_new()
+    helper_name: lm_trans_statement_text_new()
+    slice_type: lm_trans_text_ref_new_cstr("LmSlice")
+    if: param = 0 || helper_name = 0 || slice_type = 0
+        lm_trans_formal_param_delete(param)
+        lm_trans_text_ref_destroy(@ helper_name)
+        lm_trans_text_ref_destroy(@ slice_type)
+        return: 1
+    finally:
+        lm_trans_formal_param_delete(param)
+        lm_trans_text_ref_destroy(@ helper_name)
+        lm_trans_text_ref_destroy(@ slice_type)
+
+    param\is_array: 1
+    param\has_name: 1
+    param\name[0]: declarator\name[0]
+    param\declarator\type_node: declarator\type_node
+    param\declarator\expression_dimensions: 0
+    param\declarator\type_head[0]: declarator\type_head[0]
+    param\declarator\name[0]: declarator\name[0]
+    param\declarator\array_head[0]: declarator\array_head[0]
+    param\declarator\pointer_depth: declarator\pointer_depth
+    param\declarator\literal_dimension_count: 0U
+    param\declarator\type_is_head: declarator\type_is_head
+    param\declarator\allow_empty_dimensions: 1
+    param\declarator\atom_dimensions_only: 1
+
+    if: lm_trans_emit_array_value_helper(file, param, value, namespace_, helper_name) != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
+        return: 1
+    if: lm_trans_put(file, "LmSlice *") != 0 || lm_trans_emit_identifier(file, declarator\name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, helper_name) != 0 || lm_trans_put(file, "();\n") != 0
+        return: 1
+
+    status: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, slice_type)
+return: status
+
 fn: lm_trans_emit_array_declaration_with_qualifier (
     FILE: file
     const: LmP0Frame: frame
@@ -2459,6 +2557,7 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
     const: @(char qualifier)
 ) int
     const: LmP0Field: initializer_field
+    const: LmP0Structure: slice_value
     LmTransCDeclarator: declarator
 
     declarator: lm_trans_statement_c_declarator_new()
@@ -2468,6 +2567,10 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
 
     if: lm_trans_array_declarator_read_from_frame(declarator, frame, namespace_, 1, 1, 1, "trans L2 error: [] declaration expects [@...] type name size...", "trans L2 error: array pointer declaration expects type and name", "trans L2 error: array declaration expects a type/name declaration") != 0
         return: 1
+
+    slice_value: lm_trans_array_declarator_single_structure_value(declarator)
+    if: slice_value != 0
+        return: lm_trans_emit_array_slice_value_declaration(file, declarator, slice_value, indent, namespace_, qualifier)
 
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
