@@ -1,0 +1,18 @@
+L2:
+    table:
+        name: namedArgTable
+        columns((int(name: "id"; value: "5")) (const: (@: char label)))
+        rows:
+                 42  "forty-two"
+    end: namedArgTable
+
+    external:
+        fn: main () int
+            if: namedArgTable\id != 42
+                return: 1
+            if: namedArgTable\label[0] != 'f'
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L2

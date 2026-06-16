@@ -2622,6 +2622,9 @@ static int lm_trans_emit_control_condition(FILE * file, const LmP0Frame * frame,
 static int lm_trans_parse_size_payload(const char *payload, size_t *out_value);
 static int lm_trans_frame_positional_name_index(const LmP0Frame * frame, size_t *out_index);
 static int lm_trans_frame_formal_param_unwrap_index(const LmP0Frame * frame, size_t *out_index);
+static int lm_trans_frame_arg_frame(const LmP0Frame * frame, const char *name, const LmP0Frame * *out_arg);
+static int lm_trans_frame_arg_single_node(const LmP0Frame * frame, const char *name, const LmP0Node * *out_node);
+static int lm_trans_frame_arg_atom_payload(const LmP0Frame * frame, const char *name, LmP0Text * out_payload);
 static int lm_trans_name_argument_from_frame(const LmP0Frame * frame, LmP0Text * out_name);
 static int lm_trans_frame_close_target(const LmP0Frame * frame, LmP0Text * out_target);
 static int lm_trans_validate_end_trailer(const LmP0Frame * frame);
@@ -12938,31 +12941,65 @@ static int lm_trans_frame_formal_param_unwrap_index(const LmP0Frame * frame, siz
     }
 }
 
-static int lm_trans_name_argument_from_frame(const LmP0Frame * frame, LmP0Text * out_name) {
+static int lm_trans_frame_arg_frame(const LmP0Frame * frame, const char *name, const LmP0Frame * *out_arg) {
     const LmP0Field * field;
-    const LmP0Field * name_field;
     const LmP0Frame * child_frame;
-    size_t name_index;
-    if (frame == 0 || out_name == 0) {
+    if (frame == 0 || name == 0 || out_arg == 0) {
         return 0;
     }
     field = frame -> body -> first_field;
     while (field != 0) {
-        if (field -> value == 0 || field -> value -> kind != LM_P0_NODE_FRAME) {
-            field = field -> next;
-            continue;
-        }
-        child_frame = field -> value -> as -> frame;
-        if (lm_trans_text_equals(child_frame -> head, "name") == 0) {
-            field = field -> next;
-            continue;
-        }
-        name_field = child_frame -> body -> first_field;
-        if (name_field != 0 && name_field -> next == 0 && name_field -> value != 0 && name_field -> value -> kind == LM_P0_NODE_ATOM && lm_trans_name_argument_is_valid(name_field -> value -> as -> atom)) {
-            out_name[0] = name_field -> value -> as -> atom[0];
-            return 1;
+        if (field -> value != 0 && field -> value -> kind == LM_P0_NODE_FRAME) {
+            child_frame = field -> value -> as -> frame;
+            if (lm_trans_text_equals(child_frame -> head, name)) {
+                out_arg[0] = child_frame;
+                return 1;
+            }
         }
         field = field -> next;
+    }
+    return 0;
+}
+
+static int lm_trans_frame_arg_single_node(const LmP0Frame * frame, const char *name, const LmP0Node * *out_node) {
+    const LmP0Frame * arg_frame;
+    const LmP0Field * field;
+    if (out_node == 0) {
+        return 0;
+    }
+    if (lm_trans_frame_arg_frame(frame, name, &arg_frame) == 0) {
+        return 0;
+    }
+    field = arg_frame -> body -> first_field;
+    if (field == 0 || field -> next != 0 || field -> value == 0) {
+        return 0;
+    }
+    out_node[0] = field -> value;
+    return 1;
+}
+
+static int lm_trans_frame_arg_atom_payload(const LmP0Frame * frame, const char *name, LmP0Text * out_payload) {
+    const LmP0Node * node;
+    if (out_payload == 0) {
+        return 0;
+    }
+    if (lm_trans_frame_arg_single_node(frame, name, &node) == 0) {
+        return 0;
+    }
+    if (node == 0 || node -> kind != LM_P0_NODE_ATOM) {
+        return 0;
+    }
+    return lm_trans_registry_literal_value(node -> as -> atom, out_payload);
+}
+
+static int lm_trans_name_argument_from_frame(const LmP0Frame * frame, LmP0Text * out_name) {
+    const LmP0Field * field;
+    size_t name_index;
+    if (frame == 0 || out_name == 0) {
+        return 0;
+    }
+    if (lm_trans_frame_arg_atom_payload(frame, "name", out_name) && lm_trans_name_argument_is_valid(out_name)) {
+        return 1;
     }
     if (lm_trans_frame_positional_name_index(frame, &name_index) == 0) {
         return 0;
@@ -20699,6 +20736,9 @@ static int lm_trans_formal_param_name(const LmP0Node * node, LmP0Text * out_name
     }
     if (lm_trans_single_frame_node(current, &frame) == 0) {
         return 0;
+    }
+    if (lm_trans_frame_arg_atom_payload(frame, "name", out_name) && lm_trans_name_argument_is_valid(out_name)) {
+        return 1;
     }
     if (lm_trans_frame_positional_name_index(frame, &name_index)) {
         name_field = lm_trans_nth_field(frame -> body, name_index);
