@@ -2233,7 +2233,7 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
     if: lm_trans_emit_c_declarator(file, declarator, namespace_, "[] array dimension") != 0
         return: 1
 
-    initializer_field: declarator\expression_dimensions
+    initializer_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
     if: initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
@@ -2435,7 +2435,7 @@ fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
     if: lm_trans_emit_c_declarator(file, declarator, namespace_, "repeated [] array dimension") != 0
         return: 1
 
-    initializer_field: declarator\expression_dimensions
+    initializer_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
     if: initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
@@ -6750,7 +6750,8 @@ fn: lm_trans_formal_param_new () LmTransFormalParam
     if: param != 0
         param\type: lm_trans_expr_callable_type_new()
         param\name: lm_trans_statement_text_new()
-        if: param\type = 0 || param\name = 0
+        param\declarator: lm_trans_statement_c_declarator_new()
+        if: param\type = 0 || param\name = 0 || param\declarator = 0
             lm_trans_formal_param_delete(param)
             return: 0
     ---
@@ -6761,8 +6762,56 @@ sub: lm_trans_formal_param_delete (LmTransFormalParam: param)
         lm_trans_expr_callable_type_delete(param\type)
         param\type: 0
         lm_trans_text_ref_destroy(@ param\name)
+        lm_trans_statement_c_declarator_destroy(param\declarator)
+        param\declarator: 0
     lm_own_delete(param, 0)
 end: lm_trans_formal_param_delete
+
+fn: lm_trans_formal_param_read_array_declarator (
+    LmTransFormalParam: param
+    const: LmP0Frame: frame
+) int
+    const: LmP0Structure: body
+    const: LmP0Field: field
+    const: LmP0Field: type_field
+    const: LmP0Field: name_field
+    const: LmP0Node: name_node
+    size_t: pointer_depth
+
+    if: param = 0 || param\declarator = 0 || frame = 0
+        return: 1
+
+    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
+    if: body != 0
+        field: body\first_field
+    else:
+        field: 0
+
+    pointer_depth: 0U
+    while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_all_char(field\value\as\atom, '@')
+        pointer_depth: pointer_depth + field\value\as\atom\length
+        field: field\next
+
+    type_field: field
+    if: type_field != 0
+        name_field: type_field\next
+    else:
+        name_field: 0
+
+    if: type_field = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+        c.fprintf(c.stderr, "trans L2 error: [] parameter expects [@...] type name [dimensions...]\n")
+        return: 1
+
+    name_node: name_field\value
+    param\declarator\type_node: type_field\value
+    param\declarator\name[0]: name_node\as\atom[0]
+    param\declarator\array_head[0]: frame\head[0]
+    param\declarator\pointer_depth: pointer_depth
+    param\declarator\expression_dimensions: name_field\next
+    param\declarator\type_is_head: 0
+    param\declarator\allow_empty_dimensions: 1
+    param\declarator\atom_dimensions_only: 1
+return: 0
 
 fn: lm_trans_formal_param_read_into (
     LmTransFormalParam: param
@@ -6787,6 +6836,10 @@ fn: lm_trans_formal_param_read_into (
     param\value_first: value_first
     param\has_name: has_name
     param\is_array: frame != 0 && lm_trans_text_is_array_receiver_head(frame\head)
+    if: param\is_array && lm_trans_formal_param_read_array_declarator(param, frame) != 0
+        return: 1
+    if: param\is_array && param\has_name
+        param\declarator\name[0]: param\name[0]
 return: 0
 
 fn: lm_trans_formal_param_list_new (size_t: count) LmTransFormalParamList

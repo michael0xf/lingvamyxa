@@ -430,6 +430,8 @@ L4:
                  literal_dimensions        size_t                 6                       0                                0
                  literal_dimension_count   size_t                 7                       0                                0
                  type_is_head              int                    8                       0                                0
+                 allow_empty_dimensions    int                    9                       0                                0
+                 atom_dimensions_only      int                    10                      0                                0
     end: LmTransCDeclarator
 
     table:
@@ -470,6 +472,7 @@ L4:
                  value_first     LmP0Field              4                       0                                1
                  has_name        int                    5                       0                                0
                  is_array        int                    6                       0                                0
+                 declarator      LmTransCDeclarator     7                       0                                0
     end: LmTransFormalParam
 
     table:

@@ -563,7 +563,7 @@ sub: lm_trans_statement_c_declarator_destroy (
 
 fn: lm_trans_emit_c_declarator (
     FILE: file
-    LmTransCDeclarator: declarator
+    const: LmTransCDeclarator: declarator
     const: LmTransNamespace: namespace_
     const: @: char error_name
 ) int

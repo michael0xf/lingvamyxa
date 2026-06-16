@@ -260,6 +260,8 @@ typedef struct LmTransCDeclarator {
     size_t literal_dimensions[8U];
     size_t literal_dimension_count;
     int type_is_head;
+    int allow_empty_dimensions;
+    int atom_dimensions_only;
 } LmTransCDeclarator;
 typedef struct LmTransAbiParam {
     const char *name;
@@ -281,6 +283,7 @@ struct LmTransFormalParam {
     const LmP0Field * value_first;
     int has_name;
     int is_array;
+    LmTransCDeclarator * declarator;
 };
 struct LmTransFormalParamList {
     LmTransFormalParam * *params;
@@ -736,7 +739,7 @@ static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *val
 static int lm_trans_parse_size_payload(const char *payload, size_t *out_value);
 static LmTransCDeclarator * lm_trans_statement_c_declarator_new(void);
 static void lm_trans_statement_c_declarator_destroy(LmTransCDeclarator *declarator);
-static int lm_trans_emit_c_declarator(FILE *file, LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name);
+static int lm_trans_emit_c_declarator(FILE *file, const LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name);
 static int lm_trans_emit_size_literal(FILE *file, size_t value);
 static int lm_trans_l4_is_function_pointer_type(const LmTransNamespace *namespace_, const char *name);
 static int lm_trans_registry_is_function_pointer_type_name(const LmTransNamespace *namespace_, const LmP0Text *name);
@@ -2605,8 +2608,9 @@ static int lm_trans_array_type_node_info(const LmP0Node *type_node, const LmP0No
 static int lm_trans_emit_type_and_name(FILE *file, const LmP0Node *type_node, const LmP0Text *name, size_t pointer_depth, const LmTransNamespace *namespace_);
 static int lm_trans_emit_type_head_only(FILE *file, const LmP0Text *type_head);
 static int lm_trans_emit_c_dimension_text(FILE *file, const LmP0Text *dimension, const LmTransNamespace *namespace_, const char *error_name);
-static int lm_trans_emit_c_declarator(FILE *file, LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name);
-static int lm_trans_emit_array_param(FILE *file, const LmP0Frame *frame, LmTransNamespace *namespace_);
+static int lm_trans_emit_c_declarator(FILE *file, const LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name);
+static const LmP0Field * lm_trans_c_declarator_expression_dimension_tail(const LmTransCDeclarator *declarator);
+static int lm_trans_emit_array_param(FILE *file, const LmTransFormalParam *param, LmTransNamespace *namespace_);
 static int lm_trans_emit_formal_param(FILE *file, const LmTransFormalParam *param, LmTransNamespace *namespace_);
 
 
@@ -2900,6 +2904,7 @@ static int lm_trans_formal_param_read(const LmP0Node *node, LmTransL4CallableTyp
 static int lm_trans_formal_param_name(const LmP0Node *node, LmP0Text *out_name);
 static LmTransFormalParam * lm_trans_formal_param_new(void);
 static void lm_trans_formal_param_delete(LmTransFormalParam *param);
+static int lm_trans_formal_param_read_array_declarator(LmTransFormalParam *param, const LmP0Frame *frame);
 static int lm_trans_formal_param_read_into(LmTransFormalParam *param, const LmP0Node *node);
 static LmTransFormalParamList * lm_trans_formal_param_list_new(size_t count);
 static void lm_trans_formal_param_list_delete(LmTransFormalParamList *list);
@@ -12381,10 +12386,11 @@ static int lm_trans_emit_c_dimension_text(FILE *file, const LmP0Text *dimension,
     return 0;
 }
 
-static int lm_trans_emit_c_declarator(FILE *file, LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name) {
+static int lm_trans_emit_c_declarator(FILE *file, const LmTransCDeclarator *declarator, const LmTransNamespace *namespace_, const char *error_name) {
     size_t i;
     size_t head_index;
     LmP0Text * head_dimension;
+    const LmP0Field * expression_dimension;
     const char *effective_dimension_error_name;
     if (((file == 0) || (declarator == 0))) {
         return 1;
@@ -12427,6 +12433,7 @@ static int lm_trans_emit_c_declarator(FILE *file, LmTransCDeclarator *declarator
     if ((declarator -> array_head == 0)) {
         return 1;
     }
+    expression_dimension = declarator -> expression_dimensions;
     while (lm_trans_array_head_next_dimension(declarator -> array_head, &head_index, head_dimension)) {
         if ((lm_trans_put(file, "[") != 0)) {
             lm_trans_text_ref_destroy(&head_dimension);
@@ -12439,16 +12446,23 @@ static int lm_trans_emit_c_declarator(FILE *file, LmTransCDeclarator *declarator
             }
         }
         else {
-            if (((declarator -> expression_dimensions == 0) || (declarator -> expression_dimensions -> value == 0))) {
+            if (expression_dimension == 0 || expression_dimension -> value == 0 || (declarator -> atom_dimensions_only && lm_trans_array_body_dimension_can_consume(expression_dimension) == 0)) {
+                if (declarator -> allow_empty_dimensions) {
+                    if ((lm_trans_put(file, "]") != 0)) {
+                        lm_trans_text_ref_destroy(&head_dimension);
+                        return 1;
+                    }
+                    continue;
+                }
                 fprintf(stderr, "trans L2 error: %s expects a size expression\n", effective_dimension_error_name);
                 lm_trans_text_ref_destroy(&head_dimension);
                 return 1;
             }
-            if ((lm_trans_emit_expr_node(file, declarator -> expression_dimensions -> value, namespace_) != 0)) {
+            if ((lm_trans_emit_expr_node(file, expression_dimension -> value, namespace_) != 0)) {
                 lm_trans_text_ref_destroy(&head_dimension);
                 return 1;
             }
-            declarator->expression_dimensions = declarator -> expression_dimensions -> next;
+            expression_dimension = expression_dimension -> next;
         }
         if ((lm_trans_put(file, "]") != 0)) {
             lm_trans_text_ref_destroy(&head_dimension);
@@ -12466,118 +12480,51 @@ static int lm_trans_emit_c_declarator(FILE *file, LmTransCDeclarator *declarator
     return 0;
 }
 
-static int lm_trans_emit_array_param(FILE *file, const LmP0Frame *frame, LmTransNamespace *namespace_) {
-    const LmP0Structure * body;
-    const LmP0Field * field;
-    const LmP0Field * type_field;
-    const LmP0Field * name_field;
-    const LmP0Field * dimension_field;
-    const LmP0Node * name_node;
-    const LmP0Node * type_node;
-    LmP0Text * head_dimension;
+static const LmP0Field * lm_trans_c_declarator_expression_dimension_tail(const LmTransCDeclarator *declarator) {
+    const LmP0Field * dimension;
     size_t head_index;
-    size_t pointer_depth;
-    if ((frame == 0)) {
-        return 1;
+    LmP0Text * head_dimension;
+    if (declarator == 0) {
+        return 0;
     }
-    body = lm_trans_unwrap_single_anonymous_structure(frame -> body);
-    if ((body != 0)) {
-        field = body -> first_field;
+    dimension = declarator -> expression_dimensions;
+    if (declarator -> array_head == 0) {
+        return dimension;
     }
-    else {
-        field = 0;
-    }
-    pointer_depth = 0U;
-    while (((((field != 0) && (field -> value != 0)) && (field -> value -> kind == LM_P0_NODE_ATOM)) && lm_trans_text_all_char(field -> value -> as -> atom, '@'))) {
-        pointer_depth = pointer_depth + field -> value -> as -> atom -> length;
-        field = field -> next;
-    }
-    type_field = field;
-    if ((type_field != 0)) {
-        name_field = type_field -> next;
-    }
-    else {
-        name_field = 0;
-    }
-    if (((((type_field == 0) || (name_field == 0)) || (name_field -> value == 0)) || (name_field -> value -> kind != LM_P0_NODE_ATOM))) {
-        fprintf(stderr, "trans L2 error: [] parameter expects [@...] type name [dimensions...]\n");
-        return 1;
-    }
-    type_node = type_field -> value;
-    name_node = name_field -> value;
-    if ((lm_trans_emit_type_and_name(file, type_node, name_node -> as -> atom, pointer_depth, namespace_) != 0)) {
-        return 1;
-    }
-    dimension_field = name_field -> next;
     head_index = 0U;
     head_dimension = lm_trans_text_ref_new_cstr("");
-    if ((head_dimension == 0)) {
-        return 1;
+    if (head_dimension == 0) {
+        return dimension;
     }
-    while (lm_trans_array_head_next_dimension(frame -> head, &head_index, head_dimension)) {
-        if ((lm_trans_put(file, "[") != 0)) {
-            lm_trans_text_ref_destroy(&head_dimension);
-            return 1;
+    while (lm_trans_array_head_next_dimension(declarator -> array_head, &head_index, head_dimension)) {
+        if (head_dimension -> length == 0U && dimension != 0 && dimension -> value != 0 && (declarator -> atom_dimensions_only == 0 || lm_trans_array_body_dimension_can_consume(dimension))) {
+            dimension = dimension -> next;
         }
-        if ((head_dimension -> length != 0U)) {
-            LmP0Document * dimension_document;
-            const LmP0Diagnostic * diagnostic;
-            const LmP0Node * dimension_root;
-            int parse_status;
-            dimension_document = 0;
-            parse_status = lm_p0_parse_bytes(head_dimension -> data, head_dimension -> length, &dimension_document);
-            if ((parse_status != 0)) {
-                if ((dimension_document != 0)) {
-                    diagnostic = lm_p0_document_diagnostic(dimension_document);
-                }
-                else {
-                    diagnostic = 0;
-                }
-                if ((diagnostic != 0)) {
-                    fprintf(stderr, "trans L2 error: array parameter dimension parse error %d at %zu:%zu: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, diagnostic -> message);
-                }
-                else {
-                    fprintf(stderr, "trans L2 error: array parameter dimension parse failed\n");
-                }
-                if ((dimension_document != 0)) {
-                    lm_p0_document_destroy(dimension_document);
-                }
-                lm_trans_text_ref_destroy(&head_dimension);
-                return 1;
-            }
-            dimension_root = lm_p0_document_root(dimension_document);
-            if ((((dimension_root == 0) || (dimension_root -> kind != LM_P0_NODE_STRUCTURE)) || (dimension_root -> as -> structure -> first_field == 0))) {
-                fprintf(stderr, "trans L2 error: array parameter dimension must not be empty\n");
-                lm_p0_document_destroy(dimension_document);
-                lm_trans_text_ref_destroy(&head_dimension);
-                return 1;
-            }
-            if ((lm_trans_emit_expr_fields(file, dimension_root -> as -> structure -> first_field, namespace_) != 0)) {
-                lm_p0_document_destroy(dimension_document);
-                lm_trans_text_ref_destroy(&head_dimension);
-                return 1;
-            }
-            lm_p0_document_destroy(dimension_document);
-        }
-        else {
-            if (lm_trans_array_body_dimension_can_consume(dimension_field)) {
-                if ((lm_trans_emit_expr_node(file, dimension_field -> value, namespace_) != 0)) {
-                    lm_trans_text_ref_destroy(&head_dimension);
-                    return 1;
-                }
-                dimension_field = dimension_field -> next;
-            }
-        }
-        if ((lm_trans_put(file, "]") != 0)) {
-            lm_trans_text_ref_destroy(&head_dimension);
-            return 1;
-        }
+    }
+    {
+        const LmP0Field * lm_return_0 = dimension;
+        lm_trans_text_ref_destroy(&head_dimension);
+        return lm_return_0;
     }
     lm_trans_text_ref_destroy(&head_dimension);
-    if (((type_node != 0) && (type_node -> kind == LM_P0_NODE_ATOM))) {
-        return lm_trans_namespace_declare_storage_binding(namespace_, name_node -> as -> atom, type_node -> as -> atom);
+}
+
+static int lm_trans_emit_array_param(FILE *file, const LmTransFormalParam *param, LmTransNamespace *namespace_) {
+    const LmTransCDeclarator * declarator;
+    if (param == 0 || param -> declarator == 0 || param -> has_name == 0) {
+        return 1;
     }
-    return lm_trans_namespace_declare(namespace_, name_node -> as -> atom, "variable");
+    declarator = param -> declarator;
+    if (lm_trans_emit_c_declarator(file, declarator, namespace_, "array parameter dimension") != 0) {
+        return 1;
+    }
+    if (declarator -> type_is_head) {
+        return lm_trans_namespace_declare_storage_binding(namespace_, param -> name, declarator -> type_head);
+    }
+    if (declarator -> type_node != 0 && declarator -> type_node -> kind == LM_P0_NODE_ATOM) {
+        return lm_trans_namespace_declare_storage_binding(namespace_, param -> name, declarator -> type_node -> as -> atom);
+    }
+    return lm_trans_namespace_declare(namespace_, param -> name, "variable");
 }
 
 static int lm_trans_emit_formal_param(FILE *file, const LmTransFormalParam *param, LmTransNamespace *namespace_) {
@@ -12594,7 +12541,7 @@ static int lm_trans_emit_formal_param(FILE *file, const LmTransFormalParam *para
         return 1;
     }
     if (param -> is_array) {
-        return lm_trans_emit_array_param(file, param -> terminal_frame, namespace_);
+        return lm_trans_emit_array_param(file, param, namespace_);
     }
     if (param -> has_name == 0) {
         fprintf(stderr, "trans L2 error: typed parameter expects a name\n");
@@ -15490,7 +15437,7 @@ static int lm_trans_emit_array_declaration_with_qualifier(FILE *file, const LmP0
             return lm_return_7;
         }
     }
-    initializer_field = declarator -> expression_dimensions;
+    initializer_field = lm_trans_c_declarator_expression_dimension_tail(declarator);
     if (initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0) {
         {
             int lm_return_8 = 1;
@@ -15758,7 +15705,7 @@ static int lm_trans_emit_array_declaration_repeat_with_qualifier(FILE *file, con
             return lm_return_9;
         }
     }
-    initializer_field = declarator -> expression_dimensions;
+    initializer_field = lm_trans_c_declarator_expression_dimension_tail(declarator);
     if (initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0) {
         {
             int lm_return_10 = 1;
@@ -20829,7 +20776,8 @@ static LmTransFormalParam * lm_trans_formal_param_new(void) {
     if (param != 0) {
         param->type = lm_trans_expr_callable_type_new();
         param->name = lm_trans_statement_text_new();
-        if (param -> type == 0 || param -> name == 0) {
+        param->declarator = lm_trans_statement_c_declarator_new();
+        if (param -> type == 0 || param -> name == 0 || param -> declarator == 0) {
             lm_trans_formal_param_delete(param);
             return 0;
         }
@@ -20842,8 +20790,55 @@ static void lm_trans_formal_param_delete(LmTransFormalParam *param) {
         lm_trans_expr_callable_type_delete(param -> type);
         param->type = 0;
         lm_trans_text_ref_destroy(&param -> name);
+        lm_trans_statement_c_declarator_destroy(param -> declarator);
+        param->declarator = 0;
     }
     lm_own_delete(param, 0);
+}
+
+static int lm_trans_formal_param_read_array_declarator(LmTransFormalParam *param, const LmP0Frame *frame) {
+    const LmP0Structure * body;
+    const LmP0Field * field;
+    const LmP0Field * type_field;
+    const LmP0Field * name_field;
+    const LmP0Node * name_node;
+    size_t pointer_depth;
+    if (param == 0 || param -> declarator == 0 || frame == 0) {
+        return 1;
+    }
+    body = lm_trans_unwrap_single_anonymous_structure(frame -> body);
+    if (body != 0) {
+        field = body -> first_field;
+    }
+    else {
+        field = 0;
+    }
+    pointer_depth = 0U;
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && lm_trans_text_all_char(field -> value -> as -> atom, '@')) {
+        pointer_depth = pointer_depth + field -> value -> as -> atom -> length;
+        field = field -> next;
+    }
+    type_field = field;
+    if (type_field != 0) {
+        name_field = type_field -> next;
+    }
+    else {
+        name_field = 0;
+    }
+    if (type_field == 0 || name_field == 0 || name_field -> value == 0 || name_field -> value -> kind != LM_P0_NODE_ATOM) {
+        fprintf(stderr, "trans L2 error: [] parameter expects [@...] type name [dimensions...]\n");
+        return 1;
+    }
+    name_node = name_field -> value;
+    param->declarator->type_node = type_field -> value;
+    param->declarator->name[0] = name_node -> as -> atom[0];
+    param->declarator->array_head[0] = frame -> head[0];
+    param->declarator->pointer_depth = pointer_depth;
+    param->declarator->expression_dimensions = name_field -> next;
+    param->declarator->type_is_head = 0;
+    param->declarator->allow_empty_dimensions = 1;
+    param->declarator->atom_dimensions_only = 1;
+    return 0;
 }
 
 static int lm_trans_formal_param_read_into(LmTransFormalParam *param, const LmP0Node *node) {
@@ -20864,6 +20859,12 @@ static int lm_trans_formal_param_read_into(LmTransFormalParam *param, const LmP0
     param->value_first = value_first;
     param->has_name = has_name;
     param->is_array = frame != 0 && lm_trans_text_is_array_receiver_head(frame -> head);
+    if (param -> is_array && lm_trans_formal_param_read_array_declarator(param, frame) != 0) {
+        return 1;
+    }
+    if (param -> is_array && param -> has_name) {
+        param->declarator->name[0] = param -> name[0];
+    }
     return 0;
 }
 
