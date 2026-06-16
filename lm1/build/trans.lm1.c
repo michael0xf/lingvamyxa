@@ -2746,8 +2746,14 @@ static char * lm_trans_l2_table_storage_name_new(const LmP0Text * table_name);
 static int lm_trans_l2_table_note_row_layout(LmTransNamespace * namespace_, const LmP0Text * row_type, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count);
 static int lm_trans_declare_l2_table(LmTransNamespace * namespace_, const LmP0Frame * frame);
 static int lm_trans_emit_l2_table_row_type(FILE * file, const char *row_type_name, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, unsigned indent);
-static int lm_trans_emit_l2_table_row_initializer(FILE * file, const LmP0Field * first_cell, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, LmTransNamespace * namespace_, const LmP0Field * *out_next_cell);
-static int lm_trans_emit_l2_table_storage(FILE * file, const LmP0Frame * rows_frame, const char *row_type_name, const char *storage_name, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, size_t row_count, unsigned indent, LmTransNamespace * namespace_);
+static const LmP0Structure * lm_trans_l2_table_cell_structure_body(const LmP0Node * node, const LmTransL4CallableType * column_type, const LmTransNamespace * namespace_);
+static char * lm_trans_l2_table_cell_storage_name_new(const char *object_name, size_t row_index, size_t column_index);
+static int lm_trans_l2_table_structure_field_type(const LmP0Text * owner, const LmP0Text * field_name, const LmTransNamespace * namespace_, LmTransL4CallableType * out_type);
+static int lm_trans_emit_l2_table_structure_body_initializer(FILE * file, const LmP0Structure * body, const LmTransL4CallableType * column_type, LmTransNamespace * namespace_);
+static int lm_trans_emit_l2_table_cell_structure_storage(FILE * file, const char *object_name, const LmP0Node * cell_node, const LmTransL4CallableType * column_type, size_t row_index, size_t column_index, unsigned indent, LmTransNamespace * namespace_);
+static int lm_trans_emit_l2_table_cell_structure_storages(FILE * file, const LmP0Frame * rows_frame, const char *object_name, LmTransL4CallableType * *column_types, size_t column_count, size_t row_count, unsigned indent, LmTransNamespace * namespace_);
+static int lm_trans_emit_l2_table_row_initializer(FILE * file, const char *object_name, const LmP0Field * first_cell, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, size_t row_index, LmTransNamespace * namespace_, const LmP0Field * *out_next_cell);
+static int lm_trans_emit_l2_table_storage(FILE * file, const LmP0Frame * rows_frame, const char *object_name, const char *row_type_name, const char *storage_name, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, size_t row_count, unsigned indent, LmTransNamespace * namespace_);
 static int lm_trans_emit_l2_table_pointer(FILE * file, const char *row_type_name, const char *object_name, const char *storage_name, unsigned indent);
 static int lm_trans_emit_l2_table_storage_value(FILE * file, const LmP0Frame * frame, unsigned indent, LmTransNamespace * namespace_);
 static int lm_trans_emit_l2_join_structure(FILE * file, const LmP0Frame * frame, unsigned indent);
@@ -17639,9 +17645,232 @@ static int lm_trans_emit_l2_table_row_type(FILE * file, const char *row_type_nam
     return 0;
 }
 
-static int lm_trans_emit_l2_table_row_initializer(FILE * file, const LmP0Field * first_cell, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, LmTransNamespace * namespace_, const LmP0Field * *out_next_cell) {
+static const LmP0Structure * lm_trans_l2_table_cell_structure_body(const LmP0Node * node, const LmTransL4CallableType * column_type, const LmTransNamespace * namespace_) {
+    const char *backend;
+    if (node == 0 || column_type == 0 || column_type -> class_name == 0) {
+        return 0;
+    }
+    if (lm_trans_effective_address_depth(column_type -> class_name, column_type -> address_depth) != 1U) {
+        return 0;
+    }
+    backend = lm_trans_namespace_registry_lookup(namespace_, column_type -> class_name, "layout.backend");
+    if (backend == 0 || lm_trans_layout_backend_is_supported(backend) == 0) {
+        return 0;
+    }
+    if (node -> kind == LM_P0_NODE_STRUCTURE) {
+        return node -> as -> structure;
+    }
+    if (node -> kind == LM_P0_NODE_FRAME && lm_trans_identifier_same(node -> as -> frame -> head, column_type -> class_name)) {
+        return node -> as -> frame -> body;
+    }
+    return 0;
+}
+
+static char * lm_trans_l2_table_cell_storage_name_new(const char *object_name, size_t row_index, size_t column_index) {
+    char suffix[64];
+    snprintf(suffix, sizeof(suffix), "_r%zu_c%zu", row_index, column_index);
+    return lm_trans_l2_object_suffix_name_new(object_name, suffix);
+}
+
+static int lm_trans_l2_table_structure_field_type(const LmP0Text * owner, const LmP0Text * field_name, const LmTransNamespace * namespace_, LmTransL4CallableType * out_type) {
+    char *relation_name;
+    const char *field_class;
+    const char *payload;
+    size_t address_depth;
+    size_t const_flag;
+    if (owner == 0 || field_name == 0 || namespace_ == 0 || out_type == 0) {
+        return 0;
+    }
+    relation_name = lm_trans_registry_relation_name_new(owner, ".field.class");
+    if (relation_name == 0) {
+        return 0;
+    }
+    field_class = lm_trans_namespace_registry_lookup(namespace_, field_name, relation_name);
+    lm_own_delete(relation_name, 0);
+    if (field_class == 0) {
+        fprintf(stderr, "trans L2 table error: structure cell field \"%.*s\" is not declared on \"%.*s\"\n", (((int)field_name -> length)), field_name -> data, (((int)owner -> length)), owner -> data);
+        return 0;
+    }
+    address_depth = 0U;
+    relation_name = lm_trans_registry_relation_name_new(owner, ".field.address-depth");
+    if (relation_name == 0) {
+        return 0;
+    }
+    payload = lm_trans_namespace_registry_lookup(namespace_, field_name, relation_name);
+    lm_own_delete(relation_name, 0);
+    if (payload != 0 && lm_trans_parse_size_payload(payload, &address_depth) == 0) {
+        fprintf(stderr, "trans L2 table error: structure cell field \"%.*s\" on \"%.*s\" has invalid field.address-depth\n", (((int)field_name -> length)), field_name -> data, (((int)owner -> length)), owner -> data);
+        return 0;
+    }
+    const_flag = 0U;
+    relation_name = lm_trans_registry_relation_name_new(owner, ".field.const");
+    if (relation_name == 0) {
+        return 0;
+    }
+    payload = lm_trans_namespace_registry_lookup(namespace_, field_name, relation_name);
+    lm_own_delete(relation_name, 0);
+    if (payload != 0 && lm_trans_parse_size_payload(payload, &const_flag) == 0) {
+        fprintf(stderr, "trans L2 table error: structure cell field \"%.*s\" on \"%.*s\" has invalid field.const\n", (((int)field_name -> length)), field_name -> data, (((int)owner -> length)), owner -> data);
+        return 0;
+    }
+    return lm_trans_named_structure_type_set_cstr(out_type, field_class, address_depth, const_flag != 0U);
+}
+
+static int lm_trans_emit_l2_table_structure_body_initializer(FILE * file, const LmP0Structure * body, const LmTransL4CallableType * column_type, LmTransNamespace * namespace_) {
+    const LmP0Field * field;
+    const LmP0Frame * field_frame;
+    const LmP0Field * initializer;
+    LmTransL4CallableType * field_type;
+    int wrote;
+    if (column_type == 0 || column_type -> class_name == 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, " = {") != 0) {
+        return 1;
+    }
+    field_type = lm_trans_expr_callable_type_new();
+    if (field_type == 0) {
+        return 1;
+    }
+    field = 0;
+    if (body != 0) {
+        field = body -> first_field;
+    }
+    wrote = 0;
+    while (field != 0) {
+        if (lm_trans_node_is_ignored(field -> value) == 0) {
+            if (field -> value == 0 || field -> value -> kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans L2 table error: structure cell expects field frames\n");
+                {
+                    int lm_return_0 = 1;
+                    lm_trans_expr_callable_type_delete(field_type);
+                    return lm_return_0;
+                }
+            }
+            field_frame = field -> value -> as -> frame;
+            if ((field_frame -> flags & LM_P0_FRAME_COLON) == 0U) {
+                fprintf(stderr, "trans L2 table error: structure cell field \"%.*s\" must use ':'\n", (((int)field_frame -> head -> length)), field_frame -> head -> data);
+                {
+                    int lm_return_1 = 1;
+                    lm_trans_expr_callable_type_delete(field_type);
+                    return lm_return_1;
+                }
+            }
+            initializer = field_frame -> body -> first_field;
+            if (initializer == 0) {
+                fprintf(stderr, "trans L2 table error: structure cell field \"%.*s\" requires a value\n", (((int)field_frame -> head -> length)), field_frame -> head -> data);
+                {
+                    int lm_return_2 = 1;
+                    lm_trans_expr_callable_type_delete(field_type);
+                    return lm_return_2;
+                }
+            }
+            if (lm_trans_l2_table_structure_field_type(column_type -> class_name, field_frame -> head, namespace_, field_type) == 0) {
+                {
+                    int lm_return_3 = 1;
+                    lm_trans_expr_callable_type_delete(field_type);
+                    return lm_return_3;
+                }
+            }
+            if (wrote && lm_trans_put(file, ", ") != 0) {
+                {
+                    int lm_return_4 = 1;
+                    lm_trans_expr_callable_type_delete(field_type);
+                    return lm_return_4;
+                }
+            }
+            if (lm_trans_put(file, ".") != 0 || lm_trans_emit_identifier(file, field_frame -> head) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_expr_fields_with_expected_class(file, initializer, namespace_, field_type -> class_name) != 0) {
+                {
+                    int lm_return_5 = 1;
+                    lm_trans_expr_callable_type_delete(field_type);
+                    return lm_return_5;
+                }
+            }
+            wrote = 1;
+        }
+        field = field -> next;
+    }
+    if (wrote == 0 && lm_trans_put(file, "0") != 0) {
+        {
+            int lm_return_6 = 1;
+            lm_trans_expr_callable_type_delete(field_type);
+            return lm_return_6;
+        }
+    }
+    {
+        int lm_return_7 = lm_trans_put(file, "}");
+        lm_trans_expr_callable_type_delete(field_type);
+        return lm_return_7;
+    }
+}
+
+static int lm_trans_emit_l2_table_cell_structure_storage(FILE * file, const char *object_name, const LmP0Node * cell_node, const LmTransL4CallableType * column_type, size_t row_index, size_t column_index, unsigned indent, LmTransNamespace * namespace_) {
+    const LmP0Structure * body;
+    char *cell_name;
+    body = lm_trans_l2_table_cell_structure_body(cell_node, column_type, namespace_);
+    if (body == 0) {
+        return 0;
+    }
+    cell_name = lm_trans_l2_table_cell_storage_name_new(object_name, row_index, column_index);
+    if (cell_name == 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static ") != 0 || lm_trans_emit_type_name(file, column_type -> class_name) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, cell_name) != 0) {
+        {
+            int lm_return_0 = 1;
+            lm_own_delete(cell_name, 0);
+            return lm_return_0;
+        }
+    }
+    if (lm_trans_emit_l2_table_structure_body_initializer(file, body, column_type, namespace_) != 0) {
+        {
+            int lm_return_1 = 1;
+            lm_own_delete(cell_name, 0);
+            return lm_return_1;
+        }
+    }
+    if (lm_trans_put(file, ";\n") != 0) {
+        {
+            int lm_return_2 = 1;
+            lm_own_delete(cell_name, 0);
+            return lm_return_2;
+        }
+    }
+    {
+        int lm_return_3 = 0;
+        lm_own_delete(cell_name, 0);
+        return lm_return_3;
+    }
+}
+
+static int lm_trans_emit_l2_table_cell_structure_storages(FILE * file, const LmP0Frame * rows_frame, const char *object_name, LmTransL4CallableType * *column_types, size_t column_count, size_t row_count, unsigned indent, LmTransNamespace * namespace_) {
+    const LmP0Field * cell;
+    size_t row_index;
+    size_t column_index;
+    cell = lm_trans_l2_structure_first_present_field(rows_frame -> body);
+    row_index = 0U;
+    while (row_index < row_count) {
+        column_index = 0U;
+        while (column_index < column_count) {
+            if (cell == 0 || cell -> value == 0) {
+                return 1;
+            }
+            if (lm_trans_emit_l2_table_cell_structure_storage(file, object_name, cell -> value, column_types[column_index], row_index, column_index, indent, namespace_) != 0) {
+                return 1;
+            }
+            cell = lm_trans_l2_structure_next_present_field(cell);
+            column_index = column_index + 1U;
+        }
+        row_index = row_index + 1U;
+    }
+    return 0;
+}
+
+static int lm_trans_emit_l2_table_row_initializer(FILE * file, const char *object_name, const LmP0Field * first_cell, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, size_t row_index, LmTransNamespace * namespace_, const LmP0Field * *out_next_cell) {
     const LmP0Field * cell;
     const LmP0Field * next_cell;
+    const LmP0Structure * structure_body;
+    char *cell_name;
     size_t column_index;
     if (out_next_cell == 0) {
         return 1;
@@ -17662,8 +17891,22 @@ static int lm_trans_emit_l2_table_row_initializer(FILE * file, const LmP0Field *
         if (lm_trans_put(file, ".") != 0 || lm_trans_emit_identifier(file, column_names[column_index]) != 0 || lm_trans_put(file, " = ") != 0) {
             return 1;
         }
-        if (lm_trans_emit_expr_range_with_expected_class(file, cell, next_cell, namespace_, column_types[column_index] -> class_name) != 0) {
-            return 1;
+        structure_body = lm_trans_l2_table_cell_structure_body(cell -> value, column_types[column_index], namespace_);
+        if (structure_body != 0) {
+            cell_name = lm_trans_l2_table_cell_storage_name_new(object_name, row_index, column_index);
+            if (cell_name == 0) {
+                return 1;
+            }
+            if (lm_trans_put(file, "&") != 0 || lm_trans_put(file, cell_name) != 0) {
+                lm_own_delete(cell_name, 0);
+                return 1;
+            }
+            lm_own_delete(cell_name, 0);
+        }
+        else {
+            if (lm_trans_emit_expr_range_with_expected_class(file, cell, next_cell, namespace_, column_types[column_index] -> class_name) != 0) {
+                return 1;
+            }
         }
         cell = next_cell;
         column_index = column_index + 1U;
@@ -17675,7 +17918,7 @@ static int lm_trans_emit_l2_table_row_initializer(FILE * file, const LmP0Field *
     return 0;
 }
 
-static int lm_trans_emit_l2_table_storage(FILE * file, const LmP0Frame * rows_frame, const char *row_type_name, const char *storage_name, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, size_t row_count, unsigned indent, LmTransNamespace * namespace_) {
+static int lm_trans_emit_l2_table_storage(FILE * file, const LmP0Frame * rows_frame, const char *object_name, const char *row_type_name, const char *storage_name, LmTransL4CallableType * *column_types, LmP0Text * *column_names, size_t column_count, size_t row_count, unsigned indent, LmTransNamespace * namespace_) {
     const LmP0Field * cell;
     size_t row_index;
     if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static const ") != 0 || lm_trans_put(file, row_type_name) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, storage_name) != 0 || lm_trans_put(file, "[] = ") != 0) {
@@ -17693,7 +17936,7 @@ static int lm_trans_emit_l2_table_storage(FILE * file, const LmP0Frame * rows_fr
         if (lm_trans_emit_indent(file, indent + 1U) != 0) {
             return 1;
         }
-        if (lm_trans_emit_l2_table_row_initializer(file, cell, column_types, column_names, column_count, namespace_, &cell) != 0) {
+        if (lm_trans_emit_l2_table_row_initializer(file, object_name, cell, column_types, column_names, column_count, row_index, namespace_, &cell) != 0) {
             return 1;
         }
         if (row_index + 1U < row_count && lm_trans_put(file, ",") != 0) {
@@ -17783,7 +18026,7 @@ static int lm_trans_emit_l2_table_storage_value(FILE * file, const LmP0Frame * f
             return lm_return_4;
         }
     }
-    if (lm_trans_emit_l2_table_storage(file, rows_frame, row_type_name, storage_name, column_types, column_names, column_count, row_count, indent, namespace_) != 0) {
+    if (lm_trans_emit_l2_table_cell_structure_storages(file, rows_frame, object_name, column_types, column_count, row_count, indent, namespace_) != 0) {
         {
             int lm_return_5 = 1;
             lm_own_delete(object_name, 0);
@@ -17793,7 +18036,7 @@ static int lm_trans_emit_l2_table_storage_value(FILE * file, const LmP0Frame * f
             return lm_return_5;
         }
     }
-    if (lm_trans_emit_l2_table_pointer(file, row_type_name, object_name, storage_name, indent) != 0) {
+    if (lm_trans_emit_l2_table_storage(file, rows_frame, object_name, row_type_name, storage_name, column_types, column_names, column_count, row_count, indent, namespace_) != 0) {
         {
             int lm_return_6 = 1;
             lm_own_delete(object_name, 0);
@@ -17803,13 +18046,23 @@ static int lm_trans_emit_l2_table_storage_value(FILE * file, const LmP0Frame * f
             return lm_return_6;
         }
     }
+    if (lm_trans_emit_l2_table_pointer(file, row_type_name, object_name, storage_name, indent) != 0) {
+        {
+            int lm_return_7 = 1;
+            lm_own_delete(object_name, 0);
+            lm_own_delete(row_type_name, 0);
+            lm_own_delete(storage_name, 0);
+            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
+            return lm_return_7;
+        }
+    }
     {
-        int lm_return_7 = 0;
+        int lm_return_8 = 0;
         lm_own_delete(object_name, 0);
         lm_own_delete(row_type_name, 0);
         lm_own_delete(storage_name, 0);
         lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
-        return lm_return_7;
+        return lm_return_8;
     }
 }
 
