@@ -22283,6 +22283,8 @@ static int lm_trans_top_level_declare_function_params(LmTransNamespace *namespac
     const LmP0Field * field;
     LmP0Text * name;
     LmTransL4CallableType * type;
+    size_t index;
+    int has_name;
     int status;
     if (namespace_ == 0 || function == 0) {
         return 1;
@@ -22298,13 +22300,21 @@ static int lm_trans_top_level_declare_function_params(LmTransNamespace *namespac
         return 1;
     }
     status = 0;
+    index = 0U;
     field = function -> params_node -> as -> structure -> first_field;
     while (status == 0 && field != 0) {
         if (field -> value != 0) {
-            if (lm_trans_formal_param_name(field -> value, name) == 0 || lm_trans_l4_callable_type_from_node(field -> value, type) == 0 || lm_trans_namespace_declare_storage_binding(namespace_, name, type -> class_name) != 0) {
+            if (lm_trans_formal_param_read(field -> value, type, name, &has_name, 0) == 0 || has_name == 0) {
+                fprintf(stderr, "trans L2 error: function \"%.*s\" parameter %zu must expose a typed binding name\n", (((int)function -> name -> length)), function -> name -> data, index);
                 status = 1;
             }
+            else {
+                if (lm_trans_namespace_declare_storage_binding(namespace_, name, type -> class_name) != 0) {
+                    status = 1;
+                }
+            }
         }
+        index = index + 1U;
         field = field -> next;
     }
     {

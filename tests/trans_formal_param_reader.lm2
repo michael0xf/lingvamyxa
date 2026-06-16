@@ -6,8 +6,21 @@ fn: namedDefault (int(name: "base"; value: 4); int(name: "value"; value: 3)) int
     return: base + value
 end: namedDefault
 
+int: subTotal
+
+sub: setTotal (int(name: "value"; value: 9))
+    subTotal: value
+end: setTotal
+
+fm: pairFrom (int(name: "base"; value: 6)) (int: left; int: right)
+    return: (left: base; right: base + 1)
+end: pairFrom
+
 external:
     fn: main () int
-        return: parenParam(2) != 3 || namedDefault() != 7 || namedDefault(value: 8) != 12
+        pairFromReturn: pair
+        setTotal()
+        pair: pairFrom()
+        return: parenParam(2) != 3 || namedDefault() != 7 || namedDefault(value: 8) != 12 || subTotal != 9 || c.pair.left != 6 || c.pair.right != 7
     end: main
 end: external
