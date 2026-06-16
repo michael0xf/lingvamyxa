@@ -636,6 +636,46 @@ fn: lm_trans_function_raw_return_descriptor_name (const: (LmTransFunctionHeader:
         return: 0
 return: 1
 
+fn: lm_trans_emit_array_param_aliases (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    unsigned: indent
+) int
+    LmTransFormalParam: param
+    const: LmP0Node: element_type
+    size_t: rank
+    size_t: pointer_depth
+    size_t: index
+    @: char slice_name_storage
+    LmP0Text: slice_name
+
+    if: function = 0 || function\params = 0
+        return: 0
+
+    index: 0U
+    while: index < function\params\count
+        param: function\params\params[index]
+        if: param != 0 && param\is_array
+            if: lm_trans_array_formal_param_type_info(param, @ element_type, @ rank, @ pointer_depth) = 0
+                return: 1
+            slice_name_storage: lm_trans_array_slice_name_new(param\name)
+            if: slice_name_storage = 0
+                return: 1
+            slice_name: lm_trans_text_from_cstr(slice_name_storage)
+            if: slice_name = 0
+                lm_own_delete(slice_name_storage, 0)
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_array_pointer_type(file, element_type, pointer_depth + rank) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_emit_identifier(file, param\name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, slice_name) != 0 || lm_trans_put(file, " == 0 ? 0 : (") != 0 || lm_trans_emit_array_pointer_type(file, element_type, pointer_depth + rank) != 0 || lm_trans_put(file, ")") != 0 || lm_trans_emit_identifier(file, slice_name) != 0 || lm_trans_put(file, "->ptr;\n") != 0
+                lm_trans_text_ref_destroy(@ slice_name)
+                lm_own_delete(slice_name_storage, 0)
+                return: 1
+            lm_trans_text_ref_destroy(@ slice_name)
+            lm_own_delete(slice_name_storage, 0)
+        ---
+        index: index + 1U
+    ---
+return: 0
+
 fn: lm_trans_emit_raw_callable_return_prefix (FILE: file; const: (LmTransNamespace: namespace_); const: (LmP0Text: descriptor_name)) int
     @: char descriptor_cstr
     int: status
@@ -1352,6 +1392,8 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         return: 1
 
     status: 0
+    if: status = 0
+        status: lm_trans_emit_array_param_aliases(file, function, 1U)
     if: function\is_external && lm_trans_text_equals(function\c_name, "main")
         status: lm_trans_emit_l5_main_root(file, 1U)
     if: status = 0

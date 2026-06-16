@@ -39,6 +39,80 @@ fn: lm_trans_callable_type_reset (LmTransL4CallableType: type) int
     return: 0
 end: lm_trans_callable_type_reset
 
+fn: lm_trans_prefixed_identifier_name_new (
+    const: @: char prefix
+    const: (LmP0Text: name)
+    const: @: char suffix
+) @: char
+    LmP0Text: payload
+    @: char result
+    size_t: prefix_length
+    size_t: suffix_length
+    size_t: length
+
+    if: prefix = 0 || name = 0
+        return: 0
+
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ payload)
+
+    if: lm_trans_identifier_payload(name, payload) = 0
+        return: 0
+
+    prefix_length: c.strlen(prefix)
+    suffix_length: 0U
+    if: suffix != 0
+        suffix_length: c.strlen(suffix)
+    length: prefix_length + payload\length + suffix_length
+    result: (cast: (@: char) lm_own_new_zero(length + 1U))
+    if: result = 0
+        return: 0
+    c.memcpy(result, prefix, prefix_length)
+    if: payload\length != 0U
+        c.memcpy(result + prefix_length, payload\data, payload\length)
+    if: suffix_length != 0U
+        c.memcpy(result + prefix_length + payload\length, suffix, suffix_length)
+    result[length]: '\0'
+return: result
+
+fn: lm_trans_array_slice_name_new (const: (LmP0Text: name)) @: char
+return: lm_trans_prefixed_identifier_name_new("lm_slice_", name, 0)
+
+fn: lm_trans_array_items_name_new (const: (LmP0Text: name)) @: char
+return: lm_trans_prefixed_identifier_name_new("", name, "_items")
+
+fn: lm_trans_namespace_declare_array_slice_expr (
+    LmTransNamespace: namespace_
+    const: (LmP0Text: name)
+    const: @: char slice_expr
+) int
+    LmP0Text: slice_expr_text
+    int: status
+
+    slice_expr_text: lm_trans_text_from_cstr(slice_expr)
+    if: slice_expr_text = 0
+        return: 1
+    status: lm_trans_namespace_declare_relation_text(namespace_, name, "variable.slice-name", slice_expr_text)
+    lm_trans_text_ref_destroy(@ slice_expr_text)
+return: status
+
+fn: lm_trans_namespace_declare_array_slice_length (
+    LmTransNamespace: namespace_
+    const: (LmP0Text: name)
+    const: @: char slice_length
+) int
+    LmP0Text: slice_length_text
+    int: status
+
+    slice_length_text: lm_trans_text_from_cstr(slice_length)
+    if: slice_length_text = 0
+        return: 1
+    status: lm_trans_namespace_declare_relation_text(namespace_, name, "variable.slice-length", slice_length_text)
+    lm_trans_text_ref_destroy(@ slice_length_text)
+return: status
+
 fn: lm_trans_callable_type_copy (LmTransL4CallableType: target; const: (LmTransL4CallableType: source)) int
     if: target = 0
         return: 1
@@ -1357,6 +1431,24 @@ fn: lm_trans_emit_callable_type_named (FILE: file; const: (LmTransL4CallableType
     size_t: effective_address_depth
     if: ((file = 0) || (type = 0))
         return: 1
+    if: type\array_rank != 0U
+        effective_address_depth: 1U
+        if: type\address_depth > 1U
+            effective_address_depth: effective_address_depth + (type\address_depth - 1U)
+        if: type\is_const && lm_trans_put(file, "const ") != 0
+            return: 1
+        if: lm_trans_put(file, "LmSlice") != 0
+            return: 1
+        if: (lm_trans_put(file, " ") != 0)
+            return: 1
+        i: 0U
+        while: i < effective_address_depth
+            if: lm_trans_put(file, "*") != 0
+                return: 1
+            i: i + 1U
+        if: (((name != 0) && (name\length != 0U)) && (lm_trans_emit_identifier(file, name) != 0))
+            return: 1
+        return: 0
     effective_address_depth: lm_trans_effective_address_depth(type\class_name, type\address_depth)
     if: (type\is_const && (lm_trans_put(file, "const ") != 0))
         return: 1
@@ -4683,23 +4775,15 @@ end: lm_trans_lookup_type_receiver_binding
 fn: lm_trans_type_receiver_array_emit (FILE: file; const: (LmP0Node: type_node)) int
     const: LmP0Node: element_type
     size_t: rank
-    size_t: i
     int: status
     status: lm_trans_array_type_node_info(type_node, @ element_type, @ rank)
     if: (status <= 0)
         if: (status < 0)
             return: 1
         return: 0
-    if: (lm_trans_emit_type_node(file, element_type) != 0)
-        return: 1
-    if: (lm_trans_put(file, " ") != 0)
-        return: 1
-    i: 0U
-    while: (i < rank)
-        if: (lm_trans_put(file, "*") != 0)
-            return: 1
-        i: i + 1U
-    return: 0
+    element_type: element_type
+    rank: rank
+    return: lm_trans_put(file, "LmSlice *")
 end: lm_trans_type_receiver_array_emit
 
 fn: lm_trans_type_pointer_suffix_new (size_t: depth) LmTransTypePointerSuffix
@@ -5086,19 +5170,39 @@ fn: lm_trans_c_declarator_expression_dimension_tail (const: (LmTransCDeclarator:
 
 fn: lm_trans_emit_array_param (FILE: file; const: (LmTransFormalParam: param); LmTransNamespace: namespace_) int
     const: LmTransCDeclarator: declarator
+    @: char slice_name_storage
+    LmP0Text: slice_name
+    int: status
 
     if: param = 0 || param\declarator = 0 || param\has_name = 0
         return: 1
 
     declarator: param\declarator
-    if: lm_trans_emit_c_declarator(file, declarator, namespace_, "array parameter dimension") != 0
+    slice_name_storage: lm_trans_array_slice_name_new(param\name)
+    if: slice_name_storage = 0
+        return: 1
+    finally: lm_own_delete(slice_name_storage, 0)
+
+    slice_name: lm_trans_text_from_cstr(slice_name_storage)
+    if: slice_name = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ slice_name)
+
+    if: lm_trans_put(file, "LmSlice *") != 0 || lm_trans_emit_identifier(file, slice_name) != 0
         return: 1
 
+    status: 0
     if: declarator\type_is_head
-        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_head)
-    if: declarator\type_node != 0 && declarator\type_node\kind = c.LM_P0_NODE_ATOM
-        return: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_node\as\atom)
-    return: lm_trans_namespace_declare(namespace_, param\name, "variable")
+        status: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_head)
+    else:
+        if: declarator\type_node != 0 && declarator\type_node\kind = c.LM_P0_NODE_ATOM
+            status: lm_trans_namespace_declare_storage_binding(namespace_, param\name, declarator\type_node\as\atom)
+        else:
+            status: lm_trans_namespace_declare(namespace_, param\name, "variable")
+        ---
+    if: status != 0
+        return: 1
+    return: lm_trans_namespace_declare_array_slice_expr(namespace_, param\name, slice_name_storage)
 end: lm_trans_emit_array_param
 
 fn: lm_trans_emit_formal_param (

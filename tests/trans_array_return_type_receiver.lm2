@@ -21,18 +21,24 @@ end: cubeValues
 
 external:
     fn: main () int
-        @: int p
-        @@: int m
-        @@@: int cube
+        LmSlice: p
+        LmSlice: m
+        LmSlice: cube
+        @: int pItems
+        @@: int mItems
+        @@@: int cubeItems
         const: LmOwnAllocationDescriptor: pDesc
         const: LmOwnAllocationDescriptor: rowDesc
         const: LmOwnAllocationDescriptor: cubeDesc
         p: values()
         m: matrix()
         cube: cubeValues()
-        pDesc: c.lm_own_allocation_descriptor(p)
-        rowDesc: c.lm_own_allocation_descriptor(m[1])
-        cubeDesc: c.lm_own_allocation_descriptor(cube[0][1])
-        return: p[2] != 3 || m[0][1] != 2 || m[1][2] != 5 || cube[0][1][1] != 3 || cube[1][0][2] != 6 || pDesc = 0 || pDesc\rank != 1 || pDesc\level != 0 || pDesc\count != 3 || rowDesc = 0 || rowDesc\rank != 2 || rowDesc\level != 1 || rowDesc\count != 3 || cubeDesc = 0 || cubeDesc\rank != 3 || cubeDesc\level != 2 || cubeDesc\count != 2
+        pItems: cast: (@: int) p\ptr
+        mItems: cast: (@@: int) m\ptr
+        cubeItems: cast: (@@@: int) cube\ptr
+        pDesc: c.lm_own_allocation_descriptor(pItems)
+        rowDesc: c.lm_own_allocation_descriptor(mItems[1])
+        cubeDesc: c.lm_own_allocation_descriptor(cubeItems[0][1])
+        return: p\length != 3 || m\length != 2 || cube\length != 2 || pItems[2] != 3 || mItems[0][1] != 2 || mItems[1][2] != 5 || cubeItems[0][1][1] != 3 || cubeItems[1][0][2] != 6 || pDesc = 0 || pDesc\rank != 1 || pDesc\level != 0 || pDesc\count != 3 || rowDesc = 0 || rowDesc\rank != 2 || rowDesc\level != 1 || rowDesc\count != 3 || cubeDesc = 0 || cubeDesc\rank != 3 || cubeDesc\level != 2 || cubeDesc\count != 2
     end: main
 end: external
