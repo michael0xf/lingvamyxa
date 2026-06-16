@@ -38,6 +38,20 @@ fn: lm_trans_callable_type_reset (LmTransL4CallableType: type) int
     return: 0
 end: lm_trans_callable_type_reset
 
+fn: lm_trans_callable_type_copy (LmTransL4CallableType: target; const: (LmTransL4CallableType: source)) int
+    if: target = 0
+        return: 1
+    if: lm_trans_callable_type_reset(target) != 0
+        return: 1
+    if: source = 0
+        return: 0
+    if: source\class_name != 0
+        target\class_name[0]: source\class_name[0]
+    target\address_depth: source\address_depth
+    target\is_const: source\is_const
+    return: 0
+end: lm_trans_callable_type_copy
+
 fn: lm_trans_expr_callable_type_new () LmTransL4CallableType
     LmTransL4CallableType: type
     type: (cast: (LmTransL4CallableType) lm_own_new_zero(c.sizeof(type[0])))
@@ -130,10 +144,10 @@ fn: lm_trans_expr_atom_lowering_new () LmTransExprAtomLowering
     lowering: (cast: (LmTransExprAtomLowering) lm_own_new_zero(c.sizeof(lowering[0])))
     if: (lowering != 0)
         lowering\text: lm_trans_text_ref_new_cstr("")
-        lowering\expected_class: lm_trans_text_ref_new_cstr("")
-        if: (lowering\text = 0) || (lowering\expected_class = 0)
+        lowering\expected_type: lm_trans_expr_callable_type_new()
+        if: (lowering\text = 0) || (lowering\expected_type = 0)
             lm_trans_text_ref_destroy(@ lowering\text)
-            lm_trans_text_ref_destroy(@ lowering\expected_class)
+            lm_trans_expr_callable_type_delete(lowering\expected_type)
             lm_own_delete(lowering, 0)
             return: 0
         ---
@@ -143,7 +157,7 @@ end: lm_trans_expr_atom_lowering_new
 sub: lm_trans_expr_atom_lowering_destroy_fields (LmTransExprAtomLowering: lowering)
     if: (lowering != 0)
         lm_trans_text_ref_destroy(@ lowering\text)
-        lm_trans_text_ref_destroy(@ lowering\expected_class)
+        lm_trans_expr_callable_type_delete(lowering\expected_type)
     ---
 end: lm_trans_expr_atom_lowering_destroy_fields
 
@@ -154,28 +168,20 @@ end: lm_trans_expr_atom_lowering_delete
 
 fn: lm_trans_expr_atom_lowering_copy (LmTransExprAtomLowering: target; const: (LmTransExprAtomLowering: source)) int
     LmP0Text: text
-    LmP0Text: expected_class
-    if: (((target = 0) || (source = 0)) || (target\text = 0)) || (target\expected_class = 0)
+    LmTransL4CallableType: expected_type
+    if: (((target = 0) || (source = 0)) || (target\text = 0)) || (target\expected_type = 0)
         return: 1
     text: target\text
-    expected_class: target\expected_class
+    expected_type: target\expected_type
     target[0]: source[0]
     target\text: text
-    target\expected_class: expected_class
+    target\expected_type: expected_type
     if: (source\text != 0)
         target\text[0]: source\text[0]
     else:
         target\text\data: ""
         target\text\length: 0U
-    if: expected_class != 0
-        if: source\expected_class != 0
-            expected_class[0]: source\expected_class[0]
-        else:
-            expected_class\data: ""
-            expected_class\length: 0U
-        ---
-    return: 0
-end: lm_trans_expr_atom_lowering_copy
+return: lm_trans_callable_type_copy(expected_type, source\expected_type)
 
 fn: lm_trans_atom_starts_string (const: (LmP0Text: text)) int
     return: (((text != 0) && (text\length > 0U)) && ((text\data[0] = '"') || (text\data[0] = '\'')))
@@ -624,7 +630,7 @@ fn: lm_trans_expr_stack_push_range (LmTransExprStack: stack; const: (LmP0Field: 
     range\expect_field_name: 0
     range\expect_c_field_name: 0
     range\c_dot_path: 0
-    range\expected_class: 0
+    range\expected_type: 0
     status: lm_trans_expr_stack_push_range_state(stack, range)
     lm_own_delete(range, 0)
     return: status
@@ -3920,26 +3926,21 @@ fn: lm_trans_contextual_literal_value (
         return: 0
 return: lm_trans_namespace_registry_lookup(namespace_, expected_class, table_name)
 
-fn: lm_trans_contextual_literal_set_expected_class (LmTransExprAtomLowering: lowering; const: (LmP0Text: expected_class)) int
-    if: lowering = 0 || lowering\expected_class = 0
+fn: lm_trans_contextual_literal_set_expected_type (LmTransExprAtomLowering: lowering; const: (LmTransL4CallableType: expected_type)) int
+    if: lowering = 0 || lowering\expected_type = 0
         return: 1
-    if: expected_class != 0
-        lowering\expected_class[0]: expected_class[0]
-    else:
-        lowering\expected_class\data: ""
-        lowering\expected_class\length: 0U
-return: 0
+return: lm_trans_callable_type_copy(lowering\expected_type, expected_type)
 
 fn: lm_trans_expr_emit_contextual_literal (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
     const: @: char value
     if: (lowering = 0) || (lowering\text = 0)
         return: 1
-    if: lowering\expected_class = 0 || lowering\expected_class\length = 0U
-        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" requires an expected class\n", (cast: int lowering\text\length), lowering\text\data)
+    if: lowering\expected_type = 0 || lowering\expected_type\class_name = 0 || lowering\expected_type\class_name\length = 0U
+        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" requires an expected type\n", (cast: int lowering\text\length), lowering\text\data)
         return: 1
-    value: lm_trans_contextual_literal_value(namespace_, lowering\text, lowering\expected_class)
+    value: lm_trans_contextual_literal_value(namespace_, lowering\text, lowering\expected_type\class_name)
     if: value = 0
-        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" has no contextual value for class \"%.*s\"\n", (cast: int lowering\text\length), lowering\text\data, (cast: int lowering\expected_class\length), lowering\expected_class\data)
+        c.fprintf(c.stderr, "trans L2 error: contextual literal \"%.*s\" has no contextual value for type \"%.*s\"\n", (cast: int lowering\text\length), lowering\text\data, (cast: int lowering\expected_type\class_name\length), lowering\expected_type\class_name\data)
         return: 1
     return: lm_trans_put(file, value)
 end: lm_trans_expr_emit_contextual_literal
@@ -4228,7 +4229,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     const: LmP0Field: field
     const: LmP0Node: node
     const: LmP0Node: previous_operand
-    LmP0Text: pending_expected_class
+    LmTransL4CallableType: pending_expected_type
     LmP0Text: operand_class
     int: expect_field_name
     int: expect_c_field_name
@@ -4242,15 +4243,18 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     atom: lm_trans_expr_atom_lowering_new()
     if: (atom = 0)
         return: 1
-    pending_expected_class: lm_trans_text_ref_new_cstr("")
+    pending_expected_type: lm_trans_expr_callable_type_new()
     operand_class: lm_trans_text_ref_new_cstr("")
-    if: pending_expected_class = 0 || operand_class = 0
+    if: pending_expected_type = 0 || operand_class = 0
         lm_trans_expr_atom_lowering_delete(atom)
-        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
         lm_trans_text_ref_destroy(@ operand_class)
         return: 1
-    if: range\expected_class != 0
-        pending_expected_class[0]: range\expected_class[0]
+    if: lm_trans_callable_type_copy(pending_expected_type, range\expected_type) != 0
+        lm_trans_expr_atom_lowering_delete(atom)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
+        lm_trans_text_ref_destroy(@ operand_class)
+        return: 1
     field: range\field
     previous_operand: range\previous_operand
     expect_field_name: range\expect_field_name
@@ -4266,19 +4270,19 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                 if: (previous_operand = 0)
                     c.fprintf(c.stderr, "trans L2 error: index operator expects a target expression\n")
                     lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_expr_callable_type_delete(pending_expected_type)
                     lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 close: lm_trans_find_matching_index_close(field, range\stop)
                 if: (close = 0)
                     c.fprintf(c.stderr, "trans L2 error: unclosed index operator\n")
                     lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_expr_callable_type_delete(pending_expected_type)
                     lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 if: (lm_trans_expr_lowered_range_append_index(lowered, field\next, close) != 0)
                     lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_text_ref_destroy(@ pending_expected_class)
+                    lm_trans_expr_callable_type_delete(pending_expected_type)
                     lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
                 previous_operand: close\value
@@ -4293,13 +4297,13 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                     piece_leading_space: wrote
                     if: (lm_trans_lower_expr_atom(node, previous_operand, expect_field_name, expect_c_field_name, c_dot_path, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     if: atom\emit = @lm_trans_expr_emit_contextual_literal
-                        if: lm_trans_contextual_literal_set_expected_class(atom, pending_expected_class) != 0
+                        if: lm_trans_contextual_literal_set_expected_type(atom, pending_expected_type) != 0
                             lm_trans_expr_atom_lowering_delete(atom)
-                            lm_trans_text_ref_destroy(@ pending_expected_class)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
                             lm_trans_text_ref_destroy(@ operand_class)
                             return: 1
                         ---
@@ -4309,12 +4313,17 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         piece_leading_space: 0
                     if: (lm_trans_text_equals(node\as\atom, "=") || lm_trans_text_equals(node\as\atom, "!=")) && previous_operand != 0 && previous_operand\kind = c.LM_P0_NODE_ATOM
                         if: lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class)
-                            pending_expected_class[0]: operand_class[0]
+                            if: lm_trans_callable_type_reset(pending_expected_type) != 0
+                                lm_trans_expr_atom_lowering_delete(atom)
+                                lm_trans_expr_callable_type_delete(pending_expected_type)
+                                lm_trans_text_ref_destroy(@ operand_class)
+                                return: 1
+                            pending_expected_type\class_name[0]: operand_class[0]
                         ---
                     ---
                     if: (lm_trans_update_expr_atom_lowering_state(atom, node, @ previous_operand, @ expect_field_name, @ expect_c_field_name, @ c_dot_path) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     if: lm_trans_text_equals(node\as\atom, "@")
@@ -4325,14 +4334,14 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         ---
                     if: (lm_trans_expr_lowered_range_append_atom(lowered, piece_leading_space, node, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     ---
                 else:
                     if: (lm_trans_expr_lowered_range_append_node(lowered, wrote, node) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_text_ref_destroy(@ pending_expected_class)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
                     previous_operand: node
@@ -4346,17 +4355,17 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     if: expect_field_name
         c.fprintf(c.stderr, "trans L2 error: field-follow expects a field name\n")
         lm_trans_expr_atom_lowering_delete(atom)
-        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
         lm_trans_text_ref_destroy(@ operand_class)
         return: 1
     if: expect_c_field_name
         c.fprintf(c.stderr, "trans L2 error: C value-field dot expects a field name\n")
         lm_trans_expr_atom_lowering_delete(atom)
-        lm_trans_text_ref_destroy(@ pending_expected_class)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
         lm_trans_text_ref_destroy(@ operand_class)
         return: 1
     lm_trans_expr_atom_lowering_delete(atom)
-    lm_trans_text_ref_destroy(@ pending_expected_class)
+    lm_trans_expr_callable_type_delete(pending_expected_type)
     lm_trans_text_ref_destroy(@ operand_class)
     return: 0
 end: lm_trans_expr_lowered_range_build
@@ -4591,12 +4600,12 @@ fn: lm_trans_emit_expr_range (FILE: file; const: (LmP0Field: first); const: (LmP
     job\range\expect_field_name: 0
     job\range\expect_c_field_name: 0
     job\range\c_dot_path: 0
-    job\range\expected_class: 0
+    job\range\expected_type: 0
     status: lm_trans_emit_expr_stack_run(file, job, namespace_)
     return: status
 end: lm_trans_emit_expr_range
 
-fn: lm_trans_emit_expr_range_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
+fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmTransL4CallableType: expected_type)) int
     LmTransExprJob: job
     int: status
     job: lm_trans_expr_job_new()
@@ -4615,10 +4624,26 @@ fn: lm_trans_emit_expr_range_with_expected_class (FILE: file; const: (LmP0Field:
     job\range\expect_field_name: 0
     job\range\expect_c_field_name: 0
     job\range\c_dot_path: 0
-    job\range\expected_class: expected_class
+    job\range\expected_type: expected_type
     status: lm_trans_emit_expr_stack_run(file, job, namespace_)
     return: status
-end: lm_trans_emit_expr_range_with_expected_class
+end: lm_trans_emit_expr_range_with_expected_type
+
+fn: lm_trans_emit_expr_range_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
+    LmTransL4CallableType: expected_type
+    int: status
+
+    if: expected_class = 0
+        return: lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, 0)
+
+    expected_type: lm_trans_expr_callable_type_new()
+    if: expected_type = 0
+        return: 1
+    finally: lm_trans_expr_callable_type_delete(expected_type)
+
+    expected_type\class_name[0]: expected_class[0]
+    status: lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, expected_type)
+return: status
 
 fn: lm_trans_emit_expr_fields_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
     return: lm_trans_emit_expr_range_with_expected_class(file, first, 0, namespace_, expected_class)

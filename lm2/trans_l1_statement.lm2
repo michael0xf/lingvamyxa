@@ -4018,7 +4018,7 @@ fn: lm_trans_emit_l2_table_expr_with_expected_type (
 ) int
     if: expected_type = 0 || expected_type\class_name = 0
         return: 1
-return: lm_trans_emit_expr_range_with_expected_class(file, first, stop, namespace_, expected_type\class_name)
+return: lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, expected_type)
 
 fn: lm_trans_emit_l2_table_inline_layout_initializer (
     FILE: file

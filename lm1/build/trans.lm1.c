@@ -347,7 +347,7 @@ typedef struct LmTransExprRangeJob {
     int expect_field_name;
     int expect_c_field_name;
     int c_dot_path;
-    const LmP0Text * expected_class;
+    const LmTransL4CallableType * expected_type;
 } LmTransExprRangeJob;
 typedef struct LmTransExprCallArgsJob {
     const LmP0Structure * body;
@@ -358,7 +358,7 @@ struct LmTransExprAtomLowering {
     int (*emit)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
     int (*update)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
     LmP0Text * text;
-    LmP0Text * expected_class;
+    LmTransL4CallableType * expected_type;
 };
 struct LmTransExprPiece {
     int (*emit)(FILE *file, LmTransExprStack *stack, LmTransExprLoweredRange *lowered, const LmTransExprPiece *piece, const LmTransNamespace *namespace_, int *out_suspend);
@@ -2356,6 +2356,7 @@ static LmTransCallLowering * lm_trans_expr_call_lowering_new(void);
 static void lm_trans_expr_call_lowering_delete(LmTransCallLowering * call);
 static int lm_trans_callable_type_init_fields(LmTransL4CallableType * type);
 static int lm_trans_callable_type_reset(LmTransL4CallableType * type);
+static int lm_trans_callable_type_copy(LmTransL4CallableType * target, const LmTransL4CallableType * source);
 static LmTransL4CallableType * lm_trans_expr_callable_type_new(void);
 static void lm_trans_expr_callable_type_delete(LmTransL4CallableType * type);
 static LmTransAbiParam * * lm_trans_expr_abi_params_new(size_t capacity);
@@ -2527,7 +2528,7 @@ static int lm_trans_expr_emit_name(FILE * file, const LmTransExprAtomLowering * 
 static int lm_trans_expr_emit_raw(FILE * file, const LmTransExprAtomLowering * lowering, const LmTransNamespace * namespace_);
 static const char * lm_trans_contextual_literal_value_table(const LmTransNamespace * namespace_, const LmP0Text * literal);
 static const char * lm_trans_contextual_literal_value(const LmTransNamespace * namespace_, const LmP0Text * literal, const LmP0Text * expected_class);
-static int lm_trans_contextual_literal_set_expected_class(LmTransExprAtomLowering * lowering, const LmP0Text * expected_class);
+static int lm_trans_contextual_literal_set_expected_type(LmTransExprAtomLowering * lowering, const LmTransL4CallableType * expected_type);
 static int lm_trans_expr_emit_contextual_literal(FILE * file, const LmTransExprAtomLowering * lowering, const LmTransNamespace * namespace_);
 static int lm_trans_expr_state_value(const LmTransExprAtomLowering * lowering, const LmP0Node * node, const LmP0Node * *previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
 static int lm_trans_expr_state_field_name(const LmTransExprAtomLowering * lowering, const LmP0Node * node, const LmP0Node * *previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
@@ -2568,6 +2569,7 @@ static int lm_trans_emit_expr_list(FILE * file, const LmP0Field * first, const L
 static int lm_trans_emit_expr_node(FILE * file, const LmP0Node * node, const LmTransNamespace * namespace_);
 static int lm_trans_emit_expr_fields(FILE * file, const LmP0Field * first, const LmTransNamespace * namespace_);
 static int lm_trans_emit_expr_range(FILE * file, const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_);
+static int lm_trans_emit_expr_range_with_expected_type(FILE * file, const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, const LmTransL4CallableType * expected_type);
 static int lm_trans_emit_expr_range_with_expected_class(FILE * file, const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, const LmP0Text * expected_class);
 static int lm_trans_emit_expr_fields_with_expected_class(FILE * file, const LmP0Field * first, const LmTransNamespace * namespace_, const LmP0Text * expected_class);
 static int lm_trans_frame_receiver_key(const LmP0Frame * frame, LmP0Text * out_key);
@@ -6368,6 +6370,24 @@ static int lm_trans_callable_type_reset(LmTransL4CallableType * type) {
     return 0;
 }
 
+static int lm_trans_callable_type_copy(LmTransL4CallableType * target, const LmTransL4CallableType * source) {
+    if (target == 0) {
+        return 1;
+    }
+    if (lm_trans_callable_type_reset(target) != 0) {
+        return 1;
+    }
+    if (source == 0) {
+        return 0;
+    }
+    if (source -> class_name != 0) {
+        target->class_name[0] = source -> class_name[0];
+    }
+    target->address_depth = source -> address_depth;
+    target->is_const = source -> is_const;
+    return 0;
+}
+
 static LmTransL4CallableType * lm_trans_expr_callable_type_new(void) {
     LmTransL4CallableType * type;
     type = (((LmTransL4CallableType *)lm_own_new_zero(sizeof(type[0]))));
@@ -6470,10 +6490,10 @@ static LmTransExprAtomLowering * lm_trans_expr_atom_lowering_new(void) {
     lowering = (((LmTransExprAtomLowering *)lm_own_new_zero(sizeof(lowering[0]))));
     if ((lowering != 0)) {
         lowering->text = lm_trans_text_ref_new_cstr("");
-        lowering->expected_class = lm_trans_text_ref_new_cstr("");
-        if ((lowering -> text == 0) || (lowering -> expected_class == 0)) {
+        lowering->expected_type = lm_trans_expr_callable_type_new();
+        if ((lowering -> text == 0) || (lowering -> expected_type == 0)) {
             lm_trans_text_ref_destroy(&lowering -> text);
-            lm_trans_text_ref_destroy(&lowering -> expected_class);
+            lm_trans_expr_callable_type_delete(lowering -> expected_type);
             lm_own_delete(lowering, 0);
             return 0;
         }
@@ -6484,7 +6504,7 @@ static LmTransExprAtomLowering * lm_trans_expr_atom_lowering_new(void) {
 static void lm_trans_expr_atom_lowering_destroy_fields(LmTransExprAtomLowering * lowering) {
     if ((lowering != 0)) {
         lm_trans_text_ref_destroy(&lowering -> text);
-        lm_trans_text_ref_destroy(&lowering -> expected_class);
+        lm_trans_expr_callable_type_delete(lowering -> expected_type);
     }
 }
 
@@ -6495,15 +6515,15 @@ static void lm_trans_expr_atom_lowering_delete(LmTransExprAtomLowering * lowerin
 
 static int lm_trans_expr_atom_lowering_copy(LmTransExprAtomLowering * target, const LmTransExprAtomLowering * source) {
     LmP0Text * text;
-    LmP0Text * expected_class;
-    if ((((target == 0) || (source == 0)) || (target -> text == 0)) || (target -> expected_class == 0)) {
+    LmTransL4CallableType * expected_type;
+    if ((((target == 0) || (source == 0)) || (target -> text == 0)) || (target -> expected_type == 0)) {
         return 1;
     }
     text = target -> text;
-    expected_class = target -> expected_class;
+    expected_type = target -> expected_type;
     target[0] = source[0];
     target->text = text;
-    target->expected_class = expected_class;
+    target->expected_type = expected_type;
     if ((source -> text != 0)) {
         target->text[0] = source -> text[0];
     }
@@ -6511,16 +6531,7 @@ static int lm_trans_expr_atom_lowering_copy(LmTransExprAtomLowering * target, co
         target->text->data = "";
         target->text->length = 0U;
     }
-    if (expected_class != 0) {
-        if (source -> expected_class != 0) {
-            expected_class[0] = source -> expected_class[0];
-        }
-        else {
-            expected_class->data = "";
-            expected_class->length = 0U;
-        }
-    }
-    return 0;
+    return lm_trans_callable_type_copy(expected_type, source -> expected_type);
 }
 
 static int lm_trans_atom_starts_string(const LmP0Text * text) {
@@ -7041,7 +7052,7 @@ static int lm_trans_expr_stack_push_range(LmTransExprStack * stack, const LmP0Fi
     range->expect_field_name = 0;
     range->expect_c_field_name = 0;
     range->c_dot_path = 0;
-    range->expected_class = 0;
+    range->expected_type = 0;
     status = lm_trans_expr_stack_push_range_state(stack, range);
     lm_own_delete(range, 0);
     return status;
@@ -10963,18 +10974,11 @@ static const char * lm_trans_contextual_literal_value(const LmTransNamespace * n
     return lm_trans_namespace_registry_lookup(namespace_, expected_class, table_name);
 }
 
-static int lm_trans_contextual_literal_set_expected_class(LmTransExprAtomLowering * lowering, const LmP0Text * expected_class) {
-    if (lowering == 0 || lowering -> expected_class == 0) {
+static int lm_trans_contextual_literal_set_expected_type(LmTransExprAtomLowering * lowering, const LmTransL4CallableType * expected_type) {
+    if (lowering == 0 || lowering -> expected_type == 0) {
         return 1;
     }
-    if (expected_class != 0) {
-        lowering->expected_class[0] = expected_class[0];
-    }
-    else {
-        lowering->expected_class->data = "";
-        lowering->expected_class->length = 0U;
-    }
-    return 0;
+    return lm_trans_callable_type_copy(lowering -> expected_type, expected_type);
 }
 
 static int lm_trans_expr_emit_contextual_literal(FILE * file, const LmTransExprAtomLowering * lowering, const LmTransNamespace * namespace_) {
@@ -10982,13 +10986,13 @@ static int lm_trans_expr_emit_contextual_literal(FILE * file, const LmTransExprA
     if ((lowering == 0) || (lowering -> text == 0)) {
         return 1;
     }
-    if (lowering -> expected_class == 0 || lowering -> expected_class -> length == 0U) {
-        fprintf(stderr, "trans L2 error: contextual literal \"%.*s\" requires an expected class\n", (((int)lowering -> text -> length)), lowering -> text -> data);
+    if (lowering -> expected_type == 0 || lowering -> expected_type -> class_name == 0 || lowering -> expected_type -> class_name -> length == 0U) {
+        fprintf(stderr, "trans L2 error: contextual literal \"%.*s\" requires an expected type\n", (((int)lowering -> text -> length)), lowering -> text -> data);
         return 1;
     }
-    value = lm_trans_contextual_literal_value(namespace_, lowering -> text, lowering -> expected_class);
+    value = lm_trans_contextual_literal_value(namespace_, lowering -> text, lowering -> expected_type -> class_name);
     if (value == 0) {
-        fprintf(stderr, "trans L2 error: contextual literal \"%.*s\" has no contextual value for class \"%.*s\"\n", (((int)lowering -> text -> length)), lowering -> text -> data, (((int)lowering -> expected_class -> length)), lowering -> expected_class -> data);
+        fprintf(stderr, "trans L2 error: contextual literal \"%.*s\" has no contextual value for type \"%.*s\"\n", (((int)lowering -> text -> length)), lowering -> text -> data, (((int)lowering -> expected_type -> class_name -> length)), lowering -> expected_type -> class_name -> data);
         return 1;
     }
     return lm_trans_put(file, value);
@@ -11314,7 +11318,7 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
     const LmP0Field * field;
     const LmP0Node * node;
     const LmP0Node * previous_operand;
-    LmP0Text * pending_expected_class;
+    LmTransL4CallableType * pending_expected_type;
     LmP0Text * operand_class;
     int expect_field_name;
     int expect_c_field_name;
@@ -11330,16 +11334,19 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
     if ((atom == 0)) {
         return 1;
     }
-    pending_expected_class = lm_trans_text_ref_new_cstr("");
+    pending_expected_type = lm_trans_expr_callable_type_new();
     operand_class = lm_trans_text_ref_new_cstr("");
-    if (pending_expected_class == 0 || operand_class == 0) {
+    if (pending_expected_type == 0 || operand_class == 0) {
         lm_trans_expr_atom_lowering_delete(atom);
-        lm_trans_text_ref_destroy(&pending_expected_class);
+        lm_trans_expr_callable_type_delete(pending_expected_type);
         lm_trans_text_ref_destroy(&operand_class);
         return 1;
     }
-    if (range -> expected_class != 0) {
-        pending_expected_class[0] = range -> expected_class[0];
+    if (lm_trans_callable_type_copy(pending_expected_type, range -> expected_type) != 0) {
+        lm_trans_expr_atom_lowering_delete(atom);
+        lm_trans_expr_callable_type_delete(pending_expected_type);
+        lm_trans_text_ref_destroy(&operand_class);
+        return 1;
     }
     field = range -> field;
     previous_operand = range -> previous_operand;
@@ -11356,7 +11363,7 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
                 if ((previous_operand == 0)) {
                     fprintf(stderr, "trans L2 error: index operator expects a target expression\n");
                     lm_trans_expr_atom_lowering_delete(atom);
-                    lm_trans_text_ref_destroy(&pending_expected_class);
+                    lm_trans_expr_callable_type_delete(pending_expected_type);
                     lm_trans_text_ref_destroy(&operand_class);
                     return 1;
                 }
@@ -11364,13 +11371,13 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
                 if ((close == 0)) {
                     fprintf(stderr, "trans L2 error: unclosed index operator\n");
                     lm_trans_expr_atom_lowering_delete(atom);
-                    lm_trans_text_ref_destroy(&pending_expected_class);
+                    lm_trans_expr_callable_type_delete(pending_expected_type);
                     lm_trans_text_ref_destroy(&operand_class);
                     return 1;
                 }
                 if ((lm_trans_expr_lowered_range_append_index(lowered, field -> next, close) != 0)) {
                     lm_trans_expr_atom_lowering_delete(atom);
-                    lm_trans_text_ref_destroy(&pending_expected_class);
+                    lm_trans_expr_callable_type_delete(pending_expected_type);
                     lm_trans_text_ref_destroy(&operand_class);
                     return 1;
                 }
@@ -11387,14 +11394,14 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
                     piece_leading_space = wrote;
                     if ((lm_trans_lower_expr_atom(node, previous_operand, expect_field_name, expect_c_field_name, c_dot_path, atom) != 0)) {
                         lm_trans_expr_atom_lowering_delete(atom);
-                        lm_trans_text_ref_destroy(&pending_expected_class);
+                        lm_trans_expr_callable_type_delete(pending_expected_type);
                         lm_trans_text_ref_destroy(&operand_class);
                         return 1;
                     }
                     if (atom -> emit == &lm_trans_expr_emit_contextual_literal) {
-                        if (lm_trans_contextual_literal_set_expected_class(atom, pending_expected_class) != 0) {
+                        if (lm_trans_contextual_literal_set_expected_type(atom, pending_expected_type) != 0) {
                             lm_trans_expr_atom_lowering_delete(atom);
-                            lm_trans_text_ref_destroy(&pending_expected_class);
+                            lm_trans_expr_callable_type_delete(pending_expected_type);
                             lm_trans_text_ref_destroy(&operand_class);
                             return 1;
                         }
@@ -11405,12 +11412,18 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
                     }
                     if ((lm_trans_text_equals(node -> as -> atom, "=") || lm_trans_text_equals(node -> as -> atom, "!=")) && previous_operand != 0 && previous_operand -> kind == LM_P0_NODE_ATOM) {
                         if (lm_trans_expr_value_class_from_atom(previous_operand -> as -> atom, namespace_, operand_class)) {
-                            pending_expected_class[0] = operand_class[0];
+                            if (lm_trans_callable_type_reset(pending_expected_type) != 0) {
+                                lm_trans_expr_atom_lowering_delete(atom);
+                                lm_trans_expr_callable_type_delete(pending_expected_type);
+                                lm_trans_text_ref_destroy(&operand_class);
+                                return 1;
+                            }
+                            pending_expected_type->class_name[0] = operand_class[0];
                         }
                     }
                     if ((lm_trans_update_expr_atom_lowering_state(atom, node, &previous_operand, &expect_field_name, &expect_c_field_name, &c_dot_path) != 0)) {
                         lm_trans_expr_atom_lowering_delete(atom);
-                        lm_trans_text_ref_destroy(&pending_expected_class);
+                        lm_trans_expr_callable_type_delete(pending_expected_type);
                         lm_trans_text_ref_destroy(&operand_class);
                         return 1;
                     }
@@ -11424,7 +11437,7 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
                     }
                     if ((lm_trans_expr_lowered_range_append_atom(lowered, piece_leading_space, node, atom) != 0)) {
                         lm_trans_expr_atom_lowering_delete(atom);
-                        lm_trans_text_ref_destroy(&pending_expected_class);
+                        lm_trans_expr_callable_type_delete(pending_expected_type);
                         lm_trans_text_ref_destroy(&operand_class);
                         return 1;
                     }
@@ -11432,7 +11445,7 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
                 else {
                     if ((lm_trans_expr_lowered_range_append_node(lowered, wrote, node) != 0)) {
                         lm_trans_expr_atom_lowering_delete(atom);
-                        lm_trans_text_ref_destroy(&pending_expected_class);
+                        lm_trans_expr_callable_type_delete(pending_expected_type);
                         lm_trans_text_ref_destroy(&operand_class);
                         return 1;
                     }
@@ -11450,19 +11463,19 @@ static int lm_trans_expr_lowered_range_build(LmTransExprLoweredRange * lowered, 
     if (expect_field_name) {
         fprintf(stderr, "trans L2 error: field-follow expects a field name\n");
         lm_trans_expr_atom_lowering_delete(atom);
-        lm_trans_text_ref_destroy(&pending_expected_class);
+        lm_trans_expr_callable_type_delete(pending_expected_type);
         lm_trans_text_ref_destroy(&operand_class);
         return 1;
     }
     if (expect_c_field_name) {
         fprintf(stderr, "trans L2 error: C value-field dot expects a field name\n");
         lm_trans_expr_atom_lowering_delete(atom);
-        lm_trans_text_ref_destroy(&pending_expected_class);
+        lm_trans_expr_callable_type_delete(pending_expected_type);
         lm_trans_text_ref_destroy(&operand_class);
         return 1;
     }
     lm_trans_expr_atom_lowering_delete(atom);
-    lm_trans_text_ref_destroy(&pending_expected_class);
+    lm_trans_expr_callable_type_delete(pending_expected_type);
     lm_trans_text_ref_destroy(&operand_class);
     return 0;
 }
@@ -11732,12 +11745,12 @@ static int lm_trans_emit_expr_range(FILE * file, const LmP0Field * first, const 
     job->range->expect_field_name = 0;
     job->range->expect_c_field_name = 0;
     job->range->c_dot_path = 0;
-    job->range->expected_class = 0;
+    job->range->expected_type = 0;
     status = lm_trans_emit_expr_stack_run(file, job, namespace_);
     return status;
 }
 
-static int lm_trans_emit_expr_range_with_expected_class(FILE * file, const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, const LmP0Text * expected_class) {
+static int lm_trans_emit_expr_range_with_expected_type(FILE * file, const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, const LmTransL4CallableType * expected_type) {
     LmTransExprJob * job;
     int status;
     job = lm_trans_expr_job_new();
@@ -11758,9 +11771,28 @@ static int lm_trans_emit_expr_range_with_expected_class(FILE * file, const LmP0F
     job->range->expect_field_name = 0;
     job->range->expect_c_field_name = 0;
     job->range->c_dot_path = 0;
-    job->range->expected_class = expected_class;
+    job->range->expected_type = expected_type;
     status = lm_trans_emit_expr_stack_run(file, job, namespace_);
     return status;
+}
+
+static int lm_trans_emit_expr_range_with_expected_class(FILE * file, const LmP0Field * first, const LmP0Field * stop, const LmTransNamespace * namespace_, const LmP0Text * expected_class) {
+    LmTransL4CallableType * expected_type;
+    int status;
+    if (expected_class == 0) {
+        return lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, 0);
+    }
+    expected_type = lm_trans_expr_callable_type_new();
+    if (expected_type == 0) {
+        return 1;
+    }
+    expected_type->class_name[0] = expected_class[0];
+    status = lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, expected_type);
+    {
+        int lm_return_0 = status;
+        lm_trans_expr_callable_type_delete(expected_type);
+        return lm_return_0;
+    }
 }
 
 static int lm_trans_emit_expr_fields_with_expected_class(FILE * file, const LmP0Field * first, const LmTransNamespace * namespace_, const LmP0Text * expected_class) {
@@ -17759,7 +17791,7 @@ static int lm_trans_emit_l2_table_expr_with_expected_type(FILE * file, const LmP
     if (expected_type == 0 || expected_type -> class_name == 0) {
         return 1;
     }
-    return lm_trans_emit_expr_range_with_expected_class(file, first, stop, namespace_, expected_type -> class_name);
+    return lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, expected_type);
 }
 
 static int lm_trans_emit_l2_table_inline_layout_initializer(FILE * file, const LmP0Structure * body, const LmTransL4CallableType * expected_type, LmTransNamespace * namespace_) {
