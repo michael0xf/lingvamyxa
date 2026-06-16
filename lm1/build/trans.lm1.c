@@ -274,6 +274,7 @@ typedef struct LmTransL4CallableType {
     LmP0Text * class_name;
     size_t address_depth;
     int is_const;
+    size_t array_rank;
 } LmTransL4CallableType;
 struct LmTransFormalParam {
     const LmP0Node * source_node;
@@ -6423,6 +6424,7 @@ static int lm_trans_callable_type_reset(LmTransL4CallableType *type) {
     type->class_name->length = 0U;
     type->address_depth = 0U;
     type->is_const = 0;
+    type->array_rank = 0U;
     return 0;
 }
 
@@ -6441,6 +6443,7 @@ static int lm_trans_callable_type_copy(LmTransL4CallableType *target, const LmTr
     }
     target->address_depth = source -> address_depth;
     target->is_const = source -> is_const;
+    target->array_rank = source -> array_rank;
     return 0;
 }
 
@@ -7619,7 +7622,7 @@ static int lm_trans_expected_param_is_callable_descriptor(const LmP0Node *param,
 }
 
 static int lm_trans_callable_type_same(const LmTransL4CallableType *left, const LmTransL4CallableType *right) {
-    return (((((left != 0) && (right != 0)) && (left -> address_depth == right -> address_depth)) && (left -> is_const == right -> is_const)) && lm_trans_identifier_same(left -> class_name, right -> class_name));
+    return ((((((left != 0) && (right != 0)) && (left -> address_depth == right -> address_depth)) && (left -> is_const == right -> is_const)) && (left -> array_rank == right -> array_rank)) && lm_trans_identifier_same(left -> class_name, right -> class_name));
 }
 
 static int lm_trans_callable_return_type_from_node(const LmP0Node *node, LmTransL4CallableType *out) {
@@ -28367,6 +28370,9 @@ static int lm_trans_l4_callable_type_from_node(const LmP0Node *node, LmTransL4Ca
     const LmP0Node * current;
     const LmP0Frame * frame;
     const LmP0Field * field;
+    LmP0Text * dimension;
+    size_t dimension_index;
+    size_t rank;
     if (node == 0 || out == 0) {
         return 0;
     }
@@ -28416,6 +28422,20 @@ static int lm_trans_l4_callable_type_from_node(const LmP0Node *node, LmTransL4Ca
             if (field == 0 || field -> value == 0) {
                 return 0;
             }
+            dimension = lm_trans_text_ref_new_cstr("");
+            if (dimension == 0) {
+                return 0;
+            }
+            dimension_index = 0U;
+            rank = 0U;
+            while (lm_trans_array_head_next_dimension(frame -> head, &dimension_index, dimension)) {
+                rank = rank + 1U;
+            }
+            lm_trans_text_ref_destroy(&dimension);
+            if (rank == 0U) {
+                return 0;
+            }
+            out->array_rank = out -> array_rank + rank;
             out->address_depth = out -> address_depth + 1U;
             current = field -> value;
             continue;

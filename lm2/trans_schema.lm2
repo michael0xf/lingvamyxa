@@ -459,6 +459,7 @@ L4:
                  class_name     LmP0Text               0                       0                                0
                  address_depth  size_t                 1                       0                                0
                  is_const       int                    2                       0                                0
+                 array_rank     size_t                 3                       0                                0
     end: LmTransL4CallableType
 
     table:

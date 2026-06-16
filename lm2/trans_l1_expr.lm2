@@ -35,6 +35,7 @@ fn: lm_trans_callable_type_reset (LmTransL4CallableType: type) int
     type\class_name\length: 0U
     type\address_depth: 0U
     type\is_const: 0
+    type\array_rank: 0U
     return: 0
 end: lm_trans_callable_type_reset
 
@@ -49,6 +50,7 @@ fn: lm_trans_callable_type_copy (LmTransL4CallableType: target; const: (LmTransL
         target\class_name[0]: source\class_name[0]
     target\address_depth: source\address_depth
     target\is_const: source\is_const
+    target\array_rank: source\array_rank
     return: 0
 end: lm_trans_callable_type_copy
 
@@ -1061,7 +1063,7 @@ fn: lm_trans_expected_param_is_callable_descriptor (const: (LmP0Node: param); co
 end: lm_trans_expected_param_is_callable_descriptor
 
 fn: lm_trans_callable_type_same (const: (LmTransL4CallableType: left); const: (LmTransL4CallableType: right)) int
-    return: (((((left != 0) && (right != 0)) && (left\address_depth = right\address_depth)) && (left\is_const = right\is_const)) && lm_trans_identifier_same(left\class_name, right\class_name))
+    return: ((((((left != 0) && (right != 0)) && (left\address_depth = right\address_depth)) && (left\is_const = right\is_const)) && (left\array_rank = right\array_rank)) && lm_trans_identifier_same(left\class_name, right\class_name))
 end: lm_trans_callable_type_same
 
 fn: lm_trans_callable_return_type_from_node (const: (LmP0Node: node); LmTransL4CallableType: out) int
