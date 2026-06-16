@@ -542,7 +542,7 @@ fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmTransFo
     while: index < params\count
         if: index != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: lm_trans_emit_callable_descriptor_param_type(file, params\params[index]\source_node, namespace_) != 0
+        if: lm_trans_emit_callable_descriptor_param_type(file, params\params[index], namespace_) != 0
             return: 1
         index: index + 1U
 

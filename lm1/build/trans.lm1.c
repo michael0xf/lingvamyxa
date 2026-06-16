@@ -753,7 +753,7 @@ static int lm_trans_node_callable_descriptor_name(const LmP0Node *node, const Lm
 static int lm_trans_formal_param_list_has_any(const LmTransFormalParamList *params);
 static void lm_trans_formal_param_list_delete(LmTransFormalParamList *list);
 static LmTransFormalParamList * lm_trans_formal_param_list_from_node(const LmP0Node *params, int allow_unnamed, const char *error_name);
-static int lm_trans_emit_callable_descriptor_param_type(FILE *file, const LmP0Node *param, const LmTransNamespace *namespace_);
+static int lm_trans_emit_callable_descriptor_param_type(FILE *file, const LmTransFormalParam *param, const LmTransNamespace *namespace_);
 static int lm_trans_emit_function_return_struct_type_name(FILE *file, const LmP0Text *function_name);
 static int lm_trans_emit_function_return_structure_once(FILE *file, const LmP0Text *function_name, const LmP0Node *return_node);
 static int lm_trans_emit_function_params(FILE *file, const LmTransFunctionHeader *function, LmTransNamespace *namespace_);
@@ -2602,7 +2602,7 @@ static int lm_trans_type_suffix_stack_push(LmOwnPtrStack **suffixes, size_t dept
 static int lm_trans_emit_type_pointer_suffix(FILE *file, size_t depth);
 static int lm_trans_emit_type_suffixes(FILE *file, LmOwnPtrStack *suffixes);
 static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node);
-static int lm_trans_emit_callable_descriptor_param_type(FILE *file, const LmP0Node *param, const LmTransNamespace *namespace_);
+static int lm_trans_emit_callable_descriptor_param_type(FILE *file, const LmTransFormalParam *param, const LmTransNamespace *namespace_);
 static int lm_trans_emit_function_return_struct_type_name(FILE *file, const LmP0Text *function_name);
 static char * lm_trans_function_return_struct_type_name_new(const LmP0Text *function_name);
 static int lm_trans_emit_current_return_type(FILE *file, const LmTransNamespace *namespace_);
@@ -12075,102 +12075,13 @@ static int lm_trans_emit_type_node(FILE *file, const LmP0Node *type_node) {
     return status;
 }
 
-static int lm_trans_emit_callable_descriptor_param_type(FILE *file, const LmP0Node *param, const LmTransNamespace *namespace_) {
-    const LmP0Node * current;
-    const LmP0Frame * frame;
-    const LmP0Structure * body;
-    const LmP0Field * field;
-    const LmP0Field * type_field;
-    LmOwnPtrStack * suffixes;
-    int status;
-    if ((param == 0)) {
+static int lm_trans_emit_callable_descriptor_param_type(FILE *file, const LmTransFormalParam *param, const LmTransNamespace *namespace_) {
+    namespace_ = namespace_;
+    if (((param == 0) || (param -> type == 0))) {
         fprintf(stderr, "trans L2 error: callable descriptor parameter expects a type\n");
         return 1;
     }
-    current = param;
-    suffixes = 0;
-    status = 0;
-    while (1) {
-        if ((current == 0)) {
-            fprintf(stderr, "trans L2 error: callable descriptor parameter expects a type\n");
-            status = 1;
-            break;
-        }
-        if ((current -> kind == LM_P0_NODE_STRUCTURE)) {
-            field = current -> as -> structure -> first_field;
-            if ((((field == 0) || (field -> next != 0)) || (field -> value == 0))) {
-                fprintf(stderr, "trans L2 error: callable descriptor parameter Structure must contain exactly one type\n");
-                status = 1;
-                break;
-            }
-            current = field -> value;
-            continue;
-        }
-        if ((current -> kind == LM_P0_NODE_FRAME)) {
-            frame = current -> as -> frame;
-            if (lm_trans_text_equals(frame -> head, "const")) {
-                field = frame -> body -> first_field;
-                if ((((field == 0) || (field -> next != 0)) || (field -> value == 0))) {
-                    fprintf(stderr, "trans L2 error: const callable descriptor parameter expects one type\n");
-                    status = 1;
-                    break;
-                }
-                if ((lm_trans_put(file, "const ") != 0)) {
-                    status = 1;
-                    break;
-                }
-                current = field -> value;
-                continue;
-            }
-            body = lm_trans_unwrap_single_anonymous_structure(frame -> body);
-            if ((body != 0)) {
-                type_field = body -> first_field;
-            }
-            else {
-                type_field = 0;
-            }
-            if (lm_trans_text_all_char(frame -> head, '@')) {
-                if (((type_field == 0) || (type_field -> value == 0))) {
-                    fprintf(stderr, "trans L2 error: @ callable descriptor parameter expects a type\n");
-                    status = 1;
-                    break;
-                }
-                if ((lm_trans_type_suffix_stack_push(&suffixes, frame -> head -> length) != 0)) {
-                    status = 1;
-                    break;
-                }
-                current = type_field -> value;
-                continue;
-            }
-            if (lm_trans_text_is_array_receiver_head(frame -> head)) {
-                if (((type_field == 0) || (type_field -> value == 0))) {
-                    fprintf(stderr, "trans L2 error: [] callable descriptor parameter expects a type\n");
-                    status = 1;
-                    break;
-                }
-                if ((lm_trans_type_suffix_stack_push(&suffixes, 1U) != 0)) {
-                    status = 1;
-                    break;
-                }
-                current = type_field -> value;
-                continue;
-            }
-            if (lm_trans_head_can_declare_storage(frame -> head, namespace_)) {
-                status = lm_trans_emit_type_name(file, frame -> head);
-                break;
-            }
-            fprintf(stderr, "trans L2 error: unsupported callable descriptor parameter type\n");
-            status = 1;
-            break;
-        }
-        status = lm_trans_emit_type_node(file, current);
-        break;
-    }
-    if ((status == 0)) {
-        status = lm_trans_emit_type_suffixes(file, suffixes);
-    }
-    lm_trans_type_suffix_stack_delete(&suffixes);
-    return status;
+    return lm_trans_emit_callable_type_named(file, param -> type, lm_trans_text_from_cstr(""));
 }
 
 static int lm_trans_emit_function_return_struct_type_name(FILE *file, const LmP0Text *function_name) {
@@ -22833,7 +22744,7 @@ static int lm_trans_emit_callable_descriptor_params_body(FILE *file, const LmTra
         if (index != 0U && lm_trans_put(file, ", ") != 0) {
             return 1;
         }
-        if (lm_trans_emit_callable_descriptor_param_type(file, params -> params[index] -> source_node, namespace_) != 0) {
+        if (lm_trans_emit_callable_descriptor_param_type(file, params -> params[index], namespace_) != 0) {
             return 1;
         }
         index = index + 1U;
