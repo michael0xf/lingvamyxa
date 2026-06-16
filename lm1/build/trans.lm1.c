@@ -323,7 +323,7 @@ typedef struct LmTransLoop {
 struct LmTransExprSegment {
     const LmP0Field * first;
     const LmP0Field * stop;
-    const LmP0Node * expected_param;
+    LmTransFormalParam * expected_param;
     int present;
 };
 typedef struct LmTransStructReturnFieldValue {
@@ -682,6 +682,9 @@ static int lm_trans_callable_type_reset(LmTransL4CallableType *type);
 static LmTransL4CallableType * lm_trans_expr_callable_type_new(void);
 static void lm_trans_expr_callable_type_delete(LmTransL4CallableType *type);
 static int lm_trans_formal_param_name(const LmP0Node *node, LmP0Text *out_name);
+static LmTransFormalParam * lm_trans_formal_param_new(void);
+static void lm_trans_formal_param_delete(LmTransFormalParam *param);
+static int lm_trans_formal_param_read_into(LmTransFormalParam *param, const LmP0Node *node);
 static int lm_trans_receiver_fn(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
 static int lm_trans_receiver_callable(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
 static int lm_trans_receiver_fm(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
@@ -2433,16 +2436,19 @@ static int lm_trans_expr_stack_push_range(LmTransExprStack *stack, const LmP0Fie
 static int lm_trans_expr_stack_push_call_args_owned(LmTransExprStack *stack, const LmP0Structure *body, const LmTransSymbol *callee, LmTransSymbol *owned_callee);
 static int lm_trans_expr_stack_push_lowered_range(LmTransExprStack *stack, LmTransExprLoweredRange *range);
 static LmTransExprSegment * lm_trans_expr_segment_new(void);
+static void lm_trans_expr_segment_delete(LmTransExprSegment *segment);
+static void lm_trans_expr_segment_delete_any(void *object);
 static LmOwnPtrStack * lm_trans_expr_segment_stack_new(void);
 static void lm_trans_expr_segment_stack_delete(LmOwnPtrStack **segments);
 static int lm_trans_expr_segments_resize_blank(LmOwnPtrStack *segments, size_t count);
 static int lm_trans_expr_segments_append(LmOwnPtrStack *segments, const LmP0Field *first, const LmP0Field *stop);
 static int lm_trans_callable_has_no_params(const LmTransSymbol *symbol);
 static const LmP0Node * lm_trans_callable_param_node_at(const LmTransSymbol *symbol, size_t index);
+static LmTransFormalParam * lm_trans_callable_formal_param_at(const LmTransSymbol *symbol, size_t index);
+static int lm_trans_expr_segment_set_expected_param(LmTransExprSegment *segment, const LmTransSymbol *callee, size_t index);
 static int lm_trans_formal_param_default_fields(const LmP0Node *node, const LmP0Field **out_first);
 static int lm_trans_array_body_dimension_can_consume(const LmP0Field *field);
 static int lm_trans_array_param_declarator_from_node(const LmP0Node *node, LmTransCDeclarator *declarator);
-static int lm_trans_array_param_type_info(const LmP0Node *node, const LmP0Node **out_element_type, size_t *out_rank, size_t *out_pointer_depth);
 static int lm_trans_array_param_default_fields(const LmP0Node *node, const LmP0Field **out_first);
 static int lm_trans_expr_segment_set_default(LmTransExprSegment *segment, const LmTransSymbol *callee, size_t index);
 static int lm_trans_registry_is_function_pointer_type_name(const LmTransNamespace *namespace_, const LmP0Text *name);
@@ -2674,7 +2680,8 @@ static int lm_trans_emit_type_receiver_structure_value_alloc(FILE *file, unsigne
 static int lm_trans_emit_type_receiver_structure_value_fill(FILE *file, unsigned indent, const LmP0Node *type_node, const LmP0Text *target_name, const LmP0Structure *value, const LmTransNamespace *namespace_, int *out_consumed);
 static const LmP0Structure * lm_trans_expr_segment_single_structure_value(const LmTransExprSegment *segment);
 static char * lm_trans_array_value_helper_name_new(void);
-static int lm_trans_emit_array_value_helper(FILE *file, const LmP0Node *param_node, const LmP0Structure *value, const LmTransNamespace *namespace_, LmP0Text *out_name);
+static int lm_trans_array_formal_param_type_info(const LmTransFormalParam *param, const LmP0Node **out_element_type, size_t *out_rank, size_t *out_pointer_depth);
+static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam *param, const LmP0Structure *value, const LmTransNamespace *namespace_, LmP0Text *out_name);
 static int lm_trans_materialize_array_value(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
 static int lm_trans_return_name_text(unsigned id, char *buffer, size_t buffer_size, LmP0Text *out_name);
 static int lm_trans_emit_typed_value_return_statement(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_, int *out_consumed);
@@ -7153,11 +7160,23 @@ static LmTransExprSegment * lm_trans_expr_segment_new(void) {
     return (((LmTransExprSegment *)lm_own_new_zero(sizeof(LmTransExprSegment))));
 }
 
+static void lm_trans_expr_segment_delete(LmTransExprSegment *segment) {
+    if (segment != 0) {
+        lm_trans_formal_param_delete(segment -> expected_param);
+        segment->expected_param = 0;
+    }
+    lm_own_delete(segment, 0);
+}
+
+static void lm_trans_expr_segment_delete_any(void *object) {
+    lm_trans_expr_segment_delete(((LmTransExprSegment *)object));
+}
+
 static LmOwnPtrStack * lm_trans_expr_segment_stack_new(void) {
     LmOwnPtrStack * segments;
     segments = (((LmOwnPtrStack *)lm_own_new_zero(sizeof(segments[0]))));
     if ((segments != 0)) {
-        lm_own_ptr_stack_init(segments, lm_own_delete_plain);
+        lm_own_ptr_stack_init(segments, lm_trans_expr_segment_delete_any);
     }
     return segments;
 }
@@ -7185,7 +7204,7 @@ static int lm_trans_expr_segments_resize_blank(LmOwnPtrStack *segments, size_t c
             return 1;
         }
         if ((lm_own_ptr_stack_push(segments, segment) != 0)) {
-            lm_own_delete(segment, 0);
+            lm_trans_expr_segment_delete(segment);
             return 1;
         }
     }
@@ -7205,7 +7224,7 @@ static int lm_trans_expr_segments_append(LmOwnPtrStack *segments, const LmP0Fiel
     segment->present = 1;
     status = lm_own_ptr_stack_push(segments, segment);
     if ((status != 0)) {
-        lm_own_delete(segment, 0);
+        lm_trans_expr_segment_delete(segment);
     }
     return status;
 }
@@ -7224,6 +7243,38 @@ static const LmP0Node * lm_trans_callable_param_node_at(const LmTransSymbol *sym
         return field -> value;
     }
     return 0;
+}
+
+static LmTransFormalParam * lm_trans_callable_formal_param_at(const LmTransSymbol *symbol, size_t index) {
+    const LmP0Node * node;
+    LmTransFormalParam * param;
+    node = lm_trans_callable_param_node_at(symbol, index);
+    if (node == 0) {
+        return 0;
+    }
+    param = lm_trans_formal_param_new();
+    if (param == 0) {
+        return 0;
+    }
+    if (lm_trans_formal_param_read_into(param, node) != 0) {
+        lm_trans_formal_param_delete(param);
+        return 0;
+    }
+    return param;
+}
+
+static int lm_trans_expr_segment_set_expected_param(LmTransExprSegment *segment, const LmTransSymbol *callee, size_t index) {
+    LmTransFormalParam * param;
+    if (segment == 0 || callee == 0) {
+        return 0;
+    }
+    param = lm_trans_callable_formal_param_at(callee, index);
+    if (param == 0) {
+        return 0;
+    }
+    lm_trans_formal_param_delete(segment -> expected_param);
+    segment->expected_param = param;
+    return 1;
 }
 
 static int lm_trans_formal_param_default_fields(const LmP0Node *node, const LmP0Field **out_first) {
@@ -7327,70 +7378,6 @@ static int lm_trans_array_param_declarator_from_node(const LmP0Node *node, LmTra
     return 1;
 }
 
-static int lm_trans_array_param_type_info(const LmP0Node *node, const LmP0Node **out_element_type, size_t *out_rank, size_t *out_pointer_depth) {
-    LmTransCDeclarator * declarator;
-    LmP0Text * dimension;
-    size_t dimension_index;
-    size_t rank;
-    if ((out_element_type != 0)) {
-        out_element_type[0] = 0;
-    }
-    if ((out_rank != 0)) {
-        out_rank[0] = 0U;
-    }
-    if ((out_pointer_depth != 0)) {
-        out_pointer_depth[0] = 0U;
-    }
-    declarator = lm_trans_statement_c_declarator_new();
-    if (declarator == 0) {
-        return 0;
-    }
-    if (lm_trans_array_param_declarator_from_node(node, declarator) == 0) {
-        {
-            int lm_return_0 = 0;
-            lm_trans_statement_c_declarator_destroy(declarator);
-            return lm_return_0;
-        }
-    }
-    dimension_index = 0U;
-    rank = 0U;
-    dimension = lm_trans_text_ref_new_cstr("");
-    if ((dimension == 0)) {
-        {
-            int lm_return_1 = 0;
-            lm_trans_statement_c_declarator_destroy(declarator);
-            return lm_return_1;
-        }
-    }
-    while (lm_trans_array_head_next_dimension(declarator -> array_head, &dimension_index, dimension)) {
-        rank = rank + 1U;
-    }
-    if ((rank == 0U)) {
-        lm_trans_text_ref_destroy(&dimension);
-        {
-            int lm_return_2 = 0;
-            lm_trans_statement_c_declarator_destroy(declarator);
-            return lm_return_2;
-        }
-    }
-    if ((out_element_type != 0)) {
-        out_element_type[0] = declarator -> type_node;
-    }
-    if ((out_rank != 0)) {
-        out_rank[0] = rank;
-    }
-    if ((out_pointer_depth != 0)) {
-        out_pointer_depth[0] = declarator -> pointer_depth;
-    }
-    lm_trans_text_ref_destroy(&dimension);
-    {
-        int lm_return_3 = 1;
-        lm_trans_statement_c_declarator_destroy(declarator);
-        return lm_return_3;
-    }
-    lm_trans_statement_c_declarator_destroy(declarator);
-}
-
 static int lm_trans_array_param_default_fields(const LmP0Node *node, const LmP0Field **out_first) {
     const LmP0Field * default_field;
     LmTransCDeclarator * declarator;
@@ -7431,18 +7418,19 @@ static int lm_trans_array_param_default_fields(const LmP0Node *node, const LmP0F
 }
 
 static int lm_trans_expr_segment_set_default(LmTransExprSegment *segment, const LmTransSymbol *callee, size_t index) {
-    const LmP0Node * param_node;
     const LmP0Field * default_first;
     if (((segment == 0) || (callee == 0))) {
         return 0;
     }
-    param_node = lm_trans_callable_param_node_at(callee, index);
-    if ((lm_trans_formal_param_default_fields(param_node, &default_first) == 0)) {
+    if (lm_trans_expr_segment_set_expected_param(segment, callee, index) == 0) {
+        return 0;
+    }
+    default_first = segment -> expected_param -> value_first;
+    if (default_first == 0) {
         return 0;
     }
     segment->first = default_first;
     segment->stop = 0;
-    segment->expected_param = param_node;
     segment->present = 1;
     return 1;
 }
@@ -8938,7 +8926,10 @@ static int lm_trans_expr_stack_push_lazy_binder_fields(FILE *file, LmTransExprSt
         next = lm_trans_expr_segment_end(field);
         segment->first = field;
         segment->stop = next;
-        segment->expected_param = lm_trans_callable_param_node_at(source_symbol, index);
+        if (lm_trans_expr_segment_set_expected_param(segment, source_symbol, index) == 0) {
+            status = 1;
+            break;
+        }
         segment->present = 1;
         index = index + 1U;
         field = next;
@@ -9043,7 +9034,7 @@ static int lm_trans_should_force_zero_arg_callable(const LmTransExprSegment *seg
         return 0;
     }
     symbol = lm_trans_callable_value_resolve(namespace_, atom, callable_value);
-    if ((((lm_trans_symbol_is_value_callable(symbol) == 0) || (lm_trans_callable_has_no_params(symbol) == 0)) || (lm_trans_param_descriptor_matches_return(segment -> expected_param, symbol -> callable_return_node, namespace_) == 0))) {
+    if ((((lm_trans_symbol_is_value_callable(symbol) == 0) || (lm_trans_callable_has_no_params(symbol) == 0)) || (lm_trans_param_descriptor_matches_return(segment -> expected_param -> source_node, symbol -> callable_return_node, namespace_) == 0))) {
         lm_trans_text_ref_destroy(&atom);
         {
             int lm_return_0 = 0;
@@ -9148,7 +9139,7 @@ static int lm_trans_materialize_zero_arg_callable(FILE *file, LmTransExprStack *
 
 static int lm_trans_materialize_callable_descriptor_value(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed) {
     const LmTransSymbol * symbol;
-    const LmP0Node * expected_param;
+    const LmP0Node * expected_param_node;
     const LmP0Node * node;
     const LmP0Frame * frame;
     LmP0Text * descriptor_name;
@@ -9187,11 +9178,11 @@ static int lm_trans_materialize_callable_descriptor_value(FILE *file, LmTransExp
     }
     consumed = 0;
     status = 0;
-    expected_param = 0;
-    if (segment != 0) {
-        expected_param = segment -> expected_param;
+    expected_param_node = 0;
+    if (segment != 0 && segment -> expected_param != 0) {
+        expected_param_node = segment -> expected_param -> source_node;
     }
-    if (((((lm_trans_node_callable_descriptor_name(expected_param, namespace_, descriptor_name) && (segment != 0)) && (segment -> first != 0)) && (segment -> first -> next == segment -> stop)) && (segment -> first -> value != 0))) {
+    if (((((lm_trans_node_callable_descriptor_name(expected_param_node, namespace_, descriptor_name) && (segment != 0)) && (segment -> first != 0)) && (segment -> first -> next == segment -> stop)) && (segment -> first -> value != 0))) {
         descriptor_is_function_pointer = lm_trans_registry_is_function_pointer_type_name(namespace_, descriptor_name);
         node = segment -> first -> value;
         if ((node -> kind == LM_P0_NODE_FRAME)) {
@@ -9404,7 +9395,8 @@ static int lm_trans_materialize_callable_descriptor_value(FILE *file, LmTransExp
 static int lm_trans_expr_stack_try_materialize_segment(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed) {
     const char *binding;
     const char *class_name;
-    const LmP0Node * expected_param;
+    const LmTransFormalParam * expected_param;
+    const LmP0Node * expected_param_node;
     LmTransBinding * resolved;
     LmTransExprSegmentMaterializer materializer;
     if ((out_consumed != 0)) {
@@ -9417,11 +9409,15 @@ static int lm_trans_expr_stack_try_materialize_segment(FILE *file, LmTransExprSt
     if (segment != 0) {
         expected_param = segment -> expected_param;
     }
-    if (lm_trans_array_param_type_info(expected_param, 0, 0, 0)) {
+    expected_param_node = 0;
+    if (expected_param != 0) {
+        expected_param_node = expected_param -> source_node;
+    }
+    if (expected_param != 0 && expected_param -> is_array) {
         class_name = "array.value";
     }
     else {
-        if (lm_trans_expected_param_is_callable_descriptor(expected_param, namespace_)) {
+        if (lm_trans_expected_param_is_callable_descriptor(expected_param_node, namespace_)) {
             class_name = "callable.descriptor.value";
         }
         else {
@@ -9535,7 +9531,9 @@ static int lm_trans_call_args_layout_signature(LmOwnPtrStack *segments, const Lm
             named_frame = field -> value -> as -> frame;
             segment->first = named_frame -> body -> first_field;
             segment->stop = 0;
-            segment->expected_param = lm_trans_callable_param_node_at(callee, named_index);
+            if (lm_trans_expr_segment_set_expected_param(segment, callee, named_index) == 0) {
+                return 1;
+            }
             segment->present = 1;
             if ((named_index == index)) {
                 index = index + 1U;
@@ -9578,7 +9576,9 @@ static int lm_trans_call_args_layout_signature(LmOwnPtrStack *segments, const Lm
         }
         segment->first = field;
         segment->stop = next;
-        segment->expected_param = lm_trans_callable_param_node_at(callee, index);
+        if (lm_trans_expr_segment_set_expected_param(segment, callee, index) == 0) {
+            return 1;
+        }
         segment->present = 1;
         index = index + 1U;
         field = next;
@@ -13588,7 +13588,49 @@ static char * lm_trans_array_value_helper_name_new(void) {
     return name;
 }
 
-static int lm_trans_emit_array_value_helper(FILE *file, const LmP0Node *param_node, const LmP0Structure *value, const LmTransNamespace *namespace_, LmP0Text *out_name) {
+static int lm_trans_array_formal_param_type_info(const LmTransFormalParam *param, const LmP0Node **out_element_type, size_t *out_rank, size_t *out_pointer_depth) {
+    LmP0Text * dimension;
+    size_t dimension_index;
+    size_t rank;
+    if (out_element_type != 0) {
+        out_element_type[0] = 0;
+    }
+    if (out_rank != 0) {
+        out_rank[0] = 0U;
+    }
+    if (out_pointer_depth != 0) {
+        out_pointer_depth[0] = 0U;
+    }
+    if (param == 0 || param -> is_array == 0 || param -> declarator == 0) {
+        return 0;
+    }
+    dimension_index = 0U;
+    rank = 0U;
+    dimension = lm_trans_text_ref_new_cstr("");
+    if (dimension == 0) {
+        return 0;
+    }
+    while (lm_trans_array_head_next_dimension(param -> declarator -> array_head, &dimension_index, dimension)) {
+        rank = rank + 1U;
+    }
+    if (rank == 0U) {
+        lm_trans_text_ref_destroy(&dimension);
+        return 0;
+    }
+    if (out_element_type != 0) {
+        out_element_type[0] = param -> declarator -> type_node;
+    }
+    if (out_rank != 0) {
+        out_rank[0] = rank;
+    }
+    if (out_pointer_depth != 0) {
+        out_pointer_depth[0] = param -> declarator -> pointer_depth;
+    }
+    lm_trans_text_ref_destroy(&dimension);
+    return 1;
+}
+
+static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam *param, const LmP0Structure *value, const LmTransNamespace *namespace_, LmP0Text *out_name) {
     FILE * prelude_file;
     const LmP0Node * element_type;
     LmP0Text * helper_name_text;
@@ -13601,7 +13643,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmP0Node *param_no
         out_name->data = "";
         out_name->length = 0U;
     }
-    if (out_name == 0 || value == 0 || lm_trans_array_param_type_info(param_node, &element_type, &rank, &pointer_depth) == 0) {
+    if (out_name == 0 || value == 0 || lm_trans_array_formal_param_type_info(param, &element_type, &rank, &pointer_depth) == 0) {
         return 1;
     }
     helper_name = lm_trans_array_value_helper_name_new();
@@ -13678,7 +13720,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmP0Node *param_no
 static int lm_trans_materialize_array_value(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed) {
     const LmP0Structure * value;
     LmP0Text * helper_name;
-    const LmP0Node * param_node;
+    const LmTransFormalParam * param;
     if (out_consumed != 0) {
         out_consumed[0] = 0;
     }
@@ -13693,11 +13735,11 @@ static int lm_trans_materialize_array_value(FILE *file, LmTransExprStack *stack,
     if (helper_name == 0) {
         return 1;
     }
-    param_node = 0;
+    param = 0;
     if (segment != 0) {
-        param_node = segment -> expected_param;
+        param = segment -> expected_param;
     }
-    if (lm_trans_emit_array_value_helper(file, param_node, value, namespace_, helper_name) != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0 || lm_trans_expr_stack_push_text(stack, "(") != 0 || lm_trans_expr_stack_push_name_text(stack, helper_name) != 0) {
+    if (lm_trans_emit_array_value_helper(file, param, value, namespace_, helper_name) != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0 || lm_trans_expr_stack_push_text(stack, "(") != 0 || lm_trans_expr_stack_push_name_text(stack, helper_name) != 0) {
         {
             int lm_return_0 = 1;
             lm_trans_text_ref_destroy(&helper_name);

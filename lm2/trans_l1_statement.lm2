@@ -1047,9 +1047,49 @@ fn: lm_trans_array_value_helper_name_new () @: char
     c.memcpy(name, buffer, (cast: size_t written) + 1U)
 return: name
 
+fn: lm_trans_array_formal_param_type_info (
+    const: LmTransFormalParam: param
+    const: @(LmP0Node out_element_type)
+    @: size_t out_rank
+    @: size_t out_pointer_depth
+) int
+    LmP0Text: dimension
+    size_t: dimension_index
+    size_t: rank
+
+    if: out_element_type != 0
+        out_element_type[0]: 0
+    if: out_rank != 0
+        out_rank[0]: 0U
+    if: out_pointer_depth != 0
+        out_pointer_depth[0]: 0U
+
+    if: param = 0 || param\is_array = 0 || param\declarator = 0
+        return: 0
+
+    dimension_index: 0U
+    rank: 0U
+    dimension: lm_trans_text_ref_new_cstr("")
+    if: dimension = 0
+        return: 0
+    while: lm_trans_array_head_next_dimension(param\declarator\array_head, @ dimension_index, dimension)
+        rank: rank + 1U
+    if: rank = 0U
+        lm_trans_text_ref_destroy(@ dimension)
+        return: 0
+
+    if: out_element_type != 0
+        out_element_type[0]: param\declarator\type_node
+    if: out_rank != 0
+        out_rank[0]: rank
+    if: out_pointer_depth != 0
+        out_pointer_depth[0]: param\declarator\pointer_depth
+    lm_trans_text_ref_destroy(@ dimension)
+return: 1
+
 fn: lm_trans_emit_array_value_helper (
     FILE: file
-    const: LmP0Node: param_node
+    const: LmTransFormalParam: param
     const: LmP0Structure: value
     const: LmTransNamespace: namespace_
     LmP0Text: out_name
@@ -1066,7 +1106,7 @@ fn: lm_trans_emit_array_value_helper (
     if: out_name != 0
         out_name\data: ""
         out_name\length: 0U
-    if: out_name = 0 || value = 0 || lm_trans_array_param_type_info(param_node, @ element_type, @ rank, @ pointer_depth) = 0
+    if: out_name = 0 || value = 0 || lm_trans_array_formal_param_type_info(param, @ element_type, @ rank, @ pointer_depth) = 0
         return: 1
 
     helper_name: lm_trans_array_value_helper_name_new()
@@ -1113,7 +1153,7 @@ fn: lm_trans_materialize_array_value (
 ) int
     const: LmP0Structure: value
     LmP0Text: helper_name
-    const: LmP0Node: param_node
+    const: LmTransFormalParam: param
 
     if: out_consumed != 0
         out_consumed[0]: 0
@@ -1129,10 +1169,10 @@ fn: lm_trans_materialize_array_value (
         return: 1
     finally: lm_trans_text_ref_destroy(@ helper_name)
 
-    param_node: 0
+    param: 0
     if: segment != 0
-        param_node: segment\expected_param
-    if: lm_trans_emit_array_value_helper(file, param_node, value, namespace_, helper_name) != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0 || lm_trans_expr_stack_push_text(stack, "(") != 0 || lm_trans_expr_stack_push_name_text(stack, helper_name) != 0
+        param: segment\expected_param
+    if: lm_trans_emit_array_value_helper(file, param, value, namespace_, helper_name) != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0 || lm_trans_expr_stack_push_text(stack, "(") != 0 || lm_trans_expr_stack_push_name_text(stack, helper_name) != 0
         return: 1
 
     out_consumed[0]: 1
