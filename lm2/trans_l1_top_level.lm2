@@ -176,6 +176,9 @@ return: lm_trans_declare_l2_import_frame(namespace_, lm_trans_top_level_item_fra
 fn: lm_trans_top_level_emit_table (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_statement_emit_table(file, 0, lm_trans_top_level_item_frame(item), 0U, namespace_)
 
+fn: lm_trans_top_level_declare_table (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+return: lm_trans_declare_l2_table(namespace_, lm_trans_top_level_item_frame(item))
+
 fn: lm_trans_top_level_emit_join (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_statement_emit_join(file, 0, lm_trans_top_level_item_frame(item), 0U, namespace_)
 
@@ -434,6 +437,7 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
             out\emit_function: @lm_trans_top_level_emit_import_functions
         return: 1
     if: c.strcmp(receiver, "lm_trans_statement_emit_table") = 0
+        out\declare: @lm_trans_top_level_declare_table
         out\emit_after_prototypes: @lm_trans_top_level_emit_table
         out\emits_top_level: 1
         return: 1
