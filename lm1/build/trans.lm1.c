@@ -2591,8 +2591,6 @@ static int lm_trans_emit_expr_node(FILE *file, const LmP0Node *node, const LmTra
 static int lm_trans_emit_expr_fields(FILE *file, const LmP0Field *first, const LmTransNamespace *namespace_);
 static int lm_trans_emit_expr_range(FILE *file, const LmP0Field *first, const LmP0Field *stop, const LmTransNamespace *namespace_);
 static int lm_trans_emit_expr_range_with_expected_type(FILE *file, const LmP0Field *first, const LmP0Field *stop, const LmTransNamespace *namespace_, const LmTransL4CallableType *expected_type);
-static int lm_trans_emit_expr_range_with_expected_class(FILE *file, const LmP0Field *first, const LmP0Field *stop, const LmTransNamespace *namespace_, const LmP0Text *expected_class);
-static int lm_trans_emit_expr_fields_with_expected_class(FILE *file, const LmP0Field *first, const LmTransNamespace *namespace_, const LmP0Text *expected_class);
 static int lm_trans_frame_receiver_key(const LmP0Frame *frame, LmP0Text *out_key);
 static int lm_trans_type_receiver_key(const LmP0Node *type_node, LmP0Text *out_key);
 static int lm_trans_lookup_type_receiver_binding(const LmP0Node *type_node, LmTransBinding *out);
@@ -11828,29 +11826,6 @@ static int lm_trans_emit_expr_range_with_expected_type(FILE *file, const LmP0Fie
     return status;
 }
 
-static int lm_trans_emit_expr_range_with_expected_class(FILE *file, const LmP0Field *first, const LmP0Field *stop, const LmTransNamespace *namespace_, const LmP0Text *expected_class) {
-    LmTransL4CallableType * expected_type;
-    int status;
-    if (expected_class == 0) {
-        return lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, 0);
-    }
-    expected_type = lm_trans_expr_callable_type_new();
-    if (expected_type == 0) {
-        return 1;
-    }
-    expected_type->class_name[0] = expected_class[0];
-    status = lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, expected_type);
-    {
-        int lm_return_0 = status;
-        lm_trans_expr_callable_type_delete(expected_type);
-        return lm_return_0;
-    }
-}
-
-static int lm_trans_emit_expr_fields_with_expected_class(FILE *file, const LmP0Field *first, const LmTransNamespace *namespace_, const LmP0Text *expected_class) {
-    return lm_trans_emit_expr_range_with_expected_class(file, first, 0, namespace_, expected_class);
-}
-
 static int lm_trans_frame_receiver_key(const LmP0Frame *frame, LmP0Text *out_key) {
     if (((frame == 0) || (out_key == 0))) {
         return 0;
@@ -15099,6 +15074,7 @@ static int lm_trans_emit_declaration_with_qualifier(FILE *file, const LmP0Frame 
     const LmP0Structure * body;
     const LmP0Field * name_field;
     const LmP0Node * name_node;
+    LmTransL4CallableType * expected_type;
     int is_raw_callable;
     body = lm_trans_unwrap_single_anonymous_structure(frame -> body);
     name_field = lm_trans_nth_field(body, 0U);
@@ -15107,35 +15083,87 @@ static int lm_trans_emit_declaration_with_qualifier(FILE *file, const LmP0Frame 
         return 1;
     }
     name_node = name_field -> value;
+    expected_type = 0;
     if (lm_trans_emit_indent(file, indent) != 0) {
-        return 1;
+        {
+            int lm_return_0 = 1;
+            lm_trans_expr_callable_type_delete(expected_type);
+            return lm_return_0;
+        }
     }
     if (qualifier != 0 && lm_trans_put(file, qualifier) != 0) {
-        return 1;
+        {
+            int lm_return_1 = 1;
+            lm_trans_expr_callable_type_delete(expected_type);
+            return lm_return_1;
+        }
     }
     is_raw_callable = lm_trans_symbol_is(lm_trans_namespace_find(namespace_, frame -> head), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, frame -> head);
     if (is_raw_callable && lm_trans_emit_raw_callable_declarator(file, namespace_, frame -> head, name_node -> as -> atom, "callable descriptor") != 0) {
-        return 1;
+        {
+            int lm_return_2 = 1;
+            lm_trans_expr_callable_type_delete(expected_type);
+            return lm_return_2;
+        }
     }
     if (is_raw_callable == 0 && lm_trans_emit_type_head_only(file, frame -> head) != 0) {
-        return 1;
+        {
+            int lm_return_3 = 1;
+            lm_trans_expr_callable_type_delete(expected_type);
+            return lm_return_3;
+        }
     }
     if (is_raw_callable == 0 && lm_trans_put(file, " ") != 0) {
-        return 1;
+        {
+            int lm_return_4 = 1;
+            lm_trans_expr_callable_type_delete(expected_type);
+            return lm_return_4;
+        }
     }
     if (is_raw_callable == 0 && lm_trans_emit_identifier(file, name_node -> as -> atom) != 0) {
-        return 1;
+        {
+            int lm_return_5 = 1;
+            lm_trans_expr_callable_type_delete(expected_type);
+            return lm_return_5;
+        }
     }
-    if (name_field -> next != 0 && lm_trans_put(file, " = ") != 0) {
-        return 1;
-    }
-    if (name_field -> next != 0 && lm_trans_emit_expr_fields_with_expected_class(file, name_field -> next, namespace_, frame -> head) != 0) {
-        return 1;
+    if (name_field -> next != 0) {
+        expected_type = lm_trans_expr_callable_type_new();
+        if (expected_type == 0) {
+            {
+                int lm_return_6 = 1;
+                lm_trans_expr_callable_type_delete(expected_type);
+                return lm_return_6;
+            }
+        }
+        expected_type->class_name[0] = frame -> head[0];
+        if (lm_trans_put(file, " = ") != 0) {
+            {
+                int lm_return_7 = 1;
+                lm_trans_expr_callable_type_delete(expected_type);
+                return lm_return_7;
+            }
+        }
+        if (lm_trans_emit_expr_range_with_expected_type(file, name_field -> next, 0, namespace_, expected_type) != 0) {
+            {
+                int lm_return_8 = 1;
+                lm_trans_expr_callable_type_delete(expected_type);
+                return lm_return_8;
+            }
+        }
     }
     if (lm_trans_put(file, ";\n") != 0) {
-        return 1;
+        {
+            int lm_return_9 = 1;
+            lm_trans_expr_callable_type_delete(expected_type);
+            return lm_return_9;
+        }
     }
-    return lm_trans_namespace_declare_storage_binding(namespace_, name_node -> as -> atom, frame -> head);
+    {
+        int lm_return_10 = lm_trans_namespace_declare_storage_binding(namespace_, name_node -> as -> atom, frame -> head);
+        lm_trans_expr_callable_type_delete(expected_type);
+        return lm_return_10;
+    }
 }
 
 static int lm_trans_namespace_declare_storage_binding(LmTransNamespace *namespace_, const LmP0Text *name, const LmP0Text *type_head) {

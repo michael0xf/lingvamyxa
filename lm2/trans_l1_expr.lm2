@@ -4632,26 +4632,6 @@ fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: 
     return: status
 end: lm_trans_emit_expr_range_with_expected_type
 
-fn: lm_trans_emit_expr_range_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
-    LmTransL4CallableType: expected_type
-    int: status
-
-    if: expected_class = 0
-        return: lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, 0)
-
-    expected_type: lm_trans_expr_callable_type_new()
-    if: expected_type = 0
-        return: 1
-    finally: lm_trans_expr_callable_type_delete(expected_type)
-
-    expected_type\class_name[0]: expected_class[0]
-    status: lm_trans_emit_expr_range_with_expected_type(file, first, stop, namespace_, expected_type)
-return: status
-
-fn: lm_trans_emit_expr_fields_with_expected_class (FILE: file; const: (LmP0Field: first); const: (LmTransNamespace: namespace_); const: (LmP0Text: expected_class)) int
-    return: lm_trans_emit_expr_range_with_expected_class(file, first, 0, namespace_, expected_class)
-end: lm_trans_emit_expr_fields_with_expected_class
-
 fn: lm_trans_frame_receiver_key (const: (LmP0Frame: frame); LmP0Text: out_key) int
     if: ((frame = 0) || (out_key = 0))
         return: 0

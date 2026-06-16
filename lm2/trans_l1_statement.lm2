@@ -1902,6 +1902,7 @@ fn: lm_trans_emit_declaration_with_qualifier (
     const: LmP0Structure: body
     const: LmP0Field: name_field
     const: LmP0Node: name_node
+    LmTransL4CallableType: expected_type
     int: is_raw_callable
 
     body: lm_trans_unwrap_single_anonymous_structure(frame\body)
@@ -1911,6 +1912,9 @@ fn: lm_trans_emit_declaration_with_qualifier (
         return: 1
 
     name_node: name_field\value
+    expected_type: 0
+    finally: lm_trans_expr_callable_type_delete(expected_type)
+
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
     if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
@@ -1926,10 +1930,16 @@ fn: lm_trans_emit_declaration_with_qualifier (
     if: is_raw_callable = 0 && lm_trans_emit_identifier(file, name_node\as\atom) != 0
         return: 1
 
-    if: name_field\next != 0 && lm_trans_put(file, " = ") != 0
-        return: 1
-    if: name_field\next != 0 && lm_trans_emit_expr_fields_with_expected_class(file, name_field\next, namespace_, frame\head) != 0
-        return: 1
+    if: name_field\next != 0
+        expected_type: lm_trans_expr_callable_type_new()
+        if: expected_type = 0
+            return: 1
+        expected_type\class_name[0]: frame\head[0]
+        if: lm_trans_put(file, " = ") != 0
+            return: 1
+        if: lm_trans_emit_expr_range_with_expected_type(file, name_field\next, 0, namespace_, expected_type) != 0
+            return: 1
+    ---
     if: lm_trans_put(file, ";\n") != 0
         return: 1
 return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, frame\head)
