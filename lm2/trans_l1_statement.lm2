@@ -2137,6 +2137,112 @@ fn: lm_trans_emit_array_initializer (
         return: 1
 return: lm_trans_put(file, "}")
 
+fn: lm_trans_array_declarator_read_from_frame (
+    LmTransCDeclarator: declarator
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+    int: allow_single_frame
+    int: allow_type_head
+    int: require_name
+    const: @(char direct_error)
+    const: @(char pointer_error)
+    const: @(char nested_error)
+) int
+    const: LmP0Structure: body
+    const: LmP0Field: field
+    const: LmP0Field: type_field
+    const: LmP0Field: name_field
+    const: LmP0Frame: inner
+    size_t: pointer_depth
+    int: single_frame
+    int: handled
+
+    if: declarator = 0 || frame = 0 || declarator\type_head = 0 || declarator\name = 0 || declarator\array_head = 0
+        return: 1
+
+    declarator\type_node: 0
+    declarator\expression_dimensions: 0
+    declarator\type_head\data: ""
+    declarator\type_head\length: 0U
+    declarator\name\data: ""
+    declarator\name\length: 0U
+    declarator\array_head[0]: frame\head[0]
+    declarator\pointer_depth: 0U
+    declarator\literal_dimension_count: 0U
+    declarator\type_is_head: 0
+
+    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
+    field: 0
+    if: body != 0
+        field: body\first_field
+
+    single_frame: allow_single_frame && field != 0 && field\next = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+    if: single_frame
+        inner: field\value\as\frame
+        handled: 0
+        if: allow_type_head && lm_trans_head_can_declare_storage(inner\head, namespace_)
+            if: require_name
+                name_field: inner\body\first_field
+                if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+                    c.fprintf(c.stderr, "%s\n", direct_error)
+                    return: 1
+                declarator\name[0]: name_field\value\as\atom[0]
+                declarator\expression_dimensions: name_field\next
+            ---
+            declarator\type_head[0]: inner\head[0]
+            declarator\type_is_head: 1
+            handled: 1
+        ---
+        if: handled = 0 && lm_trans_text_all_char(inner\head, '@')
+            type_field: lm_trans_nth_field(inner\body, 0U)
+            if: require_name
+                name_field: lm_trans_nth_field(inner\body, 1U)
+                if: type_field = 0 || type_field\value = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+                    c.fprintf(c.stderr, "%s\n", pointer_error)
+                    return: 1
+                declarator\name[0]: name_field\value\as\atom[0]
+                declarator\expression_dimensions: name_field\next
+            else:
+                if: type_field = 0 || type_field\value = 0
+                    c.fprintf(c.stderr, "%s\n", pointer_error)
+                    return: 1
+            ---
+            declarator\pointer_depth: inner\head\length
+            declarator\type_node: type_field\value
+            handled: 1
+        ---
+        if: handled = 0
+            c.fprintf(c.stderr, "%s\n", nested_error)
+            return: 1
+        return: 0
+    ---
+
+    pointer_depth: 0U
+    while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_all_char(field\value\as\atom, '@')
+        pointer_depth: pointer_depth + field\value\as\atom\length
+        field: field\next
+
+    type_field: field
+    if: require_name
+        if: type_field != 0
+            name_field: type_field\next
+        else:
+            name_field: 0
+        if: type_field = 0 || type_field\value = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+            c.fprintf(c.stderr, "%s\n", direct_error)
+            return: 1
+        declarator\name[0]: name_field\value\as\atom[0]
+        declarator\expression_dimensions: name_field\next
+    else:
+        if: type_field = 0 || type_field\value = 0
+            c.fprintf(c.stderr, "%s\n", direct_error)
+            return: 1
+    ---
+
+    declarator\pointer_depth: pointer_depth
+    declarator\type_node: type_field\value
+return: 0
+
 fn: lm_trans_emit_array_declaration_with_qualifier (
     FILE: file
     const: LmP0Frame: frame
@@ -2144,102 +2250,22 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
     LmTransNamespace: namespace_
     const: @(char qualifier)
 ) int
-    const: LmP0Structure: body
-    const: LmP0Field: field
-    const: LmP0Field: type_field
-    const: LmP0Field: name_field
-    const: LmP0Field: dimension_field
     const: LmP0Field: initializer_field
-    const: LmP0Node: name_node
-    const: LmP0Node: type_node
-    const: LmP0Frame: inner
     LmTransCDeclarator: declarator
-    LmP0Text: type_head
-    size_t: pointer_depth
-    int: type_is_head
-    int: single_frame
-    int: handled
-
-    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
-    field: 0
-    if: body != 0
-        field: body\first_field
-    pointer_depth: 0U
-    type_node: 0
-    type_head: lm_trans_statement_text_new()
-    if: type_head = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ type_head)
-
-    type_head\data: 0
-    type_head\length: 0U
-    type_is_head: 0
-    dimension_field: 0
-    name_field: 0
-    type_field: 0
-
-    single_frame: field != 0 && field\next = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
-    if: single_frame
-        inner: field\value\as\frame
-        handled: 0
-        if: lm_trans_head_can_declare_storage(inner\head, namespace_)
-            name_field: inner\body\first_field
-            if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-                c.fprintf(c.stderr, "trans L2 error: array declaration expects a variable name\n")
-                return: 1
-            type_head[0]: inner\head[0]
-            type_is_head: 1
-            dimension_field: name_field\next
-            handled: 1
-        if: handled = 0 && lm_trans_text_all_char(inner\head, '@')
-            type_field: lm_trans_nth_field(inner\body, 0U)
-            name_field: lm_trans_nth_field(inner\body, 1U)
-            if: type_field = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-                c.fprintf(c.stderr, "trans L2 error: array pointer declaration expects type and name\n")
-                return: 1
-            pointer_depth: inner\head\length
-            type_node: type_field\value
-            dimension_field: name_field\next
-            handled: 1
-        if: handled = 0
-            c.fprintf(c.stderr, "trans L2 error: array declaration expects a type/name declaration\n")
-            return: 1
-    ---
-
-    if: single_frame = 0
-        while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_all_char(field\value\as\atom, '@')
-            pointer_depth: pointer_depth + field\value\as\atom\length
-            field: field\next
-
-        type_field: field
-        name_field: 0
-        if: type_field != 0
-            name_field: type_field\next
-        if: type_field = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-            c.fprintf(c.stderr, "trans L2 error: [] declaration expects [@...] type name size...\n")
-            return: 1
-        type_node: type_field\value
-        dimension_field: name_field\next
-    ---
-
-    name_node: name_field\value
-    if: lm_trans_emit_indent(file, indent) != 0
-        return: 1
-    if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
-        return: 1
 
     declarator: lm_trans_statement_c_declarator_new()
     if: declarator = 0
         return: 1
     finally: lm_trans_statement_c_declarator_destroy(declarator)
 
-    declarator\type_node: type_node
-    declarator\type_head[0]: type_head[0]
-    declarator\name[0]: name_node\as\atom[0]
-    declarator\pointer_depth: pointer_depth
-    declarator\type_is_head: type_is_head
-    declarator\array_head[0]: frame\head[0]
-    declarator\expression_dimensions: dimension_field
+    if: lm_trans_array_declarator_read_from_frame(declarator, frame, namespace_, 1, 1, 1, "trans L2 error: [] declaration expects [@...] type name size...", "trans L2 error: array pointer declaration expects type and name", "trans L2 error: array declaration expects a type/name declaration") != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
+        return: 1
+
     if: lm_trans_emit_c_declarator(file, declarator, namespace_, "[] array dimension") != 0
         return: 1
 
@@ -2248,9 +2274,9 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
         return: 1
     if: lm_trans_put(file, ";\n") != 0
         return: 1
-    if: type_is_head
-        return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, type_head)
-return: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_node)
+    if: declarator\type_is_head
+        return: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, declarator\type_head)
+return: lm_trans_namespace_declare_node_storage_binding(namespace_, declarator\name, declarator\type_node)
 
 fn: lm_trans_emit_array_declaration (
     FILE: file
@@ -2321,86 +2347,21 @@ fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
     LmTransNamespace: namespace_
     const: @(char qualifier)
 ) int
-    const: LmP0Structure: template_body
     const: LmP0Structure: repeat_body
-    const: LmP0Field: field
-    const: LmP0Field: type_field
     const: LmP0Field: name_field
-    const: LmP0Field: dimension_field
     const: LmP0Field: initializer_field
     const: LmP0Node: name_node
-    const: LmP0Node: type_node
-    const: LmP0Node: template_type_node
-    const: LmP0Frame: inner
     LmTransCDeclarator: declarator
-    LmP0Text: type_head
-    LmP0Text: template_type_head
-    size_t: pointer_depth
-    int: type_is_head
-    int: template_type_is_head
-    int: single_template_frame
-    int: handled
 
-    template_body: 0
-    if: template_frame != 0
-        template_body: lm_trans_unwrap_single_anonymous_structure(template_frame\body)
     repeat_body: lm_trans_unwrap_single_anonymous_structure(body)
-    field: 0
-    if: template_body != 0
-        field: template_body\first_field
-    pointer_depth: 0U
-    type_node: 0
-    template_type_node: 0
 
-    type_head: lm_trans_statement_text_new()
-    if: type_head = 0
+    declarator: lm_trans_statement_c_declarator_new()
+    if: declarator = 0
         return: 1
-    finally: lm_trans_text_ref_destroy(@ type_head)
+    finally: lm_trans_statement_c_declarator_destroy(declarator)
 
-    template_type_head: lm_trans_statement_text_new()
-    if: template_type_head = 0
+    if: lm_trans_array_declarator_read_from_frame(declarator, template_frame, namespace_, 1, 1, 0, "trans L2 error: repeated [] declaration expects a type template", "trans L2 error: repeated array pointer declaration expects a type template", "trans L2 error: repeated array declaration expects a type/name declaration template") != 0
         return: 1
-    finally: lm_trans_text_ref_destroy(@ template_type_head)
-
-    type_head\data: 0
-    type_head\length: 0U
-    template_type_head\data: 0
-    template_type_head\length: 0U
-    type_is_head: 0
-    template_type_is_head: 0
-
-    single_template_frame: field != 0 && field\next = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
-    if: single_template_frame
-        inner: field\value\as\frame
-        handled: 0
-        if: lm_trans_head_can_declare_storage(inner\head, namespace_)
-            template_type_head[0]: inner\head[0]
-            template_type_is_head: 1
-            handled: 1
-        if: handled = 0 && lm_trans_text_all_char(inner\head, '@')
-            type_field: lm_trans_nth_field(inner\body, 0U)
-            if: type_field = 0 || type_field\value = 0
-                c.fprintf(c.stderr, "trans L2 error: repeated array pointer declaration expects a type template\n")
-                return: 1
-            pointer_depth: inner\head\length
-            template_type_node: type_field\value
-            handled: 1
-        if: handled = 0
-            c.fprintf(c.stderr, "trans L2 error: repeated array declaration expects a type/name declaration template\n")
-            return: 1
-    ---
-
-    if: single_template_frame = 0
-        while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_all_char(field\value\as\atom, '@')
-            pointer_depth: pointer_depth + field\value\as\atom\length
-            field: field\next
-
-        type_field: field
-        if: type_field = 0 || type_field\value = 0
-            c.fprintf(c.stderr, "trans L2 error: repeated [] declaration expects a type template\n")
-            return: 1
-        template_type_node: type_field\value
-    ---
 
     name_field: 0
     if: repeat_body != 0
@@ -2409,14 +2370,11 @@ fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
         c.fprintf(c.stderr, "trans L2 error: repeated [] declaration expects a variable name\n")
         return: 1
 
-    type_node: template_type_node
-    type_head[0]: template_type_head[0]
-    type_is_head: template_type_is_head
     if: name_field\next != 0 && name_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_head_can_declare_storage(name_field\value\as\atom, namespace_)
-        type_head[0]: name_field\value\as\atom[0]
-        type_node: 0
-        type_is_head: 1
-        pointer_depth: 0U
+        declarator\type_head[0]: name_field\value\as\atom[0]
+        declarator\type_node: 0
+        declarator\type_is_head: 1
+        declarator\pointer_depth: 0U
         name_field: name_field\next
         if: name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
             c.fprintf(c.stderr, "trans L2 error: repeated [] declaration override expects a variable name\n")
@@ -2429,19 +2387,8 @@ fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
     if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
         return: 1
 
-    dimension_field: name_field\next
-    declarator: lm_trans_statement_c_declarator_new()
-    if: declarator = 0
-        return: 1
-    finally: lm_trans_statement_c_declarator_destroy(declarator)
-
-    declarator\type_node: type_node
-    declarator\type_head[0]: type_head[0]
     declarator\name[0]: name_node\as\atom[0]
-    declarator\pointer_depth: pointer_depth
-    declarator\type_is_head: type_is_head
-    declarator\array_head[0]: template_frame\head[0]
-    declarator\expression_dimensions: dimension_field
+    declarator\expression_dimensions: name_field\next
     if: lm_trans_emit_c_declarator(file, declarator, namespace_, "repeated [] array dimension") != 0
         return: 1
 
@@ -2450,9 +2397,9 @@ fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
         return: 1
     if: lm_trans_put(file, ";\n") != 0
         return: 1
-    if: type_is_head
-        return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, type_head)
-return: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_node)
+    if: declarator\type_is_head
+        return: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, declarator\type_head)
+return: lm_trans_namespace_declare_node_storage_binding(namespace_, declarator\name, declarator\type_node)
 
 fn: lm_trans_emit_c_tagged_declaration (
     FILE: file
@@ -6768,44 +6715,12 @@ fn: lm_trans_formal_param_read_array_declarator (
     LmTransFormalParam: param
     const: LmP0Frame: frame
 ) int
-    const: LmP0Structure: body
-    const: LmP0Field: field
-    const: LmP0Field: type_field
-    const: LmP0Field: name_field
-    const: LmP0Node: name_node
-    size_t: pointer_depth
-
     if: param = 0 || param\declarator = 0 || frame = 0
         return: 1
 
-    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
-    if: body != 0
-        field: body\first_field
-    else:
-        field: 0
-
-    pointer_depth: 0U
-    while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_all_char(field\value\as\atom, '@')
-        pointer_depth: pointer_depth + field\value\as\atom\length
-        field: field\next
-
-    type_field: field
-    if: type_field != 0
-        name_field: type_field\next
-    else:
-        name_field: 0
-
-    if: type_field = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-        c.fprintf(c.stderr, "trans L2 error: [] parameter expects [@...] type name [dimensions...]\n")
+    if: lm_trans_array_declarator_read_from_frame(param\declarator, frame, 0, 0, 0, 1, "trans L2 error: [] parameter expects [@...] type name [dimensions...]", "trans L2 error: [] parameter expects [@...] type name [dimensions...]", "trans L2 error: [] parameter expects [@...] type name [dimensions...]") != 0
         return: 1
 
-    name_node: name_field\value
-    param\declarator\type_node: type_field\value
-    param\declarator\name[0]: name_node\as\atom[0]
-    param\declarator\array_head[0]: frame\head[0]
-    param\declarator\pointer_depth: pointer_depth
-    param\declarator\expression_dimensions: name_field\next
-    param\declarator\type_is_head: 0
     param\declarator\allow_empty_dimensions: 1
     param\declarator\atom_dimensions_only: 1
 return: 0
