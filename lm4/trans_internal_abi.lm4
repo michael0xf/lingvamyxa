@@ -615,9 +615,19 @@ fn: lm_trans_node_callable_descriptor_name (
     LmP0Text: out_name
 ) int
 
-fn: lm_trans_params_has_any (
-    const: LmP0Node: params
+fn: lm_trans_formal_param_list_has_any (
+    const: LmTransFormalParamList: params
 ) int
+
+sub: lm_trans_formal_param_list_delete (
+    LmTransFormalParamList: list
+)
+
+fn: lm_trans_formal_param_list_from_node (
+    const: LmP0Node: params
+    int: allow_unnamed
+    const: @: char error_name
+) LmTransFormalParamList
 
 fn: lm_trans_emit_callable_descriptor_param_type (
     FILE: file
@@ -735,8 +745,7 @@ fn: lm_trans_capture_candidates_add_decl (
 
 fn: lm_trans_capture_candidates_add_params (
     LmOwnPtrStack: candidates
-    const: LmP0Node: params
-    const: LmTransNamespace: namespace_
+    const: LmTransFormalParamList: params
 ) int
 
 fn: lm_trans_collect_hoisted_functions_from_fields (

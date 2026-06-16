@@ -65,6 +65,8 @@ sub: lm_trans_function_header_destroy_fields (LmTransFunctionHeader: function)
         lm_trans_text_ref_destroy(@ function\name)
         lm_trans_text_ref_destroy(@ function\c_name)
         lm_trans_text_ref_destroy(@ function\env_type_name)
+        lm_trans_formal_param_list_delete(function\params)
+        function\params: 0
 end: lm_trans_function_header_destroy_fields
 
 sub: lm_trans_function_header_destroy (LmTransFunctionHeader: function)
@@ -76,9 +78,21 @@ fn: lm_trans_function_header_copy (LmTransFunctionHeader: target; const: (LmTran
     LmP0Text: name
     LmP0Text: c_name
     LmP0Text: env_type_name
+    LmTransFormalParamList: params
 
     if: target = 0 || source = 0 || lm_trans_function_header_init_fields(target) != 0
         return: 1
+
+    params: 0
+    if: source\params != 0
+        params: lm_trans_formal_param_list_from_node(source\params_node, source\is_descriptor_only || source\is_callable_descriptor, "function parameters")
+        if: params = 0
+            return: 1
+        ---
+    ---
+
+    lm_trans_formal_param_list_delete(target\params)
+    target\params: 0
 
     name: target\name
     c_name: target\c_name
@@ -87,6 +101,7 @@ fn: lm_trans_function_header_copy (LmTransFunctionHeader: target; const: (LmTran
     target\name: name
     target\c_name: c_name
     target\env_type_name: env_type_name
+    target\params: params
     if: source\name != 0
         target\name[0]: source\name[0]
     else:

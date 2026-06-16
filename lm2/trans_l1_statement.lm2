@@ -106,8 +106,8 @@ fn: lm_trans_statement_node_as_new () LmP0NodeAs
 fn: lm_trans_statement_frame_new () LmP0Frame
     return: (cast: (LmP0Frame) lm_own_new_zero(c.sizeof(c.LmP0Frame)))
 
-fn: lm_trans_params_has_any (const: (LmP0Node: params)) int
-return: params != 0 && params\kind = c.LM_P0_NODE_STRUCTURE && params\as\structure\first_field != 0
+fn: lm_trans_formal_param_list_has_any (const: (LmTransFormalParamList: params)) int
+return: params != 0 && params\count != 0U
 
 fn: lm_trans_emit_capture_field (
     FILE: file
@@ -6496,17 +6496,14 @@ return: status
 
 fn: lm_trans_emit_params_body (
     FILE: file
-    const: LmP0Node: params
+    const: LmTransFormalParamList: list
     LmTransNamespace: namespace_
     int: emit_void_when_empty
 ) int
-    LmTransFormalParamList: list
     size_t: index
 
-    list: lm_trans_formal_param_list_from_node(params, 0, "function parameters")
     if: list = 0
         return: 1
-    finally: lm_trans_formal_param_list_delete(list)
 
     index: 0U
     while: index < list\count
@@ -6520,13 +6517,6 @@ fn: lm_trans_emit_params_body (
         return: lm_trans_put(file, "void")
 return: 0
 
-fn: lm_trans_emit_params (
-    FILE: file
-    const: LmP0Node: params
-    LmTransNamespace: namespace_
-) int
-return: lm_trans_emit_params_body(file, params, namespace_, 1)
-
 fn: lm_trans_emit_function_params (
     FILE: file
     const: LmTransFunctionHeader: function
@@ -6537,27 +6527,24 @@ fn: lm_trans_emit_function_params (
     if: function = 0
         return: 1
 
-    has_user_params: lm_trans_params_has_any(function\params_node)
+    has_user_params: lm_trans_formal_param_list_has_any(function\params)
     if: function\has_env
         if: lm_trans_write_text(file, function\env_type_name) != 0 || lm_trans_put(file, " *lm_env") != 0
             return: 1
         if: has_user_params && lm_trans_put(file, ", ") != 0
             return: 1
-        return: lm_trans_emit_params_body(file, function\params_node, namespace_, 0)
-return: lm_trans_emit_params(file, function\params_node, namespace_)
+        return: lm_trans_emit_params_body(file, function\params, namespace_, 0)
+return: lm_trans_emit_params_body(file, function\params, namespace_, 1)
 
 fn: lm_trans_emit_param_name_list (
     FILE: file
-    const: LmP0Node: params
+    const: LmTransFormalParamList: list
 ) int
-    LmTransFormalParamList: list
     LmTransFormalParam: param
     size_t: index
 
-    list: lm_trans_formal_param_list_from_node(params, 0, "function parameter names")
     if: list = 0
         return: 1
-    finally: lm_trans_formal_param_list_delete(list)
 
     index: 0U
     while: index < list\count
@@ -6585,10 +6572,10 @@ fn: lm_trans_emit_closure_call_wrapper (
 
     if: lm_trans_put(file, "static ") != 0 || lm_trans_emit_type_node(file, function\return_node) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, hoisted\closure_call_name) != 0 || lm_trans_put(file, "(void *lm_env") != 0
         return: 1
-    has_params: lm_trans_params_has_any(function\params_node)
+    has_params: lm_trans_formal_param_list_has_any(function\params)
     if: has_params && lm_trans_put(file, ", ") != 0
         return: 1
-    if: lm_trans_emit_params_body(file, function\params_node, namespace_, 0) != 0 || lm_trans_put(file, ") {\n") != 0
+    if: lm_trans_emit_params_body(file, function\params, namespace_, 0) != 0 || lm_trans_put(file, ") {\n") != 0
         return: 1
     if: function\has_env = 0
         if: lm_trans_put(file, "    (void)lm_env;\n") != 0
@@ -6602,7 +6589,7 @@ fn: lm_trans_emit_closure_call_wrapper (
         if: has_params && lm_trans_put(file, ", ") != 0
             return: 1
     ---
-    if: lm_trans_emit_param_name_list(file, function\params_node) != 0
+    if: lm_trans_emit_param_name_list(file, function\params) != 0
         return: 1
 return: lm_trans_put(file, ");\n}\n")
 
@@ -7058,6 +7045,21 @@ fn: lm_trans_namespace_set_callable_shape (
     symbol\callable_is_external: function\is_external
 return: 0
 
+fn: lm_trans_function_header_read_params (LmTransFunctionHeader: function) int
+    int: allow_unnamed
+
+    if: function = 0
+        return: 1
+
+    lm_trans_formal_param_list_delete(function\params)
+    function\params: 0
+
+    allow_unnamed: function\is_descriptor_only || function\is_callable_descriptor
+    function\params: lm_trans_formal_param_list_from_node(function\params_node, allow_unnamed, "function parameters")
+    if: function\params = 0
+        return: 1
+return: 0
+
 fn: lm_trans_function_header_common (
     const: LmP0Frame: frame
     int: is_external
@@ -7089,6 +7091,7 @@ fn: lm_trans_function_header_common (
     name: out\name
     c_name: out\c_name
     env_type_name: out\env_type_name
+    lm_trans_formal_param_list_delete(out\params)
     c.memset(out, 0, c.sizeof(out[0]))
     out\name: name
     out\c_name: c_name
@@ -7115,6 +7118,8 @@ fn: lm_trans_function_header_common (
             out\body_start: params_field\next
         if: out\body_start = 0
             out\is_descriptor_only: 1
+        if: lm_trans_function_header_read_params(out) != 0
+            return: -1
         return: 1
 
     return_field: lm_trans_nth_field(frame\body, 2U)
@@ -7134,6 +7139,8 @@ fn: lm_trans_function_header_common (
         out\is_descriptor_only: 1
     if: is_callable_descriptor && out\is_descriptor_only = 0
         c.fprintf(c.stderr, "trans L2 error: callable is supported only for descriptor-only fn declarations in this profile\n")
+        return: -1
+    if: lm_trans_function_header_read_params(out) != 0
         return: -1
 return: 1
 
@@ -7721,24 +7728,39 @@ fn: lm_trans_capture_candidates_add_decl (
         return: 1
 return: 0
 
-fn: lm_trans_capture_candidates_add_params (
+fn: lm_trans_capture_candidates_add_formal_param (
     LmOwnPtrStack: candidates
-    const: LmP0Node: params
-    const: LmTransNamespace: namespace_
+    const: LmTransFormalParam: param
 ) int
-    const: LmP0Field: field
-    const: LmP0Frame: frame
+    LmTransCapture: stored
 
-    if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE
+    if: candidates = 0 || param = 0 || param\has_name = 0 || param\type = 0
+        return: 0
+    if: lm_trans_capture_stack_find(candidates, param\name) != 0
         return: 0
 
-    field: params\as\structure\first_field
-    while: field != 0
-        if: lm_trans_single_frame_node(field\value, @ frame)
-            if: lm_trans_capture_candidates_add_decl(candidates, frame, namespace_) != 0
-                return: 1
-        ---
-        field: field\next
+    stored: lm_trans_capture_new(param\name, param\type\class_name, 0, param\type\address_depth, 1)
+    if: stored = 0
+        return: 1
+    if: lm_own_ptr_stack_push(candidates, stored) != 0
+        lm_trans_capture_destroy(stored)
+        return: 1
+return: 0
+
+fn: lm_trans_capture_candidates_add_params (
+    LmOwnPtrStack: candidates
+    const: LmTransFormalParamList: params
+) int
+    size_t: index
+
+    if: params = 0
+        return: 0
+
+    index: 0U
+    while: index < params\count
+        if: lm_trans_capture_candidates_add_formal_param(candidates, params\params[index]) != 0
+            return: 1
+        index: index + 1U
 return: 0
 
 fn: lm_trans_capture_candidates_add_captures (
@@ -7894,8 +7916,8 @@ fn: lm_trans_analyze_function_captures (
     const: LmTransNamespace: namespace_
 ) int
     LmOwnPtrStack: local_names
-    const: LmP0Field: field
-    LmP0Text: param_name
+    LmTransFormalParam: param
+    size_t: index
     int: status
 
     if: hoisted = 0
@@ -7906,19 +7928,14 @@ fn: lm_trans_analyze_function_captures (
         return: 1
     finally: lm_trans_ptr_stack_delete(@ local_names)
 
-    param_name: lm_trans_statement_text_new()
-    if: param_name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ param_name)
-
     status: 0
-    if: hoisted\function\params_node != 0 && hoisted\function\params_node\kind = c.LM_P0_NODE_STRUCTURE
-        field: hoisted\function\params_node\as\structure\first_field
-        while: status = 0 && field != 0
-            if: lm_trans_formal_param_name(field\value, param_name)
-                status: lm_trans_local_name_stack_add(local_names, param_name)
-            field: field\next
-
+    if: hoisted\function\params != 0
+        index: 0U
+        while: status = 0 && index < hoisted\function\params\count
+            param: hoisted\function\params\params[index]
+            if: param != 0 && param\has_name
+                status: lm_trans_local_name_stack_add(local_names, param\name)
+            index: index + 1U
     ---
     if: status = 0
         status: lm_trans_collect_local_names_from_fields(local_names, hoisted\function\body_start, namespace_)

@@ -57,25 +57,19 @@ fn: lm_trans_top_level_declare_function_params (
     LmTransNamespace: namespace_
     const: LmTransFunctionHeader: function
 ) int
-    LmTransFormalParamList: params
     LmTransFormalParam: param
     size_t: index
     int: status
 
     if: namespace_ = 0 || function = 0
         return: 1
-    if: function\params_node = 0 || function\params_node\kind != c.LM_P0_NODE_STRUCTURE
+    if: function\params = 0
         return: 0
-
-    params: lm_trans_formal_param_list_from_node(function\params_node, 0, "function parameters")
-    if: params = 0
-        return: 1
-    finally: lm_trans_formal_param_list_delete(params)
 
     status: 0
     index: 0U
-    while: status = 0 && index < params\count
-        param: params\params[index]
+    while: status = 0 && index < function\params\count
+        param: function\params\params[index]
         if: lm_trans_namespace_declare_storage_binding(namespace_, param\name, param\type\class_name) != 0
             status: 1
         index: index + 1U
@@ -538,24 +532,21 @@ fn: lm_trans_top_level_emit_registry (FILE: file; LmTransNamespace: namespace_; 
     namespace_: namespace_
 return: 0
 
-fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmP0Node: params); const: (LmTransNamespace: namespace_); int: emit_void_when_empty) int
-    LmTransFormalParamList: list
+fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmTransFormalParamList: params); const: (LmTransNamespace: namespace_); int: emit_void_when_empty) int
     size_t: index
 
-    list: lm_trans_formal_param_list_from_node(params, 1, "callable descriptor parameters")
-    if: list = 0
+    if: params = 0
         return: 1
-    finally: lm_trans_formal_param_list_delete(list)
 
     index: 0U
-    while: index < list\count
+    while: index < params\count
         if: index != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: lm_trans_emit_callable_descriptor_param_type(file, list\params[index]\source_node, namespace_) != 0
+        if: lm_trans_emit_callable_descriptor_param_type(file, params\params[index]\source_node, namespace_) != 0
             return: 1
         index: index + 1U
 
-    if: list\count = 0U && emit_void_when_empty
+    if: params\count = 0U && emit_void_when_empty
         return: lm_trans_put(file, "void")
 return: 0
 
@@ -593,9 +584,9 @@ fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader
         return: 1
     if: lm_trans_put(file, " (*call)(void *env") != 0
         return: 1
-    if: lm_trans_params_has_any(function\params_node) && lm_trans_put(file, ", ") != 0
+    if: lm_trans_formal_param_list_has_any(function\params) && lm_trans_put(file, ", ") != 0
         return: 1
-    if: lm_trans_emit_callable_descriptor_params_body(file, function\params_node, namespace_, 0) != 0
+    if: lm_trans_emit_callable_descriptor_params_body(file, function\params, namespace_, 0) != 0
         return: 1
 return: lm_trans_put(file, ");\n    void *env;\n    void (*destroy)(void *env);\n};\n")
 
@@ -1425,7 +1416,7 @@ fn: lm_trans_function_emit_frame_new (const: (LmTransFunctionHeader: function); 
     if: capture_candidates = 0
         lm_trans_function_emit_frame_delete_any(frame)
         return: 0
-    if: lm_trans_capture_candidates_add_captures(capture_candidates, function\captures) != 0 || lm_trans_capture_candidates_add_params(capture_candidates, function\params_node, namespace_) != 0
+    if: lm_trans_capture_candidates_add_captures(capture_candidates, function\captures) != 0 || lm_trans_capture_candidates_add_params(capture_candidates, function\params) != 0
         lm_trans_ptr_stack_delete(@ capture_candidates)
         lm_trans_function_emit_frame_delete_any(frame)
         return: 0
