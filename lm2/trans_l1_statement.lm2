@@ -2137,6 +2137,11 @@ fn: lm_trans_emit_array_initializer (
         return: 1
 return: lm_trans_put(file, "}")
 
+fn: lm_trans_array_declarator_error (const: @(char message)) int
+    if: message != 0
+        c.fprintf(c.stderr, "%s\n", message)
+return: 1
+
 fn: lm_trans_array_declarator_read_from_frame (
     LmTransCDeclarator: declarator
     const: LmP0Frame: frame
@@ -2184,8 +2189,7 @@ fn: lm_trans_array_declarator_read_from_frame (
             if: require_name
                 name_field: inner\body\first_field
                 if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-                    c.fprintf(c.stderr, "%s\n", direct_error)
-                    return: 1
+                    return: lm_trans_array_declarator_error(direct_error)
                 declarator\name[0]: name_field\value\as\atom[0]
                 declarator\expression_dimensions: name_field\next
             ---
@@ -2198,22 +2202,19 @@ fn: lm_trans_array_declarator_read_from_frame (
             if: require_name
                 name_field: lm_trans_nth_field(inner\body, 1U)
                 if: type_field = 0 || type_field\value = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-                    c.fprintf(c.stderr, "%s\n", pointer_error)
-                    return: 1
+                    return: lm_trans_array_declarator_error(pointer_error)
                 declarator\name[0]: name_field\value\as\atom[0]
                 declarator\expression_dimensions: name_field\next
             else:
                 if: type_field = 0 || type_field\value = 0
-                    c.fprintf(c.stderr, "%s\n", pointer_error)
-                    return: 1
+                    return: lm_trans_array_declarator_error(pointer_error)
             ---
             declarator\pointer_depth: inner\head\length
             declarator\type_node: type_field\value
             handled: 1
         ---
         if: handled = 0
-            c.fprintf(c.stderr, "%s\n", nested_error)
-            return: 1
+            return: lm_trans_array_declarator_error(nested_error)
         return: 0
     ---
 
@@ -2229,14 +2230,12 @@ fn: lm_trans_array_declarator_read_from_frame (
         else:
             name_field: 0
         if: type_field = 0 || type_field\value = 0 || name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
-            c.fprintf(c.stderr, "%s\n", direct_error)
-            return: 1
+            return: lm_trans_array_declarator_error(direct_error)
         declarator\name[0]: name_field\value\as\atom[0]
         declarator\expression_dimensions: name_field\next
     else:
         if: type_field = 0 || type_field\value = 0
-            c.fprintf(c.stderr, "%s\n", direct_error)
-            return: 1
+            return: lm_trans_array_declarator_error(direct_error)
     ---
 
     declarator\pointer_depth: pointer_depth
