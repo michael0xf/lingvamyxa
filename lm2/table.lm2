@@ -274,11 +274,32 @@ fn: lm_table_name_from_frame (const: (LmP0Frame: table_frame); const: @@(char ou
 return: 1
 
 fn: lm_table_column_spelling_alloc (const: (LmP0Node: node); LmTableError: error) @: char
+    LmTableBuffer: buffer
+    @: char raw
     @: char result
 
     if: lm_table_column_param_frame(node) = 0
         lm_table_error_set(error, "columns: expected parameter declarations like (type: name)")
         return: 0
+
+    if: node != 0 && node\kind = c.LM_P0_NODE_FRAME
+        raw: lm_table_node_lmx_alloc(node, error)
+        if: raw = 0
+            return: 0
+        buffer: lm_table_buffer_new()
+        if: buffer = 0
+            lm_own_delete(raw, 0)
+            lm_table_error_set(error, "out of memory while formatting column")
+            return: 0
+        lm_table_buffer_append_cstr(buffer, "(")
+        lm_table_buffer_append_cstr(buffer, raw)
+        lm_table_buffer_append_cstr(buffer, ")")
+        lm_own_delete(raw, 0)
+        result: lm_table_buffer_take(buffer)
+        lm_table_buffer_delete(buffer)
+        if: result = 0
+            lm_table_error_set(error, "out of memory while formatting column")
+        return: result
 
     result: lm_table_node_lmx_alloc(node, error)
     if: result = 0
@@ -288,7 +309,13 @@ return: result
 fn: lm_table_column_param_frame (const: (LmP0Node: node)) const: LmP0Frame
     const: LmP0Node: field_node
 
-    if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE
+    if: node = 0
+        return: 0
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_table_visible_field_count(node\as\frame\body) = 0U
+            return: 0
+        return: node\as\frame
+    if: node\kind != c.LM_P0_NODE_STRUCTURE
         return: 0
     if: lm_table_visible_field_count(node\as\structure) != 1U
         return: 0
