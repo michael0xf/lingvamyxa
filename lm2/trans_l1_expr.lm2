@@ -4292,7 +4292,7 @@ fn: lm_trans_lower_expr_atom (const: (LmP0Node: node); const: (LmP0Node: previou
                         return: lm_trans_expr_atom_lowering_set_from_class(out, node\as\atom, "operator.prefix")
                     ---
                 else:
-                    if: lm_trans_registry_has_expr_emitter_binding(node\as\atom, "expr.atom.emitter")
+                    if: lm_trans_registry_has_expr_emitter_binding(node\as\atom, "expr.atom.emitter", "expr.atom")
                         return: lm_trans_expr_atom_lowering_set_from_tables(out, node\as\atom, "expr.atom", "expr.atom.ansi_c", "expr.atom.emitter")
                     else:
                         if: lm_trans_atom_is_index_operator(node\as\atom)

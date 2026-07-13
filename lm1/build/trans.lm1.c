@@ -2555,7 +2555,7 @@ static LmTransFunctionState * lm_trans_function_state_new(void);
 static void lm_trans_function_state_destroy(LmTransFunctionState *state);
 static void lm_trans_function_state_destroy_any(void *object);
 static void lm_trans_function_state_delete(LmTransFunctionState *state);
-static int lm_trans_registry_has_expr_emitter_binding(const LmP0Text *key, const char *table);
+static int lm_trans_registry_has_expr_emitter_binding(const LmP0Text *key, const char *table, const char *source_table_name);
 static const char * lm_trans_expr_emitter_binding_table(const char *class_name);
 static const char * lm_trans_expr_spelling_binding_table(const char *class_name);
 static int lm_trans_registry_has_expr_emitter_class(const LmP0Text *key, const char *class_name);
@@ -7043,32 +7043,73 @@ static void lm_trans_function_state_delete(LmTransFunctionState *state) {
     lm_own_delete(state, lm_trans_function_state_destroy_any);
 }
 
-static int lm_trans_registry_has_expr_emitter_binding(const LmP0Text *key, const char *table) {
+static int lm_trans_registry_has_expr_emitter_binding(const LmP0Text *key, const char *table, const char *source_table_name) {
     const char *binding;
+    const char *source_binding;
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_spelling_column;
+    const LmTableColumnDescriptor * source_emitter_column;
+    const LmTableCell * source_emitter_cell;
     LmTransBinding * resolved;
     const char *table_name;
+    int source_covered;
+    int source_same;
+    int source_usable;
     if (key == 0) {
         return 0;
     }
     binding = lm_trans_registry_lookup(key, table);
-    if (binding == 0) {
-        return 0;
-    }
-    resolved = lm_own_new_zero(sizeof(resolved[0]));
-    if (resolved == 0) {
-        exit(2);
-    }
-    if (lm_trans_binding_resolve(binding, resolved) == 0 || resolved -> expr_emit == 0 || resolved -> expr_state == 0) {
-        table_name = table;
-        if (table_name == 0) {
-            table_name = "<none>";
+    if (binding != 0) {
+        resolved = lm_own_new_zero(sizeof(resolved[0]));
+        if (resolved == 0) {
+            exit(2);
         }
-        fprintf(stderr, "trans registry inconsistency: %s[\"%.*s\"] has unknown expression emitter binding %s\n", table_name, (((int)key -> length)), key -> data, binding);
+        if (lm_trans_binding_resolve(binding, resolved) == 0 || resolved -> expr_emit == 0 || resolved -> expr_state == 0) {
+            table_name = table;
+            if (table_name == 0) {
+                table_name = "<none>";
+            }
+            fprintf(stderr, "trans registry inconsistency: %s[\"%.*s\"] has unknown expression emitter binding %s\n", table_name, (((int)key -> length)), key -> data, binding);
+            lm_own_delete(resolved, 0);
+            exit(2);
+        }
         lm_own_delete(resolved, 0);
-        exit(2);
     }
-    lm_own_delete(resolved, 0);
-    return 1;
+    if (lm_trans_registry_view_parity_enabled() != 0) {
+        source_covered = 0;
+        source_table = 0;
+        source_row = lm_trans_registry_source_table_lookup_row(key, source_table_name, &source_table, &source_covered);
+        source_binding = 0;
+        source_usable = source_row == 0;
+        if (source_row != 0) {
+            source_usable = lm_table_descriptor_column_count(source_table) == 3U && lm_table_row_cell_count(source_row) == 3U;
+            if (source_usable != 0) {
+                source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+                source_spelling_column = lm_table_descriptor_column_at(source_table, 1U);
+                source_emitter_column = lm_table_descriptor_column_at(source_table, 2U);
+                source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_spelling_column != 0 && source_spelling_column -> name != 0 && strcmp(source_spelling_column -> name, "ansi_c") == 0 && source_emitter_column != 0 && source_emitter_column -> name != 0 && strcmp(source_emitter_column -> name, "emitter") == 0;
+            }
+            if (source_usable != 0) {
+                source_emitter_cell = lm_table_row_cell_at(source_row, 2U);
+                if (source_emitter_cell != 0) {
+                    source_binding = source_emitter_cell -> value;
+                }
+            }
+        }
+        source_same = (source_binding == 0) == (binding == 0);
+        if (source_same != 0 && source_binding != 0) {
+            source_same = strcmp(source_binding, binding) == 0;
+        }
+        if (lm_trans_registry_view_is_selected() != 0 && source_covered != 0 && source_usable != 0 && source_same != 0) {
+            return source_binding != 0;
+        }
+    }
+    if (binding != 0) {
+        return 1;
+    }
+    return 0;
 }
 
 static const char * lm_trans_expr_emitter_binding_table(const char *class_name) {
@@ -7109,7 +7150,7 @@ static const char * lm_trans_expr_spelling_binding_table(const char *class_name)
 static int lm_trans_registry_has_expr_emitter_class(const LmP0Text *key, const char *class_name) {
     const char *table;
     table = lm_trans_expr_emitter_binding_table(class_name);
-    return table != 0 && lm_trans_registry_has_expr_emitter_binding(key, table);
+    return table != 0 && lm_trans_registry_has_expr_emitter_binding(key, table, class_name);
 }
 
 static int lm_trans_registry_has_expr_emitter_binding_class(const LmP0Text *key, const char *class_name) {
@@ -7131,7 +7172,7 @@ static int lm_trans_registry_has_any_expr_emitter_binding(const LmP0Text *key) {
             if (lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", lm_trans_text_from_cstr(row -> key), row -> payload) != 0) {
                 exit(2);
             }
-            if (lm_trans_registry_has_expr_emitter_binding(key, row -> payload)) {
+            if (lm_trans_registry_has_expr_emitter_binding(key, row -> payload, row -> key)) {
                 return 1;
             }
         }
@@ -13513,7 +13554,7 @@ static int lm_trans_lower_expr_atom(const LmP0Node *node, const LmP0Node *previo
                     }
                 }
                 else {
-                    if (lm_trans_registry_has_expr_emitter_binding(node -> as -> atom, "expr.atom.emitter")) {
+                    if (lm_trans_registry_has_expr_emitter_binding(node -> as -> atom, "expr.atom.emitter", "expr.atom")) {
                         return lm_trans_expr_atom_lowering_set_from_tables(out, node -> as -> atom, "expr.atom", "expr.atom.ansi_c", "expr.atom.emitter");
                     }
                     else {
