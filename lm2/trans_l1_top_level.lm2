@@ -314,7 +314,7 @@ fn: lm_trans_top_level_atom_binding (const: (LmP0Text: atom); LmTransTopLevelIte
     if: out = 0
         return: -1
 
-    binding: lm_trans_registry_lookup(atom, "receiver.atom.statement")
+    binding: lm_trans_atom_statement_receiver_binding(atom)
     if: binding = 0
         return: 0
 

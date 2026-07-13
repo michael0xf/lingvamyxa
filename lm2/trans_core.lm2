@@ -46,6 +46,9 @@ return: actual != 0 && c.strcmp(actual, projection) = 0
 fn: lm_trans_callable_projection_is_executable (const: @(char projection)) int
 return: projection != 0 && (c.strcmp(projection, "c.function-symbol") = 0 || c.strcmp(projection, "c.procedure-symbol") = 0 || c.strcmp(projection, "c.function-pointer") = 0 || c.strcmp(projection, "c.closure-struct") = 0)
 
+fn: lm_trans_atom_statement_receiver_binding (const: (LmP0Text: atom)) const: @: char
+return: lm_trans_namespace_registry_source_n2_typed_value(0, atom, "receiver.atom.statement", "class", "class", "receiver", "binding")
+
 fn: lm_trans_symbol_has_callable_projection (const: (LmTransSymbol: symbol); const: @(char projection)) int
     const: @: char actual
 

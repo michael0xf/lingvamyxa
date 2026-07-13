@@ -3616,6 +3616,7 @@ static int lm_trans_symbol_is(const LmTransSymbol *symbol, const char *class_nam
 static const char * lm_trans_symbol_callable_projection(const LmTransSymbol *symbol);
 static int lm_trans_callable_projection_class_is(const char *class_name, const char *projection);
 static int lm_trans_callable_projection_is_executable(const char *projection);
+static const char * lm_trans_atom_statement_receiver_binding(const LmP0Text *atom);
 static int lm_trans_symbol_has_callable_projection(const LmTransSymbol *symbol, const char *projection);
 static int lm_trans_symbol_is_executable_callable(const LmTransSymbol *symbol);
 static int lm_trans_symbol_is_value_callable(const LmTransSymbol *symbol);
@@ -23091,7 +23092,7 @@ static int lm_trans_emit_atom_statement_sequence(FILE *file, const LmP0Text *seq
                 status = 1;
             }
             if (status == 0) {
-                binding = lm_trans_registry_lookup(item_name, "receiver.atom.statement");
+                binding = lm_trans_atom_statement_receiver_binding(item_name);
                 handler = lm_trans_atom_statement_binding_handler(binding);
                 if (handler == 0 || handler == &lm_trans_atom_statement_emit_sequence_prelude) {
                     fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" item %s has no concrete atom receiver\n", (((int)sequence_name -> length)), sequence_name -> data, row -> key);
@@ -23192,7 +23193,7 @@ static LmTransAtomStatementHandler lm_trans_lower_atom_statement(const LmP0Text 
     if (lm_trans_atom_starts_string(atom)) {
         return &lm_trans_emit_atom_string_error_statement;
     }
-    binding = lm_trans_registry_lookup(atom, "receiver.atom.statement");
+    binding = lm_trans_atom_statement_receiver_binding(atom);
     if (binding != 0) {
         handler = lm_trans_atom_statement_binding_handler(binding);
         if (handler != 0) {
@@ -25777,7 +25778,7 @@ static int lm_trans_top_level_atom_binding(const LmP0Text *atom, LmTransTopLevel
     if (out == 0) {
         return -1;
     }
-    binding = lm_trans_registry_lookup(atom, "receiver.atom.statement");
+    binding = lm_trans_atom_statement_receiver_binding(atom);
     if (binding == 0) {
         return 0;
     }
@@ -34575,6 +34576,10 @@ static int lm_trans_callable_projection_class_is(const char *class_name, const c
 
 static int lm_trans_callable_projection_is_executable(const char *projection) {
     return projection != 0 && (strcmp(projection, "c.function-symbol") == 0 || strcmp(projection, "c.procedure-symbol") == 0 || strcmp(projection, "c.function-pointer") == 0 || strcmp(projection, "c.closure-struct") == 0);
+}
+
+static const char * lm_trans_atom_statement_receiver_binding(const LmP0Text *atom) {
+    return lm_trans_namespace_registry_source_n2_typed_value(0, atom, "receiver.atom.statement", "class", "class", "receiver", "binding");
 }
 
 static int lm_trans_symbol_has_callable_projection(const LmTransSymbol *symbol, const char *projection) {

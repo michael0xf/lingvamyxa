@@ -6464,7 +6464,7 @@ fn: lm_trans_emit_atom_statement_sequence (
             if: lm_trans_text_assign_cstr(item_name, row\key) = 0
                 status: 1
             if: status = 0
-                binding: lm_trans_registry_lookup(item_name, "receiver.atom.statement")
+                binding: lm_trans_atom_statement_receiver_binding(item_name)
                 handler: lm_trans_atom_statement_binding_handler(binding)
                 if: handler = 0 || handler = @lm_trans_atom_statement_emit_sequence_prelude
                     c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" item %s has no concrete atom receiver\n", (cast: int sequence_name\length), sequence_name\data, row\key)
@@ -6550,7 +6550,7 @@ fn: lm_trans_lower_atom_statement (const: (LmP0Text: atom)) LmTransAtomStatement
     if: lm_trans_atom_starts_string(atom)
         return: @lm_trans_emit_atom_string_error_statement
 
-    binding: lm_trans_registry_lookup(atom, "receiver.atom.statement")
+    binding: lm_trans_atom_statement_receiver_binding(atom)
     if: binding != 0
         handler: lm_trans_atom_statement_binding_handler(binding)
         if: handler != 0

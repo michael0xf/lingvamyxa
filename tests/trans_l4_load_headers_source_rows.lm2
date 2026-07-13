@@ -10,7 +10,35 @@ L4:
         name: `receiver.atom.statement`
         columns((class: class) (binding: receiver))
         rows:
+                 loadHeaders  lm_trans_atom_statement_emit_include_prelude
                  loadHeaders  lm_trans_atom_statement_emit_sequence_prelude
+                 loadHeaders  None
+    end: `receiver.atom.statement`
+
+    table:
+        name: `receiver.atom.statement`
+        columns((class: class) (class: receiver))
+        rows:
+                 include  lm_trans_atom_statement_emit_include_prelude
+    end: `receiver.atom.statement`
+
+    table:
+        name: `lm.test.receiver.atom.statement.seed`
+        columns((class: class) (binding: receiver))
+        rows:
+                 define  lm_trans_atom_statement_emit_define_prelude
+    end: `lm.test.receiver.atom.statement.seed`
+
+    join: (`lm.test.receiver.atom.statement.seed`) `receiver.atom.statement`
+        columns((class: class) (binding: receiver))
+        rows:
+    end: `receiver.atom.statement`
+
+    table:
+        name: `receiver.atom.statement`
+        columns((class: class) (binding: receiver))
+        rows:
+                 define  None
     end: `receiver.atom.statement`
 
     table:
