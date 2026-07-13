@@ -1,0 +1,99 @@
+L4:
+    fn: LmUnaryCall (int: value) int
+    fn: LmBinaryCall (int: left; int: right) int
+
+    table:
+        name: functionPointerType
+        columns((class: class) (int: value))
+        rows:
+                 LmUnaryCall   1
+                 LmBinaryCall  1
+    end: functionPointerType
+
+    table:
+        name: LmFullCallHolder
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 callback  LmUnaryCall  0
+    end: LmFullCallHolder
+
+    table:
+        name: LmOverlayCallHolder
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 callback  LmBinaryCall  0
+    end: LmOverlayCallHolder
+
+    table:
+        name: `LmOverlayCallHolder.field.class`
+        columns((class: class) (class: field))
+        rows:
+                 callback  LmUnaryCall
+    end: `LmOverlayCallHolder.field.class`
+
+    table:
+        name: `LmSplitCallHolder.field.class`
+        columns((class: class) (class: field))
+        rows:
+                 callback  LmUnaryCall
+    end: `LmSplitCallHolder.field.class`
+
+    table:
+        name: `LmSplitCallHolder.field.index`
+        columns((class: class) (size_t: index))
+        rows:
+                 callback  0
+    end: `LmSplitCallHolder.field.index`
+end: L4
+
+L1:
+===
+typedef int (*LmUnaryCall)(int value);
+typedef int (*LmBinaryCall)(int left, int right);
+
+typedef struct LmFullCallHolder {
+    LmUnaryCall callback;
+} LmFullCallHolder;
+
+typedef struct LmOverlayCallHolder {
+    LmUnaryCall callback;
+} LmOverlayCallHolder;
+
+typedef struct LmSplitCallHolder {
+    LmUnaryCall callback;
+} LmSplitCallHolder;
+
+static int lm_test_increment(int value) {
+    return value + 1;
+}
+
+static LmFullCallHolder lm_test_full_call_holder = { lm_test_increment };
+static LmOverlayCallHolder lm_test_overlay_call_holder = { lm_test_increment };
+static LmSplitCallHolder lm_test_split_call_holder = { lm_test_increment };
+===
+
+L2:
+    fn: callFull (const: @: LmFullCallHolder holder) int
+        return: holder\callback(40)
+    end: callFull
+
+    fn: callOverlay (const: @: LmOverlayCallHolder holder) int
+        return: holder\callback(41)
+    end: callOverlay
+
+    fn: callSplit (const: @: LmSplitCallHolder holder) int
+        return: holder\callback(42)
+    end: callSplit
+
+    external:
+        fn: main () int
+            if: callFull(@ c.lm_test_full_call_holder) != 41
+                return: 1
+            if: callOverlay(@ c.lm_test_overlay_call_holder) != 42
+                return: 2
+            if: callSplit(@ c.lm_test_split_call_holder) != 43
+                return: 3
+            return: 0
+        end: main
+    end: external
+end: L2
