@@ -1,0 +1,142 @@
+L4:
+    table:
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 Plain      layout
+                 Qualified  layout
+                 Partial    layout
+                 Overlay    layout
+                 SplitOnly  layout
+    end: class
+
+    table:
+        name: Plain
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: Plain
+
+    table:
+        name: Qualified
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+        rows:
+                 text  char  0  1  1
+    end: Qualified
+
+    table:
+        name: Partial
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+        rows:
+                 value  int  0  None  None
+    end: Partial
+
+    table:
+        name: Overlay
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: Overlay
+
+    table:
+        name: `Overlay.field.class`
+        columns((class: class) (class: field))
+        rows:
+                 value  Boolean
+    end: `Overlay.field.class`
+
+    table:
+        name: `SplitOnly.field.class`
+        columns((class: class) (class: field))
+        rows:
+                 flag  Boolean
+    end: `SplitOnly.field.class`
+
+    table:
+        name: `SplitOnly.field.index`
+        columns((class: class) (size_t: index))
+        rows:
+                 flag  0
+    end: `SplitOnly.field.index`
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 Plain      c.struct
+                 Qualified  c.struct
+                 Partial    c.struct
+                 Overlay    c.struct
+                 SplitOnly  c.struct
+    end: `layout.backend`
+
+    table:
+        name: `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+                 Plain      1
+                 Qualified  1
+                 Partial    1
+                 Overlay    1
+                 SplitOnly  1
+    end: `class.reference-base`
+end: L4
+
+L1:
+===
+#include <string.h>
+
+typedef struct Plain {
+    int value;
+} Plain;
+
+typedef struct Qualified {
+    const char *text;
+} Qualified;
+
+typedef struct Partial {
+    int value;
+} Partial;
+
+typedef struct Overlay {
+    int value;
+} Overlay;
+
+typedef struct SplitOnly {
+    int flag;
+} SplitOnly;
+===
+
+L2:
+    table:
+        name: layoutTable
+        columns((Plain: plain) (Qualified: qualified) (Partial: partial) (Overlay: overlay) (SplitOnly: split))
+        rows:
+                 Plain:
+                     value: 7
+                 Qualified:
+                     text: "ok"
+                 Partial:
+                     value: 5
+                 Overlay:
+                     value: None
+                 SplitOnly:
+                     flag: true
+    end: layoutTable
+
+    external:
+        fn: main () int
+            if: layoutTable\plain\value != 7
+                return: 1
+            if: c.strcmp(layoutTable\qualified\text, "ok") != 0
+                return: 2
+            if: layoutTable\partial\value != 5
+                return: 3
+            if: layoutTable\overlay\value != -1
+                return: 4
+            if: layoutTable\split\flag != 1
+                return: 5
+            return: 0
+        end: main
+    end: external
+end: L2
