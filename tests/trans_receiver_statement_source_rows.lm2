@@ -1,0 +1,51 @@
+L4:
+    table:
+        name: `receiver.statement`
+        columns((class: class) (binding: receiver))
+        rows:
+                 if  lm_trans_statement_emit_while
+                 if  lm_trans_statement_emit_if
+                 if  None
+    end: `receiver.statement`
+
+    table:
+        name: `receiver.statement`
+        columns((class: class) (class: receiver))
+        rows:
+                 while  lm_trans_statement_emit_while
+    end: `receiver.statement`
+
+    table:
+        name: `lm.test.receiver.statement.seed`
+        columns((class: class) (binding: receiver))
+        rows:
+                 `return`  lm_trans_statement_emit_return
+    end: `lm.test.receiver.statement.seed`
+
+    join: (`lm.test.receiver.statement.seed`) `receiver.statement`
+        columns((class: class) (binding: receiver))
+        rows:
+    end: `receiver.statement`
+
+    table:
+        name: `receiver.statement`
+        columns((class: class) (binding: receiver))
+        rows:
+                 `return`  None
+    end: `receiver.statement`
+end: L4
+
+external:
+    fn: main () int
+        int: value 0
+
+        while: value < 1
+            value: value + 1
+        ---
+
+        if: value = 1
+            return: 0
+        ---
+        return: 1
+    end: main
+end: external

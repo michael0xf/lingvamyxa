@@ -8233,7 +8233,7 @@ static int lm_trans_head_binding_resolve(const LmTransNamespace *namespace_, con
         }
         out->function_receiver = resolved -> function_receiver;
     }
-    out->statement_receiver_binding = lm_trans_namespace_registry_lookup(namespace_, head, "receiver.statement");
+    out->statement_receiver_binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.statement", "class", "class", "receiver", "binding");
     if (out -> statement_receiver_binding != 0) {
         if (lm_trans_binding_resolve(out -> statement_receiver_binding, resolved) == 0 || resolved -> statement_frame == 0) {
             fprintf(stderr, "trans registry inconsistency: receiver.statement[\"%.*s\"] has unknown statement binding %s\n", (((int)head -> length)), head -> data, out -> statement_receiver_binding);
