@@ -1,0 +1,64 @@
+import: "lm2/own.lm2"
+
+L4:
+    table:
+        name: `callable.partial.form`
+        columns((class: class) (binding: materializer))
+        rows:
+                 directPartial  lm_trans_materialize_call_frame_partial
+                 directPartial  lm_trans_materialize_partial_callable
+                 directPartial  None
+                 default        lm_trans_materialize_call_frame_partial
+                 default        lm_trans_materialize_partial_callable
+                 default        None
+                 noneOnly       None
+    end: `callable.partial.form`
+
+    table:
+        name: `callable.partial.form`
+        columns((class: class) (class: materializer))
+        rows:
+                 fallbackPartial  lm_trans_materialize_partial_callable
+    end: `callable.partial.form`
+
+    table:
+        name: `lm.test.callable.partial.form.seed`
+        columns((class: class) (binding: materializer))
+        rows:
+                 joinedPartial  lm_trans_materialize_partial_callable
+    end: `lm.test.callable.partial.form.seed`
+
+    join: (`lm.test.callable.partial.form.seed`) `callable.partial.form`
+        columns((class: class) (binding: materializer))
+        rows:
+    end: `callable.partial.form`
+
+    table:
+        name: `callable.partial.form`
+        columns((class: class) (binding: materializer))
+        rows:
+                 joinedPartial  None
+    end: `callable.partial.form`
+end: L4
+
+callable: AddX (int: value) int
+
+fn: addBase (int: base; int: value) int
+    return: base + value
+end: addBase
+
+fn: callAdd (AddX: add) int
+    return: add(3)
+end: callAdd
+
+external:
+    fn: main () int
+        return:
+            callAdd(partial(addBase, 4)) != 7
+            || callAdd(directPartial(addBase, 4)) != 7
+            || callAdd(fallbackPartial(addBase, 4)) != 7
+            || callAdd(joinedPartial(addBase, 4)) != 7
+            || callAdd(defaultPartial(addBase, 4)) != 7
+            || callAdd(noneOnly(addBase, 4)) != 7
+    end: main
+end: external

@@ -9857,7 +9857,7 @@ static int lm_trans_callable_partial_form_is(const LmTransNamespace *namespace_,
     if (form == 0 || binding_name == 0) {
         return 0;
     }
-    binding = lm_trans_namespace_registry_lookup(namespace_, form, "callable.partial.form");
+    binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, form, "callable.partial.form", "class", "class", "materializer", "binding");
     return binding != 0 && strcmp(binding, binding_name) == 0;
 }
 
