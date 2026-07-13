@@ -1,0 +1,103 @@
+L4:
+    table:
+        name: `forward.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestForwardStruct      c.struct
+                 LmTestForwardUnion       c.union
+                 LmTestForwardDuplicate   c.struct
+                 LmTestForwardDuplicate   c.union
+                 LmTestForwardLateNone    c.struct
+                 LmTestForwardLateNone    None
+                 LmTestForwardAfterOther  c.other
+                 LmTestForwardAfterOther  c.struct
+                 LmTestForwardSchemaFallback c.other
+                 LmTestForwardLayout      c.struct
+                 LmTestForwardNone        None
+    end: `forward.backend`
+
+    table:
+        name: `forward.backend`
+        columns((class: class) (class: kind))
+        rows:
+                 LmTestForwardSchemaFallback  c.struct
+    end: `forward.backend`
+
+    table:
+        name: `lm.test.forward.seed`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestForwardJoined  c.struct
+    end: `lm.test.forward.seed`
+
+    join: (`lm.test.forward.seed`) `forward.backend`
+        columns((class: class) (class: backend))
+        rows:
+    end: `forward.backend`
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestForwardLayout  c.struct
+                 LmTestForwardJoined  c.struct
+                 LmTestForwardSchemaFallback  c.struct
+    end: `layout.backend`
+
+    table:
+        name: LmTestForwardLayout
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardLayout
+
+    table:
+        name: LmTestForwardJoined
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardJoined
+
+    table:
+        name: LmTestForwardSchemaFallback
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardSchemaFallback
+end: L4
+
+forward
+layout
+
+L1:
+===
+extern LmTestForwardStruct *lm_test_forward_struct_type;
+extern struct LmTestForwardStruct *lm_test_forward_struct_type;
+extern LmTestForwardUnion *lm_test_forward_union_type;
+extern union LmTestForwardUnion *lm_test_forward_union_type;
+extern LmTestForwardDuplicate *lm_test_forward_duplicate_type;
+extern union LmTestForwardDuplicate *lm_test_forward_duplicate_type;
+extern LmTestForwardLateNone *lm_test_forward_late_none_type;
+extern struct LmTestForwardLateNone *lm_test_forward_late_none_type;
+extern LmTestForwardAfterOther *lm_test_forward_after_other_type;
+extern struct LmTestForwardAfterOther *lm_test_forward_after_other_type;
+extern LmTestForwardJoined *lm_test_forward_joined_type;
+extern struct LmTestForwardJoined *lm_test_forward_joined_type;
+extern LmTestForwardSchemaFallback *lm_test_forward_schema_fallback_type;
+extern struct LmTestForwardSchemaFallback *lm_test_forward_schema_fallback_type;
+typedef int LmTestForwardNone;
+
+static int lm_test_forward_source_rows(void) {
+    LmTestForwardLayout value = { 17 };
+    LmTestForwardJoined joined = { 19 };
+    LmTestForwardSchemaFallback fallback = { 21 };
+    LmTestForwardNone absent = 23;
+    return value.value != 17 || joined.value != 19 || fallback.value != 21 || absent != 23;
+}
+===
+
+external:
+    fn: main () int
+        return: c.lm_test_forward_source_rows()
+    end: main
+end: external

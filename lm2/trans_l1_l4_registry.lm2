@@ -584,6 +584,7 @@ fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); con
     const: LmOwnPtrStack: backend_rows
     const: LmOwnPtrStack: forward_rows
     const: @: char backend
+    const: @: char forward_backend
     const: @: char prefix
     int: has_forward
     LmP0Text: layout_text
@@ -607,7 +608,8 @@ fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); con
 
     forward_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend")
     forward_row: lm_trans_registry_relation_stack_latest_row(forward_rows, layout_text)
-    has_forward: forward_row != 0 && forward_row\payload != 0 && (c.strcmp(forward_row\payload, "c.struct") = 0 || c.strcmp(forward_row\payload, "c.union") = 0)
+    forward_backend: lm_trans_registry_source_n2_value(namespace_, "forward.backend", "class", "backend", forward_row)
+    has_forward: forward_backend != 0 && (c.strcmp(forward_backend, "c.struct") = 0 || c.strcmp(forward_backend, "c.union") = 0)
 
     prefix: 0
     if: c.strcmp(backend, "c.struct") = 0
@@ -1417,6 +1419,7 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: nam
     const: LmOwnPtrStack: backend_rows
     LmTransRegistryFact: backend_row
     const: @: char name
+    const: @: char backend
     const: @: char tag
     size_t: i
 
@@ -1439,13 +1442,14 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: nam
             c.fprintf(c.stderr, "trans L4 forward error: %s requires forward.backend\n", name)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
-        if: c.strcmp(backend_row\payload, "c.struct") = 0
+        backend: lm_trans_registry_source_n2_value(namespace_, "forward.backend", "class", "backend", backend_row)
+        if: backend != 0 && c.strcmp(backend, "c.struct") = 0
             tag: "struct"
         else:
-            if: c.strcmp(backend_row\payload, "c.union") = 0
+            if: backend != 0 && c.strcmp(backend, "c.union") = 0
                 tag: "union"
             else:
-                c.fprintf(c.stderr, "trans L4 forward error: unsupported backend %s for %s\n", backend_row\payload, name)
+                c.fprintf(c.stderr, "trans L4 forward error: unsupported backend %s for %s\n", backend, name)
                 lm_trans_ptr_stack_delete(@ names)
                 return: 1
         ---

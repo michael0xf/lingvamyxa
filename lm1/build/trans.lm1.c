@@ -2475,6 +2475,7 @@ static LmTransRegistryFact * lm_trans_registry_lookup_default_row_in_identifiers
 static int lm_trans_registry_view_row_same(const LmTransRegistryFact *legacy_row, const LmRegistryViewRow *view_row);
 static int lm_trans_registry_view_parity_enabled(void);
 static int lm_trans_registry_view_is_selected(void);
+static const char * lm_trans_registry_source_n2_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *value_column_name, const LmTransRegistryFact *facade_row);
 static void lm_trans_registry_view_parity_fail(const char *operation, const char *table);
 static const LmRegistryViewRow * lm_trans_registry_view_lookup_exact_text(const LmP0Text *key, const char *table);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_in_identifiers(const LmTransIdentifierTable *identifiers, const LmP0Text *key, const char *relation_name);
@@ -5992,6 +5993,59 @@ static int lm_trans_registry_view_parity_enabled(void) {
 
 static int lm_trans_registry_view_is_selected(void) {
     return lm_trans_registry != 0 && lm_trans_registry->view_mode == 2;
+}
+
+static const char * lm_trans_registry_source_n2_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *value_column_name, const LmTransRegistryFact *facade_row) {
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_value_column;
+    const LmTableCell * source_key_cell;
+    const LmTableCell * source_value_cell;
+    const char *result;
+    size_t descriptor_index;
+    size_t row_index;
+    int source_usable;
+    if (facade_row == 0 || facade_row -> key == 0 || facade_row -> payload == 0) {
+        return 0;
+    }
+    result = facade_row -> payload;
+    if (table_name == 0 || key_column_name == 0 || value_column_name == 0 || lm_trans_registry_view_parity_enabled() == 0) {
+        return result;
+    }
+    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
+        return result;
+    }
+    descriptor_index = lm_registry_view_source_table_count(lm_trans_registry->view);
+    while (descriptor_index > 0U) {
+        descriptor_index = descriptor_index - 1U;
+        source_table = lm_registry_view_source_table_at(lm_trans_registry->view, descriptor_index);
+        source_usable = source_table != 0 && source_table -> name != 0 && strcmp(source_table -> name, table_name) == 0 && lm_table_descriptor_column_count(source_table) == 2U;
+        if (source_usable != 0) {
+            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+            source_value_column = lm_table_descriptor_column_at(source_table, 1U);
+            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, key_column_name) == 0 && source_value_column != 0 && source_value_column -> name != 0 && strcmp(source_value_column -> name, value_column_name) == 0;
+        }
+        if (source_usable != 0) {
+            row_index = lm_table_descriptor_materialized_row_count(source_table);
+            while (row_index > 0U) {
+                row_index = row_index - 1U;
+                source_row = lm_table_descriptor_materialized_row_at(source_table, row_index);
+                if (source_row != 0 && lm_table_row_cell_count(source_row) == 2U) {
+                    source_key_cell = lm_table_row_cell_at(source_row, 0U);
+                    source_value_cell = lm_table_row_cell_at(source_row, 1U);
+                    source_usable = source_key_cell != 0 && source_key_cell -> value != 0 && strcmp(source_key_cell -> value, facade_row -> key) == 0 && source_value_cell != 0 && source_value_cell -> explicit_none == 0 && source_value_cell -> value != 0 && source_value_cell -> node == 0 && source_value_cell -> source == facade_row && strcmp(source_value_cell -> value, facade_row -> payload) == 0;
+                    if (source_usable != 0) {
+                        if (lm_trans_registry_view_is_selected() != 0) {
+                            return source_value_cell -> value;
+                        }
+                        return result;
+                    }
+                }
+            }
+        }
+    }
+    return result;
 }
 
 static void lm_trans_registry_view_parity_fail(const char *operation, const char *table) {
@@ -30116,6 +30170,7 @@ static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, 
     const LmOwnPtrStack * backend_rows;
     const LmOwnPtrStack * forward_rows;
     const char *backend;
+    const char *forward_backend;
     const char *prefix;
     int has_forward;
     LmP0Text * layout_text;
@@ -30140,7 +30195,8 @@ static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, 
     }
     forward_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend");
     forward_row = lm_trans_registry_relation_stack_latest_row(forward_rows, layout_text);
-    has_forward = forward_row != 0 && forward_row -> payload != 0 && (strcmp(forward_row -> payload, "c.struct") == 0 || strcmp(forward_row -> payload, "c.union") == 0);
+    forward_backend = lm_trans_registry_source_n2_value(namespace_, "forward.backend", "class", "backend", forward_row);
+    has_forward = forward_backend != 0 && (strcmp(forward_backend, "c.struct") == 0 || strcmp(forward_backend, "c.union") == 0);
     prefix = 0;
     if (strcmp(backend, "c.struct") == 0) {
         if (has_forward) {
@@ -31006,6 +31062,7 @@ static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace 
     const LmOwnPtrStack * backend_rows;
     LmTransRegistryFact * backend_row;
     const char *name;
+    const char *backend;
     const char *tag;
     size_t i;
     names = lm_trans_ptr_stack_new(lm_trans_free_any);
@@ -31030,15 +31087,16 @@ static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace 
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
-        if (strcmp(backend_row -> payload, "c.struct") == 0) {
+        backend = lm_trans_registry_source_n2_value(namespace_, "forward.backend", "class", "backend", backend_row);
+        if (backend != 0 && strcmp(backend, "c.struct") == 0) {
             tag = "struct";
         }
         else {
-            if (strcmp(backend_row -> payload, "c.union") == 0) {
+            if (backend != 0 && strcmp(backend, "c.union") == 0) {
                 tag = "union";
             }
             else {
-                fprintf(stderr, "trans L4 forward error: unsupported backend %s for %s\n", backend_row -> payload, name);
+                fprintf(stderr, "trans L4 forward error: unsupported backend %s for %s\n", backend, name);
                 lm_trans_ptr_stack_delete(&names);
                 return 1;
             }
