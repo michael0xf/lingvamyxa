@@ -259,7 +259,7 @@ fn: lm_trans_top_level_declare_atom_sequence (LmTransNamespace: namespace_; cons
     LmP0NodeAs: node_as
     LmP0Text: item_name
     LmTransTopLevelItem: child
-    size_t: i
+    size_t: expected_index
     int: status
 
     if: item = 0 || item\node = 0 || item\node\kind != c.LM_P0_NODE_ATOM
@@ -283,21 +283,25 @@ fn: lm_trans_top_level_declare_atom_sequence (LmTransNamespace: namespace_; cons
     node\as: node_as
 
     status: 0
-    i: 0U
-    while: status = 0 && i < rows\count
-        row: lm_own_ptr_stack_at(rows, i)
-        if: row != 0 && row\key != 0
-            lm_trans_text_assign_cstr(item_name, row\key)
-            node_as\atom: item_name
-            child: lm_trans_top_level_item_lowered_new(node)
-            if: child = 0
+    expected_index: 0U
+    while: status = 0 && expected_index < rows\count
+        if: lm_trans_sequence_item_row_at_index(namespace_, item\node\as\atom, rows, expected_index, @ row) != 0
+            status: 1
+        else:
+            if: lm_trans_text_assign_cstr(item_name, row\key) = 0
                 status: 1
-                break
-            if: child\declare != 0
-                status: child\declare(namespace_, child)
-            lm_trans_top_level_item_delete(child)
+            if: status = 0
+                node_as\atom: item_name
+                child: lm_trans_top_level_item_lowered_new(node)
+                if: child = 0
+                    status: 1
+                    break
+                if: child\declare != 0
+                    status: child\declare(namespace_, child)
+                lm_trans_top_level_item_delete(child)
+            ---
         ---
-        i: i + 1U
+        expected_index: expected_index + 1U
 
     lm_own_delete(node, 0)
     lm_own_delete(node_as, 0)

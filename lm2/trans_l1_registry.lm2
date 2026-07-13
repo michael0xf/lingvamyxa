@@ -1062,6 +1062,8 @@ fn: lm_trans_registry_source_n2_cell (
     const: @(char payload_column_name)
     const: (LmTransRegistryFact: facade_row)
     int: expect_node
+    const: @(char expected_key_descriptor)
+    const: @(char expected_payload_descriptor)
 ) const: LmTableCell
     const: LmTableDescriptor: source_table
     const: LmTableRow: source_row
@@ -1093,10 +1095,12 @@ fn: lm_trans_registry_source_n2_cell (
             source_key_column: lm_table_descriptor_column_at(source_table, 0U)
             source_payload_column: lm_table_descriptor_column_at(source_table, 1U)
             source_usable: source_key_column != 0 && source_key_column\name != 0 && c.strcmp(source_key_column\name, key_column_name) = 0 && source_payload_column != 0 && source_payload_column\name != 0 && c.strcmp(source_payload_column\name, payload_column_name) = 0
-            if: source_usable != 0 && expect_node != 0
+            if: source_usable != 0 && expected_key_descriptor != 0
                 source_key_descriptor: lm_table_column_descriptor_descriptor_at(source_key_column, 0U)
+                source_usable: lm_table_column_descriptor_descriptor_count(source_key_column) = 1U && source_key_descriptor != 0 && c.strcmp(source_key_descriptor, expected_key_descriptor) = 0
+            if: source_usable != 0 && expected_payload_descriptor != 0
                 source_payload_descriptor: lm_table_column_descriptor_descriptor_at(source_payload_column, 0U)
-                source_usable: lm_table_column_descriptor_descriptor_count(source_key_column) = 1U && source_key_descriptor != 0 && c.strcmp(source_key_descriptor, "class") = 0 && lm_table_column_descriptor_descriptor_count(source_payload_column) = 1U && source_payload_descriptor != 0 && c.strcmp(source_payload_descriptor, "node") = 0
+                source_usable: lm_table_column_descriptor_descriptor_count(source_payload_column) = 1U && source_payload_descriptor != 0 && c.strcmp(source_payload_descriptor, expected_payload_descriptor) = 0
         ---
         if: source_usable != 0
             row_index: lm_table_descriptor_materialized_row_count(source_table)
@@ -1130,7 +1134,25 @@ fn: lm_trans_registry_source_n2_value (
 
     if: facade_row = 0 || facade_row\key = 0 || facade_row\payload = 0
         return: 0
-    source_cell: lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0)
+    source_cell: lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0, 0, 0)
+    if: source_cell != 0 && lm_trans_registry_view_is_selected() != 0
+        return: source_cell\value
+return: facade_row\payload
+
+fn: lm_trans_registry_source_n2_typed_value (
+    const: (LmTransNamespace: namespace_)
+    const: @(char table_name)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_column_name)
+    const: @(char value_descriptor)
+    const: (LmTransRegistryFact: facade_row)
+) const: @: char
+    const: LmTableCell: source_cell
+
+    if: facade_row = 0 || facade_row\key = 0 || facade_row\payload = 0
+        return: 0
+    source_cell: lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0, key_descriptor, value_descriptor)
     if: source_cell != 0 && lm_trans_registry_view_is_selected() != 0
         return: source_cell\value
 return: facade_row\payload
@@ -1146,7 +1168,7 @@ fn: lm_trans_registry_source_n2_node (
 
     if: facade_row = 0 || facade_row\key = 0 || facade_row\payload_node = 0
         return: 0
-    source_cell: lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, node_column_name, facade_row, 1)
+    source_cell: lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, node_column_name, facade_row, 1, "class", "node")
     if: source_cell != 0 && lm_trans_registry_view_is_selected() != 0
         return: (cast: (const: LmP0Node) source_cell\node)
 return: facade_row\payload_node

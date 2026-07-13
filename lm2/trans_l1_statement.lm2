@@ -6348,6 +6348,77 @@ fn: lm_trans_sequence_item_index (const: @(char payload); @: size_t out_index) i
     out_index[0]: (cast: size_t value)
 return: 1
 
+fn: lm_trans_sequence_item_source_table_name_new (const: (LmP0Text: sequence_name)) @: char
+    LmP0Text: sequence_payload
+    @: char source_table_name
+
+    sequence_payload: lm_trans_statement_text_new()
+    if: sequence_payload = 0
+        return: 0
+    if: lm_trans_identifier_payload(sequence_name, sequence_payload) = 0
+        lm_trans_text_ref_destroy(@ sequence_payload)
+        return: 0
+
+    source_table_name: lm_own_new_zero(sequence_payload\length + 6U)
+    if: source_table_name != 0
+        if: sequence_payload\length != 0U
+            c.memcpy(source_table_name, sequence_payload\data, sequence_payload\length)
+        c.memcpy(source_table_name + sequence_payload\length, ".item", 6U)
+    ---
+    lm_trans_text_ref_destroy(@ sequence_payload)
+return: source_table_name
+
+fn: lm_trans_sequence_item_index_payload (
+    LmTransNamespace: namespace_
+    const: @(char source_table_name)
+    const: (LmTransRegistryFact: row)
+) const: @: char
+    if: row = 0
+        return: 0
+return: lm_trans_registry_source_n2_typed_value(namespace_, source_table_name, "class", "class", "index", "size_t", row)
+
+fn: lm_trans_sequence_item_row_at_index (
+    LmTransNamespace: namespace_
+    const: LmP0Text: sequence_name
+    const: LmOwnPtrStack: rows
+    size_t: expected_index
+    @: LmTransRegistryFact out_row
+) int
+    LmTransRegistryFact: row
+    const: @: char payload
+    @: char source_table_name
+    size_t: index
+    size_t: i
+    int: found
+
+    if: sequence_name = 0 || rows = 0 || out_row = 0
+        return: 1
+    source_table_name: lm_trans_sequence_item_source_table_name_new(sequence_name)
+    if: source_table_name = 0
+        return: 1
+    finally: lm_own_delete(source_table_name, 0)
+    out_row[0]: 0
+    found: 0
+    i: 0U
+    while: i < rows\count
+        row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(rows, i))
+        if: row != 0 && row\key != 0
+            payload: lm_trans_sequence_item_index_payload(namespace_, source_table_name, row)
+            if: lm_trans_sequence_item_index(payload, @ index) && index = expected_index
+                if: found
+                    c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" has duplicate index %zu\n", (cast: int sequence_name\length), sequence_name\data, expected_index)
+                    return: 1
+                found: 1
+                out_row[0]: row
+            ---
+        ---
+        i: i + 1U
+
+    if: found = 0
+        c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" is missing index %zu\n", (cast: int sequence_name\length), sequence_name\data, expected_index)
+        return: 1
+return: 0
+
 fn: lm_trans_emit_atom_statement_sequence (
     FILE: file
     const: LmP0Text: sequence_name
@@ -6361,11 +6432,7 @@ fn: lm_trans_emit_atom_statement_sequence (
     LmP0NodeAs: node_as
     LmP0Text: item_name
     const: @: char binding
-    size_t: emitted
     size_t: expected_index
-    size_t: index
-    size_t: i
-    int: found
     int: status
 
     rows: lm_trans_namespace_registry_relation_stack(namespace_, sequence_name, "item")
@@ -6389,44 +6456,29 @@ fn: lm_trans_emit_atom_statement_sequence (
     finally: lm_trans_text_ref_destroy(@ item_name)
 
     status: 0
-    emitted: 0U
     expected_index: 0U
-    while: status = 0 && emitted < rows\count
-        found: 0
-        i: 0U
-        while: status = 0 && i < rows\count
-            row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(rows, i))
-            if: row != 0 && row\key != 0 && lm_trans_sequence_item_index(row\payload, @ index) && index = expected_index
-                if: found
-                    c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" has duplicate index %zu\n", (cast: int sequence_name\length), sequence_name\data, expected_index)
-                    status: 1
-                else:
-                    found: 1
-                    if: lm_trans_text_assign_cstr(item_name, row\key) = 0
-                        status: 1
-                    if: status = 0
-                        binding: lm_trans_registry_lookup(item_name, "receiver.atom.statement")
-                        handler: lm_trans_atom_statement_binding_handler(binding)
-                        if: handler = 0 || handler = @lm_trans_atom_statement_emit_sequence_prelude
-                            c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" item %s has no concrete atom receiver\n", (cast: int sequence_name\length), sequence_name\data, row\key)
-                            status: 1
-                    ---
-                    if: status = 0
-                        c.memset(node, 0, c.sizeof(node[0]))
-                        c.memset(node_as, 0, c.sizeof(node_as[0]))
-                        node\kind: c.LM_P0_NODE_ATOM
-                        node\as: node_as
-                        node\as\atom: item_name
-                        if: handler(file, node, indent, namespace_) != 0
-                            status: 1
-                    ---
-                    if: status = 0
-                        emitted: emitted + 1U
-            ---
-            i: i + 1U
-        if: status = 0 && found = 0
-            c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" is missing index %zu\n", (cast: int sequence_name\length), sequence_name\data, expected_index)
+    while: status = 0 && expected_index < rows\count
+        if: lm_trans_sequence_item_row_at_index(namespace_, sequence_name, rows, expected_index, @ row) != 0
             status: 1
+        else:
+            if: lm_trans_text_assign_cstr(item_name, row\key) = 0
+                status: 1
+            if: status = 0
+                binding: lm_trans_registry_lookup(item_name, "receiver.atom.statement")
+                handler: lm_trans_atom_statement_binding_handler(binding)
+                if: handler = 0 || handler = @lm_trans_atom_statement_emit_sequence_prelude
+                    c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" item %s has no concrete atom receiver\n", (cast: int sequence_name\length), sequence_name\data, row\key)
+                    status: 1
+            ---
+            if: status = 0
+                c.memset(node, 0, c.sizeof(node[0]))
+                c.memset(node_as, 0, c.sizeof(node_as[0]))
+                node\kind: c.LM_P0_NODE_ATOM
+                node\as: node_as
+                node\as\atom: item_name
+                if: handler(file, node, indent, namespace_) != 0
+                    status: 1
+            ---
         if: status = 0
             expected_index: expected_index + 1U
 return: status
