@@ -1,0 +1,82 @@
+L4:
+    table:
+        name: os
+        columns((class: class) (node: payload))
+        rows:
+                 mac
+                 L2:
+                     fn: lm_test_os_source_value () int
+                         return: 41
+                     end: lm_test_os_source_value
+                 end: L2
+    end: os
+
+    table:
+        name: os
+        columns((class: class) (node: body))
+        rows:
+                 win
+                 L2:
+                     fn: lm_test_os_source_value () int
+                         return: 11
+                     end: lm_test_os_source_value
+                 end: L2
+                 win
+                 L2:
+                     fn: lm_test_os_source_value () int
+                         return: 12
+                     end: lm_test_os_source_value
+                 end: L2
+    end: os
+
+    table:
+        name: `lm.test.os.seed`
+        columns((class: class) (node: body))
+        rows:
+                 unix
+                 L2:
+                     fn: lm_test_os_source_value () int
+                         return: 51
+                     end: lm_test_os_source_value
+                 end: L2
+    end: `lm.test.os.seed`
+
+    join: (`lm.test.os.seed`) os
+        columns((class: class) (node: body))
+        rows:
+    end: os
+
+    table:
+        name: os
+        columns((class: class) (node: body))
+        rows:
+                 mac
+                 L2:
+                     fn: lm_test_os_source_value () int
+                         return: 21
+                     end: lm_test_os_source_value
+                 end: L2
+                 unix
+                 L2:
+                     fn: lm_test_os_source_value () int
+                         return: 31
+                     end: lm_test_os_source_value
+                 end: L2
+                 default
+                 L2:
+                     fn: lm_test_os_source_value () int
+                         return: 61
+                     end: lm_test_os_source_value
+                 end: L2
+                 unix  None
+                 mac   None
+    end: os
+end: L4
+
+os
+
+external:
+    fn: main () int
+        return: lm_test_os_source_value() != 11 && lm_test_os_source_value() != 41 && lm_test_os_source_value() != 51 && lm_test_os_source_value() != 61
+    end: main
+end: external
