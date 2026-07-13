@@ -8223,7 +8223,7 @@ static int lm_trans_head_binding_resolve(const LmTransNamespace *namespace_, con
     memset(out, 0, sizeof(out[0]));
     out->symbol = lm_trans_namespace_find(namespace_, head);
     out->receiver_type = lm_trans_namespace_registry_lookup_table_link_checked(namespace_, head, "namespace", "receiver.type");
-    out->function_receiver_binding = lm_trans_namespace_registry_lookup(namespace_, head, "receiver.function");
+    out->function_receiver_binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.function", "class", "class", "receiver", "binding");
     if (out -> function_receiver_binding != 0) {
         receiver_status = lm_trans_binding_resolve(out -> function_receiver_binding, resolved);
         if (receiver_status == 0 || resolved -> function_receiver == 0) {

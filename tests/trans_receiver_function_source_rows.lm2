@@ -1,0 +1,50 @@
+L4:
+    table:
+        name: `receiver.function`
+        columns((class: class) (binding: receiver))
+        rows:
+                 fn  lm_trans_receiver_sub
+                 fn  lm_trans_receiver_fn
+                 fn  None
+    end: `receiver.function`
+
+    table:
+        name: `receiver.function`
+        columns((class: class) (class: receiver))
+        rows:
+                 sub  lm_trans_receiver_sub
+    end: `receiver.function`
+
+    table:
+        name: `lm.test.receiver.function.seed`
+        columns((class: class) (binding: receiver))
+        rows:
+                 callable  lm_trans_receiver_callable
+    end: `lm.test.receiver.function.seed`
+
+    join: (`lm.test.receiver.function.seed`) `receiver.function`
+        columns((class: class) (binding: receiver))
+        rows:
+    end: `receiver.function`
+
+    table:
+        name: `receiver.function`
+        columns((class: class) (binding: receiver))
+        rows:
+                 callable  None
+    end: `receiver.function`
+end: L4
+
+callable: Increment (int: value) int
+
+sub: increment (@: int value)
+    value[0]: value[0] + 1
+end: increment
+
+external:
+    fn: main () int
+        int: value 6
+        increment(@ value)
+        return: value != 7
+    end: main
+end: external
