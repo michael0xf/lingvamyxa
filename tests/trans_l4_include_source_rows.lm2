@@ -1,0 +1,77 @@
+L4:
+    table:
+        name: include
+        columns((class: class) (@: char target))
+        rows:
+                 lm_test_include_source           "<limits.h>"
+                 lm_test_include_duplicate        "<float.h>"
+                 lm_test_include_duplicate        "<stdarg.h>"
+                 lm_test_include_local            "locale.h"
+                 lm_test_include_quoted           `"errno.h"`
+                 lm_test_include_late_none        "<time.h>"
+                 lm_test_include_late_none        None
+                 lm_test_include_none             None
+    end: include
+
+    table:
+        name: include
+        columns((class: class) (@: char kind))
+        rows:
+                 lm_test_include_schema_fallback  "<signal.h>"
+    end: include
+
+    table:
+        name: `lm.test.include.seed`
+        columns((class: class) (@: char target))
+        rows:
+                 lm_test_include_joined  "<assert.h>"
+    end: `lm.test.include.seed`
+
+    join: (`lm.test.include.seed`) include
+        columns((class: class) (@: char target))
+        rows:
+    end: include
+end: L4
+
+include
+
+L1:
+===
+#ifndef CHAR_BIT
+#error "full source include was not emitted"
+#endif
+
+#ifndef FLT_RADIX
+#error "first duplicate include target was not emitted"
+#endif
+
+#ifndef va_start
+#error "second duplicate include target was not emitted"
+#endif
+
+#ifndef LC_ALL
+#error "unquoted include target was not wrapped in quotes"
+#endif
+
+#ifndef errno
+#error "already-quoted include target was not preserved"
+#endif
+
+#ifndef CLOCKS_PER_SEC
+#error "None source row unexpectedly removed an earlier include"
+#endif
+
+#ifndef SIG_DFL
+#error "wrong-schema include descriptor did not fall back to the facade row"
+#endif
+
+#ifndef assert
+#error "joined include row did not fall back to its facade value"
+#endif
+===
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
