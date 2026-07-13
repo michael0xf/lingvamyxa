@@ -1,0 +1,43 @@
+registry:
+    table:
+        name: `registry.view.parity.lookup`
+        columns((class: class) (@: char value))
+        rows:
+                 default      localDefault
+                 localExact   localExactValue
+                 shadow       localShadowValue
+                 duplicate    localDuplicateFirst
+                 duplicate    localDuplicateLast
+    end: `registry.view.parity.lookup`
+
+    table:
+        name: `registry.view.parity.multi`
+        columns((class: class) (@: char left) (@: char right))
+        rows:
+                 localMulti   localLeft         localRight
+                 sharedMulti  localSharedLeft   None
+                 noneLeft     None              rightSurvives
+    end: `registry.view.parity.multi`
+
+    join: (registryViewParityJoinBase) registryViewParityJoined
+        columns((class: class) (@: char value))
+        rows:
+                 localJoin  localJoinValue
+    end: registryViewParityJoined
+
+    join: (registryViewParityNamespaceBase) namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+    end: namespace
+end: registry
+
+L2:
+    import: "fixtures/registry_view_parity_base.lm4"
+
+    external:
+        fn: main () int
+            registryViewParityAssert: 1 = 1
+            return: 0
+        end: main
+    end: external
+end: L2

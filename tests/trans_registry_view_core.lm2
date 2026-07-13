@@ -1,0 +1,120 @@
+import: "lm2/table_descriptor.lm2"
+
+external:
+    fn: main () int
+        LmRegistryView: base
+        LmRegistryView: local
+        LmTableDescriptor: descriptor
+        const: LmTableColumnDescriptor: column
+        const: LmRegistryViewRow: row
+        const: LmOwnPtrStack: source_rows
+        int: status
+
+        base: lm_registry_view_new(0)
+        local: lm_registry_view_new(base)
+        if: base = 0 || local = 0
+            lm_registry_view_delete(local)
+            lm_registry_view_delete(base)
+            return: 1
+
+        status: 0
+        if: lm_registry_view_push_relation(base, "registry.view.core", "default", "baseDefault", 0, base) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(base, "registry.view.core", "inherited", "baseExact", 0, base) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(base, "registry.view.core", "shadow", "baseShadow", 0, base) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(local, "registry.view.core", "default", "localDefault", 0, local) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(local, "registry.view.core", "shadow", "localShadow", 0, local) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(local, "registry.view.core", "duplicate", "localFirst", 0, local) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(local, "registry.view.core", "duplicate", "localLast", 0, local) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(local, "registry.view.node", "node", 0, base, local) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_push_relation(base, "registry.view.core", "lateBase", "lateBaseExact", 0, base) != 0
+            status: 1
+
+        if: status = 0
+            row: lm_registry_view_lookup_exact(local, "inherited", "registry.view.core")
+            if: row = 0 || row\payload = 0 || c.strcmp(row\payload, "baseExact") != 0
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_lookup(local, "missing", "registry.view.core")
+            if: row = 0 || row\payload = 0 || c.strcmp(row\payload, "localDefault") != 0
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_lookup(local, "shadow", "registry.view.core")
+            if: row = 0 || row\payload = 0 || c.strcmp(row\payload, "localShadow") != 0
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_lookup(local, "duplicate", "registry.view.core")
+            if: row = 0 || row\payload = 0 || c.strcmp(row\payload, "localLast") != 0
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_lookup(local, "lateBase", "registry.view.core")
+            if: row = 0 || row\payload = 0 || c.strcmp(row\payload, "lateBaseExact") != 0
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_lookup_default(local, "registry.view.core")
+            if: row = 0 || row\payload = 0 || c.strcmp(row\payload, "localDefault") != 0
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_lookup_exact(local, "node", "registry.view.node")
+            if: row = 0 || row\payload != 0 || row\payload_node != base
+                status: 1
+            ---
+        if: status = 0 && lm_registry_view_lookup_text(local, "node", "registry.view.node") != 0
+            status: 1
+
+        if: status = 0 && lm_registry_view_matching_key_count(local, "registry.view.core", "duplicate") != 2U
+            status: 1
+        if: status = 0
+            row: lm_registry_view_matching_key_at(local, "registry.view.core", "duplicate", 0U)
+            if: row = 0 || row\payload = 0 || c.strcmp(row\payload, "localFirst") != 0
+                status: 1
+            ---
+
+        if: status = 0 && (lm_registry_view_fact_count(local) != 9U || lm_registry_view_table_row_count(local, "registry.view.core") != 8U || lm_registry_view_table_has_rows(local, "registry.view.node") = 0)
+            status: 1
+        if: status = 0
+            row: lm_registry_view_fact_at(local, 1U)
+            if: row = 0 || row\key = 0 || c.strcmp(row\key, "inherited") != 0 || row\source != base
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_table_row_at(local, "registry.view.core", 4U)
+            if: row = 0 || row\key = 0 || c.strcmp(row\key, "default") != 0 || row\local_sequence != 0U
+                status: 1
+            ---
+        if: status = 0
+            row: lm_registry_view_table_row_at(local, "registry.view.core", 5U)
+            if: row = 0 || row\key = 0 || c.strcmp(row\key, "shadow") != 0 || row\source != local
+                status: 1
+            ---
+
+        descriptor: lm_registry_view_find_local_table_slice(local, "registry.view.core", 18U)
+        if: status = 0 && (descriptor = 0 || lm_table_descriptor_column_count(descriptor) != 2U || lm_table_descriptor_row_count(descriptor) != 4U)
+            status: 1
+        source_rows: lm_registry_view_local_source_rows_slice(local, "registry.view.core", 18U)
+        if: status = 0 && (source_rows = 0 || source_rows\count != 4U || lm_own_ptr_stack_at(source_rows, 0U) != local)
+            status: 1
+        if: status = 0
+            column: lm_table_descriptor_column_at(descriptor, 0U)
+            row: lm_table_descriptor_row_at(descriptor, 3U)
+            if: column = 0 || column\name = 0 || c.strcmp(column\name, "class") != 0 || row = 0 || row\key = 0 || c.strcmp(row\key, "duplicate") != 0
+                status: 1
+            ---
+
+        lm_registry_view_delete(local)
+        lm_registry_view_delete(base)
+    return: status
+end: external

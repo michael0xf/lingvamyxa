@@ -101,6 +101,7 @@ set(LM4_OWN_ABI "${CMAKE_CURRENT_SOURCE_DIR}/lm4/own_abi.lm4")
 set(LM4_PARSER_ABI "${CMAKE_CURRENT_SOURCE_DIR}/lm4/parser_abi.lm4")
 set(LM4_L4_LOADER_ABI "${CMAKE_CURRENT_SOURCE_DIR}/lm4/l4_loader_abi.lm4")
 set(LM2_L4_LOADER_UNIT_PAYLOAD "${CMAKE_CURRENT_SOURCE_DIR}/lm2/l4_loader_unit_payload.lm2")
+set(LM2_TABLE_DESCRIPTOR "${CMAKE_CURRENT_SOURCE_DIR}/lm2/table_descriptor.lm2")
 set(LM2_TO_LM1_REGISTRY_DEPS
     "${LM4_CORE_REGISTRY}"
     "${LM4_TRANS_REGISTRY}"
@@ -109,6 +110,7 @@ set(LM2_TO_LM1_REGISTRY_DEPS
     "${LM4_PARSER_ABI}"
     "${LM4_L4_LOADER_ABI}"
     "${LM2_L4_LOADER_UNIT_PAYLOAD}"
+    "${LM2_TABLE_DESCRIPTOR}"
 )
 
 # ---- Generated L1 ownership helper ----

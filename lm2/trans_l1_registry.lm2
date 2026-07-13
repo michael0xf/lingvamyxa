@@ -387,6 +387,9 @@ fn: lm_trans_registry_push_row_values (const: (LmP0Text: table_value); const: (L
     if: lm_trans_registry_index_row(row) != 0
         return: -1
 
+    if: registry\view = 0 || lm_registry_view_push_relation(registry\view, row\table, row\key, row\payload, row\payload_node, row) != 0
+        return: -1
+
     registry\loaded_fact_count: registry\loaded_fact_count + 1U
 return: 0
 
@@ -414,6 +417,9 @@ fn: lm_trans_registry_push_row_node_values (const: (LmP0Text: table_value); cons
         return: -1
 
     if: lm_trans_registry_index_row(row) != 0
+        return: -1
+
+    if: registry\view = 0 || lm_registry_view_push_relation(registry\view, row\table, row\key, row\payload, row\payload_node, row) != 0
         return: -1
 
     registry\loaded_fact_count: registry\loaded_fact_count + 1U
@@ -1028,6 +1034,52 @@ fn: lm_trans_registry_lookup_default_row_in_identifiers (const: (LmTransIdentifi
     lm_trans_text_ref_destroy(@ default_key)
 return: row
 
+fn: lm_trans_registry_view_row_same (const: (LmTransRegistryFact: legacy_row); const: (LmRegistryViewRow: view_row)) int
+    if: legacy_row = 0 || view_row = 0
+        return: legacy_row = 0 && view_row = 0
+    if: view_row\source != legacy_row
+        return: 0
+    if: legacy_row\table = 0 || view_row\table = 0 || c.strcmp(legacy_row\table, view_row\table) != 0
+        return: 0
+    if: legacy_row\key = 0 || view_row\key = 0 || c.strcmp(legacy_row\key, view_row\key) != 0
+        return: 0
+    if: (legacy_row\payload = 0) != (view_row\payload = 0)
+        return: 0
+    if: legacy_row\payload != 0 && c.strcmp(legacy_row\payload, view_row\payload) != 0
+        return: 0
+return: legacy_row\payload_node = view_row\payload_node
+
+fn: lm_trans_registry_view_parity_enabled () int
+return: c.lm_trans_registry != 0 && c.lm_trans_registry->view_mode != 0
+
+fn: lm_trans_registry_view_is_selected () int
+return: c.lm_trans_registry != 0 && c.lm_trans_registry->view_mode = 2
+
+sub: lm_trans_registry_view_parity_fail (const: @(char operation); const: @(char table))
+    if: operation = 0
+        operation: "unknown"
+    if: table = 0
+        table: "<null>"
+    c.fprintf(c.stderr, "trans registry view parity error: %s differs for table %s\n", operation, table)
+    c.exit(2)
+end: lm_trans_registry_view_parity_fail
+
+fn: lm_trans_registry_view_lookup_exact_text (const: (LmP0Text: key); const: @(char table)) const: LmRegistryViewRow
+    LmP0Text: key_payload
+    const: LmRegistryViewRow: row
+
+    if: c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0 || key = 0 || table = 0
+        return: 0
+    key_payload: lm_trans_text_ref_new_cstr("")
+    if: key_payload = 0
+        return: 0
+    if: lm_trans_identifier_payload(key, key_payload) = 0
+        lm_trans_text_ref_destroy(@ key_payload)
+        return: 0
+    row: lm_registry_view_lookup_exact_slice(c.lm_trans_registry->view, key_payload\data, key_payload\length, table, c.strlen(table))
+    lm_trans_text_ref_destroy(@ key_payload)
+return: row
+
 fn: lm_trans_registry_relation_stack_in_identifiers (const: (LmTransIdentifierTable: identifiers); const: (LmP0Text: key); const: @(char relation_name)) const: LmOwnPtrStack
     LmTransIdentifierCard: card
     LmTransIdentifierRelation: relation
@@ -1044,13 +1096,89 @@ fn: lm_trans_registry_relation_stack_in_identifiers (const: (LmTransIdentifierTa
         return: relation\symbols
 return: 0
 
+fn: lm_trans_registry_view_relation_stack (const: (LmP0Text: table_owner); const: @(char relation_name)) const: LmOwnPtrStack
+    LmP0Text: owner_payload
+    @: char table_name
+    size_t: relation_length
+    size_t: table_length
+    int: direct_table
+    const: LmOwnPtrStack: stack
+
+    if: c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0 || table_owner = 0 || relation_name = 0
+        return: 0
+    owner_payload: lm_trans_text_ref_new_cstr("")
+    if: owner_payload = 0
+        return: 0
+    if: lm_trans_identifier_payload(table_owner, owner_payload) = 0
+        lm_trans_text_ref_destroy(@ owner_payload)
+        return: 0
+    if: c.memchr(owner_payload\data, '.', owner_payload\length) != 0
+        lm_trans_text_ref_destroy(@ owner_payload)
+        return: 0
+    direct_table: c.strcmp(relation_name, "row") = 0
+    relation_length: c.strlen(relation_name)
+    table_length: owner_payload\length
+    if: direct_table = 0
+        table_length: table_length + 1U + relation_length
+    table_name: lm_own_new_zero(table_length + 1U)
+    if: table_name = 0
+        lm_trans_text_ref_destroy(@ owner_payload)
+        return: 0
+    if: owner_payload\length != 0U
+        c.memcpy(table_name, owner_payload\data, owner_payload\length)
+    if: direct_table = 0
+        table_name[owner_payload\length]: '.'
+        if: relation_length != 0U
+            c.memcpy(table_name + owner_payload\length + 1U, relation_name, relation_length)
+        ---
+    table_name[table_length]: '\0'
+    stack: lm_registry_view_local_source_rows_slice(c.lm_trans_registry->view, table_name, table_length)
+    lm_own_delete(table_name, 0)
+    lm_trans_text_ref_destroy(@ owner_payload)
+return: stack
+
+fn: lm_trans_registry_relation_stacks_same (const: (LmOwnPtrStack: legacy_stack); const: (LmOwnPtrStack: view_stack)) int
+    size_t: index
+
+    if: legacy_stack = 0 || view_stack = 0
+        return: legacy_stack = 0 && view_stack = 0
+    if: legacy_stack\count != view_stack\count
+        return: 0
+    index: 0U
+    while: index < legacy_stack\count
+        if: lm_own_ptr_stack_at(legacy_stack, index) != lm_own_ptr_stack_at(view_stack, index)
+            return: 0
+        index: index + 1U
+return: 1
+
 fn: lm_trans_registry_relation_stack (const: (LmP0Text: key); const: @(char relation_name)) const: LmOwnPtrStack
-    return: lm_trans_registry_relation_stack_in_identifiers(c.lm_trans_registry->identifiers, key, relation_name)
+    const: LmOwnPtrStack: legacy_stack
+    const: LmOwnPtrStack: view_stack
+    size_t: legacy_count
+    size_t: view_count
+
+    view_stack: 0
+    legacy_stack: lm_trans_registry_relation_stack_in_identifiers(c.lm_trans_registry->identifiers, key, relation_name)
+    if: lm_trans_registry_view_parity_enabled() != 0
+        view_stack: lm_trans_registry_view_relation_stack(key, relation_name)
+        if: lm_trans_registry_relation_stacks_same(legacy_stack, view_stack) = 0
+            legacy_count: 0U
+            view_count: 0U
+            if: legacy_stack != 0
+                legacy_count: legacy_stack\count
+            if: view_stack != 0
+                view_count: view_stack\count
+            c.fprintf(c.stderr, "trans registry view parity error: relation stack differs for %.*s.%s (legacy=%zu view=%zu)\n", (cast: int key\length), key\data, relation_name, legacy_count, view_count)
+            c.exit(2)
+    ---
+    if: lm_trans_registry_view_is_selected() != 0
+        return: view_stack
+return: legacy_stack
 
 fn: lm_trans_namespace_registry_relation_stack (const: (LmTransNamespace: namespace_); const: (LmP0Text: key); const: @(char relation_name)) const: LmOwnPtrStack
     const: LmOwnPtrStack: stack
 
-    if: namespace_ != 0 && namespace_\registry_identifiers != 0
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
         stack: lm_trans_registry_relation_stack_in_identifiers(namespace_\registry_identifiers, key, relation_name)
         if: stack != 0
             return: stack
@@ -1110,8 +1238,18 @@ return: 0
 
 fn: lm_trans_registry_lookup_exact (const: (LmP0Text: key); const: @(char table)) const: @: char
     LmTransRegistryFact: row
+    const: LmRegistryViewRow: view_row
 
     row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, key, table)
+    if: lm_trans_registry_view_parity_enabled() != 0
+        view_row: lm_trans_registry_view_lookup_exact_text(key, table)
+        if: lm_trans_registry_view_row_same(row, view_row) = 0
+            lm_trans_registry_view_parity_fail("exact lookup", table)
+    ---
+    if: lm_trans_registry_view_is_selected() != 0
+        if: view_row != 0
+            return: view_row\payload
+        return: 0
     if: row != 0
         return: row\payload
 
@@ -1119,8 +1257,18 @@ return: 0
 
 fn: lm_trans_registry_lookup_default (const: @(char table)) const: @: char
     LmTransRegistryFact: row
+    const: LmRegistryViewRow: view_row
 
     row: lm_trans_registry_lookup_default_row_in_identifiers(c.lm_trans_registry->identifiers, table)
+    if: lm_trans_registry_view_parity_enabled() != 0
+        view_row: lm_registry_view_lookup_default(c.lm_trans_registry->view, table)
+        if: lm_trans_registry_view_row_same(row, view_row) = 0
+            lm_trans_registry_view_parity_fail("default lookup", table)
+    ---
+    if: lm_trans_registry_view_is_selected() != 0
+        if: view_row != 0
+            return: view_row\payload
+        return: 0
     if: row != 0
         return: row\payload
 
@@ -1139,12 +1287,180 @@ return: lm_trans_registry_lookup(key, table) != 0
 
 fn: lm_trans_registry_table_has_rows (const: @(char table)) int
     const: LmOwnPtrStack: stack
+    int: legacy_has_rows
+    int: view_has_rows
 
     if: table = 0
         return: 0
 
     stack: lm_trans_registry_relation_stack_for_table(table)
-return: stack != 0 && stack\count != 0U
+    legacy_has_rows: stack != 0 && stack\count != 0U
+    if: lm_trans_registry_view_parity_enabled() != 0
+        view_has_rows: lm_registry_view_table_has_rows(c.lm_trans_registry->view, table)
+        if: legacy_has_rows != view_has_rows
+            lm_trans_registry_view_parity_fail("table row presence", table)
+    ---
+    if: lm_trans_registry_view_is_selected() != 0
+        return: view_has_rows
+return: legacy_has_rows
+
+fn: lm_trans_registry_assert_view_parity () int
+    size_t: fact_count
+    size_t: i
+    size_t: j
+    size_t: descriptor_index
+    size_t: table_row_count
+    size_t: matching_key_count
+    size_t: matching_key_index
+    int: first_key_row
+    const: LmRegistryViewRow: view_row
+    const: LmRegistryViewRow: candidate_view_row
+    const: LmRegistryViewRow: selected_view_row
+    const: LmRegistryViewRow: default_view_row
+    const: LmRegistryViewRow: ordered_view_row
+    const: LmTransRegistryFact: legacy_row
+    const: LmTransRegistryFact: selected_legacy_row
+    const: LmTransRegistryFact: default_legacy_row
+    const: LmTransRegistryFact: ordered_legacy_row
+    const: LmOwnPtrStack: table_stack
+    const: LmOwnPtrStack: key_stack
+    LmP0Text: key_text
+    LmTableDescriptor: descriptor
+    const: LmTableColumnDescriptor: key_column
+    const: LmTableColumnDescriptor: payload_column
+
+    if: lm_trans_registry_view_parity_enabled() = 0
+        return: 0
+    if: c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        c.fprintf(c.stderr, "trans registry view parity error: registry view is not initialized\n")
+        return: 1
+
+    fact_count: lm_registry_view_fact_count(c.lm_trans_registry->view)
+    if: fact_count != c.lm_trans_registry->loaded_fact_count
+        c.fprintf(c.stderr, "trans registry view parity error: fact count legacy=%zu view=%zu\n", c.lm_trans_registry->loaded_fact_count, fact_count)
+        return: 1
+
+    i: 0U
+    while: i < fact_count
+        view_row: lm_registry_view_fact_at(c.lm_trans_registry->view, i)
+        if: view_row = 0 || view_row\source = 0 || view_row\local_sequence != i
+            c.fprintf(c.stderr, "trans registry view parity error: invalid ordered fact at %zu\n", i)
+            return: 1
+        legacy_row: (cast: (const: LmTransRegistryFact) view_row\source)
+        if: lm_trans_registry_view_row_same(legacy_row, view_row) = 0
+            c.fprintf(c.stderr, "trans registry view parity error: fact payload differs at %zu\n", i)
+            return: 1
+        i: i + 1U
+
+    descriptor_index: 0U
+    while: descriptor_index < c.lm_trans_registry->view->tables->count
+        descriptor: lm_own_ptr_stack_at(c.lm_trans_registry->view->tables, descriptor_index)
+        if: descriptor = 0 || lm_table_descriptor_column_count(descriptor) != 2U
+            c.fprintf(c.stderr, "trans registry view parity error: canonical table schema is missing\n")
+            return: 1
+        key_column: lm_table_descriptor_column_at(descriptor, 0U)
+        payload_column: lm_table_descriptor_column_at(descriptor, 1U)
+        if: key_column = 0 || payload_column = 0 || key_column\name = 0 || payload_column\name = 0 || key_column\descriptor = 0 || payload_column\descriptor = 0 || c.strcmp(key_column\name, "class") != 0 || c.strcmp(payload_column\name, "value") != 0 || c.strcmp(key_column\descriptor, "key") != 0 || c.strcmp(payload_column\descriptor, "payload") != 0
+            c.fprintf(c.stderr, "trans registry view parity error: canonical columns differ for %s\n", descriptor\name)
+            return: 1
+
+        table_stack: lm_trans_registry_relation_stack_for_table(descriptor\name)
+        table_row_count: lm_table_descriptor_row_count(descriptor)
+        if: table_row_count != lm_registry_view_table_row_count(c.lm_trans_registry->view, descriptor\name) || lm_registry_view_table_has_rows(c.lm_trans_registry->view, descriptor\name) = 0 || (table_stack = 0 && table_row_count != 0U) || (table_stack != 0 && table_stack\count != table_row_count)
+            c.fprintf(c.stderr, "trans registry view parity error: table row count differs for %s\n", descriptor\name)
+            return: 1
+        i: 0U
+        while: i < table_row_count
+            ordered_legacy_row: (cast: (const: LmTransRegistryFact) lm_own_ptr_stack_at(table_stack, i))
+            ordered_view_row: lm_registry_view_table_row_at(c.lm_trans_registry->view, descriptor\name, i)
+            if: lm_trans_registry_view_row_same(ordered_legacy_row, ordered_view_row) = 0
+                c.fprintf(c.stderr, "trans registry view parity error: table row order differs for %s\n", descriptor\name)
+                return: 1
+            i: i + 1U
+
+        default_legacy_row: lm_trans_registry_lookup_default_row_in_identifiers(c.lm_trans_registry->identifiers, descriptor\name)
+        default_view_row: lm_registry_view_lookup_default(c.lm_trans_registry->view, descriptor\name)
+        if: lm_trans_registry_view_row_same(default_legacy_row, default_view_row) = 0
+            c.fprintf(c.stderr, "trans registry view parity error: default row differs for %s\n", descriptor\name)
+            return: 1
+
+        key_text: lm_trans_text_from_cstr("__lm_registry_view_missing__")
+        if: key_text = 0
+            return: 1
+        selected_legacy_row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, key_text, descriptor\name)
+        if: selected_legacy_row = 0
+            selected_view_row: lm_registry_view_lookup_text(c.lm_trans_registry->view, "__lm_registry_view_missing__", descriptor\name)
+            if: lm_trans_registry_view_row_same(default_legacy_row, selected_view_row) = 0
+                c.fprintf(c.stderr, "trans registry view parity error: missing/default selection differs for %s\n", descriptor\name)
+                lm_trans_text_ref_destroy(@ key_text)
+                return: 1
+        ---
+        lm_trans_text_ref_destroy(@ key_text)
+
+        i: 0U
+        while: i < table_row_count
+            view_row: lm_table_descriptor_row_at(descriptor, i)
+            if: view_row = 0 || view_row\key = 0
+                return: 1
+
+            first_key_row: 1
+            j: 0U
+            while: j < i
+                candidate_view_row: lm_table_descriptor_row_at(descriptor, j)
+                if: candidate_view_row != 0 && candidate_view_row\key != 0 && c.strcmp(candidate_view_row\key, view_row\key) = 0
+                    first_key_row: 0
+                    break
+                j: j + 1U
+
+            if: first_key_row = 0
+                i: i + 1U
+                continue
+
+            key_text: lm_trans_text_from_cstr(view_row\key)
+            if: key_text = 0
+                return: 1
+            key_stack: lm_trans_registry_relation_stack_in_identifiers(c.lm_trans_registry->identifiers, key_text, descriptor\name)
+            matching_key_count: lm_registry_view_matching_key_count(c.lm_trans_registry->view, descriptor\name, view_row\key)
+            if: (key_stack = 0 && matching_key_count != 0U) || (key_stack != 0 && key_stack\count != matching_key_count)
+                c.fprintf(c.stderr, "trans registry view parity error: duplicate count differs for %s[%s]\n", descriptor\name, view_row\key)
+                lm_trans_text_ref_destroy(@ key_text)
+                return: 1
+            matching_key_index: 0U
+            while: matching_key_index < matching_key_count
+                candidate_view_row: lm_registry_view_matching_key_at(c.lm_trans_registry->view, descriptor\name, view_row\key, matching_key_index)
+                ordered_legacy_row: (cast: (const: LmTransRegistryFact) lm_own_ptr_stack_at(key_stack, matching_key_index))
+                if: lm_trans_registry_view_row_same(ordered_legacy_row, candidate_view_row) = 0
+                    c.fprintf(c.stderr, "trans registry view parity error: duplicate order differs for %s[%s]\n", descriptor\name, view_row\key)
+                    lm_trans_text_ref_destroy(@ key_text)
+                    return: 1
+                matching_key_index: matching_key_index + 1U
+
+            selected_legacy_row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, key_text, descriptor\name)
+            selected_view_row: lm_registry_view_lookup_exact(c.lm_trans_registry->view, view_row\key, descriptor\name)
+            if: lm_trans_registry_view_row_same(selected_legacy_row, selected_view_row) = 0
+                c.fprintf(c.stderr, "trans registry view parity error: latest row differs for %s[%s]\n", descriptor\name, view_row\key)
+                lm_trans_text_ref_destroy(@ key_text)
+                return: 1
+            selected_view_row: lm_registry_view_lookup(c.lm_trans_registry->view, view_row\key, descriptor\name)
+            if: lm_trans_registry_view_row_same(selected_legacy_row, selected_view_row) = 0
+                c.fprintf(c.stderr, "trans registry view parity error: generic row selection differs for %s[%s]\n", descriptor\name, view_row\key)
+                lm_trans_text_ref_destroy(@ key_text)
+                return: 1
+
+            default_legacy_row: lm_trans_registry_lookup_default_row_in_identifiers(c.lm_trans_registry->identifiers, descriptor\name)
+            if: selected_legacy_row != 0 && selected_legacy_row\payload != 0
+                default_legacy_row: selected_legacy_row
+            selected_view_row: lm_registry_view_lookup_text(c.lm_trans_registry->view, view_row\key, descriptor\name)
+            if: lm_trans_registry_view_row_same(default_legacy_row, selected_view_row) = 0
+                c.fprintf(c.stderr, "trans registry view parity error: text exact/default selection differs for %s[%s]\n", descriptor\name, view_row\key)
+                lm_trans_text_ref_destroy(@ key_text)
+                return: 1
+            lm_trans_text_ref_destroy(@ key_text)
+            i: i + 1U
+
+        descriptor_index: descriptor_index + 1U
+
+return: 0
 
 fn: lm_trans_registry_assert_selected_table_link (const: @(char source_table); const: (LmP0Text: key); const: @(char target_class_table); const: @(char target_table)) int
     LmP0Text: target_key
@@ -1187,7 +1503,7 @@ fn: lm_trans_namespace_registry_lookup (const: (LmTransNamespace: namespace_); c
     LmTransRegistryFact: row
     const: @: char payload
 
-    if: namespace_ != 0 && namespace_\registry_identifiers != 0
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
         row: lm_trans_registry_lookup_row_in_identifiers(namespace_\registry_identifiers, key, table)
         if: row != 0
             return: row\payload
@@ -1197,7 +1513,7 @@ fn: lm_trans_namespace_registry_lookup (const: (LmTransNamespace: namespace_); c
     if: payload != 0
         return: payload
 
-    if: namespace_ != 0 && namespace_\registry_identifiers != 0
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
         row: lm_trans_registry_lookup_default_row_in_identifiers(namespace_\registry_identifiers, table)
         if: row != 0
             return: row\payload

@@ -1624,7 +1624,14 @@ fn: lm_trans_registry_init () int
     if: lm_trans_registry != 0
         return: 0
     lm_trans_registry: lm_own_new_zero(c.sizeof(lm_trans_registry[0]))
-return: lm_trans_registry = 0
+    if: lm_trans_registry = 0
+        return: 1
+    lm_trans_registry\view: lm_registry_view_new(0)
+    if: lm_trans_registry\view = 0
+        lm_own_delete(lm_trans_registry, 0)
+        lm_trans_registry: 0
+        return: 1
+return: 0
 
 sub: lm_trans_registry_destroy ()
     if: lm_trans_registry = 0
@@ -1636,6 +1643,8 @@ sub: lm_trans_registry_destroy ()
     lm_trans_ptr_stack_delete(@ lm_trans_registry\l4_frame_pointer_bindings)
     lm_own_delete(lm_trans_registry\l4_loader, 0)
     lm_trans_registry\l4_loader: 0
+    lm_registry_view_delete(lm_trans_registry\view)
+    lm_trans_registry\view: 0
     if: lm_trans_registry\loaded
         lm_trans_identifier_table_delete(@ lm_trans_registry\identifiers)
         lm_own_arena_destroy(lm_trans_registry\value_arena)
@@ -2991,6 +3000,7 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
     [4096]: char registry_path
     const: @: char candidate_name
     const: @: char override_path
+    const: @: char view_mode
     int: override_enabled
     int: loaded
     int: registry_loaded
@@ -3000,6 +3010,14 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
     if: lm_trans_registry_init() != 0
         return: 1
     lm_trans_registry\loaded: 1
+    view_mode: c.getenv("LM_TRANS_REGISTRY_VIEW")
+    if: view_mode = 0 || view_mode[0] = '\0' || c.strcmp(view_mode, "0") = 0 || c.strcmp(view_mode, "legacy") = 0
+        lm_trans_registry\view_mode: 0
+    else:
+        lm_trans_registry\view_mode: 1
+        if: c.strcmp(view_mode, "view") = 0
+            lm_trans_registry\view_mode: 2
+        ---
     lm_trans_registry\identifiers: lm_trans_identifier_table_new()
     lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
     lm_trans_registry\loaded_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
@@ -3070,6 +3088,9 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
         c.fprintf(c.stderr, "trans registry error: cannot read trans_registry.lm4\n")
         lm_trans_registry_destroy()
         return: 1
+    if: lm_trans_registry_assert_view_parity() != 0
+        lm_trans_registry_destroy()
+        return: 1
 return: 0
 
 fn: lm_trans_emit_module_prelude_plan (FILE: file) int
@@ -3134,7 +3155,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
         return: 1
 
     root: lm_p0_document_root(document)
-    if: lm_trans_registry_load_inline_root(root, source_path) != 0
+    if: lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_trans_registry_assert_view_parity() != 0
         lm_p0_document_destroy(document)
         lm_trans_registry_destroy()
         return: 1

@@ -1,0 +1,46 @@
+table:
+    name: `registry.view.parity.lookup`
+    columns((class: class) (@: char value))
+    rows:
+             default      baseDefault
+             baseExact    baseExactValue
+             shadow       baseShadowValue
+             duplicate    baseDuplicateFirst
+             duplicate    baseDuplicateLast
+end: `registry.view.parity.lookup`
+
+table:
+    name: `registry.view.parity.multi`
+    columns((class: class) (@: char left) (@: char right))
+    rows:
+             baseMulti    baseLeft          None
+             sharedMulti  baseSharedLeft    baseSharedRight
+end: `registry.view.parity.multi`
+
+table:
+    name: `registry.view.parity.dotted`
+    columns((class: class) (@: char value))
+    rows:
+             dottedKey  baseDottedValue
+end: `registry.view.parity.dotted`
+
+table:
+    name: registryViewParityJoinBase
+    columns((class: class) (@: char value))
+    rows:
+             baseJoin  baseJoinValue
+end: registryViewParityJoinBase
+
+table:
+    name: registryViewParityNamespaceBase
+    columns((class: class) (class: `receiver.type`))
+    rows:
+             registryViewParityAssert  `receiver.statement`
+end: registryViewParityNamespaceBase
+
+table:
+    name: `receiver.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+             registryViewParityAssert  lm_trans_statement_emit_assert
+end: `receiver.statement`
