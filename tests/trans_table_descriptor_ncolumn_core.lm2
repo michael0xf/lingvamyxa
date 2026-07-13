@@ -81,12 +81,16 @@ external:
         LmTableDescriptor: variant
         LmTableDescriptor: broken_source
         LmTableDescriptor: rollback_target
+        LmTableDescriptor: two_column
+        LmTableDescriptor: duplicate_columns
+        LmTableDescriptor: empty_overlay
         const: LmTableDescriptor: catalog_table
         LmTableRow: row
         const: LmTableRow: source_row
         const: LmTableRow: joined_row
         const: LmTableCell: cell
         const: LmTableColumnDescriptor: column
+        int: covered
         int: status
 
         view: lm_registry_view_new(0)
@@ -97,6 +101,9 @@ external:
         variant: 0
         broken_source: 0
         rollback_target: 0
+        two_column: 0
+        duplicate_columns: 0
+        empty_overlay: 0
         if: view = 0 || source = 0 || source_b = 0 || joined = 0 || key_only = 0
             lm_table_descriptor_delete_any(joined)
             lm_table_descriptor_delete_any(key_only)
@@ -199,7 +206,10 @@ external:
         variant: lm_table_descriptor_new_empty_slice("source.ncolumn", 14U)
         broken_source: lm_test_ncolumn_schema("broken.ncolumn")
         rollback_target: lm_test_ncolumn_schema("rollback.target")
-        if: variant = 0 || broken_source = 0 || rollback_target = 0
+        two_column: lm_table_descriptor_new_slice("direct.two", 10U)
+        duplicate_columns: lm_table_descriptor_new_empty_slice("duplicate.columns", 17U)
+        empty_overlay: lm_table_descriptor_new_slice("dynamic.overlay", 15U)
+        if: variant = 0 || broken_source = 0 || rollback_target = 0 || two_column = 0 || duplicate_columns = 0 || empty_overlay = 0
             status: 1
         if: status = 0 && lm_test_ncolumn_add_column(variant, "class", "class", 0U, 0U, 0, "key", 0) != 0
             status: 1
@@ -209,10 +219,24 @@ external:
         if: status = 0
             row: 0
         lm_table_row_delete_any(row)
+        if: status = 0 && (lm_test_ncolumn_add_column(duplicate_columns, "class", "class", 0U, 0U, 0, "key", 0) != 0 || lm_test_ncolumn_add_column(duplicate_columns, "value", "char", 1U, 0U, 0, "payload", 0) != 0 || lm_test_ncolumn_add_column(duplicate_columns, "value", "char", 1U, 0U, 0, "payload", 0) != 0)
+            status: 1
+        row: lm_table_row_new(0)
+        if: status = 0 && (row = 0 || lm_test_ncolumn_take_cell(row, "duplicate", "duplicate", 0, duplicate_columns, 0) != 0 || lm_test_ncolumn_take_cell(row, "None", 0, 0, duplicate_columns, 1) != 0 || lm_test_ncolumn_take_cell(row, "present", "present", 0, duplicate_columns, 0) != 0 || lm_table_descriptor_take_materialized_row(duplicate_columns, row) != 0)
+            status: 1
+        if: status = 0
+            row: 0
+        lm_table_row_delete_any(row)
         if: status = 0 && lm_test_ncolumn_add_row(broken_source, "valid", "left", "left", "right", "right", "None", 0) != 0
             status: 1
         if: status = 0 && lm_own_ptr_stack_push(broken_source\materialized_rows, 0) != 0
             status: 1
+        row: lm_table_row_new(0)
+        if: status = 0 && (row = 0 || lm_test_ncolumn_take_cell(row, "direct", "direct", 0, two_column, 0) != 0 || lm_test_ncolumn_take_cell(row, "payload", "payload", 0, two_column, 0) != 0 || lm_table_descriptor_take_materialized_row(two_column, row) != 0)
+            status: 1
+        if: status = 0
+            row: 0
+        lm_table_row_delete_any(row)
         if: status = 0 && lm_registry_view_take_local_source_table(view, variant) != 0
             status: 1
         if: status = 0
@@ -221,8 +245,46 @@ external:
             status: 1
         if: status = 0
             broken_source: 0
+        if: status = 0 && lm_registry_view_take_local_source_table(view, two_column) != 0
+            status: 1
+        if: status = 0
+            two_column: 0
+        if: status = 0 && lm_registry_view_take_local_source_table(view, duplicate_columns) != 0
+            status: 1
+        if: status = 0
+            duplicate_columns: 0
+        if: status = 0 && lm_registry_view_take_local_source_table(view, empty_overlay) != 0
+            status: 1
+        if: status = 0
+            empty_overlay: 0
+        if: status = 0 && lm_registry_view_push_relation(view, "dynamic.overlay", "key", "value", 0, view) != 0
+            status: 1
         catalog_table: lm_registry_view_source_table_at(view, 2U)
-        if: status = 0 && (lm_registry_view_source_table_count(view) != 4U || catalog_table = 0 || lm_table_descriptor_column_count(catalog_table) != 1U || lm_registry_view_find_source_table_slice(view, "source.ncolumn", 14U) != catalog_table)
+        if: status = 0 && (lm_registry_view_source_table_count(view) != 7U || catalog_table = 0 || lm_table_descriptor_column_count(catalog_table) != 1U || lm_registry_view_find_source_table_slice(view, "source.ncolumn", 14U) != catalog_table)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "source.ncolumn.left.part", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "source.ncolumn.body", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "source.ncolumn.b.right", @ covered) != 0 || covered = 0)
+            status: 1
+        covered: 1
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "missing.path", @ covered) != 0 || covered != 0)
+            status: 1
+        covered: 1
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "source.ncolumn", @ covered) != 0 || covered != 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "direct.two", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "duplicate.columns.value", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_registry_view_source_path_has_rows(view, "dynamic.overlay", @ covered) != 0 || covered = 0 || lm_registry_view_table_has_rows(view, "dynamic.overlay") = 0)
             status: 1
         if: status = 0 && (lm_registry_view_append_materialized_rows(view, joined, "source.ncolumn", 14U) != 0 || lm_table_descriptor_materialized_row_count(joined) != 11U)
             status: 1
@@ -232,6 +294,9 @@ external:
         lm_table_descriptor_delete_any(joined)
         lm_table_descriptor_delete_any(key_only)
         lm_table_descriptor_delete_any(rollback_target)
+        lm_table_descriptor_delete_any(two_column)
+        lm_table_descriptor_delete_any(duplicate_columns)
+        lm_table_descriptor_delete_any(empty_overlay)
         lm_table_descriptor_delete_any(broken_source)
         lm_table_descriptor_delete_any(variant)
         lm_table_descriptor_delete_any(source_b)

@@ -1289,18 +1289,28 @@ fn: lm_trans_registry_table_has_rows (const: @(char table)) int
     const: LmOwnPtrStack: stack
     int: legacy_has_rows
     int: view_has_rows
+    int: source_has_rows
+    int: source_covered
 
     if: table = 0
         return: 0
 
     stack: lm_trans_registry_relation_stack_for_table(table)
     legacy_has_rows: stack != 0 && stack\count != 0U
+    view_has_rows: 0
+    source_covered: 0
+    source_has_rows: 0
     if: lm_trans_registry_view_parity_enabled() != 0
         view_has_rows: lm_registry_view_table_has_rows(c.lm_trans_registry->view, table)
+        source_has_rows: lm_registry_view_source_path_has_rows(c.lm_trans_registry->view, table, @ source_covered)
         if: legacy_has_rows != view_has_rows
             lm_trans_registry_view_parity_fail("table row presence", table)
+        if: source_covered != 0 && source_has_rows != 0 && legacy_has_rows = 0
+            lm_trans_registry_view_parity_fail("source table row presence", table)
     ---
     if: lm_trans_registry_view_is_selected() != 0
+        if: source_covered != 0 && (source_has_rows != 0 || view_has_rows = 0)
+            return: source_has_rows
         return: view_has_rows
 return: legacy_has_rows
 
