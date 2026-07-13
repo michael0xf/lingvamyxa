@@ -1,0 +1,72 @@
+L4:
+    table:
+        name: `define.value`
+        columns((class: class) (@: char value))
+        rows:
+                 LM_TEST_DEFINE_SOURCE           11
+                 LM_TEST_DEFINE_DUPLICATE        13
+                 LM_TEST_DEFINE_DUPLICATE        13
+                 LM_TEST_DEFINE_EMPTY            ""
+                 LM_TEST_DEFINE_LATE_NONE        17
+                 LM_TEST_DEFINE_LATE_NONE        None
+                 LM_TEST_DEFINE_NONE             None
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (@: char kind))
+        rows:
+                 LM_TEST_DEFINE_SCHEMA_FALLBACK  23
+    end: `define.value`
+
+    table:
+        name: `lm.test.define.seed`
+        columns((class: class) (@: char value))
+        rows:
+                 LM_TEST_DEFINE_JOINED  29
+    end: `lm.test.define.seed`
+
+    join: (`lm.test.define.seed`) `define.value`
+        columns((class: class) (@: char value))
+        rows:
+    end: `define.value`
+end: L4
+
+define
+
+L1:
+===
+#if LM_TEST_DEFINE_SOURCE != 11
+#error "full source define value differs"
+#endif
+
+#if LM_TEST_DEFINE_DUPLICATE != 13
+#error "duplicate define rows changed value"
+#endif
+
+#ifndef LM_TEST_DEFINE_EMPTY
+#error "empty source define was not emitted"
+#endif
+
+#if LM_TEST_DEFINE_LATE_NONE != 17
+#error "None source row unexpectedly removed an earlier define"
+#endif
+
+#if LM_TEST_DEFINE_SCHEMA_FALLBACK != 23
+#error "wrong-schema source descriptor did not fall back to the facade row"
+#endif
+
+#if LM_TEST_DEFINE_JOINED != 29
+#error "joined source row did not fall back to its facade value"
+#endif
+
+#ifdef LM_TEST_DEFINE_NONE
+#error "None source cell unexpectedly emitted a define"
+#endif
+===
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

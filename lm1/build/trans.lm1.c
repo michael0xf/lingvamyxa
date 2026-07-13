@@ -30441,6 +30441,7 @@ static int lm_trans_emit_l4_constant_defines(FILE *file, const LmTransNamespace 
 static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *namespace_) {
     const LmOwnPtrStack * rows;
     LmTransRegistryFact * row;
+    const char *value;
     size_t i;
     int emitted;
     rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("define"), "value");
@@ -30455,7 +30456,8 @@ static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *nam
             if (lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(row -> key)) != 0) {
                 return 1;
             }
-            if (row -> payload != 0 && row -> payload[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, row -> payload) != 0)) {
+            value = lm_trans_registry_source_n2_value(namespace_, "define.value", "class", "value", row);
+            if (value != 0 && value[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0)) {
                 return 1;
             }
             if (lm_trans_put(file, "\n") != 0) {
