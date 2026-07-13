@@ -22,6 +22,9 @@ external:
         covered: 1
         if: lm_registry_view_source_path_has_rows(0, "invalid", @ covered) != 0 || covered != 0
             status: 1
+        covered: 1
+        if: lm_registry_view_source_path_has_key_slice(0, "invalid", 7U, "invalid", 7U, @ covered) != 0 || covered != 0
+            status: 1
         if: lm_registry_view_take_local_source_table(0, 0) = 0 || lm_registry_view_append_materialized_rows(0, 0, "invalid", 7U) = 0
             status: 1
         if: lm_registry_view_push_relation(base, "registry.view.core", "default", "baseDefault", 0, base) != 0

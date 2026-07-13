@@ -985,14 +985,11 @@ fn: lm_trans_expr_segment_set_default (LmTransExprSegment: segment; const: (LmTr
 end: lm_trans_expr_segment_set_default
 
 fn: lm_trans_registry_is_function_pointer_type_name (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    const: LmOwnPtrStack: rows
     if: lm_trans_callable_projection_class_is("functionPointerType", "c.function-pointer") = 0
         return: 0
-    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("functionPointerType"), "value")
-    if: (lm_trans_registry_relation_stack_latest_row(rows, name) != 0)
+    if: lm_trans_namespace_registry_source_relation_has_key(namespace_, name, "functionPointerType", "value") != 0
         return: 1
-    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("functionPointerType"), "row")
-    return: (lm_trans_registry_relation_stack_latest_row(rows, name) != 0)
+    return: lm_trans_namespace_registry_source_relation_has_key(namespace_, name, "functionPointerType", "row")
 end: lm_trans_registry_is_function_pointer_type_name
 
 fn: lm_trans_callable_descriptor_allows_partial (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int

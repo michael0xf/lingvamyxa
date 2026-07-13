@@ -695,7 +695,6 @@ return: 0
 
 fn: lm_trans_l4_is_function_pointer_type (const: (LmTransNamespace: namespace_); const: @(char name)) int
     LmP0Text: name_text
-    const: LmOwnPtrStack: rows
     int: found
 
     if: name = 0
@@ -704,13 +703,11 @@ fn: lm_trans_l4_is_function_pointer_type (const: (LmTransNamespace: namespace_);
     name_text: lm_trans_l4_text_view_new(name)
     if: name_text = 0
         return: 0
-    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("functionPointerType"), "value")
-    if: lm_trans_registry_relation_stack_latest_row(rows, name_text) != 0
+    if: lm_trans_namespace_registry_source_relation_has_key(namespace_, name_text, "functionPointerType", "value") != 0
         lm_trans_l4_text_view_delete(@ name_text)
         return: 1
 
-    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("functionPointerType"), "row")
-    found: lm_trans_registry_relation_stack_latest_row(rows, name_text) != 0
+    found: lm_trans_namespace_registry_source_relation_has_key(namespace_, name_text, "functionPointerType", "row")
     lm_trans_l4_text_view_delete(@ name_text)
 return: found
 

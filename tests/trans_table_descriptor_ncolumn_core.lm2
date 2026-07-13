@@ -71,6 +71,9 @@ fn: lm_test_ncolumn_add_row (
         return: 1
 return: 0
 
+fn: lm_test_source_path_has_key (const: (LmRegistryView: view); const: @(char path); const: @(char key); @: int out_covered) int
+return: lm_registry_view_source_path_has_key_slice(view, path, c.strlen(path), key, c.strlen(key), out_covered)
+
 external:
     fn: main () int
         LmRegistryView: view
@@ -285,6 +288,33 @@ external:
             status: 1
         covered: 0
         if: status = 0 && (lm_registry_view_source_path_has_rows(view, "dynamic.overlay", @ covered) != 0 || covered = 0 || lm_registry_view_table_has_rows(view, "dynamic.overlay") = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "source.ncolumn.left.part", "ordered", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "source.ncolumn.left.part", "allNone", @ covered) != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "source.ncolumn.body", "ordered", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "source.ncolumn.b.right", "bAllNone", @ covered) != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "source.ncolumn.left.part", "missing", @ covered) != 0 || covered = 0)
+            status: 1
+        covered: 1
+        if: status = 0 && (lm_test_source_path_has_key(view, "missing.path", "missing", @ covered) != 0 || covered != 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "direct.two", "direct", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "duplicate.columns.value", "duplicate", @ covered) = 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_has_key(view, "dynamic.overlay", "key", @ covered) != 0 || covered = 0 || lm_registry_view_lookup_exact(view, "key", "dynamic.overlay") = 0)
             status: 1
         if: status = 0 && (lm_registry_view_append_materialized_rows(view, joined, "source.ncolumn", 14U) != 0 || lm_table_descriptor_materialized_row_count(joined) != 11U)
             status: 1
