@@ -14024,7 +14024,28 @@ static int lm_trans_type_receiver_key(const LmP0Node *type_node, LmP0Text *out_k
 static int lm_trans_lookup_type_receiver_binding(const LmP0Node *type_node, LmTransBinding *out) {
     LmP0Text * key;
     const char *binding;
+    const char *emit_binding;
+    const char *structure_value_alloc_binding;
+    const char *structure_value_fill_binding;
+    const char *facade_emit_binding;
+    const char *facade_structure_value_alloc_binding;
+    const char *facade_structure_value_fill_binding;
+    const char *source_emit_binding;
+    const char *source_structure_value_alloc_binding;
+    const char *source_structure_value_fill_binding;
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_emit_column;
+    const LmTableColumnDescriptor * source_structure_value_alloc_column;
+    const LmTableColumnDescriptor * source_structure_value_fill_column;
+    const LmTableCell * source_emit_cell;
+    const LmTableCell * source_structure_value_alloc_cell;
+    const LmTableCell * source_structure_value_fill_cell;
     LmTransBinding * resolved;
+    int source_covered;
+    int source_same;
+    int source_usable;
     int found;
     if (out != 0) {
         memset(out, 0, sizeof(out[0]));
@@ -14039,8 +14060,67 @@ static int lm_trans_lookup_type_receiver_binding(const LmP0Node *type_node, LmTr
         lm_trans_text_ref_destroy(&key);
         return -1;
     }
+    facade_emit_binding = lm_trans_registry_lookup(key, "class.receiver.emit");
+    facade_structure_value_alloc_binding = lm_trans_registry_lookup(key, "class.receiver.structure_value_alloc");
+    facade_structure_value_fill_binding = lm_trans_registry_lookup(key, "class.receiver.structure_value_fill");
+    emit_binding = facade_emit_binding;
+    structure_value_alloc_binding = facade_structure_value_alloc_binding;
+    structure_value_fill_binding = facade_structure_value_fill_binding;
+    if (lm_trans_registry_view_parity_enabled() != 0) {
+        source_covered = 0;
+        source_table = 0;
+        source_row = lm_trans_registry_source_table_lookup_row(key, "class.receiver", &source_table, &source_covered);
+        source_emit_binding = 0;
+        source_structure_value_alloc_binding = 0;
+        source_structure_value_fill_binding = 0;
+        source_usable = source_row == 0;
+        if (source_row != 0) {
+            source_usable = lm_table_descriptor_column_count(source_table) == 4U && lm_table_row_cell_count(source_row) == 4U;
+            if (source_usable != 0) {
+                source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+                source_emit_column = lm_table_descriptor_column_at(source_table, 1U);
+                source_structure_value_alloc_column = lm_table_descriptor_column_at(source_table, 2U);
+                source_structure_value_fill_column = lm_table_descriptor_column_at(source_table, 3U);
+                source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_emit_column != 0 && source_emit_column -> name != 0 && strcmp(source_emit_column -> name, "emit") == 0 && source_structure_value_alloc_column != 0 && source_structure_value_alloc_column -> name != 0 && strcmp(source_structure_value_alloc_column -> name, "structure_value_alloc") == 0 && source_structure_value_fill_column != 0 && source_structure_value_fill_column -> name != 0 && strcmp(source_structure_value_fill_column -> name, "structure_value_fill") == 0;
+            }
+            if (source_usable != 0) {
+                source_emit_cell = lm_table_row_cell_at(source_row, 1U);
+                source_structure_value_alloc_cell = lm_table_row_cell_at(source_row, 2U);
+                source_structure_value_fill_cell = lm_table_row_cell_at(source_row, 3U);
+                if (source_emit_cell != 0) {
+                    source_emit_binding = source_emit_cell -> value;
+                }
+                if (source_structure_value_alloc_cell != 0) {
+                    source_structure_value_alloc_binding = source_structure_value_alloc_cell -> value;
+                }
+                if (source_structure_value_fill_cell != 0) {
+                    source_structure_value_fill_binding = source_structure_value_fill_cell -> value;
+                }
+            }
+        }
+        if (source_covered != 0 && source_usable != 0) {
+            if ((source_emit_binding != 0 && facade_emit_binding == 0) || (source_structure_value_alloc_binding != 0 && facade_structure_value_alloc_binding == 0) || (source_structure_value_fill_binding != 0 && facade_structure_value_fill_binding == 0)) {
+                lm_trans_registry_view_parity_fail("source class receiver row", "class.receiver");
+            }
+            source_same = (source_emit_binding == 0) == (facade_emit_binding == 0) && (source_structure_value_alloc_binding == 0) == (facade_structure_value_alloc_binding == 0) && (source_structure_value_fill_binding == 0) == (facade_structure_value_fill_binding == 0);
+            if (source_same != 0 && source_emit_binding != 0) {
+                source_same = strcmp(source_emit_binding, facade_emit_binding) == 0;
+            }
+            if (source_same != 0 && source_structure_value_alloc_binding != 0) {
+                source_same = strcmp(source_structure_value_alloc_binding, facade_structure_value_alloc_binding) == 0;
+            }
+            if (source_same != 0 && source_structure_value_fill_binding != 0) {
+                source_same = strcmp(source_structure_value_fill_binding, facade_structure_value_fill_binding) == 0;
+            }
+            if (lm_trans_registry_view_is_selected() != 0 && source_same != 0) {
+                emit_binding = source_emit_binding;
+                structure_value_alloc_binding = source_structure_value_alloc_binding;
+                structure_value_fill_binding = source_structure_value_fill_binding;
+            }
+        }
+    }
     found = 0;
-    binding = lm_trans_registry_lookup(key, "class.receiver.emit");
+    binding = emit_binding;
     if (binding != 0) {
         memset(resolved, 0, sizeof(resolved[0]));
         if ((lm_trans_binding_resolve(binding, resolved) == 0) || (resolved -> type_emit == 0)) {
@@ -14052,7 +14132,7 @@ static int lm_trans_lookup_type_receiver_binding(const LmP0Node *type_node, LmTr
         out->type_emit = resolved -> type_emit;
         found = 1;
     }
-    binding = lm_trans_registry_lookup(key, "class.receiver.structure_value_alloc");
+    binding = structure_value_alloc_binding;
     if (binding != 0) {
         memset(resolved, 0, sizeof(resolved[0]));
         if ((lm_trans_binding_resolve(binding, resolved) == 0) || (resolved -> type_structure_value_alloc == 0)) {
@@ -14064,7 +14144,7 @@ static int lm_trans_lookup_type_receiver_binding(const LmP0Node *type_node, LmTr
         out->type_structure_value_alloc = resolved -> type_structure_value_alloc;
         found = 1;
     }
-    binding = lm_trans_registry_lookup(key, "class.receiver.structure_value_fill");
+    binding = structure_value_fill_binding;
     if (binding != 0) {
         memset(resolved, 0, sizeof(resolved[0]));
         if ((lm_trans_binding_resolve(binding, resolved) == 0) || (resolved -> type_structure_value_fill == 0)) {
