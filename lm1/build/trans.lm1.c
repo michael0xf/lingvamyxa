@@ -2391,6 +2391,7 @@ static int lm_table_descriptor_source_path_column_matches(const LmTableDescripto
 static int lm_registry_view_source_path_has_rows_slice(const LmRegistryView *view, const char *path, size_t path_length, int *out_covered);
 static int lm_registry_view_source_path_has_rows(const LmRegistryView *view, const char *path, int *out_covered);
 static int lm_registry_view_source_path_has_key_slice(const LmRegistryView *view, const char *path, size_t path_length, const char *key, size_t key_length, int *out_covered);
+static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, int *out_covered);
 static int lm_registry_view_append_materialized_rows(const LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length);
 static size_t lm_registry_view_fact_count(const LmRegistryView *view);
 static const LmRegistryViewRow * lm_registry_view_fact_at(const LmRegistryView *view, size_t index);
@@ -2482,6 +2483,7 @@ static const LmOwnPtrStack * lm_trans_registry_relation_stack(const LmP0Text *ke
 static const LmOwnPtrStack * lm_trans_namespace_registry_relation_stack(const LmTransNamespace *namespace_, const LmP0Text *key, const char *relation_name);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_for_table(const char *table);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_row(const LmOwnPtrStack *stack, const LmP0Text *key);
+static char * lm_trans_registry_source_relation_path_new(const char *table, const char *relation_name, size_t *out_length);
 static int lm_trans_namespace_registry_source_relation_has_key(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table, const char *relation_name);
 static const char * lm_trans_registry_lookup_exact(const LmP0Text *key, const char *table);
 static const char * lm_trans_registry_lookup_default(const char *table);
@@ -3448,7 +3450,10 @@ static int lm_trans_registry_collect_constant_define_names(LmOwnPtrStack *names,
 static int lm_trans_emit_l4_constant_defines(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_registry_collect_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *receiver_name, const char *backend_payload, const char *error_name, int require_class);
+static int lm_trans_registry_append_relation_name(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, LmP0Text *key_text, const char *key);
+static int lm_trans_registry_collect_relation_rows(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, const LmOwnPtrStack *rows);
 static int lm_trans_registry_collect_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class);
+static int lm_trans_registry_collect_source_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class);
 static int lm_trans_l4_is_function_pointer_type(const LmTransNamespace *namespace_, const char *name);
 static int lm_trans_emit_abi_typed_name(FILE *file, const char *class_name, size_t address_depth, int is_const, const char *name);
 static int lm_trans_registry_latest_size_payload(const LmOwnPtrStack *rows, const LmP0Text *key, size_t default_value, size_t *out_value);
@@ -4388,6 +4393,67 @@ static int lm_registry_view_source_path_has_key_slice(const LmRegistryView *view
                 }
             }
             column_index = column_index + 1U;
+        }
+        table_index = table_index + 1U;
+    }
+    return 0;
+}
+
+static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, int *out_covered) {
+    const LmTableDescriptor * descriptor;
+    const LmTableRow * row;
+    const LmTableCell * key_cell;
+    const LmTableCell * payload_cell;
+    size_t table_count;
+    size_t table_index;
+    size_t column_count;
+    size_t column_index;
+    size_t row_count;
+    size_t row_index;
+    size_t fact_index;
+    int descriptor_covered;
+    if (out_covered != 0) {
+        out_covered[0] = 0;
+    }
+    if (view == 0 || path == 0 || out_covered == 0) {
+        return 0;
+    }
+    fact_index = 0U;
+    table_count = lm_registry_view_source_table_count(view);
+    table_index = 0U;
+    while (table_index < table_count) {
+        descriptor = lm_registry_view_source_table_at(view, table_index);
+        column_count = lm_table_descriptor_column_count(descriptor);
+        descriptor_covered = 0;
+        column_index = 1U;
+        while (column_index < column_count) {
+            if (lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0) {
+                descriptor_covered = 1;
+                out_covered[0] = 1;
+            }
+            column_index = column_index + 1U;
+        }
+        if (descriptor_covered != 0) {
+            row_count = lm_table_descriptor_materialized_row_count(descriptor);
+            row_index = 0U;
+            while (row_index < row_count) {
+                row = lm_table_descriptor_materialized_row_at(descriptor, row_index);
+                key_cell = lm_table_row_cell_at(row, 0U);
+                column_index = 1U;
+                while (column_index < column_count) {
+                    if (lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0) {
+                        payload_cell = lm_table_row_cell_at(row, column_index);
+                        if (key_cell != 0 && key_cell -> value != 0 && payload_cell != 0 && (payload_cell -> value != 0 || payload_cell -> node != 0)) {
+                            if (fact_index == index) {
+                                return key_cell -> value;
+                            }
+                            fact_index = fact_index + 1U;
+                        }
+                    }
+                    column_index = column_index + 1U;
+                }
+                row_index = row_index + 1U;
+            }
         }
         table_index = table_index + 1U;
     }
@@ -6071,14 +6137,44 @@ static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_row(const L
     return 0;
 }
 
+static char * lm_trans_registry_source_relation_path_new(const char *table, const char *relation_name, size_t *out_length) {
+    char *path;
+    size_t table_length;
+    size_t relation_length;
+    size_t path_length;
+    int direct_table;
+    if (out_length != 0) {
+        out_length[0] = 0U;
+    }
+    if (table == 0 || relation_name == 0 || out_length == 0) {
+        return 0;
+    }
+    table_length = strlen(table);
+    relation_length = strlen(relation_name);
+    direct_table = strcmp(relation_name, "row") == 0;
+    path_length = table_length;
+    if (direct_table == 0) {
+        path_length = path_length + 1U + relation_length;
+    }
+    path = lm_own_new_zero(path_length + 1U);
+    if (path == 0) {
+        return 0;
+    }
+    memcpy(path, table, table_length);
+    if (direct_table == 0) {
+        path[table_length] = '.';
+        memcpy(path + table_length + 1U, relation_name, relation_length);
+    }
+    path[path_length] = '\0';
+    out_length[0] = path_length;
+    return path;
+}
+
 static int lm_trans_namespace_registry_source_relation_has_key(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table, const char *relation_name) {
     const LmOwnPtrStack * rows;
     LmP0Text * table_text;
     LmP0Text * key_payload;
-    char *source_path_storage;
-    const char *source_path;
-    size_t table_length;
-    size_t relation_length;
+    char *source_path;
     size_t source_path_length;
     int facade_has_key;
     int source_has_key;
@@ -6099,33 +6195,20 @@ static int lm_trans_namespace_registry_source_relation_has_key(const LmTransName
     if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
         return facade_has_key;
     }
-    source_path_storage = 0;
-    source_path = table;
-    table_length = strlen(table);
-    relation_length = strlen(relation_name);
-    source_path_length = table_length;
-    if (strcmp(relation_name, "row") != 0) {
-        source_path_length = table_length + 1U + relation_length;
-        source_path_storage = lm_own_new_zero(source_path_length + 1U);
-        if (source_path_storage == 0) {
-            return facade_has_key;
-        }
-        memcpy(source_path_storage, table, table_length);
-        source_path_storage[table_length] = '.';
-        memcpy(source_path_storage + table_length + 1U, relation_name, relation_length);
-        source_path_storage[source_path_length] = '\0';
-        source_path = source_path_storage;
+    source_path = lm_trans_registry_source_relation_path_new(table, relation_name, &source_path_length);
+    if (source_path == 0) {
+        return facade_has_key;
     }
     key_payload = lm_trans_text_ref_new_cstr("");
     if (key_payload == 0 || lm_trans_identifier_payload(key, key_payload) == 0) {
         lm_trans_text_ref_destroy(&key_payload);
-        lm_own_delete(source_path_storage, 0);
+        lm_own_delete(source_path, 0);
         return facade_has_key;
     }
     source_covered = 0;
     source_has_key = lm_registry_view_source_path_has_key_slice(lm_trans_registry->view, source_path, source_path_length, key_payload -> data, key_payload -> length, &source_covered);
     lm_trans_text_ref_destroy(&key_payload);
-    lm_own_delete(source_path_storage, 0);
+    lm_own_delete(source_path, 0);
     if (source_covered != 0 && source_has_key != 0 && facade_has_key == 0) {
         lm_trans_registry_view_parity_fail("source relation key membership", table);
     }
@@ -29557,16 +29640,38 @@ static int lm_trans_registry_collect_backend_names(LmOwnPtrStack *names, const L
     return 0;
 }
 
-static int lm_trans_registry_collect_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class) {
+static int lm_trans_registry_append_relation_name(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, LmP0Text *key_text, const char *key) {
+    char *name;
+    if (names == 0 || owner_name == 0 || relation_name == 0 || error_name == 0 || key_text == 0 || key == 0) {
+        return 1;
+    }
+    lm_trans_text_assign_cstr(key_text, key);
+    if (require_class && lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") == 0) {
+        fprintf(stderr, "trans L4 %s error: %s.%s key %s is not a class\n", error_name, owner_name, relation_name, key);
+        return 1;
+    }
+    name = lm_trans_text_copy_cstr(key_text);
+    if (name == 0) {
+        return 1;
+    }
+    if (lm_trans_string_stack_has(names, name)) {
+        lm_own_delete(name, 0);
+        return 0;
+    }
+    if (lm_own_ptr_stack_push(names, name) != 0) {
+        lm_own_delete(name, 0);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_registry_collect_relation_rows(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, const LmOwnPtrStack *rows) {
     size_t i;
     LmTransRegistryFact * row;
-    const LmOwnPtrStack * rows;
-    char *name;
     LmP0Text * key_text;
     if (names == 0 || owner_name == 0 || relation_name == 0 || error_name == 0) {
         return 1;
     }
-    rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr(owner_name), relation_name);
     if (rows == 0) {
         return 0;
     }
@@ -29578,32 +29683,122 @@ static int lm_trans_registry_collect_relation_names(LmOwnPtrStack *names, const 
     while (i < rows -> count) {
         row = lm_own_ptr_stack_at(rows, i);
         if (row != 0 && row -> key != 0 && row -> payload != 0) {
-            lm_trans_text_assign_cstr(key_text, row -> key);
-            if (require_class && lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") == 0) {
-                fprintf(stderr, "trans L4 %s error: %s.%s key %s is not a class\n", error_name, owner_name, relation_name, row -> key);
+            if (lm_trans_registry_append_relation_name(names, namespace_, owner_name, relation_name, error_name, require_class, key_text, row -> key) != 0) {
                 lm_trans_l4_text_view_delete(&key_text);
                 return 1;
-            }
-            name = lm_trans_text_copy_cstr(key_text);
-            if (name == 0) {
-                lm_trans_l4_text_view_delete(&key_text);
-                return 1;
-            }
-            if (lm_trans_string_stack_has(names, name)) {
-                lm_own_delete(name, 0);
-            }
-            else {
-                if (lm_own_ptr_stack_push(names, name) != 0) {
-                    lm_own_delete(name, 0);
-                    lm_trans_l4_text_view_delete(&key_text);
-                    return 1;
-                }
             }
         }
         i = i + 1U;
     }
     lm_trans_l4_text_view_delete(&key_text);
     return 0;
+}
+
+static int lm_trans_registry_collect_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class) {
+    const LmOwnPtrStack * rows;
+    LmP0Text * owner_text;
+    int status;
+    if (names == 0 || owner_name == 0 || relation_name == 0 || error_name == 0) {
+        return 1;
+    }
+    owner_text = lm_trans_l4_text_view_new(owner_name);
+    if (owner_text == 0) {
+        return 1;
+    }
+    rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, relation_name);
+    status = lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows);
+    lm_trans_l4_text_view_delete(&owner_text);
+    return status;
+}
+
+static int lm_trans_registry_collect_source_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class) {
+    const LmOwnPtrStack * rows;
+    LmP0Text * owner_text;
+    LmP0Text * key_text;
+    LmTransRegistryFact * row;
+    char *source_path;
+    const char *source_key;
+    size_t source_path_length;
+    size_t source_count;
+    size_t facade_count;
+    size_t facade_index;
+    size_t i;
+    int source_covered;
+    int source_row_found;
+    int status;
+    if (names == 0 || owner_name == 0 || relation_name == 0 || error_name == 0) {
+        return 1;
+    }
+    owner_text = lm_trans_l4_text_view_new(owner_name);
+    if (owner_text == 0) {
+        return 1;
+    }
+    rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, relation_name);
+    lm_trans_l4_text_view_delete(&owner_text);
+    if (lm_trans_registry_view_parity_enabled() == 0 || (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers)) {
+        return lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows);
+    }
+    source_path = lm_trans_registry_source_relation_path_new(owner_name, relation_name, &source_path_length);
+    if (source_path == 0) {
+        return lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows);
+    }
+    source_covered = 0;
+    source_key = lm_registry_view_source_path_key_at_slice(lm_trans_registry->view, source_path, source_path_length, 0U, &source_covered);
+    if (source_covered == 0) {
+        lm_own_delete(source_path, 0);
+        return lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows);
+    }
+    facade_count = 0U;
+    i = 0U;
+    if (rows != 0) {
+        while (i < rows -> count) {
+            row = lm_own_ptr_stack_at(rows, i);
+            if (row != 0 && row -> key != 0 && row -> payload != 0) {
+                facade_count = facade_count + 1U;
+            }
+            i = i + 1U;
+        }
+    }
+    source_count = 0U;
+    facade_index = 0U;
+    while (source_key != 0) {
+        source_row_found = 0;
+        while (rows != 0 && facade_index < rows -> count) {
+            row = lm_own_ptr_stack_at(rows, facade_index);
+            facade_index = facade_index + 1U;
+            if (row != 0 && row -> key != 0 && row -> payload != 0 && strcmp(row -> key, source_key) == 0) {
+                source_row_found = 1;
+                break;
+            }
+        }
+        if (source_row_found == 0) {
+            lm_own_delete(source_path, 0);
+            lm_trans_registry_view_parity_fail("source relation key order", owner_name);
+            return 1;
+        }
+        source_count = source_count + 1U;
+        source_key = lm_registry_view_source_path_key_at_slice(lm_trans_registry->view, source_path, source_path_length, source_count, &source_covered);
+    }
+    if (lm_trans_registry_view_is_selected() == 0 || source_count != facade_count) {
+        lm_own_delete(source_path, 0);
+        return lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows);
+    }
+    key_text = lm_trans_l4_text_view_new("");
+    if (key_text == 0) {
+        lm_own_delete(source_path, 0);
+        return 1;
+    }
+    status = 0;
+    i = 0U;
+    source_key = lm_registry_view_source_path_key_at_slice(lm_trans_registry->view, source_path, source_path_length, i, &source_covered);
+    while (status == 0 && source_key != 0) {
+        status = lm_trans_registry_append_relation_name(names, namespace_, owner_name, relation_name, error_name, require_class, key_text, source_key);
+        i = i + 1U;
+        source_key = lm_registry_view_source_path_key_at_slice(lm_trans_registry->view, source_path, source_path_length, i, &source_covered);
+    }
+    lm_trans_l4_text_view_delete(&key_text);
+    lm_own_delete(source_path, 0);
+    return status;
 }
 
 static int lm_trans_l4_is_function_pointer_type(const LmTransNamespace *namespace_, const char *name) {
@@ -30499,7 +30694,7 @@ static int lm_trans_emit_l4_function_pointer_type_typedefs(FILE *file, const LmT
     if (names == 0) {
         return 1;
     }
-    if (lm_trans_registry_collect_relation_names(names, namespace_, "functionPointerType", "value", "functionPointerType", 1) != 0 || lm_trans_registry_collect_relation_names(names, namespace_, "functionPointerType", "row", "functionPointerType", 1) != 0) {
+    if (lm_trans_registry_collect_source_relation_names(names, namespace_, "functionPointerType", "value", "functionPointerType", 1) != 0 || lm_trans_registry_collect_source_relation_names(names, namespace_, "functionPointerType", "row", "functionPointerType", 1) != 0) {
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }

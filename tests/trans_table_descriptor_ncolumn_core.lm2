@@ -74,6 +74,9 @@ return: 0
 fn: lm_test_source_path_has_key (const: (LmRegistryView: view); const: @(char path); const: @(char key); @: int out_covered) int
 return: lm_registry_view_source_path_has_key_slice(view, path, c.strlen(path), key, c.strlen(key), out_covered)
 
+fn: lm_test_source_path_key_at (const: (LmRegistryView: view); const: @(char path); size_t: index; @: int out_covered) const: @: char
+return: lm_registry_view_source_path_key_at_slice(view, path, c.strlen(path), index, out_covered)
+
 external:
     fn: main () int
         LmRegistryView: view
@@ -315,6 +318,30 @@ external:
             status: 1
         covered: 0
         if: status = 0 && (lm_test_source_path_has_key(view, "dynamic.overlay", "key", @ covered) != 0 || covered = 0 || lm_registry_view_lookup_exact(view, "key", "dynamic.overlay") = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_key_at(view, "source.ncolumn.left.part", 0U, @ covered) = 0 || c.strcmp(lm_test_source_path_key_at(view, "source.ncolumn.left.part", 0U, @ covered), "ordered") != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_key_at(view, "source.ncolumn.left.part", 1U, @ covered) = 0 || c.strcmp(lm_test_source_path_key_at(view, "source.ncolumn.left.part", 1U, @ covered), "duplicate") != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_key_at(view, "source.ncolumn.left.part", 2U, @ covered) = 0 || c.strcmp(lm_test_source_path_key_at(view, "source.ncolumn.left.part", 2U, @ covered), "duplicate") != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_key_at(view, "source.ncolumn.left.part", 3U, @ covered) != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_key_at(view, "duplicate.columns.value", 0U, @ covered) = 0 || c.strcmp(lm_test_source_path_key_at(view, "duplicate.columns.value", 0U, @ covered), "duplicate") != 0 || lm_test_source_path_key_at(view, "duplicate.columns.value", 1U, @ covered) != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_key_at(view, "direct.two", 0U, @ covered) = 0 || c.strcmp(lm_test_source_path_key_at(view, "direct.two", 0U, @ covered), "direct") != 0 || covered = 0)
+            status: 1
+        covered: 0
+        if: status = 0 && (lm_test_source_path_key_at(view, "dynamic.overlay", 0U, @ covered) != 0 || covered = 0)
+            status: 1
+        covered: 1
+        if: status = 0 && (lm_test_source_path_key_at(view, "missing.path", 0U, @ covered) != 0 || covered != 0)
             status: 1
         if: status = 0 && (lm_registry_view_append_materialized_rows(view, joined, "source.ncolumn", 14U) != 0 || lm_table_descriptor_materialized_row_count(joined) != 11U)
             status: 1

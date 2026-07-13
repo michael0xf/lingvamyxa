@@ -1236,6 +1236,35 @@ fn: lm_trans_registry_relation_stack_latest_row (const: (LmOwnPtrStack: stack); 
     lm_trans_text_ref_destroy(@ key_payload)
 return: 0
 
+fn: lm_trans_registry_source_relation_path_new (const: @(char table); const: @(char relation_name); @: size_t out_length) @: char
+    @: char path
+    size_t: table_length
+    size_t: relation_length
+    size_t: path_length
+    int: direct_table
+
+    if: out_length != 0
+        out_length[0]: 0U
+    if: table = 0 || relation_name = 0 || out_length = 0
+        return: 0
+
+    table_length: c.strlen(table)
+    relation_length: c.strlen(relation_name)
+    direct_table: c.strcmp(relation_name, "row") = 0
+    path_length: table_length
+    if: direct_table = 0
+        path_length: path_length + 1U + relation_length
+    path: lm_own_new_zero(path_length + 1U)
+    if: path = 0
+        return: 0
+    c.memcpy(path, table, table_length)
+    if: direct_table = 0
+        path[table_length]: '.'
+        c.memcpy(path + table_length + 1U, relation_name, relation_length)
+    path[path_length]: '\0'
+    out_length[0]: path_length
+return: path
+
 fn: lm_trans_namespace_registry_source_relation_has_key (
     const: (LmTransNamespace: namespace_)
     const: (LmP0Text: key)
@@ -1245,10 +1274,7 @@ fn: lm_trans_namespace_registry_source_relation_has_key (
     const: LmOwnPtrStack: rows
     LmP0Text: table_text
     LmP0Text: key_payload
-    @: char source_path_storage
-    const: @: char source_path
-    size_t: table_length
-    size_t: relation_length
+    @: char source_path
     size_t: source_path_length
     int: facade_has_key
     int: source_has_key
@@ -1269,32 +1295,19 @@ fn: lm_trans_namespace_registry_source_relation_has_key (
     if: namespace_ != 0 && namespace_\registry_identifiers != 0 && namespace_\registry_identifiers != c.lm_trans_registry->identifiers
         return: facade_has_key
 
-    source_path_storage: 0
-    source_path: table
-    table_length: c.strlen(table)
-    relation_length: c.strlen(relation_name)
-    source_path_length: table_length
-    if: c.strcmp(relation_name, "row") != 0
-        source_path_length: table_length + 1U + relation_length
-        source_path_storage: lm_own_new_zero(source_path_length + 1U)
-        if: source_path_storage = 0
-            return: facade_has_key
-        c.memcpy(source_path_storage, table, table_length)
-        source_path_storage[table_length]: '.'
-        c.memcpy(source_path_storage + table_length + 1U, relation_name, relation_length)
-        source_path_storage[source_path_length]: '\0'
-        source_path: source_path_storage
-    ---
+    source_path: lm_trans_registry_source_relation_path_new(table, relation_name, @ source_path_length)
+    if: source_path = 0
+        return: facade_has_key
 
     key_payload: lm_trans_text_ref_new_cstr("")
     if: key_payload = 0 || lm_trans_identifier_payload(key, key_payload) = 0
         lm_trans_text_ref_destroy(@ key_payload)
-        lm_own_delete(source_path_storage, 0)
+        lm_own_delete(source_path, 0)
         return: facade_has_key
     source_covered: 0
     source_has_key: lm_registry_view_source_path_has_key_slice(c.lm_trans_registry->view, source_path, source_path_length, key_payload\data, key_payload\length, @ source_covered)
     lm_trans_text_ref_destroy(@ key_payload)
-    lm_own_delete(source_path_storage, 0)
+    lm_own_delete(source_path, 0)
 
     if: source_covered != 0 && source_has_key != 0 && facade_has_key = 0
         lm_trans_registry_view_parity_fail("source relation key membership", table)

@@ -927,6 +927,66 @@ fn: lm_registry_view_source_path_has_key_slice (
         table_index: table_index + 1U
 return: 0
 
+fn: lm_registry_view_source_path_key_at_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    size_t: index
+    @: int out_covered
+) const: @: char
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+    size_t: table_count
+    size_t: table_index
+    size_t: column_count
+    size_t: column_index
+    size_t: row_count
+    size_t: row_index
+    size_t: fact_index
+    int: descriptor_covered
+
+    if: out_covered != 0
+        out_covered[0]: 0
+    if: view = 0 || path = 0 || out_covered = 0
+        return: 0
+
+    fact_index: 0U
+    table_count: lm_registry_view_source_table_count(view)
+    table_index: 0U
+    while: table_index < table_count
+        descriptor: lm_registry_view_source_table_at(view, table_index)
+        column_count: lm_table_descriptor_column_count(descriptor)
+        descriptor_covered: 0
+        column_index: 1U
+        while: column_index < column_count
+            if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                descriptor_covered: 1
+                out_covered[0]: 1
+            column_index: column_index + 1U
+
+        if: descriptor_covered != 0
+            row_count: lm_table_descriptor_materialized_row_count(descriptor)
+            row_index: 0U
+            while: row_index < row_count
+                row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+                key_cell: lm_table_row_cell_at(row, 0U)
+                column_index: 1U
+                while: column_index < column_count
+                    if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                        payload_cell: lm_table_row_cell_at(row, column_index)
+                        if: key_cell != 0 && key_cell\value != 0 && payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
+                            if: fact_index = index
+                                return: key_cell\value
+                            fact_index: fact_index + 1U
+                    ---
+                    column_index: column_index + 1U
+                row_index: row_index + 1U
+        ---
+        table_index: table_index + 1U
+return: 0
+
 fn: lm_registry_view_append_materialized_rows (const: (LmRegistryView: view); LmTableDescriptor: target; const: @(char source_table); size_t: source_table_length) int
     const: LmTableDescriptor: source
     const: LmTableRow: row
