@@ -12815,7 +12815,7 @@ static int lm_trans_profile_rule_enabled(const LmTransNamespace *namespace_, con
     if (rule_text == 0) {
         return 0;
     }
-    policy = lm_trans_namespace_registry_lookup(namespace_, rule_text, "c99.ub.policy");
+    policy = lm_trans_namespace_registry_source_n2_typed_value(namespace_, rule_text, "c99.ub.policy", "class", "class", "policy", "class");
     enabled = 0;
     if (policy != 0) {
         if (strcmp(policy, "diagnostic") == 0 || strcmp(policy, "checked") == 0) {

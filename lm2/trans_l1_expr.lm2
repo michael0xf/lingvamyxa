@@ -3478,7 +3478,7 @@ fn: lm_trans_profile_rule_enabled (const: (LmTransNamespace: namespace_); const:
     if: rule_text = 0
         return: 0
 
-    policy: lm_trans_namespace_registry_lookup(namespace_, rule_text, "c99.ub.policy")
+    policy: lm_trans_namespace_registry_source_n2_typed_value(namespace_, rule_text, "c99.ub.policy", "class", "class", "policy", "class")
     enabled: 0
     if: policy != 0
         if: c.strcmp(policy, "diagnostic") = 0 || c.strcmp(policy, "checked") = 0
