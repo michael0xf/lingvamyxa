@@ -1,0 +1,48 @@
+L4:
+    table:
+        name: expr_emitter_binding
+        columns((class: class) (class: binding_table))
+        rows:
+                 `operator.prefix`  `operator.infix.emitter`
+                 `operator.prefix`  `operator.prefix.emitter`
+                 `operator.prefix`  None
+    end: expr_emitter_binding
+
+    table:
+        name: expr_emitter_binding
+        columns((class: class) (@: char binding_table))
+        rows:
+                 `operator.postfix`  `operator.postfix.emitter`
+    end: expr_emitter_binding
+
+    table:
+        name: `lm.test.expr_emitter_binding.seed`
+        columns((class: class) (class: binding_table))
+        rows:
+                 `operator.infix`  `operator.infix.emitter`
+    end: `lm.test.expr_emitter_binding.seed`
+
+    join: (`lm.test.expr_emitter_binding.seed`) expr_emitter_binding
+        columns((class: class) (class: binding_table))
+        rows:
+    end: expr_emitter_binding
+
+    table:
+        name: expr_emitter_binding
+        columns((class: class) (class: binding_table))
+        rows:
+                 `operator.infix`  None
+    end: expr_emitter_binding
+end: L4
+
+external:
+    fn: main () int
+        int: value 2
+        int: result
+
+        result: value++
+        result: -value
+        result: result + value
+        return: result != 0 || value != 3
+    end: main
+end: external

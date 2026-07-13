@@ -7289,7 +7289,7 @@ static const char * lm_trans_expr_emitter_binding_table(const char *class_name) 
     if (class_text == 0) {
         exit(2);
     }
-    table = lm_trans_registry_lookup(class_text, "expr_emitter_binding");
+    table = lm_trans_namespace_registry_source_n2_typed_value(0, class_text, "expr_emitter_binding", "class", "class", "binding_table", "class");
     if (table != 0 && lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, table) != 0) {
         lm_trans_text_ref_destroy(&class_text);
         exit(2);
