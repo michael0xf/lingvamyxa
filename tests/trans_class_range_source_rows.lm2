@@ -1,0 +1,45 @@
+L4:
+    table:
+        name: `class.range`
+        columns((class: class) (@: char value))
+        rows:
+                 int  "test-int-wrong"
+                 int  "test-int"
+                 int  None
+    end: `class.range`
+
+    table:
+        name: `class.range`
+        columns((class: class) (class: value))
+        rows:
+                 short  int
+    end: `class.range`
+
+    table:
+        name: `lm.test.class.range.seed`
+        columns((class: class) (@: char value))
+        rows:
+                 long  "test-long"
+    end: `lm.test.class.range.seed`
+
+    join: (`lm.test.class.range.seed`) `class.range`
+        columns((class: class) (@: char value))
+        rows:
+    end: `class.range`
+
+    table:
+        name: `class.range`
+        columns((class: class) (@: char value))
+        rows:
+                 long  None
+    end: `class.range`
+end: L4
+
+external:
+    fn: main () int
+        int: direct cast: int 7
+        short: fallback cast: short 8
+        long: joined cast: long 9
+        return: direct != 7 || fallback != 8 || joined != 9
+    end: main
+end: external

@@ -13139,7 +13139,7 @@ static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTran
         lm_trans_text_ref_destroy(&key);
         return 0;
     }
-    range = lm_trans_namespace_registry_lookup(namespace_, key, "class.range");
+    range = lm_trans_namespace_registry_source_n2_typed_value(namespace_, key, "class.range", "class", "class", "value", "char");
     if (range != 0) {
         lm_trans_text_ref_destroy(&key);
         return 1;
