@@ -2844,7 +2844,7 @@ static int lm_trans_expr_state_operator(const LmTransExprAtomLowering *lowering,
 static int lm_trans_expr_state_c_surface(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
 static int lm_trans_expr_atom_lowering_set_binding(LmTransExprAtomLowering *lowering, const char *binding);
 static void lm_trans_expr_atom_lowering_set_builtin(LmTransExprAtomLowering *lowering, const LmP0Text *text, const char *binding);
-static int lm_trans_expr_atom_lowering_set_from_tables(LmTransExprAtomLowering *lowering, const LmP0Text *key, const char *spelling_table, const char *emitter_table);
+static int lm_trans_expr_atom_lowering_set_from_tables(LmTransExprAtomLowering *lowering, const LmP0Text *key, const char *source_table_name, const char *spelling_table, const char *emitter_table);
 static int lm_trans_expr_atom_lowering_set_from_class(LmTransExprAtomLowering *lowering, const LmP0Text *key, const char *class_name);
 static int lm_trans_lower_expr_atom(const LmP0Node *node, const LmP0Node *previous_operand, int expect_field_name, int expect_c_field_name, int c_dot_path, LmTransExprAtomLowering *out);
 static int lm_trans_update_expr_atom_lowering_state(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
@@ -13401,13 +13401,61 @@ static void lm_trans_expr_atom_lowering_set_builtin(LmTransExprAtomLowering *low
     }
 }
 
-static int lm_trans_expr_atom_lowering_set_from_tables(LmTransExprAtomLowering *lowering, const LmP0Text *key, const char *spelling_table, const char *emitter_table) {
+static int lm_trans_expr_atom_lowering_set_from_tables(LmTransExprAtomLowering *lowering, const LmP0Text *key, const char *source_table_name, const char *spelling_table, const char *emitter_table) {
     const char *spelling;
     const char *binding;
+    const char *facade_spelling;
+    const char *facade_binding;
+    const char *source_spelling;
+    const char *source_binding;
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_spelling_column;
+    const LmTableColumnDescriptor * source_emitter_column;
+    const LmTableCell * source_spelling_cell;
+    const LmTableCell * source_emitter_cell;
     int key_length;
     const char *key_data;
-    spelling = lm_trans_registry_lookup(key, spelling_table);
-    binding = lm_trans_registry_lookup(key, emitter_table);
+    int source_covered;
+    int source_same;
+    int source_usable;
+    facade_spelling = lm_trans_registry_lookup(key, spelling_table);
+    facade_binding = lm_trans_registry_lookup(key, emitter_table);
+    spelling = facade_spelling;
+    binding = facade_binding;
+    if (lm_trans_registry_view_parity_enabled() != 0) {
+        source_covered = 0;
+        source_table = 0;
+        source_row = lm_trans_registry_source_table_lookup_row(key, source_table_name, &source_table, &source_covered);
+        source_spelling = 0;
+        source_binding = 0;
+        source_usable = 0;
+        if (source_row != 0 && lm_table_descriptor_column_count(source_table) == 3U && lm_table_row_cell_count(source_row) == 3U) {
+            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+            source_spelling_column = lm_table_descriptor_column_at(source_table, 1U);
+            source_emitter_column = lm_table_descriptor_column_at(source_table, 2U);
+            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_spelling_column != 0 && source_spelling_column -> name != 0 && strcmp(source_spelling_column -> name, "ansi_c") == 0 && source_emitter_column != 0 && source_emitter_column -> name != 0 && strcmp(source_emitter_column -> name, "emitter") == 0;
+            if (source_usable != 0) {
+                source_spelling_cell = lm_table_row_cell_at(source_row, 1U);
+                source_emitter_cell = lm_table_row_cell_at(source_row, 2U);
+                if (source_spelling_cell != 0) {
+                    source_spelling = source_spelling_cell -> value;
+                }
+                if (source_emitter_cell != 0) {
+                    source_binding = source_emitter_cell -> value;
+                }
+                source_usable = source_spelling != 0 && source_binding != 0;
+            }
+        }
+        if (source_covered != 0 && source_usable != 0 && facade_spelling != 0 && facade_binding != 0) {
+            source_same = strcmp(source_spelling, facade_spelling) == 0 && strcmp(source_binding, facade_binding) == 0;
+            if (lm_trans_registry_view_is_selected() != 0 && source_same != 0) {
+                spelling = source_spelling;
+                binding = source_binding;
+            }
+        }
+    }
     if (((spelling == 0) || (binding == 0)) || (lm_trans_expr_atom_lowering_set_binding(lowering, binding) != 0)) {
         key_length = 0;
         key_data = "";
@@ -13436,7 +13484,7 @@ static int lm_trans_expr_atom_lowering_set_from_class(LmTransExprAtomLowering *l
         fprintf(stderr, "trans L2 internal error: expression class %s has no emitter binding table\n", effective_class_name);
         return 1;
     }
-    return lm_trans_expr_atom_lowering_set_from_tables(lowering, key, spelling_table, emitter_table);
+    return lm_trans_expr_atom_lowering_set_from_tables(lowering, key, class_name, spelling_table, emitter_table);
 }
 
 static int lm_trans_lower_expr_atom(const LmP0Node *node, const LmP0Node *previous_operand, int expect_field_name, int expect_c_field_name, int c_dot_path, LmTransExprAtomLowering *out) {
@@ -13466,7 +13514,7 @@ static int lm_trans_lower_expr_atom(const LmP0Node *node, const LmP0Node *previo
                 }
                 else {
                     if (lm_trans_registry_has_expr_emitter_binding(node -> as -> atom, "expr.atom.emitter")) {
-                        return lm_trans_expr_atom_lowering_set_from_tables(out, node -> as -> atom, "expr.atom.ansi_c", "expr.atom.emitter");
+                        return lm_trans_expr_atom_lowering_set_from_tables(out, node -> as -> atom, "expr.atom", "expr.atom.ansi_c", "expr.atom.emitter");
                     }
                     else {
                         if (lm_trans_atom_is_index_operator(node -> as -> atom)) {
