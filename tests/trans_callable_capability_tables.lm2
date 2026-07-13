@@ -3,16 +3,58 @@ import: "lm2/own.lm2"
 L4:
     table:
         name: `callable.partial`
-        columns((class: class) (int: value))
+        columns((class: class) (serial: value))
         rows:
                  AddX 1
+                 AddX 2
+                 AddX None
     end: `callable.partial`
+
+    table:
+        name: `callable.partial`
+        columns((class: class) (int: value))
+        rows:
+                 WrongAddX 1
+    end: `callable.partial`
+
+    table:
+        name: `test.callable.partial.seed`
+        columns((class: class) (serial: value))
+        rows:
+                 JoinedAddX 1
+    end: `test.callable.partial.seed`
+
+    join: (`test.callable.partial.seed`) `callable.partial`
+        columns((class: class) (serial: value))
+        rows:
+    end: `callable.partial`
+
+    table:
+        name: `callable.capture`
+        columns((class: class) (serial: value))
+        rows:
+                 AddX 1
+                 AddX 2
+                 AddX None
+    end: `callable.capture`
 
     table:
         name: `callable.capture`
         columns((class: class) (int: value))
         rows:
-                 AddX 1
+                 WrongAddX 1
+    end: `callable.capture`
+
+    table:
+        name: `test.callable.capture.seed`
+        columns((class: class) (serial: value))
+        rows:
+                 JoinedAddX 1
+    end: `test.callable.capture.seed`
+
+    join: (`test.callable.capture.seed`) `callable.capture`
+        columns((class: class) (serial: value))
+        rows:
     end: `callable.capture`
 
     table:
@@ -20,6 +62,8 @@ L4:
         columns((class: class) (projection: value))
         rows:
                  AddX `c.closure-struct`
+                 WrongAddX `c.closure-struct`
+                 JoinedAddX `c.closure-struct`
     end: `callable.projection`
 
     join: (`callable.projection`) `test.callable.projection.joined`
@@ -29,6 +73,8 @@ L4:
 end: L4
 
 fn: AddX (int: value) int
+fn: WrongAddX (int: value) int
+fn: JoinedAddX (int: value) int
 
 fn: addBase (int: base; int: value) int
     return: base + value
@@ -41,12 +87,41 @@ fn: makeAdder (int: base) AddX
     return: addX
 end: makeAdder
 
+fn: makeWrongAdder (int: base) WrongAddX
+    fn: addX (int: value) int
+        return: base + value
+    ---
+    return: addX
+end: makeWrongAdder
+
+fn: makeJoinedAdder (int: base) JoinedAddX
+    fn: addX (int: value) int
+        return: base + value
+    ---
+    return: addX
+end: makeJoinedAdder
+
 fn: callAdd (AddX: add) int
     return: add(3)
 end: callAdd
 
+fn: callWrongAdd (WrongAddX: add) int
+    return: add(3)
+end: callWrongAdd
+
+fn: callJoinedAdd (JoinedAddX: add) int
+    return: add(3)
+end: callJoinedAdd
+
 external:
     fn: main () int
-        return: callAdd(addBase(4)) != 7 || callAdd(partial(addBase, 4)) != 7 || callAdd(makeAdder(4)) != 7
+        return:
+            callAdd(addBase(4)) != 7
+            || callAdd(partial(addBase, 4)) != 7
+            || callAdd(makeAdder(4)) != 7
+            || callWrongAdd(partial(addBase, 4)) != 7
+            || callWrongAdd(makeWrongAdder(4)) != 7
+            || callJoinedAdd(partial(addBase, 4)) != 7
+            || callJoinedAdd(makeJoinedAdder(4)) != 7
     end: main
 end: external

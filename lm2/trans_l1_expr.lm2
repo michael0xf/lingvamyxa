@@ -993,11 +993,11 @@ fn: lm_trans_registry_is_function_pointer_type_name (const: (LmTransNamespace: n
 end: lm_trans_registry_is_function_pointer_type_name
 
 fn: lm_trans_callable_descriptor_allows_partial (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    return: lm_trans_namespace_registry_lookup(namespace_, name, "callable.partial") != 0
+    return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.partial", "class", "class", "value", "serial") != 0
 end: lm_trans_callable_descriptor_allows_partial
 
 fn: lm_trans_callable_descriptor_allows_capture (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    return: lm_trans_namespace_registry_lookup(namespace_, name, "callable.capture") != 0
+    return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.capture", "class", "class", "value", "serial") != 0
 end: lm_trans_callable_descriptor_allows_capture
 
 fn: lm_trans_callable_descriptor_uses_closure_struct (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int

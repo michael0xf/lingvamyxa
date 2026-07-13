@@ -3,7 +3,7 @@ import: "lm2/own.lm2"
 L4:
     table:
         name: `callable.capture`
-        columns((class: class) (int: value))
+        columns((class: class) (serial: value))
         rows:
                  AddX 1
     end: `callable.capture`
