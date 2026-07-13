@@ -1,0 +1,141 @@
+L4:
+    table:
+        name: unit
+        columns((class: class) (class: backend) (node: payload))
+        rows:
+                 lm_test_unit_source           c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_source () int
+                             return: 11
+                         end: lm_test_unit_source
+                     end: external
+                 end: L2
+                 lm_test_unit_payload_overlay  c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_payload_overlay () int
+                             return: 12
+                         end: lm_test_unit_payload_overlay
+                     end: external
+                 end: L2
+                 lm_test_unit_backend_overlay  c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_backend_overlay () int
+                             return: 13
+                         end: lm_test_unit_backend_overlay
+                     end: external
+                 end: L2
+                 lm_test_unit_backend_join     c.other
+                 L2:
+                     external:
+                         fn: lm_test_unit_backend_join () int
+                             return: 14
+                         end: lm_test_unit_backend_join
+                     end: external
+                 end: L2
+                 lm_test_unit_duplicate        c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_duplicate () int
+                             return: 15
+                         end: lm_test_unit_duplicate
+                     end: external
+                 end: L2
+                 lm_test_unit_late_none        c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_late_none () int
+                             return: 17
+                         end: lm_test_unit_late_none
+                     end: external
+                 end: L2
+                 lm_test_unit_text_overlay     c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_text_overlay () int
+                             return: 18
+                         end: lm_test_unit_text_overlay
+                     end: external
+                 end: L2
+                 lm_test_unit_late_none        None  None
+                 lm_test_unit_none             None  None
+    end: unit
+
+    table:
+        name: unit
+        columns((class: class) (class: backend) (node: payload))
+        rows:
+                 lm_test_unit_duplicate  c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_duplicate () int
+                             return: 16
+                         end: lm_test_unit_duplicate
+                     end: external
+                 end: L2
+    end: unit
+
+    table:
+        name: `unit.payload`
+        columns((class: class) (node: payload))
+        rows:
+                 lm_test_unit_payload_overlay
+                 L2:
+                     external:
+                         fn: lm_test_unit_payload_overlay () int
+                             return: 22
+                         end: lm_test_unit_payload_overlay
+                     end: external
+                 end: L2
+                 lm_test_unit_split
+                 L2:
+                     external:
+                         fn: lm_test_unit_split () int
+                             return: 23
+                         end: lm_test_unit_split
+                     end: external
+                 end: L2
+    end: `unit.payload`
+
+    table:
+        name: `unit.payload`
+        columns((class: class) (char: payload))
+        rows:
+                 lm_test_unit_text_overlay  "static int lm_test_unit_text_overlay(void) { return 24; }"
+    end: `unit.payload`
+
+    table:
+        name: `unit.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 lm_test_unit_backend_overlay  c.other
+                 lm_test_unit_backend_join     c.static-unit
+                 lm_test_unit_split            c.static-unit
+    end: `unit.backend`
+end: L4
+
+unit
+
+external:
+    fn: main () int
+        if: c.lm_test_unit_source() != 11
+            return: 1
+        if: c.lm_test_unit_payload_overlay() != 22
+            return: 2
+        if: c.lm_test_unit_backend_overlay() != 13
+            return: 3
+        if: c.lm_test_unit_backend_join() != 14
+            return: 4
+        if: c.lm_test_unit_duplicate() != 16
+            return: 5
+        if: c.lm_test_unit_late_none() != 17
+            return: 6
+        if: c.lm_test_unit_split() != 23
+            return: 7
+        if: c.lm_test_unit_text_overlay() != 24
+            return: 8
+        return: 0
+    end: main
+end: external

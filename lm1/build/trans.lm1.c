@@ -3466,7 +3466,7 @@ static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_any(const L
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_return_row(const LmOwnPtrStack *stack);
 static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity, size_t *out_count, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name);
 static int lm_trans_emit_abi_params(FILE *file, LmTransAbiParam **params, size_t count);
-static int lm_trans_alias_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const LmTableCell *source_backend_cell);
+static int lm_trans_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const char *backend_payload, const LmTableCell *source_backend_cell);
 static const char * lm_trans_alias_source_target(const LmTransNamespace *namespace_, const char *name, const LmOwnPtrStack *facade_backend_rows, const LmTransRegistryFact *facade_target_row, const LmTransRegistryFact *facade_address_depth_row, const LmTransRegistryFact *facade_const_row, size_t *out_address_depth, size_t *out_const_flag);
 static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace *namespace_);
@@ -3495,6 +3495,7 @@ static int lm_trans_emit_l4_function_pointer_type_typedefs(FILE *file, const LmT
 static int lm_trans_emit_l4_fn_descriptors(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_guard_markers(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_extern_c_markers(FILE *file, const LmTransNamespace *namespace_);
+static const LmP0Node * lm_trans_unit_source_payload_node(const LmTransNamespace *namespace_, const char *name, const LmOwnPtrStack *facade_backend_rows, const LmTransRegistryFact *facade_payload_row);
 static int lm_trans_emit_l4_units(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_registry_init(void);
 static void lm_trans_registry_destroy(void);
@@ -30824,16 +30825,16 @@ static int lm_trans_emit_abi_params(FILE *file, LmTransAbiParam **params, size_t
     return 0;
 }
 
-static int lm_trans_alias_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const LmTableCell *source_backend_cell) {
+static int lm_trans_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const char *backend_payload, const LmTableCell *source_backend_cell) {
     size_t i;
     const LmTransRegistryFact * row;
-    if (facade_backend_rows == 0 || name == 0 || source_backend_cell == 0 || source_backend_cell -> value == 0 || source_backend_cell -> source == 0 || strcmp(source_backend_cell -> value, "c.typedef") != 0) {
+    if (facade_backend_rows == 0 || name == 0 || backend_payload == 0 || source_backend_cell == 0 || source_backend_cell -> value == 0 || source_backend_cell -> source == 0 || strcmp(source_backend_cell -> value, backend_payload) != 0) {
         return 0;
     }
     i = 0U;
     while (i < facade_backend_rows -> count) {
         row = lm_own_ptr_stack_at(facade_backend_rows, i);
-        if (row != 0 && source_backend_cell -> source == row && row -> key != 0 && strcmp(row -> key, name) == 0 && row -> payload != 0 && strcmp(row -> payload, "c.typedef") == 0) {
+        if (row != 0 && source_backend_cell -> source == row && row -> key != 0 && strcmp(row -> key, name) == 0 && row -> payload != 0 && strcmp(row -> payload, backend_payload) == 0) {
             return 1;
         }
         i = i + 1U;
@@ -30895,7 +30896,7 @@ static const char * lm_trans_alias_source_target(const LmTransNamespace *namespa
                     source_target_cell = lm_table_row_cell_at(source_row, 2U);
                     source_address_depth_cell = lm_table_row_cell_at(source_row, 3U);
                     source_const_cell = lm_table_row_cell_at(source_row, 4U);
-                    source_usable = source_key_cell != 0 && source_key_cell -> value != 0 && strcmp(source_key_cell -> value, name) == 0 && lm_trans_alias_source_backend_is_witness(facade_backend_rows, name, source_backend_cell) != 0 && source_target_cell != 0 && source_target_cell -> value != 0 && source_target_cell -> source == facade_target_row && strcmp(source_target_cell -> value, facade_target_row -> payload) == 0 && source_address_depth_cell != 0 && source_const_cell != 0;
+                    source_usable = source_key_cell != 0 && source_key_cell -> value != 0 && strcmp(source_key_cell -> value, name) == 0 && lm_trans_source_backend_is_witness(facade_backend_rows, name, "c.typedef", source_backend_cell) != 0 && source_target_cell != 0 && source_target_cell -> value != 0 && source_target_cell -> source == facade_target_row && strcmp(source_target_cell -> value, facade_target_row -> payload) == 0 && source_address_depth_cell != 0 && source_const_cell != 0;
                     if (source_usable != 0) {
                         source_address_depth = 0U;
                         source_const_flag = 0U;
@@ -31703,11 +31704,71 @@ static int lm_trans_emit_l4_extern_c_markers(FILE *file, const LmTransNamespace 
     return 0;
 }
 
+static const LmP0Node * lm_trans_unit_source_payload_node(const LmTransNamespace *namespace_, const char *name, const LmOwnPtrStack *facade_backend_rows, const LmTransRegistryFact *facade_payload_row) {
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_backend_column;
+    const LmTableColumnDescriptor * source_payload_column;
+    const LmTableCell * source_key_cell;
+    const LmTableCell * source_backend_cell;
+    const LmTableCell * source_payload_cell;
+    const char *source_payload_descriptor;
+    const LmP0Node * result;
+    size_t descriptor_index;
+    size_t row_index;
+    int source_usable;
+    if (facade_payload_row == 0 || facade_payload_row -> payload != 0 || facade_payload_row -> payload_node == 0) {
+        return 0;
+    }
+    result = facade_payload_row -> payload_node;
+    if (name == 0 || facade_backend_rows == 0 || lm_trans_registry_view_parity_enabled() == 0) {
+        return result;
+    }
+    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
+        return result;
+    }
+    descriptor_index = lm_registry_view_source_table_count(lm_trans_registry->view);
+    while (descriptor_index > 0U) {
+        descriptor_index = descriptor_index - 1U;
+        source_table = lm_registry_view_source_table_at(lm_trans_registry->view, descriptor_index);
+        source_usable = source_table != 0 && source_table -> name != 0 && strcmp(source_table -> name, "unit") == 0 && lm_table_descriptor_column_count(source_table) == 3U;
+        if (source_usable != 0) {
+            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+            source_backend_column = lm_table_descriptor_column_at(source_table, 1U);
+            source_payload_column = lm_table_descriptor_column_at(source_table, 2U);
+            source_payload_descriptor = lm_table_column_descriptor_descriptor_at(source_payload_column, 0U);
+            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_backend_column != 0 && source_backend_column -> name != 0 && strcmp(source_backend_column -> name, "backend") == 0 && source_payload_column != 0 && source_payload_column -> name != 0 && strcmp(source_payload_column -> name, "payload") == 0 && lm_table_column_descriptor_descriptor_count(source_payload_column) == 1U && source_payload_descriptor != 0 && strcmp(source_payload_descriptor, "node") == 0;
+        }
+        if (source_usable != 0) {
+            row_index = lm_table_descriptor_materialized_row_count(source_table);
+            while (row_index > 0U) {
+                row_index = row_index - 1U;
+                source_row = lm_table_descriptor_materialized_row_at(source_table, row_index);
+                if (source_row != 0 && lm_table_row_cell_count(source_row) == 3U) {
+                    source_key_cell = lm_table_row_cell_at(source_row, 0U);
+                    source_backend_cell = lm_table_row_cell_at(source_row, 1U);
+                    source_payload_cell = lm_table_row_cell_at(source_row, 2U);
+                    source_usable = source_key_cell != 0 && source_key_cell -> value != 0 && strcmp(source_key_cell -> value, name) == 0 && lm_trans_source_backend_is_witness(facade_backend_rows, name, "c.static-unit", source_backend_cell) != 0 && source_payload_cell != 0 && source_payload_cell -> explicit_none == 0 && source_payload_cell -> value == 0 && source_payload_cell -> node != 0 && source_payload_cell -> source == facade_payload_row && source_payload_cell -> node == facade_payload_row -> payload_node;
+                    if (source_usable != 0) {
+                        if (lm_trans_registry_view_is_selected() != 0) {
+                            return (((const LmP0Node *)source_payload_cell -> node));
+                        }
+                        return result;
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
 static int lm_trans_emit_l4_units(FILE *file, const LmTransNamespace *namespace_) {
     LmOwnPtrStack * names;
     const LmOwnPtrStack * backend_rows;
     const LmOwnPtrStack * payload_rows;
     LmTransRegistryFact * payload_row;
+    const LmP0Node * payload_node;
     const char *name;
     size_t i;
     backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("unit"), "backend");
@@ -31732,8 +31793,9 @@ static int lm_trans_emit_l4_units(FILE *file, const LmTransNamespace *namespace_
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
-        if (payload_row -> payload_node != 0) {
-            if (lm_trans_emit_l4_payload_node(file, payload_row -> payload_node, (((LmTransNamespace *)namespace_))) != 0 || lm_trans_put(file, "\n") != 0) {
+        payload_node = lm_trans_unit_source_payload_node(namespace_, name, backend_rows, payload_row);
+        if (payload_node != 0) {
+            if (lm_trans_emit_l4_payload_node(file, payload_node, (((LmTransNamespace *)namespace_))) != 0 || lm_trans_put(file, "\n") != 0) {
                 lm_trans_ptr_stack_delete(&names);
                 return 1;
             }
