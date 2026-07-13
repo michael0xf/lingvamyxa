@@ -3440,7 +3440,9 @@ static void lm_trans_l4_abi_params_delete(LmTransAbiParam **params, size_t capac
 static LmTransLayoutField * * lm_trans_layout_fields_new(size_t capacity);
 static void lm_trans_layout_fields_delete(LmTransLayoutField **fields, size_t capacity);
 static int lm_trans_registry_collect_layout_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_);
-static int lm_trans_collect_layout_field_common(const char *layout_name, const char *field_name, const LmOwnPtrStack *index_rows, const LmOwnPtrStack *address_depth_rows, const LmOwnPtrStack *const_rows, const LmOwnPtrStack *array_count_rows, LmTransLayoutField *field);
+static int lm_trans_collect_layout_field_common(const char *layout_name, const char *field_name, const LmOwnPtrStack *index_rows, const LmOwnPtrStack *address_depth_rows, const LmOwnPtrStack *const_rows, const LmOwnPtrStack *array_count_rows, LmTransLayoutField *field, LmTransRegistryFact **out_index_row, LmTransRegistryFact **out_address_depth_row, LmTransRegistryFact **out_const_row, LmTransRegistryFact **out_array_count_row);
+static const LmTableRow * lm_trans_layout_source_row_for_fact(const LmTableDescriptor *source_table, size_t *source_row_index, const LmTransRegistryFact *facade_row);
+static void lm_trans_collect_layout_field_source_row(const LmTableDescriptor *source_table, const LmTableRow *source_row, const char *field_name, const LmTransRegistryFact *facade_index_row, const LmTransRegistryFact *facade_address_depth_row, const LmTransRegistryFact *facade_const_row, const LmTransRegistryFact *facade_array_count_row, LmTransLayoutField *field);
 static int lm_trans_collect_layout_fields(const char *layout_name, const LmTransNamespace *namespace_, LmTransLayoutField **fields, size_t capacity, size_t *out_count);
 static int lm_trans_sort_layout_fields(LmTransLayoutField **fields, size_t field_count);
 static int lm_trans_emit_layout_field(FILE *file, const LmTransLayoutField *field, const LmTransNamespace *namespace_, unsigned indent);
@@ -29659,13 +29661,25 @@ static int lm_trans_registry_collect_layout_names(LmOwnPtrStack *names, const Lm
     return 0;
 }
 
-static int lm_trans_collect_layout_field_common(const char *layout_name, const char *field_name, const LmOwnPtrStack *index_rows, const LmOwnPtrStack *address_depth_rows, const LmOwnPtrStack *const_rows, const LmOwnPtrStack *array_count_rows, LmTransLayoutField *field) {
+static int lm_trans_collect_layout_field_common(const char *layout_name, const char *field_name, const LmOwnPtrStack *index_rows, const LmOwnPtrStack *address_depth_rows, const LmOwnPtrStack *const_rows, const LmOwnPtrStack *array_count_rows, LmTransLayoutField *field, LmTransRegistryFact **out_index_row, LmTransRegistryFact **out_address_depth_row, LmTransRegistryFact **out_const_row, LmTransRegistryFact **out_array_count_row) {
     size_t index;
     LmTransRegistryFact * index_row;
     LmTransRegistryFact * address_depth_row;
     LmTransRegistryFact * const_row;
     LmTransRegistryFact * array_count_row;
     LmP0Text * field_text;
+    if (out_index_row != 0) {
+        out_index_row[0] = 0;
+    }
+    if (out_address_depth_row != 0) {
+        out_address_depth_row[0] = 0;
+    }
+    if (out_const_row != 0) {
+        out_const_row[0] = 0;
+    }
+    if (out_array_count_row != 0) {
+        out_array_count_row[0] = 0;
+    }
     if (layout_name == 0 || field_name == 0 || field == 0) {
         return 1;
     }
@@ -29677,6 +29691,18 @@ static int lm_trans_collect_layout_field_common(const char *layout_name, const c
     address_depth_row = lm_trans_registry_relation_stack_latest_row(address_depth_rows, field_text);
     const_row = lm_trans_registry_relation_stack_latest_row(const_rows, field_text);
     array_count_row = lm_trans_registry_relation_stack_latest_row(array_count_rows, field_text);
+    if (out_index_row != 0) {
+        out_index_row[0] = index_row;
+    }
+    if (out_address_depth_row != 0) {
+        out_address_depth_row[0] = address_depth_row;
+    }
+    if (out_const_row != 0) {
+        out_const_row[0] = const_row;
+    }
+    if (out_array_count_row != 0) {
+        out_array_count_row[0] = array_count_row;
+    }
     if (index_row == 0 || lm_trans_parse_size_payload(index_row -> payload, &index) == 0) {
         fprintf(stderr, "trans L4 layout error: field %s.%s requires field.index\n", layout_name, field_name);
         lm_trans_l4_text_view_delete(&field_text);
@@ -29710,9 +29736,157 @@ static int lm_trans_collect_layout_field_common(const char *layout_name, const c
     return 0;
 }
 
+static const LmTableRow * lm_trans_layout_source_row_for_fact(const LmTableDescriptor *source_table, size_t *source_row_index, const LmTransRegistryFact *facade_row) {
+    const LmTableRow * source_row;
+    const LmTableCell * source_field_class_cell;
+    size_t row_count;
+    if (source_table == 0 || source_row_index == 0 || facade_row == 0) {
+        return 0;
+    }
+    row_count = lm_table_descriptor_materialized_row_count(source_table);
+    while (source_row_index[0] < row_count) {
+        source_row = lm_table_descriptor_materialized_row_at(source_table, source_row_index[0]);
+        source_field_class_cell = lm_table_row_cell_at(source_row, 1U);
+        if (source_field_class_cell != 0 && source_field_class_cell -> source == facade_row) {
+            source_row_index[0] = source_row_index[0] + 1U;
+            return source_row;
+        }
+        if (source_field_class_cell != 0 && source_field_class_cell -> source != 0) {
+            return 0;
+        }
+        source_row_index[0] = source_row_index[0] + 1U;
+    }
+    return 0;
+}
+
+static void lm_trans_collect_layout_field_source_row(const LmTableDescriptor *source_table, const LmTableRow *source_row, const char *field_name, const LmTransRegistryFact *facade_index_row, const LmTransRegistryFact *facade_address_depth_row, const LmTransRegistryFact *facade_const_row, const LmTransRegistryFact *facade_array_count_row, LmTransLayoutField *field) {
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_field_class_column;
+    const LmTableColumnDescriptor * source_field_index_column;
+    const LmTableColumnDescriptor * source_address_depth_column;
+    const LmTableColumnDescriptor * source_const_column;
+    const LmTableCell * source_key_cell;
+    const LmTableCell * source_field_class_cell;
+    const LmTableCell * source_field_index_cell;
+    const LmTableCell * source_address_depth_cell;
+    const LmTableCell * source_const_cell;
+    const char *source_key;
+    const char *source_field_class;
+    const char *source_field_index_payload;
+    const char *source_address_depth_payload;
+    const char *source_const_payload;
+    size_t source_column_count;
+    size_t source_field_index;
+    size_t source_address_depth;
+    size_t source_const_flag;
+    int source_same;
+    int source_usable;
+    if (source_table == 0 || source_row == 0 || field_name == 0 || field == 0 || field -> is_union || field -> has_array_count) {
+        return;
+    }
+    if (facade_index_row == 0 || facade_index_row -> payload == 0 || facade_array_count_row != 0) {
+        return;
+    }
+    source_key = 0;
+    source_field_class = 0;
+    source_field_index_payload = 0;
+    source_address_depth_payload = 0;
+    source_const_payload = 0;
+    source_field_index = 0U;
+    source_address_depth = 0U;
+    source_const_flag = 0U;
+    source_usable = 0;
+    if (source_row != 0) {
+        source_column_count = lm_table_descriptor_column_count(source_table);
+        source_usable = (source_column_count == 3U || source_column_count == 4U || source_column_count == 5U) && lm_table_row_cell_count(source_row) == source_column_count;
+        if (source_usable != 0) {
+            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+            source_field_class_column = lm_table_descriptor_column_at(source_table, 1U);
+            source_field_index_column = lm_table_descriptor_column_at(source_table, 2U);
+            source_address_depth_column = 0;
+            source_const_column = 0;
+            if (source_column_count >= 4U) {
+                source_address_depth_column = lm_table_descriptor_column_at(source_table, 3U);
+            }
+            if (source_column_count == 5U) {
+                source_const_column = lm_table_descriptor_column_at(source_table, 4U);
+            }
+            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_field_class_column != 0 && source_field_class_column -> name != 0 && strcmp(source_field_class_column -> name, "field.class") == 0 && source_field_index_column != 0 && source_field_index_column -> name != 0 && strcmp(source_field_index_column -> name, "field.index") == 0;
+            if (source_usable != 0 && source_address_depth_column != 0) {
+                source_usable = source_address_depth_column -> name != 0 && strcmp(source_address_depth_column -> name, "field.address-depth") == 0;
+            }
+            if (source_usable != 0 && source_const_column != 0) {
+                source_usable = source_const_column -> name != 0 && strcmp(source_const_column -> name, "field.const") == 0;
+            }
+        }
+        if (source_usable != 0) {
+            source_key_cell = lm_table_row_cell_at(source_row, 0U);
+            source_field_class_cell = lm_table_row_cell_at(source_row, 1U);
+            source_field_index_cell = lm_table_row_cell_at(source_row, 2U);
+            source_address_depth_cell = 0;
+            source_const_cell = 0;
+            if (source_column_count >= 4U) {
+                source_address_depth_cell = lm_table_row_cell_at(source_row, 3U);
+            }
+            if (source_column_count == 5U) {
+                source_const_cell = lm_table_row_cell_at(source_row, 4U);
+            }
+            source_usable = source_key_cell != 0 && source_key_cell -> value != 0 && source_field_class_cell != 0 && source_field_class_cell -> value != 0 && source_field_index_cell != 0 && source_field_index_cell -> value != 0;
+            if (source_usable != 0 && source_address_depth_column != 0) {
+                source_usable = source_address_depth_cell != 0;
+            }
+            if (source_usable != 0 && source_const_column != 0) {
+                source_usable = source_const_cell != 0;
+            }
+            if (source_usable != 0) {
+                source_key = source_key_cell -> value;
+                source_field_class = source_field_class_cell -> value;
+                source_field_index_payload = source_field_index_cell -> value;
+                if (source_address_depth_cell != 0) {
+                    source_address_depth_payload = source_address_depth_cell -> value;
+                }
+                if (source_const_cell != 0) {
+                    source_const_payload = source_const_cell -> value;
+                }
+                if (lm_trans_parse_size_payload(source_field_index_payload, &source_field_index) == 0) {
+                    source_usable = 0;
+                }
+                if (source_usable != 0 && source_address_depth_payload != 0 && lm_trans_parse_size_payload(source_address_depth_payload, &source_address_depth) == 0) {
+                    source_usable = 0;
+                }
+                if (source_usable != 0 && source_const_payload != 0 && lm_trans_parse_size_payload(source_const_payload, &source_const_flag) == 0) {
+                    source_usable = 0;
+                }
+            }
+        }
+    }
+    if (source_usable == 0) {
+        return;
+    }
+    source_same = strcmp(source_key, field_name) == 0 && strcmp(source_field_class, field -> class_name) == 0 && strcmp(source_field_index_payload, facade_index_row -> payload) == 0 && (source_address_depth_payload == 0) == (facade_address_depth_row == 0) && (source_const_payload == 0) == (facade_const_row == 0);
+    if (source_same != 0 && source_address_depth_payload != 0) {
+        source_same = facade_address_depth_row -> payload != 0 && strcmp(source_address_depth_payload, facade_address_depth_row -> payload) == 0;
+    }
+    if (source_same != 0 && source_const_payload != 0) {
+        source_same = facade_const_row -> payload != 0 && strcmp(source_const_payload, facade_const_row -> payload) == 0;
+    }
+    if (source_same != 0 && lm_trans_registry_view_is_selected() != 0) {
+        field->name = source_key;
+        field->class_name = source_field_class;
+        field->index = source_field_index;
+        field->address_depth = source_address_depth;
+        field->array_count = 0U;
+        field->is_const = source_const_flag != 0U;
+        field->has_array_count = 0;
+        field->is_union = 0;
+        field->union_layout_name = 0;
+    }
+}
+
 static int lm_trans_collect_layout_fields(const char *layout_name, const LmTransNamespace *namespace_, LmTransLayoutField **fields, size_t capacity, size_t *out_count) {
     size_t i;
     size_t field_count;
+    size_t source_row_index;
     LmTransRegistryFact * row;
     LmTransLayoutField * field;
     const LmOwnPtrStack * class_rows;
@@ -29721,6 +29895,12 @@ static int lm_trans_collect_layout_fields(const char *layout_name, const LmTrans
     const LmOwnPtrStack * address_depth_rows;
     const LmOwnPtrStack * const_rows;
     const LmOwnPtrStack * array_count_rows;
+    const LmTableDescriptor * source_table;
+    LmTransRegistryFact * facade_index_row;
+    LmTransRegistryFact * facade_address_depth_row;
+    LmTransRegistryFact * facade_const_row;
+    LmTransRegistryFact * facade_array_count_row;
+    const LmTableRow * source_row;
     LmP0Text * layout_text;
     if (layout_name == 0 || fields == 0 || out_count == 0) {
         return 1;
@@ -29735,12 +29915,17 @@ static int lm_trans_collect_layout_fields(const char *layout_name, const LmTrans
     address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.address-depth");
     const_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.const");
     array_count_rows = lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.array-count");
+    source_table = 0;
+    if (lm_trans_registry_view_parity_enabled() != 0 && (namespace_ == 0 || namespace_ -> registry_identifiers == 0 || namespace_ -> registry_identifiers == lm_trans_registry->identifiers)) {
+        source_table = lm_registry_view_find_source_table_slice(lm_trans_registry->view, layout_name, strlen(layout_name));
+    }
     if (class_rows == 0 && union_rows == 0) {
         fprintf(stderr, "trans L4 layout error: layout %s requires field.class or field.union facts\n", layout_name);
         lm_trans_l4_text_view_delete(&layout_text);
         return 1;
     }
     field_count = 0U;
+    source_row_index = 0U;
     if (class_rows != 0) {
         i = 0U;
         while (i < class_rows -> count) {
@@ -29752,7 +29937,7 @@ static int lm_trans_collect_layout_fields(const char *layout_name, const LmTrans
                     return 1;
                 }
                 field = fields[field_count];
-                if (lm_trans_collect_layout_field_common(layout_name, row -> key, index_rows, address_depth_rows, const_rows, array_count_rows, field) != 0) {
+                if (lm_trans_collect_layout_field_common(layout_name, row -> key, index_rows, address_depth_rows, const_rows, array_count_rows, field, &facade_index_row, &facade_address_depth_row, &facade_const_row, &facade_array_count_row) != 0) {
                     lm_trans_l4_text_view_delete(&layout_text);
                     return 1;
                 }
@@ -29762,6 +29947,8 @@ static int lm_trans_collect_layout_fields(const char *layout_name, const LmTrans
                     lm_trans_l4_text_view_delete(&layout_text);
                     return 1;
                 }
+                source_row = lm_trans_layout_source_row_for_fact(source_table, &source_row_index, row);
+                lm_trans_collect_layout_field_source_row(source_table, source_row, row -> key, facade_index_row, facade_address_depth_row, facade_const_row, facade_array_count_row, field);
                 field_count = field_count + 1U;
             }
             i = i + 1U;
@@ -29778,7 +29965,7 @@ static int lm_trans_collect_layout_fields(const char *layout_name, const LmTrans
                     return 1;
                 }
                 field = fields[field_count];
-                if (lm_trans_collect_layout_field_common(layout_name, row -> key, index_rows, address_depth_rows, const_rows, array_count_rows, field) != 0) {
+                if (lm_trans_collect_layout_field_common(layout_name, row -> key, index_rows, address_depth_rows, const_rows, array_count_rows, field, 0, 0, 0, 0) != 0) {
                     lm_trans_l4_text_view_delete(&layout_text);
                     return 1;
                 }

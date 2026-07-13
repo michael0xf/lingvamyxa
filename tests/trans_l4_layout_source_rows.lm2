@@ -1,0 +1,129 @@
+L4:
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestSourceOrdered    c.struct
+                 LmTestSourceDepth      c.struct
+                 LmTestSourceQualified  c.struct
+                 LmTestSourceOverlay    c.struct
+                 LmTestSourceInner      c.struct
+                 LmTestSourceOuter      c.struct
+    end: `layout.backend`
+
+    table:
+        name: LmTestSourceOrdered
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 late   char  1
+                 early  char  0
+    end: LmTestSourceOrdered
+
+    table:
+        name: LmTestSourceDepth
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+        rows:
+                 value  int   0  0
+                 next   char  1  1
+    end: LmTestSourceDepth
+
+    table:
+        name: LmTestSourceQualified
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+        rows:
+                 text   char  0  1     1
+                 value  int   1  None  None
+    end: LmTestSourceQualified
+
+    table:
+        name: LmTestSourceOverlay
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 first   char  0
+                 middle  char  1
+    end: LmTestSourceOverlay
+
+    table:
+        name: `LmTestSourceOverlay.field.class`
+        columns((class: class) (class: field))
+        rows:
+                 tail  char
+    end: `LmTestSourceOverlay.field.class`
+
+    table:
+        name: `LmTestSourceOverlay.field.index`
+        columns((class: class) (size_t: index))
+        rows:
+                 tail   2
+                 first  3
+    end: `LmTestSourceOverlay.field.index`
+
+    table:
+        name: LmTestSourceInner
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestSourceInner
+
+    table:
+        name: `LmTestSourceOuter.field.union`
+        columns((class: class) (class: union))
+        rows:
+                 items  LmTestSourceInner
+    end: `LmTestSourceOuter.field.union`
+
+    table:
+        name: `LmTestSourceOuter.field.index`
+        columns((class: class) (size_t: index))
+        rows:
+                 items  0
+    end: `LmTestSourceOuter.field.index`
+
+    table:
+        name: `LmTestSourceOuter.field.array-count`
+        columns((class: class) (size_t: count))
+        rows:
+                 items  2
+    end: `LmTestSourceOuter.field.array-count`
+end: L4
+
+layout
+
+L1:
+===
+#include <stddef.h>
+#include <string.h>
+
+static int lm_test_layout_source_rows(void) {
+    LmTestSourceDepth depth = { 7, 0 };
+    LmTestSourceQualified qualified = { "ok", 11 };
+    LmTestSourceOuter outer = { 0 };
+
+    outer.items[1].value = 13;
+    if (offsetof(LmTestSourceOrdered, early) != 0U ||
+        offsetof(LmTestSourceOrdered, late) != 1U) {
+        return 1;
+    }
+    if (depth.value != 7 || depth.next != 0) {
+        return 2;
+    }
+    if (strcmp(qualified.text, "ok") != 0 || qualified.value != 11) {
+        return 3;
+    }
+    if (offsetof(LmTestSourceOverlay, middle) != 0U ||
+        offsetof(LmTestSourceOverlay, tail) != 1U ||
+        offsetof(LmTestSourceOverlay, first) != 2U) {
+        return 4;
+    }
+    if (outer.items[1].value != 13) {
+        return 5;
+    }
+    return 0;
+}
+===
+
+external:
+    fn: main () int
+        return: c.lm_test_layout_source_rows()
+    end: main
+end: external
