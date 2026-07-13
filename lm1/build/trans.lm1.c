@@ -2810,8 +2810,7 @@ static int lm_trans_printf_format_is_flag(char ch);
 static int lm_trans_profile_rule_enabled(const LmTransNamespace *namespace_, const char *rule);
 static int lm_trans_profile_validator_enabled(const LmTransNamespace *namespace_, const char *rule, const char *binding_name);
 static const char * lm_trans_printf_conversion_rule_lookup(const LmTransNamespace *namespace_, char conversion, char modifier, const char *relation);
-static const char * lm_trans_printf_expected_class(const LmTransNamespace *namespace_, char conversion, char modifier);
-static const char * lm_trans_printf_profile_rule(const LmTransNamespace *namespace_, char conversion, char modifier);
+static void lm_trans_printf_conversion_rule_resolve(const LmTransNamespace *namespace_, char conversion, char modifier, const char **out_expected, const char **out_profile);
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame *frame, const LmTransNamespace *namespace_, size_t arg_index, const char *expected_class);
 static int lm_trans_validate_c_printf_call(const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_validate_profile_c_printf_call(const LmP0Frame *frame, const LmTransNamespace *namespace_);
@@ -12586,25 +12585,93 @@ static const char * lm_trans_printf_conversion_rule_lookup(const LmTransNamespac
     return value;
 }
 
-static const char * lm_trans_printf_expected_class(const LmTransNamespace *namespace_, char conversion, char modifier) {
-    const char *expected;
-    expected = lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.expected");
-    if (expected != 0) {
-        return expected;
+static void lm_trans_printf_conversion_rule_resolve(const LmTransNamespace *namespace_, char conversion, char modifier, const char **out_expected, const char **out_profile) {
+    char key_buffer[5];
+    LmP0Text * key;
+    const char *facade_expected;
+    const char *facade_profile;
+    const char *source_expected;
+    const char *source_profile;
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_expected_column;
+    const LmTableColumnDescriptor * source_profile_column;
+    const LmTableCell * source_expected_cell;
+    const LmTableCell * source_profile_cell;
+    size_t index;
+    int source_covered;
+    int source_same;
+    int source_usable;
+    if (out_expected == 0 || out_profile == 0) {
+        return;
     }
-    return lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.argument.class");
-}
-
-static const char * lm_trans_printf_profile_rule(const LmTransNamespace *namespace_, char conversion, char modifier) {
-    const char *rule;
-    rule = lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.profile");
-    if (rule != 0) {
-        return rule;
+    facade_expected = lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.expected");
+    if (facade_expected == 0) {
+        facade_expected = lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.argument.class");
     }
-    if (lm_trans_printf_expected_class(namespace_, conversion, modifier) != 0) {
-        return "c99.format-mismatch";
+    facade_profile = lm_trans_printf_conversion_rule_lookup(namespace_, conversion, modifier, "printf.conversion.rule.profile");
+    if (facade_profile == 0 && facade_expected != 0) {
+        facade_profile = "c99.format-mismatch";
     }
-    return 0;
+    out_expected[0] = facade_expected;
+    out_profile[0] = facade_profile;
+    if (lm_trans_registry_view_parity_enabled() == 0) {
+        return;
+    }
+    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
+        return;
+    }
+    key = lm_trans_text_ref_new_cstr("");
+    if (key == 0) {
+        return;
+    }
+    index = 0U;
+    key_buffer[index] = '%';
+    index = index + 1U;
+    if (modifier != '\0') {
+        key_buffer[index] = modifier;
+        index = index + 1U;
+    }
+    key_buffer[index] = conversion;
+    index = index + 1U;
+    key_buffer[index] = '\0';
+    key->data = key_buffer;
+    key->length = index;
+    source_covered = 0;
+    source_table = 0;
+    source_row = lm_trans_registry_source_table_lookup_row(key, "printf.conversion.rule", &source_table, &source_covered);
+    source_expected = 0;
+    source_profile = 0;
+    source_usable = 0;
+    if (source_row != 0 && lm_table_descriptor_column_count(source_table) == 3U && lm_table_row_cell_count(source_row) == 3U) {
+        source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+        source_expected_column = lm_table_descriptor_column_at(source_table, 1U);
+        source_profile_column = lm_table_descriptor_column_at(source_table, 2U);
+        source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_expected_column != 0 && source_expected_column -> name != 0 && strcmp(source_expected_column -> name, "expected") == 0 && source_profile_column != 0 && source_profile_column -> name != 0 && strcmp(source_profile_column -> name, "profile") == 0;
+        if (source_usable != 0) {
+            source_expected_cell = lm_table_row_cell_at(source_row, 1U);
+            source_profile_cell = lm_table_row_cell_at(source_row, 2U);
+            if (source_expected_cell != 0) {
+                source_expected = source_expected_cell -> value;
+            }
+            if (source_profile_cell != 0) {
+                source_profile = source_profile_cell -> value;
+            }
+            source_usable = source_expected != 0 && source_profile != 0;
+        }
+    }
+    if (source_covered != 0 && source_usable != 0) {
+        if (facade_expected == 0 || facade_profile == 0) {
+            lm_trans_registry_view_parity_fail("source printf conversion row", "printf.conversion.rule");
+        }
+        source_same = strcmp(source_expected, facade_expected) == 0 && strcmp(source_profile, facade_profile) == 0;
+        if (lm_trans_registry_view_is_selected() != 0 && source_same != 0) {
+            out_expected[0] = source_expected;
+            out_profile[0] = source_profile;
+        }
+    }
+    lm_trans_text_ref_destroy(&key);
 }
 
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame *frame, const LmTransNamespace *namespace_, size_t arg_index, const char *expected_class) {
@@ -12749,8 +12816,9 @@ static int lm_trans_validate_c_printf_call(const LmP0Frame *frame, const LmTrans
         }
         conversion = format_payload -> data[i];
         i = i + 1U;
-        expected = lm_trans_printf_expected_class(namespace_, conversion, modifier);
-        profile_rule = lm_trans_printf_profile_rule(namespace_, conversion, modifier);
+        expected = 0;
+        profile_rule = 0;
+        lm_trans_printf_conversion_rule_resolve(namespace_, conversion, modifier, &expected, &profile_rule);
         if (conversion != 'n') {
             if (profile_rule == 0 || lm_trans_profile_rule_enabled(namespace_, profile_rule)) {
                 status = lm_trans_validate_printf_expected_arg(frame, namespace_, arg_index, expected);
