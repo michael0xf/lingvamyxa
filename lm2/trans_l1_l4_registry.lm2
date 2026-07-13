@@ -1027,6 +1027,7 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
     size_t: param_count
     const: @: char class_kind
     int: is_sub
+    int: is_external
     int: status
 
     if: name = 0 || error_name = 0
@@ -1034,6 +1035,7 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
 
     class_kind: lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "class.kind")
     is_sub: class_kind != 0 && c.strcmp(class_kind, "procedure") = 0
+    is_external: lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "fn.external") != 0
 
     param_capacity: 256U
     params: lm_trans_l4_abi_params_new(param_capacity)
@@ -1043,13 +1045,21 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
     status: 0
     if: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0
         status: 1
-    if: status = 0 && lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "fn.external") = 0 && lm_trans_put(file, "static ") != 0
+    if: status = 0 && is_external = 0 && lm_trans_put(file, "static ") != 0
         status: 1
     if: status = 0 && is_sub && lm_trans_put(file, "void") != 0
         status: 1
     if: status = 0 && is_sub = 0 && lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0
         status: 1
-    if: status = 0 && (lm_trans_put(file, " ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, "(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0)
+    if: status = 0 && lm_trans_put(file, " ") != 0
+        status: 1
+    if: status = 0 && is_external && lm_trans_put(file, "(") != 0
+        status: 1
+    if: status = 0 && lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0
+        status: 1
+    if: status = 0 && is_external && lm_trans_put(file, ")") != 0
+        status: 1
+    if: status = 0 && (lm_trans_put(file, "(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0)
         status: 1
 
     lm_trans_l4_abi_params_delete(params, param_capacity)
@@ -2059,15 +2069,15 @@ fn: lm_trans_l4_receiver_row (const: (LmP0Frame: frame); int: allow_node_cells) 
 return: 0
 
 fn: lm_trans_l4_receiver_fn_descriptor (const: (LmP0Frame: frame); int: allow_node_cells) int
-    allow_node_cells: allow_node_cells
+    c.LM_UNUSED(allow_node_cells)
 return: lm_trans_registry_materialize_fn_descriptor_frame(frame)
 
 fn: lm_trans_l4_receiver_sub_descriptor (const: (LmP0Frame: frame); int: allow_node_cells) int
-    allow_node_cells: allow_node_cells
+    c.LM_UNUSED(allow_node_cells)
 return: lm_trans_registry_materialize_sub_descriptor_frame(frame)
 
 fn: lm_trans_l4_atom_receiver_prelude_sequence (const: (LmP0Text: atom); int: allow_node_cells) int
-    allow_node_cells: allow_node_cells
+    c.LM_UNUSED(allow_node_cells)
     if: atom = 0
         return: 1
     if: lm_trans_registry_relation_stack(atom, "item") = 0
@@ -2408,8 +2418,8 @@ fn: lm_trans_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom
 return: status
 
 fn: lm_trans_registry_l4_note_key (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); const: (LmP0Text: key_atom)) int
-    context: context
-    table_name: table_name
+    c.LM_UNUSED(context)
+    c.LM_UNUSED(table_name)
     if: key_atom = 0
         return: -1
     if: lm_trans_registry_column_is_class_typed(column) != 0
@@ -2431,25 +2441,25 @@ fn: lm_trans_registry_l4_push_cell (@: void context; const: (LmP0Text: table_nam
 return: 0
 
 fn: lm_trans_registry_l4_push_column_metadata (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) int
-    context: context
+    c.LM_UNUSED(context)
     if: table_name = 0
         return: -1
 return: lm_trans_registry_push_column_metadata(table_name, columns, column_count)
 
 fn: lm_trans_registry_l4_join_table (@: void context; const: (LmP0Text: source_table); const: (LmP0Text: target_table)) int
-    context: context
+    c.LM_UNUSED(context)
     if: lm_trans_registry_join_table(source_table, target_table) != 0
         return: -1
 return: 0
 
 fn: lm_trans_registry_l4_formal_param_unwrap_index (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame); @: size_t out_index) int
-    loader: loader
-    context: context
+    c.LM_UNUSED(loader)
+    c.LM_UNUSED(context)
 return: lm_trans_frame_formal_param_unwrap_index(frame, out_index)
 
 fn: lm_trans_registry_l4_positional_name_index (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame); @: size_t out_index) int
-    loader: loader
-    context: context
+    c.LM_UNUSED(loader)
+    c.LM_UNUSED(context)
 return: lm_trans_frame_positional_name_index(frame, out_index)
 
 fn: lm_trans_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP0Text: head)) LmL4FrameReceiver
@@ -2457,7 +2467,7 @@ fn: lm_trans_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP
     int: head_length
     const: @: char head_data
 
-    loader: loader
+    c.LM_UNUSED(loader)
     head_length: 0
     head_data: ""
     if: head != 0
@@ -3160,6 +3170,8 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_current_source_path: source_path
     lm_trans_next_array_value_helper_id: 0U
     lm_trans_emitted_l5_runtime_prelude: 0
+    lm_trans_emitted_l5_main_helper: 0
+    lm_trans_emitted_l5_assert_helper: 0
     emitted: 0
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)

@@ -68,44 +68,47 @@ typedef struct LmBuildOptions {
 typedef void (*LmOwnDestroyFields)(void *object);
 typedef void (*LmOwnDelete)(void *object);
 
-void * lm_own_new_zero(size_t size);
-void * lm_own_resize(void *object, size_t size);
-char * lm_own_copy_bytes(const char *source, size_t length);
-void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
-void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields);
-void lm_own_delete_plain(void *object);
-void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item);
-void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item);
-void lm_own_ptr_stack_destroy(LmOwnPtrStack *stack);
-int lm_own_ptr_stack_push(LmOwnPtrStack *stack, void *item);
-void * lm_own_ptr_stack_pop(LmOwnPtrStack *stack);
-void * lm_own_ptr_stack_at(const LmOwnPtrStack *stack, size_t index);
-void * lm_own_ptr_stack_top(const LmOwnPtrStack *stack);
-void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count);
-void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size);
-void lm_own_value_stack_destroy(LmOwnValueStack *stack);
-int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item);
-int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count);
-int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
-void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
-void * lm_own_value_stack_top(const LmOwnValueStack *stack);
-void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
-int lm_own_arena_init(LmOwnArena *arena);
-void lm_own_arena_destroy(LmOwnArena *arena);
-void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
-void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * lm_own_arena_allocation_descriptor(const LmOwnArena *arena, const void *address);
-char * lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t length);
-int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
-int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);
-int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
-void lm_own_arena_freeze(LmOwnArena *arena);
-int lm_own_arena_is_frozen(const LmOwnArena *arena);
-int lm_own_tree_cut(LmOwnArena *arena);
-int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
+void * (lm_own_new_zero)(size_t size);
+void * (lm_own_resize)(void *object, size_t size);
+char * (lm_own_copy_bytes)(const char *source, size_t length);
+void * (lm_own_array_new_zero)(size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor * (lm_own_allocation_descriptor)(const void *address);
+void (lm_own_delete)(void *object, LmOwnDestroyFields destroy_fields);
+void (lm_own_delete_plain)(void *object);
+void (lm_own_pointer_array_delete)(void **items, size_t count, LmOwnDelete delete_item);
+void (lm_own_ptr_stack_init)(LmOwnPtrStack *stack, LmOwnDelete delete_item);
+void (lm_own_ptr_stack_destroy)(LmOwnPtrStack *stack);
+int (lm_own_ptr_stack_push)(LmOwnPtrStack *stack, void *item);
+void * (lm_own_ptr_stack_pop)(LmOwnPtrStack *stack);
+void * (lm_own_ptr_stack_at)(const LmOwnPtrStack *stack, size_t index);
+void * (lm_own_ptr_stack_top)(const LmOwnPtrStack *stack);
+void (lm_own_ptr_stack_truncate)(LmOwnPtrStack *stack, size_t count);
+void (lm_own_value_stack_init)(LmOwnValueStack *stack, size_t item_size);
+void (lm_own_value_stack_destroy)(LmOwnValueStack *stack);
+int (lm_own_value_stack_push)(LmOwnValueStack *stack, const void *item);
+int (lm_own_value_stack_resize_zero)(LmOwnValueStack *stack, size_t count);
+int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
+void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
+void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
+void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
+int (lm_own_arena_init)(LmOwnArena *arena);
+void (lm_own_arena_destroy)(LmOwnArena *arena);
+void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
+void * (lm_own_arena_array_new_zero)(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor * (lm_own_arena_allocation_descriptor)(const LmOwnArena *arena, const void *address);
+char * (lm_own_arena_copy_bytes)(LmOwnArena *arena, const char *source, size_t length);
+int (lm_own_arena_add_lazy_edge)(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
+int (lm_own_arena_promote_lazy_edges)(LmOwnArena *arena);
+int (lm_own_arena_absorb)(LmOwnArena *target, LmOwnArena *source);
+void (lm_own_arena_freeze)(LmOwnArena *arena);
+int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
+int (lm_own_tree_cut)(LmOwnArena *arena);
+int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 
 
+#ifndef LM_UNUSED
+#define LM_UNUSED(value) ((void)(value))
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -185,7 +188,7 @@ static char * lm_build_platform_canary_script_path(void) {
 }
 
 static char * lm_build_platform_canary_command_path(char *canary_path) {
-    canary_path = canary_path;
+    LM_UNUSED(canary_path);
     return lm_build_platform_canary_script_path();
 }
 
@@ -317,7 +320,7 @@ static int lm_build_has_qt_gxx(void) {
 }
 
 static char * lm_build_platform_canary_command_format(void) {
-    return "timeout 120s \"%s\" --next";
+    return "sh -c 'if command -v timeout >/dev/null 2>&1; then timeout 120s \"$1\" --next; elif command -v gtimeout >/dev/null 2>&1; then gtimeout 120s \"$1\" --next; else \"$1\" --next; fi' sh \"%s\"";
 }
 
 static char * lm_build_platform_canary_command_path(char *canary_path) {
@@ -325,7 +328,7 @@ static char * lm_build_platform_canary_command_path(char *canary_path) {
 }
 
 static int lm_build_prepare_platform_canary(char *canary_path) {
-    canary_path = canary_path;
+    LM_UNUSED(canary_path);
     return 0;
 }
 
@@ -435,18 +438,6 @@ static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     }
     return thread->current->diagnostic_code;
 }
-static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {
-    if (thread == 0 || thread->current == 0) {
-        abort();
-    }
-    thread->current->diagnostic_code = 1;
-    thread->current->diagnostic_label = "AssertionViolation";
-    thread->current->diagnostic_file = file;
-    thread->current->diagnostic_line = line;
-    thread->current->diagnostic_expr = expr;
-    longjmp(thread->current->diagnostic_root, 1);
-}
-
 static LmBuildOptions * lm_build_options_new(void) {
     return lm_own_new_zero(sizeof(LmBuildOptions));
 }

@@ -274,7 +274,7 @@ fn: lm_trans_atom_is_identifier_like (const: (LmP0Text: text)) int
 end: lm_trans_atom_is_identifier_like
 
 fn: lm_trans_name_argument_is_valid (const: (LmP0Text: text)) int
-    text: text
+    c.LM_UNUSED(text)
     return: 1
 end: lm_trans_name_argument_is_valid
 
@@ -1942,8 +1942,6 @@ end: lm_trans_emit_callable_default_adapter
 
 fn: lm_trans_emit_callable_binder_descriptor_param_list (FILE: file; @: LmTransAbiParam params; size_t: param_count) int
     if: (param_count = 0U)
-        file: file
-        params: params
         return: 0
     return: lm_trans_emit_abi_params(file, params, param_count)
 end: lm_trans_emit_callable_binder_descriptor_param_list
@@ -2399,7 +2397,7 @@ fn: lm_trans_materialize_zero_arg_callable (FILE: file; LmTransExprStack: stack;
     const: LmTransSymbol: forced_symbol
     LmP0Text: forced_name
     int: status
-    file: file
+    c.LM_UNUSED(file)
     if: (out_consumed != 0)
         out_consumed[0]: 0
     if: (out_consumed = 0)
@@ -2523,7 +2521,6 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
             else:
                 symbol: lm_trans_callable_value_resolve(namespace_, frame\head, callable_value)
                 if: (((symbol != 0) && lm_trans_symbol_is_executable_callable(symbol)) && lm_trans_node_callable_descriptor_name(symbol\callable_return_node, namespace_, atom) && lm_trans_identifier_same(atom, descriptor_name))
-                    symbol: symbol
                 else:
                     if: (((((((((status = 0) && (symbol != 0)) && lm_trans_symbol_is_executable_callable(symbol)) && (lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) = 0)) && (descriptor_is_function_pointer = 0)) && (callable_value\uses_closure_struct = 0)) && lm_trans_call_body_positional_arg_count(frame\body, @ explicit_bound_count)) && lm_trans_callable_descriptor_param_count(namespace_, descriptor_name, @ descriptor_param_count)) && (symbol\param_names\count >= descriptor_param_count))
                         bound_count: (symbol\param_names\count - descriptor_param_count)
@@ -3956,12 +3953,12 @@ fn: lm_trans_expr_emit_addressable_value (FILE: file; const: (LmTransExprAtomLow
 end: lm_trans_expr_emit_addressable_value
 
 fn: lm_trans_expr_emit_name (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
     return: lm_trans_emit_name(file, lowering\text)
 end: lm_trans_expr_emit_name
 
 fn: lm_trans_expr_emit_raw (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
     return: lm_trans_write_text(file, lowering\text)
 end: lm_trans_expr_emit_raw
 
@@ -4013,8 +4010,8 @@ fn: lm_trans_expr_emit_contextual_literal (FILE: file; const: (LmTransExprAtomLo
 end: lm_trans_expr_emit_contextual_literal
 
 fn: lm_trans_expr_state_value (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    expect_field_name: expect_field_name
-    expect_c_field_name: expect_c_field_name
+    c.LM_UNUSED(expect_field_name)
+    c.LM_UNUSED(expect_c_field_name)
     if: lm_trans_atom_is_operand_like(lowering\text)
         previous_operand[0]: node
     else:
@@ -4024,7 +4021,7 @@ fn: lm_trans_expr_state_value (const: (LmTransExprAtomLowering: lowering); const
 end: lm_trans_expr_state_value
 
 fn: lm_trans_expr_state_field_name (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    expect_c_field_name: expect_c_field_name
+    c.LM_UNUSED(expect_c_field_name)
     if: (lm_trans_atom_is_identifier_like(lowering\text) = 0)
         c.fprintf(c.stderr, "trans L2 error: field-follow expects a field name\n")
         return: 1
@@ -4035,7 +4032,7 @@ fn: lm_trans_expr_state_field_name (const: (LmTransExprAtomLowering: lowering); 
 end: lm_trans_expr_state_field_name
 
 fn: lm_trans_expr_state_c_field_name (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    expect_field_name: expect_field_name
+    c.LM_UNUSED(expect_field_name)
     if: (lm_trans_atom_is_identifier_like(lowering\text) = 0)
         c.fprintf(c.stderr, "trans L2 error: C value-field dot expects a field name\n")
         return: 1
@@ -4046,8 +4043,8 @@ fn: lm_trans_expr_state_c_field_name (const: (LmTransExprAtomLowering: lowering)
 end: lm_trans_expr_state_c_field_name
 
 fn: lm_trans_expr_state_c_dot (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    lowering: lowering
-    expect_field_name: expect_field_name
+    c.LM_UNUSED(lowering)
+    c.LM_UNUSED(expect_field_name)
     if: (((c_dot_path[0] = 0) || (previous_operand[0] = 0)) || (lm_trans_nodes_touch(previous_operand[0], node) = 0))
         c.fprintf(c.stderr, "trans L2 error: C value-field dot must follow a c.name path\n")
         return: 1
@@ -4057,9 +4054,9 @@ fn: lm_trans_expr_state_c_dot (const: (LmTransExprAtomLowering: lowering); const
 end: lm_trans_expr_state_c_dot
 
 fn: lm_trans_expr_state_pointer_follow (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    lowering: lowering
-    node: node
-    expect_c_field_name: expect_c_field_name
+    c.LM_UNUSED(lowering)
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(expect_c_field_name)
     previous_operand[0]: 0
     expect_field_name[0]: 1
     c_dot_path[0]: 0
@@ -4067,29 +4064,29 @@ fn: lm_trans_expr_state_pointer_follow (const: (LmTransExprAtomLowering: lowerin
 end: lm_trans_expr_state_pointer_follow
 
 fn: lm_trans_expr_state_deref (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    lowering: lowering
-    node: node
-    expect_field_name: expect_field_name
-    expect_c_field_name: expect_c_field_name
+    c.LM_UNUSED(lowering)
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(expect_field_name)
+    c.LM_UNUSED(expect_c_field_name)
     previous_operand[0]: 0
     c_dot_path[0]: 0
     return: 0
 end: lm_trans_expr_state_deref
 
 fn: lm_trans_expr_state_operator (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    lowering: lowering
-    node: node
-    expect_field_name: expect_field_name
-    expect_c_field_name: expect_c_field_name
+    c.LM_UNUSED(lowering)
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(expect_field_name)
+    c.LM_UNUSED(expect_c_field_name)
     previous_operand[0]: 0
     c_dot_path[0]: 0
     return: 0
 end: lm_trans_expr_state_operator
 
 fn: lm_trans_expr_state_c_surface (const: (LmTransExprAtomLowering: lowering); const: (LmP0Node: node); const: @(LmP0Node previous_operand); @: int expect_field_name; @: int expect_c_field_name; @: int c_dot_path) int
-    lowering: lowering
-    expect_field_name: expect_field_name
-    expect_c_field_name: expect_c_field_name
+    c.LM_UNUSED(lowering)
+    c.LM_UNUSED(expect_field_name)
+    c.LM_UNUSED(expect_c_field_name)
     previous_operand[0]: node
     c_dot_path[0]: 1
     return: 0
@@ -4196,7 +4193,7 @@ fn: lm_trans_lower_expr_atom (const: (LmP0Node: node); const: (LmP0Node: previou
                 ---
             ---
         ---
-    c_dot_path: c_dot_path
+    c.LM_UNUSED(c_dot_path)
     return: 0
 end: lm_trans_lower_expr_atom
 
@@ -4438,7 +4435,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
 end: lm_trans_expr_lowered_range_build
 
 fn: lm_trans_expr_piece_emit_atom (FILE: file; LmTransExprStack: stack; LmTransExprLoweredRange: lowered; const: (LmTransExprPiece: piece); const: (LmTransNamespace: namespace_); @: int out_suspend) int
-    stack: stack
+    c.LM_UNUSED(stack)
     if: (out_suspend != 0)
         out_suspend[0]: 0
     if: (lm_trans_emit_expr_atom_lowering(file, piece\atom, namespace_) != 0)
@@ -4449,8 +4446,8 @@ fn: lm_trans_expr_piece_emit_atom (FILE: file; LmTransExprStack: stack; LmTransE
 end: lm_trans_expr_piece_emit_atom
 
 fn: lm_trans_expr_piece_emit_node (FILE: file; LmTransExprStack: stack; LmTransExprLoweredRange: lowered; const: (LmTransExprPiece: piece); const: (LmTransNamespace: namespace_); @: int out_suspend) int
-    file: file
-    namespace_: namespace_
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(namespace_)
     if: (out_suspend != 0)
         out_suspend[0]: 1
     lowered\index: lowered\index + 1U
@@ -4463,7 +4460,7 @@ fn: lm_trans_expr_piece_emit_node (FILE: file; LmTransExprStack: stack; LmTransE
 end: lm_trans_expr_piece_emit_node
 
 fn: lm_trans_expr_piece_emit_index (FILE: file; LmTransExprStack: stack; LmTransExprLoweredRange: lowered; const: (LmTransExprPiece: piece); const: (LmTransNamespace: namespace_); @: int out_suspend) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
     if: (out_suspend != 0)
         out_suspend[0]: 1
     if: (lm_trans_put(file, "[") != 0)
@@ -4522,14 +4519,14 @@ fn: lm_trans_expr_stack_emit_range (FILE: file; LmTransExprStack: stack; const: 
 end: lm_trans_expr_stack_emit_range
 
 fn: lm_trans_expr_job_emit_text (FILE: file; LmTransExprStack: stack; LmTransExprJob: job; const: (LmTransNamespace: namespace_)) int
-    stack: stack
-    namespace_: namespace_
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(namespace_)
     return: lm_trans_put(file, job\text)
 end: lm_trans_expr_job_emit_text
 
 fn: lm_trans_expr_job_emit_name_text (FILE: file; LmTransExprStack: stack; LmTransExprJob: job; const: (LmTransNamespace: namespace_)) int
-    stack: stack
-    namespace_: namespace_
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(namespace_)
     return: lm_trans_emit_name(file, job\name_text)
 end: lm_trans_expr_job_emit_name_text
 
@@ -4781,8 +4778,6 @@ fn: lm_trans_type_receiver_array_emit (FILE: file; const: (LmP0Node: type_node))
         if: (status < 0)
             return: 1
         return: 0
-    element_type: element_type
-    rank: rank
     return: lm_trans_put(file, "LmSlice *")
 end: lm_trans_type_receiver_array_emit
 
@@ -4922,7 +4917,7 @@ fn: lm_trans_emit_type_node (FILE: file; const: (LmP0Node: type_node)) int
 end: lm_trans_emit_type_node
 
 fn: lm_trans_emit_callable_descriptor_param_type (FILE: file; const: (LmTransFormalParam: param); const: (LmTransNamespace: namespace_)) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
     if: ((param = 0) || (param\type = 0))
         c.fprintf(c.stderr, "trans L2 error: callable descriptor parameter expects a type\n")
         return: 1
@@ -5006,7 +5001,7 @@ fn: lm_trans_emit_type_and_name (FILE: file; const: (LmP0Node: type_node); const
     size_t: i
     if: (type_node = 0)
         return: 1
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
     if: (lm_trans_emit_type_node(file, type_node) != 0)
         return: 1
     if: (lm_trans_put(file, " ") != 0)

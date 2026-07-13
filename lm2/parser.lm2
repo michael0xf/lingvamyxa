@@ -1,3 +1,10 @@
+L1:
+===
+#ifndef LM_UNUSED
+#define LM_UNUSED(value) ((void)(value))
+#endif
+===
+
 import: "lm4/own_abi.lm4"
 import: "lm4/parser_abi.lm4"
 import: "lm4/l4_loader_abi.lm4"
@@ -1594,7 +1601,6 @@ sub: lm_p0_registry_compare_fail (const: @(char table); const: @(char key); cons
 end: lm_p0_registry_compare_fail
 
 sub: lm_p0_trim_right (const: @@(char text); @: size_t length)
-    text: text
     while: ((length[0] > 0U) && (lm_p0_is_horizontal_space(text[0][(length[0] - 1U)]) || (text[0][(length[0] - 1U)] = '\r')))
         length[0]: length[0] - 1U
     ---
@@ -1733,7 +1739,6 @@ fn: lm_p0_find_layout_line_end (const: @(char source); size_t: length; size_t: s
     depth: 0U
     quote: '\0'
     lm_p0_scan_layout_prefix(source, length, start, @ ignored_content_offset, @ current_line_indent, @ current_line_dot_level)
-    ignored_content_offset: ignored_content_offset
     while: (i < length)
         if: (quote != '\0')
             if: ((quote = '"') && (source[i] = '\\'))
@@ -2723,7 +2728,7 @@ fn: lm_p0_append_compact_atom_pieces (LmP0Document: document; LmP0Structure: str
 end: lm_p0_append_compact_atom_pieces
 
 sub: lm_p0_free_node (LmP0Node: node)
-    node: node
+    c.LM_UNUSED(node)
 end: lm_p0_free_node
 
 fn: lm_p0_relaxed_level_from_column (LmP0Document: document; LmP0IndentStack: stack; size_t: column; size_t: base_level; size_t: line; size_t: source_column; @: size_t out_level) int
@@ -3635,7 +3640,6 @@ fn: lm_p0_parse_fields_until_with_layout (LmP0Document: document; LmP0IndentStac
             restart_parse_context: 1
             continue
         if: (frame\continuation = c.LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE)
-            child_index: child_index
             node\span\line: line
             lm_p0_position_in_slice(text, length, start, line, column, @ node\span\line, @ node\span\column)
             node\span\offset: (offset + start)
@@ -3648,7 +3652,6 @@ fn: lm_p0_parse_fields_until_with_layout (LmP0Document: document; LmP0IndentStac
             restart_parse_context: 1
             continue
         if: (frame\continuation = c.LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY)
-            child_index: child_index
             node\span\line: line
             lm_p0_position_in_slice(text, length, start, line, column, @ node\span\line, @ node\span\column)
             node\span\offset: (offset + start)
@@ -4264,19 +4267,20 @@ fn: lm_p0_stream_apply_item_event (LmP0Document: document; LmP0Stack: stack; con
             return: 0
         ---
     else:
-        if: (event\kind = c.LM_P0_STREAM_EVENT_BLOCK_STRING)
-            node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
-            if: (node = 0)
-                return: 0
-            node\as\atom\data: event\text
-            node\as\atom\length: event\text_length
-            node\span\line: event\line
-            node\span\column: event\column
-            node\span\offset: event\offset
-            node\span\length: event\text_length
-            if: (lm_p0_document_register_lazy_text(document, node\as\atom\data, node\as\atom\length, @ node\as\atom\data, node\span\line, node\span\column) = 0)
-                return: 0
-            ---
+        if: (event\kind != c.LM_P0_STREAM_EVENT_BLOCK_STRING)
+            lm_p0_set_diagnostic(document, 13, event\line, event\column, "unexpected stream item event kind")
+            return: 0
+        node: lm_p0_new_node(document, c.LM_P0_NODE_ATOM)
+        if: (node = 0)
+            return: 0
+        node\as\atom\data: event\text
+        node\as\atom\length: event\text_length
+        node\span\line: event\line
+        node\span\column: event\column
+        node\span\offset: event\offset
+        node\span\length: event\text_length
+        if: (lm_p0_document_register_lazy_text(document, node\as\atom\data, node\as\atom\length, @ node\as\atom\data, node\span\line, node\span\column) = 0)
+            return: 0
         ---
     node\flags: node\flags | event\node_flags
     if: (lm_p0_append_field(document, parent, node) = 0)
@@ -5337,7 +5341,7 @@ fn: lm_p0_registry_push_column_metadata (const: (LmP0Text: table_name); @: LmP0R
     lm_p0_text_ref_delete(column_payload)
 return: status
 fn: lm_p0_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom); const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
-    context: context
+    c.LM_UNUSED(context)
     if: ((((table_atom = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
         c.fprintf(c.stderr, "parser registry error: row expects exactly three atom fields\n")
         return: -1
@@ -5345,7 +5349,7 @@ fn: lm_p0_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom); 
 end: lm_p0_registry_l4_push_row
 
 fn: lm_p0_registry_l4_push_cell (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
-    context: context
+    c.LM_UNUSED(context)
     if: ((((table_name = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
         c.fprintf(c.stderr, "parser registry error: table rows currently expect atom cells\n")
         return: -1
@@ -5353,7 +5357,7 @@ fn: lm_p0_registry_l4_push_cell (@: void context; const: (LmP0Text: table_name);
 end: lm_p0_registry_l4_push_cell
 
 fn: lm_p0_registry_l4_push_column_metadata (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) int
-    context: context
+    c.LM_UNUSED(context)
     if: (table_name = 0)
         return: -1
     return: lm_p0_registry_push_column_metadata(table_name, columns, column_count)
@@ -5402,7 +5406,7 @@ fn: lm_p0_registry_l4_join_table (@: void context; const: (LmP0Text: source_tabl
     size_t: i
     size_t: copied
     int: status
-    context: context
+    c.LM_UNUSED(context)
     if: ((((lm_p0_registry = 0) || (lm_p0_registry\rows = 0)) || (source_table = 0)) || (target_table = 0))
         return: -1
     source_name: lm_p0_text_ref_new_empty()
@@ -5500,8 +5504,8 @@ fn: lm_p0_registry_l4_formal_param_unwrap_index (const: (LmL4Loader: loader); @:
     const: @: char payload
     const: LmP0Text: key
 
-    loader: loader
-    context: context
+    c.LM_UNUSED(loader)
+    c.LM_UNUSED(context)
     key: lm_p0_l4_frame_receiver_key(frame)
     payload: lm_p0_registry_lookup(key, "receiver.formal-param.unwrap")
     if: payload = 0
@@ -5512,8 +5516,8 @@ fn: lm_p0_registry_l4_positional_name_index (const: (LmL4Loader: loader); @: voi
     const: @: char payload
     const: LmP0Text: key
 
-    loader: loader
-    context: context
+    c.LM_UNUSED(loader)
+    c.LM_UNUSED(context)
     key: lm_p0_l4_frame_receiver_key(frame)
     payload: lm_p0_registry_lookup(key, "receiver.positional-name.index")
     if: payload = 0
@@ -5530,7 +5534,7 @@ end: lm_p0_registry_seed_l4_receivers
 
 fn: lm_p0_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP0Text: head)) LmL4FrameReceiver
     const: @: char receiver_type
-    loader: loader
+    c.LM_UNUSED(loader)
     receiver_type: lm_p0_registry_lookup(head, "namespace.l4")
     if: (receiver_type = 0)
         return: 0

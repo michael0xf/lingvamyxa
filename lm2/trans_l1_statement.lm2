@@ -179,8 +179,7 @@ fn: lm_trans_emit_env_type (
             return: 1
         i: i + 1U
 
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(namespace_)
 return: lm_trans_put(file, "};\n\n")
 
 fn: lm_trans_control_body_start (const: (LmP0Frame: frame)) const: LmP0Field
@@ -202,12 +201,20 @@ fn: lm_trans_emit_control_condition (
 ) int
     const: LmP0Field: body_start
     const: LmP0Field: first
+    const: LmP0Node: node
 
     first: frame\body\first_field
     if: first = 0
         return: 0
 
     body_start: lm_trans_control_body_start(frame)
+    while: first != 0 && first\next = body_start
+        node: first\value
+        if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE
+            break
+        first: node\as\structure\first_field
+        body_start: 0
+    ---
 return: lm_trans_emit_expr_range(file, first, body_start, namespace_)
 
 fn: lm_trans_parse_size_payload (const: @(char payload); @: size_t out_value) int
@@ -546,6 +553,15 @@ fn: lm_trans_emit_l5_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "}\n") != 0
         return: 1
+return: 0
+
+fn: lm_trans_emit_l5_main_helper (FILE: file) int
+    if: lm_trans_emit_l5_runtime_prelude(file) != 0
+        return: 1
+    if: lm_trans_emitted_l5_main_helper
+        return: 0
+
+    lm_trans_emitted_l5_main_helper: 1
     if: lm_trans_put(file, "static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {\n") != 0
         return: 1
     if: lm_trans_put(file, "    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {\n") != 0
@@ -558,6 +574,15 @@ fn: lm_trans_emit_l5_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "}\n") != 0
         return: 1
+return: 0
+
+fn: lm_trans_emit_l5_assert_helper (FILE: file) int
+    if: lm_trans_emit_l5_runtime_prelude(file) != 0
+        return: 1
+    if: lm_trans_emitted_l5_assert_helper
+        return: 0
+
+    lm_trans_emitted_l5_assert_helper: 1
     if: lm_trans_put(file, "static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {\n") != 0
         return: 1
     if: lm_trans_put(file, "    if (thread == 0 || thread->current == 0) {\n") != 0
@@ -583,7 +608,7 @@ fn: lm_trans_emit_l5_runtime_prelude (FILE: file) int
 return: 0
 
 fn: lm_trans_emit_l5_main_root (FILE: file; unsigned: indent) int
-    if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+    if: lm_trans_emit_l5_main_helper(lm_trans_prelude_file(file)) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "LmL5Thread *lm_l5_thread = lm_l5_main_thread();\n") != 0
         return: 1
@@ -2437,9 +2462,9 @@ fn: lm_trans_emit_array_slice_sidecar (
     @: char slice_length_storage
     int: status
 
-    file: file
-    indent: indent
-    dimension_error_name: dimension_error_name
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(indent)
+    c.LM_UNUSED(dimension_error_name)
     if: declarator = 0 || declarator\name = 0
         return: 1
 
@@ -4070,7 +4095,7 @@ fn: lm_trans_l2_table_note_row_layout (
     size_t: index
     int: status
 
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
     if: row_type = 0 || column_types = 0 || column_names = 0
         return: 1
 
@@ -4147,7 +4172,6 @@ fn: lm_trans_declare_l2_table (
         lm_trans_text_ref_destroy(@ row_type_text)
 
     status: lm_trans_l2_table_note_row_layout(namespace_, row_type_text, column_types, column_names, column_count) != 0 || lm_trans_namespace_declare_c_name(namespace_, table_name, "variable", object_name_text) != 0 || lm_trans_namespace_declare_relation_text(namespace_, table_name, "variable.type", row_type_text) != 0
-    row_count: row_count
 return: status != 0
 
 fn: lm_trans_emit_l2_table_row_type (
@@ -5454,8 +5478,7 @@ fn: lm_trans_statement_stack_schedule_named_structure (
 ) int
     int: had_layout
 
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
     had_layout: lm_trans_namespace_registry_lookup(namespace_, frame\head, "layout.backend") != 0
     if: lm_trans_declare_named_structure_layout(namespace_, frame) != 0
         return: 1
@@ -5470,8 +5493,7 @@ fn: lm_trans_statement_stack_schedule_merge_named_structure (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
     if: lm_trans_declare_merge_named_structure_layout(namespace_, frame) != 0
         return: 1
     if: lm_trans_emit_merge_named_structure_typedef(file, frame, indent, namespace_) != 0
@@ -5485,8 +5507,7 @@ fn: lm_trans_statement_emit_return (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_return_statement(file, frame\body\first_field, indent, namespace_)
 
 fn: lm_trans_statement_emit_if (
@@ -5532,12 +5553,9 @@ fn: lm_trans_statement_emit_finally (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: file != 0 && file = 0
-        return: 1
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
     if: frame = 0 || frame\body = 0 || frame\body\first_field = 0
         return: 1
 return: lm_trans_finally_push(namespace_, frame\body\first_field)
@@ -5549,12 +5567,11 @@ fn: lm_trans_statement_emit_assert (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
     if: frame = 0 || frame\body = 0 || frame\body\first_field = 0
         c.fprintf(c.stderr, "trans L2 error: assert receiver expects condition expression\n")
         return: 1
-    if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+    if: lm_trans_emit_l5_assert_helper(lm_trans_prelude_file(file)) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!(") != 0
         return: 1
@@ -5577,8 +5594,7 @@ fn: lm_trans_statement_emit_loop_jump (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_loop_jump_statement(file, frame\head, indent, namespace_)
 
 fn: lm_trans_statement_emit_include_prelude (
@@ -5588,12 +5604,9 @@ fn: lm_trans_statement_emit_include_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l1_include_frame(lm_trans_prelude_file(file), frame)
 
 fn: lm_trans_statement_emit_os_prelude (
@@ -5603,10 +5616,8 @@ fn: lm_trans_statement_emit_os_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_os_frame(lm_trans_prelude_file(file), frame, namespace_)
 
 fn: lm_trans_statement_emit_define_prelude (
@@ -5616,10 +5627,8 @@ fn: lm_trans_statement_emit_define_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_define_frame(lm_trans_prelude_file(file), frame, namespace_)
 
 fn: lm_trans_statement_emit_ifndef_default_prelude (
@@ -5629,10 +5638,8 @@ fn: lm_trans_statement_emit_ifndef_default_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_ifndef_default_frame(lm_trans_prelude_file(file), frame, namespace_)
 
 fn: lm_trans_statement_emit_ifdef_prelude (
@@ -5642,10 +5649,8 @@ fn: lm_trans_statement_emit_ifdef_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_ifdef_frame(lm_trans_prelude_file(file), frame, namespace_)
 
 fn: lm_trans_statement_emit_guard_prelude (
@@ -5655,10 +5660,8 @@ fn: lm_trans_statement_emit_guard_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_guard_frame(lm_trans_prelude_file(file), frame, namespace_)
 
 fn: lm_trans_statement_emit_extern_c_prelude (
@@ -5668,10 +5671,8 @@ fn: lm_trans_statement_emit_extern_c_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_extern_c_frame(lm_trans_prelude_file(file), frame, namespace_)
 
 fn: lm_trans_statement_emit_import (
@@ -5681,14 +5682,10 @@ fn: lm_trans_statement_emit_import (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: file != 0 && file = 0
-        return: 1
-    if: stack != 0 && stack = 0
-        return: 1
-    if: frame != 0 && frame = 0
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(frame)
+    c.LM_UNUSED(namespace_)
     if: indent = 0U
         return: 0
     c.fprintf(c.stderr, "trans L2 error: import receiver is top-level only\n")
@@ -5701,10 +5698,8 @@ fn: lm_trans_statement_emit_table (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l2_table_storage_value(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_join (
@@ -5714,10 +5709,8 @@ fn: lm_trans_statement_emit_join (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l2_join_structure(file, frame, indent)
 
 fn: lm_trans_statement_emit_const_declaration (
@@ -5727,8 +5720,7 @@ fn: lm_trans_statement_emit_const_declaration (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_const_statement(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_array_declaration (
@@ -5738,8 +5730,7 @@ fn: lm_trans_statement_emit_array_declaration (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_array_declaration(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_structure_declaration (
@@ -5749,16 +5740,11 @@ fn: lm_trans_statement_emit_structure_declaration (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: file != 0 && file = 0
-        return: 1
-    if: stack != 0 && stack = 0
-        return: 1
-    if: frame != 0 && frame = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(frame)
+    c.LM_UNUSED(indent)
+    c.LM_UNUSED(namespace_)
     c.fprintf(c.stderr, "trans L2 error: (): receiver is reserved for Structure-like variable declarations\n")
 return: 0
 
@@ -5769,8 +5755,7 @@ fn: lm_trans_statement_emit_c_tagged_declaration (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_c_tagged_declaration(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_storage_declaration (
@@ -5780,8 +5765,7 @@ fn: lm_trans_statement_emit_storage_declaration (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_declaration(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_pointer_declaration (
@@ -5791,8 +5775,7 @@ fn: lm_trans_statement_emit_pointer_declaration (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_pointer_declaration(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_target_assignment (
@@ -5802,8 +5785,7 @@ fn: lm_trans_statement_emit_target_assignment (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_target_assignment(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_named_structure (
@@ -5831,8 +5813,7 @@ fn: lm_trans_statement_emit_call (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_call_statement(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_assignment (
@@ -5842,8 +5823,7 @@ fn: lm_trans_statement_emit_assignment (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_assignment(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_contextual_literal_assignment (
@@ -5853,8 +5833,7 @@ fn: lm_trans_statement_emit_contextual_literal_assignment (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 return: lm_trans_emit_contextual_literal_assignment(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_lowering_from_head (
@@ -6030,8 +6009,7 @@ fn: lm_trans_emit_atom_return_statement (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
+    c.LM_UNUSED(node)
 return: lm_trans_emit_return_statement(file, 0, indent, namespace_)
 
 fn: lm_trans_emit_atom_string_error_statement (
@@ -6040,14 +6018,10 @@ fn: lm_trans_emit_atom_string_error_statement (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: file != 0 && file = 0
-        return: 1
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
+    c.LM_UNUSED(namespace_)
     c.fprintf(c.stderr, "trans L2 error: standalone string field is not consumed by any L2 receiver\n")
 return: 1
 
@@ -6069,10 +6043,8 @@ fn: lm_trans_atom_statement_emit_include_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_registry_include_table(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_os_prelude (
@@ -6081,10 +6053,8 @@ fn: lm_trans_atom_statement_emit_os_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_registry_os_table(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_ifdef_prelude (
@@ -6093,10 +6063,8 @@ fn: lm_trans_atom_statement_emit_ifdef_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l2_registry_ifdef_table(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_layout_prelude (
@@ -6105,10 +6073,8 @@ fn: lm_trans_atom_statement_emit_layout_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_layout_typedefs(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_constant_prelude (
@@ -6117,10 +6083,8 @@ fn: lm_trans_atom_statement_emit_constant_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_constant_defines(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_define_prelude (
@@ -6129,10 +6093,8 @@ fn: lm_trans_atom_statement_emit_define_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_define_table(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_alias_prelude (
@@ -6141,10 +6103,8 @@ fn: lm_trans_atom_statement_emit_alias_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_alias_typedefs(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_forward_prelude (
@@ -6153,10 +6113,8 @@ fn: lm_trans_atom_statement_emit_forward_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_forward_typedefs(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_prototype_prelude (
@@ -6165,10 +6123,8 @@ fn: lm_trans_atom_statement_emit_prototype_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_prototypes(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_fn_prelude (
@@ -6177,10 +6133,8 @@ fn: lm_trans_atom_statement_emit_fn_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_fn_descriptors(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_guard_prelude (
@@ -6189,10 +6143,8 @@ fn: lm_trans_atom_statement_emit_guard_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_guard_markers(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_extern_c_prelude (
@@ -6201,10 +6153,8 @@ fn: lm_trans_atom_statement_emit_extern_c_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_extern_c_markers(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_atom_statement_emit_unit_prelude (
@@ -6213,10 +6163,8 @@ fn: lm_trans_atom_statement_emit_unit_prelude (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    if: node != 0 && node = 0
-        return: 1
-    if: indent != 0U && indent = 0U
-        return: 1
+    c.LM_UNUSED(node)
+    c.LM_UNUSED(indent)
 return: lm_trans_emit_l4_units(lm_trans_prelude_file(file), namespace_)
 
 fn: lm_trans_sequence_item_index (const: @(char payload); @: size_t out_index) int
@@ -6449,8 +6397,7 @@ fn: lm_trans_statement_emit_nested_function (
     const: LmTransCapture: capture
     size_t: capture_index
 
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
 
     function: lm_trans_statement_function_header_new()
     if: function = 0
@@ -6567,8 +6514,7 @@ fn: lm_trans_statement_job_emit_list (
     const: LmP0Frame: next_repeat_frame
     int: status
 
-    if: file != 0 && file = 0
-        return: 1
+    c.LM_UNUSED(file)
     if: job\list = 0
         return: 1
 
@@ -6612,12 +6558,9 @@ fn: lm_trans_statement_job_validate_end (
     LmTransStatementJob: job
     LmTransNamespace: namespace_
 ) int
-    if: file != 0 && file = 0
-        return: 1
-    if: stack != 0 && stack = 0
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(namespace_)
     if: job\frame = 0
         return: 1
 return: lm_trans_validate_end_trailer(job\frame\frame)
@@ -6628,8 +6571,7 @@ fn: lm_trans_statement_job_emit_trailer (
     LmTransStatementJob: job
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
     if: job\frame = 0 || job\frame\frame = 0
         return: 1
 return: lm_trans_emit_trailer_statement(file, job\frame\frame\trailer, job\frame\indent, namespace_)
@@ -6640,12 +6582,9 @@ fn: lm_trans_statement_job_leave_scope (
     LmTransStatementJob: job
     LmTransNamespace: namespace_
 ) int
-    if: file != 0 && file = 0
-        return: 1
-    if: stack != 0 && stack = 0
-        return: 1
-    if: job != 0 && job = 0
-        return: 1
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(job)
     lm_trans_namespace_leave_scope(namespace_)
 return: 0
 
@@ -6655,12 +6594,9 @@ fn: lm_trans_statement_job_loop_pop (
     LmTransStatementJob: job
     LmTransNamespace: namespace_
 ) int
-    if: file != 0 && file = 0
-        return: 1
-    if: stack != 0 && stack = 0
-        return: 1
-    if: job != 0 && job = 0
-        return: 1
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(job)
     lm_trans_loop_pop(namespace_)
 return: 0
 
@@ -6670,8 +6606,7 @@ fn: lm_trans_statement_job_emit_scope_cleanups (
     LmTransStatementJob: job
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
+    c.LM_UNUSED(stack)
     if: job\text = 0
         return: 1
 return: lm_trans_emit_scope_cleanups(file, job\text\indent, namespace_)
@@ -6682,10 +6617,8 @@ fn: lm_trans_statement_job_emit_indent_text (
     LmTransStatementJob: job
     LmTransNamespace: namespace_
 ) int
-    if: stack != 0 && stack = 0
-        return: 1
-    if: namespace_ != 0 && namespace_ = 0
-        return: 1
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(namespace_)
     if: job\text = 0
         return: 1
     if: lm_trans_emit_indent(file, job\text\indent) != 0

@@ -9,6 +9,8 @@ LmOwnPtrStack: lm_trans_emitted_callable_binders
 LmOwnPtrStack: lm_trans_emitted_array_value_helpers
 LmOwnPtrStack: lm_trans_emitted_function_return_structs
 int: lm_trans_emitted_l5_runtime_prelude
+int: lm_trans_emitted_l5_main_helper
+int: lm_trans_emitted_l5_assert_helper
 unsigned: lm_trans_next_callable_adapter_id
 unsigned: lm_trans_next_array_value_helper_id
 unsigned: lm_trans_next_l2_structure_object_id

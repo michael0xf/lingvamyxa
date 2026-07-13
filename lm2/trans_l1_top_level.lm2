@@ -134,11 +134,11 @@ fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_
 return: status
 
 fn: lm_trans_top_level_emit_l1 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l1_frame(file, item\frame)
 
 fn: lm_trans_top_level_emit_l2 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l2_frame(file, item\frame)
 
 fn: lm_trans_top_level_emit_os (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
@@ -178,19 +178,19 @@ fn: lm_trans_top_level_emit_import_functions (FILE: file; LmTransNamespace: name
 return: lm_trans_emit_l2_import_functions(file, lm_trans_top_level_item_frame(item), namespace_)
 
 fn: lm_trans_top_level_emit_include (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l1_include_frame(file, item\frame)
 
 fn: lm_trans_top_level_declare_atom_os (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_declare_l2_registry_os_table(namespace_)
 
 fn: lm_trans_top_level_declare_atom_ifdef (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_declare_l2_registry_ifdef_table(namespace_)
 
 fn: lm_trans_top_level_emit_atom_include (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_registry_include_table(file, namespace_)
 
 fn: lm_trans_top_level_emit_define (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
@@ -200,51 +200,51 @@ fn: lm_trans_top_level_emit_ifndef_default (FILE: file; LmTransNamespace: namesp
 return: lm_trans_emit_l2_ifndef_default_frame(file, lm_trans_top_level_item_frame(item), namespace_)
 
 fn: lm_trans_top_level_emit_atom_os (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l2_registry_os_table(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_ifdef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l2_registry_ifdef_table(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_layout (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_layout_typedefs(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_constant (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_constant_defines(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_define (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_define_table(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_alias (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_alias_typedefs(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_forward (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_forward_typedefs(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_prototype (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_prototypes(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_fn (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_fn_descriptors(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_guard (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_guard_markers(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_extern_c (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_extern_c_markers(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_unit (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    item: item
+    c.LM_UNUSED(item)
 return: lm_trans_emit_l4_units(file, namespace_)
 
 fn: lm_trans_top_level_emit_atom_sequence (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
@@ -528,8 +528,8 @@ return: lm_trans_end_frame_targets_level_receiver_binding(frame, "lm_trans_emit_
 fn: lm_trans_top_level_emit_registry (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0
         return: 1
-    file: file
-    namespace_: namespace_
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(namespace_)
 return: 0
 
 fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmTransFormalParamList: params); const: (LmTransNamespace: namespace_); int: emit_void_when_empty) int
@@ -2411,11 +2411,11 @@ fn: lm_trans_emit_preprocessor_define_frame (FILE: output; const: (LmP0Frame: fr
 return: status
 
 fn: lm_trans_emit_l2_define_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_preprocessor_define_frame(output, frame, 0, "define")
 
 fn: lm_trans_emit_l2_ifndef_default_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
-    namespace_: namespace_
+    c.LM_UNUSED(namespace_)
 return: lm_trans_emit_preprocessor_define_frame(output, frame, 1, "ifndef-default")
 
 fn: lm_trans_os_branch_looks_l2 (const: (LmP0Structure: body)) int

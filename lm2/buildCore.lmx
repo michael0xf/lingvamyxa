@@ -1,3 +1,10 @@
+L1:
+===
+#ifndef LM_UNUSED
+#define LM_UNUSED(value) ((void)(value))
+#endif
+===
+
 L4: loadHeaders
 
 L4:
@@ -121,7 +128,7 @@ L2:
             end: lm_build_platform_canary_script_path
 
             fn: lm_build_platform_canary_command_path (@: char canary_path) @: char
-                canary_path: canary_path
+                c.LM_UNUSED(canary_path)
                 return: lm_build_platform_canary_script_path()
             end: lm_build_platform_canary_command_path
 
@@ -251,7 +258,7 @@ L2:
             end: lm_build_has_qt_gxx
 
             fn: lm_build_platform_canary_command_format () @: char
-                return: "timeout 120s \"%s\" --next"
+                return: "sh -c 'if command -v timeout >/dev/null 2>&1; then timeout 120s \"$1\" --next; elif command -v gtimeout >/dev/null 2>&1; then gtimeout 120s \"$1\" --next; else \"$1\" --next; fi' sh \"%s\""
             end: lm_build_platform_canary_command_format
 
             fn: lm_build_platform_canary_command_path (@: char canary_path) @: char
@@ -259,7 +266,7 @@ L2:
             end: lm_build_platform_canary_command_path
 
             fn: lm_build_prepare_platform_canary (@: char canary_path) int
-                canary_path: canary_path
+                c.LM_UNUSED(canary_path)
                 return: 0
             end: lm_build_prepare_platform_canary
 

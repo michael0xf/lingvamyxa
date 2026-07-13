@@ -1,0 +1,32 @@
+L2:
+    external:
+        fn: main () int
+            int: a 1
+            int: b 0
+            int: c 0
+            int: matched 0
+            int: iterations 0
+
+            if: (a || b) && c
+                return: 1
+
+            if: a || (b && c)
+                matched: 1
+            if: matched != 1
+                return: 2
+
+            matched: 0
+            if: ((a = 1))
+                matched: 1
+            if: matched != 1
+                return: 3
+
+            if: ((a || b) && c)
+                return: 4
+
+            while: ((iterations < 2))
+                iterations: iterations + 1
+            return: iterations != 2
+        end: main
+    end: external
+end: L2

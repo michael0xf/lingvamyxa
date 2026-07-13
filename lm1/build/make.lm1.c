@@ -9,20 +9,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-char * getenv(const char *name);
-size_t strlen(const char *text);
-char * strchr(const char *text, int value);
-void * memcpy(void *target, const void *source, size_t length);
-char * strcpy(char *target, const char *source);
-char * strcat(char *target, const char *source);
-int system(const char *command);
-int remove(const char *path);
-FILE * fopen(const char *path, const char *mode);
-int fclose(FILE *file);
-size_t fread(void *buffer, size_t item_size, size_t item_count, FILE *file);
-size_t fwrite(const void *buffer, size_t item_size, size_t item_count, FILE *file);
-int ferror(FILE *file);
-int strcmp(const char *left, const char *right);
+char * (getenv)(const char *name);
+size_t (strlen)(const char *text);
+char * (strchr)(const char *text, int value);
+void * (memcpy)(void *target, const void *source, size_t length);
+char * (strcpy)(char *target, const char *source);
+char * (strcat)(char *target, const char *source);
+int (system)(const char *command);
+int (remove)(const char *path);
+FILE * (fopen)(const char *path, const char *mode);
+int (fclose)(FILE *file);
+size_t (fread)(void *buffer, size_t item_size, size_t item_count, FILE *file);
+size_t (fwrite)(const void *buffer, size_t item_size, size_t item_count, FILE *file);
+int (ferror)(FILE *file);
+int (strcmp)(const char *left, const char *right);
 
 static char * lm_make_env_or_default(char *name, char *fallback);
 static size_t lm_make_append(char *buffer, size_t size, size_t used, char *text);
@@ -57,18 +57,6 @@ static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     }
     return thread->current->diagnostic_code;
 }
-static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {
-    if (thread == 0 || thread->current == 0) {
-        abort();
-    }
-    thread->current->diagnostic_code = 1;
-    thread->current->diagnostic_label = "AssertionViolation";
-    thread->current->diagnostic_file = file;
-    thread->current->diagnostic_line = line;
-    thread->current->diagnostic_expr = expr;
-    longjmp(thread->current->diagnostic_root, 1);
-}
-
 static char * lm_make_env_or_default(char *name, char *fallback) {
     char *value;
     value = getenv(name);

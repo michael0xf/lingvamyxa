@@ -30,6 +30,6 @@ os
 
 external:
     fn: main () int
-        return: lm_test_registry_platform_value() != 7
+        return: lm_test_registry_platform_value() != 7 && lm_test_registry_platform_value() != 3
     end: main
 end: external
