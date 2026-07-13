@@ -13341,7 +13341,7 @@ static int lm_trans_lookup_expr_frame_receiver_binding(const LmTransNamespace *n
     if (out == 0) {
         return -1;
     }
-    binding = lm_trans_namespace_registry_lookup(namespace_, head, "receiver.expr");
+    binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.expr", "class", "class", "receiver", "binding");
     if (binding == 0) {
         return 0;
     }

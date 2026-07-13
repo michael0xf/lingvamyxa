@@ -1,0 +1,45 @@
+L4:
+    table:
+        name: `receiver.expr`
+        columns((class: class) (binding: receiver))
+        rows:
+                 directCast  lm_trans_expr_emit_instanceof_frame
+                 directCast  lm_trans_expr_emit_cast_frame
+                 directCast  None
+    end: `receiver.expr`
+
+    table:
+        name: `receiver.expr`
+        columns((class: class) (class: receiver))
+        rows:
+                 fallbackCast  lm_trans_expr_emit_cast_frame
+    end: `receiver.expr`
+
+    table:
+        name: `lm.test.receiver.expr.seed`
+        columns((class: class) (binding: receiver))
+        rows:
+                 joinedCast  lm_trans_expr_emit_cast_frame
+    end: `lm.test.receiver.expr.seed`
+
+    join: (`lm.test.receiver.expr.seed`) `receiver.expr`
+        columns((class: class) (binding: receiver))
+        rows:
+    end: `receiver.expr`
+
+    table:
+        name: `receiver.expr`
+        columns((class: class) (binding: receiver))
+        rows:
+                 joinedCast  None
+    end: `receiver.expr`
+end: L4
+
+external:
+    fn: main () int
+        int: direct directCast: int 7
+        int: fallback fallbackCast: int 8
+        int: joined joinedCast: int 9
+        return: direct != 7 || fallback != 8 || joined != 9
+    end: main
+end: external
