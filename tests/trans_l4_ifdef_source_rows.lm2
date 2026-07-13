@@ -1,0 +1,110 @@
+L1:
+===
+#ifndef LM_TEST_IFDEF_DIRECT
+#define LM_TEST_IFDEF_DIRECT 0
+#endif
+#ifndef LM_TEST_IFDEF_LATE
+#define LM_TEST_IFDEF_LATE 0
+#endif
+#ifndef LM_TEST_IFDEF_WRONG_SCHEMA
+#define LM_TEST_IFDEF_WRONG_SCHEMA 0
+#endif
+#ifndef LM_TEST_IFDEF_JOINED
+#define LM_TEST_IFDEF_JOINED 0
+#endif
+#ifndef LM_TEST_IFDEF_NONE
+#define LM_TEST_IFDEF_NONE 0
+#endif
+#ifndef LM_TEST_IFDEF_EXPECTED
+#define LM_TEST_IFDEF_EXPECTED 61
+#endif
+===
+
+L4:
+    table:
+        name: ifdef
+        columns((class: class) (node: payload))
+        rows:
+                 LM_TEST_IFDEF_WRONG_SCHEMA
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 41
+                     end: lm_test_ifdef_source_value
+                 end: L2
+    end: ifdef
+
+    table:
+        name: ifdef
+        columns((class: class) (node: body))
+        rows:
+                 LM_TEST_IFDEF_DIRECT
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 11
+                     end: lm_test_ifdef_source_value
+                 end: L2
+                 LM_TEST_IFDEF_DIRECT
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 12
+                     end: lm_test_ifdef_source_value
+                 end: L2
+    end: ifdef
+
+    table:
+        name: `lm.test.ifdef.seed`
+        columns((class: class) (node: body))
+        rows:
+                 LM_TEST_IFDEF_JOINED
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 51
+                     end: lm_test_ifdef_source_value
+                 end: L2
+    end: `lm.test.ifdef.seed`
+
+    join: (`lm.test.ifdef.seed`) ifdef
+        columns((class: class) (node: body))
+        rows:
+    end: ifdef
+
+    table:
+        name: ifdef
+        columns((class: class) (node: body))
+        rows:
+                 LM_TEST_IFDEF_LATE
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 21
+                     end: lm_test_ifdef_source_value
+                 end: L2
+                 LM_TEST_IFDEF_LATE          None
+                 LM_TEST_IFDEF_NONE          None
+                 LM_TEST_IFDEF_WRONG_SCHEMA
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 42
+                     end: lm_test_ifdef_source_value
+                 end: L2
+                 LM_TEST_IFDEF_JOINED
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 52
+                     end: lm_test_ifdef_source_value
+                 end: L2
+                 default
+                 L2:
+                     fn: lm_test_ifdef_source_value () int
+                         return: 61
+                     end: lm_test_ifdef_source_value
+                 end: L2
+    end: ifdef
+end: L4
+
+ifdef
+
+external:
+    fn: main () int
+        return: lm_test_ifdef_source_value() != c.LM_TEST_IFDEF_EXPECTED
+    end: main
+end: external

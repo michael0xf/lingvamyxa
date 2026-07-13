@@ -28617,6 +28617,7 @@ static int lm_trans_declare_l2_registry_ifdef_table(LmTransNamespace *namespace_
     size_t i;
     LmTransRegistryFact * row;
     const LmOwnPtrStack * rows;
+    const LmP0Node * body;
     LmP0Text * branch_name;
     LmP0Text * condition;
     int emitted_default;
@@ -28662,7 +28663,11 @@ static int lm_trans_declare_l2_registry_ifdef_table(LmTransNamespace *namespace_
                 }
                 lm_trans_text_ref_destroy(&condition);
             }
-            if (lm_trans_declare_l2_registry_os_node(namespace_, row -> payload_node) != 0) {
+            body = lm_trans_registry_source_n2_node(namespace_, "ifdef", "class", "body", row);
+            if (body == 0) {
+                body = row -> payload_node;
+            }
+            if (lm_trans_declare_l2_registry_os_node(namespace_, body) != 0) {
                 lm_trans_text_ref_destroy(&branch_name);
                 return 1;
             }
@@ -29044,6 +29049,7 @@ static int lm_trans_emit_l2_registry_ifdef_table(FILE *output, LmTransNamespace 
     size_t i;
     LmTransRegistryFact * row;
     const LmOwnPtrStack * rows;
+    const LmP0Node * body;
     LmP0Text * branch_name;
     LmP0Text * condition;
     int opened;
@@ -29111,7 +29117,11 @@ static int lm_trans_emit_l2_registry_ifdef_table(FILE *output, LmTransNamespace 
                 lm_trans_text_ref_destroy(&condition);
                 opened = 1;
             }
-            if (lm_trans_emit_l2_registry_os_node(output, row -> payload_node, namespace_) != 0) {
+            body = lm_trans_registry_source_n2_node(namespace_, "ifdef", "class", "body", row);
+            if (body == 0) {
+                body = row -> payload_node;
+            }
+            if (lm_trans_emit_l2_registry_os_node(output, body, namespace_) != 0) {
                 lm_trans_text_ref_destroy(&branch_name);
                 return 1;
             }
