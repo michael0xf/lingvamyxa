@@ -1,0 +1,64 @@
+L4:
+    table:
+        name: constant
+        columns((class: class) (class: backend) (int: value))
+        rows:
+                 LM_TEST_CONSTANT_SOURCE           c.define  41
+                 LM_TEST_CONSTANT_VALUE_OVERLAY    c.define  5
+                 LM_TEST_CONSTANT_BACKEND_OVERLAY  c.define  9
+                 LM_TEST_CONSTANT_DUPLICATE        c.define  7
+                 LM_TEST_CONSTANT_DUPLICATE        c.define  8
+                 LM_TEST_CONSTANT_NONE             None      None
+    end: constant
+
+    table:
+        name: `constant.value`
+        columns((class: class) (int: value))
+        rows:
+                 LM_TEST_CONSTANT_VALUE_OVERLAY  6
+                 LM_TEST_CONSTANT_SPLIT          17
+    end: `constant.value`
+
+    table:
+        name: `constant.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LM_TEST_CONSTANT_BACKEND_OVERLAY  c.other
+                 LM_TEST_CONSTANT_SPLIT            c.define
+    end: `constant.backend`
+end: L4
+
+constant
+
+L1:
+===
+#if LM_TEST_CONSTANT_SOURCE != 41
+#error "full source constant value differs"
+#endif
+
+#if LM_TEST_CONSTANT_VALUE_OVERLAY != 6
+#error "split constant value overlay was ignored"
+#endif
+
+#if LM_TEST_CONSTANT_BACKEND_OVERLAY != 9
+#error "legacy any-c.define membership changed"
+#endif
+
+#if LM_TEST_CONSTANT_DUPLICATE != 8
+#error "latest duplicate constant row was ignored"
+#endif
+
+#if LM_TEST_CONSTANT_SPLIT != 17
+#error "split-only constant fallback was ignored"
+#endif
+
+#ifdef LM_TEST_CONSTANT_NONE
+#error "None source cells unexpectedly emitted a constant"
+#endif
+===
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

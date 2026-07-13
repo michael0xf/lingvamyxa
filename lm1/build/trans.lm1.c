@@ -3451,6 +3451,7 @@ static int lm_trans_l4_mark_typedef_emitted_cstr(const char *name);
 static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_layout_typedefs(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_registry_collect_constant_define_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_);
+static const char * lm_trans_constant_source_value(const LmTransNamespace *namespace_, const char *name, const LmTransRegistryFact *facade_backend_row, const LmTransRegistryFact *facade_value_row);
 static int lm_trans_emit_l4_constant_defines(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_registry_collect_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *receiver_name, const char *backend_payload, const char *error_name, int require_class);
@@ -30277,11 +30278,71 @@ static int lm_trans_registry_collect_constant_define_names(LmOwnPtrStack *names,
     return 0;
 }
 
+static const char * lm_trans_constant_source_value(const LmTransNamespace *namespace_, const char *name, const LmTransRegistryFact *facade_backend_row, const LmTransRegistryFact *facade_value_row) {
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_backend_column;
+    const LmTableColumnDescriptor * source_value_column;
+    const LmTableCell * source_key_cell;
+    const LmTableCell * source_backend_cell;
+    const LmTableCell * source_value_cell;
+    const char *result;
+    size_t descriptor_index;
+    size_t row_index;
+    int source_usable;
+    if (facade_value_row == 0 || facade_value_row -> payload == 0) {
+        return 0;
+    }
+    result = facade_value_row -> payload;
+    if (name == 0 || facade_backend_row == 0 || facade_backend_row -> payload == 0 || lm_trans_registry_view_parity_enabled() == 0) {
+        return result;
+    }
+    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
+        return result;
+    }
+    descriptor_index = lm_registry_view_source_table_count(lm_trans_registry->view);
+    while (descriptor_index > 0U) {
+        descriptor_index = descriptor_index - 1U;
+        source_table = lm_registry_view_source_table_at(lm_trans_registry->view, descriptor_index);
+        source_usable = source_table != 0 && source_table -> name != 0 && strcmp(source_table -> name, "constant") == 0 && lm_table_descriptor_column_count(source_table) == 3U;
+        if (source_usable != 0) {
+            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+            source_backend_column = lm_table_descriptor_column_at(source_table, 1U);
+            source_value_column = lm_table_descriptor_column_at(source_table, 2U);
+            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_backend_column != 0 && source_backend_column -> name != 0 && strcmp(source_backend_column -> name, "backend") == 0 && source_value_column != 0 && source_value_column -> name != 0 && strcmp(source_value_column -> name, "value") == 0;
+        }
+        if (source_usable != 0) {
+            row_index = lm_table_descriptor_materialized_row_count(source_table);
+            while (row_index > 0U) {
+                row_index = row_index - 1U;
+                source_row = lm_table_descriptor_materialized_row_at(source_table, row_index);
+                if (source_row != 0 && lm_table_row_cell_count(source_row) == 3U) {
+                    source_key_cell = lm_table_row_cell_at(source_row, 0U);
+                    source_backend_cell = lm_table_row_cell_at(source_row, 1U);
+                    source_value_cell = lm_table_row_cell_at(source_row, 2U);
+                    source_usable = source_key_cell != 0 && source_key_cell -> value != 0 && strcmp(source_key_cell -> value, name) == 0 && source_backend_cell != 0 && source_backend_cell -> value != 0 && strcmp(source_backend_cell -> value, "c.define") == 0 && source_backend_cell -> source == facade_backend_row && strcmp(source_backend_cell -> value, facade_backend_row -> payload) == 0 && source_value_cell != 0 && source_value_cell -> value != 0 && source_value_cell -> source == facade_value_row && strcmp(source_value_cell -> value, facade_value_row -> payload) == 0;
+                    if (source_usable != 0) {
+                        if (lm_trans_registry_view_is_selected() != 0) {
+                            return source_value_cell -> value;
+                        }
+                        return result;
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
 static int lm_trans_emit_l4_constant_defines(FILE *file, const LmTransNamespace *namespace_) {
     LmOwnPtrStack * names;
     size_t i;
     const char *name;
+    const char *value;
+    LmTransRegistryFact * backend_row;
     LmTransRegistryFact * value_row;
+    const LmOwnPtrStack * backend_rows;
     const LmOwnPtrStack * value_rows;
     names = lm_trans_ptr_stack_new(lm_trans_free_any);
     if (names == 0) {
@@ -30291,17 +30352,20 @@ static int lm_trans_emit_l4_constant_defines(FILE *file, const LmTransNamespace 
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }
+    backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("constant"), "backend");
     value_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("constant"), "value");
     i = 0U;
     while (i < names -> count) {
         name = lm_own_ptr_stack_at(names, i);
+        backend_row = lm_trans_registry_relation_stack_latest_row(backend_rows, lm_trans_text_from_cstr(name));
         value_row = lm_trans_registry_relation_stack_latest_row(value_rows, lm_trans_text_from_cstr(name));
         if (value_row == 0 || value_row -> payload == 0) {
             fprintf(stderr, "trans L4 constant error: %s requires constant.value\n", name);
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
-        if (lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, value_row -> payload) != 0 || lm_trans_put(file, "\n") != 0) {
+        value = lm_trans_constant_source_value(namespace_, name, backend_row, value_row);
+        if (value == 0 || lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0 || lm_trans_put(file, "\n") != 0) {
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
