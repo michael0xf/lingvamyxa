@@ -1,0 +1,105 @@
+L4:
+    table:
+        name: alias
+        columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
+        rows:
+                 LmTestAliasSource           c.typedef  int       None  None
+                 LmTestAliasPointer          c.typedef  char      1     1
+                 LmTestAliasValueOverlay     c.typedef  int       0     0
+                 LmTestAliasBackendOverlay   c.typedef  long      None  None
+                 LmTestAliasDepthOverlay     c.typedef  char      1     None
+                 LmTestAliasConstOverlay     c.typedef  int       None  None
+                 LmTestAliasDuplicate        c.typedef  int       None  None
+                 LmTestAliasDuplicate        c.typedef  double    None  None
+                 LmTestAliasLateNone         c.typedef  char      1     1
+                 LmTestAliasLateNone         None       None      None  None
+                 LmTestAliasNone             None       None      None  None
+    end: alias
+
+    table:
+        name: `alias.target`
+        columns((class: class) (class: target))
+        rows:
+                 LmTestAliasValueOverlay  unsigned
+                 LmTestAliasSplit         short
+    end: `alias.target`
+
+    table:
+        name: `alias.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestAliasBackendOverlay  c.other
+                 LmTestAliasSplit           c.typedef
+    end: `alias.backend`
+
+    table:
+        name: `alias.target.address-depth`
+        columns((class: class) (size_t: depth))
+        rows:
+                 LmTestAliasDepthOverlay  2
+                 LmTestAliasSplit         1
+    end: `alias.target.address-depth`
+
+    table:
+        name: `alias.target.const`
+        columns((class: class) (int: value))
+        rows:
+                 LmTestAliasConstOverlay  1
+                 LmTestAliasSplit         1
+    end: `alias.target.const`
+end: L4
+
+alias
+
+L1:
+===
+#include <limits.h>
+
+extern LmTestAliasSource lm_test_alias_source_type;
+extern int lm_test_alias_source_type;
+extern LmTestAliasPointer lm_test_alias_pointer_type;
+extern const char *lm_test_alias_pointer_type;
+extern LmTestAliasValueOverlay lm_test_alias_value_overlay_type;
+extern unsigned lm_test_alias_value_overlay_type;
+extern LmTestAliasBackendOverlay lm_test_alias_backend_overlay_type;
+extern long lm_test_alias_backend_overlay_type;
+extern LmTestAliasDepthOverlay lm_test_alias_depth_overlay_type;
+extern char **lm_test_alias_depth_overlay_type;
+extern LmTestAliasConstOverlay lm_test_alias_const_overlay_type;
+extern const int lm_test_alias_const_overlay_type;
+extern LmTestAliasDuplicate lm_test_alias_duplicate_type;
+extern double lm_test_alias_duplicate_type;
+extern LmTestAliasLateNone lm_test_alias_late_none_type;
+extern const char *lm_test_alias_late_none_type;
+extern LmTestAliasSplit lm_test_alias_split_type;
+extern const short *lm_test_alias_split_type;
+
+static int lm_test_alias_source_rows(void) {
+    LmTestAliasSource source = 3;
+    LmTestAliasPointer pointer = "ok";
+    LmTestAliasValueOverlay value_overlay = UINT_MAX;
+    LmTestAliasBackendOverlay backend_overlay = 5L;
+    char value = 'x';
+    char *one = &value;
+    LmTestAliasDepthOverlay depth_overlay = &one;
+    LmTestAliasConstOverlay const_overlay = 6;
+    LmTestAliasDuplicate duplicate = 1.5;
+    LmTestAliasLateNone late_none = "none";
+    short split_value = 8;
+    LmTestAliasSplit split = &split_value;
+
+    if (source != 3 || pointer[0] != 'o' || value_overlay == 0U ||
+        backend_overlay != 5L || **depth_overlay != 'x' ||
+        const_overlay != 6 || duplicate <= 1.0 || duplicate >= 2.0 ||
+        late_none[0] != 'n' || *split != 8) {
+        return 1;
+    }
+    return 0;
+}
+===
+
+external:
+    fn: main () int
+        return: c.lm_test_alias_source_rows()
+    end: main
+end: external

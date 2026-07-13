@@ -1239,13 +1239,122 @@ fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: cou
         i: i + 1U
 return: 0
 
+fn: lm_trans_alias_source_backend_is_witness (
+    const: (LmOwnPtrStack: facade_backend_rows)
+    const: @(char name)
+    const: (LmTableCell: source_backend_cell)
+) int
+    size_t: i
+    const: LmTransRegistryFact: row
+
+    if: facade_backend_rows = 0 || name = 0 || source_backend_cell = 0 || source_backend_cell\value = 0 || source_backend_cell\source = 0 || c.strcmp(source_backend_cell\value, "c.typedef") != 0
+        return: 0
+    i: 0U
+    while: i < facade_backend_rows\count
+        row: lm_own_ptr_stack_at(facade_backend_rows, i)
+        if: row != 0 && source_backend_cell\source = row && row\key != 0 && c.strcmp(row\key, name) = 0 && row\payload != 0 && c.strcmp(row\payload, "c.typedef") = 0
+            return: 1
+        i: i + 1U
+return: 0
+
+fn: lm_trans_alias_source_target (
+    const: (LmTransNamespace: namespace_)
+    const: @(char name)
+    const: (LmOwnPtrStack: facade_backend_rows)
+    const: (LmTransRegistryFact: facade_target_row)
+    const: (LmTransRegistryFact: facade_address_depth_row)
+    const: (LmTransRegistryFact: facade_const_row)
+    @: size_t out_address_depth
+    @: size_t out_const_flag
+) const: @: char
+    const: LmTableDescriptor: source_table
+    const: LmTableRow: source_row
+    const: LmTableColumnDescriptor: source_key_column
+    const: LmTableColumnDescriptor: source_backend_column
+    const: LmTableColumnDescriptor: source_target_column
+    const: LmTableColumnDescriptor: source_address_depth_column
+    const: LmTableColumnDescriptor: source_const_column
+    const: LmTableCell: source_key_cell
+    const: LmTableCell: source_backend_cell
+    const: LmTableCell: source_target_cell
+    const: LmTableCell: source_address_depth_cell
+    const: LmTableCell: source_const_cell
+    const: @: char result
+    size_t: descriptor_index
+    size_t: row_index
+    size_t: source_address_depth
+    size_t: source_const_flag
+    int: source_same
+    int: source_usable
+
+    if: facade_target_row = 0 || facade_target_row\payload = 0
+        return: 0
+    result: facade_target_row\payload
+    if: name = 0 || facade_backend_rows = 0 || out_address_depth = 0 || out_const_flag = 0 || lm_trans_registry_view_parity_enabled() = 0
+        return: result
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0 && namespace_\registry_identifiers != c.lm_trans_registry->identifiers
+        return: result
+
+    descriptor_index: lm_registry_view_source_table_count(c.lm_trans_registry->view)
+    while: descriptor_index > 0U
+        descriptor_index: descriptor_index - 1U
+        source_table: lm_registry_view_source_table_at(c.lm_trans_registry->view, descriptor_index)
+        source_usable: source_table != 0 && source_table\name != 0 && c.strcmp(source_table\name, "alias") = 0 && lm_table_descriptor_column_count(source_table) = 5U
+        if: source_usable != 0
+            source_key_column: lm_table_descriptor_column_at(source_table, 0U)
+            source_backend_column: lm_table_descriptor_column_at(source_table, 1U)
+            source_target_column: lm_table_descriptor_column_at(source_table, 2U)
+            source_address_depth_column: lm_table_descriptor_column_at(source_table, 3U)
+            source_const_column: lm_table_descriptor_column_at(source_table, 4U)
+            source_usable: source_key_column != 0 && source_key_column\name != 0 && c.strcmp(source_key_column\name, "class") = 0 && source_backend_column != 0 && source_backend_column\name != 0 && c.strcmp(source_backend_column\name, "backend") = 0 && source_target_column != 0 && source_target_column\name != 0 && c.strcmp(source_target_column\name, "target") = 0 && source_address_depth_column != 0 && source_address_depth_column\name != 0 && c.strcmp(source_address_depth_column\name, "target.address-depth") = 0 && source_const_column != 0 && source_const_column\name != 0 && c.strcmp(source_const_column\name, "target.const") = 0
+        ---
+        if: source_usable != 0
+            row_index: lm_table_descriptor_materialized_row_count(source_table)
+            while: row_index > 0U
+                row_index: row_index - 1U
+                source_row: lm_table_descriptor_materialized_row_at(source_table, row_index)
+                if: source_row != 0 && lm_table_row_cell_count(source_row) = 5U
+                    source_key_cell: lm_table_row_cell_at(source_row, 0U)
+                    source_backend_cell: lm_table_row_cell_at(source_row, 1U)
+                    source_target_cell: lm_table_row_cell_at(source_row, 2U)
+                    source_address_depth_cell: lm_table_row_cell_at(source_row, 3U)
+                    source_const_cell: lm_table_row_cell_at(source_row, 4U)
+                    source_usable: source_key_cell != 0 && source_key_cell\value != 0 && c.strcmp(source_key_cell\value, name) = 0 && lm_trans_alias_source_backend_is_witness(facade_backend_rows, name, source_backend_cell) != 0 && source_target_cell != 0 && source_target_cell\value != 0 && source_target_cell\source = facade_target_row && c.strcmp(source_target_cell\value, facade_target_row\payload) = 0 && source_address_depth_cell != 0 && source_const_cell != 0
+                    if: source_usable != 0
+                        source_address_depth: 0U
+                        source_const_flag: 0U
+                        source_same: 1
+                        if: source_address_depth_cell\value = 0
+                            source_same: source_address_depth_cell\explicit_none != 0 && source_address_depth_cell\node = 0 && source_address_depth_cell\source = 0 && facade_address_depth_row = 0
+                        else:
+                            source_same: facade_address_depth_row != 0 && facade_address_depth_row\payload != 0 && source_address_depth_cell\source = facade_address_depth_row && c.strcmp(source_address_depth_cell\value, facade_address_depth_row\payload) = 0 && lm_trans_parse_size_payload(source_address_depth_cell\value, @ source_address_depth) != 0
+                        if: source_same != 0 && source_const_cell\value = 0
+                            source_same: source_const_cell\explicit_none != 0 && source_const_cell\node = 0 && source_const_cell\source = 0 && facade_const_row = 0
+                        if: source_same != 0 && source_const_cell\value != 0
+                            source_same: facade_const_row != 0 && facade_const_row\payload != 0 && source_const_cell\source = facade_const_row && c.strcmp(source_const_cell\value, facade_const_row\payload) = 0 && lm_trans_parse_size_payload(source_const_cell\value, @ source_const_flag) != 0
+                        if: source_same != 0
+                            if: lm_trans_registry_view_is_selected() != 0
+                                out_address_depth[0]: source_address_depth
+                                out_const_flag[0]: source_const_flag
+                                return: source_target_cell\value
+                            return: result
+                ---
+            ---
+        ---
+    ---
+return: result
+
 fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
     LmOwnPtrStack: names
+    const: LmOwnPtrStack: backend_rows
     const: LmOwnPtrStack: target_rows
     const: LmOwnPtrStack: address_depth_rows
     const: LmOwnPtrStack: const_rows
     LmTransRegistryFact: target_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: const_row
     const: @: char name
+    const: @: char target
     LmP0Text: name_text
     size_t: i
     size_t: address_depth
@@ -1263,6 +1372,7 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
         lm_trans_ptr_stack_delete(@ names)
         return: 1
 
+    backend_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "backend")
     target_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target")
     address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.address-depth")
     const_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.const")
@@ -1277,12 +1387,17 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
-        if: lm_trans_registry_latest_size_payload(address_depth_rows, name_text, 0U, @ address_depth) = 0 || lm_trans_registry_latest_size_payload(const_rows, name_text, 0U, @ const_flag) = 0
+        address_depth: 0U
+        const_flag: 0U
+        address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, name_text)
+        const_row: lm_trans_registry_relation_stack_latest_row(const_rows, name_text)
+        if: (address_depth_row != 0 && lm_trans_parse_size_payload(address_depth_row\payload, @ address_depth) = 0) || (const_row != 0 && lm_trans_parse_size_payload(const_row\payload, @ const_flag) = 0)
             c.fprintf(c.stderr, "trans L4 alias error: %s has invalid alias target flags\n", name)
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
-        if: lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target_row\payload, address_depth, const_flag != 0U, name) != 0 || lm_trans_put(file, ";\n") != 0
+        target: lm_trans_alias_source_target(namespace_, name, backend_rows, target_row, address_depth_row, const_row, @ address_depth, @ const_flag)
+        if: target = 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target, address_depth, const_flag != 0U, name) != 0 || lm_trans_put(file, ";\n") != 0
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
