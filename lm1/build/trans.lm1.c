@@ -11834,7 +11834,7 @@ static int lm_trans_expr_stack_try_materialize_segment(FILE *file, LmTransExprSt
             class_name = "callable.zero-arg.value";
         }
     }
-    binding = lm_trans_registry_lookup(lm_trans_text_from_cstr(class_name), "materialize.argument");
+    binding = lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(class_name), "materialize.argument", "class", "class", "materializer", "binding");
     if (binding == 0) {
         return 0;
     }
