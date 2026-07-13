@@ -1265,6 +1265,41 @@ fn: lm_trans_registry_source_relation_path_new (const: @(char table); const: @(c
     out_length[0]: path_length
 return: path
 
+fn: lm_trans_registry_source_table_lookup_row (
+    const: (LmP0Text: key)
+    const: @(char table)
+    const: @(LmTableDescriptor out_descriptor)
+    @: int out_covered
+) const: LmTableRow
+    LmP0Text: key_payload
+    const: LmTableRow: row
+
+    if: out_descriptor != 0
+        out_descriptor[0]: 0
+    if: out_covered != 0
+        out_covered[0]: 0
+    if: key = 0 || table = 0 || out_descriptor = 0 || out_covered = 0 || lm_trans_registry_view_parity_enabled() = 0 || c.lm_trans_registry->view = 0
+        return: 0
+
+    key_payload: lm_trans_text_ref_new_cstr("")
+    if: key_payload = 0
+        return: 0
+    if: lm_trans_identifier_payload(key, key_payload) = 0
+        lm_trans_text_ref_destroy(@ key_payload)
+        return: 0
+
+    row: lm_registry_view_source_table_lookup_row_slice(
+        c.lm_trans_registry->view,
+        table,
+        c.strlen(table),
+        key_payload\data,
+        key_payload\length,
+        out_descriptor,
+        out_covered
+    )
+    lm_trans_text_ref_destroy(@ key_payload)
+return: row
+
 fn: lm_trans_namespace_registry_source_relation_has_key (
     const: (LmTransNamespace: namespace_)
     const: (LmP0Text: key)

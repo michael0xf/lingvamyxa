@@ -798,6 +798,62 @@ fn: lm_registry_view_source_table_at (const: (LmRegistryView: view); size_t: ind
         return: 0
 return: lm_own_ptr_stack_at(view\source_tables, index - parent_count)
 
+fn: lm_registry_view_source_table_lookup_row_slice (
+    const: (LmRegistryView: view)
+    const: @(char table)
+    size_t: table_length
+    const: @(char key)
+    size_t: key_length
+    const: @(LmTableDescriptor out_descriptor)
+    @: int out_covered
+) const: LmTableRow
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: @: char selected_key
+    size_t: selected_key_length
+    size_t: table_count
+    size_t: table_index
+    size_t: row_index
+    size_t: pass_index
+
+    if: out_descriptor != 0
+        out_descriptor[0]: 0
+    if: out_covered != 0
+        out_covered[0]: 0
+    if: view = 0 || table = 0 || key = 0 || out_descriptor = 0 || out_covered = 0
+        return: 0
+
+    selected_key: key
+    selected_key_length: key_length
+    table_count: lm_registry_view_source_table_count(view)
+    pass_index: 0U
+    while: pass_index < 2U
+        table_index: table_count
+        while: table_index > 0U
+            table_index: table_index - 1U
+            descriptor: lm_registry_view_source_table_at(view, table_index)
+            if: descriptor != 0 && descriptor\name != 0 && lm_table_descriptor_cstr_equals_slice(descriptor\name, table, table_length) != 0
+                out_covered[0]: 1
+                row_index: lm_table_descriptor_materialized_row_count(descriptor)
+                while: row_index > 0U
+                    row_index: row_index - 1U
+                    row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+                    key_cell: lm_table_row_cell_at(row, 0U)
+                    if: key_cell != 0 && key_cell\value != 0 && lm_table_descriptor_cstr_equals_slice(key_cell\value, selected_key, selected_key_length) != 0
+                        out_descriptor[0]: descriptor
+                        return: row
+                ---
+            ---
+        ---
+
+        if: key_length = 7U && c.memcmp(key, "default", 7U) = 0
+            return: 0
+        selected_key: "default"
+        selected_key_length: 7U
+        pass_index: pass_index + 1U
+return: 0
+
 fn: lm_table_descriptor_source_path_column_matches (
     const: (LmTableDescriptor: descriptor)
     size_t: column_index

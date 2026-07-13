@@ -4,7 +4,7 @@ external:
     fn: main () int
         LmRegistryView: base
         LmRegistryView: local
-        LmTableDescriptor: descriptor
+        const: LmTableDescriptor: descriptor
         const: LmTableColumnDescriptor: column
         const: LmRegistryViewRow: row
         const: LmOwnPtrStack: source_rows
@@ -27,6 +27,10 @@ external:
             status: 1
         covered: 1
         if: lm_registry_view_source_path_key_at_slice(0, "invalid", 7U, 0U, @ covered) != 0 || covered != 0
+            status: 1
+        descriptor: 0
+        covered: 1
+        if: lm_registry_view_source_table_lookup_row_slice(0, "invalid", 7U, "invalid", 7U, @ descriptor, @ covered) != 0 || descriptor != 0 || covered != 0
             status: 1
         if: lm_registry_view_take_local_source_table(0, 0) = 0 || lm_registry_view_append_materialized_rows(0, 0, "invalid", 7U) = 0
             status: 1

@@ -2387,6 +2387,7 @@ static LmTableDescriptor * lm_registry_view_find_source_table_slice(const LmRegi
 static int lm_registry_view_take_local_source_table(LmRegistryView *view, LmTableDescriptor *descriptor);
 static size_t lm_registry_view_source_table_count(const LmRegistryView *view);
 static const LmTableDescriptor * lm_registry_view_source_table_at(const LmRegistryView *view, size_t index);
+static const LmTableRow * lm_registry_view_source_table_lookup_row_slice(const LmRegistryView *view, const char *table, size_t table_length, const char *key, size_t key_length, const LmTableDescriptor **out_descriptor, int *out_covered);
 static int lm_table_descriptor_source_path_column_matches(const LmTableDescriptor *descriptor, size_t column_index, const char *path, size_t path_length);
 static int lm_registry_view_source_path_has_rows_slice(const LmRegistryView *view, const char *path, size_t path_length, int *out_covered);
 static int lm_registry_view_source_path_has_rows(const LmRegistryView *view, const char *path, int *out_covered);
@@ -2484,6 +2485,7 @@ static const LmOwnPtrStack * lm_trans_namespace_registry_relation_stack(const Lm
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_for_table(const char *table);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_row(const LmOwnPtrStack *stack, const LmP0Text *key);
 static char * lm_trans_registry_source_relation_path_new(const char *table, const char *relation_name, size_t *out_length);
+static const LmTableRow * lm_trans_registry_source_table_lookup_row(const LmP0Text *key, const char *table, const LmTableDescriptor **out_descriptor, int *out_covered);
 static int lm_trans_namespace_registry_source_relation_has_key(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table, const char *relation_name);
 static const char * lm_trans_registry_lookup_exact(const LmP0Text *key, const char *table);
 static const char * lm_trans_registry_lookup_default(const char *table);
@@ -4267,6 +4269,58 @@ static const LmTableDescriptor * lm_registry_view_source_table_at(const LmRegist
         return 0;
     }
     return lm_own_ptr_stack_at(view -> source_tables, index - parent_count);
+}
+
+static const LmTableRow * lm_registry_view_source_table_lookup_row_slice(const LmRegistryView *view, const char *table, size_t table_length, const char *key, size_t key_length, const LmTableDescriptor **out_descriptor, int *out_covered) {
+    const LmTableDescriptor * descriptor;
+    const LmTableRow * row;
+    const LmTableCell * key_cell;
+    const char *selected_key;
+    size_t selected_key_length;
+    size_t table_count;
+    size_t table_index;
+    size_t row_index;
+    size_t pass_index;
+    if (out_descriptor != 0) {
+        out_descriptor[0] = 0;
+    }
+    if (out_covered != 0) {
+        out_covered[0] = 0;
+    }
+    if (view == 0 || table == 0 || key == 0 || out_descriptor == 0 || out_covered == 0) {
+        return 0;
+    }
+    selected_key = key;
+    selected_key_length = key_length;
+    table_count = lm_registry_view_source_table_count(view);
+    pass_index = 0U;
+    while (pass_index < 2U) {
+        table_index = table_count;
+        while (table_index > 0U) {
+            table_index = table_index - 1U;
+            descriptor = lm_registry_view_source_table_at(view, table_index);
+            if (descriptor != 0 && descriptor -> name != 0 && lm_table_descriptor_cstr_equals_slice(descriptor -> name, table, table_length) != 0) {
+                out_covered[0] = 1;
+                row_index = lm_table_descriptor_materialized_row_count(descriptor);
+                while (row_index > 0U) {
+                    row_index = row_index - 1U;
+                    row = lm_table_descriptor_materialized_row_at(descriptor, row_index);
+                    key_cell = lm_table_row_cell_at(row, 0U);
+                    if (key_cell != 0 && key_cell -> value != 0 && lm_table_descriptor_cstr_equals_slice(key_cell -> value, selected_key, selected_key_length) != 0) {
+                        out_descriptor[0] = descriptor;
+                        return row;
+                    }
+                }
+            }
+        }
+        if (key_length == 7U && memcmp(key, "default", 7U) == 0) {
+            return 0;
+        }
+        selected_key = "default";
+        selected_key_length = 7U;
+        pass_index = pass_index + 1U;
+    }
+    return 0;
 }
 
 static int lm_table_descriptor_source_path_column_matches(const LmTableDescriptor *descriptor, size_t column_index, const char *path, size_t path_length) {
@@ -6168,6 +6222,31 @@ static char * lm_trans_registry_source_relation_path_new(const char *table, cons
     path[path_length] = '\0';
     out_length[0] = path_length;
     return path;
+}
+
+static const LmTableRow * lm_trans_registry_source_table_lookup_row(const LmP0Text *key, const char *table, const LmTableDescriptor **out_descriptor, int *out_covered) {
+    LmP0Text * key_payload;
+    const LmTableRow * row;
+    if (out_descriptor != 0) {
+        out_descriptor[0] = 0;
+    }
+    if (out_covered != 0) {
+        out_covered[0] = 0;
+    }
+    if (key == 0 || table == 0 || out_descriptor == 0 || out_covered == 0 || lm_trans_registry_view_parity_enabled() == 0 || lm_trans_registry->view == 0) {
+        return 0;
+    }
+    key_payload = lm_trans_text_ref_new_cstr("");
+    if (key_payload == 0) {
+        return 0;
+    }
+    if (lm_trans_identifier_payload(key, key_payload) == 0) {
+        lm_trans_text_ref_destroy(&key_payload);
+        return 0;
+    }
+    row = lm_registry_view_source_table_lookup_row_slice(lm_trans_registry->view, table, strlen(table), key_payload -> data, key_payload -> length, out_descriptor, out_covered);
+    lm_trans_text_ref_destroy(&key_payload);
+    return row;
 }
 
 static int lm_trans_namespace_registry_source_relation_has_key(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table, const char *relation_name) {
@@ -14841,7 +14920,21 @@ static int lm_trans_parse_size_payload(const char *payload, size_t *out_value) {
 
 static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *out_index) {
     const char *index_payload;
+    const LmTableDescriptor * source_table;
+    const LmTableRow * source_row;
+    const LmTableColumnDescriptor * source_key_column;
+    const LmTableColumnDescriptor * source_argument_column;
+    const LmTableColumnDescriptor * source_index_column;
+    const LmTableCell * source_argument_cell;
+    const LmTableCell * source_index_cell;
     LmP0Text * receiver_key;
+    size_t facade_index;
+    size_t source_index;
+    int facade_found;
+    int source_covered;
+    int source_found;
+    int source_same;
+    int source_usable;
     if (frame == 0 || out_index == 0) {
         return 0;
     }
@@ -14856,28 +14949,87 @@ static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *
             return lm_return_0;
         }
     }
+    facade_index = 0U;
+    facade_found = 0;
     index_payload = lm_trans_registry_lookup(receiver_key, "receiver.positional-name.index");
     if (index_payload != 0) {
-        if (lm_trans_parse_size_payload(index_payload, out_index) == 0) {
+        if (lm_trans_parse_size_payload(index_payload, &facade_index) == 0) {
             fprintf(stderr, "trans registry error: receiver.positional-name.index for \"%.*s\" must be a non-negative integer\n", (((int)receiver_key -> length)), receiver_key -> data);
             exit(2);
         }
+        facade_found = 1;
+    }
+    else {
+        if (lm_trans_registry_has(receiver_key, "receiver.positional-name.argument")) {
+            facade_index = 0U;
+            facade_found = 1;
+        }
+    }
+    if (lm_trans_registry_view_parity_enabled() == 0) {
+        if (facade_found != 0) {
+            out_index[0] = facade_index;
+        }
         {
-            int lm_return_1 = 1;
+            int lm_return_1 = facade_found;
             lm_trans_text_ref_destroy(&receiver_key);
             return lm_return_1;
         }
     }
-    if (lm_trans_registry_has(receiver_key, "receiver.positional-name.argument")) {
-        out_index[0] = 0U;
+    source_covered = 0;
+    source_table = 0;
+    source_row = lm_trans_registry_source_table_lookup_row(receiver_key, "receiver.positional-name", &source_table, &source_covered);
+    source_found = 0;
+    source_index = 0U;
+    source_usable = source_row == 0;
+    if (source_row != 0) {
+        source_usable = lm_table_descriptor_column_count(source_table) == 3U && lm_table_row_cell_count(source_row) == 3U;
+        if (source_usable != 0) {
+            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
+            source_argument_column = lm_table_descriptor_column_at(source_table, 1U);
+            source_index_column = lm_table_descriptor_column_at(source_table, 2U);
+            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_argument_column != 0 && source_argument_column -> name != 0 && strcmp(source_argument_column -> name, "argument") == 0 && source_index_column != 0 && source_index_column -> name != 0 && strcmp(source_index_column -> name, "index") == 0;
+        }
+        if (source_usable != 0) {
+            source_argument_cell = lm_table_row_cell_at(source_row, 1U);
+            source_index_cell = lm_table_row_cell_at(source_row, 2U);
+            if (source_index_cell != 0 && source_index_cell -> value != 0) {
+                if (lm_trans_parse_size_payload(source_index_cell -> value, &source_index) != 0) {
+                    source_found = 1;
+                }
+                else {
+                    source_usable = 0;
+                }
+            }
+            else {
+                if (source_argument_cell != 0 && source_argument_cell -> value != 0) {
+                    source_index = 0U;
+                    source_found = 1;
+                }
+            }
+        }
+    }
+    if (source_covered != 0 && source_usable != 0 && source_found != 0 && facade_found == 0) {
+        lm_trans_registry_view_parity_fail("source positional-name row", "receiver.positional-name");
+    }
+    source_same = source_found == facade_found;
+    if (source_same != 0 && source_found != 0) {
+        source_same = source_index == facade_index;
+    }
+    if (lm_trans_registry_view_is_selected() != 0 && source_covered != 0 && source_usable != 0 && source_same != 0) {
+        if (source_found != 0) {
+            out_index[0] = source_index;
+        }
         {
-            int lm_return_2 = 1;
+            int lm_return_2 = source_found;
             lm_trans_text_ref_destroy(&receiver_key);
             return lm_return_2;
         }
     }
+    if (facade_found != 0) {
+        out_index[0] = facade_index;
+    }
     {
-        int lm_return_3 = 0;
+        int lm_return_3 = facade_found;
         lm_trans_text_ref_destroy(&receiver_key);
         return lm_return_3;
     }

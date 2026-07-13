@@ -80,8 +80,10 @@ return: lm_registry_view_source_path_key_at_slice(view, path, c.strlen(path), in
 external:
     fn: main () int
         LmRegistryView: view
+        LmRegistryView: local_view
         LmTableDescriptor: source
         LmTableDescriptor: source_b
+        LmTableDescriptor: local_source
         LmTableDescriptor: joined
         LmTableDescriptor: key_only
         LmTableDescriptor: variant
@@ -91,8 +93,11 @@ external:
         LmTableDescriptor: duplicate_columns
         LmTableDescriptor: empty_overlay
         const: LmTableDescriptor: catalog_table
+        const: LmTableDescriptor: local_catalog_table
+        const: LmTableDescriptor: selected_table
         LmTableRow: row
         const: LmTableRow: source_row
+        const: LmTableRow: selected_row
         const: LmTableRow: joined_row
         const: LmTableCell: cell
         const: LmTableColumnDescriptor: column
@@ -100,8 +105,10 @@ external:
         int: status
 
         view: lm_registry_view_new(0)
+        local_view: 0
         source: lm_test_ncolumn_schema("source.ncolumn")
         source_b: lm_test_ncolumn_schema("source.ncolumn.b")
+        local_source: 0
         joined: lm_test_ncolumn_schema("joined.ncolumn")
         key_only: lm_table_descriptor_new_empty_slice("key.only", 8U)
         variant: 0
@@ -141,7 +148,6 @@ external:
         column: lm_table_descriptor_column_at(source, 1U)
         if: status = 0 && (lm_table_descriptor_column_count(source) != 4U || lm_table_descriptor_materialized_row_count(source) != 4U || column = 0 || column\index != 1U || column\type_name = 0 || c.strcmp(column\type_name, "char") != 0 || column\address_depth != 1U || column\array_rank != 0U || column\is_const = 0 || lm_table_column_descriptor_descriptor_count(column) != 2U || c.strcmp(column\descriptor, "payload") != 0 || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 1U), "ordered.second") != 0)
             status: 1
-
         source_row: lm_table_descriptor_materialized_row_at(source, 1U)
         cell: lm_table_row_cell_at(source_row, 1U)
         if: status = 0 && (source_row = 0 || lm_table_row_cell_count(source_row) != 4U || source_row\local_sequence != 1U || cell = 0 || cell\atom = 0 || c.strcmp(cell\atom, "None") != 0 || cell\value != 0 || cell\node != 0 || cell\explicit_none = 0)
@@ -225,6 +231,12 @@ external:
         if: status = 0
             row: 0
         lm_table_row_delete_any(row)
+        row: lm_table_row_new(0)
+        if: status = 0 && (row = 0 || lm_test_ncolumn_take_cell(row, "default", "default", 0, variant, 0) != 0 || lm_table_descriptor_take_materialized_row(variant, row) != 0)
+            status: 1
+        if: status = 0
+            row: 0
+        lm_table_row_delete_any(row)
         if: status = 0 && (lm_test_ncolumn_add_column(duplicate_columns, "class", "class", 0U, 0U, 0, "key", 0) != 0 || lm_test_ncolumn_add_column(duplicate_columns, "value", "char", 1U, 0U, 0, "payload", 0) != 0 || lm_test_ncolumn_add_column(duplicate_columns, "value", "char", 1U, 0U, 0, "payload", 0) != 0)
             status: 1
         row: lm_table_row_new(0)
@@ -268,6 +280,73 @@ external:
         catalog_table: lm_registry_view_source_table_at(view, 2U)
         if: status = 0 && (lm_registry_view_source_table_count(view) != 7U || catalog_table = 0 || lm_table_descriptor_column_count(catalog_table) != 1U || lm_registry_view_find_source_table_slice(view, "source.ncolumn", 14U) != catalog_table)
             status: 1
+        covered: 0
+        selected_table: 0
+        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn", 14U, "duplicate", 9U, @ selected_table, @ covered)
+        cell: lm_table_row_cell_at(selected_row, 1U)
+        if: status = 0 && (selected_row = 0 || selected_table = 0 || selected_row\local_sequence != 3U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "newLeft") != 0 || covered = 0)
+            status: 1
+        cell: lm_table_row_cell_at(selected_row, 2U)
+        if: status = 0 && (cell = 0 || cell\value != 0 || cell\explicit_none = 0)
+            status: 1
+        covered: 0
+        selected_table: 0
+        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn", 14U, "variant", 7U, @ selected_table, @ covered)
+        if: status = 0 && (selected_row = 0 || selected_table != catalog_table || selected_row\local_sequence != 0U || covered = 0)
+            status: 1
+        covered: 0
+        selected_table: catalog_table
+        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn", 14U, "missing", 7U, @ selected_table, @ covered)
+        if: status = 0 && (selected_row = 0 || selected_table != catalog_table || selected_row\local_sequence != 1U || covered = 0)
+            status: 1
+        covered: 0
+        selected_table: catalog_table
+        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn.b", 16U, "missing", 7U, @ selected_table, @ covered)
+        if: status = 0 && (selected_row != 0 || selected_table != 0 || covered = 0)
+            status: 1
+        covered: 1
+        selected_table: catalog_table
+        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "missing.table", 13U, "missing", 7U, @ selected_table, @ covered)
+        if: status = 0 && (selected_row != 0 || selected_table != 0 || covered != 0)
+            status: 1
+        if: status = 0
+            local_view: lm_registry_view_new(view)
+            local_source: lm_test_ncolumn_schema("source.ncolumn")
+            if: local_view = 0 || local_source = 0 || lm_test_ncolumn_add_row(local_source, "duplicate", "localLeft", "localLeft", "None", 0, "None", 0) != 0 || lm_test_ncolumn_add_row(local_source, "default", "localDefault", "localDefault", "None", 0, "None", 0) != 0
+                status: 1
+            ---
+        if: status = 0 && lm_registry_view_take_local_source_table(local_view, local_source) != 0
+            status: 1
+        if: status = 0
+            local_catalog_table: local_source
+            local_source: 0
+            covered: 0
+            selected_table: 0
+            selected_row: lm_registry_view_source_table_lookup_row_slice(local_view, "source.ncolumn", 14U, "duplicate", 9U, @ selected_table, @ covered)
+            cell: lm_table_row_cell_at(selected_row, 1U)
+            if: selected_row = 0 || selected_table != local_catalog_table || selected_row\local_sequence != 0U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "localLeft") != 0 || covered = 0
+                status: 1
+            ---
+        if: status = 0
+            covered: 0
+            selected_table: 0
+            selected_row: lm_registry_view_source_table_lookup_row_slice(local_view, "source.ncolumn", 14U, "ordered", 7U, @ selected_table, @ covered)
+            cell: lm_table_row_cell_at(selected_row, 1U)
+            if: selected_row = 0 || selected_table = local_catalog_table || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "left raw") != 0 || covered = 0
+                status: 1
+            ---
+        if: status = 0
+            covered: 0
+            selected_table: 0
+            selected_row: lm_registry_view_source_table_lookup_row_slice(local_view, "source.ncolumn", 14U, "missing", 7U, @ selected_table, @ covered)
+            cell: lm_table_row_cell_at(selected_row, 1U)
+            if: selected_row = 0 || selected_table != local_catalog_table || selected_row\local_sequence != 1U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "localDefault") != 0 || covered = 0
+                status: 1
+            ---
+        lm_table_descriptor_delete_any(local_source)
+        local_source: 0
+        lm_registry_view_delete(local_view)
+        local_view: 0
         covered: 0
         if: status = 0 && (lm_registry_view_source_path_has_rows(view, "source.ncolumn.left.part", @ covered) = 0 || covered = 0)
             status: 1
@@ -358,6 +437,8 @@ external:
         lm_table_descriptor_delete_any(variant)
         lm_table_descriptor_delete_any(source_b)
         lm_table_descriptor_delete_any(source)
+        lm_table_descriptor_delete_any(local_source)
+        lm_registry_view_delete(local_view)
         lm_registry_view_delete(view)
     return: status
 end: external
