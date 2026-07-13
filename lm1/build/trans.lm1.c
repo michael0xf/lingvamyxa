@@ -9848,7 +9848,7 @@ static int lm_trans_callable_descriptor_uses_closure_struct(const LmTransNamespa
     if (name == 0) {
         return 0;
     }
-    projection = lm_trans_namespace_registry_lookup(namespace_, name, "callable.projection");
+    projection = lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.projection", "class", "class", "value", "projection");
     return projection != 0 && strcmp(projection, "c.closure-struct") == 0;
 }
 
@@ -34561,7 +34561,7 @@ static const char * lm_trans_symbol_callable_projection(const LmTransSymbol *sym
     if (symbol == 0 || symbol -> class_name == 0) {
         return 0;
     }
-    return lm_trans_registry_lookup(lm_trans_text_from_cstr(symbol -> class_name), "callable.projection");
+    return lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(symbol -> class_name), "callable.projection", "class", "class", "value", "projection");
 }
 
 static int lm_trans_callable_projection_class_is(const char *class_name, const char *projection) {
@@ -34569,7 +34569,7 @@ static int lm_trans_callable_projection_class_is(const char *class_name, const c
     if (class_name == 0 || projection == 0) {
         return 0;
     }
-    actual = lm_trans_registry_lookup(lm_trans_text_from_cstr(class_name), "callable.projection");
+    actual = lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(class_name), "callable.projection", "class", "class", "value", "projection");
     return actual != 0 && strcmp(actual, projection) == 0;
 }
 

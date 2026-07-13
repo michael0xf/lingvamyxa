@@ -61,15 +61,36 @@ L4:
         name: `callable.projection`
         columns((class: class) (projection: value))
         rows:
+                 AddX `c.function-pointer`
                  AddX `c.closure-struct`
-                 WrongAddX `c.closure-struct`
-                 JoinedAddX `c.closure-struct`
+                 AddX None
     end: `callable.projection`
 
-    join: (`callable.projection`) `test.callable.projection.joined`
+    table:
+        name: `callable.projection`
+        columns((class: class) (class: value))
+        rows:
+                 WrongAddX `c.closure-struct`
+    end: `callable.projection`
+
+    table:
+        name: `test.callable.projection.seed`
         columns((class: class) (projection: value))
         rows:
-    end: `test.callable.projection.joined`
+                 JoinedAddX `c.closure-struct`
+    end: `test.callable.projection.seed`
+
+    join: (`test.callable.projection.seed`) `callable.projection`
+        columns((class: class) (projection: value))
+        rows:
+    end: `callable.projection`
+
+    table:
+        name: `callable.projection`
+        columns((class: class) (projection: value))
+        rows:
+                 JoinedAddX None
+    end: `callable.projection`
 end: L4
 
 fn: AddX (int: value) int

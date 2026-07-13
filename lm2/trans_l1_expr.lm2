@@ -1004,7 +1004,7 @@ fn: lm_trans_callable_descriptor_uses_closure_struct (const: (LmTransNamespace: 
     const: @: char projection
     if: name = 0
         return: 0
-    projection: lm_trans_namespace_registry_lookup(namespace_, name, "callable.projection")
+    projection: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.projection", "class", "class", "value", "projection")
     return: projection != 0 && c.strcmp(projection, "c.closure-struct") = 0
 end: lm_trans_callable_descriptor_uses_closure_struct
 

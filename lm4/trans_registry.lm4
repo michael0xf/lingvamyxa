@@ -483,7 +483,7 @@ end: `true.value`
 
 table:
     name: `callable.projection`
-    columns((class: class) (@: char projection))
+    columns((class: class) (projection: value))
     rows:
              fn                         c.function-symbol
              function                   c.function-symbol
