@@ -1,0 +1,241 @@
+import: "lm2/table_descriptor.lm2"
+
+fn: lm_test_ncolumn_add_column (
+    LmTableDescriptor: table
+    const: @(char name)
+    const: @(char type_name)
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+    const: @(char first_descriptor)
+    const: @(char second_descriptor)
+) int
+    LmTableColumnDescriptor: column
+
+    column: lm_table_column_descriptor_new_slice(name, c.strlen(name), type_name, c.strlen(type_name), address_depth, array_rank, is_const)
+    if: column = 0
+        return: 1
+    if: first_descriptor != 0 && lm_table_column_descriptor_add_descriptor_slice(column, first_descriptor, c.strlen(first_descriptor)) != 0
+        lm_table_column_descriptor_delete_any(column)
+        return: 1
+    if: second_descriptor != 0 && lm_table_column_descriptor_add_descriptor_slice(column, second_descriptor, c.strlen(second_descriptor)) != 0
+        lm_table_column_descriptor_delete_any(column)
+        return: 1
+    if: lm_table_descriptor_take_column(table, column) != 0
+        lm_table_column_descriptor_delete_any(column)
+        return: 1
+return: 0
+
+fn: lm_test_ncolumn_schema (const: @(char name)) LmTableDescriptor
+    LmTableDescriptor: table
+
+    table: lm_table_descriptor_new_empty_slice(name, c.strlen(name))
+    if: table = 0
+        return: 0
+    if: lm_test_ncolumn_add_column(table, "class", "class", 0U, 0U, 0, "key", 0) != 0 || lm_test_ncolumn_add_column(table, "left.part", "char", 1U, 0U, 1, "payload", "ordered.second") != 0 || lm_test_ncolumn_add_column(table, "right", "char", 1U, 0U, 0, "payload", 0) != 0 || lm_test_ncolumn_add_column(table, "body", "LmP0Node", 1U, 0U, 1, "node", 0) != 0
+        lm_table_descriptor_delete_any(table)
+        return: 0
+return: table
+
+fn: lm_test_ncolumn_take_cell (LmTableRow: row; const: @(char atom); const: @(char value); const: @(void node); const: @(void source); int: explicit_none) int
+    LmTableCell: cell
+
+    cell: lm_table_cell_new_cstr(atom, value, node, source, explicit_none)
+    if: cell = 0
+        return: 1
+    if: lm_table_row_take_cell(row, cell) != 0
+        lm_table_cell_delete_any(cell)
+        return: 1
+return: 0
+
+fn: lm_test_ncolumn_add_row (
+    LmTableDescriptor: table
+    const: @(char key)
+    const: @(char left_atom)
+    const: @(char left_value)
+    const: @(char right_atom)
+    const: @(char right_value)
+    const: @(char body_atom)
+    const: @(void body_node)
+) int
+    LmTableRow: row
+
+    row: lm_table_row_new(0)
+    if: row = 0
+        return: 1
+    if: lm_test_ncolumn_take_cell(row, key, key, 0, table, 0) != 0 || lm_test_ncolumn_take_cell(row, left_atom, left_value, 0, table, left_atom != 0 && c.strcmp(left_atom, "None") = 0) != 0 || lm_test_ncolumn_take_cell(row, right_atom, right_value, 0, table, right_atom != 0 && c.strcmp(right_atom, "None") = 0) != 0 || lm_test_ncolumn_take_cell(row, body_atom, 0, body_node, table, body_atom != 0 && c.strcmp(body_atom, "None") = 0) != 0
+        lm_table_row_delete_any(row)
+        return: 1
+    if: lm_table_descriptor_take_materialized_row(table, row) != 0
+        lm_table_row_delete_any(row)
+        return: 1
+return: 0
+
+external:
+    fn: main () int
+        LmRegistryView: view
+        LmTableDescriptor: source
+        LmTableDescriptor: source_b
+        LmTableDescriptor: joined
+        LmTableDescriptor: key_only
+        LmTableDescriptor: variant
+        LmTableDescriptor: broken_source
+        LmTableDescriptor: rollback_target
+        const: LmTableDescriptor: catalog_table
+        LmTableRow: row
+        const: LmTableRow: source_row
+        const: LmTableRow: joined_row
+        const: LmTableCell: cell
+        const: LmTableColumnDescriptor: column
+        int: status
+
+        view: lm_registry_view_new(0)
+        source: lm_test_ncolumn_schema("source.ncolumn")
+        source_b: lm_test_ncolumn_schema("source.ncolumn.b")
+        joined: lm_test_ncolumn_schema("joined.ncolumn")
+        key_only: lm_table_descriptor_new_empty_slice("key.only", 8U)
+        variant: 0
+        broken_source: 0
+        rollback_target: 0
+        if: view = 0 || source = 0 || source_b = 0 || joined = 0 || key_only = 0
+            lm_table_descriptor_delete_any(joined)
+            lm_table_descriptor_delete_any(key_only)
+            lm_table_descriptor_delete_any(source_b)
+            lm_table_descriptor_delete_any(source)
+            lm_registry_view_delete(view)
+            return: 1
+
+        status: 0
+        if: lm_registry_view_fact_at(0, 0U) != 0 || lm_registry_view_push_relation(0, "x", "x", "x", 0, 0) = 0
+            status: 1
+        if: status = 0 && (lm_registry_view_lookup_exact(0, "x", "x") != 0 || lm_registry_view_lookup_default(0, "x") != 0 || lm_registry_view_lookup(0, "x", "x") != 0 || lm_registry_view_lookup_text(0, "x", "x") != 0)
+            status: 1
+        if: status = 0 && (lm_registry_view_table_row_at(0, "x", 0U) != 0 || lm_registry_view_matching_key_count(0, "x", "x") != 0U || lm_registry_view_matching_key_at(0, "x", "x", 0U) != 0 || lm_registry_view_local_source_rows_slice(0, "x", 1U) != 0 || lm_registry_view_table_has_rows(0, "x") != 0)
+            status: 1
+        if: lm_test_ncolumn_add_row(source, "ordered", "\"left raw\"", "left raw", "right", "right", "node", source) != 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_add_row(source, "allNone", "None", 0, "None", 0, "None", 0) != 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_add_row(source, "duplicate", "oldLeft", "oldLeft", "oldRight", "oldRight", "None", 0) != 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_add_row(source, "duplicate", "newLeft", "newLeft", "None", 0, "node", joined) != 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_add_row(source_b, "bFirst", "bLeft", "bLeft", "None", 0, "None", 0) != 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_add_row(source_b, "bAllNone", "None", 0, "None", 0, "None", 0) != 0
+            status: 1
+
+        column: lm_table_descriptor_column_at(source, 1U)
+        if: status = 0 && (lm_table_descriptor_column_count(source) != 4U || lm_table_descriptor_materialized_row_count(source) != 4U || column = 0 || column\index != 1U || column\type_name = 0 || c.strcmp(column\type_name, "char") != 0 || column\address_depth != 1U || column\array_rank != 0U || column\is_const = 0 || lm_table_column_descriptor_descriptor_count(column) != 2U || c.strcmp(column\descriptor, "payload") != 0 || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 1U), "ordered.second") != 0)
+            status: 1
+
+        source_row: lm_table_descriptor_materialized_row_at(source, 1U)
+        cell: lm_table_row_cell_at(source_row, 1U)
+        if: status = 0 && (source_row = 0 || lm_table_row_cell_count(source_row) != 4U || source_row\local_sequence != 1U || cell = 0 || cell\atom = 0 || c.strcmp(cell\atom, "None") != 0 || cell\value != 0 || cell\node != 0 || cell\explicit_none = 0)
+            status: 1
+
+        row: lm_table_row_new(0)
+        if: status = 0 && (row = 0 || lm_test_ncolumn_take_cell(row, "short", "short", 0, 0, 0) != 0)
+            status: 1
+        if: status = 0 && lm_table_descriptor_take_materialized_row(source, row) = 0
+            status: 1
+        lm_table_row_delete_any(row)
+        if: status = 0 && lm_table_descriptor_materialized_row_count(source) != 4U
+            status: 1
+
+        if: status = 0 && lm_registry_view_take_local_source_table(view, source) != 0
+            status: 1
+        if: status = 0
+            source: 0
+        if: status = 0 && lm_registry_view_take_local_source_table(view, source_b) != 0
+            status: 1
+        if: status = 0
+            source_b: 0
+        if: status = 0 && lm_registry_view_source_table_count(view) != 2U
+            status: 1
+        catalog_table: lm_registry_view_source_table_at(view, 0U)
+        if: status = 0 && (catalog_table = 0 || catalog_table\name = 0 || c.strcmp(catalog_table\name, "source.ncolumn") != 0)
+            status: 1
+        catalog_table: lm_registry_view_source_table_at(view, 1U)
+        if: status = 0 && (catalog_table = 0 || catalog_table\name = 0 || c.strcmp(catalog_table\name, "source.ncolumn.b") != 0)
+            status: 1
+        if: status = 0 && lm_registry_view_append_materialized_rows(view, joined, "source.ncolumn", 14U) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_append_materialized_rows(view, joined, "source.ncolumn.b", 16U) != 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_add_row(joined, "local", "localLeft", "localLeft", "localRight", "localRight", "None", 0) != 0
+            status: 1
+        if: status = 0 && lm_table_descriptor_materialized_row_count(joined) != 7U
+            status: 1
+
+        source_row: lm_table_descriptor_materialized_row_at(lm_registry_view_find_source_table_slice(view, "source.ncolumn", 14U), 0U)
+        joined_row: lm_table_descriptor_materialized_row_at(joined, 0U)
+        cell: lm_table_row_cell_at(joined_row, 1U)
+        if: status = 0 && (source_row = 0 || joined_row = 0 || joined_row = source_row || joined_row\source != source_row || joined_row\local_sequence != 0U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "left raw") != 0 || cell\source != lm_registry_view_find_source_table_slice(view, "source.ncolumn", 14U))
+            status: 1
+        source_row: lm_table_descriptor_materialized_row_at(lm_registry_view_find_source_table_slice(view, "source.ncolumn.b", 16U), 0U)
+        joined_row: lm_table_descriptor_materialized_row_at(joined, 4U)
+        cell: lm_table_row_cell_at(joined_row, 0U)
+        if: status = 0 && (source_row = 0 || joined_row = 0 || joined_row\source != source_row || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "bFirst") != 0)
+            status: 1
+        joined_row: lm_table_descriptor_materialized_row_at(joined, 6U)
+        cell: lm_table_row_cell_at(joined_row, 0U)
+        if: status = 0 && (joined_row = 0 || joined_row\source != 0 || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "local") != 0)
+            status: 1
+
+        if: status = 0 && lm_test_ncolumn_add_column(key_only, "class", "class", 0U, 0U, 0, "key", 0) != 0
+            status: 1
+        if: status = 0 && (lm_registry_view_append_materialized_rows(view, key_only, "source.ncolumn", 14U) != 0 || lm_table_descriptor_materialized_row_count(key_only) != 0U)
+            status: 1
+        row: lm_table_row_new(0)
+        if: status = 0 && (row = 0 || lm_test_ncolumn_take_cell(row, "only", "only", 0, 0, 0) != 0 || lm_table_descriptor_take_materialized_row(key_only, row) != 0)
+            status: 1
+        if: status = 0
+            row: 0
+        lm_table_row_delete_any(row)
+        if: status = 0 && (lm_table_descriptor_materialized_row_count(key_only) != 1U || lm_table_row_cell_count(lm_table_descriptor_materialized_row_at(key_only, 0U)) != 1U || lm_table_descriptor_column_at(key_only, 1U) != 0 || lm_table_descriptor_materialized_row_at(key_only, 1U) != 0)
+            status: 1
+
+        variant: lm_table_descriptor_new_empty_slice("source.ncolumn", 14U)
+        broken_source: lm_test_ncolumn_schema("broken.ncolumn")
+        rollback_target: lm_test_ncolumn_schema("rollback.target")
+        if: variant = 0 || broken_source = 0 || rollback_target = 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_add_column(variant, "class", "class", 0U, 0U, 0, "key", 0) != 0
+            status: 1
+        row: lm_table_row_new(0)
+        if: status = 0 && (row = 0 || lm_test_ncolumn_take_cell(row, "variant", "variant", 0, variant, 0) != 0 || lm_table_descriptor_take_materialized_row(variant, row) != 0)
+            status: 1
+        if: status = 0
+            row: 0
+        lm_table_row_delete_any(row)
+        if: status = 0 && lm_test_ncolumn_add_row(broken_source, "valid", "left", "left", "right", "right", "None", 0) != 0
+            status: 1
+        if: status = 0 && lm_own_ptr_stack_push(broken_source\materialized_rows, 0) != 0
+            status: 1
+        if: status = 0 && lm_registry_view_take_local_source_table(view, variant) != 0
+            status: 1
+        if: status = 0
+            variant: 0
+        if: status = 0 && lm_registry_view_take_local_source_table(view, broken_source) != 0
+            status: 1
+        if: status = 0
+            broken_source: 0
+        catalog_table: lm_registry_view_source_table_at(view, 2U)
+        if: status = 0 && (lm_registry_view_source_table_count(view) != 4U || catalog_table = 0 || lm_table_descriptor_column_count(catalog_table) != 1U || lm_registry_view_find_source_table_slice(view, "source.ncolumn", 14U) != catalog_table)
+            status: 1
+        if: status = 0 && (lm_registry_view_append_materialized_rows(view, joined, "source.ncolumn", 14U) != 0 || lm_table_descriptor_materialized_row_count(joined) != 11U)
+            status: 1
+        if: status = 0 && (lm_registry_view_append_materialized_rows(view, rollback_target, "broken.ncolumn", 14U) = 0 || lm_table_descriptor_materialized_row_count(rollback_target) != 0U)
+            status: 1
+
+        lm_table_descriptor_delete_any(joined)
+        lm_table_descriptor_delete_any(key_only)
+        lm_table_descriptor_delete_any(rollback_target)
+        lm_table_descriptor_delete_any(broken_source)
+        lm_table_descriptor_delete_any(variant)
+        lm_table_descriptor_delete_any(source_b)
+        lm_table_descriptor_delete_any(source)
+        lm_registry_view_delete(view)
+    return: status
+end: external

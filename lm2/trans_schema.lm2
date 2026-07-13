@@ -890,5 +890,10 @@ L4:
         columns((class: class) (class: `field.class`)  (size_t: `field.index`))
         rows:
                  allow_node_cells  int                    0
+                 source_table     LmTableDescriptor      1
+                 expected_direct_rows size_t              2
+                 materialized_direct_rows size_t          3
+                 projection_facts LmOwnPtrStack            4
+                 source_table_initial_row_count size_t     5
     end: LmTransL4LoadContext
 end: L4

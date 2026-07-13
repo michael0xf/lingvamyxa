@@ -18,6 +18,8 @@ external:
             return: 1
 
         status: 0
+        if: lm_registry_view_take_local_source_table(0, 0) = 0 || lm_registry_view_append_materialized_rows(0, 0, "invalid", 7U) = 0
+            status: 1
         if: lm_registry_view_push_relation(base, "registry.view.core", "default", "baseDefault", 0, base) != 0
             status: 1
         if: status = 0 && lm_registry_view_push_relation(base, "registry.view.core", "inherited", "baseExact", 0, base) != 0

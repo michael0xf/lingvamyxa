@@ -1304,6 +1304,118 @@ fn: lm_trans_registry_table_has_rows (const: @(char table)) int
         return: view_has_rows
 return: legacy_has_rows
 
+fn: lm_trans_registry_source_cell_copy_same (const: (LmTableCell: copied); const: (LmTableCell: source)) int
+    if: copied = 0 || source = 0 || copied = source
+        return: 0
+    if: (copied\atom = 0) != (source\atom = 0) || (copied\value = 0) != (source\value = 0)
+        return: 0
+    if: copied\atom != 0 && (copied\atom = source\atom || c.strcmp(copied\atom, source\atom) != 0)
+        return: 0
+    if: copied\value != 0 && (copied\value = source\value || c.strcmp(copied\value, source\value) != 0)
+        return: 0
+return: copied\node = source\node && copied\source = source\source && copied\explicit_none = source\explicit_none
+
+fn: lm_trans_registry_source_row_copy_same (const: (LmTableRow: copied); const: (LmTableRow: source)) int
+    size_t: cell_index
+
+    if: copied = 0 || source = 0 || copied = source || lm_table_row_cell_count(copied) != lm_table_row_cell_count(source)
+        return: 0
+    cell_index: 0U
+    while: cell_index < lm_table_row_cell_count(copied)
+        if: lm_trans_registry_source_cell_copy_same(lm_table_row_cell_at(copied, cell_index), lm_table_row_cell_at(source, cell_index)) = 0
+            return: 0
+        cell_index: cell_index + 1U
+return: 1
+
+fn: lm_trans_registry_assert_source_table_materialization () int
+    size_t: source_table_count
+    size_t: descriptor_index
+    size_t: column_count
+    size_t: column_index
+    size_t: descriptor_count
+    size_t: row_count
+    size_t: row_index
+    size_t: cell_index
+    const: LmTableDescriptor: descriptor
+    const: LmTableColumnDescriptor: column
+    const: @: char first_descriptor
+    const: LmTableRow: row
+    const: LmTableRow: source_row
+    const: LmTableCell: key_cell
+    const: LmTableCell: cell
+    const: LmTransRegistryFact: fact
+
+    if: c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+    source_table_count: lm_registry_view_source_table_count(c.lm_trans_registry->view)
+    descriptor_index: 0U
+    while: descriptor_index < source_table_count
+        descriptor: lm_registry_view_source_table_at(c.lm_trans_registry->view, descriptor_index)
+        column_count: lm_table_descriptor_column_count(descriptor)
+        if: descriptor = 0 || descriptor\name = 0 || column_count = 0U
+            c.fprintf(c.stderr, "trans registry source table error: invalid descriptor at %zu\n", descriptor_index)
+            return: 1
+
+        column_index: 0U
+        while: column_index < column_count
+            column: lm_table_descriptor_column_at(descriptor, column_index)
+            if: column = 0 || column\name = 0 || column\index != column_index || column\descriptors = 0
+                c.fprintf(c.stderr, "trans registry source table error: invalid column %zu for %s\n", column_index, descriptor\name)
+                return: 1
+            descriptor_count: lm_table_column_descriptor_descriptor_count(column)
+            first_descriptor: lm_table_column_descriptor_descriptor_at(column, 0U)
+            if: (descriptor_count = 0U && column\descriptor != 0) || (descriptor_count != 0U && (column\descriptor = 0 || first_descriptor = 0 || c.strcmp(column\descriptor, first_descriptor) != 0))
+                c.fprintf(c.stderr, "trans registry source table error: descriptor order differs for %s.%s\n", descriptor\name, column\name)
+                return: 1
+            column_index: column_index + 1U
+
+        row_count: lm_table_descriptor_materialized_row_count(descriptor)
+        row_index: 0U
+        while: row_index < row_count
+            row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+            if: row = 0 || row\local_sequence != row_index || lm_table_row_cell_count(row) != column_count
+                c.fprintf(c.stderr, "trans registry source table error: invalid row %zu for %s\n", row_index, descriptor\name)
+                return: 1
+            key_cell: lm_table_row_cell_at(row, 0U)
+            if: key_cell = 0 || key_cell\atom = 0 || key_cell\value = 0 || key_cell\node != 0 || key_cell\source != 0
+                c.fprintf(c.stderr, "trans registry source table error: invalid key cell in %s row %zu\n", descriptor\name, row_index)
+                return: 1
+
+            if: row\source != 0
+                source_row: row\source
+                if: lm_trans_registry_source_row_copy_same(row, source_row) = 0
+                    c.fprintf(c.stderr, "trans registry source table error: joined row copy differs in %s row %zu\n", descriptor\name, row_index)
+                    return: 1
+            ---
+
+            cell_index: 1U
+            while: cell_index < column_count
+                cell: lm_table_row_cell_at(row, cell_index)
+                if: cell = 0
+                    return: 1
+                if: cell\explicit_none != 0
+                    if: cell\atom = 0 || cell\value != 0 || cell\node != 0 || cell\source != 0
+                        c.fprintf(c.stderr, "trans registry source table error: invalid None cell in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
+                        return: 1
+                ---
+                else:
+                    if: cell\source = 0
+                        if: cell\value != 0 || cell\node != 0
+                            c.fprintf(c.stderr, "trans registry source table error: materialized cell has no legacy source in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
+                            return: 1
+                    ---
+                    else:
+                        fact: cast: (const: LmTransRegistryFact) cell\source
+                        if: fact\key = 0 || c.strcmp(fact\key, key_cell\value) != 0 || (fact\payload = 0) != (cell\value = 0) || (fact\payload != 0 && c.strcmp(fact\payload, cell\value) != 0) || fact\payload_node != cell\node
+                            c.fprintf(c.stderr, "trans registry source table error: legacy projection differs in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
+                            return: 1
+                    ---
+                ---
+                cell_index: cell_index + 1U
+            row_index: row_index + 1U
+        descriptor_index: descriptor_index + 1U
+return: 0
+
 fn: lm_trans_registry_assert_view_parity () int
     size_t: fact_count
     size_t: i
@@ -1334,6 +1446,8 @@ fn: lm_trans_registry_assert_view_parity () int
     if: c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
         c.fprintf(c.stderr, "trans registry view parity error: registry view is not initialized\n")
         return: 1
+    if: lm_trans_registry_assert_source_table_materialization() != 0
+        return: 1
 
     fact_count: lm_registry_view_fact_count(c.lm_trans_registry->view)
     if: fact_count != c.lm_trans_registry->loaded_fact_count
@@ -1356,12 +1470,12 @@ fn: lm_trans_registry_assert_view_parity () int
     while: descriptor_index < c.lm_trans_registry->view->tables->count
         descriptor: lm_own_ptr_stack_at(c.lm_trans_registry->view->tables, descriptor_index)
         if: descriptor = 0 || lm_table_descriptor_column_count(descriptor) != 2U
-            c.fprintf(c.stderr, "trans registry view parity error: canonical table schema is missing\n")
+            c.fprintf(c.stderr, "trans registry view parity error: legacy projection schema is missing\n")
             return: 1
         key_column: lm_table_descriptor_column_at(descriptor, 0U)
         payload_column: lm_table_descriptor_column_at(descriptor, 1U)
         if: key_column = 0 || payload_column = 0 || key_column\name = 0 || payload_column\name = 0 || key_column\descriptor = 0 || payload_column\descriptor = 0 || c.strcmp(key_column\name, "class") != 0 || c.strcmp(payload_column\name, "value") != 0 || c.strcmp(key_column\descriptor, "key") != 0 || c.strcmp(payload_column\descriptor, "payload") != 0
-            c.fprintf(c.stderr, "trans registry view parity error: canonical columns differ for %s\n", descriptor\name)
+            c.fprintf(c.stderr, "trans registry view parity error: legacy projection columns differ for %s\n", descriptor\name)
             return: 1
 
         table_stack: lm_trans_registry_relation_stack_for_table(descriptor\name)

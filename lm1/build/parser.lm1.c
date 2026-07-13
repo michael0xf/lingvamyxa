@@ -177,6 +177,10 @@ struct LmL4Column {
     const LmP0Text * name;
     const LmP0Text * descriptors[16U];
     size_t descriptor_count;
+    const LmP0Text * type_name;
+    size_t address_depth;
+    size_t array_rank;
+    int is_const;
 };
 struct LmL4Loader {
     const char *error_prefix;
@@ -188,6 +192,7 @@ struct LmL4Loader {
     int (*dispatch_frame)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
     int (*formal_param_unwrap_index)(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
     int (*positional_name_index)(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+    int (*push_table_row)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells);
 };
 typedef struct LmP0StreamEvent {
     LmP0StreamEventKind kind;
@@ -297,6 +302,7 @@ typedef void (*LmOwnDestroyFields)(void *object);
 typedef void (*LmOwnDelete)(void *object);
 typedef int (*LmL4PushRow)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
 typedef int (*LmL4PushCell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4PushTableRow)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells);
 typedef int (*LmL4NoteKey)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
 typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
 typedef int (*LmL4JoinTable)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
@@ -395,6 +401,8 @@ static int lm_l4_frame_formal_param_unwrap_index(const LmL4Loader *loader, void 
 static int lm_l4_frame_positional_name_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 static int lm_l4_formal_param_name(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_name);
 static int lm_l4_column_descriptor_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_descriptor);
+static size_t lm_l4_array_receiver_rank(const LmP0Text *head);
+static int lm_l4_column_type_shape(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column);
 static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column);
 static int lm_l4_structure_single_visible_frame(const LmP0Structure *structure, const LmP0Frame **out_frame);
 static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, const LmP0Text **out_atom);
@@ -791,6 +799,94 @@ static int lm_l4_column_descriptor_from_param_node(const LmL4Loader *loader, voi
     return 0;
 }
 
+static size_t lm_l4_array_receiver_rank(const LmP0Text *head) {
+    size_t i;
+    size_t rank;
+    if (head == 0) {
+        return 0U;
+    }
+    i = 0U;
+    rank = 0U;
+    while (i < head -> length) {
+        if (head -> data[i] != '[') {
+            return 0U;
+        }
+        i = i + 1U;
+        while (i < head -> length && head -> data[i] != ']') {
+            i = i + 1U;
+        }
+        if (i >= head -> length) {
+            return 0U;
+        }
+        i = i + 1U;
+        rank = rank + 1U;
+    }
+    return rank;
+}
+
+static int lm_l4_column_type_shape(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column) {
+    const LmP0Node * current;
+    const LmP0Frame * frame;
+    const LmP0Field * field;
+    size_t index;
+    size_t rank;
+    if (node == 0 || out_column == 0) {
+        return 0;
+    }
+    current = node;
+    while (current != 0) {
+        if (current -> kind == LM_P0_NODE_STRUCTURE) {
+            if (lm_l4_structure_single_visible_node(current -> as -> structure, &current) == 0) {
+                return 1;
+            }
+            continue;
+        }
+        if (current -> kind == LM_P0_NODE_ATOM) {
+            out_column->type_name = current -> as -> atom;
+            return 1;
+        }
+        if (current -> kind != LM_P0_NODE_FRAME) {
+            return 1;
+        }
+        frame = current -> as -> frame;
+        if (lm_l4_text_equals(frame -> head, "const") != 0) {
+            out_column->is_const = 1;
+            if (lm_l4_frame_formal_param_unwrap_index(loader, context, frame, &index) == 0) {
+                index = 0U;
+            }
+            field = lm_l4_nth_field(frame -> body, index);
+            if (field == 0 || field -> value == 0) {
+                return 0;
+            }
+            current = field -> value;
+            continue;
+        }
+        if (lm_l4_text_all_char(frame -> head, '@') != 0) {
+            out_column->address_depth = out_column -> address_depth + frame -> head -> length;
+            field = lm_l4_nth_field(frame -> body, 0U);
+            if (field == 0 || field -> value == 0) {
+                return 0;
+            }
+            current = field -> value;
+            continue;
+        }
+        rank = lm_l4_array_receiver_rank(frame -> head);
+        if (rank != 0U) {
+            out_column->array_rank = out_column -> array_rank + rank;
+            out_column->address_depth = out_column -> address_depth + 1U;
+            field = lm_l4_nth_field(frame -> body, 0U);
+            if (field == 0 || field -> value == 0) {
+                return 0;
+            }
+            current = field -> value;
+            continue;
+        }
+        out_column->type_name = frame -> head;
+        return 1;
+    }
+    return 1;
+}
+
 static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column) {
     const LmP0Text * atom;
     if (node == 0 || out_column == 0) {
@@ -803,6 +899,9 @@ static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *con
     if (lm_l4_column_descriptor_from_param_node(loader, context, node, &atom) != 0) {
         out_column->descriptors[0] = atom;
         out_column->descriptor_count = 1U;
+    }
+    if (lm_l4_column_type_shape(loader, context, node, out_column) == 0) {
+        return -1;
     }
     return 1;
 }
@@ -1034,14 +1133,15 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
     const LmP0Node * key_node;
     const LmP0Node * cell_node;
     const LmP0Text * key_atom;
+    const LmP0Node * *row_cells;
     size_t field_index;
     size_t column_index;
     int split_by_column;
     if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "rows") == 0) {
         return 0;
     }
-    if (loader == 0 || loader -> push_cell == 0) {
-        lm_l4_error(loader, "cell consumer is not configured");
+    if (loader == 0 || (loader -> push_cell == 0 && loader -> push_table_row == 0)) {
+        lm_l4_error(loader, "table row consumer is not configured");
         return -1;
     }
     if (columns == 0 || column_count == 0U) {
@@ -1055,6 +1155,11 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
         }
         return 1;
     }
+    row_cells = lm_own_new_zero(column_count * sizeof(row_cells[0]));
+    if (row_cells == 0) {
+        lm_l4_error(loader, "out of memory while reading table rows");
+        return -1;
+    }
     field_index = 0U;
     key_node = 0;
     key_atom = 0;
@@ -1063,26 +1168,35 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
     while (field != 0) {
         if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
             column_index = field_index % column_count;
+            row_cells[column_index] = field -> value;
             if (column_index == 0U) {
                 key_node = field -> value;
                 if (key_node -> kind != LM_P0_NODE_ATOM) {
                     lm_l4_error(loader, "table rows currently expect atom cells in the key column");
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
                 key_atom = lm_l4_node_atom(key_node);
                 if (key_atom == 0) {
                     lm_l4_error(loader, "table rows currently expect atom cells in the key column");
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
                 if (loader -> note_key != 0 && loader->note_key(context, table_name, columns[0], key_atom) != 0) {
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
             }
-            if (column_index != 0U) {
+            if (column_index != 0U && loader -> push_cell != 0) {
                 cell_node = field -> value;
                 if (key_node == 0 || key_atom == 0 || loader->push_cell(context, table_name, columns[column_index], split_by_column, key_atom, cell_node) != 0) {
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
+            }
+            if (column_index + 1U == column_count && loader -> push_table_row != 0 && loader->push_table_row(context, table_name, columns, column_count, row_cells) != 0) {
+                lm_own_delete(row_cells, 0);
+                return -1;
             }
             field_index = field_index + 1U;
         }
@@ -1090,8 +1204,10 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
     }
     if ((field_index % column_count) != 0U) {
         lm_l4_error(loader, "rows field count is not divisible by column count; use explicit None for empty cells");
+        lm_own_delete(row_cells, 0);
         return -1;
     }
+    lm_own_delete(row_cells, 0);
     return 1;
 }
 

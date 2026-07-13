@@ -2018,26 +2018,59 @@ fn: lm_trans_registry_l4_loader_get () const: LmL4Loader
         return: lm_trans_registry\l4_loader
 return: 0
 
+fn: lm_trans_registry_l4_load_context_new (int: allow_node_cells) LmTransL4LoadContext
+    LmTransL4LoadContext: context
+
+    context: lm_own_new_zero(c.sizeof(context[0]))
+    if: context = 0
+        return: 0
+    context\projection_facts: lm_table_descriptor_stack_new(0)
+    context\allow_node_cells: allow_node_cells
+    if: context\projection_facts = 0
+        lm_own_delete(context, 0)
+        return: 0
+return: context
+
+sub: lm_trans_registry_l4_load_context_delete (LmTransL4LoadContext: context)
+    if: context = 0
+        return
+    if: context\projection_facts != 0
+        lm_own_ptr_stack_destroy(context\projection_facts)
+        lm_own_delete(context\projection_facts, 0)
+        context\projection_facts: 0
+    context\source_table: 0
+    lm_own_delete(context, 0)
+end: lm_trans_registry_l4_load_context_delete
+
+sub: lm_trans_registry_l4_load_context_rollback (LmTransL4LoadContext: context)
+    if: context = 0 || context\source_table = 0 || context\source_table\materialized_rows = 0
+        return
+    lm_own_ptr_stack_truncate(context\source_table\materialized_rows, context\source_table_initial_row_count)
+end: lm_trans_registry_l4_load_context_rollback
+
 fn: lm_trans_registry_load_table_frame_common (const: (LmP0Frame: frame); int: allow_node_cells; const: @(char error_context)) int
     LmTransL4LoadContext: context
     const: @: char context_name
     int: status
 
-    context: lm_own_new_zero(c.sizeof(context[0]))
+    context: lm_trans_registry_l4_load_context_new(allow_node_cells)
     if: context = 0
         return: 1
-    context\allow_node_cells: allow_node_cells
+    context_name: error_context
+    if: context_name = 0
+        context_name: "trans registry"
     status: lm_l4_table_from_frame(lm_trans_registry_l4_loader_get(), context, frame)
+    if: status > 0 && context\expected_direct_rows != context\materialized_direct_rows
+        c.fprintf(c.stderr, "%s error: direct table row materialization count differs (expected=%zu materialized=%zu)\n", context_name, context\expected_direct_rows, context\materialized_direct_rows)
+        status: -1
     if: status <= 0
+        lm_trans_registry_l4_load_context_rollback(context)
         if: status = 0
-            context_name: error_context
-            if: context_name = 0
-                context_name: "trans registry"
             c.fprintf(c.stderr, "%s error: table receiver expects a table frame\n", context_name)
         ---
-        lm_own_delete(context, 0)
+        lm_trans_registry_l4_load_context_delete(context)
         return: 1
-    lm_own_delete(context, 0)
+    lm_trans_registry_l4_load_context_delete(context)
 return: 0
 
 fn: lm_trans_l4_receiver_table (const: (LmP0Frame: frame); int: allow_node_cells) int
@@ -2047,17 +2080,20 @@ fn: lm_trans_l4_receiver_join (const: (LmP0Frame: frame); int: allow_node_cells)
     LmTransL4LoadContext: context
     int: status
 
-    context: lm_own_new_zero(c.sizeof(context[0]))
+    context: lm_trans_registry_l4_load_context_new(allow_node_cells)
     if: context = 0
         return: 1
-    context\allow_node_cells: allow_node_cells
     status: lm_l4_join_from_frame(lm_trans_registry_l4_loader_get(), context, frame)
+    if: status > 0 && context\expected_direct_rows != context\materialized_direct_rows
+        c.fprintf(c.stderr, "trans L4 error: direct join row materialization count differs (expected=%zu materialized=%zu)\n", context\expected_direct_rows, context\materialized_direct_rows)
+        status: -1
     if: status <= 0
+        lm_trans_registry_l4_load_context_rollback(context)
         if: status = 0
             c.fprintf(c.stderr, "trans L4 error: join receiver expects a join frame\n")
-        lm_own_delete(context, 0)
+        lm_trans_registry_l4_load_context_delete(context)
         return: 1
-    lm_own_delete(context, 0)
+    lm_trans_registry_l4_load_context_delete(context)
 return: 0
 
 fn: lm_trans_l4_receiver_row (const: (LmP0Frame: frame); int: allow_node_cells) int
@@ -2426,39 +2462,277 @@ fn: lm_trans_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom
     lm_trans_l4_text_view_delete(@ key_value)
 return: status
 
+fn: lm_trans_registry_l4_source_descriptor_new (const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) LmTableDescriptor
+    LmP0Text: table_value
+    LmP0Text: column_value
+    LmP0Text: descriptor_value
+    LmP0Text: type_value
+    LmTableDescriptor: descriptor
+    LmTableColumnDescriptor: target_column
+    size_t: column_index
+    size_t: descriptor_index
+
+    if: table_name = 0 || columns = 0 || column_count = 0U
+        return: 0
+    table_value: lm_trans_l4_text_view_new("")
+    column_value: lm_trans_l4_text_view_new("")
+    descriptor_value: lm_trans_l4_text_view_new("")
+    type_value: lm_trans_l4_text_view_new("")
+    descriptor: 0
+    if: table_value = 0 || column_value = 0 || descriptor_value = 0 || type_value = 0 || lm_trans_registry_identifier_value(table_name, table_value) = 0
+        lm_trans_l4_text_view_delete(@ table_value)
+        lm_trans_l4_text_view_delete(@ column_value)
+        lm_trans_l4_text_view_delete(@ descriptor_value)
+        lm_trans_l4_text_view_delete(@ type_value)
+        return: 0
+
+    descriptor: lm_table_descriptor_new_empty_slice(table_value\data, table_value\length)
+    column_index: 0U
+    while: descriptor != 0 && column_index < column_count
+        if: columns[column_index] = 0 || columns[column_index]\name = 0 || lm_trans_registry_identifier_value(columns[column_index]\name, column_value) = 0
+            lm_table_descriptor_delete_any(descriptor)
+            descriptor: 0
+            break
+        if: columns[column_index]\type_name != 0
+            if: lm_trans_registry_identifier_value(columns[column_index]\type_name, type_value) = 0
+                lm_table_descriptor_delete_any(descriptor)
+                descriptor: 0
+                break
+            target_column: lm_table_column_descriptor_new_slice(column_value\data, column_value\length, type_value\data, type_value\length, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const)
+        else:
+            target_column: lm_table_column_descriptor_new_slice(column_value\data, column_value\length, 0, 0U, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const)
+        if: target_column = 0
+            lm_table_descriptor_delete_any(descriptor)
+            descriptor: 0
+            break
+
+        descriptor_index: 0U
+        while: descriptor_index < columns[column_index]\descriptor_count
+            if: columns[column_index]\descriptors[descriptor_index] = 0 || lm_trans_registry_identifier_value(columns[column_index]\descriptors[descriptor_index], descriptor_value) = 0 || lm_table_column_descriptor_add_descriptor_slice(target_column, descriptor_value\data, descriptor_value\length) != 0
+                lm_table_column_descriptor_delete_any(target_column)
+                lm_table_descriptor_delete_any(descriptor)
+                descriptor: 0
+                break
+            descriptor_index: descriptor_index + 1U
+        if: descriptor = 0
+            break
+        if: lm_table_descriptor_take_column(descriptor, target_column) != 0
+            lm_table_column_descriptor_delete_any(target_column)
+            lm_table_descriptor_delete_any(descriptor)
+            descriptor: 0
+            break
+        column_index: column_index + 1U
+
+    lm_trans_l4_text_view_delete(@ table_value)
+    lm_trans_l4_text_view_delete(@ column_value)
+    lm_trans_l4_text_view_delete(@ descriptor_value)
+    lm_trans_l4_text_view_delete(@ type_value)
+return: descriptor
+
+fn: lm_trans_registry_l4_push_table_row (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count; const: @: LmP0Node cells) int
+    LmTransL4LoadContext: load_context
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+    LmTableCell: cell
+    const: LmP0Node: node
+    const: LmP0Text: atom
+    LmP0Text: value
+    LmTransRegistryFact: projection
+    size_t: column_index
+    int: cell_status
+    int: explicit_none
+    int: wants_node
+
+    c.LM_UNUSED(table_name)
+    load_context: cast: (LmTransL4LoadContext) context
+    if: load_context = 0 || load_context\source_table = 0 || load_context\projection_facts = 0 || columns = 0 || cells = 0 || column_count = 0U
+        return: -1
+    descriptor: load_context\source_table
+    if: lm_table_descriptor_column_count(descriptor) != column_count || load_context\projection_facts\count + 1U != column_count
+        return: -1
+    row: lm_table_row_new(0)
+    value: lm_trans_l4_text_view_new("")
+    if: row = 0 || value = 0
+        lm_table_row_delete_any(row)
+        lm_trans_l4_text_view_delete(@ value)
+        return: -1
+
+    column_index: 0U
+    while: column_index < column_count
+        node: cells[column_index]
+        atom: 0
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM
+            atom: node\as\atom
+        explicit_none: atom != 0 && lm_trans_registry_payload_is_null(atom) != 0
+        projection: 0
+        cell_status: 0
+        wants_node: 0
+
+        if: column_index = 0U
+            if: atom = 0 || lm_trans_registry_identifier_value(atom, value) = 0
+                lm_table_row_delete_any(row)
+                lm_trans_l4_text_view_delete(@ value)
+                return: -1
+            cell: lm_table_cell_new_slice(atom\data, atom\length, value\data, value\length, 0, 0, explicit_none)
+        else:
+            wants_node: lm_trans_registry_column_has_descriptor(columns[column_index], "node")
+            if: wants_node != 0
+                if: explicit_none != 0
+                    cell: lm_table_cell_new_slice(atom\data, atom\length, 0, 0U, 0, 0, 1)
+                else:
+                    projection: lm_own_ptr_stack_at(load_context\projection_facts, column_index - 1U)
+                    if: projection = 0 || projection\payload_node = 0
+                        lm_table_row_delete_any(row)
+                        lm_trans_l4_text_view_delete(@ value)
+                        return: -1
+                    if: atom != 0
+                        cell: lm_table_cell_new_slice(atom\data, atom\length, 0, 0U, projection\payload_node, projection, 0)
+                    else:
+                        cell: lm_table_cell_new_slice(0, 0U, 0, 0U, projection\payload_node, projection, 0)
+            ---
+            else:
+                if: atom = 0
+                    lm_table_row_delete_any(row)
+                    lm_trans_l4_text_view_delete(@ value)
+                    return: -1
+                cell_status: lm_trans_registry_cell_value(atom, columns[column_index], value)
+                if: cell_status < 0
+                    lm_table_row_delete_any(row)
+                    lm_trans_l4_text_view_delete(@ value)
+                    return: -1
+                if: cell_status = 0
+                    cell: lm_table_cell_new_slice(atom\data, atom\length, 0, 0U, 0, 0, explicit_none)
+                else:
+                    projection: lm_own_ptr_stack_at(load_context\projection_facts, column_index - 1U)
+                    if: projection = 0 || projection\payload = 0
+                        lm_table_row_delete_any(row)
+                        lm_trans_l4_text_view_delete(@ value)
+                        return: -1
+                    cell_status: lm_table_descriptor_cstr_equals_slice(projection\payload, value\data, value\length)
+                    if: cell_status = 0
+                        lm_table_row_delete_any(row)
+                        lm_trans_l4_text_view_delete(@ value)
+                        return: -1
+                    cell: lm_table_cell_new_slice(atom\data, atom\length, projection\payload, c.strlen(projection\payload), 0, projection, 0)
+        ---
+
+        if: cell = 0 || lm_table_row_take_cell(row, cell) != 0
+            lm_table_cell_delete_any(cell)
+            lm_table_row_delete_any(row)
+            lm_trans_l4_text_view_delete(@ value)
+            return: -1
+        column_index: column_index + 1U
+
+    lm_trans_l4_text_view_delete(@ value)
+    if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+        lm_table_row_delete_any(row)
+        return: -1
+    lm_own_ptr_stack_truncate(load_context\projection_facts, 0U)
+    load_context\materialized_direct_rows: load_context\materialized_direct_rows + 1U
+return: 0
+
 fn: lm_trans_registry_l4_note_key (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); const: (LmP0Text: key_atom)) int
-    c.LM_UNUSED(context)
+    LmTransL4LoadContext: load_context
+
     c.LM_UNUSED(table_name)
     if: key_atom = 0
         return: -1
+    load_context: cast: (LmTransL4LoadContext) context
+    if: load_context != 0
+        if: load_context\projection_facts = 0 || load_context\projection_facts\count != 0U
+            return: -1
+        load_context\expected_direct_rows: load_context\expected_direct_rows + 1U
     if: lm_trans_registry_column_is_class_typed(column) != 0
         return: lm_trans_registry_note_class_present(key_atom)
 return: 0
 
 fn: lm_trans_registry_l4_push_cell (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
     LmTransL4LoadContext: load_context
+    const: LmRegistryViewRow: view_row
+    LmTransRegistryFact: projection
+    size_t: fact_count_before
     int: allow_node_cells
 
     load_context: cast: (LmTransL4LoadContext) context
-    if: table_name = 0 || key_atom = 0
+    if: table_name = 0 || key_atom = 0 || load_context = 0 || load_context\projection_facts = 0 || c.lm_trans_registry = 0
         return: -1
-    allow_node_cells: load_context != 0 && load_context\allow_node_cells != 0
+    allow_node_cells: load_context\allow_node_cells != 0
+    fact_count_before: c.lm_trans_registry->loaded_fact_count
     if: lm_trans_registry_push_table_cell(table_name, column, split_by_column, key_atom, payload_node, allow_node_cells) != 0
+        return: -1
+    projection: 0
+    if: c.lm_trans_registry->loaded_fact_count > fact_count_before
+        view_row: lm_registry_view_fact_at(c.lm_trans_registry->view, c.lm_trans_registry->loaded_fact_count - 1U)
+        if: view_row = 0 || view_row\source = 0
+            return: -1
+        projection: cast: (LmTransRegistryFact) view_row\source
+    ---
+    if: lm_own_ptr_stack_push(load_context\projection_facts, projection) != 0
         return: -1
     if: lm_trans_registry_column_is_class_typed(column) != 0 && payload_node != 0 && payload_node\kind = c.LM_P0_NODE_ATOM && lm_trans_registry_payload_is_null(payload_node\as\atom) = 0
         return: lm_trans_registry_note_class_present(payload_node\as\atom)
 return: 0
 
 fn: lm_trans_registry_l4_push_column_metadata (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) int
-    c.LM_UNUSED(context)
-    if: table_name = 0
+    LmTransL4LoadContext: load_context
+    LmTableDescriptor: candidate
+    LmTableDescriptor: existing
+
+    load_context: cast: (LmTransL4LoadContext) context
+    if: load_context = 0 || table_name = 0 || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
         return: -1
+    candidate: lm_trans_registry_l4_source_descriptor_new(table_name, columns, column_count)
+    if: candidate = 0
+        return: -1
+    existing: lm_registry_view_find_local_source_table_slice(c.lm_trans_registry->view, candidate\name, c.strlen(candidate\name))
+    if: existing != 0 && lm_table_descriptor_schema_same(existing, candidate) != 0
+        lm_table_descriptor_delete_any(candidate)
+        load_context\source_table: existing
+    else:
+        if: lm_registry_view_take_local_source_table(c.lm_trans_registry->view, candidate) != 0
+            lm_table_descriptor_delete_any(candidate)
+            return: -1
+        load_context\source_table: candidate
+    ---
+    load_context\source_table_initial_row_count: lm_table_descriptor_materialized_row_count(load_context\source_table)
 return: lm_trans_registry_push_column_metadata(table_name, columns, column_count)
 
 fn: lm_trans_registry_l4_join_table (@: void context; const: (LmP0Text: source_table); const: (LmP0Text: target_table)) int
-    c.LM_UNUSED(context)
-    if: lm_trans_registry_join_table(source_table, target_table) != 0
+    LmTransL4LoadContext: load_context
+    LmP0Text: source_value
+    LmP0Text: target_value
+    size_t: target_row_count
+
+    load_context: cast: (LmTransL4LoadContext) context
+    if: load_context = 0 || load_context\source_table = 0 || source_table = 0 || target_table = 0
         return: -1
+    source_value: lm_trans_l4_text_view_new("")
+    target_value: lm_trans_l4_text_view_new("")
+    if: source_value = 0 || target_value = 0
+        lm_trans_l4_text_view_delete(@ source_value)
+        lm_trans_l4_text_view_delete(@ target_value)
+        return: -1
+    if: lm_trans_registry_identifier_value(source_table, source_value) = 0 || lm_trans_registry_identifier_value(target_table, target_value) = 0
+        lm_trans_l4_text_view_delete(@ source_value)
+        lm_trans_l4_text_view_delete(@ target_value)
+        return: -1
+    if: lm_table_descriptor_cstr_equals_slice(load_context\source_table\name, target_value\data, target_value\length) = 0
+        lm_trans_l4_text_view_delete(@ source_value)
+        lm_trans_l4_text_view_delete(@ target_value)
+        return: -1
+    target_row_count: lm_table_descriptor_materialized_row_count(load_context\source_table)
+    if: lm_registry_view_append_materialized_rows(c.lm_trans_registry->view, load_context\source_table, source_value\data, source_value\length) != 0
+        c.fprintf(c.stderr, "trans registry error: cannot copy source rows in join %.*s -> %.*s\n", (cast: int source_value\length), source_value\data, (cast: int target_value\length), target_value\data)
+        lm_trans_l4_text_view_delete(@ source_value)
+        lm_trans_l4_text_view_delete(@ target_value)
+        return: -1
+    if: lm_trans_registry_join_table(source_table, target_table) != 0
+        lm_own_ptr_stack_truncate(load_context\source_table\materialized_rows, target_row_count)
+        lm_trans_l4_text_view_delete(@ source_value)
+        lm_trans_l4_text_view_delete(@ target_value)
+        return: -1
+    lm_trans_l4_text_view_delete(@ source_value)
+    lm_trans_l4_text_view_delete(@ target_value)
 return: 0
 
 fn: lm_trans_registry_l4_formal_param_unwrap_index (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame); @: size_t out_index) int
@@ -2537,6 +2811,7 @@ fn: lm_trans_registry_l4_loader_new () LmL4Loader
     loader\push_cell: @ lm_trans_registry_l4_push_cell
     loader\note_key: @ lm_trans_registry_l4_note_key
     loader\push_column_metadata: @ lm_trans_registry_l4_push_column_metadata
+    loader\push_table_row: @ lm_trans_registry_l4_push_table_row
     loader\join_table: @ lm_trans_registry_l4_join_table
     loader\dispatch_frame: @ lm_trans_registry_l4_dispatch_frame
     loader\formal_param_unwrap_index: @ lm_trans_registry_l4_formal_param_unwrap_index

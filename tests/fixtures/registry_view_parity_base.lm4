@@ -25,6 +25,46 @@ table:
 end: `registry.view.parity.dotted`
 
 table:
+    name: `registry.view.parity.keyonly`
+    columns((class: class))
+    rows:
+             baseKeyOnly
+             duplicateKeyOnly
+end: `registry.view.parity.keyonly`
+
+table:
+    name: `registry.view.parity.allnone`
+    columns((class: class) (@: char left) (@: char middle) (@: char right))
+    rows:
+             baseAllNone  None  None  None
+end: `registry.view.parity.allnone`
+
+table:
+    name: `registry.view.parity.duplicateColumns`
+    columns((class: class) (@: char value) (@: char value))
+    rows:
+             baseDuplicateColumns  baseFirst  baseSecond
+end: `registry.view.parity.duplicateColumns`
+
+table:
+    name: registryViewParityWideA
+    columns((class: class) (@: char left) (@: char middle) (@: char right))
+    rows:
+             wideAFirst    aLeft       None       aRight
+             sharedWide    aShared     aMiddle    None
+             wideAAllNone  None        None       None
+end: registryViewParityWideA
+
+table:
+    name: registryViewParityWideB
+    columns((class: class) (@: char left) (@: char middle) (@: char right))
+    rows:
+             wideBFirst    bLeft       bMiddle    bRight
+             sharedWide    bShared     None       bRight
+             wideBAllNone  None        None       None
+end: registryViewParityWideB
+
+table:
     name: registryViewParityJoinBase
     columns((class: class) (@: char value))
     rows:

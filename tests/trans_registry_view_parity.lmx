@@ -19,6 +19,40 @@ registry:
                  noneLeft     None              rightSurvives
     end: `registry.view.parity.multi`
 
+    table:
+        name: `registry.view.parity.keyonly`
+        columns((class: class))
+        rows:
+                 localKeyOnly
+                 duplicateKeyOnly
+                 None
+    end: `registry.view.parity.keyonly`
+
+    table:
+        name: `registry.view.parity.allnone`
+        columns((class: class) (@: char left) (@: char middle) (@: char right))
+        rows:
+                 localAllNone      None       None         None
+                 duplicateAllNone  None       None         None
+                 duplicateAllNone  None       None         None
+    end: `registry.view.parity.allnone`
+
+    table:
+        name: `registry.view.parity.duplicateColumns`
+        columns((class: class) (@: char value) (@: char value))
+        rows:
+                 localDuplicateColumns  localFirst  localSecond
+                 partialDuplicate       survives    None
+    end: `registry.view.parity.duplicateColumns`
+
+    join: (registryViewParityWideA registryViewParityWideB) registryViewParityWideJoined
+        columns((class: class) (@: char left) (@: char middle) (@: char right))
+        rows:
+                 localWide       localLeft  None         localRight
+                 localWideNone   None       None         None
+                 sharedWide      localLast  localMiddle  None
+    end: registryViewParityWideJoined
+
     join: (registryViewParityJoinBase) registryViewParityJoined
         columns((class: class) (@: char value))
         rows:

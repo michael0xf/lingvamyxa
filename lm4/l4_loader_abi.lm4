@@ -14,6 +14,7 @@ table:
     rows:
              LmL4PushRow            1
              LmL4PushCell           1
+             LmL4PushTableRow       1
              LmL4NoteKey            1
              LmL4PushColumnMetadata 1
              LmL4JoinTable          1
@@ -48,6 +49,14 @@ fn: LmL4PushCell (
     int: split_by_column
     const: LmP0Text: key_atom
     const: LmP0Node: payload_node
+) int
+
+fn: LmL4PushTableRow (
+    @: void context
+    const: LmP0Text: table_name
+    @: LmL4Column columns
+    size_t: column_count
+    const: @: LmP0Node cells
 ) int
 
 fn: LmL4NoteKey (
@@ -156,6 +165,10 @@ table:
              name              LmP0Text
              descriptors       LmP0Text
              descriptor_count  size_t
+             type_name         LmP0Text
+             address_depth     size_t
+             array_rank        size_t
+             is_const          int
 end: `LmL4Column.field.class`
 
 table:
@@ -165,6 +178,10 @@ table:
              name              0
              descriptors       1
              descriptor_count  2
+             type_name         3
+             address_depth     4
+             array_rank        5
+             is_const          6
 end: `LmL4Column.field.index`
 
 table:
@@ -180,6 +197,8 @@ table:
     rows:
              name         0
              descriptors  0
+             type_name    0
+             address_depth 0
 end: `LmL4Column.field.address-depth`
 
 table:
@@ -188,6 +207,7 @@ table:
     rows:
              name         1
              descriptors  1
+             type_name    1
 end: `LmL4Column.field.const`
 
 table:
@@ -203,6 +223,7 @@ table:
              dispatch_frame        LmL4FrameReceiver
              formal_param_unwrap_index LmL4FrameIndexRule
              positional_name_index LmL4FrameIndexRule
+             push_table_row       LmL4PushTableRow
 end: `LmL4Loader.field.class`
 
 table:
@@ -218,6 +239,7 @@ table:
              dispatch_frame        6
              formal_param_unwrap_index 7
              positional_name_index 8
+             push_table_row       9
 end: `LmL4Loader.field.index`
 
 table:

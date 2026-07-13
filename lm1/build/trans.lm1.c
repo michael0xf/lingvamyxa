@@ -26,6 +26,8 @@ typedef struct LmP0Document LmP0Document;
 typedef struct LmL4Column LmL4Column;
 typedef struct LmL4Loader LmL4Loader;
 typedef struct LmTableColumnDescriptor LmTableColumnDescriptor;
+typedef struct LmTableCell LmTableCell;
+typedef struct LmTableRow LmTableRow;
 typedef struct LmRegistryViewRow LmRegistryViewRow;
 typedef struct LmTableDescriptor LmTableDescriptor;
 typedef struct LmRegistryView LmRegistryView;
@@ -171,6 +173,10 @@ struct LmL4Column {
     const LmP0Text * name;
     const LmP0Text * descriptors[16U];
     size_t descriptor_count;
+    const LmP0Text * type_name;
+    size_t address_depth;
+    size_t array_rank;
+    int is_const;
 };
 struct LmL4Loader {
     const char *error_prefix;
@@ -182,6 +188,7 @@ struct LmL4Loader {
     int (*dispatch_frame)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
     int (*formal_param_unwrap_index)(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
     int (*positional_name_index)(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+    int (*push_table_row)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells);
 };
 typedef struct LmTransL4FramePointerBinding {
     const char *head;
@@ -200,6 +207,24 @@ typedef struct LmTransRegistryImportFrame {
 struct LmTableColumnDescriptor {
     char *name;
     char *descriptor;
+    LmOwnPtrStack * descriptors;
+    char *type_name;
+    size_t index;
+    size_t address_depth;
+    size_t array_rank;
+    int is_const;
+};
+struct LmTableCell {
+    char *atom;
+    char *value;
+    const void *node;
+    const void *source;
+    int explicit_none;
+};
+struct LmTableRow {
+    LmOwnPtrStack * cells;
+    const LmTableRow * source;
+    size_t local_sequence;
 };
 struct LmRegistryViewRow {
     char *table;
@@ -214,12 +239,14 @@ struct LmTableDescriptor {
     LmOwnPtrStack * columns;
     LmOwnPtrStack * rows;
     LmOwnPtrStack * source_rows;
+    LmOwnPtrStack * materialized_rows;
 };
 struct LmRegistryView {
     const LmRegistryView * parent;
     LmOwnPtrStack * tables;
     LmOwnPtrStack * facts;
     size_t local_fact_count;
+    LmOwnPtrStack * source_tables;
 };
 struct LmTransIdentifierRelation {
     const char *name;
@@ -585,12 +612,18 @@ struct LmTransNamespace {
 };
 typedef struct LmTransL4LoadContext {
     int allow_node_cells;
+    LmTableDescriptor * source_table;
+    size_t expected_direct_rows;
+    size_t materialized_direct_rows;
+    LmOwnPtrStack * projection_facts;
+    size_t source_table_initial_row_count;
 } LmTransL4LoadContext;
 
 typedef void (*LmOwnDestroyFields)(void *object);
 typedef void (*LmOwnDelete)(void *object);
 typedef int (*LmL4PushRow)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
 typedef int (*LmL4PushCell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
+typedef int (*LmL4PushTableRow)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells);
 typedef int (*LmL4NoteKey)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
 typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
 typedef int (*LmL4JoinTable)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
@@ -914,6 +947,8 @@ static int lm_l4_frame_formal_param_unwrap_index(const LmL4Loader *loader, void 
 static int lm_l4_frame_positional_name_index(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 static int lm_l4_formal_param_name(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_name);
 static int lm_l4_column_descriptor_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, const LmP0Text **out_descriptor);
+static size_t lm_l4_array_receiver_rank(const LmP0Text *head);
+static int lm_l4_column_type_shape(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column);
 static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column);
 static int lm_l4_structure_single_visible_frame(const LmP0Structure *structure, const LmP0Frame **out_frame);
 static int lm_l4_frame_single_atom(const LmP0Frame *frame, const char *head, const LmP0Text **out_atom);
@@ -1310,6 +1345,94 @@ static int lm_l4_column_descriptor_from_param_node(const LmL4Loader *loader, voi
     return 0;
 }
 
+static size_t lm_l4_array_receiver_rank(const LmP0Text *head) {
+    size_t i;
+    size_t rank;
+    if (head == 0) {
+        return 0U;
+    }
+    i = 0U;
+    rank = 0U;
+    while (i < head -> length) {
+        if (head -> data[i] != '[') {
+            return 0U;
+        }
+        i = i + 1U;
+        while (i < head -> length && head -> data[i] != ']') {
+            i = i + 1U;
+        }
+        if (i >= head -> length) {
+            return 0U;
+        }
+        i = i + 1U;
+        rank = rank + 1U;
+    }
+    return rank;
+}
+
+static int lm_l4_column_type_shape(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column) {
+    const LmP0Node * current;
+    const LmP0Frame * frame;
+    const LmP0Field * field;
+    size_t index;
+    size_t rank;
+    if (node == 0 || out_column == 0) {
+        return 0;
+    }
+    current = node;
+    while (current != 0) {
+        if (current -> kind == LM_P0_NODE_STRUCTURE) {
+            if (lm_l4_structure_single_visible_node(current -> as -> structure, &current) == 0) {
+                return 1;
+            }
+            continue;
+        }
+        if (current -> kind == LM_P0_NODE_ATOM) {
+            out_column->type_name = current -> as -> atom;
+            return 1;
+        }
+        if (current -> kind != LM_P0_NODE_FRAME) {
+            return 1;
+        }
+        frame = current -> as -> frame;
+        if (lm_l4_text_equals(frame -> head, "const") != 0) {
+            out_column->is_const = 1;
+            if (lm_l4_frame_formal_param_unwrap_index(loader, context, frame, &index) == 0) {
+                index = 0U;
+            }
+            field = lm_l4_nth_field(frame -> body, index);
+            if (field == 0 || field -> value == 0) {
+                return 0;
+            }
+            current = field -> value;
+            continue;
+        }
+        if (lm_l4_text_all_char(frame -> head, '@') != 0) {
+            out_column->address_depth = out_column -> address_depth + frame -> head -> length;
+            field = lm_l4_nth_field(frame -> body, 0U);
+            if (field == 0 || field -> value == 0) {
+                return 0;
+            }
+            current = field -> value;
+            continue;
+        }
+        rank = lm_l4_array_receiver_rank(frame -> head);
+        if (rank != 0U) {
+            out_column->array_rank = out_column -> array_rank + rank;
+            out_column->address_depth = out_column -> address_depth + 1U;
+            field = lm_l4_nth_field(frame -> body, 0U);
+            if (field == 0 || field -> value == 0) {
+                return 0;
+            }
+            current = field -> value;
+            continue;
+        }
+        out_column->type_name = frame -> head;
+        return 1;
+    }
+    return 1;
+}
+
 static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *context, const LmP0Node *node, LmL4Column *out_column) {
     const LmP0Text * atom;
     if (node == 0 || out_column == 0) {
@@ -1322,6 +1445,9 @@ static int lm_l4_column_name_from_param_node(const LmL4Loader *loader, void *con
     if (lm_l4_column_descriptor_from_param_node(loader, context, node, &atom) != 0) {
         out_column->descriptors[0] = atom;
         out_column->descriptor_count = 1U;
+    }
+    if (lm_l4_column_type_shape(loader, context, node, out_column) == 0) {
+        return -1;
     }
     return 1;
 }
@@ -1553,14 +1679,15 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
     const LmP0Node * key_node;
     const LmP0Node * cell_node;
     const LmP0Text * key_atom;
+    const LmP0Node * *row_cells;
     size_t field_index;
     size_t column_index;
     int split_by_column;
     if (frame == 0 || lm_l4_text_equals(lm_l4_frame_head(frame), "rows") == 0) {
         return 0;
     }
-    if (loader == 0 || loader -> push_cell == 0) {
-        lm_l4_error(loader, "cell consumer is not configured");
+    if (loader == 0 || (loader -> push_cell == 0 && loader -> push_table_row == 0)) {
+        lm_l4_error(loader, "table row consumer is not configured");
         return -1;
     }
     if (columns == 0 || column_count == 0U) {
@@ -1574,6 +1701,11 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
         }
         return 1;
     }
+    row_cells = lm_own_new_zero(column_count * sizeof(row_cells[0]));
+    if (row_cells == 0) {
+        lm_l4_error(loader, "out of memory while reading table rows");
+        return -1;
+    }
     field_index = 0U;
     key_node = 0;
     key_atom = 0;
@@ -1582,26 +1714,35 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
     while (field != 0) {
         if (field -> value != 0 && lm_l4_node_is_ignored(field -> value) == 0) {
             column_index = field_index % column_count;
+            row_cells[column_index] = field -> value;
             if (column_index == 0U) {
                 key_node = field -> value;
                 if (key_node -> kind != LM_P0_NODE_ATOM) {
                     lm_l4_error(loader, "table rows currently expect atom cells in the key column");
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
                 key_atom = lm_l4_node_atom(key_node);
                 if (key_atom == 0) {
                     lm_l4_error(loader, "table rows currently expect atom cells in the key column");
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
                 if (loader -> note_key != 0 && loader->note_key(context, table_name, columns[0], key_atom) != 0) {
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
             }
-            if (column_index != 0U) {
+            if (column_index != 0U && loader -> push_cell != 0) {
                 cell_node = field -> value;
                 if (key_node == 0 || key_atom == 0 || loader->push_cell(context, table_name, columns[column_index], split_by_column, key_atom, cell_node) != 0) {
+                    lm_own_delete(row_cells, 0);
                     return -1;
                 }
+            }
+            if (column_index + 1U == column_count && loader -> push_table_row != 0 && loader->push_table_row(context, table_name, columns, column_count, row_cells) != 0) {
+                lm_own_delete(row_cells, 0);
+                return -1;
             }
             field_index = field_index + 1U;
         }
@@ -1609,8 +1750,10 @@ static int lm_l4_rows_from_frame(const LmL4Loader *loader, void *context, const 
     }
     if ((field_index % column_count) != 0U) {
         lm_l4_error(loader, "rows field count is not divisible by column count; use explicit None for empty cells");
+        lm_own_delete(row_cells, 0);
         return -1;
     }
+    lm_own_delete(row_cells, 0);
     return 1;
 }
 
@@ -2207,18 +2350,44 @@ static int lm_table_descriptor_slice_equals(const char *left, size_t left_length
 static int lm_table_descriptor_cstr_equals_slice(const char *left, const char *right, size_t right_length);
 static LmOwnPtrStack * lm_table_descriptor_stack_new(LmOwnDelete delete_item);
 static void lm_table_column_descriptor_delete_any(void *object);
+static void lm_table_cell_delete_any(void *object);
+static void lm_table_row_delete_any(void *object);
 static void lm_registry_view_row_delete_any(void *object);
 static void lm_table_descriptor_delete_any(void *object);
+static LmTableColumnDescriptor * lm_table_column_descriptor_new_slice(const char *name, size_t name_length, const char *type_name, size_t type_name_length, size_t address_depth, size_t array_rank, int is_const);
+static int lm_table_column_descriptor_add_descriptor_slice(LmTableColumnDescriptor *column, const char *descriptor, size_t descriptor_length);
+static size_t lm_table_column_descriptor_descriptor_count(const LmTableColumnDescriptor *column);
+static const char * lm_table_column_descriptor_descriptor_at(const LmTableColumnDescriptor *column, size_t index);
+static int lm_table_descriptor_take_column(LmTableDescriptor *table, LmTableColumnDescriptor *column);
 static int lm_table_descriptor_add_column(LmTableDescriptor *table, const char *name, const char *descriptor);
+static LmTableDescriptor * lm_table_descriptor_new_empty_slice(const char *name, size_t name_length);
 static LmTableDescriptor * lm_table_descriptor_new_slice(const char *name, size_t name_length);
 static size_t lm_table_descriptor_column_count(const LmTableDescriptor *table);
 static const LmTableColumnDescriptor * lm_table_descriptor_column_at(const LmTableDescriptor *table, size_t index);
 static size_t lm_table_descriptor_row_count(const LmTableDescriptor *table);
 static const LmRegistryViewRow * lm_table_descriptor_row_at(const LmTableDescriptor *table, size_t index);
+static LmTableCell * lm_table_cell_new_slice(const char *atom, size_t atom_length, const char *value, size_t value_length, const void *node, const void *source, int explicit_none);
+static LmTableCell * lm_table_cell_new_cstr(const char *atom, const char *value, const void *node, const void *source, int explicit_none);
+static LmTableRow * lm_table_row_new(const LmTableRow *source);
+static int lm_table_row_take_cell(LmTableRow *row, LmTableCell *cell);
+static size_t lm_table_row_cell_count(const LmTableRow *row);
+static const LmTableCell * lm_table_row_cell_at(const LmTableRow *row, size_t index);
+static int lm_table_descriptor_take_materialized_row(LmTableDescriptor *table, LmTableRow *row);
+static size_t lm_table_descriptor_materialized_row_count(const LmTableDescriptor *table);
+static const LmTableRow * lm_table_descriptor_materialized_row_at(const LmTableDescriptor *table, size_t index);
+static int lm_table_descriptor_append_materialized_row_copy(LmTableDescriptor *table, const LmTableRow *source_row);
+static int lm_table_descriptor_schema_same(const LmTableDescriptor *left, const LmTableDescriptor *right);
+static int lm_table_descriptor_join_schema_compatible(const LmTableDescriptor *source, const LmTableDescriptor *target);
 static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent);
 static void lm_registry_view_delete(LmRegistryView *view);
 static LmTableDescriptor * lm_registry_view_find_local_table_slice(const LmRegistryView *view, const char *table, size_t table_length);
 static LmTableDescriptor * lm_registry_view_ensure_local_table_slice(LmRegistryView *view, const char *table, size_t table_length);
+static LmTableDescriptor * lm_registry_view_find_local_source_table_slice(const LmRegistryView *view, const char *table, size_t table_length);
+static LmTableDescriptor * lm_registry_view_find_source_table_slice(const LmRegistryView *view, const char *table, size_t table_length);
+static int lm_registry_view_take_local_source_table(LmRegistryView *view, LmTableDescriptor *descriptor);
+static size_t lm_registry_view_source_table_count(const LmRegistryView *view);
+static const LmTableDescriptor * lm_registry_view_source_table_at(const LmRegistryView *view, size_t index);
+static int lm_registry_view_append_materialized_rows(const LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length);
 static size_t lm_registry_view_fact_count(const LmRegistryView *view);
 static const LmRegistryViewRow * lm_registry_view_fact_at(const LmRegistryView *view, size_t index);
 static int lm_registry_view_push_relation(LmRegistryView *view, const char *table, const char *key, const char *payload, const void *payload_node, const void *source);
@@ -2314,6 +2483,9 @@ static const char * lm_trans_registry_lookup_default(const char *table);
 static const char * lm_trans_registry_lookup(const LmP0Text *key, const char *table);
 static int lm_trans_registry_has(const LmP0Text *key, const char *table);
 static int lm_trans_registry_table_has_rows(const char *table);
+static int lm_trans_registry_source_cell_copy_same(const LmTableCell *copied, const LmTableCell *source);
+static int lm_trans_registry_source_row_copy_same(const LmTableRow *copied, const LmTableRow *source);
+static int lm_trans_registry_assert_source_table_materialization(void);
 static int lm_trans_registry_assert_view_parity(void);
 static int lm_trans_registry_assert_selected_table_link(const char *source_table, const LmP0Text *key, const char *target_class_table, const char *target_table);
 static int lm_trans_registry_assert_payload_table_exists(const char *source_table, const LmP0Text *key, const char *target_table);
@@ -3321,6 +3493,9 @@ static int lm_trans_registry_materialize_fn_descriptor_param(const LmP0Text *fun
 static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *frame);
 static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *frame);
 static const LmL4Loader * lm_trans_registry_l4_loader_get(void);
+static LmTransL4LoadContext * lm_trans_registry_l4_load_context_new(int allow_node_cells);
+static void lm_trans_registry_l4_load_context_delete(LmTransL4LoadContext *context);
+static void lm_trans_registry_l4_load_context_rollback(LmTransL4LoadContext *context);
 static int lm_trans_registry_load_table_frame_common(const LmP0Frame *frame, int allow_node_cells, const char *error_context);
 static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cells);
 static int lm_trans_l4_receiver_join(const LmP0Frame *frame, int allow_node_cells);
@@ -3344,6 +3519,8 @@ static int lm_trans_registry_load_l4_structure(const LmP0Structure *structure, i
 static int lm_trans_l4_root_receiver_registry(const LmP0Frame *frame, int allow_node_cells);
 static int lm_trans_registry_load_l4_root_frame(const LmP0Frame *frame, int allow_node_cells, int *out_loaded);
 static int lm_trans_registry_l4_push_row(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
+static LmTableDescriptor * lm_trans_registry_l4_source_descriptor_new(const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
+static int lm_trans_registry_l4_push_table_row(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells);
 static int lm_trans_registry_l4_note_key(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
 static int lm_trans_registry_l4_push_cell(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
 static int lm_trans_registry_l4_push_column_metadata(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
@@ -3504,9 +3681,46 @@ static void lm_table_column_descriptor_delete_any(void *object) {
     }
     lm_own_delete(column -> name, 0);
     lm_own_delete(column -> descriptor, 0);
+    if (column -> descriptors != 0) {
+        lm_own_ptr_stack_destroy(column -> descriptors);
+        lm_own_delete(column -> descriptors, 0);
+        column->descriptors = 0;
+    }
+    lm_own_delete(column -> type_name, 0);
     column->name = 0;
     column->descriptor = 0;
+    column->type_name = 0;
     lm_own_delete(column, 0);
+}
+
+static void lm_table_cell_delete_any(void *object) {
+    LmTableCell * cell;
+    cell = object;
+    if (cell == 0) {
+        return;
+    }
+    lm_own_delete(cell -> atom, 0);
+    lm_own_delete(cell -> value, 0);
+    cell->atom = 0;
+    cell->value = 0;
+    cell->node = 0;
+    cell->source = 0;
+    lm_own_delete(cell, 0);
+}
+
+static void lm_table_row_delete_any(void *object) {
+    LmTableRow * row;
+    row = object;
+    if (row == 0) {
+        return;
+    }
+    if (row -> cells != 0) {
+        lm_own_ptr_stack_destroy(row -> cells);
+        lm_own_delete(row -> cells, 0);
+        row->cells = 0;
+    }
+    row->source = 0;
+    lm_own_delete(row, 0);
 }
 
 static void lm_registry_view_row_delete_any(void *object) {
@@ -3542,6 +3756,11 @@ static void lm_table_descriptor_delete_any(void *object) {
         lm_own_delete(table -> rows, 0);
         table->rows = 0;
     }
+    if (table -> materialized_rows != 0) {
+        lm_own_ptr_stack_destroy(table -> materialized_rows);
+        lm_own_delete(table -> materialized_rows, 0);
+        table->materialized_rows = 0;
+    }
     if (table -> source_rows != 0) {
         lm_own_ptr_stack_destroy(table -> source_rows);
         lm_own_delete(table -> source_rows, 0);
@@ -3552,32 +3771,103 @@ static void lm_table_descriptor_delete_any(void *object) {
     lm_own_delete(table, 0);
 }
 
-static int lm_table_descriptor_add_column(LmTableDescriptor *table, const char *name, const char *descriptor) {
+static LmTableColumnDescriptor * lm_table_column_descriptor_new_slice(const char *name, size_t name_length, const char *type_name, size_t type_name_length, size_t address_depth, size_t array_rank, int is_const) {
     LmTableColumnDescriptor * column;
-    if (table == 0 || table -> columns == 0 || name == 0) {
-        return 1;
+    if (name == 0) {
+        return 0;
     }
     column = lm_own_new_zero(sizeof(column[0]));
     if (column == 0) {
+        return 0;
+    }
+    column->name = lm_table_descriptor_copy_slice(name, name_length);
+    column->descriptors = lm_table_descriptor_stack_new(lm_own_delete_plain);
+    if (type_name != 0) {
+        column->type_name = lm_table_descriptor_copy_slice(type_name, type_name_length);
+    }
+    column->address_depth = address_depth;
+    column->array_rank = array_rank;
+    column->is_const = is_const;
+    if (column -> name == 0 || column -> descriptors == 0 || (type_name != 0 && column -> type_name == 0)) {
+        lm_table_column_descriptor_delete_any(column);
+        return 0;
+    }
+    return column;
+}
+
+static int lm_table_column_descriptor_add_descriptor_slice(LmTableColumnDescriptor *column, const char *descriptor, size_t descriptor_length) {
+    char *copy;
+    if (column == 0 || column -> descriptors == 0 || descriptor == 0) {
         return 1;
     }
-    column->name = lm_table_descriptor_copy_cstr(name);
-    if (descriptor != 0) {
-        column->descriptor = lm_table_descriptor_copy_cstr(descriptor);
+    copy = lm_table_descriptor_copy_slice(descriptor, descriptor_length);
+    if (copy == 0) {
+        return 1;
     }
-    if (column -> name == 0 || (descriptor != 0 && column -> descriptor == 0)) {
+    if (column -> descriptor == 0) {
+        column->descriptor = lm_table_descriptor_copy_slice(descriptor, descriptor_length);
+        if (column -> descriptor == 0) {
+            lm_own_delete(copy, 0);
+            return 1;
+        }
+    }
+    if (lm_own_ptr_stack_push(column -> descriptors, copy) != 0) {
+        lm_own_delete(copy, 0);
+        return 1;
+    }
+    return 0;
+}
+
+static size_t lm_table_column_descriptor_descriptor_count(const LmTableColumnDescriptor *column) {
+    if (column == 0 || column -> descriptors == 0) {
+        return 0U;
+    }
+    return column -> descriptors -> count;
+}
+
+static const char * lm_table_column_descriptor_descriptor_at(const LmTableColumnDescriptor *column, size_t index) {
+    if (column == 0 || column -> descriptors == 0) {
+        return 0;
+    }
+    return lm_own_ptr_stack_at(column -> descriptors, index);
+}
+
+static int lm_table_descriptor_take_column(LmTableDescriptor *table, LmTableColumnDescriptor *column) {
+    if (table == 0 || table -> columns == 0 || column == 0 || column -> name == 0) {
+        return 1;
+    }
+    column->index = table -> columns -> count;
+    if (lm_own_ptr_stack_push(table -> columns, column) != 0) {
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_table_descriptor_add_column(LmTableDescriptor *table, const char *name, const char *descriptor) {
+    LmTableColumnDescriptor * column;
+    if (name == 0) {
+        return 1;
+    }
+    column = lm_table_column_descriptor_new_slice(name, strlen(name), 0, 0U, 0U, 0U, 0);
+    if (column == 0) {
+        return 1;
+    }
+    if (descriptor != 0 && lm_table_column_descriptor_add_descriptor_slice(column, descriptor, strlen(descriptor)) != 0) {
         lm_table_column_descriptor_delete_any(column);
         return 1;
     }
-    if (lm_own_ptr_stack_push(table -> columns, column) != 0) {
+    if (lm_table_descriptor_take_column(table, column) != 0) {
         lm_table_column_descriptor_delete_any(column);
         return 1;
     }
     return 0;
 }
 
-static LmTableDescriptor * lm_table_descriptor_new_slice(const char *name, size_t name_length) {
+static LmTableDescriptor * lm_table_descriptor_new_empty_slice(const char *name, size_t name_length) {
     LmTableDescriptor * table;
+    if (name == 0) {
+        return 0;
+    }
     table = lm_own_new_zero(sizeof(table[0]));
     if (table == 0) {
         return 0;
@@ -3585,9 +3875,19 @@ static LmTableDescriptor * lm_table_descriptor_new_slice(const char *name, size_
     table->name = lm_table_descriptor_copy_slice(name, name_length);
     table->columns = lm_table_descriptor_stack_new(lm_table_column_descriptor_delete_any);
     table->rows = lm_table_descriptor_stack_new(lm_registry_view_row_delete_any);
+    table->materialized_rows = lm_table_descriptor_stack_new(lm_table_row_delete_any);
     table->source_rows = lm_table_descriptor_stack_new(0);
-    if (table -> name == 0 || table -> columns == 0 || table -> rows == 0 || table -> source_rows == 0) {
+    if (table -> name == 0 || table -> columns == 0 || table -> rows == 0 || table -> materialized_rows == 0 || table -> source_rows == 0) {
         lm_table_descriptor_delete_any(table);
+        return 0;
+    }
+    return table;
+}
+
+static LmTableDescriptor * lm_table_descriptor_new_slice(const char *name, size_t name_length) {
+    LmTableDescriptor * table;
+    table = lm_table_descriptor_new_empty_slice(name, name_length);
+    if (table == 0) {
         return 0;
     }
     if (lm_table_descriptor_add_column(table, "class", "key") != 0 || lm_table_descriptor_add_column(table, "value", "payload") != 0) {
@@ -3625,6 +3925,184 @@ static const LmRegistryViewRow * lm_table_descriptor_row_at(const LmTableDescrip
     return lm_own_ptr_stack_at(table -> rows, index);
 }
 
+static LmTableCell * lm_table_cell_new_slice(const char *atom, size_t atom_length, const char *value, size_t value_length, const void *node, const void *source, int explicit_none) {
+    LmTableCell * cell;
+    if (atom == 0 && value == 0 && node == 0 && explicit_none == 0) {
+        return 0;
+    }
+    cell = lm_own_new_zero(sizeof(cell[0]));
+    if (cell == 0) {
+        return 0;
+    }
+    if (atom != 0) {
+        cell->atom = lm_table_descriptor_copy_slice(atom, atom_length);
+    }
+    if (value != 0) {
+        cell->value = lm_table_descriptor_copy_slice(value, value_length);
+    }
+    cell->node = node;
+    cell->source = source;
+    cell->explicit_none = explicit_none;
+    if ((atom != 0 && cell -> atom == 0) || (value != 0 && cell -> value == 0)) {
+        lm_table_cell_delete_any(cell);
+        return 0;
+    }
+    return cell;
+}
+
+static LmTableCell * lm_table_cell_new_cstr(const char *atom, const char *value, const void *node, const void *source, int explicit_none) {
+    size_t atom_length;
+    size_t value_length;
+    atom_length = 0U;
+    value_length = 0U;
+    if (atom != 0) {
+        atom_length = strlen(atom);
+    }
+    if (value != 0) {
+        value_length = strlen(value);
+    }
+    return lm_table_cell_new_slice(atom, atom_length, value, value_length, node, source, explicit_none);
+}
+
+static LmTableRow * lm_table_row_new(const LmTableRow *source) {
+    LmTableRow * row;
+    row = lm_own_new_zero(sizeof(row[0]));
+    if (row == 0) {
+        return 0;
+    }
+    row->cells = lm_table_descriptor_stack_new(lm_table_cell_delete_any);
+    row->source = source;
+    if (row -> cells == 0) {
+        lm_table_row_delete_any(row);
+        return 0;
+    }
+    return row;
+}
+
+static int lm_table_row_take_cell(LmTableRow *row, LmTableCell *cell) {
+    if (row == 0 || row -> cells == 0 || cell == 0) {
+        return 1;
+    }
+    return lm_own_ptr_stack_push(row -> cells, cell);
+}
+
+static size_t lm_table_row_cell_count(const LmTableRow *row) {
+    if (row == 0 || row -> cells == 0) {
+        return 0U;
+    }
+    return row -> cells -> count;
+}
+
+static const LmTableCell * lm_table_row_cell_at(const LmTableRow *row, size_t index) {
+    if (row == 0 || row -> cells == 0) {
+        return 0;
+    }
+    return lm_own_ptr_stack_at(row -> cells, index);
+}
+
+static int lm_table_descriptor_take_materialized_row(LmTableDescriptor *table, LmTableRow *row) {
+    if (table == 0 || table -> materialized_rows == 0 || row == 0 || row -> cells == 0) {
+        return 1;
+    }
+    if (row -> cells -> count != lm_table_descriptor_column_count(table)) {
+        return 1;
+    }
+    row->local_sequence = table -> materialized_rows -> count;
+    return lm_own_ptr_stack_push(table -> materialized_rows, row);
+}
+
+static size_t lm_table_descriptor_materialized_row_count(const LmTableDescriptor *table) {
+    if (table == 0 || table -> materialized_rows == 0) {
+        return 0U;
+    }
+    return table -> materialized_rows -> count;
+}
+
+static const LmTableRow * lm_table_descriptor_materialized_row_at(const LmTableDescriptor *table, size_t index) {
+    if (table == 0 || table -> materialized_rows == 0) {
+        return 0;
+    }
+    return lm_own_ptr_stack_at(table -> materialized_rows, index);
+}
+
+static int lm_table_descriptor_append_materialized_row_copy(LmTableDescriptor *table, const LmTableRow *source_row) {
+    LmTableRow * row;
+    const LmTableCell * source_cell;
+    LmTableCell * cell;
+    size_t index;
+    if (table == 0 || source_row == 0 || lm_table_row_cell_count(source_row) != lm_table_descriptor_column_count(table)) {
+        return 1;
+    }
+    row = lm_table_row_new(source_row);
+    if (row == 0) {
+        return 1;
+    }
+    index = 0U;
+    while (index < lm_table_row_cell_count(source_row)) {
+        source_cell = lm_table_row_cell_at(source_row, index);
+        if (source_cell == 0) {
+            lm_table_row_delete_any(row);
+            return 1;
+        }
+        cell = lm_table_cell_new_cstr(source_cell -> atom, source_cell -> value, source_cell -> node, source_cell -> source, source_cell -> explicit_none);
+        if (cell == 0 || lm_table_row_take_cell(row, cell) != 0) {
+            lm_table_cell_delete_any(cell);
+            lm_table_row_delete_any(row);
+            return 1;
+        }
+        index = index + 1U;
+    }
+    if (lm_table_descriptor_take_materialized_row(table, row) != 0) {
+        lm_table_row_delete_any(row);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_table_descriptor_schema_same(const LmTableDescriptor *left, const LmTableDescriptor *right) {
+    const LmTableColumnDescriptor * left_column;
+    const LmTableColumnDescriptor * right_column;
+    const char *left_descriptor;
+    const char *right_descriptor;
+    size_t column_index;
+    size_t descriptor_index;
+    if (left == 0 || right == 0 || lm_table_descriptor_column_count(left) != lm_table_descriptor_column_count(right)) {
+        return 0;
+    }
+    column_index = 0U;
+    while (column_index < lm_table_descriptor_column_count(left)) {
+        left_column = lm_table_descriptor_column_at(left, column_index);
+        right_column = lm_table_descriptor_column_at(right, column_index);
+        if (left_column == 0 || right_column == 0 || left_column -> name == 0 || right_column -> name == 0 || strcmp(left_column -> name, right_column -> name) != 0 || left_column -> address_depth != right_column -> address_depth || left_column -> array_rank != right_column -> array_rank || left_column -> is_const != right_column -> is_const || lm_table_column_descriptor_descriptor_count(left_column) != lm_table_column_descriptor_descriptor_count(right_column)) {
+            return 0;
+        }
+        if ((left_column -> type_name == 0) != (right_column -> type_name == 0)) {
+            return 0;
+        }
+        if (left_column -> type_name != 0 && strcmp(left_column -> type_name, right_column -> type_name) != 0) {
+            return 0;
+        }
+        descriptor_index = 0U;
+        while (descriptor_index < lm_table_column_descriptor_descriptor_count(left_column)) {
+            left_descriptor = lm_table_column_descriptor_descriptor_at(left_column, descriptor_index);
+            right_descriptor = lm_table_column_descriptor_descriptor_at(right_column, descriptor_index);
+            if (left_descriptor == 0 || right_descriptor == 0 || strcmp(left_descriptor, right_descriptor) != 0) {
+                return 0;
+            }
+            descriptor_index = descriptor_index + 1U;
+        }
+        column_index = column_index + 1U;
+    }
+    return 1;
+}
+
+static int lm_table_descriptor_join_schema_compatible(const LmTableDescriptor *source, const LmTableDescriptor *target) {
+    if (lm_table_descriptor_schema_same(source, target) != 0) {
+        return 1;
+    }
+    return lm_table_descriptor_column_count(source) == 2U && lm_table_descriptor_column_count(target) == 2U;
+}
+
 static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent) {
     LmRegistryView * view;
     view = lm_own_new_zero(sizeof(view[0]));
@@ -3633,8 +4111,9 @@ static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent) {
     }
     view->parent = parent;
     view->tables = lm_table_descriptor_stack_new(lm_table_descriptor_delete_any);
+    view->source_tables = lm_table_descriptor_stack_new(lm_table_descriptor_delete_any);
     view->facts = lm_table_descriptor_stack_new(0);
-    if (view -> tables == 0 || view -> facts == 0) {
+    if (view -> tables == 0 || view -> source_tables == 0 || view -> facts == 0) {
         if (view -> tables != 0) {
             lm_own_ptr_stack_destroy(view -> tables);
             lm_own_delete(view -> tables, 0);
@@ -3642,6 +4121,10 @@ static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent) {
         if (view -> facts != 0) {
             lm_own_ptr_stack_destroy(view -> facts);
             lm_own_delete(view -> facts, 0);
+        }
+        if (view -> source_tables != 0) {
+            lm_own_ptr_stack_destroy(view -> source_tables);
+            lm_own_delete(view -> source_tables, 0);
         }
         lm_own_delete(view, 0);
         return 0;
@@ -3662,6 +4145,11 @@ static void lm_registry_view_delete(LmRegistryView *view) {
         lm_own_ptr_stack_destroy(view -> tables);
         lm_own_delete(view -> tables, 0);
         view->tables = 0;
+    }
+    if (view -> source_tables != 0) {
+        lm_own_ptr_stack_destroy(view -> source_tables);
+        lm_own_delete(view -> source_tables, 0);
+        view->source_tables = 0;
     }
     view->parent = 0;
     view->local_fact_count = 0U;
@@ -3703,6 +4191,109 @@ static LmTableDescriptor * lm_registry_view_ensure_local_table_slice(LmRegistryV
         return 0;
     }
     return descriptor;
+}
+
+static LmTableDescriptor * lm_registry_view_find_local_source_table_slice(const LmRegistryView *view, const char *table, size_t table_length) {
+    size_t index;
+    LmTableDescriptor * descriptor;
+    if (view == 0 || view -> source_tables == 0 || table == 0) {
+        return 0;
+    }
+    index = view -> source_tables -> count;
+    while (index > 0U) {
+        index = index - 1U;
+        descriptor = lm_own_ptr_stack_at(view -> source_tables, index);
+        if (descriptor != 0 && descriptor -> name != 0 && lm_table_descriptor_cstr_equals_slice(descriptor -> name, table, table_length) != 0) {
+            return descriptor;
+        }
+    }
+    return 0;
+}
+
+static LmTableDescriptor * lm_registry_view_find_source_table_slice(const LmRegistryView *view, const char *table, size_t table_length) {
+    LmTableDescriptor * descriptor;
+    if (view == 0) {
+        return 0;
+    }
+    descriptor = lm_registry_view_find_local_source_table_slice(view, table, table_length);
+    if (descriptor != 0) {
+        return descriptor;
+    }
+    return lm_registry_view_find_source_table_slice(view -> parent, table, table_length);
+}
+
+static int lm_registry_view_take_local_source_table(LmRegistryView *view, LmTableDescriptor *descriptor) {
+    if (view == 0 || view -> source_tables == 0 || descriptor == 0 || descriptor -> name == 0) {
+        return 1;
+    }
+    return lm_own_ptr_stack_push(view -> source_tables, descriptor);
+}
+
+static size_t lm_registry_view_source_table_count(const LmRegistryView *view) {
+    size_t count;
+    if (view == 0) {
+        return 0U;
+    }
+    count = 0U;
+    if (view -> source_tables != 0) {
+        count = view -> source_tables -> count;
+    }
+    if (view -> parent != 0) {
+        count = count + lm_registry_view_source_table_count(view -> parent);
+    }
+    return count;
+}
+
+static const LmTableDescriptor * lm_registry_view_source_table_at(const LmRegistryView *view, size_t index) {
+    size_t parent_count;
+    if (view == 0) {
+        return 0;
+    }
+    parent_count = lm_registry_view_source_table_count(view -> parent);
+    if (index < parent_count) {
+        return lm_registry_view_source_table_at(view -> parent, index);
+    }
+    if (view -> source_tables == 0) {
+        return 0;
+    }
+    return lm_own_ptr_stack_at(view -> source_tables, index - parent_count);
+}
+
+static int lm_registry_view_append_materialized_rows(const LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length) {
+    const LmTableDescriptor * source;
+    const LmTableRow * row;
+    size_t source_count;
+    size_t row_count;
+    size_t original_row_count;
+    size_t source_index;
+    size_t index;
+    if (view == 0 || target == 0 || source_table == 0) {
+        return 1;
+    }
+    source = lm_registry_view_find_source_table_slice(view, source_table, source_table_length);
+    if (source == 0) {
+        return 0;
+    }
+    original_row_count = lm_table_descriptor_materialized_row_count(target);
+    source_count = lm_registry_view_source_table_count(view);
+    source_index = 0U;
+    while (source_index < source_count) {
+        source = lm_registry_view_source_table_at(view, source_index);
+        if (source != 0 && source -> name != 0 && lm_table_descriptor_cstr_equals_slice(source -> name, source_table, source_table_length) != 0 && lm_table_descriptor_join_schema_compatible(source, target) != 0) {
+            row_count = lm_table_descriptor_materialized_row_count(source);
+            index = 0U;
+            while (index < row_count) {
+                row = lm_table_descriptor_materialized_row_at(source, index);
+                if (row == 0 || lm_table_descriptor_append_materialized_row_copy(target, row) != 0) {
+                    lm_own_ptr_stack_truncate(target -> materialized_rows, original_row_count);
+                    return 1;
+                }
+                index = index + 1U;
+            }
+        }
+        source_index = source_index + 1U;
+    }
+    return 0;
 }
 
 static size_t lm_registry_view_fact_count(const LmRegistryView *view) {
@@ -5423,6 +6014,137 @@ static int lm_trans_registry_table_has_rows(const char *table) {
     return legacy_has_rows;
 }
 
+static int lm_trans_registry_source_cell_copy_same(const LmTableCell *copied, const LmTableCell *source) {
+    if (copied == 0 || source == 0 || copied == source) {
+        return 0;
+    }
+    if ((copied -> atom == 0) != (source -> atom == 0) || (copied -> value == 0) != (source -> value == 0)) {
+        return 0;
+    }
+    if (copied -> atom != 0 && (copied -> atom == source -> atom || strcmp(copied -> atom, source -> atom) != 0)) {
+        return 0;
+    }
+    if (copied -> value != 0 && (copied -> value == source -> value || strcmp(copied -> value, source -> value) != 0)) {
+        return 0;
+    }
+    return copied -> node == source -> node && copied -> source == source -> source && copied -> explicit_none == source -> explicit_none;
+}
+
+static int lm_trans_registry_source_row_copy_same(const LmTableRow *copied, const LmTableRow *source) {
+    size_t cell_index;
+    if (copied == 0 || source == 0 || copied == source || lm_table_row_cell_count(copied) != lm_table_row_cell_count(source)) {
+        return 0;
+    }
+    cell_index = 0U;
+    while (cell_index < lm_table_row_cell_count(copied)) {
+        if (lm_trans_registry_source_cell_copy_same(lm_table_row_cell_at(copied, cell_index), lm_table_row_cell_at(source, cell_index)) == 0) {
+            return 0;
+        }
+        cell_index = cell_index + 1U;
+    }
+    return 1;
+}
+
+static int lm_trans_registry_assert_source_table_materialization(void) {
+    size_t source_table_count;
+    size_t descriptor_index;
+    size_t column_count;
+    size_t column_index;
+    size_t descriptor_count;
+    size_t row_count;
+    size_t row_index;
+    size_t cell_index;
+    const LmTableDescriptor * descriptor;
+    const LmTableColumnDescriptor * column;
+    const char *first_descriptor;
+    const LmTableRow * row;
+    const LmTableRow * source_row;
+    const LmTableCell * key_cell;
+    const LmTableCell * cell;
+    const LmTransRegistryFact * fact;
+    if (lm_trans_registry == 0 || lm_trans_registry->view == 0) {
+        return 1;
+    }
+    source_table_count = lm_registry_view_source_table_count(lm_trans_registry->view);
+    descriptor_index = 0U;
+    while (descriptor_index < source_table_count) {
+        descriptor = lm_registry_view_source_table_at(lm_trans_registry->view, descriptor_index);
+        column_count = lm_table_descriptor_column_count(descriptor);
+        if (descriptor == 0 || descriptor -> name == 0 || column_count == 0U) {
+            fprintf(stderr, "trans registry source table error: invalid descriptor at %zu\n", descriptor_index);
+            return 1;
+        }
+        column_index = 0U;
+        while (column_index < column_count) {
+            column = lm_table_descriptor_column_at(descriptor, column_index);
+            if (column == 0 || column -> name == 0 || column -> index != column_index || column -> descriptors == 0) {
+                fprintf(stderr, "trans registry source table error: invalid column %zu for %s\n", column_index, descriptor -> name);
+                return 1;
+            }
+            descriptor_count = lm_table_column_descriptor_descriptor_count(column);
+            first_descriptor = lm_table_column_descriptor_descriptor_at(column, 0U);
+            if ((descriptor_count == 0U && column -> descriptor != 0) || (descriptor_count != 0U && (column -> descriptor == 0 || first_descriptor == 0 || strcmp(column -> descriptor, first_descriptor) != 0))) {
+                fprintf(stderr, "trans registry source table error: descriptor order differs for %s.%s\n", descriptor -> name, column -> name);
+                return 1;
+            }
+            column_index = column_index + 1U;
+        }
+        row_count = lm_table_descriptor_materialized_row_count(descriptor);
+        row_index = 0U;
+        while (row_index < row_count) {
+            row = lm_table_descriptor_materialized_row_at(descriptor, row_index);
+            if (row == 0 || row -> local_sequence != row_index || lm_table_row_cell_count(row) != column_count) {
+                fprintf(stderr, "trans registry source table error: invalid row %zu for %s\n", row_index, descriptor -> name);
+                return 1;
+            }
+            key_cell = lm_table_row_cell_at(row, 0U);
+            if (key_cell == 0 || key_cell -> atom == 0 || key_cell -> value == 0 || key_cell -> node != 0 || key_cell -> source != 0) {
+                fprintf(stderr, "trans registry source table error: invalid key cell in %s row %zu\n", descriptor -> name, row_index);
+                return 1;
+            }
+            if (row -> source != 0) {
+                source_row = row -> source;
+                if (lm_trans_registry_source_row_copy_same(row, source_row) == 0) {
+                    fprintf(stderr, "trans registry source table error: joined row copy differs in %s row %zu\n", descriptor -> name, row_index);
+                    return 1;
+                }
+            }
+            cell_index = 1U;
+            while (cell_index < column_count) {
+                cell = lm_table_row_cell_at(row, cell_index);
+                if (cell == 0) {
+                    return 1;
+                }
+                if (cell -> explicit_none != 0) {
+                    if (cell -> atom == 0 || cell -> value != 0 || cell -> node != 0 || cell -> source != 0) {
+                        fprintf(stderr, "trans registry source table error: invalid None cell in %s row %zu column %zu\n", descriptor -> name, row_index, cell_index);
+                        return 1;
+                    }
+                }
+                else {
+                    if (cell -> source == 0) {
+                        if (cell -> value != 0 || cell -> node != 0) {
+                            fprintf(stderr, "trans registry source table error: materialized cell has no legacy source in %s row %zu column %zu\n", descriptor -> name, row_index, cell_index);
+                            return 1;
+                        }
+                    }
+                    else {
+                        fact = ((const LmTransRegistryFact *)cell -> source);
+                        if (fact -> key == 0 || strcmp(fact -> key, key_cell -> value) != 0 || (fact -> payload == 0) != (cell -> value == 0) || (fact -> payload != 0 && strcmp(fact -> payload, cell -> value) != 0) || fact -> payload_node != cell -> node) {
+                            fprintf(stderr, "trans registry source table error: legacy projection differs in %s row %zu column %zu\n", descriptor -> name, row_index, cell_index);
+                            return 1;
+                        }
+                    }
+                }
+                cell_index = cell_index + 1U;
+            }
+            row_index = row_index + 1U;
+        }
+        descriptor_index = descriptor_index + 1U;
+    }
+    return 0;
+}
+
 static int lm_trans_registry_assert_view_parity(void) {
     size_t fact_count;
     size_t i;
@@ -5454,6 +6176,9 @@ static int lm_trans_registry_assert_view_parity(void) {
         fprintf(stderr, "trans registry view parity error: registry view is not initialized\n");
         return 1;
     }
+    if (lm_trans_registry_assert_source_table_materialization() != 0) {
+        return 1;
+    }
     fact_count = lm_registry_view_fact_count(lm_trans_registry->view);
     if (fact_count != lm_trans_registry->loaded_fact_count) {
         fprintf(stderr, "trans registry view parity error: fact count legacy=%zu view=%zu\n", lm_trans_registry->loaded_fact_count, fact_count);
@@ -5477,13 +6202,13 @@ static int lm_trans_registry_assert_view_parity(void) {
     while (descriptor_index < lm_trans_registry->view->tables->count) {
         descriptor = lm_own_ptr_stack_at(lm_trans_registry->view->tables, descriptor_index);
         if (descriptor == 0 || lm_table_descriptor_column_count(descriptor) != 2U) {
-            fprintf(stderr, "trans registry view parity error: canonical table schema is missing\n");
+            fprintf(stderr, "trans registry view parity error: legacy projection schema is missing\n");
             return 1;
         }
         key_column = lm_table_descriptor_column_at(descriptor, 0U);
         payload_column = lm_table_descriptor_column_at(descriptor, 1U);
         if (key_column == 0 || payload_column == 0 || key_column -> name == 0 || payload_column -> name == 0 || key_column -> descriptor == 0 || payload_column -> descriptor == 0 || strcmp(key_column -> name, "class") != 0 || strcmp(payload_column -> name, "value") != 0 || strcmp(key_column -> descriptor, "key") != 0 || strcmp(payload_column -> descriptor, "payload") != 0) {
-            fprintf(stderr, "trans registry view parity error: canonical columns differ for %s\n", descriptor -> name);
+            fprintf(stderr, "trans registry view parity error: legacy projection columns differ for %s\n", descriptor -> name);
             return 1;
         }
         table_stack = lm_trans_registry_relation_stack_for_table(descriptor -> name);
@@ -30116,28 +30841,67 @@ static const LmL4Loader * lm_trans_registry_l4_loader_get(void) {
     return 0;
 }
 
+static LmTransL4LoadContext * lm_trans_registry_l4_load_context_new(int allow_node_cells) {
+    LmTransL4LoadContext * context;
+    context = lm_own_new_zero(sizeof(context[0]));
+    if (context == 0) {
+        return 0;
+    }
+    context->projection_facts = lm_table_descriptor_stack_new(0);
+    context->allow_node_cells = allow_node_cells;
+    if (context -> projection_facts == 0) {
+        lm_own_delete(context, 0);
+        return 0;
+    }
+    return context;
+}
+
+static void lm_trans_registry_l4_load_context_delete(LmTransL4LoadContext *context) {
+    if (context == 0) {
+        return;
+    }
+    if (context -> projection_facts != 0) {
+        lm_own_ptr_stack_destroy(context -> projection_facts);
+        lm_own_delete(context -> projection_facts, 0);
+        context->projection_facts = 0;
+    }
+    context->source_table = 0;
+    lm_own_delete(context, 0);
+}
+
+static void lm_trans_registry_l4_load_context_rollback(LmTransL4LoadContext *context) {
+    if (context == 0 || context -> source_table == 0 || context -> source_table -> materialized_rows == 0) {
+        return;
+    }
+    lm_own_ptr_stack_truncate(context -> source_table -> materialized_rows, context -> source_table_initial_row_count);
+}
+
 static int lm_trans_registry_load_table_frame_common(const LmP0Frame *frame, int allow_node_cells, const char *error_context) {
     LmTransL4LoadContext * context;
     const char *context_name;
     int status;
-    context = lm_own_new_zero(sizeof(context[0]));
+    context = lm_trans_registry_l4_load_context_new(allow_node_cells);
     if (context == 0) {
         return 1;
     }
-    context->allow_node_cells = allow_node_cells;
+    context_name = error_context;
+    if (context_name == 0) {
+        context_name = "trans registry";
+    }
     status = lm_l4_table_from_frame(lm_trans_registry_l4_loader_get(), context, frame);
+    if (status > 0 && context -> expected_direct_rows != context -> materialized_direct_rows) {
+        fprintf(stderr, "%s error: direct table row materialization count differs (expected=%zu materialized=%zu)\n", context_name, context -> expected_direct_rows, context -> materialized_direct_rows);
+        status = -1;
+    }
     if (status <= 0) {
+        lm_trans_registry_l4_load_context_rollback(context);
         if (status == 0) {
-            context_name = error_context;
-            if (context_name == 0) {
-                context_name = "trans registry";
-            }
             fprintf(stderr, "%s error: table receiver expects a table frame\n", context_name);
         }
-        lm_own_delete(context, 0);
+        lm_trans_registry_l4_load_context_delete(context);
         return 1;
     }
-    lm_own_delete(context, 0);
+    lm_trans_registry_l4_load_context_delete(context);
     return 0;
 }
 
@@ -30148,20 +30912,24 @@ static int lm_trans_l4_receiver_table(const LmP0Frame *frame, int allow_node_cel
 static int lm_trans_l4_receiver_join(const LmP0Frame *frame, int allow_node_cells) {
     LmTransL4LoadContext * context;
     int status;
-    context = lm_own_new_zero(sizeof(context[0]));
+    context = lm_trans_registry_l4_load_context_new(allow_node_cells);
     if (context == 0) {
         return 1;
     }
-    context->allow_node_cells = allow_node_cells;
     status = lm_l4_join_from_frame(lm_trans_registry_l4_loader_get(), context, frame);
+    if (status > 0 && context -> expected_direct_rows != context -> materialized_direct_rows) {
+        fprintf(stderr, "trans L4 error: direct join row materialization count differs (expected=%zu materialized=%zu)\n", context -> expected_direct_rows, context -> materialized_direct_rows);
+        status = -1;
+    }
     if (status <= 0) {
+        lm_trans_registry_l4_load_context_rollback(context);
         if (status == 0) {
             fprintf(stderr, "trans L4 error: join receiver expects a join frame\n");
         }
-        lm_own_delete(context, 0);
+        lm_trans_registry_l4_load_context_delete(context);
         return 1;
     }
-    lm_own_delete(context, 0);
+    lm_trans_registry_l4_load_context_delete(context);
     return 0;
 }
 
@@ -30575,11 +31343,213 @@ static int lm_trans_registry_l4_push_row(void *context, const LmP0Text *table_at
     return status;
 }
 
+static LmTableDescriptor * lm_trans_registry_l4_source_descriptor_new(const LmP0Text *table_name, LmL4Column **columns, size_t column_count) {
+    LmP0Text * table_value;
+    LmP0Text * column_value;
+    LmP0Text * descriptor_value;
+    LmP0Text * type_value;
+    LmTableDescriptor * descriptor;
+    LmTableColumnDescriptor * target_column;
+    size_t column_index;
+    size_t descriptor_index;
+    if (table_name == 0 || columns == 0 || column_count == 0U) {
+        return 0;
+    }
+    table_value = lm_trans_l4_text_view_new("");
+    column_value = lm_trans_l4_text_view_new("");
+    descriptor_value = lm_trans_l4_text_view_new("");
+    type_value = lm_trans_l4_text_view_new("");
+    descriptor = 0;
+    if (table_value == 0 || column_value == 0 || descriptor_value == 0 || type_value == 0 || lm_trans_registry_identifier_value(table_name, table_value) == 0) {
+        lm_trans_l4_text_view_delete(&table_value);
+        lm_trans_l4_text_view_delete(&column_value);
+        lm_trans_l4_text_view_delete(&descriptor_value);
+        lm_trans_l4_text_view_delete(&type_value);
+        return 0;
+    }
+    descriptor = lm_table_descriptor_new_empty_slice(table_value -> data, table_value -> length);
+    column_index = 0U;
+    while (descriptor != 0 && column_index < column_count) {
+        if (columns[column_index] == 0 || columns[column_index] -> name == 0 || lm_trans_registry_identifier_value(columns[column_index] -> name, column_value) == 0) {
+            lm_table_descriptor_delete_any(descriptor);
+            descriptor = 0;
+            break;
+        }
+        if (columns[column_index] -> type_name != 0) {
+            if (lm_trans_registry_identifier_value(columns[column_index] -> type_name, type_value) == 0) {
+                lm_table_descriptor_delete_any(descriptor);
+                descriptor = 0;
+                break;
+            }
+            target_column = lm_table_column_descriptor_new_slice(column_value -> data, column_value -> length, type_value -> data, type_value -> length, columns[column_index] -> address_depth, columns[column_index] -> array_rank, columns[column_index] -> is_const);
+        }
+        else {
+            target_column = lm_table_column_descriptor_new_slice(column_value -> data, column_value -> length, 0, 0U, columns[column_index] -> address_depth, columns[column_index] -> array_rank, columns[column_index] -> is_const);
+        }
+        if (target_column == 0) {
+            lm_table_descriptor_delete_any(descriptor);
+            descriptor = 0;
+            break;
+        }
+        descriptor_index = 0U;
+        while (descriptor_index < columns[column_index] -> descriptor_count) {
+            if (columns[column_index] -> descriptors[descriptor_index] == 0 || lm_trans_registry_identifier_value(columns[column_index] -> descriptors[descriptor_index], descriptor_value) == 0 || lm_table_column_descriptor_add_descriptor_slice(target_column, descriptor_value -> data, descriptor_value -> length) != 0) {
+                lm_table_column_descriptor_delete_any(target_column);
+                lm_table_descriptor_delete_any(descriptor);
+                descriptor = 0;
+                break;
+            }
+            descriptor_index = descriptor_index + 1U;
+        }
+        if (descriptor == 0) {
+            break;
+        }
+        if (lm_table_descriptor_take_column(descriptor, target_column) != 0) {
+            lm_table_column_descriptor_delete_any(target_column);
+            lm_table_descriptor_delete_any(descriptor);
+            descriptor = 0;
+            break;
+        }
+        column_index = column_index + 1U;
+    }
+    lm_trans_l4_text_view_delete(&table_value);
+    lm_trans_l4_text_view_delete(&column_value);
+    lm_trans_l4_text_view_delete(&descriptor_value);
+    lm_trans_l4_text_view_delete(&type_value);
+    return descriptor;
+}
+
+static int lm_trans_registry_l4_push_table_row(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells) {
+    LmTransL4LoadContext * load_context;
+    LmTableDescriptor * descriptor;
+    LmTableRow * row;
+    LmTableCell * cell;
+    const LmP0Node * node;
+    const LmP0Text * atom;
+    LmP0Text * value;
+    LmTransRegistryFact * projection;
+    size_t column_index;
+    int cell_status;
+    int explicit_none;
+    int wants_node;
+    LM_UNUSED(table_name);
+    load_context = ((LmTransL4LoadContext *)context);
+    if (load_context == 0 || load_context -> source_table == 0 || load_context -> projection_facts == 0 || columns == 0 || cells == 0 || column_count == 0U) {
+        return -1;
+    }
+    descriptor = load_context -> source_table;
+    if (lm_table_descriptor_column_count(descriptor) != column_count || load_context -> projection_facts -> count + 1U != column_count) {
+        return -1;
+    }
+    row = lm_table_row_new(0);
+    value = lm_trans_l4_text_view_new("");
+    if (row == 0 || value == 0) {
+        lm_table_row_delete_any(row);
+        lm_trans_l4_text_view_delete(&value);
+        return -1;
+    }
+    column_index = 0U;
+    while (column_index < column_count) {
+        node = cells[column_index];
+        atom = 0;
+        if (node != 0 && node -> kind == LM_P0_NODE_ATOM) {
+            atom = node -> as -> atom;
+        }
+        explicit_none = atom != 0 && lm_trans_registry_payload_is_null(atom) != 0;
+        projection = 0;
+        cell_status = 0;
+        wants_node = 0;
+        if (column_index == 0U) {
+            if (atom == 0 || lm_trans_registry_identifier_value(atom, value) == 0) {
+                lm_table_row_delete_any(row);
+                lm_trans_l4_text_view_delete(&value);
+                return -1;
+            }
+            cell = lm_table_cell_new_slice(atom -> data, atom -> length, value -> data, value -> length, 0, 0, explicit_none);
+        }
+        else {
+            wants_node = lm_trans_registry_column_has_descriptor(columns[column_index], "node");
+            if (wants_node != 0) {
+                if (explicit_none != 0) {
+                    cell = lm_table_cell_new_slice(atom -> data, atom -> length, 0, 0U, 0, 0, 1);
+                }
+                else {
+                    projection = lm_own_ptr_stack_at(load_context -> projection_facts, column_index - 1U);
+                    if (projection == 0 || projection -> payload_node == 0) {
+                        lm_table_row_delete_any(row);
+                        lm_trans_l4_text_view_delete(&value);
+                        return -1;
+                    }
+                    if (atom != 0) {
+                        cell = lm_table_cell_new_slice(atom -> data, atom -> length, 0, 0U, projection -> payload_node, projection, 0);
+                    }
+                    else {
+                        cell = lm_table_cell_new_slice(0, 0U, 0, 0U, projection -> payload_node, projection, 0);
+                    }
+                }
+            }
+            else {
+                if (atom == 0) {
+                    lm_table_row_delete_any(row);
+                    lm_trans_l4_text_view_delete(&value);
+                    return -1;
+                }
+                cell_status = lm_trans_registry_cell_value(atom, columns[column_index], value);
+                if (cell_status < 0) {
+                    lm_table_row_delete_any(row);
+                    lm_trans_l4_text_view_delete(&value);
+                    return -1;
+                }
+                if (cell_status == 0) {
+                    cell = lm_table_cell_new_slice(atom -> data, atom -> length, 0, 0U, 0, 0, explicit_none);
+                }
+                else {
+                    projection = lm_own_ptr_stack_at(load_context -> projection_facts, column_index - 1U);
+                    if (projection == 0 || projection -> payload == 0) {
+                        lm_table_row_delete_any(row);
+                        lm_trans_l4_text_view_delete(&value);
+                        return -1;
+                    }
+                    cell_status = lm_table_descriptor_cstr_equals_slice(projection -> payload, value -> data, value -> length);
+                    if (cell_status == 0) {
+                        lm_table_row_delete_any(row);
+                        lm_trans_l4_text_view_delete(&value);
+                        return -1;
+                    }
+                    cell = lm_table_cell_new_slice(atom -> data, atom -> length, projection -> payload, strlen(projection -> payload), 0, projection, 0);
+                }
+            }
+        }
+        if (cell == 0 || lm_table_row_take_cell(row, cell) != 0) {
+            lm_table_cell_delete_any(cell);
+            lm_table_row_delete_any(row);
+            lm_trans_l4_text_view_delete(&value);
+            return -1;
+        }
+        column_index = column_index + 1U;
+    }
+    lm_trans_l4_text_view_delete(&value);
+    if (lm_table_descriptor_take_materialized_row(descriptor, row) != 0) {
+        lm_table_row_delete_any(row);
+        return -1;
+    }
+    lm_own_ptr_stack_truncate(load_context -> projection_facts, 0U);
+    load_context->materialized_direct_rows = load_context -> materialized_direct_rows + 1U;
+    return 0;
+}
+
 static int lm_trans_registry_l4_note_key(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom) {
-    LM_UNUSED(context);
+    LmTransL4LoadContext * load_context;
     LM_UNUSED(table_name);
     if (key_atom == 0) {
         return -1;
+    }
+    load_context = ((LmTransL4LoadContext *)context);
+    if (load_context != 0) {
+        if (load_context -> projection_facts == 0 || load_context -> projection_facts -> count != 0U) {
+            return -1;
+        }
+        load_context->expected_direct_rows = load_context -> expected_direct_rows + 1U;
     }
     if (lm_trans_registry_column_is_class_typed(column) != 0) {
         return lm_trans_registry_note_class_present(key_atom);
@@ -30589,13 +31559,28 @@ static int lm_trans_registry_l4_note_key(void *context, const LmP0Text *table_na
 
 static int lm_trans_registry_l4_push_cell(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node) {
     LmTransL4LoadContext * load_context;
+    const LmRegistryViewRow * view_row;
+    LmTransRegistryFact * projection;
+    size_t fact_count_before;
     int allow_node_cells;
     load_context = ((LmTransL4LoadContext *)context);
-    if (table_name == 0 || key_atom == 0) {
+    if (table_name == 0 || key_atom == 0 || load_context == 0 || load_context -> projection_facts == 0 || lm_trans_registry == 0) {
         return -1;
     }
-    allow_node_cells = load_context != 0 && load_context -> allow_node_cells != 0;
+    allow_node_cells = load_context -> allow_node_cells != 0;
+    fact_count_before = lm_trans_registry->loaded_fact_count;
     if (lm_trans_registry_push_table_cell(table_name, column, split_by_column, key_atom, payload_node, allow_node_cells) != 0) {
+        return -1;
+    }
+    projection = 0;
+    if (lm_trans_registry->loaded_fact_count > fact_count_before) {
+        view_row = lm_registry_view_fact_at(lm_trans_registry->view, lm_trans_registry->loaded_fact_count - 1U);
+        if (view_row == 0 || view_row -> source == 0) {
+            return -1;
+        }
+        projection = ((LmTransRegistryFact *)view_row -> source);
+    }
+    if (lm_own_ptr_stack_push(load_context -> projection_facts, projection) != 0) {
         return -1;
     }
     if (lm_trans_registry_column_is_class_typed(column) != 0 && payload_node != 0 && payload_node -> kind == LM_P0_NODE_ATOM && lm_trans_registry_payload_is_null(payload_node -> as -> atom) == 0) {
@@ -30605,18 +31590,74 @@ static int lm_trans_registry_l4_push_cell(void *context, const LmP0Text *table_n
 }
 
 static int lm_trans_registry_l4_push_column_metadata(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count) {
-    LM_UNUSED(context);
-    if (table_name == 0) {
+    LmTransL4LoadContext * load_context;
+    LmTableDescriptor * candidate;
+    LmTableDescriptor * existing;
+    load_context = ((LmTransL4LoadContext *)context);
+    if (load_context == 0 || table_name == 0 || lm_trans_registry == 0 || lm_trans_registry->view == 0) {
         return -1;
     }
+    candidate = lm_trans_registry_l4_source_descriptor_new(table_name, columns, column_count);
+    if (candidate == 0) {
+        return -1;
+    }
+    existing = lm_registry_view_find_local_source_table_slice(lm_trans_registry->view, candidate -> name, strlen(candidate -> name));
+    if (existing != 0 && lm_table_descriptor_schema_same(existing, candidate) != 0) {
+        lm_table_descriptor_delete_any(candidate);
+        load_context->source_table = existing;
+    }
+    else {
+        if (lm_registry_view_take_local_source_table(lm_trans_registry->view, candidate) != 0) {
+            lm_table_descriptor_delete_any(candidate);
+            return -1;
+        }
+        load_context->source_table = candidate;
+    }
+    load_context->source_table_initial_row_count = lm_table_descriptor_materialized_row_count(load_context -> source_table);
     return lm_trans_registry_push_column_metadata(table_name, columns, column_count);
 }
 
 static int lm_trans_registry_l4_join_table(void *context, const LmP0Text *source_table, const LmP0Text *target_table) {
-    LM_UNUSED(context);
-    if (lm_trans_registry_join_table(source_table, target_table) != 0) {
+    LmTransL4LoadContext * load_context;
+    LmP0Text * source_value;
+    LmP0Text * target_value;
+    size_t target_row_count;
+    load_context = ((LmTransL4LoadContext *)context);
+    if (load_context == 0 || load_context -> source_table == 0 || source_table == 0 || target_table == 0) {
         return -1;
     }
+    source_value = lm_trans_l4_text_view_new("");
+    target_value = lm_trans_l4_text_view_new("");
+    if (source_value == 0 || target_value == 0) {
+        lm_trans_l4_text_view_delete(&source_value);
+        lm_trans_l4_text_view_delete(&target_value);
+        return -1;
+    }
+    if (lm_trans_registry_identifier_value(source_table, source_value) == 0 || lm_trans_registry_identifier_value(target_table, target_value) == 0) {
+        lm_trans_l4_text_view_delete(&source_value);
+        lm_trans_l4_text_view_delete(&target_value);
+        return -1;
+    }
+    if (lm_table_descriptor_cstr_equals_slice(load_context -> source_table -> name, target_value -> data, target_value -> length) == 0) {
+        lm_trans_l4_text_view_delete(&source_value);
+        lm_trans_l4_text_view_delete(&target_value);
+        return -1;
+    }
+    target_row_count = lm_table_descriptor_materialized_row_count(load_context -> source_table);
+    if (lm_registry_view_append_materialized_rows(lm_trans_registry->view, load_context -> source_table, source_value -> data, source_value -> length) != 0) {
+        fprintf(stderr, "trans registry error: cannot copy source rows in join %.*s -> %.*s\n", (((int)source_value -> length)), source_value -> data, (((int)target_value -> length)), target_value -> data);
+        lm_trans_l4_text_view_delete(&source_value);
+        lm_trans_l4_text_view_delete(&target_value);
+        return -1;
+    }
+    if (lm_trans_registry_join_table(source_table, target_table) != 0) {
+        lm_own_ptr_stack_truncate(load_context -> source_table -> materialized_rows, target_row_count);
+        lm_trans_l4_text_view_delete(&source_value);
+        lm_trans_l4_text_view_delete(&target_value);
+        return -1;
+    }
+    lm_trans_l4_text_view_delete(&source_value);
+    lm_trans_l4_text_view_delete(&target_value);
     return 0;
 }
 
@@ -30699,6 +31740,7 @@ static LmL4Loader * lm_trans_registry_l4_loader_new(void) {
     loader->push_cell = &lm_trans_registry_l4_push_cell;
     loader->note_key = &lm_trans_registry_l4_note_key;
     loader->push_column_metadata = &lm_trans_registry_l4_push_column_metadata;
+    loader->push_table_row = &lm_trans_registry_l4_push_table_row;
     loader->join_table = &lm_trans_registry_l4_join_table;
     loader->dispatch_frame = &lm_trans_registry_l4_dispatch_frame;
     loader->formal_param_unwrap_index = &lm_trans_registry_l4_formal_param_unwrap_index;

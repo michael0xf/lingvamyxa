@@ -21,6 +21,11 @@ L4:
         rows:
                  AddX `c.closure-struct`
     end: `callable.projection`
+
+    join: (`callable.projection`) `test.callable.projection.joined`
+        columns((class: class) (projection: value))
+        rows:
+    end: `test.callable.projection.joined`
 end: L4
 
 fn: AddX (int: value) int
