@@ -29281,6 +29281,7 @@ static int lm_trans_emit_core_include_table(FILE *output, const LmTransNamespace
     size_t i;
     LmTransRegistryFact * row;
     const LmOwnPtrStack * rows;
+    const char *target;
     int emitted;
     emitted = 0;
     rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("core"), "c.include");
@@ -29291,7 +29292,11 @@ static int lm_trans_emit_core_include_table(FILE *output, const LmTransNamespace
     while (i < rows -> count) {
         row = lm_own_ptr_stack_at(rows, i);
         if (row != 0 && row -> payload != 0) {
-            if (lm_trans_emit_l1_include_target_text(output, row -> payload, strlen(row -> payload)) != 0) {
+            target = lm_trans_registry_source_n2_value(namespace_, "core.c.include", "class", "target", row);
+            if (target == 0) {
+                target = row -> payload;
+            }
+            if (lm_trans_emit_l1_include_target_text(output, target, strlen(target)) != 0) {
                 return 1;
             }
             emitted = 1;
