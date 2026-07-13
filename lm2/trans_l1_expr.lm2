@@ -3779,7 +3779,7 @@ fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTrans
     if: range != 0
         lm_trans_text_ref_destroy(@ key)
         return: 1
-    if: (lm_trans_namespace_registry_lookup(namespace_, key, "cast.target") != 0)
+    if: (lm_trans_namespace_registry_source_n2_typed_value(namespace_, key, "cast.target", "class", "class", "value", "int") != 0)
         lm_trans_text_ref_destroy(@ key)
         return: 1
     c.fprintf(c.stderr, "trans L2 error: cast target type \"%.*s\" is not listed in class.range or cast.target\n", (cast: int key\length), key\data)

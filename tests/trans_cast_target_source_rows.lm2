@@ -1,0 +1,48 @@
+import: "lm2/own.lm2"
+
+L4:
+    table:
+        name: `cast.target`
+        columns((class: class) (int: value))
+        rows:
+                 void  0
+                 void  1
+                 void  None
+    end: `cast.target`
+
+    table:
+        name: `cast.target`
+        columns((class: class) (class: value))
+        rows:
+                 LmOwnAllocationDescriptor  int
+    end: `cast.target`
+
+    table:
+        name: `lm.test.cast.target.seed`
+        columns((class: class) (int: value))
+        rows:
+                 LmOwnPtrStack  1
+    end: `lm.test.cast.target.seed`
+
+    join: (`lm.test.cast.target.seed`) `cast.target`
+        columns((class: class) (int: value))
+        rows:
+    end: `cast.target`
+
+    table:
+        name: `cast.target`
+        columns((class: class) (int: value))
+        rows:
+                 LmOwnPtrStack  None
+    end: `cast.target`
+end: L4
+
+external:
+    fn: main () int
+        int: value 7
+        @: void direct cast: (@: void) @ value
+        LmOwnAllocationDescriptor: fallback cast: LmOwnAllocationDescriptor direct
+        LmOwnPtrStack: joined cast: LmOwnPtrStack direct
+        return: direct = 0 || fallback = 0 || joined = 0
+    end: main
+end: external
