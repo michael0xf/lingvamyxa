@@ -1,0 +1,35 @@
+import: "lm2/own.lm2"
+
+L4:
+    table:
+        name: `call.lowering`
+        columns((class: class) (binding: handler))
+        rows:
+                 function  lm_trans_call_lower_statement
+                 function  lm_trans_call_lower_value
+                 function  None
+    end: `call.lowering`
+
+    table:
+        name: `call.lowering`
+        columns((class: class) (class: handler))
+        rows:
+                 callable  lm_trans_call_lower_statement
+    end: `call.lowering`
+end: L4
+
+fn: seven () int
+    return: 7
+end: seven
+
+sub: store (@: int target; int: value)
+    target[0]: value
+end: store
+
+external:
+    fn: main () int
+        int: result 0
+        store(@ result, seven())
+        return: result != 7
+    end: main
+end: external

@@ -9105,7 +9105,7 @@ static int lm_trans_lower_call(const LmP0Text *head, const LmTransNamespace *nam
     if (lm_trans_is_c_reference_name(head)) {
         return 0;
     }
-    binding = lm_trans_registry_lookup(lm_trans_text_from_cstr(lowering_class), "call.lowering");
+    binding = lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(lowering_class), "call.lowering", "class", "class", "handler", "binding");
     handler = lm_trans_call_lowering_handler_binding(binding);
     if (handler == 0) {
         effective_lowering_class = "";
