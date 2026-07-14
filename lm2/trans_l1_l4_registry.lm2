@@ -6,6 +6,11 @@ fn: lm_trans_layout_backend_value (const: (LmTransNamespace: namespace_); const:
         return: 0
 return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class")
 
+fn: lm_trans_fn_is_external (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "fn.external", "class", "class", "value", "int") != 0
+
 fn: lm_trans_l4_text_view_new (const: @(char text)) LmP0Text
     if: text != 0
         return: lm_trans_text_from_cstr(text)
@@ -1528,7 +1533,7 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
 
     class_kind: lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "class.kind")
     is_sub: class_kind != 0 && c.strcmp(class_kind, "procedure") = 0
-    is_external: lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "fn.external") != 0
+    is_external: lm_trans_fn_is_external(namespace_, lm_trans_text_from_cstr(name))
 
     param_capacity: 256U
     params: lm_trans_l4_abi_params_new(param_capacity)
@@ -1862,7 +1867,7 @@ fn: lm_trans_declare_l4_sub_descriptor (LmTransNamespace: namespace_; const: @(c
     function\symbol_class: "procedure"
     function\is_sub: 1
     function\is_descriptor_only: 1
-    function\is_external: lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0
+    function\is_external: lm_trans_fn_is_external(namespace_, name_text)
 
     function\params: lm_trans_formal_param_list_from_node(function\params_node, 1, "function parameters")
     if: function\params = 0
@@ -1921,7 +1926,7 @@ fn: lm_trans_declare_l4_fn_descriptor (LmTransNamespace: namespace_; const: @(ch
     function\params_node: params_node
     function\return_node: return_node
     function\symbol_class: "function"
-    function\is_external: lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0
+    function\is_external: lm_trans_fn_is_external(namespace_, name_text)
 
     function\params: lm_trans_formal_param_list_from_node(function\params_node, 1, "function parameters")
     if: function\params = 0

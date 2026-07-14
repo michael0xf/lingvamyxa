@@ -3442,6 +3442,7 @@ static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *val
 
 static int lm_trans_layout_backend_is_supported(const char *backend);
 static const char * lm_trans_layout_backend_value(const LmTransNamespace *namespace_, const LmP0Text *class_name);
+static int lm_trans_fn_is_external(const LmTransNamespace *namespace_, const LmP0Text *name);
 static LmP0Text * lm_trans_l4_text_view_new(const char *text);
 static void lm_trans_l4_text_view_delete(LmP0Text **view);
 static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace *namespace_, const char *class_name);
@@ -29760,6 +29761,13 @@ static const char * lm_trans_layout_backend_value(const LmTransNamespace *namesp
     return lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class");
 }
 
+static int lm_trans_fn_is_external(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    if (name == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "fn.external", "class", "class", "value", "int") != 0;
+}
+
 static LmP0Text * lm_trans_l4_text_view_new(const char *text) {
     if (text != 0) {
         return lm_trans_text_from_cstr(text);
@@ -31392,7 +31400,7 @@ static int lm_trans_emit_l4_prototype_name(FILE *file, const LmTransNamespace *n
     }
     class_kind = lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "class.kind");
     is_sub = class_kind != 0 && strcmp(class_kind, "procedure") == 0;
-    is_external = lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "fn.external") != 0;
+    is_external = lm_trans_fn_is_external(namespace_, lm_trans_text_from_cstr(name));
     param_capacity = 256U;
     params = lm_trans_l4_abi_params_new(param_capacity);
     if (params == 0) {
@@ -31767,7 +31775,7 @@ static int lm_trans_declare_l4_sub_descriptor(LmTransNamespace *namespace_, cons
     function->symbol_class = "procedure";
     function->is_sub = 1;
     function->is_descriptor_only = 1;
-    function->is_external = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0;
+    function->is_external = lm_trans_fn_is_external(namespace_, name_text);
     function->params = lm_trans_formal_param_list_from_node(function -> params_node, 1, "function parameters");
     if (function -> params == 0) {
         lm_trans_function_header_destroy(function);
@@ -31826,7 +31834,7 @@ static int lm_trans_declare_l4_fn_descriptor(LmTransNamespace *namespace_, const
     function->params_node = params_node;
     function->return_node = return_node;
     function->symbol_class = "function";
-    function->is_external = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.external") != 0;
+    function->is_external = lm_trans_fn_is_external(namespace_, name_text);
     function->params = lm_trans_formal_param_list_from_node(function -> params_node, 1, "function parameters");
     if (function -> params == 0) {
         lm_trans_function_header_destroy(function);

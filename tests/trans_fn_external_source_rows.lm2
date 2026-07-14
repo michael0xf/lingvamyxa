@@ -1,0 +1,26 @@
+import: "fixtures/fn_external_source_rows.lm4"
+
+prototype
+
+L1:
+===
+int lm_test_external_direct(int value) {
+    return value + 10;
+}
+
+void lm_test_external_fallback(int *value) {
+    *value += 20;
+}
+
+int lm_test_external_joined(int value) {
+    return value + 30;
+}
+===
+
+external:
+    fn: main () int
+        int: value 1
+        lm_test_external_fallback(@ value)
+        return: lm_test_external_direct(1) != 11 || value != 21 || lm_test_external_joined(1) != 31
+    end: main
+end: external

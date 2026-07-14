@@ -1,0 +1,38 @@
+table:
+    name: `fn.external`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_external_direct  1
+             lm_test_external_direct  0
+             lm_test_external_direct  None
+end: `fn.external`
+
+table:
+    name: `fn.external`
+    columns((class: class) (class: value))
+    rows:
+             lm_test_external_fallback  1
+end: `fn.external`
+
+table:
+    name: `lm.test.fn.external.seed`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_external_joined  1
+end: `lm.test.fn.external.seed`
+
+join: (`lm.test.fn.external.seed`) `fn.external`
+    columns((class: class) (int: value))
+    rows:
+end: `fn.external`
+
+table:
+    name: `fn.external`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_external_joined  None
+end: `fn.external`
+
+fn: lm_test_external_direct (int: value) int
+sub: lm_test_external_fallback (@: int value)
+fn: lm_test_external_joined (int: value) int
