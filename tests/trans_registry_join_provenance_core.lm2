@@ -150,6 +150,13 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: fn_receiver_target
     LmTransRegistryFact: fn_receiver_n2_origin
     LmTransRegistryFact: fn_receiver_n2_target
+    LmTransRegistryFact: serialization_codec_origin
+    LmTransRegistryFact: serialization_codec_middle
+    LmTransRegistryFact: serialization_codec_target
+    LmTransRegistryFact: serialization_codec_n2_origin
+    LmTransRegistryFact: serialization_codec_n2_target
+    LmTransRegistryFact: serialization_codec_wrong_column_origin
+    LmTransRegistryFact: serialization_codec_wrong_column_target
     LmTransRegistryFact: namespace_l4_origin
     LmTransRegistryFact: namespace_l4_middle
     LmTransRegistryFact: namespace_l4_target
@@ -248,6 +255,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: cast_target_descriptor
     LmTableDescriptor: fn_external_descriptor
     LmTableDescriptor: fn_receiver_n2_descriptor
+    LmTableDescriptor: serialization_codec_descriptor
+    LmTableDescriptor: serialization_codec_n2_descriptor
+    LmTableDescriptor: serialization_codec_wrong_column_descriptor
     LmTableDescriptor: namespace_l4_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
@@ -274,6 +284,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: cast_target_row
     LmTableRow: fn_external_row
     LmTableRow: fn_receiver_n2_row
+    LmTableRow: serialization_codec_row
+    LmTableRow: serialization_codec_n2_row
+    LmTableRow: serialization_codec_wrong_column_row
     LmTableRow: namespace_l4_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
@@ -322,6 +335,13 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: fn_receiver_value_cell
     LmTableCell: fn_receiver_n2_key_cell
     LmTableCell: fn_receiver_n2_value_cell
+    LmTableCell: serialization_codec_key_cell
+    LmTableCell: serialization_codec_marker_cell
+    LmTableCell: serialization_codec_value_cell
+    LmTableCell: serialization_codec_n2_key_cell
+    LmTableCell: serialization_codec_n2_value_cell
+    LmTableCell: serialization_codec_wrong_column_key_cell
+    LmTableCell: serialization_codec_wrong_column_value_cell
     LmTableCell: namespace_l4_key_cell
     LmTableCell: namespace_l4_marker_cell
     LmTableCell: namespace_l4_value_cell
@@ -432,6 +452,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_cast_target
     const: @: char resolved_fn_external
     const: @: char resolved_fn_receiver
+    const: @: char resolved_serialization_codec
     const: @: char resolved_namespace_l4
     const: @: char resolved_namespace_l4_root
     const: @: char resolved_namespace_l4_atom
@@ -466,6 +487,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: cast_target_key_text
     LmP0Text: fn_external_key_text
     LmP0Text: fn_receiver_n2_key_text
+    LmP0Text: serialization_codec_key_text
+    LmP0Text: serialization_codec_n2_key_text
+    LmP0Text: serialization_codec_wrong_column_key_text
     LmP0Text: namespace_l4_key_text
     LmP0Text: profile_rule_key_text
     LmP0Text: class_c_projection_key_text
@@ -939,6 +963,136 @@ fn: lm_test_registry_join_provenance_core () int
         fn_receiver_n2_key_text: lm_trans_text_from_cstr("ExternalReceiverN2")
         resolved_fn_receiver: lm_trans_fn_receiver_value(0, fn_receiver_n2_key_text)
         if: fn_receiver_n2_key_text = 0 || resolved_fn_receiver != fn_receiver_n2_value_cell\value || resolved_fn_receiver = fn_receiver_n2_target\payload
+            status: 1
+    ---
+
+    serialization_codec_origin: 0
+    serialization_codec_middle: 0
+    serialization_codec_target: 0
+    serialization_codec_descriptor: 0
+    serialization_codec_row: 0
+    serialization_codec_key_cell: 0
+    serialization_codec_marker_cell: 0
+    serialization_codec_value_cell: 0
+    serialization_codec_key_text: 0
+    if: status = 0
+        serialization_codec_origin: lm_test_registry_push_value_fact("lm.test.serialization.codec.origin", "CodecWide", "lmx.decimal-atom", 0)
+        serialization_codec_middle: lm_test_registry_push_value_fact("lm.test.serialization.codec.middle", "CodecWide", "lmx.decimal-atom", serialization_codec_origin)
+        serialization_codec_target: lm_test_registry_push_value_fact("serialization.codec", "CodecWide", "lmx.decimal-atom", serialization_codec_middle)
+        if: serialization_codec_origin = 0 || serialization_codec_middle = 0 || serialization_codec_target = 0 || serialization_codec_middle\source != serialization_codec_origin || serialization_codec_target\source != serialization_codec_middle
+            status: 1
+    ---
+
+    if: status = 0
+        serialization_codec_descriptor: lm_table_descriptor_new_empty_slice("serialization", 13U)
+        if: serialization_codec_descriptor = 0 || lm_table_descriptor_add_column(serialization_codec_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(serialization_codec_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(serialization_codec_descriptor, "codec", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        serialization_codec_row: lm_table_row_new(0)
+        serialization_codec_key_cell: lm_table_cell_new_cstr("CodecWide", "CodecWide", 0, 0, 0)
+        serialization_codec_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        serialization_codec_value_cell: lm_table_cell_new_cstr("lmx.decimal-atom", "lmx.decimal-atom", 0, serialization_codec_origin, 0)
+        if: serialization_codec_row = 0 || serialization_codec_key_cell = 0 || serialization_codec_marker_cell = 0 || serialization_codec_value_cell = 0 || lm_table_row_take_cell(serialization_codec_row, serialization_codec_key_cell) != 0 || lm_table_row_take_cell(serialization_codec_row, serialization_codec_marker_cell) != 0 || lm_table_row_take_cell(serialization_codec_row, serialization_codec_value_cell) != 0 || lm_table_descriptor_take_materialized_row(serialization_codec_descriptor, serialization_codec_row) != 0
+            status: 1
+        else:
+            serialization_codec_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, serialization_codec_descriptor) != 0
+                status: 1
+            else:
+                serialization_codec_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        serialization_codec_key_text: lm_trans_text_from_cstr("CodecWide")
+        resolved_serialization_codec: lm_trans_registry_serialization_codec_value(serialization_codec_key_text)
+        if: serialization_codec_key_text = 0 || resolved_serialization_codec != serialization_codec_value_cell\value || resolved_serialization_codec = serialization_codec_middle\payload || resolved_serialization_codec = serialization_codec_target\payload
+            status: 1
+    ---
+
+    serialization_codec_n2_origin: 0
+    serialization_codec_n2_target: 0
+    serialization_codec_n2_descriptor: 0
+    serialization_codec_n2_row: 0
+    serialization_codec_n2_key_cell: 0
+    serialization_codec_n2_value_cell: 0
+    serialization_codec_n2_key_text: 0
+    if: status = 0
+        serialization_codec_n2_origin: lm_test_registry_push_value_fact("lm.test.serialization.codec.n2.origin", "CodecN2", "lmx.decimal-atom", 0)
+        serialization_codec_n2_target: lm_test_registry_push_value_fact("serialization.codec", "CodecN2", "lmx.decimal-atom", serialization_codec_n2_origin)
+        if: serialization_codec_n2_origin = 0 || serialization_codec_n2_target = 0 || serialization_codec_n2_target\source != serialization_codec_n2_origin
+            status: 1
+    ---
+
+    if: status = 0
+        serialization_codec_n2_descriptor: lm_table_descriptor_new_empty_slice("serialization.codec", 19U)
+        if: serialization_codec_n2_descriptor = 0 || lm_table_descriptor_add_column(serialization_codec_n2_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(serialization_codec_n2_descriptor, "codec", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        serialization_codec_n2_row: lm_table_row_new(0)
+        serialization_codec_n2_key_cell: lm_table_cell_new_cstr("CodecN2", "CodecN2", 0, 0, 0)
+        serialization_codec_n2_value_cell: lm_table_cell_new_cstr("lmx.decimal-atom", "lmx.decimal-atom", 0, serialization_codec_n2_origin, 0)
+        if: serialization_codec_n2_row = 0 || serialization_codec_n2_key_cell = 0 || serialization_codec_n2_value_cell = 0 || lm_table_row_take_cell(serialization_codec_n2_row, serialization_codec_n2_key_cell) != 0 || lm_table_row_take_cell(serialization_codec_n2_row, serialization_codec_n2_value_cell) != 0 || lm_table_descriptor_take_materialized_row(serialization_codec_n2_descriptor, serialization_codec_n2_row) != 0
+            status: 1
+        else:
+            serialization_codec_n2_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, serialization_codec_n2_descriptor) != 0
+                status: 1
+            else:
+                serialization_codec_n2_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        serialization_codec_n2_key_text: lm_trans_text_from_cstr("CodecN2")
+        resolved_serialization_codec: lm_trans_registry_serialization_codec_value(serialization_codec_n2_key_text)
+        if: serialization_codec_n2_key_text = 0 || resolved_serialization_codec != serialization_codec_n2_value_cell\value || resolved_serialization_codec = serialization_codec_n2_target\payload
+            status: 1
+    ---
+
+    serialization_codec_wrong_column_origin: 0
+    serialization_codec_wrong_column_target: 0
+    serialization_codec_wrong_column_descriptor: 0
+    serialization_codec_wrong_column_row: 0
+    serialization_codec_wrong_column_key_cell: 0
+    serialization_codec_wrong_column_value_cell: 0
+    serialization_codec_wrong_column_key_text: 0
+    if: status = 0
+        serialization_codec_wrong_column_origin: lm_test_registry_push_value_fact("lm.test.serialization.codec.wrong-column.origin", "CodecWrongColumn", "lmx.char", 0)
+        serialization_codec_wrong_column_target: lm_test_registry_push_value_fact("serialization.codec", "CodecWrongColumn", "lmx.char", serialization_codec_wrong_column_origin)
+        if: serialization_codec_wrong_column_origin = 0 || serialization_codec_wrong_column_target = 0 || serialization_codec_wrong_column_target\source != serialization_codec_wrong_column_origin
+            status: 1
+    ---
+
+    if: status = 0
+        serialization_codec_wrong_column_descriptor: lm_table_descriptor_new_empty_slice("serialization.codec", 19U)
+        if: serialization_codec_wrong_column_descriptor = 0 || lm_table_descriptor_add_column(serialization_codec_wrong_column_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(serialization_codec_wrong_column_descriptor, "value", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        serialization_codec_wrong_column_row: lm_table_row_new(0)
+        serialization_codec_wrong_column_key_cell: lm_table_cell_new_cstr("CodecWrongColumn", "CodecWrongColumn", 0, 0, 0)
+        serialization_codec_wrong_column_value_cell: lm_table_cell_new_cstr("lmx.char", "lmx.char", 0, serialization_codec_wrong_column_origin, 0)
+        if: serialization_codec_wrong_column_row = 0 || serialization_codec_wrong_column_key_cell = 0 || serialization_codec_wrong_column_value_cell = 0 || lm_table_row_take_cell(serialization_codec_wrong_column_row, serialization_codec_wrong_column_key_cell) != 0 || lm_table_row_take_cell(serialization_codec_wrong_column_row, serialization_codec_wrong_column_value_cell) != 0 || lm_table_descriptor_take_materialized_row(serialization_codec_wrong_column_descriptor, serialization_codec_wrong_column_row) != 0
+            status: 1
+        else:
+            serialization_codec_wrong_column_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, serialization_codec_wrong_column_descriptor) != 0
+                status: 1
+            else:
+                serialization_codec_wrong_column_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        serialization_codec_wrong_column_key_text: lm_trans_text_from_cstr("CodecWrongColumn")
+        resolved_serialization_codec: lm_trans_registry_serialization_codec_value(serialization_codec_wrong_column_key_text)
+        if: serialization_codec_wrong_column_key_text = 0 || resolved_serialization_codec != serialization_codec_wrong_column_target\payload || resolved_serialization_codec = serialization_codec_wrong_column_value_cell\value
             status: 1
     ---
 
@@ -1966,6 +2120,15 @@ fn: lm_test_registry_join_provenance_core () int
     lm_trans_text_ref_destroy(@ fn_receiver_n2_key_text)
     lm_table_row_delete_any(fn_receiver_n2_row)
     lm_table_descriptor_delete_any(fn_receiver_n2_descriptor)
+    lm_trans_text_ref_destroy(@ serialization_codec_key_text)
+    lm_table_row_delete_any(serialization_codec_row)
+    lm_table_descriptor_delete_any(serialization_codec_descriptor)
+    lm_trans_text_ref_destroy(@ serialization_codec_n2_key_text)
+    lm_table_row_delete_any(serialization_codec_n2_row)
+    lm_table_descriptor_delete_any(serialization_codec_n2_descriptor)
+    lm_trans_text_ref_destroy(@ serialization_codec_wrong_column_key_text)
+    lm_table_row_delete_any(serialization_codec_wrong_column_row)
+    lm_table_descriptor_delete_any(serialization_codec_wrong_column_descriptor)
     lm_trans_text_ref_destroy(@ cast_target_key_text)
     lm_table_row_delete_any(cast_target_row)
     lm_table_descriptor_delete_any(cast_target_descriptor)

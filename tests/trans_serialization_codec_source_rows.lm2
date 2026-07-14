@@ -1,15 +1,48 @@
 L4:
     table:
+        name: serialization
+        columns((class: class) (int: marker) (@: char codec))
+        rows:
+                 LmCodecDirect           1  `lmx.decimal-atom`
+                 LmCodecDirect           5  `lmx.char`
+                 LmCodecFallback         2  `lmx.decimal-atom`
+                 LmCodecNumericFallback  3  `lmx.decimal-atom`
+                 default                 4  `lmx.char`
+    end: serialization
+
+    table:
+        name: `lm.test.serialization.codec.seed`
+        columns((class: class) (int: marker) (@: char codec))
+        rows:
+                 LmCodecJoined  7  `lmx.char`
+    end: `lm.test.serialization.codec.seed`
+
+    join: (`lm.test.serialization.codec.seed`) `lm.test.serialization.codec.middle`
+        columns((class: class) (int: marker) (@: char codec))
+        rows:
+    end: `lm.test.serialization.codec.middle`
+
+    join: (`lm.test.serialization.codec.middle`) serialization
+        columns((class: class) (int: marker) (@: char codec))
+        rows:
+    end: serialization
+
+    table:
+        name: serialization
+        columns((class: class) (int: marker) (@: char codec))
+        rows:
+                 LmCodecDirect  8  None
+                 LmCodecJoined  9  None
+                 default        10  None
+    end: serialization
+
+    table:
         name: `serialization.codec`
         columns((class: class) (@: char codec))
         rows:
-                 LmCodecDirect           `lmx.decimal-atom`
-                 LmCodecDirect           `lmx.char`
-                 LmCodecDirect           None
-                 LmCodecFallback         `lmx.decimal-atom`
-                 LmCodecJoined           `lmx.decimal-atom`
-                 LmCodecNumericFallback  `lmx.decimal-atom`
-                 default                 `lmx.char`
+                 LmCodecLegacy  `lmx.decimal-atom`
+                 LmCodecLegacy  `lmx.char`
+                 LmCodecLegacy  None
     end: `serialization.codec`
 
     table:
@@ -18,25 +51,6 @@ L4:
         rows:
                  LmCodecFallback         `lmx.char`
                  LmCodecNumericFallback  `lmx.symbol-atom`
-    end: `serialization.codec`
-
-    table:
-        name: `lm.test.serialization.codec.seed`
-        columns((class: class) (@: char codec))
-        rows:
-                 LmCodecJoined  `lmx.char`
-    end: `lm.test.serialization.codec.seed`
-
-    join: (`lm.test.serialization.codec.seed`) `serialization.codec`
-        columns((class: class) (@: char codec))
-        rows:
-    end: `serialization.codec`
-
-    table:
-        name: `serialization.codec`
-        columns((class: class) (@: char codec))
-        rows:
-                 LmCodecJoined  None
     end: `serialization.codec`
 
     table:
@@ -73,6 +87,13 @@ L4:
         rows:
                  LM_TEST_CODEC_NUMERIC_FALLBACK  lm_test_symbol_token
     end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmCodecLegacy: value))
+        rows:
+                 LM_TEST_CODEC_LEGACY  "16"
+    end: `define.value`
 end: L4
 
 define
@@ -90,7 +111,7 @@ L1:
 #endif
 
 #if !defined(LM_TEST_CODEC_JOINED) || LM_TEST_CODEC_JOINED != 13
-#error "joined serialization codec did not use the facade value"
+#error "wide joined serialization codec source row differs"
 #endif
 
 #if !defined(LM_TEST_CODEC_DEFAULT) || LM_TEST_CODEC_DEFAULT != 14
@@ -99,6 +120,10 @@ L1:
 
 #if !defined(LM_TEST_CODEC_NUMERIC_FALLBACK) || LM_TEST_CODEC_NUMERIC_FALLBACK != 15
 #error "wrong-schema numeric codec did not use the facade value"
+#endif
+
+#if !defined(LM_TEST_CODEC_LEGACY) || LM_TEST_CODEC_LEGACY != 16
+#error "legacy N2 serialization codec source row differs"
 #endif
 ===
 

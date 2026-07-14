@@ -5780,7 +5780,7 @@ static int lm_trans_registry_column_is_class_typed(const LmL4Column *column) {
 }
 
 static const char * lm_trans_registry_serialization_codec_value(const LmP0Text *key) {
-    return lm_trans_namespace_registry_source_n2_typed_value(0, key, "serialization.codec", "class", "class", "codec", "char");
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, key, "serialization.codec", "class", "class", "codec", "char");
 }
 
 static const char * lm_trans_registry_column_serialization_codec(const LmL4Column *column) {

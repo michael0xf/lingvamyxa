@@ -626,7 +626,7 @@ fn: lm_trans_registry_column_is_class_typed (const: (LmL4Column: column)) int
 return: is_class || lm_trans_registry_column_has_descriptor(column, "class")
 
 fn: lm_trans_registry_serialization_codec_value (const: (LmP0Text: key)) const: @: char
-return: lm_trans_namespace_registry_source_n2_typed_value(0, key, "serialization.codec", "class", "class", "codec", "char")
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, key, "serialization.codec", "class", "class", "codec", "char")
 
 fn: lm_trans_registry_column_serialization_codec (const: (LmL4Column: column)) const: @: char
     LmP0Text: payload
