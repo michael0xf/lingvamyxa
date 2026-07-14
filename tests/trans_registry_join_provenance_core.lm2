@@ -187,6 +187,15 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: profile_validator_origin
     LmTransRegistryFact: profile_validator_middle
     LmTransRegistryFact: profile_validator_target
+    LmTransRegistryFact: printf_rule_expected_origin
+    LmTransRegistryFact: printf_rule_expected_middle
+    LmTransRegistryFact: printf_rule_expected_target
+    LmTransRegistryFact: printf_rule_profile_origin
+    LmTransRegistryFact: printf_rule_profile_middle
+    LmTransRegistryFact: printf_rule_profile_target
+    LmTransRegistryFact: printf_argument_origin
+    LmTransRegistryFact: printf_argument_middle
+    LmTransRegistryFact: printf_argument_target
     LmTransRegistryFact: class_c_projection_origin
     LmTransRegistryFact: class_c_projection_middle
     LmTransRegistryFact: class_c_projection_target
@@ -290,6 +299,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: namespace_l4_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
+    LmTableDescriptor: printf_rule_descriptor
+    LmTableDescriptor: printf_argument_descriptor
     LmTableDescriptor: class_metadata_descriptor
     LmTableDescriptor: class_reference_descriptor
     LmTableDescriptor: receiver_descriptor
@@ -324,6 +335,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: namespace_l4_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
+    LmTableRow: printf_rule_row
+    LmTableRow: printf_argument_row
     LmTableRow: class_c_projection_row
     LmTableRow: class_spelling_row
     LmTableRow: class_ctail_row
@@ -401,6 +414,13 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: profile_validator_key_cell
     LmTableCell: profile_validator_marker_cell
     LmTableCell: profile_validator_value_cell
+    LmTableCell: printf_rule_key_cell
+    LmTableCell: printf_rule_marker_cell
+    LmTableCell: printf_rule_profile_cell
+    LmTableCell: printf_rule_extra_cell
+    LmTableCell: printf_rule_expected_cell
+    LmTableCell: printf_argument_key_cell
+    LmTableCell: printf_argument_value_cell
     LmTableCell: class_c_projection_key_cell
     LmTableCell: class_c_projection_value_cell
     LmTableCell: class_c_projection_spelling_none_cell
@@ -519,6 +539,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_namespace_l4_payload
     const: @: char resolved_c99_policy
     const: @: char resolved_profile_validator
+    const: @: char resolved_printf_expected
+    const: @: char resolved_printf_profile
     const: @: char resolved_class_c_projection
     const: @: char resolved_class_c_projection_spelling
     const: @: char resolved_class_spelling
@@ -1506,6 +1528,101 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_c99_policy: lm_trans_c99_ub_policy_value(0, profile_rule_key_text)
         resolved_profile_validator: lm_trans_profile_validator_binding(0, profile_rule_key_text)
         if: profile_rule_key_text = 0 || resolved_c99_policy != c99_policy_value_cell\value || resolved_c99_policy = c99_policy_middle\payload || resolved_c99_policy = c99_policy_target\payload || resolved_profile_validator != profile_validator_value_cell\value || resolved_profile_validator = profile_validator_middle\payload || resolved_profile_validator = profile_validator_target\payload || lm_trans_profile_rule_enabled(0, "ProfileWide") = 0 || lm_trans_profile_validator_enabled(0, "ProfileWide", "lm_trans_validate_c_printf_call") = 0
+            status: 1
+    ---
+
+    printf_rule_expected_origin: 0
+    printf_rule_expected_middle: 0
+    printf_rule_expected_target: 0
+    printf_rule_profile_origin: 0
+    printf_rule_profile_middle: 0
+    printf_rule_profile_target: 0
+    printf_argument_origin: 0
+    printf_argument_middle: 0
+    printf_argument_target: 0
+    printf_rule_descriptor: 0
+    printf_argument_descriptor: 0
+    printf_rule_row: 0
+    printf_argument_row: 0
+    printf_rule_key_cell: 0
+    printf_rule_marker_cell: 0
+    printf_rule_profile_cell: 0
+    printf_rule_extra_cell: 0
+    printf_rule_expected_cell: 0
+    printf_argument_key_cell: 0
+    printf_argument_value_cell: 0
+    if: status = 0
+        printf_rule_expected_origin: lm_test_registry_push_value_fact("lm.test.printf.rule.expected.origin", "%R", "int", 0)
+        printf_rule_expected_middle: lm_test_registry_push_value_fact("lm.test.printf.rule.expected.middle", "%R", "int", printf_rule_expected_origin)
+        printf_rule_expected_target: lm_test_registry_push_value_fact("printf.conversion.rule.expected", "%R", "int", printf_rule_expected_middle)
+        printf_rule_profile_origin: lm_test_registry_push_value_fact("lm.test.printf.rule.profile.origin", "%R", "ProfileWide", 0)
+        printf_rule_profile_middle: lm_test_registry_push_value_fact("lm.test.printf.rule.profile.middle", "%R", "ProfileWide", printf_rule_profile_origin)
+        printf_rule_profile_target: lm_test_registry_push_value_fact("printf.conversion.rule.profile", "%R", "ProfileWide", printf_rule_profile_middle)
+        printf_argument_origin: lm_test_registry_push_value_fact("lm.test.printf.argument.origin", "%J", "long", 0)
+        printf_argument_middle: lm_test_registry_push_value_fact("lm.test.printf.argument.middle", "%J", "long", printf_argument_origin)
+        printf_argument_target: lm_test_registry_push_value_fact("printf.argument.class", "%J", "long", printf_argument_middle)
+        if: printf_rule_expected_origin = 0 || printf_rule_expected_middle = 0 || printf_rule_expected_target = 0 || printf_rule_profile_origin = 0 || printf_rule_profile_middle = 0 || printf_rule_profile_target = 0 || printf_argument_origin = 0 || printf_argument_middle = 0 || printf_argument_target = 0 || printf_rule_expected_middle\source != printf_rule_expected_origin || printf_rule_expected_target\source != printf_rule_expected_middle || printf_rule_profile_middle\source != printf_rule_profile_origin || printf_rule_profile_target\source != printf_rule_profile_middle || printf_argument_middle\source != printf_argument_origin || printf_argument_target\source != printf_argument_middle
+            status: 1
+    ---
+
+    if: status = 0
+        printf_rule_descriptor: lm_table_descriptor_new_empty_slice("printf.conversion.rule", 22U)
+        if: printf_rule_descriptor = 0 || lm_table_descriptor_add_column(printf_rule_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(printf_rule_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(printf_rule_descriptor, "profile", "profileRule") != 0 || lm_table_descriptor_add_column(printf_rule_descriptor, "extra", "int") != 0 || lm_table_descriptor_add_column(printf_rule_descriptor, "expected", "class") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        printf_rule_row: lm_table_row_new(0)
+        printf_rule_key_cell: lm_table_cell_new_cstr("%R", "%R", 0, 0, 0)
+        printf_rule_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        printf_rule_profile_cell: lm_table_cell_new_cstr("ProfileWide", "ProfileWide", 0, printf_rule_profile_origin, 0)
+        printf_rule_extra_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        printf_rule_expected_cell: lm_table_cell_new_cstr("int", "int", 0, printf_rule_expected_origin, 0)
+        if: printf_rule_row = 0 || printf_rule_key_cell = 0 || printf_rule_marker_cell = 0 || printf_rule_profile_cell = 0 || printf_rule_extra_cell = 0 || printf_rule_expected_cell = 0 || lm_table_row_take_cell(printf_rule_row, printf_rule_key_cell) != 0 || lm_table_row_take_cell(printf_rule_row, printf_rule_marker_cell) != 0 || lm_table_row_take_cell(printf_rule_row, printf_rule_profile_cell) != 0 || lm_table_row_take_cell(printf_rule_row, printf_rule_extra_cell) != 0 || lm_table_row_take_cell(printf_rule_row, printf_rule_expected_cell) != 0 || lm_table_descriptor_take_materialized_row(printf_rule_descriptor, printf_rule_row) != 0
+            status: 1
+        else:
+            printf_rule_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, printf_rule_descriptor) != 0
+                status: 1
+            else:
+                printf_rule_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        printf_argument_descriptor: lm_table_descriptor_new_empty_slice("printf.argument.class", 21U)
+        if: printf_argument_descriptor = 0 || lm_table_descriptor_add_column(printf_argument_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(printf_argument_descriptor, "value", "class") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        printf_argument_row: lm_table_row_new(0)
+        printf_argument_key_cell: lm_table_cell_new_cstr("%J", "%J", 0, 0, 0)
+        printf_argument_value_cell: lm_table_cell_new_cstr("long", "long", 0, printf_argument_origin, 0)
+        if: printf_argument_row = 0 || printf_argument_key_cell = 0 || printf_argument_value_cell = 0 || lm_table_row_take_cell(printf_argument_row, printf_argument_key_cell) != 0 || lm_table_row_take_cell(printf_argument_row, printf_argument_value_cell) != 0 || lm_table_descriptor_take_materialized_row(printf_argument_descriptor, printf_argument_row) != 0
+            status: 1
+        else:
+            printf_argument_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, printf_argument_descriptor) != 0
+                status: 1
+            else:
+                printf_argument_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_printf_expected: 0
+        resolved_printf_profile: 0
+        lm_trans_printf_conversion_rule_resolve(0, 'R', '\0', @ resolved_printf_expected, @ resolved_printf_profile)
+        if: resolved_printf_expected != printf_rule_expected_cell\value || resolved_printf_expected = printf_rule_expected_middle\payload || resolved_printf_expected = printf_rule_expected_target\payload || resolved_printf_profile != printf_rule_profile_cell\value || resolved_printf_profile = printf_rule_profile_middle\payload || resolved_printf_profile = printf_rule_profile_target\payload
+            status: 1
+    ---
+
+    if: status = 0
+        resolved_printf_expected: 0
+        resolved_printf_profile: 0
+        lm_trans_printf_conversion_rule_resolve(0, 'J', '\0', @ resolved_printf_expected, @ resolved_printf_profile)
+        if: resolved_printf_expected != printf_argument_value_cell\value || resolved_printf_expected = printf_argument_middle\payload || resolved_printf_expected = printf_argument_target\payload || resolved_printf_profile = 0 || c.strcmp(resolved_printf_profile, "c99.format-mismatch") != 0
             status: 1
     ---
 
@@ -2501,6 +2618,10 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_row_delete_any(class_spelling_row)
     lm_table_row_delete_any(class_c_projection_row)
     lm_table_descriptor_delete_any(class_metadata_descriptor)
+    lm_table_row_delete_any(printf_argument_row)
+    lm_table_descriptor_delete_any(printf_argument_descriptor)
+    lm_table_row_delete_any(printf_rule_row)
+    lm_table_descriptor_delete_any(printf_rule_descriptor)
     lm_trans_text_ref_destroy(@ profile_rule_key_text)
     lm_table_row_delete_any(profile_validator_row)
     lm_table_descriptor_delete_any(profile_validator_descriptor)

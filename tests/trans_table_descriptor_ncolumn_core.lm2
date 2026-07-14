@@ -108,7 +108,6 @@ external:
         const: LmTableDescriptor: selected_table
         LmTableRow: row
         const: LmTableRow: source_row
-        const: LmTableRow: selected_row
         const: LmTableRow: joined_row
         const: LmTableCell: cell
         const: LmTableCell: selected_key_cell
@@ -293,35 +292,6 @@ external:
         catalog_table: lm_registry_view_source_table_at(view, 2U)
         if: status = 0 && (lm_registry_view_source_table_count(view) != 7U || catalog_table = 0 || lm_table_descriptor_column_count(catalog_table) != 1U || lm_registry_view_find_source_table_slice(view, "source.ncolumn", 14U) != catalog_table)
             status: 1
-        covered: 0
-        selected_table: 0
-        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn", 14U, "duplicate", 9U, @ selected_table, @ covered)
-        cell: lm_table_row_cell_at(selected_row, 1U)
-        if: status = 0 && (selected_row = 0 || selected_table = 0 || selected_row\local_sequence != 3U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "newLeft") != 0 || covered = 0)
-            status: 1
-        cell: lm_table_row_cell_at(selected_row, 2U)
-        if: status = 0 && (cell = 0 || cell\value != 0 || cell\explicit_none = 0)
-            status: 1
-        covered: 0
-        selected_table: 0
-        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn", 14U, "variant", 7U, @ selected_table, @ covered)
-        if: status = 0 && (selected_row = 0 || selected_table != catalog_table || selected_row\local_sequence != 0U || covered = 0)
-            status: 1
-        covered: 0
-        selected_table: catalog_table
-        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn", 14U, "missing", 7U, @ selected_table, @ covered)
-        if: status = 0 && (selected_row = 0 || selected_table != catalog_table || selected_row\local_sequence != 1U || covered = 0)
-            status: 1
-        covered: 0
-        selected_table: catalog_table
-        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "source.ncolumn.b", 16U, "missing", 7U, @ selected_table, @ covered)
-        if: status = 0 && (selected_row != 0 || selected_table != 0 || covered = 0)
-            status: 1
-        covered: 1
-        selected_table: catalog_table
-        selected_row: lm_registry_view_source_table_lookup_row_slice(view, "missing.table", 13U, "missing", 7U, @ selected_table, @ covered)
-        if: status = 0 && (selected_row != 0 || selected_table != 0 || covered != 0)
-            status: 1
         if: status = 0
             local_view: lm_registry_view_new(view)
             local_source: lm_test_ncolumn_schema("source.ncolumn")
@@ -333,29 +303,6 @@ external:
         if: status = 0
             local_catalog_table: local_source
             local_source: 0
-            covered: 0
-            selected_table: 0
-            selected_row: lm_registry_view_source_table_lookup_row_slice(local_view, "source.ncolumn", 14U, "duplicate", 9U, @ selected_table, @ covered)
-            cell: lm_table_row_cell_at(selected_row, 1U)
-            if: selected_row = 0 || selected_table != local_catalog_table || selected_row\local_sequence != 0U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "localLeft") != 0 || covered = 0
-                status: 1
-            ---
-        if: status = 0
-            covered: 0
-            selected_table: 0
-            selected_row: lm_registry_view_source_table_lookup_row_slice(local_view, "source.ncolumn", 14U, "ordered", 7U, @ selected_table, @ covered)
-            cell: lm_table_row_cell_at(selected_row, 1U)
-            if: selected_row = 0 || selected_table = local_catalog_table || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "left raw") != 0 || covered = 0
-                status: 1
-            ---
-        if: status = 0
-            covered: 0
-            selected_table: 0
-            selected_row: lm_registry_view_source_table_lookup_row_slice(local_view, "source.ncolumn", 14U, "missing", 7U, @ selected_table, @ covered)
-            cell: lm_table_row_cell_at(selected_row, 1U)
-            if: selected_row = 0 || selected_table != local_catalog_table || selected_row\local_sequence != 1U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "localDefault") != 0 || covered = 0
-                status: 1
-            ---
         if: status = 0
             covered: 0
             selected_table: 0
