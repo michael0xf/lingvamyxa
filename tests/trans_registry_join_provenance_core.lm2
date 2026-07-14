@@ -222,9 +222,11 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
     const: @: char resolved_receiver_binding
+    const: @: char resolved_expr_target_binding
     const: @: char resolved_expr_meta_binding
     const: @: char resolved_expr_meta_default
     const: @: char resolved_expr_meta_wrong
+    LmP0Text: target_key_text
     LmP0Text: receiver_key_text
     size_t: layout_source_row_index
     size_t: unrelated_layout_source_row_index
@@ -242,6 +244,7 @@ fn: lm_test_registry_join_provenance_core () int
         return: 1
     lm_trans_registry\loaded: 1
     lm_trans_registry\view_mode: 2
+    target_key_text: 0
 
     origin: lm_test_registry_push_value_fact("origin.value", "Witness", "payload", 0)
     middle: lm_test_registry_push_value_fact("middle.value", "Witness", "payload", origin)
@@ -275,9 +278,10 @@ fn: lm_test_registry_join_provenance_core () int
         ---
 
     if: status = 0
+        target_key_text: lm_trans_text_from_cstr("Witness")
         resolved_cell: lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, target)
-        resolved_value: lm_trans_registry_source_path_typed_value(0, "target.value", "class", "class", "char", target)
-        if: resolved_cell != value_cell || resolved_value != value_cell\value || resolved_value = target\payload || lm_trans_registry_fact_has_source(origin, origin) = 0 || lm_trans_registry_fact_has_source(middle, origin) = 0 || lm_trans_registry_fact_has_source(target, origin) = 0 || lm_trans_registry_fact_has_source(target, middle) = 0 || lm_trans_registry_fact_has_source(unrelated, origin) != 0 || lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, unrelated) != 0
+        resolved_value: lm_trans_expr_source_path_value(target_key_text, "target.value", "value", "char")
+        if: target_key_text = 0 || resolved_cell != value_cell || resolved_value != value_cell\value || resolved_value = target\payload || lm_trans_registry_fact_has_source(origin, origin) = 0 || lm_trans_registry_fact_has_source(middle, origin) = 0 || lm_trans_registry_fact_has_source(target, origin) = 0 || lm_trans_registry_fact_has_source(target, middle) = 0 || lm_trans_registry_fact_has_source(unrelated, origin) != 0 || lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, unrelated) != 0
             status: 1
     ---
 
@@ -323,7 +327,8 @@ fn: lm_test_registry_join_provenance_core () int
     if: status = 0
         receiver_key_text: lm_trans_text_from_cstr("ReceiverWitness")
         resolved_receiver_binding: lm_trans_atom_statement_receiver_binding(receiver_key_text)
-        if: receiver_key_text = 0 || resolved_receiver_binding != receiver_binding_cell\value || resolved_receiver_binding = receiver_middle\payload || resolved_receiver_binding = receiver_target\payload
+        resolved_expr_target_binding: lm_trans_expr_source_path_value(receiver_key_text, "receiver.atom.statement", "statement", "binding")
+        if: receiver_key_text = 0 || resolved_receiver_binding != receiver_binding_cell\value || resolved_receiver_binding = receiver_middle\payload || resolved_receiver_binding = receiver_target\payload || resolved_expr_target_binding != receiver_binding_cell\value || resolved_expr_target_binding = receiver_target\payload
             status: 1
     ---
 
@@ -750,6 +755,7 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(expr_meta_wrong_descriptor)
     lm_table_row_delete_any(expr_meta_row)
     lm_table_descriptor_delete_any(expr_meta_descriptor)
+    lm_trans_text_ref_destroy(@ target_key_text)
     lm_trans_text_ref_destroy(@ receiver_key_text)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)

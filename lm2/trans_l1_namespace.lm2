@@ -154,25 +154,23 @@ sub: lm_trans_function_state_delete (LmTransFunctionState: state)
     lm_own_delete(state, lm_trans_function_state_destroy_any)
 end: lm_trans_function_state_delete
 
-fn: lm_trans_registry_has_expr_emitter_binding (const: (LmP0Text: key); const: @(char table); const: @(char source_table_name)) int
+fn: lm_trans_expr_source_path_value (
+    const: (LmP0Text: key)
+    const: @(char source_path)
+    const: @(char n2_value_column_name)
+    const: @(char value_descriptor)
+) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, key, source_path, "class", "class", n2_value_column_name, value_descriptor)
+
+fn: lm_trans_registry_has_expr_emitter_binding (const: (LmP0Text: key); const: @(char table)) int
     const: @: char binding
-    const: @: char source_binding
-    const: LmTableDescriptor: source_table
-    const: LmTableRow: source_row
-    const: LmTableColumnDescriptor: source_key_column
-    const: LmTableColumnDescriptor: source_spelling_column
-    const: LmTableColumnDescriptor: source_emitter_column
-    const: LmTableCell: source_emitter_cell
     LmTransBinding: resolved
     const: @: char table_name
-    int: source_covered
-    int: source_same
-    int: source_usable
 
     if: key = 0
         return: 0
 
-    binding: lm_trans_registry_lookup(key, table)
+    binding: lm_trans_expr_source_path_value(key, table, "emitter", "binding")
     if: binding != 0
         resolved: lm_own_new_zero(c.sizeof(resolved[0]))
         if: resolved = 0
@@ -186,40 +184,7 @@ fn: lm_trans_registry_has_expr_emitter_binding (const: (LmP0Text: key); const: @
             c.exit(2)
         lm_own_delete(resolved, 0)
     ---
-
-    if: lm_trans_registry_view_parity_enabled() != 0
-        source_covered: 0
-        source_table: 0
-        source_row: lm_trans_registry_source_table_lookup_row(key, source_table_name, @ source_table, @ source_covered)
-        source_binding: 0
-        source_usable: source_row = 0
-        if: source_row != 0
-            source_usable: lm_table_descriptor_column_count(source_table) = 3U && lm_table_row_cell_count(source_row) = 3U
-            if: source_usable != 0
-                source_key_column: lm_table_descriptor_column_at(source_table, 0U)
-                source_spelling_column: lm_table_descriptor_column_at(source_table, 1U)
-                source_emitter_column: lm_table_descriptor_column_at(source_table, 2U)
-                source_usable: source_key_column != 0 && source_key_column\name != 0 && c.strcmp(source_key_column\name, "class") = 0 && source_spelling_column != 0 && source_spelling_column\name != 0 && c.strcmp(source_spelling_column\name, "ansi_c") = 0 && source_emitter_column != 0 && source_emitter_column\name != 0 && c.strcmp(source_emitter_column\name, "emitter") = 0
-            ---
-            if: source_usable != 0
-                source_emitter_cell: lm_table_row_cell_at(source_row, 2U)
-                if: source_emitter_cell != 0
-                    source_binding: source_emitter_cell\value
-                ---
-            ---
-        ---
-
-        source_same: (source_binding = 0) = (binding = 0)
-        if: source_same != 0 && source_binding != 0
-            source_same: c.strcmp(source_binding, binding) = 0
-        if: lm_trans_registry_view_is_selected() != 0 && source_covered != 0 && source_usable != 0 && source_same != 0
-            return: source_binding != 0
-        ---
-    ---
-
-    if: binding != 0
-        return: 1
-return: 0
+return: binding != 0
 
 fn: lm_trans_expr_emitter_binding_view_row_matches (const: (LmRegistryViewRow: view_row)) int
     if: view_row = 0 || view_row\table = 0
@@ -386,7 +351,7 @@ fn: lm_trans_registry_has_expr_emitter_class (const: (LmP0Text: key); const: @(c
     const: @: char table
 
     table: lm_trans_expr_emitter_binding_table(class_name)
-return: table != 0 && lm_trans_registry_has_expr_emitter_binding(key, table, class_name)
+return: table != 0 && lm_trans_registry_has_expr_emitter_binding(key, table)
 
 fn: lm_trans_registry_has_expr_emitter_binding_class (const: (LmP0Text: key); const: @(char class_name)) int
 return: lm_trans_registry_has_expr_emitter_class(key, class_name)
@@ -419,14 +384,14 @@ fn: lm_trans_registry_has_any_expr_emitter_binding (const: (LmP0Text: key)) int
                 if: lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, binding_table) != 0
                     lm_trans_text_ref_destroy(@ class_text)
                     c.exit(2)
-                found: lm_trans_registry_has_expr_emitter_binding(key, binding_table, class_name)
+                found: lm_trans_registry_has_expr_emitter_binding(key, binding_table)
                 lm_trans_text_ref_destroy(@ class_text)
                 if: found
                     class_name: 0
                     binding_table: 0
                     if: lm_trans_expr_emitter_binding_view_row_values(view_row, @ class_name, @ binding_table) = 0
                         return: 1
-                    if: lm_trans_registry_has_expr_emitter_binding(key, binding_table, class_name)
+                    if: lm_trans_registry_has_expr_emitter_binding(key, binding_table)
                         return: 1
                     ---
                 ---
@@ -450,7 +415,7 @@ fn: lm_trans_registry_has_any_expr_emitter_binding (const: (LmP0Text: key)) int
             if: lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, row\payload) != 0
                 lm_trans_text_ref_destroy(@ class_text)
                 c.exit(2)
-            found: lm_trans_registry_has_expr_emitter_binding(key, row\payload, row\key)
+            found: lm_trans_registry_has_expr_emitter_binding(key, row\payload)
             lm_trans_text_ref_destroy(@ class_text)
             if: found
                 return: 1
