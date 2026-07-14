@@ -3962,13 +3962,16 @@ fn: lm_trans_expr_emit_cast_frame (FILE: file; LmTransExprStack: stack; const: (
     return: 0
 end: lm_trans_expr_emit_cast_frame
 
+fn: lm_trans_expr_frame_receiver_binding_from_head (const: (LmTransNamespace: namespace_); const: (LmP0Text: head)) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, head, "receiver.expr", "class", "class", "receiver", "binding")
+
 fn: lm_trans_lookup_expr_frame_receiver_binding (const: (LmTransNamespace: namespace_); const: (LmP0Text: head); LmTransBinding: out) int
     const: @: char binding
     if: (out != 0)
         c.memset(out, 0, c.sizeof(out[0]))
     if: (out = 0)
         return: -1
-    binding: lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.expr", "class", "class", "receiver", "binding")
+    binding: lm_trans_expr_frame_receiver_binding_from_head(namespace_, head)
     if: (binding = 0)
         return: 0
     if: ((lm_trans_binding_resolve(binding, out) = 0) || (out\expr_frame = 0))

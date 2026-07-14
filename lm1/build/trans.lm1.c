@@ -2879,6 +2879,7 @@ static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Tex
 static int lm_trans_instanceof_arg_key(const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key);
 static int lm_trans_expr_emit_instanceof_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_expr_emit_cast_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
+static const char * lm_trans_expr_frame_receiver_binding_from_head(const LmTransNamespace *namespace_, const LmP0Text *head);
 static int lm_trans_lookup_expr_frame_receiver_binding(const LmTransNamespace *namespace_, const LmP0Text *head, LmTransBinding *out);
 static int lm_trans_expr_stack_emit_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_expr_stack_emit_node(FILE *file, LmTransExprStack *stack, const LmP0Node *node, const LmTransNamespace *namespace_);
@@ -2984,6 +2985,7 @@ static const LmP0Field * lm_trans_control_body_start(const LmP0Frame *frame);
 static int lm_trans_emit_control_condition(FILE *file, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_parse_size_payload(const char *payload, size_t *out_value);
 static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *out_index);
+static const char * lm_trans_formal_param_unwrap_index_payload(const LmP0Text *receiver_key);
 static int lm_trans_frame_formal_param_unwrap_index(const LmP0Frame *frame, size_t *out_index);
 static int lm_trans_frame_arg_frame(const LmP0Frame *frame, const char *name, const LmP0Frame **out_arg);
 static int lm_trans_frame_arg_single_node(const LmP0Frame *frame, const char *name, const LmP0Node **out_node);
@@ -14611,6 +14613,10 @@ static int lm_trans_expr_emit_cast_frame(FILE *file, LmTransExprStack *stack, co
     return 0;
 }
 
+static const char * lm_trans_expr_frame_receiver_binding_from_head(const LmTransNamespace *namespace_, const LmP0Text *head) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, head, "receiver.expr", "class", "class", "receiver", "binding");
+}
+
 static int lm_trans_lookup_expr_frame_receiver_binding(const LmTransNamespace *namespace_, const LmP0Text *head, LmTransBinding *out) {
     const char *binding;
     if (out != 0) {
@@ -14619,7 +14625,7 @@ static int lm_trans_lookup_expr_frame_receiver_binding(const LmTransNamespace *n
     if (out == 0) {
         return -1;
     }
-    binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.expr", "class", "class", "receiver", "binding");
+    binding = lm_trans_expr_frame_receiver_binding_from_head(namespace_, head);
     if (binding == 0) {
         return 0;
     }
@@ -16751,6 +16757,10 @@ static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *
     }
 }
 
+static const char * lm_trans_formal_param_unwrap_index_payload(const LmP0Text *receiver_key) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, receiver_key, "receiver.formal-param.unwrap", "class", "class", "index", "size_t");
+}
+
 static int lm_trans_frame_formal_param_unwrap_index(const LmP0Frame *frame, size_t *out_index) {
     const char *index_payload;
     LmP0Text * receiver_key;
@@ -16768,7 +16778,7 @@ static int lm_trans_frame_formal_param_unwrap_index(const LmP0Frame *frame, size
             return lm_return_0;
         }
     }
-    index_payload = lm_trans_namespace_registry_source_n2_typed_value(0, receiver_key, "receiver.formal-param.unwrap", "class", "class", "index", "size_t");
+    index_payload = lm_trans_formal_param_unwrap_index_payload(receiver_key);
     if (index_payload == 0) {
         {
             int lm_return_1 = 0;

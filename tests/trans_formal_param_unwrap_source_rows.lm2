@@ -27,29 +27,34 @@ L4:
 
     table:
         name: `lm.test.formal-param.unwrap.seed`
-        columns((class: class) (size_t: index))
+        columns((class: class) (int: marker) (size_t: unwrap))
         rows:
-                 LmTestJoinedUnwrap  1
+                 LmTestJoinedUnwrap  7  1
     end: `lm.test.formal-param.unwrap.seed`
 
     table:
-        name: `receiver.formal-param.unwrap`
-        columns((class: class) (size_t: index))
+        name: `receiver.formal-param`
+        columns((class: class) (int: marker) (size_t: unwrap))
         rows:
-                 LmTestJoinedUnwrap  0
-    end: `receiver.formal-param.unwrap`
+                 LmTestJoinedUnwrap  6  0
+    end: `receiver.formal-param`
 
-    join: (`lm.test.formal-param.unwrap.seed`) `receiver.formal-param.unwrap`
-        columns((class: class) (size_t: index))
+    join: (`lm.test.formal-param.unwrap.seed`) `lm.test.formal-param.unwrap.middle`
+        columns((class: class) (int: marker) (size_t: unwrap))
         rows:
-    end: `receiver.formal-param.unwrap`
+    end: `lm.test.formal-param.unwrap.middle`
+
+    join: (`lm.test.formal-param.unwrap.middle`) `receiver.formal-param`
+        columns((class: class) (int: marker) (size_t: unwrap))
+        rows:
+    end: `receiver.formal-param`
 
     table:
-        name: `receiver.formal-param.unwrap`
-        columns((class: class) (size_t: index))
+        name: `receiver.formal-param`
+        columns((class: class) (int: marker) (size_t: unwrap))
         rows:
-                 LmTestJoinedUnwrap  None
-    end: `receiver.formal-param.unwrap`
+                 LmTestJoinedUnwrap  8  None
+    end: `receiver.formal-param`
 end: L4
 
 fn: lm_test_direct_unwrap (LmTestDirectUnwrap: (int: stale) (int: value)) int

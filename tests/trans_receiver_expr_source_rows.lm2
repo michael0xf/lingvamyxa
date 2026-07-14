@@ -17,22 +17,27 @@ L4:
 
     table:
         name: `lm.test.receiver.expr.seed`
-        columns((class: class) (binding: receiver))
+        columns((class: class) (int: marker) (binding: expr))
         rows:
-                 joinedCast  lm_trans_expr_emit_cast_frame
+                 joinedCast  1  lm_trans_expr_emit_cast_frame
     end: `lm.test.receiver.expr.seed`
 
-    join: (`lm.test.receiver.expr.seed`) `receiver.expr`
-        columns((class: class) (binding: receiver))
+    join: (`lm.test.receiver.expr.seed`) `lm.test.receiver.expr.middle`
+        columns((class: class) (int: marker) (binding: expr))
         rows:
-    end: `receiver.expr`
+    end: `lm.test.receiver.expr.middle`
+
+    join: (`lm.test.receiver.expr.middle`) receiver
+        columns((class: class) (int: marker) (binding: expr))
+        rows:
+    end: receiver
 
     table:
-        name: `receiver.expr`
-        columns((class: class) (binding: receiver))
+        name: receiver
+        columns((class: class) (int: marker) (binding: expr))
         rows:
-                 joinedCast  None
-    end: `receiver.expr`
+                 joinedCast  2  None
+    end: receiver
 end: L4
 
 external:

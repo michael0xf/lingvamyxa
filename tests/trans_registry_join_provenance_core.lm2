@@ -156,6 +156,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: receiver_trailer_origin
     LmTransRegistryFact: receiver_trailer_middle
     LmTransRegistryFact: receiver_trailer_target
+    LmTransRegistryFact: receiver_expr_origin
+    LmTransRegistryFact: receiver_expr_middle
+    LmTransRegistryFact: receiver_expr_target
+    LmTransRegistryFact: receiver_unwrap_origin
+    LmTransRegistryFact: receiver_unwrap_middle
+    LmTransRegistryFact: receiver_unwrap_target
     LmTransRegistryFact: receiver_type_row
     LmTransRegistryFact: receiver_type_class_row
     LmTransRegistryFact: expr_meta_older
@@ -171,6 +177,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
+    LmTableDescriptor: receiver_formal_param_descriptor
     LmTableDescriptor: expr_meta_descriptor
     LmTableDescriptor: expr_meta_wrong_descriptor
     LmTableDescriptor: expr_spelling_descriptor
@@ -183,6 +190,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
+    LmTableRow: receiver_formal_param_row
     LmTableRow: expr_meta_row
     LmTableRow: expr_meta_wrong_row
     LmTableRow: expr_spelling_row
@@ -204,6 +212,10 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: receiver_statement_cell
     LmTableCell: receiver_level_cell
     LmTableCell: receiver_trailer_cell
+    LmTableCell: receiver_expr_cell
+    LmTableCell: receiver_formal_param_key_cell
+    LmTableCell: receiver_formal_param_marker_cell
+    LmTableCell: receiver_unwrap_cell
     LmTableCell: expr_meta_key_cell
     LmTableCell: expr_meta_binding_cell
     LmTableCell: expr_meta_marker_cell
@@ -232,6 +244,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Node: source_node
     LmP0Node: unit_wrong_source_node
     LmTransHeadBinding: receiver_head_binding
+    LmTransBinding: receiver_expr_binding
+    LmP0Frame: receiver_family_frame
     const: LmTableCell: resolved_cell
     const: LmTableCell: resolved_node_cell
     const: LmTableCell: resolved_condition_node_cell
@@ -259,6 +273,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_receiver_binding
     const: @: char resolved_level_receiver
     const: @: char resolved_trailer_receiver
+    const: @: char resolved_expr_receiver
+    const: @: char resolved_unwrap_payload
     const: @: char resolved_expr_target_binding
     const: @: char resolved_expr_meta_binding
     const: @: char resolved_expr_meta_default
@@ -270,6 +286,7 @@ fn: lm_test_registry_join_provenance_core () int
     size_t: layout_source_row_index
     size_t: unrelated_layout_source_row_index
     size_t: condition_row_count
+    size_t: resolved_unwrap_index
     int: condition_present
     int: condition_view_rows
     int: status
@@ -383,17 +400,31 @@ fn: lm_test_registry_join_provenance_core () int
     receiver_trailer_origin: 0
     receiver_trailer_middle: 0
     receiver_trailer_target: 0
+    receiver_expr_origin: 0
+    receiver_expr_middle: 0
+    receiver_expr_target: 0
+    receiver_unwrap_origin: 0
+    receiver_unwrap_middle: 0
+    receiver_unwrap_target: 0
     receiver_type_row: 0
     receiver_type_class_row: 0
     receiver_family_descriptor: 0
+    receiver_formal_param_descriptor: 0
     receiver_family_row: 0
+    receiver_formal_param_row: 0
     receiver_family_key_cell: 0
     receiver_family_marker_cell: 0
     receiver_function_cell: 0
     receiver_statement_cell: 0
     receiver_level_cell: 0
     receiver_trailer_cell: 0
+    receiver_expr_cell: 0
+    receiver_formal_param_key_cell: 0
+    receiver_formal_param_marker_cell: 0
+    receiver_unwrap_cell: 0
     receiver_head_binding: 0
+    receiver_expr_binding: 0
+    receiver_family_frame: 0
     receiver_family_key_text: 0
     if: status = 0
         receiver_function_origin: lm_test_registry_push_value_fact("lm.test.receiver.origin.function", "ReceiverFamilyWitness", "lm_trans_receiver_fn", 0)
@@ -408,15 +439,21 @@ fn: lm_test_registry_join_provenance_core () int
         receiver_trailer_origin: lm_test_registry_push_value_fact("lm.test.receiver.origin.trailer", "ReceiverFamilyWitness", "lm_trans_validate_end_trailer", 0)
         receiver_trailer_middle: lm_test_registry_push_value_fact("lm.test.receiver.middle.trailer", "ReceiverFamilyWitness", "lm_trans_validate_end_trailer", receiver_trailer_origin)
         receiver_trailer_target: lm_test_registry_push_value_fact("receiver.trailer", "ReceiverFamilyWitness", "lm_trans_validate_end_trailer", receiver_trailer_middle)
+        receiver_expr_origin: lm_test_registry_push_value_fact("lm.test.receiver.origin.expr", "ReceiverFamilyWitness", "lm_trans_expr_emit_cast_frame", 0)
+        receiver_expr_middle: lm_test_registry_push_value_fact("lm.test.receiver.middle.expr", "ReceiverFamilyWitness", "lm_trans_expr_emit_cast_frame", receiver_expr_origin)
+        receiver_expr_target: lm_test_registry_push_value_fact("receiver.expr", "ReceiverFamilyWitness", "lm_trans_expr_emit_cast_frame", receiver_expr_middle)
+        receiver_unwrap_origin: lm_test_registry_push_value_fact("lm.test.receiver.origin.formal-param.unwrap", "ReceiverFamilyWitness", "1", 0)
+        receiver_unwrap_middle: lm_test_registry_push_value_fact("lm.test.receiver.middle.formal-param.unwrap", "ReceiverFamilyWitness", "1", receiver_unwrap_origin)
+        receiver_unwrap_target: lm_test_registry_push_value_fact("receiver.formal-param.unwrap", "ReceiverFamilyWitness", "1", receiver_unwrap_middle)
         receiver_type_row: lm_test_registry_push_value_fact("namespace", "ReceiverFamilyWitness", "receiver.level", 0)
         receiver_type_class_row: lm_test_registry_push_value_fact("receiver.type", "receiver.level", "lm_trans_dispatch_level_receiver", 0)
-        if: receiver_function_origin = 0 || receiver_function_middle = 0 || receiver_function_target = 0 || receiver_statement_origin = 0 || receiver_statement_middle = 0 || receiver_statement_target = 0 || receiver_level_origin = 0 || receiver_level_middle = 0 || receiver_level_target = 0 || receiver_trailer_origin = 0 || receiver_trailer_middle = 0 || receiver_trailer_target = 0 || receiver_type_row = 0 || receiver_type_class_row = 0 || receiver_function_middle\source != receiver_function_origin || receiver_function_target\source != receiver_function_middle || receiver_statement_middle\source != receiver_statement_origin || receiver_statement_target\source != receiver_statement_middle || receiver_level_middle\source != receiver_level_origin || receiver_level_target\source != receiver_level_middle || receiver_trailer_middle\source != receiver_trailer_origin || receiver_trailer_target\source != receiver_trailer_middle
+        if: receiver_function_origin = 0 || receiver_function_middle = 0 || receiver_function_target = 0 || receiver_statement_origin = 0 || receiver_statement_middle = 0 || receiver_statement_target = 0 || receiver_level_origin = 0 || receiver_level_middle = 0 || receiver_level_target = 0 || receiver_trailer_origin = 0 || receiver_trailer_middle = 0 || receiver_trailer_target = 0 || receiver_expr_origin = 0 || receiver_expr_middle = 0 || receiver_expr_target = 0 || receiver_unwrap_origin = 0 || receiver_unwrap_middle = 0 || receiver_unwrap_target = 0 || receiver_type_row = 0 || receiver_type_class_row = 0 || receiver_function_middle\source != receiver_function_origin || receiver_function_target\source != receiver_function_middle || receiver_statement_middle\source != receiver_statement_origin || receiver_statement_target\source != receiver_statement_middle || receiver_level_middle\source != receiver_level_origin || receiver_level_target\source != receiver_level_middle || receiver_trailer_middle\source != receiver_trailer_origin || receiver_trailer_target\source != receiver_trailer_middle || receiver_expr_middle\source != receiver_expr_origin || receiver_expr_target\source != receiver_expr_middle || receiver_unwrap_middle\source != receiver_unwrap_origin || receiver_unwrap_target\source != receiver_unwrap_middle
             status: 1
     ---
 
     if: status = 0
         receiver_family_descriptor: lm_table_descriptor_new_empty_slice("receiver", 8U)
-        if: receiver_family_descriptor = 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "function", "binding") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "statement", "binding") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "level", "binding") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "trailer", "binding") != 0
+        if: receiver_family_descriptor = 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "function", "binding") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "statement", "binding") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "level", "binding") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "trailer", "binding") != 0 || lm_table_descriptor_add_column(receiver_family_descriptor, "expr", "binding") != 0
             status: 1
     ---
 
@@ -428,7 +465,8 @@ fn: lm_test_registry_join_provenance_core () int
         receiver_statement_cell: lm_table_cell_new_cstr("lm_trans_statement_emit_return", "lm_trans_statement_emit_return", 0, receiver_statement_origin, 0)
         receiver_level_cell: lm_table_cell_new_cstr("lm_trans_emit_l1_frame", "lm_trans_emit_l1_frame", 0, receiver_level_origin, 0)
         receiver_trailer_cell: lm_table_cell_new_cstr("lm_trans_validate_end_trailer", "lm_trans_validate_end_trailer", 0, receiver_trailer_origin, 0)
-        if: receiver_family_row = 0 || receiver_family_key_cell = 0 || receiver_family_marker_cell = 0 || receiver_function_cell = 0 || receiver_statement_cell = 0 || receiver_level_cell = 0 || receiver_trailer_cell = 0 || lm_table_row_take_cell(receiver_family_row, receiver_family_key_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_family_marker_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_function_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_statement_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_level_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_trailer_cell) != 0 || lm_table_descriptor_take_materialized_row(receiver_family_descriptor, receiver_family_row) != 0
+        receiver_expr_cell: lm_table_cell_new_cstr("lm_trans_expr_emit_cast_frame", "lm_trans_expr_emit_cast_frame", 0, receiver_expr_origin, 0)
+        if: receiver_family_row = 0 || receiver_family_key_cell = 0 || receiver_family_marker_cell = 0 || receiver_function_cell = 0 || receiver_statement_cell = 0 || receiver_level_cell = 0 || receiver_trailer_cell = 0 || receiver_expr_cell = 0 || lm_table_row_take_cell(receiver_family_row, receiver_family_key_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_family_marker_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_function_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_statement_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_level_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_trailer_cell) != 0 || lm_table_row_take_cell(receiver_family_row, receiver_expr_cell) != 0 || lm_table_descriptor_take_materialized_row(receiver_family_descriptor, receiver_family_row) != 0
             status: 1
         else:
             receiver_family_row: 0
@@ -440,14 +478,42 @@ fn: lm_test_registry_join_provenance_core () int
     ---
 
     if: status = 0
-        receiver_family_key_text: lm_trans_text_from_cstr("ReceiverFamilyWitness")
-        receiver_head_binding: lm_trans_head_binding_new()
-        if: receiver_family_key_text = 0 || receiver_head_binding = 0 || lm_trans_head_binding_resolve(0, receiver_family_key_text, receiver_head_binding) != 0
+        receiver_formal_param_descriptor: lm_table_descriptor_new_empty_slice("receiver.formal-param", 21U)
+        if: receiver_formal_param_descriptor = 0 || lm_table_descriptor_add_column(receiver_formal_param_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(receiver_formal_param_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(receiver_formal_param_descriptor, "unwrap", "size_t") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        receiver_formal_param_row: lm_table_row_new(0)
+        receiver_formal_param_key_cell: lm_table_cell_new_cstr("ReceiverFamilyWitness", "ReceiverFamilyWitness", 0, 0, 0)
+        receiver_formal_param_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        receiver_unwrap_cell: lm_table_cell_new_cstr("1", "1", 0, receiver_unwrap_origin, 0)
+        if: receiver_formal_param_row = 0 || receiver_formal_param_key_cell = 0 || receiver_formal_param_marker_cell = 0 || receiver_unwrap_cell = 0 || lm_table_row_take_cell(receiver_formal_param_row, receiver_formal_param_key_cell) != 0 || lm_table_row_take_cell(receiver_formal_param_row, receiver_formal_param_marker_cell) != 0 || lm_table_row_take_cell(receiver_formal_param_row, receiver_unwrap_cell) != 0 || lm_table_descriptor_take_materialized_row(receiver_formal_param_descriptor, receiver_formal_param_row) != 0
             status: 1
         else:
+            receiver_formal_param_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, receiver_formal_param_descriptor) != 0
+                status: 1
+            else:
+                receiver_formal_param_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        receiver_family_key_text: lm_trans_text_from_cstr("ReceiverFamilyWitness")
+        receiver_head_binding: lm_trans_head_binding_new()
+        receiver_expr_binding: lm_trans_expr_binding_new()
+        receiver_family_frame: lm_trans_registry_new_frame()
+        if: receiver_family_key_text = 0 || receiver_head_binding = 0 || receiver_expr_binding = 0 || receiver_family_frame = 0 || lm_trans_head_binding_resolve(0, receiver_family_key_text, receiver_head_binding) != 0
+            status: 1
+        else:
+            receiver_family_frame\head[0]: receiver_family_key_text[0]
             resolved_level_receiver: lm_trans_level_receiver_binding_from_head(receiver_family_key_text)
             resolved_trailer_receiver: lm_trans_trailer_receiver_binding_from_head(receiver_family_key_text)
-            if: receiver_head_binding\function_receiver_binding != receiver_function_cell\value || receiver_head_binding\function_receiver_binding = receiver_function_middle\payload || receiver_head_binding\function_receiver_binding = receiver_function_target\payload || receiver_head_binding\statement_receiver_binding != receiver_statement_cell\value || receiver_head_binding\statement_receiver_binding = receiver_statement_middle\payload || receiver_head_binding\statement_receiver_binding = receiver_statement_target\payload || resolved_level_receiver != receiver_level_cell\value || resolved_level_receiver = receiver_level_middle\payload || resolved_level_receiver = receiver_level_target\payload || resolved_trailer_receiver != receiver_trailer_cell\value || resolved_trailer_receiver = receiver_trailer_middle\payload || resolved_trailer_receiver = receiver_trailer_target\payload
+            resolved_expr_receiver: lm_trans_expr_frame_receiver_binding_from_head(0, receiver_family_key_text)
+            resolved_unwrap_payload: lm_trans_formal_param_unwrap_index_payload(receiver_family_key_text)
+            resolved_unwrap_index: 0U
+            if: receiver_head_binding\function_receiver_binding != receiver_function_cell\value || receiver_head_binding\function_receiver_binding = receiver_function_middle\payload || receiver_head_binding\function_receiver_binding = receiver_function_target\payload || receiver_head_binding\statement_receiver_binding != receiver_statement_cell\value || receiver_head_binding\statement_receiver_binding = receiver_statement_middle\payload || receiver_head_binding\statement_receiver_binding = receiver_statement_target\payload || resolved_level_receiver != receiver_level_cell\value || resolved_level_receiver = receiver_level_middle\payload || resolved_level_receiver = receiver_level_target\payload || resolved_trailer_receiver != receiver_trailer_cell\value || resolved_trailer_receiver = receiver_trailer_middle\payload || resolved_trailer_receiver = receiver_trailer_target\payload || resolved_expr_receiver != receiver_expr_cell\value || resolved_expr_receiver = receiver_expr_middle\payload || resolved_expr_receiver = receiver_expr_target\payload || resolved_unwrap_payload != receiver_unwrap_cell\value || resolved_unwrap_payload = receiver_unwrap_middle\payload || resolved_unwrap_payload = receiver_unwrap_target\payload || lm_trans_lookup_expr_frame_receiver_binding(0, receiver_family_key_text, receiver_expr_binding) != 1 || receiver_expr_binding\expr_frame != @lm_trans_expr_emit_cast_frame || lm_trans_frame_formal_param_unwrap_index(receiver_family_frame, @ resolved_unwrap_index) = 0 || resolved_unwrap_index != 1U
                 status: 1
         ---
     ---
@@ -932,6 +998,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_trans_text_ref_destroy(@ receiver_key_text)
     lm_trans_text_ref_destroy(@ receiver_family_key_text)
     lm_own_delete(receiver_head_binding, 0)
+    lm_own_delete(receiver_expr_binding, 0)
+    lm_table_row_delete_any(receiver_formal_param_row)
+    lm_table_descriptor_delete_any(receiver_formal_param_descriptor)
     lm_table_row_delete_any(receiver_family_row)
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)

@@ -337,6 +337,9 @@ fn: lm_trans_frame_positional_name_index (const: (LmP0Frame: frame); @: size_t o
         out_index[0]: facade_index
 return: facade_found
 
+fn: lm_trans_formal_param_unwrap_index_payload (const: (LmP0Text: receiver_key)) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, receiver_key, "receiver.formal-param.unwrap", "class", "class", "index", "size_t")
+
 fn: lm_trans_frame_formal_param_unwrap_index (const: (LmP0Frame: frame); @: size_t out_index) int
     const: @: char index_payload
     LmP0Text: receiver_key
@@ -352,7 +355,7 @@ fn: lm_trans_frame_formal_param_unwrap_index (const: (LmP0Frame: frame); @: size
     if: lm_trans_frame_receiver_key(frame, receiver_key) = 0
         return: 0
 
-    index_payload: lm_trans_namespace_registry_source_n2_typed_value(0, receiver_key, "receiver.formal-param.unwrap", "class", "class", "index", "size_t")
+    index_payload: lm_trans_formal_param_unwrap_index_payload(receiver_key)
     if: index_payload = 0
         return: 0
     if: lm_trans_parse_size_payload(index_payload, out_index) = 0
