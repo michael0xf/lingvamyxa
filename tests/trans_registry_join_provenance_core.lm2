@@ -166,6 +166,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: contextual_literal_target_origin
     LmTransRegistryFact: contextual_literal_target_middle
     LmTransRegistryFact: contextual_literal_target_target
+    LmTransRegistryFact: contextual_literal_class_origin
+    LmTransRegistryFact: contextual_literal_class_middle
+    LmTransRegistryFact: contextual_literal_class_target
     LmTransRegistryFact: namespace_l4_origin
     LmTransRegistryFact: namespace_l4_middle
     LmTransRegistryFact: namespace_l4_target
@@ -270,6 +273,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: none_cell_descriptor
     LmTableDescriptor: contextual_literal_mapping_descriptor
     LmTableDescriptor: contextual_literal_target_descriptor
+    LmTableDescriptor: contextual_literal_class_descriptor
     LmTableDescriptor: namespace_l4_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
@@ -302,6 +306,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: none_cell_row
     LmTableRow: contextual_literal_mapping_row
     LmTableRow: contextual_literal_target_row
+    LmTableRow: contextual_literal_class_row
     LmTableRow: namespace_l4_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
@@ -366,6 +371,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: contextual_literal_target_key_cell
     LmTableCell: contextual_literal_target_marker_cell
     LmTableCell: contextual_literal_target_value_cell
+    LmTableCell: contextual_literal_class_key_cell
+    LmTableCell: contextual_literal_class_marker_cell
+    LmTableCell: contextual_literal_class_value_cell
     LmTableCell: namespace_l4_key_cell
     LmTableCell: namespace_l4_marker_cell
     LmTableCell: namespace_l4_value_cell
@@ -480,6 +488,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_none_cell
     const: @: char resolved_contextual_literal_mapping
     const: @: char resolved_contextual_literal_value
+    const: @: char resolved_contextual_literal_class_value
     const: @: char resolved_namespace_l4
     const: @: char resolved_namespace_l4_root
     const: @: char resolved_namespace_l4_atom
@@ -520,6 +529,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: none_cell_key_text
     LmP0Text: contextual_literal_mapping_key_text
     LmP0Text: contextual_literal_expected_class_text
+    LmP0Text: contextual_literal_class_expected_text
     LmP0Text: namespace_l4_key_text
     LmP0Text: profile_rule_key_text
     LmP0Text: class_c_projection_key_text
@@ -1264,6 +1274,53 @@ fn: lm_test_registry_join_provenance_core () int
         contextual_literal_expected_class_text: lm_trans_text_from_cstr("ContextualClassWide")
         resolved_contextual_literal_value: lm_trans_contextual_literal_value(0, contextual_literal_mapping_key_text, contextual_literal_expected_class_text)
         if: contextual_literal_expected_class_text = 0 || resolved_contextual_literal_value != contextual_literal_target_value_cell\value || resolved_contextual_literal_value = contextual_literal_target_middle\payload || resolved_contextual_literal_value = contextual_literal_target_target\payload
+            status: 1
+    ---
+
+    contextual_literal_class_origin: 0
+    contextual_literal_class_middle: 0
+    contextual_literal_class_target: 0
+    contextual_literal_class_descriptor: 0
+    contextual_literal_class_row: 0
+    contextual_literal_class_key_cell: 0
+    contextual_literal_class_marker_cell: 0
+    contextual_literal_class_value_cell: 0
+    contextual_literal_class_expected_text: 0
+    if: status = 0
+        contextual_literal_class_origin: lm_test_registry_push_value_fact("lm.test.contextual.class.origin", "ContextualWide", "888", 0)
+        contextual_literal_class_middle: lm_test_registry_push_value_fact("lm.test.contextual.class.middle", "ContextualWide", "888", contextual_literal_class_origin)
+        contextual_literal_class_target: lm_test_registry_push_value_fact("ContextualClassLocalWide.context literal", "ContextualWide", "888", contextual_literal_class_middle)
+        if: contextual_literal_class_origin = 0 || contextual_literal_class_middle = 0 || contextual_literal_class_target = 0 || contextual_literal_class_middle\source != contextual_literal_class_origin || contextual_literal_class_target\source != contextual_literal_class_middle
+            status: 1
+    ---
+
+    if: status = 0
+        contextual_literal_class_descriptor: lm_table_descriptor_new_empty_slice("ContextualClassLocalWide", 24U)
+        if: contextual_literal_class_descriptor = 0 || lm_table_descriptor_add_column(contextual_literal_class_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(contextual_literal_class_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(contextual_literal_class_descriptor, "context literal", "decimal") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        contextual_literal_class_row: lm_table_row_new(0)
+        contextual_literal_class_key_cell: lm_table_cell_new_cstr("ContextualWide", "ContextualWide", 0, 0, 0)
+        contextual_literal_class_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        contextual_literal_class_value_cell: lm_table_cell_new_cstr("888", "888", 0, contextual_literal_class_origin, 0)
+        if: contextual_literal_class_row = 0 || contextual_literal_class_key_cell = 0 || contextual_literal_class_marker_cell = 0 || contextual_literal_class_value_cell = 0 || lm_table_row_take_cell(contextual_literal_class_row, contextual_literal_class_key_cell) != 0 || lm_table_row_take_cell(contextual_literal_class_row, contextual_literal_class_marker_cell) != 0 || lm_table_row_take_cell(contextual_literal_class_row, contextual_literal_class_value_cell) != 0 || lm_table_descriptor_take_materialized_row(contextual_literal_class_descriptor, contextual_literal_class_row) != 0
+            status: 1
+        else:
+            contextual_literal_class_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, contextual_literal_class_descriptor) != 0
+                status: 1
+            else:
+                contextual_literal_class_descriptor: 0
+            ---
+        ---
+    ---
+
+    if: status = 0
+        contextual_literal_class_expected_text: lm_trans_text_from_cstr("ContextualClassLocalWide")
+        resolved_contextual_literal_class_value: lm_trans_contextual_literal_value(0, contextual_literal_mapping_key_text, contextual_literal_class_expected_text)
+        if: contextual_literal_class_expected_text = 0 || resolved_contextual_literal_class_value != contextual_literal_class_value_cell\value || resolved_contextual_literal_class_value = contextual_literal_class_middle\payload || resolved_contextual_literal_class_value = contextual_literal_class_target\payload
             status: 1
     ---
 
@@ -2309,6 +2366,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_trans_text_ref_destroy(@ contextual_literal_expected_class_text)
     lm_table_row_delete_any(contextual_literal_target_row)
     lm_table_descriptor_delete_any(contextual_literal_target_descriptor)
+    lm_trans_text_ref_destroy(@ contextual_literal_class_expected_text)
+    lm_table_row_delete_any(contextual_literal_class_row)
+    lm_table_descriptor_delete_any(contextual_literal_class_descriptor)
     lm_trans_text_ref_destroy(@ cast_target_key_text)
     lm_table_row_delete_any(cast_target_row)
     lm_table_descriptor_delete_any(cast_target_descriptor)

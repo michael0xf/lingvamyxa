@@ -2550,6 +2550,8 @@ static const char * lm_trans_class_kind_selected_row_value(const LmTransNamespac
 static const char * lm_trans_namespace_class_kind_value(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_namespace_class_is_reference_base(const LmTransNamespace *namespace_, const LmP0Text *name);
 static const char * lm_trans_namespace_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name);
+static const char * lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(const LmTransNamespace *source_namespace, const char *source_path, int direct_n2, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const LmTransRegistryFact *facade_row, const char *selected_value);
+static const char * lm_trans_namespace_registry_source_n2_or_relation_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *relation_name, const char *key_column_name, const char *key_descriptor);
 static const char * lm_trans_l4_namespace_receiver_type_value(const LmP0Text *key, const char *namespace_table);
 static const char * lm_trans_namespace_receiver_type_selected_row_value(const LmTransNamespace *source_namespace, const char *source_path, const LmTransRegistryFact *facade_row, const char *selected_value);
 static const char * lm_trans_namespace_receiver_type_value(const LmTransNamespace *namespace_, const LmP0Text *key);
@@ -7901,6 +7903,100 @@ static const char * lm_trans_namespace_registry_source_n2_key_typed_value(const 
         return selected_value;
     }
     return lm_trans_registry_source_n2_key_typed_value(namespace_, table_name, key_column_name, key_descriptor, value_column_name, facade_row);
+}
+
+static const char * lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(const LmTransNamespace *source_namespace, const char *source_path, int direct_n2, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const LmTransRegistryFact *facade_row, const char *selected_value) {
+    const char *source_value;
+    if (selected_value == 0 || source_path == 0) {
+        return 0;
+    }
+    if (facade_row == 0 || facade_row -> payload == 0 || strcmp(facade_row -> payload, selected_value) != 0) {
+        return selected_value;
+    }
+    source_value = 0;
+    if (direct_n2 != 0) {
+        source_value = lm_trans_registry_source_n2_key_typed_value(source_namespace, source_path, key_column_name, key_descriptor, value_column_name, facade_row);
+    }
+    else {
+        source_value = lm_trans_registry_source_path_n2_named_key_typed_value(source_namespace, source_path, key_column_name, key_descriptor, value_column_name, facade_row);
+    }
+    if (source_value != 0) {
+        return source_value;
+    }
+    return selected_value;
+}
+
+static const char * lm_trans_namespace_registry_source_n2_or_relation_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *relation_name, const char *key_column_name, const char *key_descriptor) {
+    LmTransRegistryFact * facade_row;
+    char *relation_path;
+    size_t relation_path_length;
+    const char *selected_value;
+    const char *value;
+    int private_registry;
+    if (key == 0 || table_name == 0 || relation_name == 0) {
+        return 0;
+    }
+    relation_path = lm_trans_registry_source_relation_path_new(table_name, relation_name, &relation_path_length);
+    if (relation_path == 0) {
+        return lm_trans_namespace_registry_source_n2_key_typed_value(namespace_, key, table_name, key_column_name, key_descriptor, relation_name);
+    }
+    LM_UNUSED(relation_path_length);
+    value = 0;
+    private_registry = namespace_ != 0 && namespace_ -> registry_identifiers != 0 && (lm_trans_registry == 0 || namespace_ -> registry_identifiers != lm_trans_registry->identifiers);
+    if (private_registry) {
+        facade_row = lm_trans_registry_lookup_row_in_identifiers(namespace_ -> registry_identifiers, key, table_name);
+        selected_value = 0;
+        if (facade_row != 0) {
+            selected_value = facade_row -> payload;
+        }
+        value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(namespace_, table_name, 1, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        if (value == 0) {
+            facade_row = lm_trans_registry_lookup_row_in_identifiers(namespace_ -> registry_identifiers, key, relation_path);
+            selected_value = 0;
+            if (facade_row != 0) {
+                selected_value = facade_row -> payload;
+            }
+            value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(namespace_, relation_path, 0, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        }
+    }
+    if (value == 0 && lm_trans_registry != 0 && lm_trans_registry->identifiers != 0) {
+        selected_value = lm_trans_registry_lookup_exact(key, table_name);
+        facade_row = lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry->identifiers, key, table_name);
+        value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(0, table_name, 1, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        if (value == 0) {
+            selected_value = lm_trans_registry_lookup_exact(key, relation_path);
+            facade_row = lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry->identifiers, key, relation_path);
+            value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(0, relation_path, 0, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        }
+    }
+    if (value == 0 && private_registry) {
+        facade_row = lm_trans_registry_lookup_default_row_in_identifiers(namespace_ -> registry_identifiers, table_name);
+        selected_value = 0;
+        if (facade_row != 0) {
+            selected_value = facade_row -> payload;
+        }
+        value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(namespace_, table_name, 1, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        if (value == 0) {
+            facade_row = lm_trans_registry_lookup_default_row_in_identifiers(namespace_ -> registry_identifiers, relation_path);
+            selected_value = 0;
+            if (facade_row != 0) {
+                selected_value = facade_row -> payload;
+            }
+            value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(namespace_, relation_path, 0, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        }
+    }
+    if (value == 0 && lm_trans_registry != 0 && lm_trans_registry->identifiers != 0) {
+        selected_value = lm_trans_registry_lookup_default(table_name);
+        facade_row = lm_trans_registry_lookup_default_row_in_identifiers(lm_trans_registry->identifiers, table_name);
+        value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(0, table_name, 1, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        if (value == 0) {
+            selected_value = lm_trans_registry_lookup_default(relation_path);
+            facade_row = lm_trans_registry_lookup_default_row_in_identifiers(lm_trans_registry->identifiers, relation_path);
+            value = lm_trans_registry_source_n2_or_relation_key_typed_selected_row_value(0, relation_path, 0, key_column_name, key_descriptor, relation_name, facade_row, selected_value);
+        }
+    }
+    lm_own_delete(relation_path, 0);
+    return value;
 }
 
 static const char * lm_trans_l4_namespace_receiver_type_value(const LmP0Text *key, const char *namespace_table) {
@@ -15044,7 +15140,7 @@ static const char * lm_trans_contextual_literal_value(const LmTransNamespace *na
     }
     expected_table = lm_trans_text_copy_cstr(expected_class);
     if (expected_table != 0) {
-        value = lm_trans_namespace_registry_source_n2_key_typed_value(namespace_, literal, expected_table, "class", "class", "context literal");
+        value = lm_trans_namespace_registry_source_n2_or_relation_key_typed_value(namespace_, literal, expected_table, "context literal", "class", "class");
         lm_own_delete(expected_table, 0);
         if (value != 0) {
             return value;

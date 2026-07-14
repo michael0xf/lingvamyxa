@@ -83,6 +83,74 @@ L4:
     end: long
 
     table:
+        name: long
+        columns((class: class) (int: marker) (long: `context literal`))
+        rows:
+                 default  19  1010
+    end: long
+
+    table:
+        name: i16
+        columns((class: class) (int: marker) (i16: `context literal`))
+        rows:
+                 OK  11  11
+                 OK  12  None
+    end: i16
+
+    table:
+        name: double
+        columns((class: class) (int: marker) (double: `context literal`))
+        rows:
+                 false  13  808
+    end: double
+
+    table:
+        name: `lm.test.contextual.class.wide.seed`
+        columns((class: class) (int: marker) (short: `context literal`))
+        rows:
+                 false  14  12
+    end: `lm.test.contextual.class.wide.seed`
+
+    join: (`lm.test.contextual.class.wide.seed`) `lm.test.contextual.class.wide.middle`
+        columns((class: class) (int: marker) (short: `context literal`))
+        rows:
+    end: `lm.test.contextual.class.wide.middle`
+
+    join: (`lm.test.contextual.class.wide.middle`) short
+        columns((class: class) (int: marker) (short: `context literal`))
+        rows:
+    end: short
+
+    table:
+        name: short
+        columns((class: class) (int: marker) (short: `context literal`))
+        rows:
+                 false  15  None
+    end: short
+
+    table:
+        name: u16
+        columns((class: class) (int: marker) (u16: `context literal`))
+        rows:
+                 default  16  13
+                 default  17  None
+    end: u16
+
+    table:
+        name: u32
+        columns((class: class) (u32: `context literal`))
+        rows:
+                 default  14
+    end: u32
+
+    table:
+        name: u32
+        columns((class: class) (int: marker) (u32: `context literal`))
+        rows:
+                 true  18  1010
+    end: u32
+
+    table:
         name: `lm.test.contextual.direct.value`
         columns((class: class) (@: char value))
         rows:
@@ -147,7 +215,11 @@ external:
         double: class_fallback false
         uint8: class_joined None
         long: class_default true
+        i16: class_wide_direct OK
+        short: class_wide_joined false
+        u16: class_wide_default true
+        u32: class_wide_exact_over_n2_default true
 
-        return: direct != 101 || fallback != 202 || joined != 303 || defaulted != 404 || class_direct != 7 || class_fallback != 8 || class_joined != 9 || class_default != 10
+        return: direct != 101 || fallback != 202 || joined != 303 || defaulted != 404 || class_direct != 7 || class_fallback != 8 || class_joined != 9 || class_default != 10 || class_wide_direct != 11 || class_wide_joined != 12 || class_wide_default != 13 || class_wide_exact_over_n2_default != 1010
     end: main
 end: external
