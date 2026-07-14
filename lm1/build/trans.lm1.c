@@ -2878,6 +2878,8 @@ static int lm_trans_printf_arg_class_from_field_chain(const LmP0Text *atom, cons
 static int lm_trans_expr_value_class_from_atom(const LmP0Text *atom, const LmTransNamespace *namespace_, LmP0Text *out_class);
 static int lm_trans_printf_arg_class_from_segment(const LmP0Field *first, const LmP0Field *stop, const LmTransNamespace *namespace_, LmP0Text *out_class);
 static int lm_trans_printf_format_is_flag(char ch);
+static const char * lm_trans_c99_ub_policy_value(const LmTransNamespace *namespace_, const LmP0Text *rule);
+static const char * lm_trans_profile_validator_binding(const LmTransNamespace *namespace_, const LmP0Text *rule);
 static int lm_trans_profile_rule_enabled(const LmTransNamespace *namespace_, const char *rule);
 static int lm_trans_profile_validator_enabled(const LmTransNamespace *namespace_, const char *rule, const char *binding_name);
 static const char * lm_trans_printf_conversion_rule_lookup(const LmTransNamespace *namespace_, char conversion, char modifier, const char *relation);
@@ -14145,6 +14147,14 @@ static int lm_trans_printf_format_is_flag(char ch) {
     return ch == '-' || ch == '+' || ch == ' ' || ch == '#' || ch == '0';
 }
 
+static const char * lm_trans_c99_ub_policy_value(const LmTransNamespace *namespace_, const LmP0Text *rule) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, rule, "c99.ub.policy", "class", "class", "policy", "class");
+}
+
+static const char * lm_trans_profile_validator_binding(const LmTransNamespace *namespace_, const LmP0Text *rule) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, rule, "profile.validator", "class", "class", "binding", "char");
+}
+
 static int lm_trans_profile_rule_enabled(const LmTransNamespace *namespace_, const char *rule) {
     LmP0Text * rule_text;
     const char *policy;
@@ -14156,7 +14166,7 @@ static int lm_trans_profile_rule_enabled(const LmTransNamespace *namespace_, con
     if (rule_text == 0) {
         return 0;
     }
-    policy = lm_trans_namespace_registry_source_n2_typed_value(namespace_, rule_text, "c99.ub.policy", "class", "class", "policy", "class");
+    policy = lm_trans_c99_ub_policy_value(namespace_, rule_text);
     enabled = 0;
     if (policy != 0) {
         if (strcmp(policy, "diagnostic") == 0 || strcmp(policy, "checked") == 0) {
@@ -14181,7 +14191,7 @@ static int lm_trans_profile_validator_enabled(const LmTransNamespace *namespace_
     if (rule_text == 0) {
         return 0;
     }
-    binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, rule_text, "profile.validator", "class", "class", "binding", "char");
+    binding = lm_trans_profile_validator_binding(namespace_, rule_text);
     enabled = binding != 0 && strcmp(binding, binding_name) == 0;
     lm_trans_text_ref_destroy(&rule_text);
     return enabled;

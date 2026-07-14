@@ -1,22 +1,27 @@
 L4:
     table:
         name: `lm.test.profile.validator.seed`
-        columns((class: class) (@: char binding))
+        columns((class: class) (int: marker) (@: char validator))
         rows:
-                 `c99.format-mismatch`  lm_trans_validate_c_printf_call
+                 `c99.format-mismatch`  7  lm_trans_validate_c_printf_call
     end: `lm.test.profile.validator.seed`
 
-    join: (`lm.test.profile.validator.seed`) `profile.validator`
-        columns((class: class) (@: char binding))
+    join: (`lm.test.profile.validator.seed`) `lm.test.profile.validator.middle`
+        columns((class: class) (int: marker) (@: char validator))
         rows:
-    end: `profile.validator`
+    end: `lm.test.profile.validator.middle`
+
+    join: (`lm.test.profile.validator.middle`) profile
+        columns((class: class) (int: marker) (@: char validator))
+        rows:
+    end: profile
 
     table:
-        name: `profile.validator`
-        columns((class: class) (@: char binding))
+        name: profile
+        columns((class: class) (int: marker) (@: char validator))
         rows:
-                 `c99.format-mismatch`  None
-    end: `profile.validator`
+                 `c99.format-mismatch`  8  None
+    end: profile
 end: L4
 
 external:

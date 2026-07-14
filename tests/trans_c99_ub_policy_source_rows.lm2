@@ -17,22 +17,27 @@ L4:
 
     table:
         name: `lm.test.c99.ub.policy.seed`
-        columns((class: class) (class: policy))
+        columns((class: class) (int: marker) (class: policy))
         rows:
-                 `c99.invalid-pointer-cast`  checked
+                 `c99.invalid-pointer-cast`  7  checked
     end: `lm.test.c99.ub.policy.seed`
 
-    join: (`lm.test.c99.ub.policy.seed`) `c99.ub.policy`
-        columns((class: class) (class: policy))
+    join: (`lm.test.c99.ub.policy.seed`) `lm.test.c99.ub.policy.middle`
+        columns((class: class) (int: marker) (class: policy))
         rows:
-    end: `c99.ub.policy`
+    end: `lm.test.c99.ub.policy.middle`
+
+    join: (`lm.test.c99.ub.policy.middle`) `c99.ub`
+        columns((class: class) (int: marker) (class: policy))
+        rows:
+    end: `c99.ub`
 
     table:
-        name: `c99.ub.policy`
-        columns((class: class) (class: policy))
+        name: `c99.ub`
+        columns((class: class) (int: marker) (class: policy))
         rows:
-                 `c99.invalid-pointer-cast`  None
-    end: `c99.ub.policy`
+                 `c99.invalid-pointer-cast`  8  None
+    end: `c99.ub`
 
     table:
         name: `printf.conversion.rule`

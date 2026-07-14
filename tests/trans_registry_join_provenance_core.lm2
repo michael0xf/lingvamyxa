@@ -142,6 +142,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: cast_target_origin
     LmTransRegistryFact: cast_target_middle
     LmTransRegistryFact: cast_target_target
+    LmTransRegistryFact: c99_policy_origin
+    LmTransRegistryFact: c99_policy_middle
+    LmTransRegistryFact: c99_policy_target
+    LmTransRegistryFact: profile_validator_origin
+    LmTransRegistryFact: profile_validator_middle
+    LmTransRegistryFact: profile_validator_target
     LmTransRegistryFact: node_origin
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
@@ -205,6 +211,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: callable_partial_form_descriptor
     LmTableDescriptor: class_range_descriptor
     LmTableDescriptor: cast_target_descriptor
+    LmTableDescriptor: c99_policy_descriptor
+    LmTableDescriptor: profile_validator_descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
@@ -224,6 +232,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: callable_partial_form_row
     LmTableRow: class_range_row
     LmTableRow: cast_target_row
+    LmTableRow: c99_policy_row
+    LmTableRow: profile_validator_row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
@@ -258,6 +268,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: cast_target_key_cell
     LmTableCell: cast_target_marker_cell
     LmTableCell: cast_target_value_cell
+    LmTableCell: c99_policy_key_cell
+    LmTableCell: c99_policy_marker_cell
+    LmTableCell: c99_policy_value_cell
+    LmTableCell: profile_validator_key_cell
+    LmTableCell: profile_validator_marker_cell
+    LmTableCell: profile_validator_value_cell
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
@@ -331,6 +347,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_callable_partial_form_materializer
     const: @: char resolved_class_range
     const: @: char resolved_cast_target
+    const: @: char resolved_c99_policy
+    const: @: char resolved_profile_validator
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
@@ -351,6 +369,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: callable_partial_form_key_text
     LmP0Text: class_range_key_text
     LmP0Text: cast_target_key_text
+    LmP0Text: profile_rule_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
     size_t: layout_source_row_index
@@ -720,6 +739,86 @@ fn: lm_test_registry_join_provenance_core () int
         cast_target_key_text: lm_trans_text_from_cstr("CastWide")
         resolved_cast_target: lm_trans_cast_target_value(0, cast_target_key_text)
         if: cast_target_key_text = 0 || resolved_cast_target != cast_target_value_cell\value || resolved_cast_target = cast_target_middle\payload || resolved_cast_target = cast_target_target\payload
+            status: 1
+    ---
+
+    c99_policy_origin: 0
+    c99_policy_middle: 0
+    c99_policy_target: 0
+    profile_validator_origin: 0
+    profile_validator_middle: 0
+    profile_validator_target: 0
+    c99_policy_descriptor: 0
+    profile_validator_descriptor: 0
+    c99_policy_row: 0
+    profile_validator_row: 0
+    c99_policy_key_cell: 0
+    c99_policy_marker_cell: 0
+    c99_policy_value_cell: 0
+    profile_validator_key_cell: 0
+    profile_validator_marker_cell: 0
+    profile_validator_value_cell: 0
+    profile_rule_key_text: 0
+    if: status = 0
+        c99_policy_origin: lm_test_registry_push_value_fact("lm.test.c99.ub.policy.origin", "ProfileWide", "diagnostic", 0)
+        c99_policy_middle: lm_test_registry_push_value_fact("lm.test.c99.ub.policy.middle", "ProfileWide", "diagnostic", c99_policy_origin)
+        c99_policy_target: lm_test_registry_push_value_fact("c99.ub.policy", "ProfileWide", "diagnostic", c99_policy_middle)
+        profile_validator_origin: lm_test_registry_push_value_fact("lm.test.profile.validator.origin", "ProfileWide", "lm_trans_validate_c_printf_call", 0)
+        profile_validator_middle: lm_test_registry_push_value_fact("lm.test.profile.validator.middle", "ProfileWide", "lm_trans_validate_c_printf_call", profile_validator_origin)
+        profile_validator_target: lm_test_registry_push_value_fact("profile.validator", "ProfileWide", "lm_trans_validate_c_printf_call", profile_validator_middle)
+        if: c99_policy_origin = 0 || c99_policy_middle = 0 || c99_policy_target = 0 || profile_validator_origin = 0 || profile_validator_middle = 0 || profile_validator_target = 0 || c99_policy_middle\source != c99_policy_origin || c99_policy_target\source != c99_policy_middle || profile_validator_middle\source != profile_validator_origin || profile_validator_target\source != profile_validator_middle
+            status: 1
+    ---
+
+    if: status = 0
+        c99_policy_descriptor: lm_table_descriptor_new_empty_slice("c99.ub", 6U)
+        if: c99_policy_descriptor = 0 || lm_table_descriptor_add_column(c99_policy_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(c99_policy_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(c99_policy_descriptor, "policy", "class") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        c99_policy_row: lm_table_row_new(0)
+        c99_policy_key_cell: lm_table_cell_new_cstr("ProfileWide", "ProfileWide", 0, 0, 0)
+        c99_policy_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        c99_policy_value_cell: lm_table_cell_new_cstr("diagnostic", "diagnostic", 0, c99_policy_origin, 0)
+        if: c99_policy_row = 0 || c99_policy_key_cell = 0 || c99_policy_marker_cell = 0 || c99_policy_value_cell = 0 || lm_table_row_take_cell(c99_policy_row, c99_policy_key_cell) != 0 || lm_table_row_take_cell(c99_policy_row, c99_policy_marker_cell) != 0 || lm_table_row_take_cell(c99_policy_row, c99_policy_value_cell) != 0 || lm_table_descriptor_take_materialized_row(c99_policy_descriptor, c99_policy_row) != 0
+            status: 1
+        else:
+            c99_policy_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, c99_policy_descriptor) != 0
+                status: 1
+            else:
+                c99_policy_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        profile_validator_descriptor: lm_table_descriptor_new_empty_slice("profile", 7U)
+        if: profile_validator_descriptor = 0 || lm_table_descriptor_add_column(profile_validator_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(profile_validator_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(profile_validator_descriptor, "validator", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        profile_validator_row: lm_table_row_new(0)
+        profile_validator_key_cell: lm_table_cell_new_cstr("ProfileWide", "ProfileWide", 0, 0, 0)
+        profile_validator_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        profile_validator_value_cell: lm_table_cell_new_cstr("lm_trans_validate_c_printf_call", "lm_trans_validate_c_printf_call", 0, profile_validator_origin, 0)
+        if: profile_validator_row = 0 || profile_validator_key_cell = 0 || profile_validator_marker_cell = 0 || profile_validator_value_cell = 0 || lm_table_row_take_cell(profile_validator_row, profile_validator_key_cell) != 0 || lm_table_row_take_cell(profile_validator_row, profile_validator_marker_cell) != 0 || lm_table_row_take_cell(profile_validator_row, profile_validator_value_cell) != 0 || lm_table_descriptor_take_materialized_row(profile_validator_descriptor, profile_validator_row) != 0
+            status: 1
+        else:
+            profile_validator_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, profile_validator_descriptor) != 0
+                status: 1
+            else:
+                profile_validator_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        profile_rule_key_text: lm_trans_text_from_cstr("ProfileWide")
+        resolved_c99_policy: lm_trans_c99_ub_policy_value(0, profile_rule_key_text)
+        resolved_profile_validator: lm_trans_profile_validator_binding(0, profile_rule_key_text)
+        if: profile_rule_key_text = 0 || resolved_c99_policy != c99_policy_value_cell\value || resolved_c99_policy = c99_policy_middle\payload || resolved_c99_policy = c99_policy_target\payload || resolved_profile_validator != profile_validator_value_cell\value || resolved_profile_validator = profile_validator_middle\payload || resolved_profile_validator = profile_validator_target\payload || lm_trans_profile_rule_enabled(0, "ProfileWide") = 0 || lm_trans_profile_validator_enabled(0, "ProfileWide", "lm_trans_validate_c_printf_call") = 0
             status: 1
     ---
 
@@ -1387,6 +1486,11 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)
+    lm_trans_text_ref_destroy(@ profile_rule_key_text)
+    lm_table_row_delete_any(profile_validator_row)
+    lm_table_descriptor_delete_any(profile_validator_descriptor)
+    lm_table_row_delete_any(c99_policy_row)
+    lm_table_descriptor_delete_any(c99_policy_descriptor)
     lm_trans_text_ref_destroy(@ cast_target_key_text)
     lm_table_row_delete_any(cast_target_row)
     lm_table_descriptor_delete_any(cast_target_descriptor)
