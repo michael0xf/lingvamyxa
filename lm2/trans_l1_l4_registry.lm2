@@ -2832,7 +2832,7 @@ fn: lm_trans_l4_atom_receiver_prelude_sequence (const: (LmP0Text: atom); int: al
     c.LM_UNUSED(allow_node_cells)
     if: atom = 0
         return: 1
-    if: lm_trans_registry_relation_stack(atom, "item") = 0
+    if: lm_trans_sequence_item_count(0, atom) = 0U
         c.fprintf:
             c.stderr
             "trans L4 error: prelude sequence \"%.*s\" has no item rows\n"

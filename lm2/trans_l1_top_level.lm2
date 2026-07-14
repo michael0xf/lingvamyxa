@@ -253,20 +253,20 @@ fn: lm_trans_top_level_emit_atom_sequence (FILE: file; LmTransNamespace: namespa
 return: lm_trans_emit_atom_statement_sequence(file, item\node\as\atom, 0U, namespace_)
 
 fn: lm_trans_top_level_declare_atom_sequence (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    const: LmOwnPtrStack: rows
-    LmTransRegistryFact: row
     LmP0Node: node
     LmP0NodeAs: node_as
     LmP0Text: item_name
     LmTransTopLevelItem: child
+    const: @: char selected_item_name
+    size_t: item_count
     size_t: expected_index
     int: status
 
     if: item = 0 || item\node = 0 || item\node\kind != c.LM_P0_NODE_ATOM
         return: 1
 
-    rows: lm_trans_namespace_registry_relation_stack(namespace_, item\node\as\atom, "item")
-    if: rows = 0
+    item_count: lm_trans_sequence_item_count(namespace_, item\node\as\atom)
+    if: item_count = 0U
         c.fprintf(c.stderr, "trans registry error: atom statement sequence \"%.*s\" has no item rows\n", (cast: int item\node\as\atom\length), item\node\as\atom\data)
         return: 1
 
@@ -284,11 +284,12 @@ fn: lm_trans_top_level_declare_atom_sequence (LmTransNamespace: namespace_; cons
 
     status: 0
     expected_index: 0U
-    while: status = 0 && expected_index < rows\count
-        if: lm_trans_sequence_item_row_at_index(namespace_, item\node\as\atom, rows, expected_index, @ row) != 0
+    while: status = 0 && expected_index < item_count
+        selected_item_name: 0
+        if: lm_trans_sequence_item_at_index(namespace_, item\node\as\atom, expected_index, @ selected_item_name) != 0
             status: 1
         else:
-            if: lm_trans_text_assign_cstr(item_name, row\key) = 0
+            if: lm_trans_text_assign_cstr(item_name, selected_item_name) = 0
                 status: 1
             if: status = 0
                 node_as\atom: item_name

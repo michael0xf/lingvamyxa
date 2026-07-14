@@ -3212,8 +3212,8 @@ static int lm_trans_atom_statement_emit_extern_c_prelude(FILE *file, const LmP0N
 static int lm_trans_atom_statement_emit_unit_prelude(FILE *file, const LmP0Node *node, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_sequence_item_index(const char *payload, size_t *out_index);
 static char * lm_trans_sequence_item_source_table_name_new(const LmP0Text *sequence_name);
-static const char * lm_trans_sequence_item_index_payload(LmTransNamespace *namespace_, const char *source_table_name, const LmTransRegistryFact *row);
-static int lm_trans_sequence_item_row_at_index(LmTransNamespace *namespace_, const LmP0Text *sequence_name, const LmOwnPtrStack *rows, size_t expected_index, LmTransRegistryFact **out_row);
+static size_t lm_trans_sequence_item_count(LmTransNamespace *namespace_, const LmP0Text *sequence_name);
+static int lm_trans_sequence_item_at_index(LmTransNamespace *namespace_, const LmP0Text *sequence_name, size_t expected_index, const char **out_item_name);
 static int lm_trans_emit_atom_statement_sequence(FILE *file, const LmP0Text *sequence_name, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_atom_statement_emit_sequence_prelude(FILE *file, const LmP0Node *node, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_emit_configured_prelude_sequences(FILE *file, LmTransNamespace *namespace_, int *out_emitted);
@@ -24061,34 +24061,97 @@ static char * lm_trans_sequence_item_source_table_name_new(const LmP0Text *seque
     return source_table_name;
 }
 
-static const char * lm_trans_sequence_item_index_payload(LmTransNamespace *namespace_, const char *source_table_name, const LmTransRegistryFact *row) {
-    if (row == 0) {
-        return 0;
+static size_t lm_trans_sequence_item_count(LmTransNamespace *namespace_, const LmP0Text *sequence_name) {
+    const LmRegistryView * view;
+    const LmOwnPtrStack * rows;
+    char *source_table_name;
+    size_t count;
+    if (sequence_name == 0) {
+        return 0U;
     }
-    return lm_trans_registry_source_n2_typed_value(namespace_, source_table_name, "class", "class", "index", "size_t", row);
+    source_table_name = lm_trans_sequence_item_source_table_name_new(sequence_name);
+    if (source_table_name == 0) {
+        return 0U;
+    }
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view != 0) {
+        count = lm_registry_view_table_row_count(view, source_table_name);
+    }
+    else {
+        rows = lm_trans_namespace_registry_relation_stack(namespace_, sequence_name, "item");
+        count = 0U;
+        if (rows != 0) {
+            count = rows -> count;
+        }
+    }
+    lm_own_delete(source_table_name, 0);
+    return count;
 }
 
-static int lm_trans_sequence_item_row_at_index(LmTransNamespace *namespace_, const LmP0Text *sequence_name, const LmOwnPtrStack *rows, size_t expected_index, LmTransRegistryFact **out_row) {
+static int lm_trans_sequence_item_at_index(LmTransNamespace *namespace_, const LmP0Text *sequence_name, size_t expected_index, const char **out_item_name) {
+    const LmRegistryView * view;
+    const LmRegistryViewRow * view_row;
+    const LmOwnPtrStack * rows;
     LmTransRegistryFact * row;
+    const LmTransRegistryFact * facade_row;
+    const LmTableCell * source_key_cell;
+    const LmTableCell * source_index_cell;
+    const char *item_name;
     const char *payload;
     char *source_table_name;
+    size_t row_count;
     size_t index;
     size_t i;
     int found;
-    if (sequence_name == 0 || rows == 0 || out_row == 0) {
+    if (out_item_name != 0) {
+        out_item_name[0] = 0;
+    }
+    if (sequence_name == 0 || out_item_name == 0) {
         return 1;
     }
     source_table_name = lm_trans_sequence_item_source_table_name_new(sequence_name);
     if (source_table_name == 0) {
         return 1;
     }
-    out_row[0] = 0;
+    view = lm_trans_namespace_registry_view(namespace_);
+    rows = 0;
+    if (view != 0) {
+        row_count = lm_registry_view_table_row_count(view, source_table_name);
+    }
+    else {
+        rows = lm_trans_namespace_registry_relation_stack(namespace_, sequence_name, "item");
+        row_count = 0U;
+        if (rows != 0) {
+            row_count = rows -> count;
+        }
+    }
     found = 0;
     i = 0U;
-    while (i < rows -> count) {
-        row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i)));
-        if (row != 0 && row -> key != 0) {
-            payload = lm_trans_sequence_item_index_payload(namespace_, source_table_name, row);
+    while (i < row_count) {
+        item_name = 0;
+        payload = 0;
+        if (view != 0) {
+            view_row = lm_registry_view_table_row_at(view, source_table_name, i);
+            if (view_row != 0) {
+                item_name = view_row -> key;
+                payload = view_row -> payload;
+                facade_row = ((const LmTransRegistryFact *)view_row -> source);
+                source_key_cell = 0;
+                source_index_cell = lm_trans_registry_source_path_typed_cell_kind(namespace_, source_table_name, "class", "class", "size_t", "index", facade_row, 0, &source_key_cell);
+                if (source_key_cell != 0 && source_key_cell -> value != 0 && source_index_cell != 0 && source_index_cell -> value != 0 && lm_trans_registry_view_is_selected() != 0) {
+                    item_name = source_key_cell -> value;
+                    payload = source_index_cell -> value;
+                }
+            }
+        }
+        else {
+            row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i)));
+            if (row != 0) {
+                item_name = row -> key;
+                payload = row -> payload;
+            }
+        }
+        if (item_name != 0) {
             if (lm_trans_sequence_item_index(payload, &index) && index == expected_index) {
                 if (found) {
                     fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" has duplicate index %zu\n", (((int)sequence_name -> length)), sequence_name -> data, expected_index);
@@ -24099,7 +24162,7 @@ static int lm_trans_sequence_item_row_at_index(LmTransNamespace *namespace_, con
                     }
                 }
                 found = 1;
-                out_row[0] = row;
+                out_item_name[0] = item_name;
             }
         }
         i = i + 1U;
@@ -24120,17 +24183,17 @@ static int lm_trans_sequence_item_row_at_index(LmTransNamespace *namespace_, con
 }
 
 static int lm_trans_emit_atom_statement_sequence(FILE *file, const LmP0Text *sequence_name, unsigned indent, LmTransNamespace *namespace_) {
-    const LmOwnPtrStack * rows;
-    LmTransRegistryFact * row;
     LmTransAtomStatementHandler handler;
     LmP0Node * node;
     LmP0NodeAs * node_as;
     LmP0Text * item_name;
+    const char *selected_item_name;
     const char *binding;
+    size_t item_count;
     size_t expected_index;
     int status;
-    rows = lm_trans_namespace_registry_relation_stack(namespace_, sequence_name, "item");
-    if (rows == 0) {
+    item_count = lm_trans_sequence_item_count(namespace_, sequence_name);
+    if (item_count == 0U) {
         fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" has no item rows\n", (((int)sequence_name -> length)), sequence_name -> data);
         return 1;
     }
@@ -24157,19 +24220,20 @@ static int lm_trans_emit_atom_statement_sequence(FILE *file, const LmP0Text *seq
     }
     status = 0;
     expected_index = 0U;
-    while (status == 0 && expected_index < rows -> count) {
-        if (lm_trans_sequence_item_row_at_index(namespace_, sequence_name, rows, expected_index, &row) != 0) {
+    while (status == 0 && expected_index < item_count) {
+        selected_item_name = 0;
+        if (lm_trans_sequence_item_at_index(namespace_, sequence_name, expected_index, &selected_item_name) != 0) {
             status = 1;
         }
         else {
-            if (lm_trans_text_assign_cstr(item_name, row -> key) == 0) {
+            if (lm_trans_text_assign_cstr(item_name, selected_item_name) == 0) {
                 status = 1;
             }
             if (status == 0) {
                 binding = lm_trans_atom_statement_receiver_binding(item_name);
                 handler = lm_trans_atom_statement_binding_handler(binding);
                 if (handler == 0 || handler == &lm_trans_atom_statement_emit_sequence_prelude) {
-                    fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" item %s has no concrete atom receiver\n", (((int)sequence_name -> length)), sequence_name -> data, row -> key);
+                    fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" item %s has no concrete atom receiver\n", (((int)sequence_name -> length)), sequence_name -> data, selected_item_name);
                     status = 1;
                 }
             }
@@ -26789,19 +26853,19 @@ static int lm_trans_top_level_emit_atom_sequence(FILE *file, LmTransNamespace *n
 }
 
 static int lm_trans_top_level_declare_atom_sequence(LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
-    const LmOwnPtrStack * rows;
-    LmTransRegistryFact * row;
     LmP0Node * node;
     LmP0NodeAs * node_as;
     LmP0Text * item_name;
     LmTransTopLevelItem * child;
+    const char *selected_item_name;
+    size_t item_count;
     size_t expected_index;
     int status;
     if (item == 0 || item -> node == 0 || item -> node -> kind != LM_P0_NODE_ATOM) {
         return 1;
     }
-    rows = lm_trans_namespace_registry_relation_stack(namespace_, item -> node -> as -> atom, "item");
-    if (rows == 0) {
+    item_count = lm_trans_sequence_item_count(namespace_, item -> node -> as -> atom);
+    if (item_count == 0U) {
         fprintf(stderr, "trans registry error: atom statement sequence \"%.*s\" has no item rows\n", (((int)item -> node -> as -> atom -> length)), item -> node -> as -> atom -> data);
         return 1;
     }
@@ -26818,12 +26882,13 @@ static int lm_trans_top_level_declare_atom_sequence(LmTransNamespace *namespace_
     node->as = node_as;
     status = 0;
     expected_index = 0U;
-    while (status == 0 && expected_index < rows -> count) {
-        if (lm_trans_sequence_item_row_at_index(namespace_, item -> node -> as -> atom, rows, expected_index, &row) != 0) {
+    while (status == 0 && expected_index < item_count) {
+        selected_item_name = 0;
+        if (lm_trans_sequence_item_at_index(namespace_, item -> node -> as -> atom, expected_index, &selected_item_name) != 0) {
             status = 1;
         }
         else {
-            if (lm_trans_text_assign_cstr(item_name, row -> key) == 0) {
+            if (lm_trans_text_assign_cstr(item_name, selected_item_name) == 0) {
                 status = 1;
             }
             if (status == 0) {
@@ -34141,7 +34206,7 @@ static int lm_trans_l4_atom_receiver_prelude_sequence(const LmP0Text *atom, int 
     if (atom == 0) {
         return 1;
     }
-    if (lm_trans_registry_relation_stack(atom, "item") == 0) {
+    if (lm_trans_sequence_item_count(0, atom) == 0U) {
         fprintf(stderr, "trans L4 error: prelude sequence \"%.*s\" has no item rows\n", (((int)atom -> length)), atom -> data);
         return 1;
     }
