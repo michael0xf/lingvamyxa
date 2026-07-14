@@ -1,0 +1,166 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_generated_layout_field_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_generated_layout_field_source_rows_core () int
+    const: [6]: @: char suffixes
+    const: [6]: @: char source_paths
+    const: [6]: @: char relation_names
+    const: [6]: @: char value_column_names
+    const: [6]: @: char value_descriptors
+    const: [6]: @: char raw_payloads
+    const: [6]: @: char expected_payloads
+    const: LmRegistryViewRow: view_row
+    LmTransRegistryFact: fact
+    const: LmTableDescriptor: descriptor
+    const: LmTableColumnDescriptor: key_column
+    const: LmTableColumnDescriptor: value_column
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+    const: LmTableCell: resolved_key_cell
+    LmP0Text: owner
+    LmP0Text: key
+    LmP0Text: query_key
+    LmP0Text: payload
+    const: @: char selected_value
+    const: @: char resolved_value
+    size_t: i
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    suffixes[0]: ".field.class"
+    suffixes[1]: ".field.union"
+    suffixes[2]: ".field.index"
+    suffixes[3]: ".field.address-depth"
+    suffixes[4]: ".field.const"
+    suffixes[5]: ".field.array-count"
+    source_paths[0]: "LmGeneratedFieldOwner.field.class"
+    source_paths[1]: "LmGeneratedFieldOwner.field.union"
+    source_paths[2]: "LmGeneratedFieldOwner.field.index"
+    source_paths[3]: "LmGeneratedFieldOwner.field.address-depth"
+    source_paths[4]: "LmGeneratedFieldOwner.field.const"
+    source_paths[5]: "LmGeneratedFieldOwner.field.array-count"
+    relation_names[0]: "field.class"
+    relation_names[1]: "field.union"
+    relation_names[2]: "field.index"
+    relation_names[3]: "field.address-depth"
+    relation_names[4]: "field.const"
+    relation_names[5]: "field.array-count"
+    value_column_names[0]: "field"
+    value_column_names[1]: "union"
+    value_column_names[2]: "index"
+    value_column_names[3]: "depth"
+    value_column_names[4]: "value"
+    value_column_names[5]: "count"
+    value_descriptors[0]: "class"
+    value_descriptors[1]: "class"
+    value_descriptors[2]: "size_t"
+    value_descriptors[3]: "size_t"
+    value_descriptors[4]: "int"
+    value_descriptors[5]: "size_t"
+    raw_payloads[0]: "\"LmQuotedClass\""
+    raw_payloads[1]: "'LmQuotedUnion'"
+    raw_payloads[2]: "'3'"
+    raw_payloads[3]: "\"2\""
+    raw_payloads[4]: "`1`"
+    raw_payloads[5]: "'4'"
+    expected_payloads[0]: "LmQuotedClass"
+    expected_payloads[1]: "LmQuotedUnion"
+    expected_payloads[2]: "3"
+    expected_payloads[3]: "2"
+    expected_payloads[4]: "1"
+    expected_payloads[5]: "4"
+
+    owner: lm_trans_text_from_cstr("`LmGeneratedFieldOwner`")
+    key: lm_trans_text_from_cstr("`field-name`")
+    query_key: lm_trans_text_from_cstr("`field-name`")
+    payload: lm_trans_text_from_cstr("None")
+    status: 0
+    if: owner = 0 || key = 0 || query_key = 0 || payload = 0 || lm_trans_named_structure_push_relation(owner, ".field.class", key, payload) != 0 || lm_registry_view_fact_count(lm_trans_registry\view) != 0U || lm_registry_view_source_table_count(lm_trans_registry\view) != 0U
+        status: 1
+    lm_trans_text_ref_destroy(@ payload)
+
+    i: 0U
+    while: status = 0 && i < 6U
+        payload: lm_trans_text_from_cstr(raw_payloads[i])
+        if: payload = 0 || lm_trans_named_structure_push_relation(owner, suffixes[i], key, payload) != 0
+            status: 1
+        lm_trans_text_ref_destroy(@ payload)
+        if: status != 0
+            break
+
+        view_row: lm_registry_view_fact_at(lm_trans_registry\view, i)
+        fact: 0
+        if: view_row != 0
+            fact: cast: (LmTransRegistryFact) view_row\source
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, i)
+        key_column: lm_table_descriptor_column_at(descriptor, 0U)
+        value_column: lm_table_descriptor_column_at(descriptor, 1U)
+        row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+        key_cell: lm_table_row_cell_at(row, 0U)
+        value_cell: lm_table_row_cell_at(row, 1U)
+
+        if: fact = 0 || fact\table = 0 || c.strcmp(fact\table, source_paths[i]) != 0 || fact\key = 0 || c.strcmp(fact\key, "field-name") != 0 || fact\payload = 0 || c.strcmp(fact\payload, expected_payloads[i]) != 0 || fact\payload_node != 0 || fact\source != 0
+            status: 1
+        if: descriptor = 0 || descriptor\name = 0 || c.strcmp(descriptor\name, source_paths[i]) != 0 || lm_table_descriptor_column_count(descriptor) != 2U || lm_table_descriptor_materialized_row_count(descriptor) != 1U
+            status: 1
+        if: key_column = 0 || key_column\name = 0 || key_column\type_name = 0 || c.strcmp(key_column\name, "class") != 0 || c.strcmp(key_column\type_name, "class") != 0 || lm_table_column_descriptor_descriptor_count(key_column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(key_column, 0U), "class") != 0
+            status: 1
+        if: value_column = 0 || value_column\name = 0 || value_column\type_name = 0 || c.strcmp(value_column\name, value_column_names[i]) != 0 || c.strcmp(value_column\type_name, value_descriptors[i]) != 0 || lm_table_column_descriptor_descriptor_count(value_column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(value_column, 0U), value_descriptors[i]) != 0
+            status: 1
+        if: row = 0 || row\source != 0 || row\local_sequence != 0U || lm_table_row_cell_count(row) != 2U || key_cell = 0 || key_cell\atom = 0 || key_cell\value = 0 || c.strcmp(key_cell\atom, "field-name") != 0 || c.strcmp(key_cell\value, "field-name") != 0 || key_cell\atom = key_cell\value || key_cell\atom = fact\key || key_cell\value = fact\key || key_cell\source != 0 || key_cell\node != 0 || key_cell\explicit_none != 0 || value_cell = 0 || value_cell\atom = 0 || value_cell\value = 0 || c.strcmp(value_cell\atom, expected_payloads[i]) != 0 || c.strcmp(value_cell\value, expected_payloads[i]) != 0 || value_cell\atom = value_cell\value || value_cell\atom = fact\payload || value_cell\value = fact\payload || value_cell\source != fact || value_cell\node != 0 || value_cell\explicit_none != 0
+            status: 1
+
+        lm_trans_registry\view_mode: 0
+        selected_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, query_key, source_paths[i], "class", "class", value_column_names[i], value_descriptors[i])
+        resolved_key_cell: 0
+        resolved_value: lm_trans_layout_field_source_value(0, "LmGeneratedFieldOwner", relation_names[i], value_column_names[i], value_descriptors[i], fact, @ resolved_key_cell)
+        if: selected_value != fact\payload || resolved_value != fact\payload || resolved_key_cell != 0
+            status: 1
+        lm_trans_registry\view_mode: 1
+        selected_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, query_key, source_paths[i], "class", "class", value_column_names[i], value_descriptors[i])
+        resolved_key_cell: 0
+        resolved_value: lm_trans_layout_field_source_value(0, "LmGeneratedFieldOwner", relation_names[i], value_column_names[i], value_descriptors[i], fact, @ resolved_key_cell)
+        if: selected_value != fact\payload || resolved_value != fact\payload || resolved_key_cell != 0
+            status: 1
+        lm_trans_registry\view_mode: 2
+        selected_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, query_key, source_paths[i], "class", "class", value_column_names[i], value_descriptors[i])
+        resolved_key_cell: 0
+        resolved_value: lm_trans_layout_field_source_value(0, "LmGeneratedFieldOwner", relation_names[i], value_column_names[i], value_descriptors[i], fact, @ resolved_key_cell)
+        if: selected_value != value_cell\value || selected_value = fact\payload || resolved_value != value_cell\value || resolved_value = fact\payload || resolved_key_cell != key_cell
+            status: 1
+        i: i + 1U
+
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 6U || lm_registry_view_fact_count(lm_trans_registry\view) != 6U || lm_registry_view_source_table_count(lm_trans_registry\view) != 6U)
+        status: 1
+    if: status = 0 && lm_trans_named_structure_push_relation(owner, ".field.unknown", key, query_key) = 0
+        status: 1
+    if: status = 0 && (lm_registry_view_fact_count(lm_trans_registry\view) != 6U || lm_registry_view_source_table_count(lm_trans_registry\view) != 6U || lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ payload)
+    lm_trans_text_ref_destroy(@ query_key)
+    lm_trans_text_ref_destroy(@ key)
+    lm_trans_text_ref_destroy(@ owner)
+    lm_trans_registry_destroy()
+return: status

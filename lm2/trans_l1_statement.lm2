@@ -3162,6 +3162,33 @@ fn: lm_trans_named_structure_push_relation (
 ) int
     @: char table_name
     LmP0Text: table_atom
+    const: @: char value_column_name
+    const: @: char value_descriptor
+
+    if: suffix = 0
+        return: 1
+    value_column_name: 0
+    value_descriptor: 0
+    if: c.strcmp(suffix, ".field.class") = 0
+        value_column_name: "field"
+        value_descriptor: "class"
+    if: c.strcmp(suffix, ".field.union") = 0
+        value_column_name: "union"
+        value_descriptor: "class"
+    if: c.strcmp(suffix, ".field.index") = 0
+        value_column_name: "index"
+        value_descriptor: "size_t"
+    if: c.strcmp(suffix, ".field.address-depth") = 0
+        value_column_name: "depth"
+        value_descriptor: "size_t"
+    if: c.strcmp(suffix, ".field.const") = 0
+        value_column_name: "value"
+        value_descriptor: "int"
+    if: c.strcmp(suffix, ".field.array-count") = 0
+        value_column_name: "count"
+        value_descriptor: "size_t"
+    if: value_column_name = 0 || value_descriptor = 0
+        return: 1
 
     table_name: lm_trans_named_structure_relation_table_new(owner, suffix)
     if: table_name = 0
@@ -3173,7 +3200,7 @@ fn: lm_trans_named_structure_push_relation (
         return: 1
     finally: lm_trans_text_ref_destroy(@ table_atom)
 
-return: lm_trans_registry_push_row_atoms(table_atom, key, payload) != 0
+return: lm_trans_registry_push_generated_source_n2_row_atoms(table_atom, key, payload, "class", "class", value_column_name, value_descriptor) != 0
 
 fn: lm_trans_declare_named_structure_owner (
     LmTransNamespace: namespace_
