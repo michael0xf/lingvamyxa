@@ -10,21 +10,60 @@ fn: lm_test_ncolumn_add_column (
     const: @(char first_descriptor)
     const: @(char second_descriptor)
 ) int
-    LmTableColumnDescriptor: column
+    const: [2]: @: char descriptor_data
+    [2]: size_t descriptor_lengths
+    size_t: descriptor_count
+    size_t: type_name_length
 
-    column: lm_table_column_descriptor_new_slice(name, c.strlen(name), type_name, c.strlen(type_name), address_depth, array_rank, is_const)
-    if: column = 0
+    type_name_length: 0U
+    if: type_name != 0
+        type_name_length: c.strlen(type_name)
+
+    descriptor_count: 0U
+    if: first_descriptor != 0
+        descriptor_data[descriptor_count]: first_descriptor
+        descriptor_lengths[descriptor_count]: c.strlen(first_descriptor)
+        descriptor_count: descriptor_count + 1U
+    if: second_descriptor != 0
+        descriptor_data[descriptor_count]: second_descriptor
+        descriptor_lengths[descriptor_count]: c.strlen(second_descriptor)
+        descriptor_count: descriptor_count + 1U
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), type_name, type_name_length, (cast: (const: @@: char) descriptor_data), descriptor_lengths, descriptor_count, address_depth, array_rank, is_const)
+
+fn: lm_test_ncolumn_column_builder_atomic () int
+    LmTableDescriptor: table
+    const: LmTableColumnDescriptor: column
+    const: [2]: @: char descriptor_data
+    [2]: size_t descriptor_lengths
+    int: status
+
+    table: lm_table_descriptor_new_empty_slice("builder.atomic", 14U)
+    if: table = 0
         return: 1
-    if: first_descriptor != 0 && lm_table_column_descriptor_add_descriptor_slice(column, first_descriptor, c.strlen(first_descriptor)) != 0
-        lm_table_column_descriptor_delete_any(column)
-        return: 1
-    if: second_descriptor != 0 && lm_table_column_descriptor_add_descriptor_slice(column, second_descriptor, c.strlen(second_descriptor)) != 0
-        lm_table_column_descriptor_delete_any(column)
-        return: 1
-    if: lm_table_descriptor_take_column(table, column) != 0
-        lm_table_column_descriptor_delete_any(column)
-        return: 1
-return: 0
+
+    descriptor_data[0]: "payload"
+    descriptor_data[1]: "ordered.second"
+    descriptor_lengths[0]: 7U
+    descriptor_lengths[1]: 14U
+    status: lm_table_descriptor_add_column_slices(table, "value", 5U, "char", 4U, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 2U, 2U, 1U, 1)
+    column: lm_table_descriptor_column_at(table, 0U)
+    if: status = 0 && (column = 0 || column\type_name = 0 || c.strcmp(column\type_name, "char") != 0 || column\address_depth != 2U || column\array_rank != 1U || column\is_const = 0 || lm_table_column_descriptor_descriptor_count(column) != 2U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "payload") != 0 || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 1U), "ordered.second") != 0)
+        status: 1
+
+    descriptor_data[1]: 0
+    if: status = 0 && lm_table_descriptor_add_column_slices(table, "broken", 6U, "char", 4U, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 2U, 0U, 0U, 0) = 0
+        status: 1
+    if: status = 0 && lm_table_descriptor_column_count(table) != 1U
+        status: 1
+
+    if: status = 0 && lm_table_descriptor_add_column_slices(table, "untyped", 7U, 0, 0U, 0, 0, 0U, 0U, 0U, 0) != 0
+        status: 1
+    column: lm_table_descriptor_column_at(table, 1U)
+    if: status = 0 && (column = 0 || column\type_name != 0 || lm_table_column_descriptor_descriptor_count(column) != 0U)
+        status: 1
+
+    lm_table_descriptor_delete_any(table)
+return: status
 
 fn: lm_test_ncolumn_schema (const: @(char name)) LmTableDescriptor
     LmTableDescriptor: table
@@ -138,6 +177,8 @@ external:
             return: 1
 
         status: 0
+        if: lm_test_ncolumn_column_builder_atomic() != 0
+            status: 1
         if: lm_registry_view_fact_at(0, 0U) != 0 || lm_registry_view_push_relation(0, "x", "x", "x", 0, 0) = 0
             status: 1
         if: status = 0 && (lm_registry_view_lookup_exact(0, "x", "x") != 0 || lm_registry_view_lookup_default(0, "x") != 0 || lm_registry_view_lookup(0, "x", "x") != 0 || lm_registry_view_lookup_text(0, "x", "x") != 0)

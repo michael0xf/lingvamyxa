@@ -2433,17 +2433,14 @@ fn: lm_trans_table_descriptor_add_generated_column_shaped (
     size_t: array_rank
     int: is_const
 ) int
-    LmTableColumnDescriptor: column
+    const: [1]: @: char descriptor_data
+    [1]: size_t descriptor_lengths
 
     if: table = 0 || name = 0 || type_name = 0 || descriptor = 0
         return: 1
-    column: lm_table_column_descriptor_new_slice(name, c.strlen(name), type_name, c.strlen(type_name), address_depth, array_rank, is_const)
-    if: column = 0
-        return: 1
-    if: lm_table_column_descriptor_add_descriptor_slice(column, descriptor, c.strlen(descriptor)) != 0 || lm_table_descriptor_take_column(table, column) != 0
-        lm_table_column_descriptor_delete_any(column)
-        return: 1
-return: 0
+    descriptor_data[0]: descriptor
+    descriptor_lengths[0]: c.strlen(descriptor)
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), type_name, c.strlen(type_name), (cast: (const: @@: char) descriptor_data), descriptor_lengths, 1U, address_depth, array_rank, is_const)
 
 fn: lm_trans_table_descriptor_add_generated_column (
     LmTableDescriptor: table
@@ -3517,7 +3514,10 @@ fn: lm_trans_registry_l4_source_descriptor_new (const: (LmP0Text: table_name); @
     LmP0Text: descriptor_value
     LmP0Text: type_value
     LmTableDescriptor: descriptor
-    LmTableColumnDescriptor: target_column
+    const: [16]: @: char descriptor_data
+    [16]: size_t descriptor_lengths
+    const: @: char type_data
+    size_t: type_length
     size_t: column_index
     size_t: descriptor_index
 
@@ -3542,31 +3542,33 @@ fn: lm_trans_registry_l4_source_descriptor_new (const: (LmP0Text: table_name); @
             lm_table_descriptor_delete_any(descriptor)
             descriptor: 0
             break
+        type_data: 0
+        type_length: 0U
         if: columns[column_index]\type_name != 0
             if: lm_trans_registry_identifier_value(columns[column_index]\type_name, type_value) = 0
                 lm_table_descriptor_delete_any(descriptor)
                 descriptor: 0
                 break
-            target_column: lm_table_column_descriptor_new_slice(column_value\data, column_value\length, type_value\data, type_value\length, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const)
-        else:
-            target_column: lm_table_column_descriptor_new_slice(column_value\data, column_value\length, 0, 0U, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const)
-        if: target_column = 0
+            type_data: type_value\data
+            type_length: type_value\length
+        ---
+        if: columns[column_index]\descriptor_count > c.sizeof(descriptor_data) / c.sizeof(descriptor_data[0])
             lm_table_descriptor_delete_any(descriptor)
             descriptor: 0
             break
 
         descriptor_index: 0U
         while: descriptor_index < columns[column_index]\descriptor_count
-            if: columns[column_index]\descriptors[descriptor_index] = 0 || lm_trans_registry_identifier_value(columns[column_index]\descriptors[descriptor_index], descriptor_value) = 0 || lm_table_column_descriptor_add_descriptor_slice(target_column, descriptor_value\data, descriptor_value\length) != 0
-                lm_table_column_descriptor_delete_any(target_column)
+            if: columns[column_index]\descriptors[descriptor_index] = 0 || lm_trans_registry_identifier_value(columns[column_index]\descriptors[descriptor_index], descriptor_value) = 0
                 lm_table_descriptor_delete_any(descriptor)
                 descriptor: 0
                 break
+            descriptor_data[descriptor_index]: descriptor_value\data
+            descriptor_lengths[descriptor_index]: descriptor_value\length
             descriptor_index: descriptor_index + 1U
         if: descriptor = 0
             break
-        if: lm_table_descriptor_take_column(descriptor, target_column) != 0
-            lm_table_column_descriptor_delete_any(target_column)
+        if: lm_table_descriptor_add_column_slices(descriptor, column_value\data, column_value\length, type_data, type_length, (cast: (const: @@: char) descriptor_data), descriptor_lengths, columns[column_index]\descriptor_count, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const) != 0
             lm_table_descriptor_delete_any(descriptor)
             descriptor: 0
             break

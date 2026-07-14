@@ -462,21 +462,53 @@ fn: lm_table_descriptor_take_column (LmTableDescriptor: table; LmTableColumnDesc
         return: 1
 return: 0
 
-fn: lm_table_descriptor_add_column (LmTableDescriptor: table; const: @(char name); const: @(char descriptor)) int
+fn: lm_table_descriptor_add_column_slices (
+    LmTableDescriptor: table
+    const: @(char name)
+    size_t: name_length
+    const: @(char type_name)
+    size_t: type_name_length
+    const: @@(char descriptor_data)
+    const: @(size_t descriptor_lengths)
+    size_t: descriptor_count
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+) int
     LmTableColumnDescriptor: column
+    size_t: descriptor_index
 
-    if: name = 0
+    if: table = 0 || name = 0 || (type_name = 0 && type_name_length != 0U) || (descriptor_count != 0U && (descriptor_data = 0 || descriptor_lengths = 0))
         return: 1
-    column: lm_table_column_descriptor_new_slice(name, c.strlen(name), 0, 0U, 0U, 0U, 0)
+
+    column: lm_table_column_descriptor_new_slice(name, name_length, type_name, type_name_length, address_depth, array_rank, is_const)
     if: column = 0
         return: 1
-    if: descriptor != 0 && lm_table_column_descriptor_add_descriptor_slice(column, descriptor, c.strlen(descriptor)) != 0
-        lm_table_column_descriptor_delete_any(column)
-        return: 1
+
+    descriptor_index: 0U
+    while: descriptor_index < descriptor_count
+        if: descriptor_data[descriptor_index] = 0 || lm_table_column_descriptor_add_descriptor_slice(column, descriptor_data[descriptor_index], descriptor_lengths[descriptor_index]) != 0
+            lm_table_column_descriptor_delete_any(column)
+            return: 1
+        descriptor_index: descriptor_index + 1U
+
     if: lm_table_descriptor_take_column(table, column) != 0
         lm_table_column_descriptor_delete_any(column)
         return: 1
 return: 0
+
+fn: lm_table_descriptor_add_column (LmTableDescriptor: table; const: @(char name); const: @(char descriptor)) int
+    const: [1]: @: char descriptor_data
+    [1]: size_t descriptor_lengths
+
+    if: name = 0
+        return: 1
+    if: descriptor = 0
+        return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), 0, 0U, 0, 0, 0U, 0U, 0U, 0)
+
+    descriptor_data[0]: descriptor
+    descriptor_lengths[0]: c.strlen(descriptor)
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), 0, 0U, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 1U, 0U, 0U, 0)
 
 fn: lm_table_descriptor_new_empty_slice (const: @(char name); size_t: name_length) LmTableDescriptor
     LmTableDescriptor: table

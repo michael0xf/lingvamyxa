@@ -2369,6 +2369,7 @@ static int lm_table_column_descriptor_add_descriptor_slice(LmTableColumnDescript
 static size_t lm_table_column_descriptor_descriptor_count(const LmTableColumnDescriptor *column);
 static const char * lm_table_column_descriptor_descriptor_at(const LmTableColumnDescriptor *column, size_t index);
 static int lm_table_descriptor_take_column(LmTableDescriptor *table, LmTableColumnDescriptor *column);
+static int lm_table_descriptor_add_column_slices(LmTableDescriptor *table, const char *name, size_t name_length, const char *type_name, size_t type_name_length, const char **descriptor_data, const size_t *descriptor_lengths, size_t descriptor_count, size_t address_depth, size_t array_rank, int is_const);
 static int lm_table_descriptor_add_column(LmTableDescriptor *table, const char *name, const char *descriptor);
 static LmTableDescriptor * lm_table_descriptor_new_empty_slice(const char *name, size_t name_length);
 static LmTableDescriptor * lm_table_descriptor_new_slice(const char *name, size_t name_length);
@@ -4000,24 +4001,43 @@ static int lm_table_descriptor_take_column(LmTableDescriptor *table, LmTableColu
     return 0;
 }
 
-static int lm_table_descriptor_add_column(LmTableDescriptor *table, const char *name, const char *descriptor) {
+static int lm_table_descriptor_add_column_slices(LmTableDescriptor *table, const char *name, size_t name_length, const char *type_name, size_t type_name_length, const char **descriptor_data, const size_t *descriptor_lengths, size_t descriptor_count, size_t address_depth, size_t array_rank, int is_const) {
     LmTableColumnDescriptor * column;
-    if (name == 0) {
+    size_t descriptor_index;
+    if (table == 0 || name == 0 || (type_name == 0 && type_name_length != 0U) || (descriptor_count != 0U && (descriptor_data == 0 || descriptor_lengths == 0))) {
         return 1;
     }
-    column = lm_table_column_descriptor_new_slice(name, strlen(name), 0, 0U, 0U, 0U, 0);
+    column = lm_table_column_descriptor_new_slice(name, name_length, type_name, type_name_length, address_depth, array_rank, is_const);
     if (column == 0) {
         return 1;
     }
-    if (descriptor != 0 && lm_table_column_descriptor_add_descriptor_slice(column, descriptor, strlen(descriptor)) != 0) {
-        lm_table_column_descriptor_delete_any(column);
-        return 1;
+    descriptor_index = 0U;
+    while (descriptor_index < descriptor_count) {
+        if (descriptor_data[descriptor_index] == 0 || lm_table_column_descriptor_add_descriptor_slice(column, descriptor_data[descriptor_index], descriptor_lengths[descriptor_index]) != 0) {
+            lm_table_column_descriptor_delete_any(column);
+            return 1;
+        }
+        descriptor_index = descriptor_index + 1U;
     }
     if (lm_table_descriptor_take_column(table, column) != 0) {
         lm_table_column_descriptor_delete_any(column);
         return 1;
     }
     return 0;
+}
+
+static int lm_table_descriptor_add_column(LmTableDescriptor *table, const char *name, const char *descriptor) {
+    const char *descriptor_data[1];
+    size_t descriptor_lengths[1];
+    if (name == 0) {
+        return 1;
+    }
+    if (descriptor == 0) {
+        return lm_table_descriptor_add_column_slices(table, name, strlen(name), 0, 0U, 0, 0, 0U, 0U, 0U, 0);
+    }
+    descriptor_data[0] = descriptor;
+    descriptor_lengths[0] = strlen(descriptor);
+    return lm_table_descriptor_add_column_slices(table, name, strlen(name), 0, 0U, (((const char **)descriptor_data)), descriptor_lengths, 1U, 0U, 0U, 0);
 }
 
 static LmTableDescriptor * lm_table_descriptor_new_empty_slice(const char *name, size_t name_length) {
@@ -33888,19 +33908,14 @@ static int lm_trans_registry_push_owner_relation_size_with_fact(const LmP0Text *
 }
 
 static int lm_trans_table_descriptor_add_generated_column_shaped(LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor, size_t address_depth, size_t array_rank, int is_const) {
-    LmTableColumnDescriptor * column;
+    const char *descriptor_data[1];
+    size_t descriptor_lengths[1];
     if (table == 0 || name == 0 || type_name == 0 || descriptor == 0) {
         return 1;
     }
-    column = lm_table_column_descriptor_new_slice(name, strlen(name), type_name, strlen(type_name), address_depth, array_rank, is_const);
-    if (column == 0) {
-        return 1;
-    }
-    if (lm_table_column_descriptor_add_descriptor_slice(column, descriptor, strlen(descriptor)) != 0 || lm_table_descriptor_take_column(table, column) != 0) {
-        lm_table_column_descriptor_delete_any(column);
-        return 1;
-    }
-    return 0;
+    descriptor_data[0] = descriptor;
+    descriptor_lengths[0] = strlen(descriptor);
+    return lm_table_descriptor_add_column_slices(table, name, strlen(name), type_name, strlen(type_name), (((const char **)descriptor_data)), descriptor_lengths, 1U, address_depth, array_rank, is_const);
 }
 
 static int lm_trans_table_descriptor_add_generated_column(LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor) {
@@ -35057,7 +35072,10 @@ static LmTableDescriptor * lm_trans_registry_l4_source_descriptor_new(const LmP0
     LmP0Text * descriptor_value;
     LmP0Text * type_value;
     LmTableDescriptor * descriptor;
-    LmTableColumnDescriptor * target_column;
+    const char *descriptor_data[16];
+    size_t descriptor_lengths[16];
+    const char *type_data;
+    size_t type_length;
     size_t column_index;
     size_t descriptor_index;
     if (table_name == 0 || columns == 0 || column_count == 0U) {
@@ -35083,37 +35101,37 @@ static LmTableDescriptor * lm_trans_registry_l4_source_descriptor_new(const LmP0
             descriptor = 0;
             break;
         }
+        type_data = 0;
+        type_length = 0U;
         if (columns[column_index] -> type_name != 0) {
             if (lm_trans_registry_identifier_value(columns[column_index] -> type_name, type_value) == 0) {
                 lm_table_descriptor_delete_any(descriptor);
                 descriptor = 0;
                 break;
             }
-            target_column = lm_table_column_descriptor_new_slice(column_value -> data, column_value -> length, type_value -> data, type_value -> length, columns[column_index] -> address_depth, columns[column_index] -> array_rank, columns[column_index] -> is_const);
+            type_data = type_value -> data;
+            type_length = type_value -> length;
         }
-        else {
-            target_column = lm_table_column_descriptor_new_slice(column_value -> data, column_value -> length, 0, 0U, columns[column_index] -> address_depth, columns[column_index] -> array_rank, columns[column_index] -> is_const);
-        }
-        if (target_column == 0) {
+        if (columns[column_index] -> descriptor_count > sizeof(descriptor_data) / sizeof(descriptor_data[0])) {
             lm_table_descriptor_delete_any(descriptor);
             descriptor = 0;
             break;
         }
         descriptor_index = 0U;
         while (descriptor_index < columns[column_index] -> descriptor_count) {
-            if (columns[column_index] -> descriptors[descriptor_index] == 0 || lm_trans_registry_identifier_value(columns[column_index] -> descriptors[descriptor_index], descriptor_value) == 0 || lm_table_column_descriptor_add_descriptor_slice(target_column, descriptor_value -> data, descriptor_value -> length) != 0) {
-                lm_table_column_descriptor_delete_any(target_column);
+            if (columns[column_index] -> descriptors[descriptor_index] == 0 || lm_trans_registry_identifier_value(columns[column_index] -> descriptors[descriptor_index], descriptor_value) == 0) {
                 lm_table_descriptor_delete_any(descriptor);
                 descriptor = 0;
                 break;
             }
+            descriptor_data[descriptor_index] = descriptor_value -> data;
+            descriptor_lengths[descriptor_index] = descriptor_value -> length;
             descriptor_index = descriptor_index + 1U;
         }
         if (descriptor == 0) {
             break;
         }
-        if (lm_table_descriptor_take_column(descriptor, target_column) != 0) {
-            lm_table_column_descriptor_delete_any(target_column);
+        if (lm_table_descriptor_add_column_slices(descriptor, column_value -> data, column_value -> length, type_data, type_length, (((const char **)descriptor_data)), descriptor_lengths, columns[column_index] -> descriptor_count, columns[column_index] -> address_depth, columns[column_index] -> array_rank, columns[column_index] -> is_const) != 0) {
             lm_table_descriptor_delete_any(descriptor);
             descriptor = 0;
             break;
