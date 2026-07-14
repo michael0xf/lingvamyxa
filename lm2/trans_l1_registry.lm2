@@ -741,7 +741,7 @@ fn: lm_trans_registry_cell_none_cell_matches (const: (LmP0Text: payload); const:
         return: 0
     result: 0
     if: lm_trans_registry_identifier_value(class_atom, class_name) != 0
-        none_value: lm_trans_registry_lookup(class_name, "None.cell")
+        none_value: lm_trans_namespace_registry_source_n2_key_typed_value(0, class_name, "None.cell", "class", "class", "value")
         if: none_value != 0 && lm_trans_text_equals(payload, none_value) != 0
             result: 1
     ---

@@ -1,0 +1,99 @@
+L4:
+    table:
+        name: `None.cell`
+        columns((class: class) (decimal: value))
+        rows:
+                 LmNoneDirect    1
+                 LmNoneDirect    0
+                 LmNoneDirect    None
+                 LmNoneFallback  1
+                 LmNoneJoined    1
+    end: `None.cell`
+
+    table:
+        name: `None.cell`
+        columns((class: class) (decimal: sentinel))
+        rows:
+                 LmNoneFallback  0
+    end: `None.cell`
+
+    table:
+        name: `lm.test.none-cell.seed`
+        columns((class: class) (decimal: value))
+        rows:
+                 LmNoneJoined  0
+    end: `lm.test.none-cell.seed`
+
+    join: (`lm.test.none-cell.seed`) `None.cell`
+        columns((class: class) (decimal: value))
+        rows:
+    end: `None.cell`
+
+    table:
+        name: `None.cell`
+        columns((class: class) (decimal: value))
+        rows:
+                 LmNoneJoined  None
+                 default       0
+    end: `None.cell`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmNoneDirect: value))
+        rows:
+                 LM_TEST_NONE_DIRECT    0
+                 LM_TEST_NONE_SURVIVES  1
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmNoneFallback: value))
+        rows:
+                 LM_TEST_NONE_FALLBACK  0
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmNoneJoined: value))
+        rows:
+                 LM_TEST_NONE_JOINED  0
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmNoneDefault: value))
+        rows:
+                 LM_TEST_NONE_DEFAULT  0
+    end: `define.value`
+end: L4
+
+define
+
+L1:
+===
+#ifdef LM_TEST_NONE_DIRECT
+#error "direct None.cell source row did not suppress its cell"
+#endif
+
+#ifdef LM_TEST_NONE_FALLBACK
+#error "wrong-schema None.cell did not use the facade value"
+#endif
+
+#ifdef LM_TEST_NONE_JOINED
+#error "joined None.cell did not use the facade value"
+#endif
+
+#ifdef LM_TEST_NONE_DEFAULT
+#error "default None.cell source row did not suppress its cell"
+#endif
+
+#if !defined(LM_TEST_NONE_SURVIVES) || LM_TEST_NONE_SURVIVES != 1
+#error "None.cell suppressed a non-matching cell"
+#endif
+===
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
