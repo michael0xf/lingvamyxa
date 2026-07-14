@@ -122,6 +122,18 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
     LmTransRegistryFact: node_unrelated
+    LmTransRegistryFact: unit_payload_middle
+    LmTransRegistryFact: unit_payload_target
+    LmTransRegistryFact: unit_backend_origin
+    LmTransRegistryFact: unit_backend_middle
+    LmTransRegistryFact: unit_backend_target
+    LmTransRegistryFact: unit_backend_unrelated
+    LmTransRegistryFact: unit_wrong_payload_origin
+    LmTransRegistryFact: unit_wrong_payload_middle
+    LmTransRegistryFact: unit_wrong_payload_target
+    LmTransRegistryFact: unit_wrong_backend_origin
+    LmTransRegistryFact: unit_wrong_backend_middle
+    LmTransRegistryFact: unit_wrong_backend_target
     LmTransRegistryFact: layout_origin
     LmTransRegistryFact: layout_middle
     LmTransRegistryFact: layout_target
@@ -129,24 +141,39 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: descriptor
     LmTableDescriptor: node_descriptor
     LmTableDescriptor: layout_descriptor
+    LmTableDescriptor: unit_descriptor
+    LmTableDescriptor: unit_wrong_descriptor
     LmTableRow: row
     LmTableRow: node_row
     LmTableRow: layout_row
+    LmTableRow: unit_row
+    LmTableRow: unit_wrong_row
     LmTableCell: key_cell
     LmTableCell: value_cell
     LmTableCell: marker_cell
     LmTableCell: node_key_cell
     LmTableCell: node_value_cell
+    LmTableCell: unit_key_cell
+    LmTableCell: unit_backend_cell
+    LmTableCell: unit_payload_cell
+    LmTableCell: unit_wrong_key_cell
+    LmTableCell: unit_wrong_backend_cell
+    LmTableCell: unit_wrong_payload_cell
     LmTableCell: layout_key_cell
     LmTableCell: layout_backend_cell
     LmTableCell: layout_marker_cell
     LmP0Node: source_node
+    LmP0Node: unit_wrong_source_node
     const: LmTableCell: resolved_cell
     const: LmTableCell: resolved_node_cell
     const: LmRegistryViewRow: layout_view_row
+    const: LmOwnPtrStack: unit_backend_rows
+    LmOwnPtrStack: unit_unrelated_backend_rows
     const: LmTableDescriptor: layout_source_table
     const: LmTableRow: resolved_layout_source_row
     const: LmP0Node: resolved_node
+    const: LmP0Node: resolved_unit_node
+    const: LmP0Node: resolved_unit_wrong_node
     const: @: char resolved_value
     const: @: char resolved_layout_backend
     size_t: layout_source_row_index
@@ -266,6 +293,30 @@ fn: lm_test_registry_join_provenance_core () int
     node_middle: 0
     node_target: 0
     node_unrelated: 0
+    unit_payload_middle: 0
+    unit_payload_target: 0
+    unit_backend_origin: 0
+    unit_backend_middle: 0
+    unit_backend_target: 0
+    unit_backend_unrelated: 0
+    unit_wrong_payload_origin: 0
+    unit_wrong_payload_middle: 0
+    unit_wrong_payload_target: 0
+    unit_wrong_backend_origin: 0
+    unit_wrong_backend_middle: 0
+    unit_wrong_backend_target: 0
+    unit_descriptor: 0
+    unit_wrong_descriptor: 0
+    unit_row: 0
+    unit_wrong_row: 0
+    unit_key_cell: 0
+    unit_backend_cell: 0
+    unit_payload_cell: 0
+    unit_wrong_key_cell: 0
+    unit_wrong_backend_cell: 0
+    unit_wrong_payload_cell: 0
+    unit_wrong_source_node: 0
+    unit_unrelated_backend_rows: 0
     if: status = 0
         source_node: lm_test_registry_node_new("node-payload")
         node_origin: lm_test_registry_push_node_fact("origin.node", "NodeWitness", source_node, 0)
@@ -302,12 +353,105 @@ fn: lm_test_registry_join_provenance_core () int
     ---
 
     if: status = 0
+        unit_payload_middle: lm_test_registry_join_fact("origin.node", "middle.unit.payload", "NodeWitness")
+        if: unit_payload_middle != 0
+            unit_payload_target: lm_test_registry_join_fact("middle.unit.payload", "unit.payload", "NodeWitness")
+        unit_backend_origin: lm_test_registry_push_value_fact("origin.unit.backend", "NodeWitness", "c.static-unit", 0)
+        if: unit_backend_origin != 0
+            unit_backend_middle: lm_test_registry_join_fact("origin.unit.backend", "middle.unit.backend", "NodeWitness")
+        if: unit_backend_middle != 0
+            unit_backend_target: lm_test_registry_join_fact("middle.unit.backend", "unit.backend", "NodeWitness")
+        unit_backend_unrelated: lm_test_registry_push_value_fact("unrelated.unit.backend", "NodeWitness", "c.static-unit", 0)
+        if: unit_payload_middle = 0 || unit_payload_target = 0 || unit_backend_origin = 0 || unit_backend_middle = 0 || unit_backend_target = 0 || unit_backend_unrelated = 0 || unit_payload_middle\source != node_origin || unit_payload_target\source != unit_payload_middle || unit_backend_middle\source != unit_backend_origin || unit_backend_target\source != unit_backend_middle || unit_backend_unrelated\source != 0
+            status: 1
+    ---
+
+    if: status = 0
+        unit_descriptor: lm_table_descriptor_new_empty_slice("unit", 4U)
+        if: unit_descriptor = 0 || lm_table_descriptor_add_column(unit_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(unit_descriptor, "backend", "class") != 0 || lm_table_descriptor_add_column(unit_descriptor, "payload", "node") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        unit_row: lm_table_row_new(0)
+        unit_key_cell: lm_table_cell_new_cstr("NodeWitness", "NodeWitness", 0, 0, 0)
+        unit_backend_cell: lm_table_cell_new_cstr("c.static-unit", "c.static-unit", 0, unit_backend_origin, 0)
+        unit_payload_cell: lm_table_cell_new_cstr("node-payload", 0, node_origin\payload_node, node_origin, 0)
+        if: unit_row = 0 || unit_key_cell = 0 || unit_backend_cell = 0 || unit_payload_cell = 0 || lm_table_row_take_cell(unit_row, unit_key_cell) != 0 || lm_table_row_take_cell(unit_row, unit_backend_cell) != 0 || lm_table_row_take_cell(unit_row, unit_payload_cell) != 0 || lm_table_descriptor_take_materialized_row(unit_descriptor, unit_row) != 0
+            status: 1
+        else:
+            unit_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, unit_descriptor) != 0
+                status: 1
+            else:
+                unit_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        unit_wrong_source_node: lm_test_registry_node_new("wrong-node-payload")
+        unit_wrong_payload_origin: lm_test_registry_push_node_fact("origin.wrong.unit.payload", "WrongSchemaWitness", unit_wrong_source_node, 0)
+        if: unit_wrong_payload_origin != 0
+            unit_wrong_payload_middle: lm_test_registry_join_fact("origin.wrong.unit.payload", "middle.wrong.unit.payload", "WrongSchemaWitness")
+        if: unit_wrong_payload_middle != 0
+            unit_wrong_payload_target: lm_test_registry_join_fact("middle.wrong.unit.payload", "unit.payload", "WrongSchemaWitness")
+        unit_wrong_backend_origin: lm_test_registry_push_value_fact("origin.wrong.unit.backend", "WrongSchemaWitness", "c.static-unit", 0)
+        if: unit_wrong_backend_origin != 0
+            unit_wrong_backend_middle: lm_test_registry_join_fact("origin.wrong.unit.backend", "middle.wrong.unit.backend", "WrongSchemaWitness")
+        if: unit_wrong_backend_middle != 0
+            unit_wrong_backend_target: lm_test_registry_join_fact("middle.wrong.unit.backend", "unit.backend", "WrongSchemaWitness")
+        if: unit_wrong_source_node = 0 || unit_wrong_payload_origin = 0 || unit_wrong_payload_middle = 0 || unit_wrong_payload_target = 0 || unit_wrong_backend_origin = 0 || unit_wrong_backend_middle = 0 || unit_wrong_backend_target = 0 || unit_wrong_payload_origin\payload_node = unit_wrong_source_node || unit_wrong_payload_middle\payload_node = unit_wrong_payload_origin\payload_node || unit_wrong_payload_target\payload_node = unit_wrong_payload_middle\payload_node || unit_wrong_payload_middle\source != unit_wrong_payload_origin || unit_wrong_payload_target\source != unit_wrong_payload_middle || unit_wrong_backend_middle\source != unit_wrong_backend_origin || unit_wrong_backend_target\source != unit_wrong_backend_middle
+            status: 1
+    ---
+
+    if: status = 0
+        unit_wrong_descriptor: lm_table_descriptor_new_empty_slice("unit", 4U)
+        if: unit_wrong_descriptor = 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "class", "char") != 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "backend", "char") != 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "payload", "node") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        unit_wrong_row: lm_table_row_new(0)
+        unit_wrong_key_cell: lm_table_cell_new_cstr("WrongSchemaWitness", "WrongSchemaWitness", 0, 0, 0)
+        unit_wrong_backend_cell: lm_table_cell_new_cstr("c.static-unit", "c.static-unit", 0, unit_wrong_backend_origin, 0)
+        unit_wrong_payload_cell: lm_table_cell_new_cstr("wrong-node-payload", 0, unit_wrong_payload_origin\payload_node, unit_wrong_payload_origin, 0)
+        if: unit_wrong_row = 0 || unit_wrong_key_cell = 0 || unit_wrong_backend_cell = 0 || unit_wrong_payload_cell = 0 || lm_table_row_take_cell(unit_wrong_row, unit_wrong_key_cell) != 0 || lm_table_row_take_cell(unit_wrong_row, unit_wrong_backend_cell) != 0 || lm_table_row_take_cell(unit_wrong_row, unit_wrong_payload_cell) != 0 || lm_table_descriptor_take_materialized_row(unit_wrong_descriptor, unit_wrong_row) != 0
+            status: 1
+        else:
+            unit_wrong_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, unit_wrong_descriptor) != 0
+                status: 1
+            else:
+                unit_wrong_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        unit_unrelated_backend_rows: lm_trans_ptr_stack_new(0)
+        unit_backend_rows: lm_trans_registry_relation_stack_for_table("unit.backend")
+        if: unit_unrelated_backend_rows = 0 || unit_backend_rows = 0 || lm_own_ptr_stack_push(unit_unrelated_backend_rows, unit_backend_unrelated) != 0
+            status: 1
+    ---
+
+    if: status = 0
         resolved_node_cell: lm_trans_registry_source_n2_cell(0, "target.node", "class", "body", node_target, 1, "class", "node", 0)
         resolved_node: lm_trans_registry_source_n2_node(0, "target.node", "class", "body", node_target)
         if: resolved_node_cell != node_value_cell || resolved_node != node_origin\payload_node || resolved_node = node_middle\payload_node || resolved_node = node_target\payload_node || lm_trans_registry_source_n2_cell(0, "target.node", "class", "body", node_unrelated, 1, "class", "node", 0) != 0 || lm_trans_registry_source_n2_node(0, "target.node", "class", "body", node_unrelated) = node_origin\payload_node || lm_trans_registry_assert_source_table_materialization() != 0
             status: 1
     ---
 
+    if: status = 0
+        resolved_unit_node: lm_trans_unit_source_payload_node(0, "NodeWitness", unit_backend_rows, unit_payload_target)
+        resolved_unit_wrong_node: lm_trans_unit_source_payload_node(0, "WrongSchemaWitness", unit_backend_rows, unit_wrong_payload_target)
+        if: resolved_unit_node != unit_payload_cell\node || resolved_unit_node = unit_payload_middle\payload_node || resolved_unit_node = unit_payload_target\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_backend_rows, node_unrelated) != node_unrelated\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_unrelated_backend_rows, unit_payload_target) != unit_payload_target\payload_node || resolved_unit_wrong_node != unit_wrong_payload_target\payload_node || resolved_unit_wrong_node = unit_wrong_payload_cell\node
+            status: 1
+    ---
+
+    lm_trans_ptr_stack_delete(@ unit_unrelated_backend_rows)
+    lm_table_row_delete_any(unit_wrong_row)
+    lm_table_descriptor_delete_any(unit_wrong_descriptor)
+    lm_table_row_delete_any(unit_row)
+    lm_table_descriptor_delete_any(unit_descriptor)
     lm_table_row_delete_any(node_row)
     lm_table_descriptor_delete_any(node_descriptor)
     lm_table_row_delete_any(layout_row)

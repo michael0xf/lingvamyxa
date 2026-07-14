@@ -114,6 +114,30 @@ L4:
                  lm_test_unit_backend_join     c.static-unit
                  lm_test_unit_split            c.static-unit
     end: `unit.backend`
+
+    table:
+        name: `lm.test.unit.joined.seed`
+        columns((class: class) (class: backend) (node: payload))
+        rows:
+                 lm_test_unit_joined  c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_unit_joined () int
+                             return: 25
+                         end: lm_test_unit_joined
+                     end: external
+                 end: L2
+    end: `lm.test.unit.joined.seed`
+
+    join: (`lm.test.unit.joined.seed`) `lm.test.unit.joined.middle`
+        columns((class: class) (class: backend) (node: payload))
+        rows:
+    end: `lm.test.unit.joined.middle`
+
+    join: (`lm.test.unit.joined.middle`) unit
+        columns((class: class) (class: backend) (node: payload))
+        rows:
+    end: unit
 end: L4
 
 unit
@@ -136,6 +160,8 @@ external:
             return: 7
         if: c.lm_test_unit_text_overlay() != 24
             return: 8
+        if: c.lm_test_unit_joined() != 25
+            return: 9
         return: 0
     end: main
 end: external
