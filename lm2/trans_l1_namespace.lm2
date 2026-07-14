@@ -1217,39 +1217,8 @@ fn: lm_trans_namespace_materialize_registry_receivers (LmTransNamespace: namespa
         i: i + 1U
 return: lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, "@", "receiver.statement")
 
-fn: lm_trans_namespace_materialize_registry_classes (LmTransNamespace: namespace_) int
-    LmP0Text: table_name
-    const: LmOwnPtrStack: rows
-    LmTransRegistryFact: row
-    size_t: i
-
-    if: namespace_ = 0
-        return: 1
-
-    table_name: lm_trans_text_from_cstr("class.present")
-    if: table_name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ table_name)
-
-    rows: lm_trans_namespace_registry_relation_stack(namespace_, table_name, "row")
-    if: rows = 0
-        return: 0
-
-    i: 0U
-    while: i < rows\count
-        row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(rows, i))
-        if: row != 0 && row\key != 0
-            if: lm_trans_registry_key_is_c_surface_name(row\key) = 0 && lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, row\key, "class") != 0
-                return: 1
-            ---
-        ---
-        i: i + 1U
-return: 0
-
 fn: lm_trans_namespace_materialize_registry_heads (LmTransNamespace: namespace_) int
-    if: lm_trans_namespace_materialize_registry_receivers(namespace_) != 0
-        return: 1
-return: lm_trans_namespace_materialize_registry_classes(namespace_)
+return: lm_trans_namespace_materialize_registry_receivers(namespace_)
 
 fn: lm_trans_namespace_attach_registry (LmTransNamespace: namespace_) int
     if: namespace_ = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0

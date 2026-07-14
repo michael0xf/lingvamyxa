@@ -2648,7 +2648,6 @@ static int lm_trans_namespace_declare_generated(LmTransNamespace *namespace_, co
 static int lm_trans_namespace_declare_visible_symbol_if_missing(LmTransNamespace *namespace_, const char *name, const char *kind);
 static int lm_trans_registry_key_is_c_surface_name(const char *name);
 static int lm_trans_namespace_materialize_registry_receivers(LmTransNamespace *namespace_);
-static int lm_trans_namespace_materialize_registry_classes(LmTransNamespace *namespace_);
 static int lm_trans_namespace_materialize_registry_heads(LmTransNamespace *namespace_);
 static int lm_trans_namespace_attach_registry(LmTransNamespace *namespace_);
 static int lm_trans_namespace_declare_c_name(LmTransNamespace *namespace_, const LmP0Text *name, const char *kind, const LmP0Text *c_name);
@@ -8762,52 +8761,8 @@ static int lm_trans_namespace_materialize_registry_receivers(LmTransNamespace *n
     }
 }
 
-static int lm_trans_namespace_materialize_registry_classes(LmTransNamespace *namespace_) {
-    LmP0Text * table_name;
-    const LmOwnPtrStack * rows;
-    LmTransRegistryFact * row;
-    size_t i;
-    if (namespace_ == 0) {
-        return 1;
-    }
-    table_name = lm_trans_text_from_cstr("class.present");
-    if (table_name == 0) {
-        return 1;
-    }
-    rows = lm_trans_namespace_registry_relation_stack(namespace_, table_name, "row");
-    if (rows == 0) {
-        {
-            int lm_return_0 = 0;
-            lm_trans_text_ref_destroy(&table_name);
-            return lm_return_0;
-        }
-    }
-    i = 0U;
-    while (i < rows -> count) {
-        row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i)));
-        if (row != 0 && row -> key != 0) {
-            if (lm_trans_registry_key_is_c_surface_name(row -> key) == 0 && lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, row -> key, "class") != 0) {
-                {
-                    int lm_return_1 = 1;
-                    lm_trans_text_ref_destroy(&table_name);
-                    return lm_return_1;
-                }
-            }
-        }
-        i = i + 1U;
-    }
-    {
-        int lm_return_2 = 0;
-        lm_trans_text_ref_destroy(&table_name);
-        return lm_return_2;
-    }
-}
-
 static int lm_trans_namespace_materialize_registry_heads(LmTransNamespace *namespace_) {
-    if (lm_trans_namespace_materialize_registry_receivers(namespace_) != 0) {
-        return 1;
-    }
-    return lm_trans_namespace_materialize_registry_classes(namespace_);
+    return lm_trans_namespace_materialize_registry_receivers(namespace_);
 }
 
 static int lm_trans_namespace_attach_registry(LmTransNamespace *namespace_) {
