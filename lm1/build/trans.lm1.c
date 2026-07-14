@@ -3488,6 +3488,7 @@ static int lm_trans_sort_layout_fields(LmTransLayoutField **fields, size_t field
 static int lm_trans_emit_layout_field(FILE *file, const LmTransLayoutField *field, const LmTransNamespace *namespace_, unsigned indent);
 static int lm_trans_emit_layout_fields(FILE *file, const char *layout_name, const LmTransNamespace *namespace_, unsigned indent);
 static int lm_trans_l4_mark_typedef_emitted_cstr(const char *name);
+static const char * lm_trans_registry_forward_view_backend(const LmTransNamespace *namespace_, const LmRegistryViewRow *view_row);
 static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_layout_typedefs(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_registry_collect_constant_define_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_);
@@ -3508,6 +3509,7 @@ static int lm_trans_emit_abi_params(FILE *file, LmTransAbiParam **params, size_t
 static int lm_trans_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const char *backend_payload, const LmTableCell *source_backend_cell);
 static const char * lm_trans_alias_source_target(const LmTransNamespace *namespace_, const char *name, const LmOwnPtrStack *facade_backend_rows, const LmTransRegistryFact *facade_target_row, const LmTransRegistryFact *facade_address_depth_row, const LmTransRegistryFact *facade_const_row, size_t *out_address_depth, size_t *out_const_flag);
 static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *namespace_);
+static int lm_trans_registry_collect_forward_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *backend_payload);
 static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_emit_abi_return_type(FILE *file, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name);
 static int lm_trans_emit_l4_prototype_name(FILE *file, const LmTransNamespace *namespace_, const char *name, const char *error_name);
@@ -31422,11 +31424,27 @@ static int lm_trans_l4_mark_typedef_emitted_cstr(const char *name) {
     return status;
 }
 
+static const char * lm_trans_registry_forward_view_backend(const LmTransNamespace *namespace_, const LmRegistryViewRow *view_row) {
+    LmTransRegistryFact * facade_row;
+    const char *backend;
+    if (view_row == 0 || view_row -> payload == 0) {
+        return 0;
+    }
+    backend = view_row -> payload;
+    facade_row = ((LmTransRegistryFact *)view_row -> source);
+    if (facade_row != 0 && facade_row -> payload != 0) {
+        backend = lm_trans_registry_source_path_n2_named_typed_value(namespace_, "forward.backend", "class", "class", "backend", "class", facade_row);
+    }
+    return backend;
+}
+
 static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, const LmTransNamespace *namespace_) {
     LmTransRegistryFact * backend_row;
     LmTransRegistryFact * forward_row;
     const LmOwnPtrStack * backend_rows;
     const LmOwnPtrStack * forward_rows;
+    const LmRegistryView * view;
+    const LmRegistryViewRow * forward_view_row;
     const char *backend;
     const char *forward_backend;
     const char *prefix;
@@ -31451,9 +31469,17 @@ static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, 
         lm_trans_l4_text_view_delete(&layout_text);
         return 1;
     }
-    forward_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend");
-    forward_row = lm_trans_registry_relation_stack_latest_row(forward_rows, layout_text);
-    forward_backend = lm_trans_registry_source_n2_value(namespace_, "forward.backend", "class", "backend", forward_row);
+    forward_backend = 0;
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view != 0) {
+        forward_view_row = lm_registry_view_lookup_exact(view, layout_name, "forward.backend");
+        forward_backend = lm_trans_registry_forward_view_backend(namespace_, forward_view_row);
+    }
+    else {
+        forward_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend");
+        forward_row = lm_trans_registry_relation_stack_latest_row(forward_rows, layout_text);
+        forward_backend = lm_trans_registry_source_path_n2_named_typed_value(namespace_, "forward.backend", "class", "class", "backend", "class", forward_row);
+    }
     has_forward = forward_backend != 0 && (strcmp(forward_backend, "c.struct") == 0 || strcmp(forward_backend, "c.union") == 0);
     prefix = 0;
     if (strcmp(backend, "c.struct") == 0) {
@@ -32340,10 +32366,47 @@ static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *n
     return 0;
 }
 
+static int lm_trans_registry_collect_forward_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *backend_payload) {
+    const LmRegistryView * view;
+    const LmRegistryViewRow * view_row;
+    const char *backend;
+    LmP0Text * key_text;
+    size_t row_count;
+    size_t i;
+    if (names == 0 || backend_payload == 0) {
+        return 1;
+    }
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view == 0) {
+        return lm_trans_registry_collect_backend_names(names, namespace_, "forward", backend_payload, "forward", 1);
+    }
+    key_text = lm_trans_l4_text_view_new("");
+    if (key_text == 0) {
+        return 1;
+    }
+    row_count = lm_registry_view_table_row_count(view, "forward.backend");
+    i = 0U;
+    while (i < row_count) {
+        view_row = lm_registry_view_table_row_at(view, "forward.backend", i);
+        backend = lm_trans_registry_forward_view_backend(namespace_, view_row);
+        if (view_row != 0 && view_row -> key != 0 && backend != 0 && strcmp(backend, backend_payload) == 0) {
+            if (lm_trans_registry_append_relation_name(names, namespace_, "forward", "backend", "forward", 1, key_text, view_row -> key) != 0) {
+                lm_trans_l4_text_view_delete(&key_text);
+                return 1;
+            }
+        }
+        i = i + 1U;
+    }
+    lm_trans_l4_text_view_delete(&key_text);
+    return 0;
+}
+
 static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace *namespace_) {
     LmOwnPtrStack * names;
     const LmOwnPtrStack * backend_rows;
     LmTransRegistryFact * backend_row;
+    const LmRegistryView * view;
+    const LmRegistryViewRow * backend_view_row;
     const char *name;
     const char *backend;
     const char *tag;
@@ -32352,25 +32415,38 @@ static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace 
     if (names == 0) {
         return 1;
     }
-    if (lm_trans_registry_collect_backend_names(names, namespace_, "forward", "c.struct", "forward", 1) != 0) {
+    if (lm_trans_registry_collect_forward_backend_names(names, namespace_, "c.struct") != 0) {
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    if (lm_trans_registry_collect_backend_names(names, namespace_, "forward", "c.union", "forward", 1) != 0) {
+    if (lm_trans_registry_collect_forward_backend_names(names, namespace_, "c.union") != 0) {
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend");
+    view = lm_trans_namespace_registry_view(namespace_);
+    backend_rows = 0;
+    if (view == 0) {
+        backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend");
+    }
     i = 0U;
     while (i < names -> count) {
         name = lm_own_ptr_stack_at(names, i);
-        backend_row = lm_trans_registry_relation_stack_latest_row(backend_rows, lm_trans_text_from_cstr(name));
-        if (backend_row == 0 || backend_row -> payload == 0) {
+        backend = 0;
+        if (view != 0) {
+            backend_view_row = lm_registry_view_lookup_exact(view, name, "forward.backend");
+            backend = lm_trans_registry_forward_view_backend(namespace_, backend_view_row);
+        }
+        else {
+            backend_row = lm_trans_registry_relation_stack_latest_row(backend_rows, lm_trans_text_from_cstr(name));
+            if (backend_row != 0 && backend_row -> payload != 0) {
+                backend = lm_trans_registry_source_path_n2_named_typed_value(namespace_, "forward.backend", "class", "class", "backend", "class", backend_row);
+            }
+        }
+        if (backend == 0) {
             fprintf(stderr, "trans L4 forward error: %s requires forward.backend\n", name);
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
-        backend = lm_trans_registry_source_n2_value(namespace_, "forward.backend", "class", "backend", backend_row);
         if (backend != 0 && strcmp(backend, "c.struct") == 0) {
             tag = "struct";
         }

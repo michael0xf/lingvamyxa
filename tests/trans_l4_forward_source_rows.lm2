@@ -36,12 +36,62 @@ L4:
     end: `forward.backend`
 
     table:
+        name: forward
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+                 LmTestForwardWideStruct          c.struct  1
+                 LmTestForwardWideUnion           c.union   2
+                 LmTestForwardWideDuplicate       c.struct  3
+                 LmTestForwardWideDuplicate       c.union   4
+                 LmTestForwardWideLateNone        c.struct  5
+                 LmTestForwardWideLateNone        None      6
+                 LmTestForwardWideAfterOther      c.other   7
+                 LmTestForwardWideAfterOther      c.struct  8
+                 LmTestForwardWideOtherOnly       c.other   9
+                 LmTestForwardWideBackendOverlay  c.struct  10
+                 LmTestForwardWideLayout          c.struct  11
+                 LmTestForwardWideNone            None      12
+    end: forward
+
+    table:
+        name: `forward.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestForwardWideBackendOverlay  c.union
+                 LmTestForwardWidePhysical        c.struct
+    end: `forward.backend`
+
+    table:
+        name: `lm.test.forward.wide.seed`
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+                 LmTestForwardWideJoined  c.struct  13
+    end: `lm.test.forward.wide.seed`
+
+    join: (`lm.test.forward.wide.seed`) forward
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+    end: forward
+
+    table:
+        name: forward
+        columns((class: class) (@: char backend) (int: marker))
+        rows:
+                 LmTestForwardWideSchemaFallback  "c.struct"  14
+    end: forward
+
+    table:
         name: `layout.backend`
         columns((class: class) (class: backend))
         rows:
                  LmTestForwardLayout  c.struct
                  LmTestForwardJoined  c.struct
                  LmTestForwardSchemaFallback  c.struct
+                 LmTestForwardWideLayout          c.struct
+                 LmTestForwardWideBackendOverlay  c.union
+                 LmTestForwardWidePhysical        c.struct
+                 LmTestForwardWideJoined          c.struct
+                 LmTestForwardWideSchemaFallback  c.struct
     end: `layout.backend`
 
     table:
@@ -64,6 +114,41 @@ L4:
         rows:
                  value  int  0
     end: LmTestForwardSchemaFallback
+
+    table:
+        name: LmTestForwardWideLayout
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardWideLayout
+
+    table:
+        name: LmTestForwardWideBackendOverlay
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardWideBackendOverlay
+
+    table:
+        name: LmTestForwardWidePhysical
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardWidePhysical
+
+    table:
+        name: LmTestForwardWideJoined
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardWideJoined
+
+    table:
+        name: LmTestForwardWideSchemaFallback
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 value  int  0
+    end: LmTestForwardWideSchemaFallback
 end: L4
 
 forward
@@ -86,13 +171,43 @@ extern struct LmTestForwardJoined *lm_test_forward_joined_type;
 extern LmTestForwardSchemaFallback *lm_test_forward_schema_fallback_type;
 extern struct LmTestForwardSchemaFallback *lm_test_forward_schema_fallback_type;
 typedef int LmTestForwardNone;
+extern LmTestForwardWideStruct *lm_test_forward_wide_struct_type;
+extern struct LmTestForwardWideStruct *lm_test_forward_wide_struct_type;
+extern LmTestForwardWideUnion *lm_test_forward_wide_union_type;
+extern union LmTestForwardWideUnion *lm_test_forward_wide_union_type;
+extern LmTestForwardWideDuplicate *lm_test_forward_wide_duplicate_type;
+extern union LmTestForwardWideDuplicate *lm_test_forward_wide_duplicate_type;
+extern LmTestForwardWideLateNone *lm_test_forward_wide_late_none_type;
+extern struct LmTestForwardWideLateNone *lm_test_forward_wide_late_none_type;
+extern LmTestForwardWideAfterOther *lm_test_forward_wide_after_other_type;
+extern struct LmTestForwardWideAfterOther *lm_test_forward_wide_after_other_type;
+extern LmTestForwardWideBackendOverlay *lm_test_forward_wide_backend_overlay_type;
+extern union LmTestForwardWideBackendOverlay *lm_test_forward_wide_backend_overlay_type;
+extern LmTestForwardWidePhysical *lm_test_forward_wide_physical_type;
+extern struct LmTestForwardWidePhysical *lm_test_forward_wide_physical_type;
+extern LmTestForwardWideJoined *lm_test_forward_wide_joined_type;
+extern struct LmTestForwardWideJoined *lm_test_forward_wide_joined_type;
+extern LmTestForwardWideSchemaFallback *lm_test_forward_wide_schema_fallback_type;
+extern struct LmTestForwardWideSchemaFallback *lm_test_forward_wide_schema_fallback_type;
+typedef int LmTestForwardWideOtherOnly;
+typedef int LmTestForwardWideNone;
 
 static int lm_test_forward_source_rows(void) {
     LmTestForwardLayout value = { 17 };
     LmTestForwardJoined joined = { 19 };
     LmTestForwardSchemaFallback fallback = { 21 };
+    LmTestForwardWideLayout wide = { 23 };
+    LmTestForwardWideBackendOverlay wide_overlay = { 25 };
+    LmTestForwardWidePhysical wide_physical = { 27 };
+    LmTestForwardWideJoined wide_joined = { 29 };
+    LmTestForwardWideSchemaFallback wide_fallback = { 31 };
+    LmTestForwardWideOtherOnly wide_other = 33;
+    LmTestForwardWideNone wide_none = 35;
     LmTestForwardNone absent = 23;
-    return value.value != 17 || joined.value != 19 || fallback.value != 21 || absent != 23;
+    return value.value != 17 || joined.value != 19 || fallback.value != 21 ||
+           wide.value != 23 || wide_overlay.value != 25 || wide_physical.value != 27 ||
+           wide_joined.value != 29 || wide_fallback.value != 31 || wide_other != 33 ||
+           wide_none != 35 || absent != 23;
 }
 ===
 
