@@ -1169,6 +1169,7 @@ fn: lm_trans_registry_source_path_typed_cell (
     const: @(char key_column_name)
     const: @(char key_descriptor)
     const: @(char value_descriptor)
+    const: @(char n2_value_column_name)
     const: (LmTransRegistryFact: facade_row)
 ) const: LmTableCell
     const: LmTableDescriptor: source_table
@@ -1210,6 +1211,8 @@ fn: lm_trans_registry_source_path_typed_cell (
             while: column_index < column_count
                 source_value_column: lm_table_descriptor_column_at(source_table, column_index)
                 column_usable: lm_table_descriptor_source_path_column_matches(source_table, column_index, source_path, source_path_length) != 0 && source_value_column != 0 && lm_table_column_descriptor_descriptor_count(source_value_column) = 1U
+                if: column_usable != 0 && column_count = 2U && n2_value_column_name != 0
+                    column_usable: source_value_column\name != 0 && c.strcmp(source_value_column\name, n2_value_column_name) = 0
                 if: column_usable != 0
                     source_descriptor: lm_table_column_descriptor_descriptor_at(source_value_column, 0U)
                     column_usable: source_descriptor != 0 && c.strcmp(source_descriptor, value_descriptor) = 0
@@ -1242,7 +1245,25 @@ fn: lm_trans_registry_source_path_typed_value (
 
     if: facade_row = 0 || facade_row\key = 0 || facade_row\payload = 0
         return: 0
-    source_cell: lm_trans_registry_source_path_typed_cell(namespace_, source_path, key_column_name, key_descriptor, value_descriptor, facade_row)
+    source_cell: lm_trans_registry_source_path_typed_cell(namespace_, source_path, key_column_name, key_descriptor, value_descriptor, 0, facade_row)
+    if: source_cell != 0 && lm_trans_registry_view_is_selected() != 0
+        return: source_cell\value
+return: facade_row\payload
+
+fn: lm_trans_registry_source_path_n2_named_typed_value (
+    const: (LmTransNamespace: namespace_)
+    const: @(char source_path)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char n2_value_column_name)
+    const: @(char value_descriptor)
+    const: (LmTransRegistryFact: facade_row)
+) const: @: char
+    const: LmTableCell: source_cell
+
+    if: facade_row = 0 || facade_row\key = 0 || facade_row\payload = 0 || n2_value_column_name = 0
+        return: 0
+    source_cell: lm_trans_registry_source_path_typed_cell(namespace_, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row)
     if: source_cell != 0 && lm_trans_registry_view_is_selected() != 0
         return: source_cell\value
 return: facade_row\payload

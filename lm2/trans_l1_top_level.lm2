@@ -3520,23 +3520,35 @@ fn: lm_trans_emit_l1_include_target_text (FILE: output; const: @(char data); siz
         return: 1
 return: lm_trans_put(output, "\n")
 
-fn: lm_trans_registry_include_view_target (const: (LmTransNamespace: namespace_); const: (LmRegistryViewRow: view_row)) const: @: char
+fn: lm_trans_namespace_registry_include_view (const: (LmTransNamespace: namespace_)) const: LmRegistryView
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
+        return: 0
+    if: namespace_ != 0 && namespace_\registry_view != 0
+        return: namespace_\registry_view
+    if: c.lm_trans_registry != 0
+        return: c.lm_trans_registry->view
+return: 0
+
+fn: lm_trans_registry_include_view_target (
+    const: (LmTransNamespace: namespace_)
+    const: (LmRegistryViewRow: view_row)
+    const: @(char source_path)
+    int: direct_n2
+) const: @: char
     LmTransRegistryFact: facade_row
     const: @: char target
 
-    if: view_row = 0 || view_row\table = 0 || view_row\payload = 0
+    if: view_row = 0 || view_row\table = 0 || view_row\payload = 0 || source_path = 0
         return: 0
     facade_row: cast: (LmTransRegistryFact) view_row\source
     if: facade_row = 0 || facade_row\payload = 0
         return: view_row\payload
 
     target: 0
-    if: c.strcmp(view_row\table, "include") = 0
-        target: lm_trans_registry_source_n2_typed_value(namespace_, "include", "class", "class", "target", "char", facade_row)
+    if: direct_n2
+        target: lm_trans_registry_source_n2_typed_value(namespace_, source_path, "class", "class", "target", "char", facade_row)
     else:
-        if: c.strcmp(view_row\table, "include.target") = 0
-            target: lm_trans_registry_source_path_typed_value(namespace_, "include.target", "class", "class", "char", facade_row)
-        ---
+        target: lm_trans_registry_source_path_n2_named_typed_value(namespace_, source_path, "class", "class", "target", "char", facade_row)
     ---
     if: target != 0
         return: target
@@ -3551,20 +3563,9 @@ fn: lm_trans_emit_registry_include_table (FILE: output; const: (LmTransNamespace
     const: LmRegistryViewRow: view_row
     const: @: char target
     int: emitted
-    int: private_registry
 
     emitted: 0
-    private_registry: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
-    view: 0
-    if: private_registry = 0
-        if: namespace_ != 0 && namespace_\registry_view != 0
-            view: namespace_\registry_view
-        else:
-            if: c.lm_trans_registry != 0
-                view: c.lm_trans_registry->view
-            ---
-        ---
-    ---
+    view: lm_trans_namespace_registry_include_view(namespace_)
 
     if: view != 0
         fact_count: lm_registry_view_fact_count(view)
@@ -3572,7 +3573,11 @@ fn: lm_trans_emit_registry_include_table (FILE: output; const: (LmTransNamespace
         while: i < fact_count
             view_row: lm_registry_view_fact_at(view, i)
             if: view_row != 0 && view_row\table != 0 && view_row\payload != 0 && (c.strcmp(view_row\table, "include") = 0 || c.strcmp(view_row\table, "include.target") = 0)
-                target: lm_trans_registry_include_view_target(namespace_, view_row)
+                if: c.strcmp(view_row\table, "include") = 0
+                    target: lm_trans_registry_include_view_target(namespace_, view_row, "include", 1)
+                else:
+                    target: lm_trans_registry_include_view_target(namespace_, view_row, "include.target", 0)
+                ---
                 if: target != 0 && lm_trans_emit_l1_include_target_text(output, target, c.strlen(target)) != 0
                     return: 1
                 if: target != 0
@@ -3607,12 +3612,34 @@ return: 1
 
 fn: lm_trans_emit_core_include_table (FILE: output; const: (LmTransNamespace: namespace_); @: int out_emitted) int
     size_t: i
+    size_t: fact_count
     LmTransRegistryFact: row
     const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
     const: @: char target
     int: emitted
 
     emitted: 0
+    view: lm_trans_namespace_registry_include_view(namespace_)
+    if: view != 0
+        fact_count: lm_registry_view_fact_count(view)
+        i: 0U
+        while: i < fact_count
+            view_row: lm_registry_view_fact_at(view, i)
+            if: view_row != 0 && view_row\table != 0 && view_row\payload != 0 && c.strcmp(view_row\table, "core.c.include") = 0
+                target: lm_trans_registry_include_view_target(namespace_, view_row, "core.c.include", 0)
+                if: target != 0 && lm_trans_emit_l1_include_target_text(output, target, c.strlen(target)) != 0
+                    return: 1
+                if: target != 0
+                    emitted: 1
+            ---
+            i: i + 1U
+        if: emitted && out_emitted != 0
+            out_emitted[0]: 1
+        return: 0
+    ---
+
     rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("core"), "c.include")
     if: rows = 0
         return: 0
