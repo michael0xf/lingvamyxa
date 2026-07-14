@@ -1,0 +1,157 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_generated_owner_metadata_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_generated_owner_metadata_descriptor (const: @(char name)) const: LmTableDescriptor
+    const: LmTableDescriptor: descriptor
+    size_t: i
+
+    if: name = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0
+        return: 0
+    i: 0U
+    while: i < lm_registry_view_source_table_count(lm_trans_registry\view)
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, i)
+        if: descriptor != 0 && descriptor\name != 0 && c.strcmp(descriptor\name, name) = 0
+            return: descriptor
+        i: i + 1U
+return: 0
+
+fn: lm_test_generated_owner_metadata_value (size_t: index; const: (LmP0Text: owner)) const: @: char
+    if: index = 0U
+        return: lm_trans_namespace_class_kind_value(0, owner)
+    if: index = 1U
+        return: lm_trans_namespace_class_reference_base_value(0, owner)
+return: lm_trans_layout_backend_value(0, owner)
+
+fn: lm_test_generated_owner_metadata_source_rows_core () int
+    const: [3]: @: char table_names
+    const: [3]: @: char value_column_names
+    const: [3]: @: char value_descriptors
+    const: [3]: @: char expected_payloads
+    const: LmRegistryViewRow: view_row
+    const: LmRegistryViewRow: owner_present_view_row
+    const: LmRegistryViewRow: kind_present_view_row
+    LmTransRegistryFact: fact
+    LmTransRegistryFact: owner_present_fact
+    LmTransRegistryFact: kind_present_fact
+    const: LmTableDescriptor: descriptor
+    const: LmTableColumnDescriptor: key_column
+    const: LmTableColumnDescriptor: value_column
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+    LmP0Text: owner
+    LmP0Text: query_owner
+    const: @: char selected_value
+    const: @: char generic_value
+    size_t: i
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    table_names[0]: "class.kind"
+    table_names[1]: "class.reference-base"
+    table_names[2]: "layout.backend"
+    value_column_names[0]: "kind"
+    value_column_names[1]: "value"
+    value_column_names[2]: "backend"
+    value_descriptors[0]: "class"
+    value_descriptors[1]: "int"
+    value_descriptors[2]: "class"
+    expected_payloads[0]: "layout"
+    expected_payloads[1]: "1"
+    expected_payloads[2]: "c.struct"
+
+    owner: lm_trans_text_from_cstr("`LmGeneratedOwnerMetadata`")
+    query_owner: lm_trans_text_from_cstr("LmGeneratedOwnerMetadata")
+    status: 0
+    if: owner = 0 || query_owner = 0
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_note_class_kind(owner, "None") != 0 || lm_trans_registry_note_layout_backend(owner, "None") != 0 || lm_trans_registry_note_layout_backend(owner, 0) != 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 0U || lm_registry_view_fact_count(lm_trans_registry\view) != 0U || lm_registry_view_source_table_count(lm_trans_registry\view) != 0U)
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_note_class_kind(owner, "'layout'") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_note_layout_backend(owner, "\"c.struct\"") != 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 5U || lm_registry_view_fact_count(lm_trans_registry\view) != 5U || lm_registry_view_source_table_count(lm_trans_registry\view) != 3U)
+        status: 1
+
+    owner_present_view_row: lm_registry_view_lookup_exact(lm_trans_registry\view, "LmGeneratedOwnerMetadata", "class.present")
+    kind_present_view_row: lm_registry_view_lookup_exact(lm_trans_registry\view, "layout", "class.present")
+    owner_present_fact: 0
+    kind_present_fact: 0
+    if: owner_present_view_row != 0
+        owner_present_fact: cast: (LmTransRegistryFact) owner_present_view_row\source
+    if: kind_present_view_row != 0
+        kind_present_fact: cast: (LmTransRegistryFact) kind_present_view_row\source
+    if: status = 0 && (owner_present_fact = 0 || owner_present_fact\table = 0 || c.strcmp(owner_present_fact\table, "class.present") != 0 || owner_present_fact\key = 0 || c.strcmp(owner_present_fact\key, "LmGeneratedOwnerMetadata") != 0 || owner_present_fact\payload = 0 || c.strcmp(owner_present_fact\payload, "class") != 0 || owner_present_fact\payload_node != 0 || owner_present_fact\source != 0 || kind_present_fact = 0 || kind_present_fact\table = 0 || c.strcmp(kind_present_fact\table, "class.present") != 0 || kind_present_fact\key = 0 || c.strcmp(kind_present_fact\key, "layout") != 0 || kind_present_fact\payload = 0 || c.strcmp(kind_present_fact\payload, "class") != 0 || kind_present_fact\payload_node != 0 || kind_present_fact\source != 0)
+        status: 1
+
+    i: 0U
+    while: status = 0 && i < 3U
+        view_row: lm_registry_view_lookup_exact(lm_trans_registry\view, "LmGeneratedOwnerMetadata", table_names[i])
+        fact: 0
+        if: view_row != 0
+            fact: cast: (LmTransRegistryFact) view_row\source
+        descriptor: lm_test_generated_owner_metadata_descriptor(table_names[i])
+        key_column: lm_table_descriptor_column_at(descriptor, 0U)
+        value_column: lm_table_descriptor_column_at(descriptor, 1U)
+        row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+        key_cell: lm_table_row_cell_at(row, 0U)
+        value_cell: lm_table_row_cell_at(row, 1U)
+
+        if: fact = 0 || fact\table = 0 || c.strcmp(fact\table, table_names[i]) != 0 || fact\key = 0 || c.strcmp(fact\key, "LmGeneratedOwnerMetadata") != 0 || fact\payload = 0 || c.strcmp(fact\payload, expected_payloads[i]) != 0 || fact\payload_node != 0 || fact\source != 0
+            status: 1
+        if: descriptor = 0 || descriptor\name = 0 || c.strcmp(descriptor\name, table_names[i]) != 0 || lm_table_descriptor_column_count(descriptor) != 2U || lm_table_descriptor_materialized_row_count(descriptor) != 1U
+            status: 1
+        if: key_column = 0 || key_column\name = 0 || key_column\type_name = 0 || c.strcmp(key_column\name, "class") != 0 || c.strcmp(key_column\type_name, "class") != 0 || lm_table_column_descriptor_descriptor_count(key_column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(key_column, 0U), "class") != 0
+            status: 1
+        if: value_column = 0 || value_column\name = 0 || value_column\type_name = 0 || c.strcmp(value_column\name, value_column_names[i]) != 0 || c.strcmp(value_column\type_name, value_descriptors[i]) != 0 || lm_table_column_descriptor_descriptor_count(value_column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(value_column, 0U), value_descriptors[i]) != 0
+            status: 1
+        if: row = 0 || row\source != 0 || row\local_sequence != 0U || lm_table_row_cell_count(row) != 2U || key_cell = 0 || key_cell\atom = 0 || key_cell\value = 0 || c.strcmp(key_cell\atom, "LmGeneratedOwnerMetadata") != 0 || c.strcmp(key_cell\value, "LmGeneratedOwnerMetadata") != 0 || key_cell\atom = key_cell\value || key_cell\atom = fact\key || key_cell\value = fact\key || key_cell\source != 0 || key_cell\node != 0 || key_cell\explicit_none != 0 || value_cell = 0 || value_cell\atom = 0 || value_cell\value = 0 || c.strcmp(value_cell\atom, expected_payloads[i]) != 0 || c.strcmp(value_cell\value, expected_payloads[i]) != 0 || value_cell\atom = value_cell\value || value_cell\atom = fact\payload || value_cell\value = fact\payload || value_cell\source != fact || value_cell\node != 0 || value_cell\explicit_none != 0
+            status: 1
+
+        lm_trans_registry\view_mode: 0
+        selected_value: lm_test_generated_owner_metadata_value(i, query_owner)
+        generic_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, query_owner, table_names[i], "class", "class", value_column_names[i], value_descriptors[i])
+        if: selected_value != fact\payload || generic_value != fact\payload
+            status: 1
+        lm_trans_registry\view_mode: 1
+        selected_value: lm_test_generated_owner_metadata_value(i, query_owner)
+        generic_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, query_owner, table_names[i], "class", "class", value_column_names[i], value_descriptors[i])
+        if: selected_value != fact\payload || generic_value != fact\payload
+            status: 1
+        lm_trans_registry\view_mode: 2
+        selected_value: lm_test_generated_owner_metadata_value(i, query_owner)
+        generic_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, query_owner, table_names[i], "class", "class", value_column_names[i], value_descriptors[i])
+        if: selected_value != value_cell\value || selected_value = fact\payload || generic_value != value_cell\value || generic_value = fact\payload
+            status: 1
+        i: i + 1U
+
+    if: status = 0 && (lm_trans_namespace_class_is_reference_base(0, query_owner) = 0 || lm_trans_class_is_reference_base(query_owner) = 0 || lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ query_owner)
+    lm_trans_text_ref_destroy(@ owner)
+    lm_trans_registry_destroy()
+return: status

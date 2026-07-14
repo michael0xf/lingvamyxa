@@ -2489,6 +2489,7 @@ static int lm_trans_registry_cell_value(const LmP0Text *atom, const LmL4Column *
 static int lm_trans_registry_push_table_cell(const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node, int allow_node_cells);
 static int lm_trans_registry_note_class_kind(const LmP0Text *name, const char *kind);
 static int lm_trans_registry_note_class_reference_base(const LmP0Text *name);
+static int lm_trans_registry_note_layout_backend(const LmP0Text *name, const char *backend);
 static int lm_trans_registry_note_class_present(const LmP0Text *name);
 static LmTransRegistryFact * lm_trans_registry_lookup_row_in_identifiers(const LmTransIdentifierTable *identifiers, const LmP0Text *key, const char *table);
 static LmTransRegistryFact * lm_trans_registry_lookup_default_row_in_identifiers(const LmTransIdentifierTable *identifiers, const char *table);
@@ -6129,7 +6130,7 @@ static int lm_trans_registry_note_class_kind(const LmP0Text *name, const char *k
         lm_trans_text_ref_destroy(&payload);
         return 1;
     }
-    status = lm_trans_registry_push_row_atoms(table, name, payload) != 0;
+    status = lm_trans_registry_push_generated_source_n2_row_atoms(table, name, payload, "class", "class", "kind", "class") != 0;
     lm_trans_text_ref_destroy(&table);
     lm_trans_text_ref_destroy(&payload);
     return status;
@@ -6146,7 +6147,27 @@ static int lm_trans_registry_note_class_reference_base(const LmP0Text *name) {
         lm_trans_text_ref_destroy(&payload);
         return 1;
     }
-    status = lm_trans_registry_push_row_atoms(table, name, payload) != 0;
+    status = lm_trans_registry_push_generated_source_n2_row_atoms(table, name, payload, "class", "class", "value", "int") != 0;
+    lm_trans_text_ref_destroy(&table);
+    lm_trans_text_ref_destroy(&payload);
+    return status;
+}
+
+static int lm_trans_registry_note_layout_backend(const LmP0Text *name, const char *backend) {
+    LmP0Text * table;
+    LmP0Text * payload;
+    int status;
+    if (backend == 0) {
+        return 0;
+    }
+    table = lm_trans_text_from_cstr("layout.backend");
+    payload = lm_trans_text_from_cstr(backend);
+    if (table == 0 || payload == 0) {
+        lm_trans_text_ref_destroy(&table);
+        lm_trans_text_ref_destroy(&payload);
+        return 1;
+    }
+    status = lm_trans_registry_push_generated_source_n2_row_atoms(table, name, payload, "class", "class", "backend", "class") != 0;
     lm_trans_text_ref_destroy(&table);
     lm_trans_text_ref_destroy(&payload);
     return status;
@@ -20659,8 +20680,6 @@ static int lm_trans_named_structure_push_relation(const LmP0Text *owner, const c
 
 static int lm_trans_declare_named_structure_owner(LmTransNamespace *namespace_, const LmP0Text *owner) {
     LmP0Text * storage_name;
-    LmP0Text * layout_backend_table;
-    LmP0Text * backend_payload;
     char *storage_name_text;
     int status;
     if (namespace_ == 0 || owner == 0) {
@@ -20678,33 +20697,12 @@ static int lm_trans_declare_named_structure_owner(LmTransNamespace *namespace_, 
             return lm_return_0;
         }
     }
-    layout_backend_table = lm_trans_text_from_cstr("layout.backend");
-    if (layout_backend_table == 0) {
-        {
-            int lm_return_1 = 1;
-            lm_trans_text_ref_destroy(&storage_name);
-            lm_own_delete(storage_name_text, 0);
-            return lm_return_1;
-        }
-    }
-    backend_payload = lm_trans_text_from_cstr("c.struct");
-    if (backend_payload == 0) {
-        {
-            int lm_return_2 = 1;
-            lm_trans_text_ref_destroy(&layout_backend_table);
-            lm_trans_text_ref_destroy(&storage_name);
-            lm_own_delete(storage_name_text, 0);
-            return lm_return_2;
-        }
-    }
-    status = lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, owner, backend_payload) != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0;
+    status = lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_note_layout_backend(owner, "c.struct") != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0;
     {
-        int lm_return_3 = status != 0;
-        lm_trans_text_ref_destroy(&backend_payload);
-        lm_trans_text_ref_destroy(&layout_backend_table);
+        int lm_return_1 = status != 0;
         lm_trans_text_ref_destroy(&storage_name);
         lm_own_delete(storage_name_text, 0);
-        return lm_return_3;
+        return lm_return_1;
     }
 }
 
@@ -21863,33 +21861,19 @@ static char * lm_trans_l2_table_storage_name_new(const LmP0Text *table_name) {
 }
 
 static int lm_trans_l2_table_note_row_layout(LmTransNamespace *namespace_, const LmP0Text *row_type, LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count) {
-    LmP0Text * layout_backend_table;
-    LmP0Text * backend_payload;
     size_t index;
     int status;
     LM_UNUSED(namespace_);
     if (row_type == 0 || column_types == 0 || column_names == 0) {
         return 1;
     }
-    layout_backend_table = lm_trans_text_from_cstr("layout.backend");
-    backend_payload = lm_trans_text_from_cstr("c.struct");
-    if (layout_backend_table == 0 || backend_payload == 0) {
-        lm_trans_text_ref_destroy(&layout_backend_table);
-        lm_trans_text_ref_destroy(&backend_payload);
-        return 1;
-    }
-    status = lm_trans_registry_note_class_present(row_type) != 0 || lm_trans_registry_note_class_kind(row_type, "layout") != 0 || lm_trans_registry_note_class_reference_base(row_type) != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, row_type, backend_payload) != 0;
+    status = lm_trans_registry_note_class_present(row_type) != 0 || lm_trans_registry_note_class_kind(row_type, "layout") != 0 || lm_trans_registry_note_class_reference_base(row_type) != 0 || lm_trans_registry_note_layout_backend(row_type, "c.struct") != 0;
     index = 0U;
     while (status == 0 && index < column_count) {
         status = lm_trans_named_structure_push_field_relations(row_type, column_names[index], column_types[index], index);
         index = index + 1U;
     }
-    {
-        int lm_return_0 = status != 0;
-        lm_trans_text_ref_destroy(&layout_backend_table);
-        lm_trans_text_ref_destroy(&backend_payload);
-        return lm_return_0;
-    }
+    return status != 0;
 }
 
 static int lm_trans_declare_l2_table(LmTransNamespace *namespace_, const LmP0Frame *frame) {
@@ -33932,6 +33916,10 @@ static int lm_trans_registry_push_generated_source_n2_row_values(const LmP0Text 
     if (lm_trans_registry_push_row_values(table_value, key_value, payload_value) != 0) {
         return 1;
     }
+    if (lm_trans_registry->loaded_fact_count <= fact_index) {
+        return 1;
+    }
+    fact_index = lm_trans_registry->loaded_fact_count - 1U;
     view_row = lm_registry_view_fact_at(lm_trans_registry->view, fact_index);
     if (view_row == 0 || view_row -> source == 0) {
         return 1;

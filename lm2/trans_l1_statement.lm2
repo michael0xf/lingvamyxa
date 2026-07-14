@@ -3207,8 +3207,6 @@ fn: lm_trans_declare_named_structure_owner (
     const: LmP0Text: owner
 ) int
     LmP0Text: storage_name
-    LmP0Text: layout_backend_table
-    LmP0Text: backend_payload
     @: char storage_name_text
     int: status
 
@@ -3225,17 +3223,7 @@ fn: lm_trans_declare_named_structure_owner (
         return: 1
     finally: lm_trans_text_ref_destroy(@ storage_name)
 
-    layout_backend_table: lm_trans_text_from_cstr("layout.backend")
-    if: layout_backend_table = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ layout_backend_table)
-
-    backend_payload: lm_trans_text_from_cstr("c.struct")
-    if: backend_payload = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ backend_payload)
-
-    status: lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, owner, backend_payload) != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0
+    status: lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_note_layout_backend(owner, "c.struct") != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0
 return: status != 0
 
 fn: lm_trans_named_structure_push_field_relations (
@@ -4127,8 +4115,6 @@ fn: lm_trans_l2_table_note_row_layout (
     @: LmP0Text column_names
     size_t: column_count
 ) int
-    LmP0Text: layout_backend_table
-    LmP0Text: backend_payload
     size_t: index
     int: status
 
@@ -4136,17 +4122,7 @@ fn: lm_trans_l2_table_note_row_layout (
     if: row_type = 0 || column_types = 0 || column_names = 0
         return: 1
 
-    layout_backend_table: lm_trans_text_from_cstr("layout.backend")
-    backend_payload: lm_trans_text_from_cstr("c.struct")
-    if: layout_backend_table = 0 || backend_payload = 0
-        lm_trans_text_ref_destroy(@ layout_backend_table)
-        lm_trans_text_ref_destroy(@ backend_payload)
-        return: 1
-    finally:
-        lm_trans_text_ref_destroy(@ layout_backend_table)
-        lm_trans_text_ref_destroy(@ backend_payload)
-
-    status: lm_trans_registry_note_class_present(row_type) != 0 || lm_trans_registry_note_class_kind(row_type, "layout") != 0 || lm_trans_registry_note_class_reference_base(row_type) != 0 || lm_trans_registry_push_row_atoms(layout_backend_table, row_type, backend_payload) != 0
+    status: lm_trans_registry_note_class_present(row_type) != 0 || lm_trans_registry_note_class_kind(row_type, "layout") != 0 || lm_trans_registry_note_class_reference_base(row_type) != 0 || lm_trans_registry_note_layout_backend(row_type, "c.struct") != 0
     index: 0U
     while: status = 0 && index < column_count
         status: lm_trans_named_structure_push_field_relations(row_type, column_names[index], column_types[index], index)

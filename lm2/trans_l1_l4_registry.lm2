@@ -2466,6 +2466,9 @@ fn: lm_trans_registry_push_generated_source_n2_row_values (
     fact_index: c.lm_trans_registry->loaded_fact_count
     if: lm_trans_registry_push_row_values(table_value, key_value, payload_value) != 0
         return: 1
+    if: c.lm_trans_registry->loaded_fact_count <= fact_index
+        return: 1
+    fact_index: c.lm_trans_registry->loaded_fact_count - 1U
     view_row: lm_registry_view_fact_at(c.lm_trans_registry->view, fact_index)
     if: view_row = 0 || view_row\source = 0
         return: 1
