@@ -885,7 +885,8 @@ fn: lm_test_registry_join_provenance_core () int
     if: status = 0
         cast_target_key_text: lm_trans_text_from_cstr("CastWide")
         resolved_cast_target: lm_trans_cast_target_value(0, cast_target_key_text)
-        if: cast_target_key_text = 0 || resolved_cast_target != cast_target_value_cell\value || resolved_cast_target = cast_target_middle\payload || resolved_cast_target = cast_target_target\payload
+        resolved_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "cast.target", "class", "class", 0, "value", cast_target_target, 1, 0, 0)
+        if: cast_target_key_text = 0 || resolved_cast_target != cast_target_value_cell\value || resolved_cast_target = cast_target_middle\payload || resolved_cast_target = cast_target_target\payload || resolved_cell != cast_target_value_cell || lm_trans_registry_source_path_typed_cell_kind(0, "cast.target", "class", "class", "char", "value", cast_target_target, 0, 0) != 0 || lm_trans_registry_source_path_typed_cell_kind_policy(0, "cast.target", "class", "wrong", 0, "value", cast_target_target, 1, 0, 0) != 0 || lm_trans_registry_source_path_typed_cell_kind_policy(0, "cast.target", "class", "class", 0, "value", cast_target_target, 0, 0, 0) != 0 || lm_trans_registry_source_path_typed_cell_kind_policy(0, "cast.target", "class", "class", "int", "value", cast_target_target, 1, 0, 0) != 0
             status: 1
     ---
 
@@ -1070,7 +1071,8 @@ fn: lm_test_registry_join_provenance_core () int
     if: status = 0
         serialization_codec_n2_key_text: lm_trans_text_from_cstr("CodecN2")
         resolved_serialization_codec: lm_trans_registry_serialization_codec_value(serialization_codec_n2_key_text)
-        if: serialization_codec_n2_key_text = 0 || resolved_serialization_codec != serialization_codec_n2_value_cell\value || resolved_serialization_codec = serialization_codec_n2_target\payload
+        resolved_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "serialization.codec", "class", "class", 0, "codec", serialization_codec_n2_target, 1, 0, 0)
+        if: serialization_codec_n2_key_text = 0 || resolved_serialization_codec != serialization_codec_n2_value_cell\value || resolved_serialization_codec = serialization_codec_n2_target\payload || resolved_cell != serialization_codec_n2_value_cell
             status: 1
     ---
 
@@ -1112,7 +1114,8 @@ fn: lm_test_registry_join_provenance_core () int
     if: status = 0
         serialization_codec_wrong_column_key_text: lm_trans_text_from_cstr("CodecWrongColumn")
         resolved_serialization_codec: lm_trans_registry_serialization_codec_value(serialization_codec_wrong_column_key_text)
-        if: serialization_codec_wrong_column_key_text = 0 || resolved_serialization_codec != serialization_codec_wrong_column_target\payload || resolved_serialization_codec = serialization_codec_wrong_column_value_cell\value
+        resolved_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "serialization.codec", "class", "class", 0, "codec", serialization_codec_wrong_column_target, 1, 0, 0)
+        if: serialization_codec_wrong_column_key_text = 0 || resolved_serialization_codec != serialization_codec_wrong_column_target\payload || resolved_serialization_codec = serialization_codec_wrong_column_value_cell\value || resolved_cell != 0
             status: 1
     ---
 
