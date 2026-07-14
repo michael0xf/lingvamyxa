@@ -17,22 +17,27 @@ L4:
 
     table:
         name: `lm.test.class.semantic.seed`
-        columns((class: class) (@: char value))
+        columns((class: class) (int: marker) (@: char semantic))
         rows:
-                 long  opaqueHandle
+                 long  7  opaqueHandle
     end: `lm.test.class.semantic.seed`
 
-    join: (`lm.test.class.semantic.seed`) `class.semantic`
-        columns((class: class) (@: char value))
+    join: (`lm.test.class.semantic.seed`) `lm.test.class.semantic.middle`
+        columns((class: class) (int: marker) (@: char semantic))
         rows:
-    end: `class.semantic`
+    end: `lm.test.class.semantic.middle`
+
+    join: (`lm.test.class.semantic.middle`) class
+        columns((class: class) (int: marker) (@: char semantic))
+        rows:
+    end: class
 
     table:
-        name: `class.semantic`
-        columns((class: class) (@: char value))
+        name: class
+        columns((class: class) (int: marker) (@: char semantic))
         rows:
-                 long  None
-    end: `class.semantic`
+                 long  8  None
+    end: class
 
     table:
         name: `layout.backend`
@@ -55,6 +60,10 @@ layout
 
 L1:
 ===
+static int lm_test_semantic_direct(int value);
+static int lm_test_semantic_fallback(short *value);
+static int lm_test_semantic_joined(long *value);
+
 static int lm_test_class_semantic_source_rows(void) {
     short fallback_value = 8;
     long joined_value = 9;
@@ -64,8 +73,20 @@ static int lm_test_class_semantic_source_rows(void) {
 }
 ===
 
+fn: lm_test_semantic_direct (int: value) int
+    return: value != 7
+end: lm_test_semantic_direct
+
+fn: lm_test_semantic_fallback (short: value) int
+    return: value != 0
+end: lm_test_semantic_fallback
+
+fn: lm_test_semantic_joined (long: value) int
+    return: value != 0
+end: lm_test_semantic_joined
+
 external:
     fn: main () int
-        return: c.lm_test_class_semantic_source_rows()
+        return: c.lm_test_class_semantic_source_rows() || lm_test_semantic_direct(7) || lm_test_semantic_fallback(0) || lm_test_semantic_joined(0)
     end: main
 end: external

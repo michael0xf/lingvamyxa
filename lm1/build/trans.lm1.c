@@ -2540,8 +2540,11 @@ static const char * lm_trans_namespace_registry_lookup(const LmTransNamespace *n
 static LmTransRegistryFact * lm_trans_namespace_registry_selected_facade_text_row(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table);
 static const char * lm_trans_namespace_registry_source_n2_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor);
 static const char * lm_trans_namespace_registry_source_path_n2_named_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *n2_value_column_name, const char *value_descriptor);
+static const char * lm_trans_namespace_class_reference_base_value(const LmTransNamespace *namespace_, const LmP0Text *name);
+static const char * lm_trans_namespace_class_semantic_value(const LmTransNamespace *namespace_, const LmP0Text *name);
 static const char * lm_trans_class_kind_selected_row_value(const LmTransNamespace *source_namespace, const LmTransRegistryFact *facade_row, const char *table_name, const char *selected_value);
 static const char * lm_trans_namespace_class_kind_value(const LmTransNamespace *namespace_, const LmP0Text *name);
+static int lm_trans_namespace_class_is_reference_base(const LmTransNamespace *namespace_, const LmP0Text *name);
 static const char * lm_trans_namespace_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name);
 static const char * lm_trans_l4_namespace_receiver_type_value(const LmP0Text *key, const char *namespace_table);
 static const char * lm_trans_namespace_receiver_type_selected_row_value(const LmTransNamespace *source_namespace, const char *source_path, const LmTransRegistryFact *facade_row, const char *selected_value);
@@ -7697,6 +7700,20 @@ static const char * lm_trans_namespace_registry_source_path_n2_named_typed_value
     return selected_value;
 }
 
+static const char * lm_trans_namespace_class_reference_base_value(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    if (name == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "class.reference-base", "class", "class", "value", "int");
+}
+
+static const char * lm_trans_namespace_class_semantic_value(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    if (name == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "class.semantic", "class", "class", "value", "char");
+}
+
 static const char * lm_trans_class_kind_selected_row_value(const LmTransNamespace *source_namespace, const LmTransRegistryFact *facade_row, const char *table_name, const char *selected_value) {
     const char *source_value;
     if (selected_value == 0) {
@@ -7779,6 +7796,37 @@ static const char * lm_trans_namespace_class_kind_value(const LmTransNamespace *
         value = lm_trans_class_kind_selected_row_value(0, facade_row, "class.kind", selected_value);
         if (value != 0) {
             return value;
+        }
+    }
+    return 0;
+}
+
+static int lm_trans_namespace_class_is_reference_base(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    const char *class_kind;
+    const char *semantic;
+    int private_registry;
+    if (name == 0) {
+        return 0;
+    }
+    if (lm_trans_namespace_class_reference_base_value(0, name) != 0) {
+        return 1;
+    }
+    class_kind = lm_trans_namespace_class_kind_value(0, name);
+    if (class_kind != 0 && strcmp(class_kind, "opaqueReference") == 0) {
+        return 1;
+    }
+    semantic = lm_trans_namespace_class_semantic_value(0, name);
+    if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
+        return 1;
+    }
+    private_registry = namespace_ != 0 && namespace_ -> registry_identifiers != 0 && (lm_trans_registry == 0 || namespace_ -> registry_identifiers != lm_trans_registry->identifiers);
+    if (private_registry) {
+        if (lm_trans_namespace_class_reference_base_value(namespace_, name) != 0) {
+            return 1;
+        }
+        semantic = lm_trans_namespace_class_semantic_value(namespace_, name);
+        if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
+            return 1;
         }
     }
     return 0;
@@ -9866,23 +9914,7 @@ static const char * lm_trans_class_c_tail_value(const LmP0Text *name) {
 }
 
 static int lm_trans_class_is_reference_base(const LmP0Text *name) {
-    const char *class_kind;
-    const char *semantic;
-    if (name == 0) {
-        return 0;
-    }
-    if (lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.reference-base", "class", "class", "value", "int") != 0) {
-        return 1;
-    }
-    class_kind = lm_trans_namespace_class_kind_value(0, name);
-    if (class_kind != 0 && strcmp(class_kind, "opaqueReference") == 0) {
-        return 1;
-    }
-    semantic = lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.semantic", "class", "class", "value", "char");
-    if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
-        return 1;
-    }
-    return 0;
+    return lm_trans_namespace_class_is_reference_base(0, name);
 }
 
 static int lm_trans_builtin_c_type_tail(const LmP0Text *name) {
@@ -31454,7 +31486,6 @@ static void lm_trans_l4_text_view_delete(LmP0Text **view) {
 
 static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace *namespace_, const char *class_name) {
     LmP0Text * class_text;
-    const char *semantic;
     int result;
     if (class_name == 0) {
         return 0;
@@ -31463,16 +31494,7 @@ static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace *
     if (class_text == 0) {
         return 0;
     }
-    result = lm_trans_class_is_reference_base(class_text);
-    if (result == 0 && namespace_ != 0) {
-        result = lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_text, "class.reference-base", "class", "class", "value", "int") != 0;
-    }
-    if (result == 0 && namespace_ != 0) {
-        semantic = lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_text, "class.semantic", "class", "class", "value", "char");
-        if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
-            result = 1;
-        }
-    }
+    result = lm_trans_namespace_class_is_reference_base(namespace_, class_text);
     lm_trans_l4_text_view_delete(&class_text);
     return result;
 }

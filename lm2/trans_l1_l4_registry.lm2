@@ -29,7 +29,6 @@ end: lm_trans_l4_text_view_delete
 
 fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: namespace_); const: @(char class_name)) int
     LmP0Text: class_text
-    const: @: char semantic
     int: result
 
     if: class_name = 0
@@ -38,14 +37,7 @@ fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: name
     class_text: lm_trans_l4_text_view_new(class_name)
     if: class_text = 0
         return: 0
-    result: lm_trans_class_is_reference_base(class_text)
-    if: result = 0 && namespace_ != 0
-        result: lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_text, "class.reference-base", "class", "class", "value", "int") != 0
-    if: result = 0 && namespace_ != 0
-        semantic: lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_text, "class.semantic", "class", "class", "value", "char")
-        if: semantic != 0 && c.strcmp(semantic, "opaqueHandle") = 0
-            result: 1
-        ---
+    result: lm_trans_namespace_class_is_reference_base(namespace_, class_text)
     lm_trans_l4_text_view_delete(@ class_text)
 return: result
 

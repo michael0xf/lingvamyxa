@@ -2457,6 +2457,16 @@ fn: lm_trans_namespace_registry_source_path_n2_named_typed_value (
         return: source_value
 return: selected_value
 
+fn: lm_trans_namespace_class_reference_base_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "class.reference-base", "class", "class", "value", "int")
+
+fn: lm_trans_namespace_class_semantic_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "class.semantic", "class", "class", "value", "char")
+
 fn: lm_trans_class_kind_selected_row_value (
     const: (LmTransNamespace: source_namespace)
     const: (LmTransRegistryFact: facade_row)
@@ -2548,6 +2558,33 @@ fn: lm_trans_namespace_class_kind_value (const: (LmTransNamespace: namespace_); 
             return: value
     ---
 
+return: 0
+
+fn: lm_trans_namespace_class_is_reference_base (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+    const: @: char class_kind
+    const: @: char semantic
+    int: private_registry
+
+    if: name = 0
+        return: 0
+    if: lm_trans_namespace_class_reference_base_value(0, name) != 0
+        return: 1
+    class_kind: lm_trans_namespace_class_kind_value(0, name)
+    if: class_kind != 0 && c.strcmp(class_kind, "opaqueReference") = 0
+        return: 1
+    semantic: lm_trans_namespace_class_semantic_value(0, name)
+    if: semantic != 0 && c.strcmp(semantic, "opaqueHandle") = 0
+        return: 1
+
+    private_registry: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
+    if: private_registry
+        if: lm_trans_namespace_class_reference_base_value(namespace_, name) != 0
+            return: 1
+        semantic: lm_trans_namespace_class_semantic_value(namespace_, name)
+        if: semantic != 0 && c.strcmp(semantic, "opaqueHandle") = 0
+            return: 1
+        ---
+    ---
 return: 0
 
 fn: lm_trans_namespace_registry_source_n2_key_typed_value (

@@ -157,6 +157,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: class_ctail_origin
     LmTransRegistryFact: class_ctail_middle
     LmTransRegistryFact: class_ctail_target
+    LmTransRegistryFact: class_reference_base_origin
+    LmTransRegistryFact: class_reference_base_middle
+    LmTransRegistryFact: class_reference_base_target
+    LmTransRegistryFact: class_semantic_origin
+    LmTransRegistryFact: class_semantic_middle
+    LmTransRegistryFact: class_semantic_target
     LmTransRegistryFact: node_origin
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
@@ -223,6 +229,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
     LmTableDescriptor: class_metadata_descriptor
+    LmTableDescriptor: class_reference_descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
@@ -247,6 +254,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: class_c_projection_row
     LmTableRow: class_spelling_row
     LmTableRow: class_ctail_row
+    LmTableRow: class_reference_base_row
+    LmTableRow: class_semantic_row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
@@ -302,6 +311,14 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: class_ctail_spelling_none_cell
     LmTableCell: class_ctail_value_cell
     LmTableCell: class_ctail_marker_cell
+    LmTableCell: class_reference_base_key_cell
+    LmTableCell: class_reference_base_marker_cell
+    LmTableCell: class_reference_base_value_cell
+    LmTableCell: class_reference_base_semantic_none_cell
+    LmTableCell: class_semantic_key_cell
+    LmTableCell: class_semantic_marker_cell
+    LmTableCell: class_semantic_reference_none_cell
+    LmTableCell: class_semantic_value_cell
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
@@ -381,6 +398,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_class_c_projection_spelling
     const: @: char resolved_class_spelling
     const: @: char resolved_class_ctail
+    const: @: char resolved_class_reference_base
+    const: @: char resolved_class_semantic
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
@@ -405,6 +424,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: class_c_projection_key_text
     LmP0Text: class_spelling_key_text
     LmP0Text: class_ctail_key_text
+    LmP0Text: class_reference_base_key_text
+    LmP0Text: class_semantic_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
     size_t: layout_source_row_index
@@ -961,6 +982,80 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_class_spelling: lm_trans_class_c_spelling(class_spelling_key_text)
         resolved_class_ctail: lm_trans_class_c_tail_value(class_ctail_key_text)
         if: class_c_projection_key_text = 0 || class_spelling_key_text = 0 || class_ctail_key_text = 0 || resolved_class_c_projection != class_c_projection_value_cell\value || resolved_class_c_projection = class_c_projection_middle\payload || resolved_class_c_projection = class_c_projection_target\payload || resolved_class_c_projection_spelling != class_c_projection_value_cell\value || resolved_class_c_projection_spelling = class_c_projection_middle\payload || resolved_class_c_projection_spelling = class_c_projection_target\payload || resolved_class_spelling != class_spelling_value_cell\value || resolved_class_spelling = class_spelling_middle\payload || resolved_class_spelling = class_spelling_target\payload || resolved_class_ctail != class_ctail_value_cell\value || resolved_class_ctail = class_ctail_middle\payload || resolved_class_ctail = class_ctail_target\payload || lm_trans_builtin_c_type_tail(class_ctail_key_text) = 0
+            status: 1
+    ---
+
+    class_reference_base_origin: 0
+    class_reference_base_middle: 0
+    class_reference_base_target: 0
+    class_semantic_origin: 0
+    class_semantic_middle: 0
+    class_semantic_target: 0
+    class_reference_descriptor: 0
+    class_reference_base_row: 0
+    class_semantic_row: 0
+    class_reference_base_key_cell: 0
+    class_reference_base_marker_cell: 0
+    class_reference_base_value_cell: 0
+    class_reference_base_semantic_none_cell: 0
+    class_semantic_key_cell: 0
+    class_semantic_marker_cell: 0
+    class_semantic_reference_none_cell: 0
+    class_semantic_value_cell: 0
+    class_reference_base_key_text: 0
+    class_semantic_key_text: 0
+    if: status = 0
+        class_reference_base_origin: lm_test_registry_push_value_fact("lm.test.class.reference-base.origin", "ReferenceBaseWide", "1", 0)
+        class_reference_base_middle: lm_test_registry_push_value_fact("lm.test.class.reference-base.middle", "ReferenceBaseWide", "1", class_reference_base_origin)
+        class_reference_base_target: lm_test_registry_push_value_fact("class.reference-base", "ReferenceBaseWide", "1", class_reference_base_middle)
+        class_semantic_origin: lm_test_registry_push_value_fact("lm.test.class.semantic.origin", "SemanticWide", "opaqueHandle", 0)
+        class_semantic_middle: lm_test_registry_push_value_fact("lm.test.class.semantic.middle", "SemanticWide", "opaqueHandle", class_semantic_origin)
+        class_semantic_target: lm_test_registry_push_value_fact("class.semantic", "SemanticWide", "opaqueHandle", class_semantic_middle)
+        if: class_reference_base_origin = 0 || class_reference_base_middle = 0 || class_reference_base_target = 0 || class_semantic_origin = 0 || class_semantic_middle = 0 || class_semantic_target = 0 || class_reference_base_middle\source != class_reference_base_origin || class_reference_base_target\source != class_reference_base_middle || class_semantic_middle\source != class_semantic_origin || class_semantic_target\source != class_semantic_middle
+            status: 1
+    ---
+
+    if: status = 0
+        class_reference_descriptor: lm_table_descriptor_new_empty_slice("class", 5U)
+        if: class_reference_descriptor = 0 || lm_table_descriptor_add_column(class_reference_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(class_reference_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(class_reference_descriptor, "reference-base", "int") != 0 || lm_table_descriptor_add_column(class_reference_descriptor, "semantic", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        class_reference_base_row: lm_table_row_new(0)
+        class_reference_base_key_cell: lm_table_cell_new_cstr("ReferenceBaseWide", "ReferenceBaseWide", 0, 0, 0)
+        class_reference_base_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_reference_base_value_cell: lm_table_cell_new_cstr("1", "1", 0, class_reference_base_origin, 0)
+        class_reference_base_semantic_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: class_reference_base_row = 0 || class_reference_base_key_cell = 0 || class_reference_base_marker_cell = 0 || class_reference_base_value_cell = 0 || class_reference_base_semantic_none_cell = 0 || lm_table_row_take_cell(class_reference_base_row, class_reference_base_key_cell) != 0 || lm_table_row_take_cell(class_reference_base_row, class_reference_base_marker_cell) != 0 || lm_table_row_take_cell(class_reference_base_row, class_reference_base_value_cell) != 0 || lm_table_row_take_cell(class_reference_base_row, class_reference_base_semantic_none_cell) != 0 || lm_table_descriptor_take_materialized_row(class_reference_descriptor, class_reference_base_row) != 0
+            status: 1
+        else:
+            class_reference_base_row: 0
+    ---
+
+    if: status = 0
+        class_semantic_row: lm_table_row_new(0)
+        class_semantic_key_cell: lm_table_cell_new_cstr("SemanticWide", "SemanticWide", 0, 0, 0)
+        class_semantic_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_semantic_reference_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_semantic_value_cell: lm_table_cell_new_cstr("opaqueHandle", "opaqueHandle", 0, class_semantic_origin, 0)
+        if: class_semantic_row = 0 || class_semantic_key_cell = 0 || class_semantic_marker_cell = 0 || class_semantic_reference_none_cell = 0 || class_semantic_value_cell = 0 || lm_table_row_take_cell(class_semantic_row, class_semantic_key_cell) != 0 || lm_table_row_take_cell(class_semantic_row, class_semantic_marker_cell) != 0 || lm_table_row_take_cell(class_semantic_row, class_semantic_reference_none_cell) != 0 || lm_table_row_take_cell(class_semantic_row, class_semantic_value_cell) != 0 || lm_table_descriptor_take_materialized_row(class_reference_descriptor, class_semantic_row) != 0
+            status: 1
+        else:
+            class_semantic_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, class_reference_descriptor) != 0
+                status: 1
+            else:
+                class_reference_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        class_reference_base_key_text: lm_trans_text_from_cstr("ReferenceBaseWide")
+        class_semantic_key_text: lm_trans_text_from_cstr("SemanticWide")
+        resolved_class_reference_base: lm_trans_namespace_class_reference_base_value(0, class_reference_base_key_text)
+        resolved_class_semantic: lm_trans_namespace_class_semantic_value(0, class_semantic_key_text)
+        if: class_reference_base_key_text = 0 || class_semantic_key_text = 0 || resolved_class_reference_base != class_reference_base_value_cell\value || resolved_class_reference_base = class_reference_base_middle\payload || resolved_class_reference_base = class_reference_base_target\payload || resolved_class_semantic != class_semantic_value_cell\value || resolved_class_semantic = class_semantic_middle\payload || resolved_class_semantic = class_semantic_target\payload || lm_trans_class_is_reference_base(class_reference_base_key_text) = 0 || lm_trans_class_is_reference_base(class_semantic_key_text) = 0
             status: 1
     ---
 
@@ -1628,6 +1723,11 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)
+    lm_trans_text_ref_destroy(@ class_semantic_key_text)
+    lm_trans_text_ref_destroy(@ class_reference_base_key_text)
+    lm_table_row_delete_any(class_semantic_row)
+    lm_table_row_delete_any(class_reference_base_row)
+    lm_table_descriptor_delete_any(class_reference_descriptor)
     lm_trans_text_ref_destroy(@ class_ctail_key_text)
     lm_trans_text_ref_destroy(@ class_spelling_key_text)
     lm_trans_text_ref_destroy(@ class_c_projection_key_text)

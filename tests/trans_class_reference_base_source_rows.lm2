@@ -17,22 +17,27 @@ L4:
 
     table:
         name: `lm.test.class.reference-base.seed`
-        columns((class: class) (int: value))
+        columns((class: class) (int: marker) (int: `reference-base`))
         rows:
-                 float  1
+                 float  7  1
     end: `lm.test.class.reference-base.seed`
 
-    join: (`lm.test.class.reference-base.seed`) `class.reference-base`
-        columns((class: class) (int: value))
+    join: (`lm.test.class.reference-base.seed`) `lm.test.class.reference-base.middle`
+        columns((class: class) (int: marker) (int: `reference-base`))
         rows:
-    end: `class.reference-base`
+    end: `lm.test.class.reference-base.middle`
+
+    join: (`lm.test.class.reference-base.middle`) class
+        columns((class: class) (int: marker) (int: `reference-base`))
+        rows:
+    end: class
 
     table:
-        name: `class.reference-base`
-        columns((class: class) (int: value))
+        name: class
+        columns((class: class) (int: marker) (int: `reference-base`))
         rows:
-                 float  None
-    end: `class.reference-base`
+                 float  8  None
+    end: class
 
     table:
         name: `layout.backend`
@@ -55,6 +60,10 @@ layout
 
 L1:
 ===
+static int lm_test_reference_direct(short *value);
+static int lm_test_reference_fallback(long *value);
+static int lm_test_reference_joined(float *value);
+
 static int lm_test_class_reference_base_source_rows(void) {
     short direct = 7;
     long fallback = 8;
@@ -65,8 +74,20 @@ static int lm_test_class_reference_base_source_rows(void) {
 }
 ===
 
+fn: lm_test_reference_direct (short: value) int
+    return: value != 0
+end: lm_test_reference_direct
+
+fn: lm_test_reference_fallback (long: value) int
+    return: value != 0
+end: lm_test_reference_fallback
+
+fn: lm_test_reference_joined (float: value) int
+    return: value != 0
+end: lm_test_reference_joined
+
 external:
     fn: main () int
-        return: c.lm_test_class_reference_base_source_rows()
+        return: c.lm_test_class_reference_base_source_rows() || lm_test_reference_direct(0) || lm_test_reference_fallback(0) || lm_test_reference_joined(0)
     end: main
 end: external
