@@ -3616,12 +3616,13 @@ static int lm_trans_registry_push_generated_row_cstr(const char *table, const ch
 static int lm_trans_registry_push_generated_row_text(const char *table, const char *key, const LmP0Text *payload);
 static int lm_trans_registry_push_column_metadata(const LmP0Text *table_name, LmTransRegistryColumn *columns, size_t column_count);
 static char * lm_trans_registry_relation_name_new(const LmP0Text *owner, const char *suffix);
-static int lm_trans_registry_push_owner_relation_text(const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload);
+static int lm_trans_registry_push_row_values_with_fact(const LmP0Text *table, const LmP0Text *key, const LmP0Text *payload, LmTransRegistryFact **out_fact);
 static int lm_trans_registry_push_owner_relation_text_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload, LmTransRegistryFact **out_fact);
 static int lm_trans_registry_push_owner_relation_size_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, size_t value, LmTransRegistryFact **out_fact);
 static int lm_trans_table_descriptor_add_generated_column(LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor);
 static int lm_trans_registry_push_generated_source_n2_row_values(const LmP0Text *table_value, const LmP0Text *key_value, const LmP0Text *payload_value, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor);
 static int lm_trans_table_row_take_generated_fact_cell(LmTableRow *row, const LmTransRegistryFact *fact);
+static int lm_trans_registry_materialize_generated_fn_source_row(const LmP0Text *function_name, const LmTransRegistryFact *descriptor_fact, const LmTransRegistryFact *receiver_fact);
 static int lm_trans_registry_materialize_generated_param_source_row(const LmP0Text *function_name, const LmTransRegistryFact *class_fact, const LmTransRegistryFact *index_fact, const LmTransRegistryFact *address_depth_fact, const LmTransRegistryFact *const_fact);
 static int lm_trans_registry_materialize_generated_return_source_row(const LmP0Text *function_name, const LmTransRegistryFact *class_fact, const LmTransRegistryFact *address_depth_fact, const LmTransRegistryFact *const_fact);
 static int lm_trans_l4_callable_type_from_node(const LmP0Node *node, LmTransL4CallableType *out);
@@ -34545,29 +34546,17 @@ static char * lm_trans_registry_relation_name_new(const LmP0Text *owner, const c
     return result;
 }
 
-static int lm_trans_registry_push_owner_relation_text(const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload) {
-    char *table_name;
-    int status;
-    table_name = lm_trans_registry_relation_name_new(owner, suffix);
-    if (table_name == 0) {
-        return 1;
-    }
-    status = lm_trans_registry_push_row_values(lm_trans_text_from_cstr(table_name), key, payload) != 0;
-    lm_own_delete(table_name, 0);
-    return status;
-}
-
-static int lm_trans_registry_push_owner_relation_text_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload, LmTransRegistryFact **out_fact) {
+static int lm_trans_registry_push_row_values_with_fact(const LmP0Text *table, const LmP0Text *key, const LmP0Text *payload, LmTransRegistryFact **out_fact) {
     const LmRegistryViewRow * view_row;
     size_t fact_index;
     if (out_fact != 0) {
         out_fact[0] = 0;
     }
-    if (out_fact == 0 || lm_trans_registry == 0 || lm_trans_registry->view == 0) {
+    if (table == 0 || key == 0 || payload == 0 || out_fact == 0 || lm_trans_registry == 0 || lm_trans_registry->view == 0) {
         return 1;
     }
     fact_index = lm_trans_registry->loaded_fact_count;
-    if (lm_trans_registry_push_owner_relation_text(owner, suffix, key, payload) != 0) {
+    if (lm_trans_registry_push_row_values(table, key, payload) != 0) {
         return 1;
     }
     view_row = lm_registry_view_fact_at(lm_trans_registry->view, fact_index);
@@ -34576,6 +34565,24 @@ static int lm_trans_registry_push_owner_relation_text_with_fact(const LmP0Text *
     }
     out_fact[0] = ((LmTransRegistryFact *)view_row -> source);
     return 0;
+}
+
+static int lm_trans_registry_push_owner_relation_text_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload, LmTransRegistryFact **out_fact) {
+    char *table_name;
+    int status;
+    if (out_fact != 0) {
+        out_fact[0] = 0;
+    }
+    if (owner == 0 || suffix == 0 || key == 0 || payload == 0 || out_fact == 0) {
+        return 1;
+    }
+    table_name = lm_trans_registry_relation_name_new(owner, suffix);
+    if (table_name == 0) {
+        return 1;
+    }
+    status = lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr(table_name), key, payload, out_fact);
+    lm_own_delete(table_name, 0);
+    return status;
 }
 
 static int lm_trans_registry_push_owner_relation_size_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, size_t value, LmTransRegistryFact **out_fact) {
@@ -34698,6 +34705,61 @@ static int lm_trans_table_row_take_generated_fact_cell(LmTableRow *row, const Lm
         return 1;
     }
     return 0;
+}
+
+static int lm_trans_registry_materialize_generated_fn_source_row(const LmP0Text *function_name, const LmTransRegistryFact *descriptor_fact, const LmTransRegistryFact *receiver_fact) {
+    LmTableDescriptor * descriptor;
+    LmTableRow * row;
+    LmTableCell * key_cell;
+    int status;
+    if (function_name == 0 || descriptor_fact == 0 || receiver_fact == 0 || descriptor_fact -> table == 0 || strcmp(descriptor_fact -> table, "fn.descriptor") != 0 || receiver_fact -> table == 0 || strcmp(receiver_fact -> table, "fn.receiver") != 0 || descriptor_fact -> key == 0 || descriptor_fact -> payload == 0 || receiver_fact -> key == 0 || receiver_fact -> payload == 0 || strcmp(descriptor_fact -> key, receiver_fact -> key) != 0 || lm_trans_text_equals(function_name, descriptor_fact -> key) == 0 || lm_trans_registry == 0 || lm_trans_registry->view == 0) {
+        return 1;
+    }
+    descriptor = lm_table_descriptor_new_empty_slice("fn", 2U);
+    row = 0;
+    key_cell = 0;
+    status = 0;
+    if (descriptor == 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "descriptor", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "receiver", "class", "class") != 0) {
+        status = 1;
+    }
+    if (status == 0) {
+        row = lm_table_row_new(0);
+        key_cell = lm_table_cell_new_cstr(descriptor_fact -> key, descriptor_fact -> key, 0, 0, 0);
+        if (row == 0 || key_cell == 0) {
+            status = 1;
+        }
+    }
+    if (status == 0) {
+        if (lm_table_row_take_cell(row, key_cell) != 0) {
+            status = 1;
+        }
+        else {
+            key_cell = 0;
+        }
+    }
+    if (status == 0 && (lm_trans_table_row_take_generated_fact_cell(row, descriptor_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, receiver_fact) != 0)) {
+        status = 1;
+    }
+    if (status == 0) {
+        if (lm_table_descriptor_take_materialized_row(descriptor, row) != 0) {
+            status = 1;
+        }
+        else {
+            row = 0;
+        }
+    }
+    if (status == 0) {
+        if (lm_registry_view_take_local_source_table(lm_trans_registry->view, descriptor) != 0) {
+            status = 1;
+        }
+        else {
+            descriptor = 0;
+        }
+    }
+    lm_table_cell_delete_any(key_cell);
+    lm_table_row_delete_any(row);
+    lm_table_descriptor_delete_any(descriptor);
+    return status;
 }
 
 static int lm_trans_registry_materialize_generated_param_source_row(const LmP0Text *function_name, const LmTransRegistryFact *class_fact, const LmTransRegistryFact *index_fact, const LmTransRegistryFact *address_depth_fact, const LmTransRegistryFact *const_fact) {
@@ -34994,6 +35056,8 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
     size_t index;
     LmP0Text * function_name;
     LmP0Text * receiver_name;
+    LmTransRegistryFact * descriptor_fact;
+    LmTransRegistryFact * receiver_fact;
     int status;
     if (frame == 0) {
         return 1;
@@ -35002,6 +35066,8 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
     return_type = lm_trans_expr_callable_type_new();
     function_name = lm_trans_l4_text_view_new("");
     receiver_name = lm_trans_l4_text_view_new("");
+    descriptor_fact = 0;
+    receiver_fact = 0;
     status = 0;
     if (function == 0 || return_type == 0 || function_name == 0 || receiver_name == 0) {
         status = 1;
@@ -35035,7 +35101,7 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
         fprintf(stderr, "trans fn descriptor error: return descriptor expects a type\n");
         status = 1;
     }
-    if (status == 0 && (lm_trans_registry_note_class_present(function_name) != 0 || lm_trans_registry_note_class_present(return_type -> class_name) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("fn.descriptor"), function_name, lm_trans_text_from_cstr("callableDescriptor")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("fn.receiver"), function_name, receiver_name) != 0)) {
+    if (status == 0 && (lm_trans_registry_note_class_present(function_name) != 0 || lm_trans_registry_note_class_present(return_type -> class_name) != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.descriptor"), function_name, lm_trans_text_from_cstr("callableDescriptor"), &descriptor_fact) != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.receiver"), function_name, receiver_name, &receiver_fact) != 0 || lm_trans_registry_materialize_generated_fn_source_row(function_name, descriptor_fact, receiver_fact) != 0)) {
         status = 1;
     }
     if (status == 0 && lm_trans_registry_materialize_fn_descriptor_return(function_name, return_type) != 0) {
@@ -35071,6 +35137,8 @@ static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *f
     size_t index;
     LmP0Text * function_name;
     LmP0Text * receiver_name;
+    LmTransRegistryFact * descriptor_fact;
+    LmTransRegistryFact * receiver_fact;
     int status;
     if (frame == 0) {
         return 1;
@@ -35078,6 +35146,8 @@ static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *f
     function = lm_trans_function_header_new();
     function_name = lm_trans_l4_text_view_new("");
     receiver_name = lm_trans_l4_text_view_new("");
+    descriptor_fact = 0;
+    receiver_fact = 0;
     status = 0;
     if (function == 0 || function_name == 0 || receiver_name == 0) {
         status = 1;
@@ -35096,7 +35166,7 @@ static int lm_trans_registry_materialize_sub_descriptor_frame(const LmP0Frame *f
     if (status == 0 && lm_trans_registry_identifier_value(function -> name, function_name) == 0) {
         status = 1;
     }
-    if (status == 0 && (lm_trans_registry_note_class_present(function_name) != 0 || lm_trans_registry_note_class_kind(function_name, "procedure") != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("fn.descriptor"), function_name, lm_trans_text_from_cstr("procedure")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("fn.receiver"), function_name, receiver_name) != 0)) {
+    if (status == 0 && (lm_trans_registry_note_class_present(function_name) != 0 || lm_trans_registry_note_class_kind(function_name, "procedure") != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.descriptor"), function_name, lm_trans_text_from_cstr("procedure"), &descriptor_fact) != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.receiver"), function_name, receiver_name, &receiver_fact) != 0 || lm_trans_registry_materialize_generated_fn_source_row(function_name, descriptor_fact, receiver_fact) != 0)) {
         status = 1;
     }
     if (status == 0 && function -> params == 0) {
