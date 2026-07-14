@@ -1,0 +1,17 @@
+L4:
+    table:
+        name: `profile.validator`
+        columns((class: class) (@: char binding))
+        rows:
+                 `c99.format-mismatch`  lm_trans_validate_c_printf_call
+    end: `profile.validator`
+end: L4
+
+external:
+    fn: main () int
+        short: value 7
+
+        c.printf: "direct:%d\n" value
+        return: 0
+    end: main
+end: external

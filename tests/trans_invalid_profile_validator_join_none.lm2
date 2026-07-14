@@ -1,0 +1,29 @@
+L4:
+    table:
+        name: `lm.test.profile.validator.seed`
+        columns((class: class) (@: char binding))
+        rows:
+                 `c99.format-mismatch`  lm_trans_validate_c_printf_call
+    end: `lm.test.profile.validator.seed`
+
+    join: (`lm.test.profile.validator.seed`) `profile.validator`
+        columns((class: class) (@: char binding))
+        rows:
+    end: `profile.validator`
+
+    table:
+        name: `profile.validator`
+        columns((class: class) (@: char binding))
+        rows:
+                 `c99.format-mismatch`  None
+    end: `profile.validator`
+end: L4
+
+external:
+    fn: main () int
+        short: value 7
+
+        c.printf: "join-none:%d\n" value
+        return: 0
+    end: main
+end: external
