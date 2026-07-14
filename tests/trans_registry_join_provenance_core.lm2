@@ -141,7 +141,11 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: layout_middle
     LmTransRegistryFact: layout_target
     LmTransRegistryFact: layout_unrelated
+    LmTransRegistryFact: receiver_origin
+    LmTransRegistryFact: receiver_middle
+    LmTransRegistryFact: receiver_target
     LmTableDescriptor: descriptor
+    LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: node_descriptor
     LmTableDescriptor: condition_descriptor
     LmTableDescriptor: condition_wrong_descriptor
@@ -149,6 +153,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: unit_descriptor
     LmTableDescriptor: unit_wrong_descriptor
     LmTableRow: row
+    LmTableRow: receiver_row
     LmTableRow: node_row
     LmTableRow: condition_row
     LmTableRow: condition_wrong_row
@@ -158,6 +163,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: key_cell
     LmTableCell: value_cell
     LmTableCell: marker_cell
+    LmTableCell: receiver_key_cell
+    LmTableCell: receiver_binding_cell
+    LmTableCell: receiver_marker_cell
     LmTableCell: node_key_cell
     LmTableCell: node_value_cell
     LmTableCell: condition_key_cell
@@ -197,6 +205,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
+    const: @: char resolved_receiver_binding
+    LmP0Text: receiver_key_text
     size_t: layout_source_row_index
     size_t: unrelated_layout_source_row_index
     size_t: condition_row_count
@@ -249,6 +259,52 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_cell: lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, target)
         resolved_value: lm_trans_registry_source_path_typed_value(0, "target.value", "class", "class", "char", target)
         if: resolved_cell != value_cell || resolved_value != value_cell\value || resolved_value = target\payload || lm_trans_registry_fact_has_source(origin, origin) = 0 || lm_trans_registry_fact_has_source(middle, origin) = 0 || lm_trans_registry_fact_has_source(target, origin) = 0 || lm_trans_registry_fact_has_source(target, middle) = 0 || lm_trans_registry_fact_has_source(unrelated, origin) != 0 || lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, unrelated) != 0
+            status: 1
+    ---
+
+    receiver_origin: 0
+    receiver_middle: 0
+    receiver_target: 0
+    receiver_descriptor: 0
+    receiver_row: 0
+    receiver_key_cell: 0
+    receiver_binding_cell: 0
+    receiver_marker_cell: 0
+    receiver_key_text: 0
+    if: status = 0
+        receiver_origin: lm_test_registry_push_value_fact("lm.test.receiver.atom.origin.statement", "ReceiverWitness", "lm_trans_atom_statement_emit_include_prelude", 0)
+        receiver_middle: lm_test_registry_push_value_fact("lm.test.receiver.atom.middle.statement", "ReceiverWitness", "lm_trans_atom_statement_emit_include_prelude", receiver_origin)
+        receiver_target: lm_test_registry_push_value_fact("receiver.atom.statement", "ReceiverWitness", "lm_trans_atom_statement_emit_include_prelude", receiver_middle)
+        if: receiver_origin = 0 || receiver_middle = 0 || receiver_target = 0 || receiver_middle\source != receiver_origin || receiver_target\source != receiver_middle
+            status: 1
+    ---
+
+    if: status = 0
+        receiver_descriptor: lm_table_descriptor_new_empty_slice("receiver.atom", 13U)
+        if: receiver_descriptor = 0 || lm_table_descriptor_add_column(receiver_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(receiver_descriptor, "statement", "binding") != 0 || lm_table_descriptor_add_column(receiver_descriptor, "marker", "int") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        receiver_row: lm_table_row_new(0)
+        receiver_key_cell: lm_table_cell_new_cstr("ReceiverWitness", "ReceiverWitness", 0, 0, 0)
+        receiver_binding_cell: lm_table_cell_new_cstr("lm_trans_atom_statement_emit_include_prelude", "lm_trans_atom_statement_emit_include_prelude", 0, receiver_origin, 0)
+        receiver_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: receiver_row = 0 || receiver_key_cell = 0 || receiver_binding_cell = 0 || receiver_marker_cell = 0 || lm_table_row_take_cell(receiver_row, receiver_key_cell) != 0 || lm_table_row_take_cell(receiver_row, receiver_binding_cell) != 0 || lm_table_row_take_cell(receiver_row, receiver_marker_cell) != 0 || lm_table_descriptor_take_materialized_row(receiver_descriptor, receiver_row) != 0
+            status: 1
+        else:
+            receiver_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, receiver_descriptor) != 0
+                status: 1
+            else:
+                receiver_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        receiver_key_text: lm_trans_text_from_cstr("ReceiverWitness")
+        resolved_receiver_binding: lm_trans_atom_statement_receiver_binding(receiver_key_text)
+        if: receiver_key_text = 0 || resolved_receiver_binding != receiver_binding_cell\value || resolved_receiver_binding = receiver_middle\payload || resolved_receiver_binding = receiver_target\payload
             status: 1
     ---
 
@@ -582,6 +638,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(node_descriptor)
     lm_table_row_delete_any(layout_row)
     lm_table_descriptor_delete_any(layout_descriptor)
+    lm_trans_text_ref_destroy(@ receiver_key_text)
+    lm_table_row_delete_any(receiver_row)
+    lm_table_descriptor_delete_any(receiver_descriptor)
     lm_table_row_delete_any(row)
     lm_table_descriptor_delete_any(descriptor)
     lm_trans_registry_destroy()

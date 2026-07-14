@@ -1,0 +1,84 @@
+L4:
+    table:
+        name: include
+        columns((class: class) (@: char target))
+        rows:
+                 stddef  "<stddef.h>"
+    end: include
+
+    table:
+        name: `receiver.atom`
+        columns((class: class) (binding: statement) (int: marker))
+        rows:
+                 lmTestReceiverWide      lm_trans_atom_statement_emit_include_prelude  1
+                 lmTestReceiverLateNone  lm_trans_atom_statement_emit_include_prelude  2
+    end: `receiver.atom`
+
+    table:
+        name: `receiver.atom`
+        columns((class: class) (int: marker) (binding: statement))
+        rows:
+                 lmTestReceiverReordered  3  lm_trans_atom_statement_emit_include_prelude
+    end: `receiver.atom`
+
+    table:
+        name: `lm.test.receiver.atom.wide.seed`
+        columns((class: class) (binding: statement) (int: marker))
+        rows:
+                 lmTestReceiverJoined  lm_trans_atom_statement_emit_include_prelude  4
+    end: `lm.test.receiver.atom.wide.seed`
+
+    join: (`lm.test.receiver.atom.wide.seed`) `lm.test.receiver.atom.wide.middle`
+        columns((class: class) (binding: statement) (int: marker))
+        rows:
+    end: `lm.test.receiver.atom.wide.middle`
+
+    join: (`lm.test.receiver.atom.wide.middle`) `receiver.atom`
+        columns((class: class) (binding: statement) (int: marker))
+        rows:
+    end: `receiver.atom`
+
+    table:
+        name: `receiver.atom`
+        columns((char: class) (binding: statement) (int: marker))
+        rows:
+                 lmTestReceiverWrongKeySchema  lm_trans_atom_statement_emit_include_prelude  5
+    end: `receiver.atom`
+
+    table:
+        name: `receiver.atom`
+        columns((class: class) (class: statement) (int: marker))
+        rows:
+                 lmTestReceiverWrongValueSchema  lm_trans_atom_statement_emit_include_prelude  6
+    end: `receiver.atom`
+
+    table:
+        name: `receiver.atom`
+        columns((class: class) (binding: statement) (int: marker))
+        rows:
+                 lmTestReceiverLateNone  None  7
+                 default                 lm_trans_atom_statement_emit_include_prelude  8
+    end: `receiver.atom`
+
+    table:
+        name: `receiver.atom.statement`
+        columns((class: class) (binding: receiver))
+        rows:
+                 lmTestReceiverPhysical  lm_trans_atom_statement_emit_include_prelude
+    end: `receiver.atom.statement`
+end: L4
+
+lmTestReceiverWide
+lmTestReceiverReordered
+lmTestReceiverJoined
+lmTestReceiverWrongKeySchema
+lmTestReceiverWrongValueSchema
+lmTestReceiverLateNone
+lmTestReceiverPhysical
+lmTestReceiverDefault
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
