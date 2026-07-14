@@ -449,7 +449,7 @@ return: 0
 fn: lm_trans_namespace_receiver_type_from_head (const: (LmP0Text: head)) const: @: char
     if: head = 0
         return: 0
-return: lm_trans_namespace_registry_source_n2_typed_value(0, head, "namespace", "class", "class", "receiver.type", "class")
+return: lm_trans_namespace_receiver_type_value(0, head)
 
 fn: lm_trans_level_receiver_binding_from_head (const: (LmP0Text: head)) const: @: char
     const: @: char receiver_type
