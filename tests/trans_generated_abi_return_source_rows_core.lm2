@@ -1,0 +1,184 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_generated_abi_return_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_generated_return_fact_at (size_t: index) LmTransRegistryFact
+    const: LmRegistryViewRow: row
+
+    row: lm_registry_view_fact_at(lm_trans_registry\view, index)
+    if: row = 0 || row\source = 0
+        return: 0
+return: cast: (LmTransRegistryFact) row\source
+
+fn: lm_test_generated_return_fact_is (
+    const: (LmTransRegistryFact: fact)
+    const: @(char table)
+    const: @(char payload)
+) int
+return: fact != 0 && fact\table != 0 && c.strcmp(fact\table, table) = 0 && fact\key != 0 && c.strcmp(fact\key, "return") = 0 && fact\payload != 0 && c.strcmp(fact\payload, payload) = 0
+
+fn: lm_test_generated_return_column_is (
+    const: (LmTableColumnDescriptor: column)
+    const: @(char name)
+    const: @(char type_name)
+    const: @(char descriptor)
+) int
+    const: @: char actual_descriptor
+
+    if: column = 0 || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, name) != 0 || c.strcmp(column\type_name, type_name) != 0 || lm_table_column_descriptor_descriptor_count(column) != 1U
+        return: 0
+    actual_descriptor: lm_table_column_descriptor_descriptor_at(column, 0U)
+return: actual_descriptor != 0 && c.strcmp(actual_descriptor, descriptor) = 0
+
+fn: lm_test_generated_return_path_cell_is (
+    const: @(char path)
+    const: (LmTransRegistryFact: fact)
+) int
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+    int: covered
+
+    key_cell: 0
+    covered: 0
+    value_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, path, c.strlen(path), 0U, 0, 0, @ key_cell, @ covered)
+    if: covered = 0 || key_cell = 0 || key_cell\value = 0 || key_cell\source != 0 || c.strcmp(key_cell\value, "return") != 0 || value_cell = 0 || value_cell\value = 0 || value_cell\source != fact || value_cell\value = fact\payload || c.strcmp(value_cell\value, fact\payload) != 0
+        return: 0
+return: 1
+
+fn: lm_test_generated_abi_return_source_rows_core () int
+    LmP0Text: scalar_name
+    LmP0Text: pointer_name
+    LmTransL4CallableType: scalar_type
+    LmTransL4CallableType: pointer_type
+    LmTransL4CallableType: resolved_type
+    LmTransRegistryFact: scalar_class_fact
+    LmTransRegistryFact: pointer_class_fact
+    LmTransRegistryFact: pointer_depth_fact
+    LmTransRegistryFact: pointer_const_fact
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: cell
+    LmOwnPtrStack: selected_keys
+    const: @: char source_key
+    size_t: i
+    int: covered
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    scalar_name: lm_trans_text_from_cstr("LmGeneratedScalarReturn")
+    pointer_name: lm_trans_text_from_cstr("LmGeneratedPointerReturn")
+    scalar_type: lm_trans_expr_callable_type_new()
+    pointer_type: lm_trans_expr_callable_type_new()
+    resolved_type: lm_trans_expr_callable_type_new()
+    selected_keys: 0
+    status: 0
+    if: scalar_name = 0 || pointer_name = 0 || scalar_type = 0 || pointer_type = 0 || resolved_type = 0
+        status: 1
+
+    if: status = 0 && lm_trans_text_assign_cstr(scalar_type\class_name, "int") = 0
+        status: 1
+    if: status = 0
+        pointer_type\address_depth: 1U
+        pointer_type\is_const: 1
+        if: lm_trans_text_assign_cstr(pointer_type\class_name, "char") = 0
+            status: 1
+    ---
+
+    if: status = 0 && (lm_trans_registry_note_class_present(scalar_name) != 0 || lm_trans_registry_note_class_present(scalar_type\class_name) != 0 || lm_trans_registry_materialize_fn_descriptor_return(scalar_name, scalar_type) != 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry_note_class_present(pointer_name) != 0 || lm_trans_registry_note_class_present(pointer_type\class_name) != 0 || lm_trans_registry_materialize_fn_descriptor_return(pointer_name, pointer_type) != 0)
+        status: 1
+
+    scalar_class_fact: lm_test_generated_return_fact_at(2U)
+    pointer_class_fact: lm_test_generated_return_fact_at(5U)
+    pointer_depth_fact: lm_test_generated_return_fact_at(6U)
+    pointer_const_fact: lm_test_generated_return_fact_at(7U)
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 8U || lm_registry_view_fact_count(lm_trans_registry\view) != 8U || lm_registry_view_source_table_count(lm_trans_registry\view) != 2U)
+        status: 1
+    if: status = 0 && (lm_test_generated_return_fact_is(scalar_class_fact, "LmGeneratedScalarReturn.return.class", "int") = 0 || lm_test_generated_return_fact_is(pointer_class_fact, "LmGeneratedPointerReturn.return.class", "char") = 0 || lm_test_generated_return_fact_is(pointer_depth_fact, "LmGeneratedPointerReturn.return.address-depth", "1") = 0 || lm_test_generated_return_fact_is(pointer_const_fact, "LmGeneratedPointerReturn.return.const", "1") = 0)
+        status: 1
+
+    i: 0U
+    while: status = 0 && i < 2U
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, i)
+        if: descriptor = 0 || descriptor\name = 0 || lm_table_descriptor_column_count(descriptor) != 4U || lm_table_descriptor_materialized_row_count(descriptor) != 1U || lm_test_generated_return_column_is(lm_table_descriptor_column_at(descriptor, 0U), "name", "class", "class") = 0 || lm_test_generated_return_column_is(lm_table_descriptor_column_at(descriptor, 1U), "class", "class", "class") = 0 || lm_test_generated_return_column_is(lm_table_descriptor_column_at(descriptor, 2U), "address-depth", "size_t", "size_t") = 0 || lm_test_generated_return_column_is(lm_table_descriptor_column_at(descriptor, 3U), "const", "int", "int") = 0
+            status: 1
+            break
+        if: (i = 0U && c.strcmp(descriptor\name, "LmGeneratedScalarReturn.return") != 0) || (i = 1U && c.strcmp(descriptor\name, "LmGeneratedPointerReturn.return") != 0)
+            status: 1
+            break
+        row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+        if: row = 0 || row\local_sequence != 0U || lm_table_row_cell_count(row) != 4U
+            status: 1
+            break
+        i: i + 1U
+
+    if: status = 0
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, 0U)
+        row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+        cell: lm_table_row_cell_at(row, 2U)
+        if: cell = 0 || cell\atom = 0 || c.strcmp(cell\atom, "None") != 0 || cell\value != 0 || cell\node != 0 || cell\source != 0 || cell\explicit_none = 0
+            status: 1
+        cell: lm_table_row_cell_at(row, 3U)
+        if: cell = 0 || cell\atom = 0 || c.strcmp(cell\atom, "None") != 0 || cell\value != 0 || cell\node != 0 || cell\source != 0 || cell\explicit_none = 0
+            status: 1
+    ---
+
+    if: status = 0 && (lm_test_generated_return_path_cell_is("LmGeneratedScalarReturn.return.class", scalar_class_fact) = 0 || lm_test_generated_return_path_cell_is("LmGeneratedPointerReturn.return.class", pointer_class_fact) = 0 || lm_test_generated_return_path_cell_is("LmGeneratedPointerReturn.return.address-depth", pointer_depth_fact) = 0 || lm_test_generated_return_path_cell_is("LmGeneratedPointerReturn.return.const", pointer_const_fact) = 0)
+        status: 1
+
+    if: status = 0
+        covered: 0
+        if: lm_registry_view_source_path_has_key_slice(lm_trans_registry\view, "LmGeneratedScalarReturn.return.address-depth", c.strlen("LmGeneratedScalarReturn.return.address-depth"), "return", 6U, @ covered) != 0 || covered = 0
+            status: 1
+        covered: 0
+        if: lm_registry_view_source_path_has_key_slice(lm_trans_registry\view, "LmGeneratedScalarReturn.return.const", c.strlen("LmGeneratedScalarReturn.return.const"), "return", 6U, @ covered) != 0 || covered = 0
+            status: 1
+        covered: 1
+        if: lm_registry_view_source_path_has_rows(lm_trans_registry\view, "LmGeneratedSub.return.class", @ covered) != 0 || covered != 0
+            status: 1
+    ---
+
+    if: status = 0
+        selected_keys: lm_trans_namespace_registry_source_relation_keys_new(0, pointer_name, "return.class")
+        covered: 0
+        source_key: lm_registry_view_source_path_key_at_slice(lm_trans_registry\view, "LmGeneratedPointerReturn.return.class", c.strlen("LmGeneratedPointerReturn.return.class"), 0U, @ covered)
+        if: selected_keys = 0 || selected_keys\count != 1U || covered = 0 || source_key = 0 || lm_own_ptr_stack_at(selected_keys, 0U) != source_key || source_key = pointer_class_fact\key
+            status: 1
+    ---
+
+    if: status = 0 && lm_trans_callable_descriptor_return_type(0, pointer_name, resolved_type) = 0
+        status: 1
+    if: status = 0 && (resolved_type\class_name = 0 || lm_trans_text_equals(resolved_type\class_name, "char") = 0 || resolved_type\address_depth != 1U || resolved_type\is_const = 0)
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_ptr_stack_delete(@ selected_keys)
+    lm_trans_expr_callable_type_delete(resolved_type)
+    lm_trans_expr_callable_type_delete(pointer_type)
+    lm_trans_expr_callable_type_delete(scalar_type)
+    lm_trans_text_ref_destroy(@ pointer_name)
+    lm_trans_text_ref_destroy(@ scalar_name)
+    lm_trans_registry_destroy()
+return: status
