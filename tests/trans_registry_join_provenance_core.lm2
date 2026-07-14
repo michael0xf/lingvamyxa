@@ -157,6 +157,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: serialization_codec_n2_target
     LmTransRegistryFact: serialization_codec_wrong_column_origin
     LmTransRegistryFact: serialization_codec_wrong_column_target
+    LmTransRegistryFact: none_cell_origin
+    LmTransRegistryFact: none_cell_middle
+    LmTransRegistryFact: none_cell_target
     LmTransRegistryFact: contextual_literal_mapping_origin
     LmTransRegistryFact: contextual_literal_mapping_middle
     LmTransRegistryFact: contextual_literal_mapping_target
@@ -264,6 +267,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: serialization_codec_descriptor
     LmTableDescriptor: serialization_codec_n2_descriptor
     LmTableDescriptor: serialization_codec_wrong_column_descriptor
+    LmTableDescriptor: none_cell_descriptor
     LmTableDescriptor: contextual_literal_mapping_descriptor
     LmTableDescriptor: contextual_literal_target_descriptor
     LmTableDescriptor: namespace_l4_descriptor
@@ -295,6 +299,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: serialization_codec_row
     LmTableRow: serialization_codec_n2_row
     LmTableRow: serialization_codec_wrong_column_row
+    LmTableRow: none_cell_row
     LmTableRow: contextual_literal_mapping_row
     LmTableRow: contextual_literal_target_row
     LmTableRow: namespace_l4_row
@@ -352,6 +357,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: serialization_codec_n2_value_cell
     LmTableCell: serialization_codec_wrong_column_key_cell
     LmTableCell: serialization_codec_wrong_column_value_cell
+    LmTableCell: none_cell_key_cell
+    LmTableCell: none_cell_marker_cell
+    LmTableCell: none_cell_value_cell
     LmTableCell: contextual_literal_mapping_key_cell
     LmTableCell: contextual_literal_mapping_marker_cell
     LmTableCell: contextual_literal_mapping_value_cell
@@ -469,6 +477,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_fn_external
     const: @: char resolved_fn_receiver
     const: @: char resolved_serialization_codec
+    const: @: char resolved_none_cell
     const: @: char resolved_contextual_literal_mapping
     const: @: char resolved_contextual_literal_value
     const: @: char resolved_namespace_l4
@@ -508,6 +517,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: serialization_codec_key_text
     LmP0Text: serialization_codec_n2_key_text
     LmP0Text: serialization_codec_wrong_column_key_text
+    LmP0Text: none_cell_key_text
     LmP0Text: contextual_literal_mapping_key_text
     LmP0Text: contextual_literal_expected_class_text
     LmP0Text: namespace_l4_key_text
@@ -1116,6 +1126,52 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_serialization_codec: lm_trans_registry_serialization_codec_value(serialization_codec_wrong_column_key_text)
         resolved_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "serialization.codec", "class", "class", 0, "codec", serialization_codec_wrong_column_target, 1, 0, 0)
         if: serialization_codec_wrong_column_key_text = 0 || resolved_serialization_codec != serialization_codec_wrong_column_target\payload || resolved_serialization_codec = serialization_codec_wrong_column_value_cell\value || resolved_cell != 0
+            status: 1
+    ---
+
+    none_cell_origin: 0
+    none_cell_middle: 0
+    none_cell_target: 0
+    none_cell_descriptor: 0
+    none_cell_row: 0
+    none_cell_key_cell: 0
+    none_cell_marker_cell: 0
+    none_cell_value_cell: 0
+    none_cell_key_text: 0
+    if: status = 0
+        none_cell_origin: lm_test_registry_push_value_fact("lm.test.none-cell.origin", "LmNoneWide", "0", 0)
+        none_cell_middle: lm_test_registry_push_value_fact("lm.test.none-cell.middle", "LmNoneWide", "0", none_cell_origin)
+        none_cell_target: lm_test_registry_push_value_fact("None.cell", "LmNoneWide", "0", none_cell_middle)
+        if: none_cell_origin = 0 || none_cell_middle = 0 || none_cell_target = 0 || none_cell_middle\source != none_cell_origin || none_cell_target\source != none_cell_middle
+            status: 1
+    ---
+
+    if: status = 0
+        none_cell_descriptor: lm_table_descriptor_new_empty_slice("None", 4U)
+        if: none_cell_descriptor = 0 || lm_table_descriptor_add_column(none_cell_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(none_cell_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(none_cell_descriptor, "cell", "decimal") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        none_cell_row: lm_table_row_new(0)
+        none_cell_key_cell: lm_table_cell_new_cstr("LmNoneWide", "LmNoneWide", 0, 0, 0)
+        none_cell_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        none_cell_value_cell: lm_table_cell_new_cstr("0", "0", 0, none_cell_origin, 0)
+        if: none_cell_row = 0 || none_cell_key_cell = 0 || none_cell_marker_cell = 0 || none_cell_value_cell = 0 || lm_table_row_take_cell(none_cell_row, none_cell_key_cell) != 0 || lm_table_row_take_cell(none_cell_row, none_cell_marker_cell) != 0 || lm_table_row_take_cell(none_cell_row, none_cell_value_cell) != 0 || lm_table_descriptor_take_materialized_row(none_cell_descriptor, none_cell_row) != 0
+            status: 1
+        else:
+            none_cell_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, none_cell_descriptor) != 0
+                status: 1
+            else:
+                none_cell_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        none_cell_key_text: lm_trans_text_from_cstr("LmNoneWide")
+        resolved_none_cell: lm_trans_registry_none_cell_value(none_cell_key_text)
+        if: none_cell_key_text = 0 || resolved_none_cell != none_cell_value_cell\value || resolved_none_cell = none_cell_middle\payload || resolved_none_cell = none_cell_target\payload
             status: 1
     ---
 
@@ -2244,6 +2300,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_trans_text_ref_destroy(@ serialization_codec_wrong_column_key_text)
     lm_table_row_delete_any(serialization_codec_wrong_column_row)
     lm_table_descriptor_delete_any(serialization_codec_wrong_column_descriptor)
+    lm_trans_text_ref_destroy(@ none_cell_key_text)
+    lm_table_row_delete_any(none_cell_row)
+    lm_table_descriptor_delete_any(none_cell_descriptor)
     lm_trans_text_ref_destroy(@ contextual_literal_mapping_key_text)
     lm_table_row_delete_any(contextual_literal_mapping_row)
     lm_table_descriptor_delete_any(contextual_literal_mapping_descriptor)

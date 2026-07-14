@@ -2479,6 +2479,7 @@ static int lm_trans_registry_push_row_atoms(const LmP0Text *table_atom, const Lm
 static int lm_trans_registry_column_has_descriptor(const LmL4Column *column, const char *descriptor);
 static int lm_trans_registry_column_is_class_typed(const LmL4Column *column);
 static const char * lm_trans_registry_serialization_codec_value(const LmP0Text *key);
+static const char * lm_trans_registry_none_cell_value(const LmP0Text *key);
 static const char * lm_trans_registry_column_serialization_codec(const LmL4Column *column);
 static int lm_trans_registry_descriptor_payload_is_numeric(const LmP0Text *payload);
 static int lm_trans_registry_column_is_numeric_typed(const LmL4Column *column);
@@ -2507,6 +2508,7 @@ static const LmTableCell * lm_trans_registry_source_path_typed_cell(const LmTran
 static const LmTableCell * lm_trans_registry_source_path_typed_node_cell(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *node_descriptor, const char *n2_node_column_name, const LmTransRegistryFact *facade_row, const LmTableCell **out_key_cell);
 static const char * lm_trans_registry_source_path_typed_value(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const LmTransRegistryFact *facade_row);
 static const char * lm_trans_registry_source_path_n2_named_typed_value(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *n2_value_column_name, const char *value_descriptor, const LmTransRegistryFact *facade_row);
+static const char * lm_trans_registry_source_path_n2_named_key_typed_value(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row);
 static const char * lm_trans_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const LmTransRegistryFact *facade_row);
 static const LmP0Node * lm_trans_registry_source_n2_node(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *node_column_name, const LmTransRegistryFact *facade_row);
 static void lm_trans_registry_view_parity_fail(const char *operation, const char *table);
@@ -2541,6 +2543,7 @@ static const char * lm_trans_namespace_registry_lookup(const LmTransNamespace *n
 static LmTransRegistryFact * lm_trans_namespace_registry_selected_facade_text_row(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table);
 static const char * lm_trans_namespace_registry_source_n2_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor);
 static const char * lm_trans_namespace_registry_source_path_n2_named_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *n2_value_column_name, const char *value_descriptor);
+static const char * lm_trans_namespace_registry_source_path_n2_named_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *n2_value_column_name);
 static const char * lm_trans_namespace_class_reference_base_value(const LmTransNamespace *namespace_, const LmP0Text *name);
 static const char * lm_trans_namespace_class_semantic_value(const LmTransNamespace *namespace_, const LmP0Text *name);
 static const char * lm_trans_class_kind_selected_row_value(const LmTransNamespace *source_namespace, const LmTransRegistryFact *facade_row, const char *table_name, const char *selected_value);
@@ -5784,6 +5787,10 @@ static const char * lm_trans_registry_serialization_codec_value(const LmP0Text *
     return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, key, "serialization.codec", "class", "class", "codec", "char");
 }
 
+static const char * lm_trans_registry_none_cell_value(const LmP0Text *key) {
+    return lm_trans_namespace_registry_source_path_n2_named_key_typed_value(0, key, "None.cell", "class", "class", "value");
+}
+
 static const char * lm_trans_registry_column_serialization_codec(const LmL4Column *column) {
     LmP0Text * payload;
     const char *codec;
@@ -5915,7 +5922,7 @@ static int lm_trans_registry_cell_none_cell_matches(const LmP0Text *payload, con
     }
     result = 0;
     if (lm_trans_registry_identifier_value(class_atom, class_name) != 0) {
-        none_value = lm_trans_namespace_registry_source_n2_key_typed_value(0, class_name, "None.cell", "class", "class", "value");
+        none_value = lm_trans_registry_none_cell_value(class_name);
         if (none_value != 0 && lm_trans_text_equals(payload, none_value) != 0) {
             result = 1;
         }
@@ -6525,6 +6532,18 @@ static const char * lm_trans_registry_source_path_n2_named_typed_value(const LmT
         return 0;
     }
     source_cell = lm_trans_registry_source_path_typed_cell(namespace_, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row);
+    if (source_cell != 0 && lm_trans_registry_view_is_selected() != 0) {
+        return source_cell -> value;
+    }
+    return facade_row -> payload;
+}
+
+static const char * lm_trans_registry_source_path_n2_named_key_typed_value(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row) {
+    const LmTableCell * source_cell;
+    if (facade_row == 0 || facade_row -> key == 0 || facade_row -> payload == 0 || n2_value_column_name == 0) {
+        return 0;
+    }
+    source_cell = lm_trans_registry_source_path_typed_cell_kind_policy(namespace_, source_path, key_column_name, key_descriptor, 0, n2_value_column_name, facade_row, 1, 0, 0);
     if (source_cell != 0 && lm_trans_registry_view_is_selected() != 0) {
         return source_cell -> value;
     }
@@ -7704,6 +7723,25 @@ static const char * lm_trans_namespace_registry_source_path_n2_named_typed_value
         return selected_value;
     }
     source_value = lm_trans_registry_source_path_n2_named_typed_value(namespace_, source_path, key_column_name, key_descriptor, n2_value_column_name, value_descriptor, facade_row);
+    if (source_value != 0) {
+        return source_value;
+    }
+    return selected_value;
+}
+
+static const char * lm_trans_namespace_registry_source_path_n2_named_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *n2_value_column_name) {
+    LmTransRegistryFact * facade_row;
+    const char *selected_value;
+    const char *source_value;
+    selected_value = lm_trans_namespace_registry_lookup(namespace_, key, source_path);
+    if (selected_value == 0) {
+        return 0;
+    }
+    facade_row = lm_trans_namespace_registry_selected_facade_text_row(namespace_, key, source_path);
+    if (facade_row == 0 || facade_row -> payload == 0 || strcmp(facade_row -> payload, selected_value) != 0) {
+        return selected_value;
+    }
+    source_value = lm_trans_registry_source_path_n2_named_key_typed_value(namespace_, source_path, key_column_name, key_descriptor, n2_value_column_name, facade_row);
     if (source_value != 0) {
         return source_value;
     }
