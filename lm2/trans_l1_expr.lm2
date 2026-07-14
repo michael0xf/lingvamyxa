@@ -4130,7 +4130,7 @@ fn: lm_trans_contextual_literal_value (
         return: 0
     expected_table: lm_trans_text_copy_cstr(expected_class)
     if: expected_table != 0
-        value: lm_trans_namespace_registry_lookup(namespace_, literal, expected_table)
+        value: lm_trans_namespace_registry_source_n2_key_typed_value(namespace_, literal, expected_table, "class", "class", "context literal")
         lm_own_delete(expected_table, 0)
         if: value != 0
             return: value

@@ -2475,9 +2475,10 @@ static LmTransRegistryFact * lm_trans_registry_lookup_default_row_in_identifiers
 static int lm_trans_registry_view_row_same(const LmTransRegistryFact *legacy_row, const LmRegistryViewRow *view_row);
 static int lm_trans_registry_view_parity_enabled(void);
 static int lm_trans_registry_view_is_selected(void);
-static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *payload_column_name, const LmTransRegistryFact *facade_row, int expect_node, const char *expected_key_descriptor, const char *expected_payload_descriptor);
+static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *payload_column_name, const LmTransRegistryFact *facade_row, int expect_node, const char *expected_key_descriptor, const char *expected_payload_descriptor, int accept_any_payload_descriptor);
 static const char * lm_trans_registry_source_n2_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *value_column_name, const LmTransRegistryFact *facade_row);
 static const char * lm_trans_registry_source_n2_typed_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor, const LmTransRegistryFact *facade_row);
+static const char * lm_trans_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const LmTransRegistryFact *facade_row);
 static const LmP0Node * lm_trans_registry_source_n2_node(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *node_column_name, const LmTransRegistryFact *facade_row);
 static void lm_trans_registry_view_parity_fail(const char *operation, const char *table);
 static const LmRegistryViewRow * lm_trans_registry_view_lookup_exact_text(const LmP0Text *key, const char *table);
@@ -2505,6 +2506,7 @@ static int lm_trans_registry_assert_payload_table_exists(const char *source_tabl
 static const char * lm_trans_namespace_registry_lookup(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table);
 static LmTransRegistryFact * lm_trans_namespace_registry_selected_facade_text_row(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table);
 static const char * lm_trans_namespace_registry_source_n2_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor);
+static const char * lm_trans_namespace_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name);
 static const char * lm_trans_namespace_registry_source_n2_typed_table_link_checked(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_table, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor, const char *target_class_table);
 static int lm_trans_array_head_find_close(const LmP0Text *text, size_t open_index, size_t *out_close_index);
 static int lm_trans_array_head_next_dimension(const LmP0Text *head, size_t *index, LmP0Text *out_dimension);
@@ -6008,7 +6010,7 @@ static int lm_trans_registry_view_is_selected(void) {
     return lm_trans_registry != 0 && lm_trans_registry->view_mode == 2;
 }
 
-static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *payload_column_name, const LmTransRegistryFact *facade_row, int expect_node, const char *expected_key_descriptor, const char *expected_payload_descriptor) {
+static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *payload_column_name, const LmTransRegistryFact *facade_row, int expect_node, const char *expected_key_descriptor, const char *expected_payload_descriptor, int accept_any_payload_descriptor) {
     const LmTableDescriptor * source_table;
     const LmTableRow * source_row;
     const LmTableColumnDescriptor * source_key_column;
@@ -6045,9 +6047,12 @@ static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespa
                 source_key_descriptor = lm_table_column_descriptor_descriptor_at(source_key_column, 0U);
                 source_usable = lm_table_column_descriptor_descriptor_count(source_key_column) == 1U && source_key_descriptor != 0 && strcmp(source_key_descriptor, expected_key_descriptor) == 0;
             }
-            if (source_usable != 0 && expected_payload_descriptor != 0) {
+            if (source_usable != 0 && (expected_payload_descriptor != 0 || accept_any_payload_descriptor != 0)) {
                 source_payload_descriptor = lm_table_column_descriptor_descriptor_at(source_payload_column, 0U);
-                source_usable = lm_table_column_descriptor_descriptor_count(source_payload_column) == 1U && source_payload_descriptor != 0 && strcmp(source_payload_descriptor, expected_payload_descriptor) == 0;
+                source_usable = lm_table_column_descriptor_descriptor_count(source_payload_column) == 1U && source_payload_descriptor != 0;
+                if (source_usable != 0 && expected_payload_descriptor != 0) {
+                    source_usable = strcmp(source_payload_descriptor, expected_payload_descriptor) == 0;
+                }
             }
         }
         if (source_usable != 0) {
@@ -6080,7 +6085,7 @@ static const char * lm_trans_registry_source_n2_value(const LmTransNamespace *na
     if (facade_row == 0 || facade_row -> key == 0 || facade_row -> payload == 0) {
         return 0;
     }
-    source_cell = lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0, 0, 0);
+    source_cell = lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0, 0, 0, 0);
     if (source_cell != 0 && lm_trans_registry_view_is_selected() != 0) {
         return source_cell -> value;
     }
@@ -6092,7 +6097,19 @@ static const char * lm_trans_registry_source_n2_typed_value(const LmTransNamespa
     if (facade_row == 0 || facade_row -> key == 0 || facade_row -> payload == 0) {
         return 0;
     }
-    source_cell = lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0, key_descriptor, value_descriptor);
+    source_cell = lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0, key_descriptor, value_descriptor, 0);
+    if (source_cell != 0 && lm_trans_registry_view_is_selected() != 0) {
+        return source_cell -> value;
+    }
+    return facade_row -> payload;
+}
+
+static const char * lm_trans_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const LmTransRegistryFact *facade_row) {
+    const LmTableCell * source_cell;
+    if (facade_row == 0 || facade_row -> key == 0 || facade_row -> payload == 0) {
+        return 0;
+    }
+    source_cell = lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, value_column_name, facade_row, 0, key_descriptor, 0, 1);
     if (source_cell != 0 && lm_trans_registry_view_is_selected() != 0) {
         return source_cell -> value;
     }
@@ -6104,7 +6121,7 @@ static const LmP0Node * lm_trans_registry_source_n2_node(const LmTransNamespace 
     if (facade_row == 0 || facade_row -> key == 0 || facade_row -> payload_node == 0) {
         return 0;
     }
-    source_cell = lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, node_column_name, facade_row, 1, "class", "node");
+    source_cell = lm_trans_registry_source_n2_cell(namespace_, table_name, key_column_name, node_column_name, facade_row, 1, "class", "node", 0);
     if (source_cell != 0 && lm_trans_registry_view_is_selected() != 0) {
         return (((const LmP0Node *)source_cell -> node));
     }
@@ -6921,6 +6938,20 @@ static const char * lm_trans_namespace_registry_source_n2_typed_value(const LmTr
         return source_value;
     }
     return selected_value;
+}
+
+static const char * lm_trans_namespace_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name) {
+    LmTransRegistryFact * facade_row;
+    const char *selected_value;
+    selected_value = lm_trans_namespace_registry_lookup(namespace_, key, table_name);
+    if (selected_value == 0) {
+        return 0;
+    }
+    facade_row = lm_trans_namespace_registry_selected_facade_text_row(namespace_, key, table_name);
+    if (facade_row == 0 || facade_row -> payload == 0 || strcmp(facade_row -> payload, selected_value) != 0) {
+        return selected_value;
+    }
+    return lm_trans_registry_source_n2_key_typed_value(namespace_, table_name, key_column_name, key_descriptor, value_column_name, facade_row);
 }
 
 static const char * lm_trans_namespace_registry_source_n2_typed_table_link_checked(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_table, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor, const char *target_class_table) {
@@ -13542,7 +13573,7 @@ static const char * lm_trans_contextual_literal_value(const LmTransNamespace *na
     }
     expected_table = lm_trans_text_copy_cstr(expected_class);
     if (expected_table != 0) {
-        value = lm_trans_namespace_registry_lookup(namespace_, literal, expected_table);
+        value = lm_trans_namespace_registry_source_n2_key_typed_value(namespace_, literal, expected_table, "class", "class", "context literal");
         lm_own_delete(expected_table, 0);
         if (value != 0) {
             return value;

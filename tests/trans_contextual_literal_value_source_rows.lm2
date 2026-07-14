@@ -36,6 +36,47 @@ L4:
     end: `contextual.literal.value`
 
     table:
+        name: Boolean
+        columns((class: class) (int8: `context literal`))
+        rows:
+                 OK  7
+                 OK  None
+    end: Boolean
+
+    table:
+        name: double
+        columns((class: class) (double: value))
+        rows:
+                 false  8
+    end: double
+
+    table:
+        name: `lm.test.contextual.class.seed`
+        columns((class: class) (uint8: `context literal`))
+        rows:
+                 None  9
+    end: `lm.test.contextual.class.seed`
+
+    join: (`lm.test.contextual.class.seed`) uint8
+        columns((class: class) (uint8: `context literal`))
+        rows:
+    end: uint8
+
+    table:
+        name: uint8
+        columns((class: class) (uint8: `context literal`))
+        rows:
+                 None  None
+    end: uint8
+
+    table:
+        name: long
+        columns((class: class) (long: `context literal`))
+        rows:
+                 default  10
+    end: long
+
+    table:
         name: `lm.test.contextual.direct`
         columns((class: class) (@: char value))
         rows:
@@ -84,7 +125,11 @@ external:
         int: fallback OK
         int: joined false
         int: defaulted true
+        Boolean: class_direct OK
+        double: class_fallback false
+        uint8: class_joined None
+        long: class_default true
 
-        return: direct != 101 || fallback != 202 || joined != 303 || defaulted != 404
+        return: direct != 101 || fallback != 202 || joined != 303 || defaulted != 404 || class_direct != 7 || class_fallback != 8 || class_joined != 9 || class_default != 10
     end: main
 end: external
