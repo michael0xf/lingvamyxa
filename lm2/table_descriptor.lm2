@@ -233,6 +233,7 @@ L4:
                  facts             LmOwnPtrStack
                  local_fact_count  size_t
                  source_tables     LmOwnPtrStack
+                 class_names       LmOwnPtrStack
     end: `LmRegistryView.field.class`
 
     table:
@@ -244,6 +245,7 @@ L4:
                  facts             2
                  local_fact_count  3
                  source_tables     4
+                 class_names       5
     end: `LmRegistryView.field.index`
 
     table:
@@ -254,6 +256,7 @@ L4:
                  tables  0
                  source_tables 0
                  facts   0
+                 class_names 0
     end: `LmRegistryView.field.address-depth`
 
     table:
@@ -681,7 +684,8 @@ fn: lm_registry_view_new (const: (LmRegistryView: parent)) LmRegistryView
     view\tables: lm_table_descriptor_stack_new(lm_table_descriptor_delete_any)
     view\source_tables: lm_table_descriptor_stack_new(lm_table_descriptor_delete_any)
     view\facts: lm_table_descriptor_stack_new(0)
-    if: view\tables = 0 || view\source_tables = 0 || view\facts = 0
+    view\class_names: lm_table_descriptor_stack_new(lm_own_delete_plain)
+    if: view\tables = 0 || view\source_tables = 0 || view\facts = 0 || view\class_names = 0
         if: view\tables != 0
             lm_own_ptr_stack_destroy(view\tables)
             lm_own_delete(view\tables, 0)
@@ -691,6 +695,9 @@ fn: lm_registry_view_new (const: (LmRegistryView: parent)) LmRegistryView
         if: view\source_tables != 0
             lm_own_ptr_stack_destroy(view\source_tables)
             lm_own_delete(view\source_tables, 0)
+        if: view\class_names != 0
+            lm_own_ptr_stack_destroy(view\class_names)
+            lm_own_delete(view\class_names, 0)
         lm_own_delete(view, 0)
         return: 0
 return: view
@@ -710,10 +717,93 @@ sub: lm_registry_view_delete (LmRegistryView: view)
         lm_own_ptr_stack_destroy(view\source_tables)
         lm_own_delete(view\source_tables, 0)
         view\source_tables: 0
+    if: view\class_names != 0
+        lm_own_ptr_stack_destroy(view\class_names)
+        lm_own_delete(view\class_names, 0)
+        view\class_names: 0
     view\parent: 0
     view\local_fact_count: 0U
     lm_own_delete(view, 0)
 end: lm_registry_view_delete
+
+fn: lm_registry_view_class_has (const: (LmRegistryView: view); const: @(char name)) int
+    size_t: index
+    const: @: char candidate
+
+    if: view = 0 || name = 0
+        return: 0
+    if: view\class_names != 0
+        index: 0U
+        while: index < view\class_names\count
+            candidate: lm_own_ptr_stack_at(view\class_names, index)
+            if: candidate != 0 && c.strcmp(candidate, name) = 0
+                return: 1
+            index: index + 1U
+    ---
+return: lm_registry_view_class_has(view\parent, name)
+
+fn: lm_registry_view_class_add (LmRegistryView: view; const: @(char name)) int
+    @: char copy
+
+    if: view = 0 || view\class_names = 0 || name = 0
+        return: 1
+    if: lm_registry_view_class_has(view, name) != 0
+        return: 0
+    copy: lm_table_descriptor_copy_cstr(name)
+    if: copy = 0
+        return: 1
+    if: lm_own_ptr_stack_push(view\class_names, copy) != 0
+        lm_own_delete(copy, 0)
+        return: 1
+return: 0
+
+fn: lm_registry_view_class_count (const: (LmRegistryView: view)) size_t
+    size_t: count
+    size_t: index
+    const: LmRegistryView: current
+    const: @: char candidate
+
+    count: 0U
+    current: view
+    while: current != 0
+        if: current\class_names != 0
+            index: 0U
+            while: index < current\class_names\count
+                candidate: lm_own_ptr_stack_at(current\class_names, index)
+                if: candidate != 0 && lm_registry_view_class_has(current\parent, candidate) = 0
+                    count: count + 1U
+                index: index + 1U
+        ---
+        current: current\parent
+return: count
+
+fn: lm_registry_view_class_at (const: (LmRegistryView: view); size_t: index) const: @: char
+    size_t: parent_count
+    size_t: local_index
+    const: LmRegistryView: current
+    const: @: char candidate
+
+    current: view
+    while: current != 0
+        parent_count: lm_registry_view_class_count(current\parent)
+        if: index < parent_count
+            current: current\parent
+            continue
+        ---
+        index: index - parent_count
+        if: current\class_names = 0
+            return: 0
+        local_index: 0U
+        while: local_index < current\class_names\count
+            candidate: lm_own_ptr_stack_at(current\class_names, local_index)
+            if: candidate != 0 && lm_registry_view_class_has(current\parent, candidate) = 0
+                if: index = 0U
+                    return: candidate
+                index: index - 1U
+            ---
+            local_index: local_index + 1U
+        return: 0
+return: 0
 
 fn: lm_registry_view_find_local_table_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) LmTableDescriptor
     size_t: index
@@ -1135,6 +1225,12 @@ fn: lm_registry_view_push_relation (
         lm_registry_view_row_delete_any(popped)
         return: 1
     if: lm_own_ptr_stack_push(view\facts, row) != 0
+        popped: lm_own_ptr_stack_pop(descriptor\source_rows)
+        popped: lm_own_ptr_stack_pop(descriptor\rows)
+        lm_registry_view_row_delete_any(popped)
+        return: 1
+    if: payload != 0 && c.strcmp(table, "class.present") = 0 && lm_registry_view_class_add(view, key) != 0
+        popped: lm_own_ptr_stack_pop(view\facts)
         popped: lm_own_ptr_stack_pop(descriptor\source_rows)
         popped: lm_own_ptr_stack_pop(descriptor\rows)
         lm_registry_view_row_delete_any(popped)

@@ -1681,6 +1681,53 @@ fn: lm_trans_registry_assert_source_table_materialization () int
         descriptor_index: descriptor_index + 1U
 return: 0
 
+fn: lm_trans_registry_assert_class_universe_parity () int
+    const: LmOwnPtrStack: rows
+    const: LmTransRegistryFact: row
+    const: @: char class_name
+    const: @: char legacy_class_name
+    size_t: class_count
+    size_t: i
+    size_t: j
+    size_t: unique_count
+    int: first
+
+    if: c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+
+    rows: lm_trans_registry_relation_stack_for_table("class.present")
+    unique_count: 0U
+    if: rows != 0
+        i: 0U
+        while: i < rows\count
+            row: (cast: (const: LmTransRegistryFact) lm_own_ptr_stack_at(rows, i))
+            if: row != 0 && row\key != 0 && row\payload != 0
+                legacy_class_name: row\key
+                first: 1
+                j: 0U
+                while: j < i
+                    row: (cast: (const: LmTransRegistryFact) lm_own_ptr_stack_at(rows, j))
+                    if: row != 0 && row\key != 0 && row\payload != 0 && c.strcmp(row\key, legacy_class_name) = 0
+                        first: 0
+                        break
+                    j: j + 1U
+                if: first != 0
+                    class_name: lm_registry_view_class_at(c.lm_trans_registry->view, unique_count)
+                    if: class_name = 0 || c.strcmp(class_name, legacy_class_name) != 0
+                        c.fprintf(c.stderr, "trans registry view parity error: class universe order differs at %zu for %s\n", unique_count, legacy_class_name)
+                        return: 1
+                    unique_count: unique_count + 1U
+                ---
+            ---
+            i: i + 1U
+    ---
+
+    class_count: lm_registry_view_class_count(c.lm_trans_registry->view)
+    if: class_count != unique_count
+        c.fprintf(c.stderr, "trans registry view parity error: class universe count legacy=%zu view=%zu\n", unique_count, class_count)
+        return: 1
+return: 0
+
 fn: lm_trans_registry_assert_view_parity () int
     size_t: fact_count
     size_t: i
@@ -1712,6 +1759,8 @@ fn: lm_trans_registry_assert_view_parity () int
         c.fprintf(c.stderr, "trans registry view parity error: registry view is not initialized\n")
         return: 1
     if: lm_trans_registry_assert_source_table_materialization() != 0
+        return: 1
+    if: lm_trans_registry_assert_class_universe_parity() != 0
         return: 1
 
     fact_count: lm_registry_view_fact_count(c.lm_trans_registry->view)

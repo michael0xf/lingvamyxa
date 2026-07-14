@@ -247,6 +247,7 @@ struct LmRegistryView {
     LmOwnPtrStack * facts;
     size_t local_fact_count;
     LmOwnPtrStack * source_tables;
+    LmOwnPtrStack * class_names;
 };
 struct LmTransIdentifierRelation {
     const char *name;
@@ -2380,6 +2381,10 @@ static int lm_table_descriptor_schema_same(const LmTableDescriptor *left, const 
 static int lm_table_descriptor_join_schema_compatible(const LmTableDescriptor *source, const LmTableDescriptor *target);
 static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent);
 static void lm_registry_view_delete(LmRegistryView *view);
+static int lm_registry_view_class_has(const LmRegistryView *view, const char *name);
+static int lm_registry_view_class_add(LmRegistryView *view, const char *name);
+static size_t lm_registry_view_class_count(const LmRegistryView *view);
+static const char * lm_registry_view_class_at(const LmRegistryView *view, size_t index);
 static LmTableDescriptor * lm_registry_view_find_local_table_slice(const LmRegistryView *view, const char *table, size_t table_length);
 static LmTableDescriptor * lm_registry_view_ensure_local_table_slice(LmRegistryView *view, const char *table, size_t table_length);
 static LmTableDescriptor * lm_registry_view_find_local_source_table_slice(const LmRegistryView *view, const char *table, size_t table_length);
@@ -2501,6 +2506,7 @@ static int lm_trans_registry_table_has_rows(const char *table);
 static int lm_trans_registry_source_cell_copy_same(const LmTableCell *copied, const LmTableCell *source);
 static int lm_trans_registry_source_row_copy_same(const LmTableRow *copied, const LmTableRow *source);
 static int lm_trans_registry_assert_source_table_materialization(void);
+static int lm_trans_registry_assert_class_universe_parity(void);
 static int lm_trans_registry_assert_view_parity(void);
 static int lm_trans_registry_assert_selected_table_link(const char *source_table, const LmP0Text *key, const char *target_class_table, const char *target_table);
 static int lm_trans_registry_assert_payload_table_exists(const char *source_table, const LmP0Text *key, const char *target_table);
@@ -4151,7 +4157,8 @@ static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent) {
     view->tables = lm_table_descriptor_stack_new(lm_table_descriptor_delete_any);
     view->source_tables = lm_table_descriptor_stack_new(lm_table_descriptor_delete_any);
     view->facts = lm_table_descriptor_stack_new(0);
-    if (view -> tables == 0 || view -> source_tables == 0 || view -> facts == 0) {
+    view->class_names = lm_table_descriptor_stack_new(lm_own_delete_plain);
+    if (view -> tables == 0 || view -> source_tables == 0 || view -> facts == 0 || view -> class_names == 0) {
         if (view -> tables != 0) {
             lm_own_ptr_stack_destroy(view -> tables);
             lm_own_delete(view -> tables, 0);
@@ -4163,6 +4170,10 @@ static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent) {
         if (view -> source_tables != 0) {
             lm_own_ptr_stack_destroy(view -> source_tables);
             lm_own_delete(view -> source_tables, 0);
+        }
+        if (view -> class_names != 0) {
+            lm_own_ptr_stack_destroy(view -> class_names);
+            lm_own_delete(view -> class_names, 0);
         }
         lm_own_delete(view, 0);
         return 0;
@@ -4189,9 +4200,107 @@ static void lm_registry_view_delete(LmRegistryView *view) {
         lm_own_delete(view -> source_tables, 0);
         view->source_tables = 0;
     }
+    if (view -> class_names != 0) {
+        lm_own_ptr_stack_destroy(view -> class_names);
+        lm_own_delete(view -> class_names, 0);
+        view->class_names = 0;
+    }
     view->parent = 0;
     view->local_fact_count = 0U;
     lm_own_delete(view, 0);
+}
+
+static int lm_registry_view_class_has(const LmRegistryView *view, const char *name) {
+    size_t index;
+    const char *candidate;
+    if (view == 0 || name == 0) {
+        return 0;
+    }
+    if (view -> class_names != 0) {
+        index = 0U;
+        while (index < view -> class_names -> count) {
+            candidate = lm_own_ptr_stack_at(view -> class_names, index);
+            if (candidate != 0 && strcmp(candidate, name) == 0) {
+                return 1;
+            }
+            index = index + 1U;
+        }
+    }
+    return lm_registry_view_class_has(view -> parent, name);
+}
+
+static int lm_registry_view_class_add(LmRegistryView *view, const char *name) {
+    char *copy;
+    if (view == 0 || view -> class_names == 0 || name == 0) {
+        return 1;
+    }
+    if (lm_registry_view_class_has(view, name) != 0) {
+        return 0;
+    }
+    copy = lm_table_descriptor_copy_cstr(name);
+    if (copy == 0) {
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(view -> class_names, copy) != 0) {
+        lm_own_delete(copy, 0);
+        return 1;
+    }
+    return 0;
+}
+
+static size_t lm_registry_view_class_count(const LmRegistryView *view) {
+    size_t count;
+    size_t index;
+    const LmRegistryView * current;
+    const char *candidate;
+    count = 0U;
+    current = view;
+    while (current != 0) {
+        if (current -> class_names != 0) {
+            index = 0U;
+            while (index < current -> class_names -> count) {
+                candidate = lm_own_ptr_stack_at(current -> class_names, index);
+                if (candidate != 0 && lm_registry_view_class_has(current -> parent, candidate) == 0) {
+                    count = count + 1U;
+                }
+                index = index + 1U;
+            }
+        }
+        current = current -> parent;
+    }
+    return count;
+}
+
+static const char * lm_registry_view_class_at(const LmRegistryView *view, size_t index) {
+    size_t parent_count;
+    size_t local_index;
+    const LmRegistryView * current;
+    const char *candidate;
+    current = view;
+    while (current != 0) {
+        parent_count = lm_registry_view_class_count(current -> parent);
+        if (index < parent_count) {
+            current = current -> parent;
+            continue;
+        }
+        index = index - parent_count;
+        if (current -> class_names == 0) {
+            return 0;
+        }
+        local_index = 0U;
+        while (local_index < current -> class_names -> count) {
+            candidate = lm_own_ptr_stack_at(current -> class_names, local_index);
+            if (candidate != 0 && lm_registry_view_class_has(current -> parent, candidate) == 0) {
+                if (index == 0U) {
+                    return candidate;
+                }
+                index = index - 1U;
+            }
+            local_index = local_index + 1U;
+        }
+        return 0;
+    }
+    return 0;
 }
 
 static LmTableDescriptor * lm_registry_view_find_local_table_slice(const LmRegistryView *view, const char *table, size_t table_length) {
@@ -4641,6 +4750,13 @@ static int lm_registry_view_push_relation(LmRegistryView *view, const char *tabl
         return 1;
     }
     if (lm_own_ptr_stack_push(view -> facts, row) != 0) {
+        popped = lm_own_ptr_stack_pop(descriptor -> source_rows);
+        popped = lm_own_ptr_stack_pop(descriptor -> rows);
+        lm_registry_view_row_delete_any(popped);
+        return 1;
+    }
+    if (payload != 0 && strcmp(table, "class.present") == 0 && lm_registry_view_class_add(view, key) != 0) {
+        popped = lm_own_ptr_stack_pop(view -> facts);
         popped = lm_own_ptr_stack_pop(descriptor -> source_rows);
         popped = lm_own_ptr_stack_pop(descriptor -> rows);
         lm_registry_view_row_delete_any(popped);
@@ -6666,6 +6782,57 @@ static int lm_trans_registry_assert_source_table_materialization(void) {
     return 0;
 }
 
+static int lm_trans_registry_assert_class_universe_parity(void) {
+    const LmOwnPtrStack * rows;
+    const LmTransRegistryFact * row;
+    const char *class_name;
+    const char *legacy_class_name;
+    size_t class_count;
+    size_t i;
+    size_t j;
+    size_t unique_count;
+    int first;
+    if (lm_trans_registry == 0 || lm_trans_registry->view == 0) {
+        return 1;
+    }
+    rows = lm_trans_registry_relation_stack_for_table("class.present");
+    unique_count = 0U;
+    if (rows != 0) {
+        i = 0U;
+        while (i < rows -> count) {
+            row = (((const LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i)));
+            if (row != 0 && row -> key != 0 && row -> payload != 0) {
+                legacy_class_name = row -> key;
+                first = 1;
+                j = 0U;
+                while (j < i) {
+                    row = (((const LmTransRegistryFact *)lm_own_ptr_stack_at(rows, j)));
+                    if (row != 0 && row -> key != 0 && row -> payload != 0 && strcmp(row -> key, legacy_class_name) == 0) {
+                        first = 0;
+                        break;
+                    }
+                    j = j + 1U;
+                }
+                if (first != 0) {
+                    class_name = lm_registry_view_class_at(lm_trans_registry->view, unique_count);
+                    if (class_name == 0 || strcmp(class_name, legacy_class_name) != 0) {
+                        fprintf(stderr, "trans registry view parity error: class universe order differs at %zu for %s\n", unique_count, legacy_class_name);
+                        return 1;
+                    }
+                    unique_count = unique_count + 1U;
+                }
+            }
+            i = i + 1U;
+        }
+    }
+    class_count = lm_registry_view_class_count(lm_trans_registry->view);
+    if (class_count != unique_count) {
+        fprintf(stderr, "trans registry view parity error: class universe count legacy=%zu view=%zu\n", unique_count, class_count);
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_registry_assert_view_parity(void) {
     size_t fact_count;
     size_t i;
@@ -6698,6 +6865,9 @@ static int lm_trans_registry_assert_view_parity(void) {
         return 1;
     }
     if (lm_trans_registry_assert_source_table_materialization() != 0) {
+        return 1;
+    }
+    if (lm_trans_registry_assert_class_universe_parity() != 0) {
         return 1;
     }
     fact_count = lm_registry_view_fact_count(lm_trans_registry->view);

@@ -426,6 +426,8 @@ external:
             status: 1
         if: status = 0 && (lm_registry_view_append_materialized_rows(view, rollback_target, "broken.ncolumn", 14U) = 0 || lm_table_descriptor_materialized_row_count(rollback_target) != 0U)
             status: 1
+        if: status = 0 && (lm_registry_view_class_count(view) != 0U || lm_registry_view_class_at(view, 0U) != 0)
+            status: 1
 
         lm_table_descriptor_delete_any(joined)
         lm_table_descriptor_delete_any(key_only)
