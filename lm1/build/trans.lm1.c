@@ -7851,7 +7851,7 @@ static const char * lm_trans_l4_namespace_receiver_type_value(const LmP0Text *ke
     if (key == 0 || namespace_table == 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(0, key, namespace_table, "class", "class", "L4", "char");
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, key, namespace_table, "class", "class", "L4", "char");
 }
 
 static const char * lm_trans_namespace_receiver_type_selected_row_value(const LmTransNamespace *source_namespace, const char *source_path, const LmTransRegistryFact *facade_row, const char *selected_value) {

@@ -23,22 +23,27 @@ L4:
 
     table:
         name: `lm.test.namespace.l4.seed`
-        columns((class: class) (@: char L4))
+        columns((class: class) (int: marker) (@: char l4))
         rows:
-                 row  `l4.frame`
+                 row  7  `l4.frame`
     end: `lm.test.namespace.l4.seed`
 
-    join: (`lm.test.namespace.l4.seed`) `namespace.l4`
-        columns((class: class) (@: char L4))
+    join: (`lm.test.namespace.l4.seed`) `lm.test.namespace.l4.middle`
+        columns((class: class) (int: marker) (@: char l4))
         rows:
-    end: `namespace.l4`
+    end: `lm.test.namespace.l4.middle`
+
+    join: (`lm.test.namespace.l4.middle`) namespace
+        columns((class: class) (int: marker) (@: char l4))
+        rows:
+    end: namespace
 
     table:
-        name: `namespace.l4`
-        columns((class: class) (@: char L4))
+        name: namespace
+        columns((class: class) (int: marker) (@: char l4))
         rows:
-                 row  None
-    end: `namespace.l4`
+                 row  8  None
+    end: namespace
 
     row: `lm.test.namespace.l4.direct` joined  2
 
@@ -61,24 +66,29 @@ L4:
 
     table:
         name: `lm.test.namespace.l4.root.seed`
-        columns((class: class) (@: char L4))
+        columns((class: class) (int: marker) (@: char `l4.root`))
         rows:
-                 L4  `l4.root`
+                 L4  7  `l4.root`
     end: `lm.test.namespace.l4.root.seed`
 end: L4
 
 registry:
-    join: (`lm.test.namespace.l4.root.seed`) `namespace.l4.root`
-        columns((class: class) (@: char L4))
+    join: (`lm.test.namespace.l4.root.seed`) `lm.test.namespace.l4.root.middle`
+        columns((class: class) (int: marker) (@: char `l4.root`))
         rows:
-    end: `namespace.l4.root`
+    end: `lm.test.namespace.l4.root.middle`
+
+    join: (`lm.test.namespace.l4.root.middle`) namespace
+        columns((class: class) (int: marker) (@: char `l4.root`))
+        rows:
+    end: namespace
 
     table:
-        name: `namespace.l4.root`
-        columns((class: class) (@: char L4))
+        name: namespace
+        columns((class: class) (int: marker) (@: char `l4.root`))
         rows:
-                 L4  None
-    end: `namespace.l4.root`
+                 L4  8  None
+    end: namespace
 end: registry
 
 L4:
@@ -114,22 +124,27 @@ L4: loadHeaders
 L4:
     table:
         name: `lm.test.namespace.l4.atom.seed`
-        columns((class: class) (@: char L4))
+        columns((class: class) (int: marker) (@: char `l4.atom`))
         rows:
-                 loadHeaders  `l4.atom`
+                 loadHeaders  7  `l4.atom`
     end: `lm.test.namespace.l4.atom.seed`
 
-    join: (`lm.test.namespace.l4.atom.seed`) `namespace.l4.atom`
-        columns((class: class) (@: char L4))
+    join: (`lm.test.namespace.l4.atom.seed`) `lm.test.namespace.l4.atom.middle`
+        columns((class: class) (int: marker) (@: char `l4.atom`))
         rows:
-    end: `namespace.l4.atom`
+    end: `lm.test.namespace.l4.atom.middle`
+
+    join: (`lm.test.namespace.l4.atom.middle`) namespace
+        columns((class: class) (int: marker) (@: char `l4.atom`))
+        rows:
+    end: namespace
 
     table:
-        name: `namespace.l4.atom`
-        columns((class: class) (@: char L4))
+        name: namespace
+        columns((class: class) (int: marker) (@: char `l4.atom`))
         rows:
-                 loadHeaders  None
-    end: `namespace.l4.atom`
+                 loadHeaders  8  None
+    end: namespace
 end: L4
 
 L4: loadHeaders
@@ -149,6 +164,30 @@ L4:
         rows:
                  import  `l4.payload`
     end: `namespace.l4.payload`
+
+    table:
+        name: `lm.test.namespace.l4.payload.seed`
+        columns((class: class) (int: marker) (@: char `l4.payload`))
+        rows:
+                 L2  7  `l4.payload`
+    end: `lm.test.namespace.l4.payload.seed`
+
+    join: (`lm.test.namespace.l4.payload.seed`) `lm.test.namespace.l4.payload.middle`
+        columns((class: class) (int: marker) (@: char `l4.payload`))
+        rows:
+    end: `lm.test.namespace.l4.payload.middle`
+
+    join: (`lm.test.namespace.l4.payload.middle`) namespace
+        columns((class: class) (int: marker) (@: char `l4.payload`))
+        rows:
+    end: namespace
+
+    table:
+        name: namespace
+        columns((class: class) (int: marker) (@: char `l4.payload`))
+        rows:
+                 L2  8  None
+    end: namespace
 
     table:
         name: unit

@@ -145,6 +145,18 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: fn_external_origin
     LmTransRegistryFact: fn_external_middle
     LmTransRegistryFact: fn_external_target
+    LmTransRegistryFact: namespace_l4_origin
+    LmTransRegistryFact: namespace_l4_middle
+    LmTransRegistryFact: namespace_l4_target
+    LmTransRegistryFact: namespace_l4_root_origin
+    LmTransRegistryFact: namespace_l4_root_middle
+    LmTransRegistryFact: namespace_l4_root_target
+    LmTransRegistryFact: namespace_l4_atom_origin
+    LmTransRegistryFact: namespace_l4_atom_middle
+    LmTransRegistryFact: namespace_l4_atom_target
+    LmTransRegistryFact: namespace_l4_payload_origin
+    LmTransRegistryFact: namespace_l4_payload_middle
+    LmTransRegistryFact: namespace_l4_payload_target
     LmTransRegistryFact: c99_policy_origin
     LmTransRegistryFact: c99_policy_middle
     LmTransRegistryFact: c99_policy_target
@@ -230,6 +242,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: class_range_descriptor
     LmTableDescriptor: cast_target_descriptor
     LmTableDescriptor: fn_external_descriptor
+    LmTableDescriptor: namespace_l4_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
     LmTableDescriptor: class_metadata_descriptor
@@ -254,6 +267,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: class_range_row
     LmTableRow: cast_target_row
     LmTableRow: fn_external_row
+    LmTableRow: namespace_l4_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
     LmTableRow: class_c_projection_row
@@ -298,6 +312,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: fn_external_key_cell
     LmTableCell: fn_external_marker_cell
     LmTableCell: fn_external_value_cell
+    LmTableCell: namespace_l4_key_cell
+    LmTableCell: namespace_l4_marker_cell
+    LmTableCell: namespace_l4_value_cell
+    LmTableCell: namespace_l4_root_value_cell
+    LmTableCell: namespace_l4_atom_value_cell
+    LmTableCell: namespace_l4_payload_value_cell
     LmTableCell: c99_policy_key_cell
     LmTableCell: c99_policy_marker_cell
     LmTableCell: c99_policy_value_cell
@@ -401,6 +421,10 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_class_range
     const: @: char resolved_cast_target
     const: @: char resolved_fn_external
+    const: @: char resolved_namespace_l4
+    const: @: char resolved_namespace_l4_root
+    const: @: char resolved_namespace_l4_atom
+    const: @: char resolved_namespace_l4_payload
     const: @: char resolved_c99_policy
     const: @: char resolved_profile_validator
     const: @: char resolved_class_c_projection
@@ -430,6 +454,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: class_range_key_text
     LmP0Text: cast_target_key_text
     LmP0Text: fn_external_key_text
+    LmP0Text: namespace_l4_key_text
     LmP0Text: profile_rule_key_text
     LmP0Text: class_c_projection_key_text
     LmP0Text: class_spelling_key_text
@@ -851,6 +876,79 @@ fn: lm_test_registry_join_provenance_core () int
         fn_external_key_text: lm_trans_text_from_cstr("ExternalWide")
         resolved_fn_external: lm_trans_fn_external_value(0, fn_external_key_text)
         if: fn_external_key_text = 0 || resolved_fn_external != fn_external_value_cell\value || resolved_fn_external = fn_external_middle\payload || resolved_fn_external = fn_external_target\payload || lm_trans_fn_is_external(0, fn_external_key_text) = 0
+            status: 1
+    ---
+
+    namespace_l4_origin: 0
+    namespace_l4_middle: 0
+    namespace_l4_target: 0
+    namespace_l4_root_origin: 0
+    namespace_l4_root_middle: 0
+    namespace_l4_root_target: 0
+    namespace_l4_atom_origin: 0
+    namespace_l4_atom_middle: 0
+    namespace_l4_atom_target: 0
+    namespace_l4_payload_origin: 0
+    namespace_l4_payload_middle: 0
+    namespace_l4_payload_target: 0
+    namespace_l4_descriptor: 0
+    namespace_l4_row: 0
+    namespace_l4_key_cell: 0
+    namespace_l4_marker_cell: 0
+    namespace_l4_value_cell: 0
+    namespace_l4_root_value_cell: 0
+    namespace_l4_atom_value_cell: 0
+    namespace_l4_payload_value_cell: 0
+    namespace_l4_key_text: 0
+    if: status = 0
+        namespace_l4_origin: lm_test_registry_push_value_fact("lm.test.namespace.l4.origin", "NamespaceL4Wide", "l4.frame", 0)
+        namespace_l4_middle: lm_test_registry_push_value_fact("lm.test.namespace.l4.middle", "NamespaceL4Wide", "l4.frame", namespace_l4_origin)
+        namespace_l4_target: lm_test_registry_push_value_fact("namespace.l4", "NamespaceL4Wide", "l4.frame", namespace_l4_middle)
+        namespace_l4_root_origin: lm_test_registry_push_value_fact("lm.test.namespace.l4.root.origin", "NamespaceL4Wide", "l4.root", 0)
+        namespace_l4_root_middle: lm_test_registry_push_value_fact("lm.test.namespace.l4.root.middle", "NamespaceL4Wide", "l4.root", namespace_l4_root_origin)
+        namespace_l4_root_target: lm_test_registry_push_value_fact("namespace.l4.root", "NamespaceL4Wide", "l4.root", namespace_l4_root_middle)
+        namespace_l4_atom_origin: lm_test_registry_push_value_fact("lm.test.namespace.l4.atom.origin", "NamespaceL4Wide", "l4.atom", 0)
+        namespace_l4_atom_middle: lm_test_registry_push_value_fact("lm.test.namespace.l4.atom.middle", "NamespaceL4Wide", "l4.atom", namespace_l4_atom_origin)
+        namespace_l4_atom_target: lm_test_registry_push_value_fact("namespace.l4.atom", "NamespaceL4Wide", "l4.atom", namespace_l4_atom_middle)
+        namespace_l4_payload_origin: lm_test_registry_push_value_fact("lm.test.namespace.l4.payload.origin", "NamespaceL4Wide", "l4.payload", 0)
+        namespace_l4_payload_middle: lm_test_registry_push_value_fact("lm.test.namespace.l4.payload.middle", "NamespaceL4Wide", "l4.payload", namespace_l4_payload_origin)
+        namespace_l4_payload_target: lm_test_registry_push_value_fact("namespace.l4.payload", "NamespaceL4Wide", "l4.payload", namespace_l4_payload_middle)
+        if: namespace_l4_origin = 0 || namespace_l4_middle = 0 || namespace_l4_target = 0 || namespace_l4_root_origin = 0 || namespace_l4_root_middle = 0 || namespace_l4_root_target = 0 || namespace_l4_atom_origin = 0 || namespace_l4_atom_middle = 0 || namespace_l4_atom_target = 0 || namespace_l4_payload_origin = 0 || namespace_l4_payload_middle = 0 || namespace_l4_payload_target = 0 || namespace_l4_middle\source != namespace_l4_origin || namespace_l4_target\source != namespace_l4_middle || namespace_l4_root_middle\source != namespace_l4_root_origin || namespace_l4_root_target\source != namespace_l4_root_middle || namespace_l4_atom_middle\source != namespace_l4_atom_origin || namespace_l4_atom_target\source != namespace_l4_atom_middle || namespace_l4_payload_middle\source != namespace_l4_payload_origin || namespace_l4_payload_target\source != namespace_l4_payload_middle
+            status: 1
+    ---
+
+    if: status = 0
+        namespace_l4_descriptor: lm_table_descriptor_new_empty_slice("namespace", 9U)
+        if: namespace_l4_descriptor = 0 || lm_table_descriptor_add_column(namespace_l4_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(namespace_l4_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(namespace_l4_descriptor, "l4", "char") != 0 || lm_table_descriptor_add_column(namespace_l4_descriptor, "l4.root", "char") != 0 || lm_table_descriptor_add_column(namespace_l4_descriptor, "l4.atom", "char") != 0 || lm_table_descriptor_add_column(namespace_l4_descriptor, "l4.payload", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        namespace_l4_row: lm_table_row_new(0)
+        namespace_l4_key_cell: lm_table_cell_new_cstr("NamespaceL4Wide", "NamespaceL4Wide", 0, 0, 0)
+        namespace_l4_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        namespace_l4_value_cell: lm_table_cell_new_cstr("l4.frame", "l4.frame", 0, namespace_l4_origin, 0)
+        namespace_l4_root_value_cell: lm_table_cell_new_cstr("l4.root", "l4.root", 0, namespace_l4_root_origin, 0)
+        namespace_l4_atom_value_cell: lm_table_cell_new_cstr("l4.atom", "l4.atom", 0, namespace_l4_atom_origin, 0)
+        namespace_l4_payload_value_cell: lm_table_cell_new_cstr("l4.payload", "l4.payload", 0, namespace_l4_payload_origin, 0)
+        if: namespace_l4_row = 0 || namespace_l4_key_cell = 0 || namespace_l4_marker_cell = 0 || namespace_l4_value_cell = 0 || namespace_l4_root_value_cell = 0 || namespace_l4_atom_value_cell = 0 || namespace_l4_payload_value_cell = 0 || lm_table_row_take_cell(namespace_l4_row, namespace_l4_key_cell) != 0 || lm_table_row_take_cell(namespace_l4_row, namespace_l4_marker_cell) != 0 || lm_table_row_take_cell(namespace_l4_row, namespace_l4_value_cell) != 0 || lm_table_row_take_cell(namespace_l4_row, namespace_l4_root_value_cell) != 0 || lm_table_row_take_cell(namespace_l4_row, namespace_l4_atom_value_cell) != 0 || lm_table_row_take_cell(namespace_l4_row, namespace_l4_payload_value_cell) != 0 || lm_table_descriptor_take_materialized_row(namespace_l4_descriptor, namespace_l4_row) != 0
+            status: 1
+        else:
+            namespace_l4_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, namespace_l4_descriptor) != 0
+                status: 1
+            else:
+                namespace_l4_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        namespace_l4_key_text: lm_trans_text_from_cstr("NamespaceL4Wide")
+        resolved_namespace_l4: lm_trans_l4_namespace_receiver_type_value(namespace_l4_key_text, "namespace.l4")
+        resolved_namespace_l4_root: lm_trans_l4_namespace_receiver_type_value(namespace_l4_key_text, "namespace.l4.root")
+        resolved_namespace_l4_atom: lm_trans_l4_namespace_receiver_type_value(namespace_l4_key_text, "namespace.l4.atom")
+        resolved_namespace_l4_payload: lm_trans_l4_namespace_receiver_type_value(namespace_l4_key_text, "namespace.l4.payload")
+        if: namespace_l4_key_text = 0 || resolved_namespace_l4 != namespace_l4_value_cell\value || resolved_namespace_l4 = namespace_l4_middle\payload || resolved_namespace_l4 = namespace_l4_target\payload || resolved_namespace_l4_root != namespace_l4_root_value_cell\value || resolved_namespace_l4_root = namespace_l4_root_middle\payload || resolved_namespace_l4_root = namespace_l4_root_target\payload || resolved_namespace_l4_atom != namespace_l4_atom_value_cell\value || resolved_namespace_l4_atom = namespace_l4_atom_middle\payload || resolved_namespace_l4_atom = namespace_l4_atom_target\payload || resolved_namespace_l4_payload != namespace_l4_payload_value_cell\value || resolved_namespace_l4_payload = namespace_l4_payload_middle\payload || resolved_namespace_l4_payload = namespace_l4_payload_target\payload
             status: 1
     ---
 
@@ -1796,6 +1894,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(profile_validator_descriptor)
     lm_table_row_delete_any(c99_policy_row)
     lm_table_descriptor_delete_any(c99_policy_descriptor)
+    lm_trans_text_ref_destroy(@ namespace_l4_key_text)
+    lm_table_row_delete_any(namespace_l4_row)
+    lm_table_descriptor_delete_any(namespace_l4_descriptor)
     lm_trans_text_ref_destroy(@ fn_external_key_text)
     lm_table_row_delete_any(fn_external_row)
     lm_table_descriptor_delete_any(fn_external_descriptor)
