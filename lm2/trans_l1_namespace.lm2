@@ -1053,7 +1053,7 @@ fn: lm_trans_is_reserved_head_name (const: (LmP0Text: name)) int
 
     if: name = 0
         return: 0
-    namespace_class: lm_trans_registry_lookup_table_link_checked(name, "namespace", "receiver.type")
+    namespace_class: lm_trans_namespace_registry_source_n2_typed_table_link_checked(0, name, "namespace", "class", "class", "receiver.type", "class", "receiver.type")
 return: namespace_class != 0
 
 fn: lm_trans_head_binding_resolve (const: (LmTransNamespace: namespace_); const: (LmP0Text: head); LmTransHeadBinding: out) int
@@ -1068,7 +1068,7 @@ fn: lm_trans_head_binding_resolve (const: (LmTransNamespace: namespace_); const:
         return: 1
     c.memset(out, 0, c.sizeof(out[0]))
     out\symbol: lm_trans_namespace_find(namespace_, head)
-    out\receiver_type: lm_trans_namespace_registry_lookup_table_link_checked(namespace_, head, "namespace", "receiver.type")
+    out\receiver_type: lm_trans_namespace_registry_source_n2_typed_table_link_checked(namespace_, head, "namespace", "class", "class", "receiver.type", "class", "receiver.type")
 
     out\function_receiver_binding: lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.function", "class", "class", "receiver", "binding")
     if: out\function_receiver_binding != 0

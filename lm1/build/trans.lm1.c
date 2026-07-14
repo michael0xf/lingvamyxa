@@ -2502,11 +2502,10 @@ static int lm_trans_registry_assert_source_table_materialization(void);
 static int lm_trans_registry_assert_view_parity(void);
 static int lm_trans_registry_assert_selected_table_link(const char *source_table, const LmP0Text *key, const char *target_class_table, const char *target_table);
 static int lm_trans_registry_assert_payload_table_exists(const char *source_table, const LmP0Text *key, const char *target_table);
-static const char * lm_trans_registry_lookup_table_link_checked(const LmP0Text *key, const char *source_table, const char *target_class_table);
 static const char * lm_trans_namespace_registry_lookup(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table);
 static LmTransRegistryFact * lm_trans_namespace_registry_selected_facade_text_row(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table);
 static const char * lm_trans_namespace_registry_source_n2_typed_value(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor);
-static const char * lm_trans_namespace_registry_lookup_table_link_checked(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_table, const char *target_class_table);
+static const char * lm_trans_namespace_registry_source_n2_typed_table_link_checked(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_table, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor, const char *target_class_table);
 static int lm_trans_array_head_find_close(const LmP0Text *text, size_t open_index, size_t *out_close_index);
 static int lm_trans_array_head_next_dimension(const LmP0Text *head, size_t *index, LmP0Text *out_dimension);
 static int lm_trans_text_is_array_receiver_head(const LmP0Text *head);
@@ -6851,15 +6850,6 @@ static int lm_trans_registry_assert_payload_table_exists(const char *source_tabl
     return 0;
 }
 
-static const char * lm_trans_registry_lookup_table_link_checked(const LmP0Text *key, const char *source_table, const char *target_class_table) {
-    const char *target_table;
-    target_table = lm_trans_registry_lookup(key, source_table);
-    if (target_table != 0 && lm_trans_registry_assert_selected_table_link(source_table, key, target_class_table, target_table) != 0) {
-        exit(2);
-    }
-    return target_table;
-}
-
 static const char * lm_trans_namespace_registry_lookup(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table) {
     LmTransRegistryFact * row;
     const char *payload;
@@ -6932,9 +6922,9 @@ static const char * lm_trans_namespace_registry_source_n2_typed_value(const LmTr
     return selected_value;
 }
 
-static const char * lm_trans_namespace_registry_lookup_table_link_checked(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_table, const char *target_class_table) {
+static const char * lm_trans_namespace_registry_source_n2_typed_table_link_checked(const LmTransNamespace *namespace_, const LmP0Text *key, const char *source_table, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor, const char *target_class_table) {
     const char *target_table;
-    target_table = lm_trans_namespace_registry_lookup(namespace_, key, source_table);
+    target_table = lm_trans_namespace_registry_source_n2_typed_value(namespace_, key, source_table, key_column_name, key_descriptor, value_column_name, value_descriptor);
     if (target_table != 0 && lm_trans_registry_assert_selected_table_link(source_table, key, target_class_table, target_table) != 0) {
         exit(2);
     }
@@ -8210,7 +8200,7 @@ static int lm_trans_is_reserved_head_name(const LmP0Text *name) {
     if (name == 0) {
         return 0;
     }
-    namespace_class = lm_trans_registry_lookup_table_link_checked(name, "namespace", "receiver.type");
+    namespace_class = lm_trans_namespace_registry_source_n2_typed_table_link_checked(0, name, "namespace", "class", "class", "receiver.type", "class", "receiver.type");
     return namespace_class != 0;
 }
 
@@ -8226,7 +8216,7 @@ static int lm_trans_head_binding_resolve(const LmTransNamespace *namespace_, con
     }
     memset(out, 0, sizeof(out[0]));
     out->symbol = lm_trans_namespace_find(namespace_, head);
-    out->receiver_type = lm_trans_namespace_registry_lookup_table_link_checked(namespace_, head, "namespace", "receiver.type");
+    out->receiver_type = lm_trans_namespace_registry_source_n2_typed_table_link_checked(namespace_, head, "namespace", "class", "class", "receiver.type", "class", "receiver.type");
     out->function_receiver_binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.function", "class", "class", "receiver", "binding");
     if (out -> function_receiver_binding != 0) {
         receiver_status = lm_trans_binding_resolve(out -> function_receiver_binding, resolved);
