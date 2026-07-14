@@ -13526,7 +13526,7 @@ static const char * lm_trans_contextual_literal_value_table(const LmTransNamespa
     if (literal == 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_lookup(namespace_, literal, "contextual.literal.value");
+    return lm_trans_namespace_registry_source_n2_typed_value(namespace_, literal, "contextual.literal.value", "class", "class", "value", "relation");
 }
 
 static const char * lm_trans_contextual_literal_value(const LmTransNamespace *namespace_, const LmP0Text *literal, const LmP0Text *expected_class) {

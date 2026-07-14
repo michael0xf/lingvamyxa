@@ -1,0 +1,67 @@
+L4:
+    table:
+        name: `contextual.literal.value`
+        columns((class: class) (relation: value))
+        rows:
+                 None  `lm.test.contextual.direct.old`
+                 None  `lm.test.contextual.direct`
+                 None  None
+    end: `contextual.literal.value`
+
+    table:
+        name: `contextual.literal.value`
+        columns((class: class) (class: value))
+        rows:
+                 OK  `lm.test.contextual.fallback`
+    end: `contextual.literal.value`
+
+    table:
+        name: `lm.test.contextual.literal.seed`
+        columns((class: class) (relation: value))
+        rows:
+                 false  `lm.test.contextual.joined`
+    end: `lm.test.contextual.literal.seed`
+
+    join: (`lm.test.contextual.literal.seed`) `contextual.literal.value`
+        columns((class: class) (relation: value))
+        rows:
+    end: `contextual.literal.value`
+
+    table:
+        name: `contextual.literal.value`
+        columns((class: class) (relation: value))
+        rows:
+                 false  None
+    end: `contextual.literal.value`
+
+    table:
+        name: `lm.test.contextual.direct`
+        columns((class: class) (@: char value))
+        rows:
+                 int  101
+    end: `lm.test.contextual.direct`
+
+    table:
+        name: `lm.test.contextual.fallback`
+        columns((class: class) (@: char value))
+        rows:
+                 int  202
+    end: `lm.test.contextual.fallback`
+
+    table:
+        name: `lm.test.contextual.joined`
+        columns((class: class) (@: char value))
+        rows:
+                 int  303
+    end: `lm.test.contextual.joined`
+end: L4
+
+external:
+    fn: main () int
+        int: direct None
+        int: fallback OK
+        int: joined false
+
+        return: direct != 101 || fallback != 202 || joined != 303
+    end: main
+end: external

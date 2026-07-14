@@ -4115,7 +4115,7 @@ end: lm_trans_expr_emit_raw
 fn: lm_trans_contextual_literal_value_table (const: (LmTransNamespace: namespace_); const: (LmP0Text: literal)) const: @: char
     if: literal = 0
         return: 0
-return: lm_trans_namespace_registry_lookup(namespace_, literal, "contextual.literal.value")
+return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, literal, "contextual.literal.value", "class", "class", "value", "relation")
 
 fn: lm_trans_contextual_literal_value (
     const: (LmTransNamespace: namespace_)
