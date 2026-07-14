@@ -1,13 +1,12 @@
 L4:
     table:
-        name: `contextual.literal.value`
-        columns((class: class) (relation: value))
+        name: `contextual.literal`
+        columns((class: class) (int: marker) (relation: value))
         rows:
-                 None  `lm.test.contextual.direct.old`
-                 None  `lm.test.contextual.direct`
-                 None  None
-                 true  `lm.test.contextual.default`
-    end: `contextual.literal.value`
+                 None  1  `lm.test.contextual.direct.old`
+                 None  2  `lm.test.contextual.direct`
+                 true  3  `lm.test.contextual.default`
+    end: `contextual.literal`
 
     table:
         name: `contextual.literal.value`
@@ -18,22 +17,29 @@ L4:
 
     table:
         name: `lm.test.contextual.literal.seed`
-        columns((class: class) (relation: value))
+        columns((class: class) (int: marker) (relation: value))
         rows:
-                 false  `lm.test.contextual.joined`
+                 false  7  `lm.test.contextual.joined`
     end: `lm.test.contextual.literal.seed`
 
-    join: (`lm.test.contextual.literal.seed`) `contextual.literal.value`
-        columns((class: class) (relation: value))
+    join: (`lm.test.contextual.literal.seed`) `lm.test.contextual.literal.middle`
+        columns((class: class) (int: marker) (relation: value))
         rows:
-    end: `contextual.literal.value`
+    end: `lm.test.contextual.literal.middle`
+
+    join: (`lm.test.contextual.literal.middle`) `contextual.literal`
+        columns((class: class) (int: marker) (relation: value))
+        rows:
+    end: `contextual.literal`
 
     table:
-        name: `contextual.literal.value`
-        columns((class: class) (relation: value))
+        name: `contextual.literal`
+        columns((class: class) (int: marker) (relation: value))
         rows:
-                 false  None
-    end: `contextual.literal.value`
+                 None   8   None
+                 false  9   None
+                 true   10  None
+    end: `contextual.literal`
 
     table:
         name: Boolean

@@ -157,6 +157,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: serialization_codec_n2_target
     LmTransRegistryFact: serialization_codec_wrong_column_origin
     LmTransRegistryFact: serialization_codec_wrong_column_target
+    LmTransRegistryFact: contextual_literal_mapping_origin
+    LmTransRegistryFact: contextual_literal_mapping_middle
+    LmTransRegistryFact: contextual_literal_mapping_target
     LmTransRegistryFact: namespace_l4_origin
     LmTransRegistryFact: namespace_l4_middle
     LmTransRegistryFact: namespace_l4_target
@@ -258,6 +261,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: serialization_codec_descriptor
     LmTableDescriptor: serialization_codec_n2_descriptor
     LmTableDescriptor: serialization_codec_wrong_column_descriptor
+    LmTableDescriptor: contextual_literal_mapping_descriptor
     LmTableDescriptor: namespace_l4_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
@@ -287,6 +291,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: serialization_codec_row
     LmTableRow: serialization_codec_n2_row
     LmTableRow: serialization_codec_wrong_column_row
+    LmTableRow: contextual_literal_mapping_row
     LmTableRow: namespace_l4_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
@@ -342,6 +347,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: serialization_codec_n2_value_cell
     LmTableCell: serialization_codec_wrong_column_key_cell
     LmTableCell: serialization_codec_wrong_column_value_cell
+    LmTableCell: contextual_literal_mapping_key_cell
+    LmTableCell: contextual_literal_mapping_marker_cell
+    LmTableCell: contextual_literal_mapping_value_cell
     LmTableCell: namespace_l4_key_cell
     LmTableCell: namespace_l4_marker_cell
     LmTableCell: namespace_l4_value_cell
@@ -453,6 +461,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_fn_external
     const: @: char resolved_fn_receiver
     const: @: char resolved_serialization_codec
+    const: @: char resolved_contextual_literal_mapping
     const: @: char resolved_namespace_l4
     const: @: char resolved_namespace_l4_root
     const: @: char resolved_namespace_l4_atom
@@ -490,6 +499,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: serialization_codec_key_text
     LmP0Text: serialization_codec_n2_key_text
     LmP0Text: serialization_codec_wrong_column_key_text
+    LmP0Text: contextual_literal_mapping_key_text
     LmP0Text: namespace_l4_key_text
     LmP0Text: profile_rule_key_text
     LmP0Text: class_c_projection_key_text
@@ -1093,6 +1103,52 @@ fn: lm_test_registry_join_provenance_core () int
         serialization_codec_wrong_column_key_text: lm_trans_text_from_cstr("CodecWrongColumn")
         resolved_serialization_codec: lm_trans_registry_serialization_codec_value(serialization_codec_wrong_column_key_text)
         if: serialization_codec_wrong_column_key_text = 0 || resolved_serialization_codec != serialization_codec_wrong_column_target\payload || resolved_serialization_codec = serialization_codec_wrong_column_value_cell\value
+            status: 1
+    ---
+
+    contextual_literal_mapping_origin: 0
+    contextual_literal_mapping_middle: 0
+    contextual_literal_mapping_target: 0
+    contextual_literal_mapping_descriptor: 0
+    contextual_literal_mapping_row: 0
+    contextual_literal_mapping_key_cell: 0
+    contextual_literal_mapping_marker_cell: 0
+    contextual_literal_mapping_value_cell: 0
+    contextual_literal_mapping_key_text: 0
+    if: status = 0
+        contextual_literal_mapping_origin: lm_test_registry_push_value_fact("lm.test.contextual.literal.mapping.origin", "ContextualWide", "lm.test.contextual.value", 0)
+        contextual_literal_mapping_middle: lm_test_registry_push_value_fact("lm.test.contextual.literal.mapping.middle", "ContextualWide", "lm.test.contextual.value", contextual_literal_mapping_origin)
+        contextual_literal_mapping_target: lm_test_registry_push_value_fact("contextual.literal.value", "ContextualWide", "lm.test.contextual.value", contextual_literal_mapping_middle)
+        if: contextual_literal_mapping_origin = 0 || contextual_literal_mapping_middle = 0 || contextual_literal_mapping_target = 0 || contextual_literal_mapping_middle\source != contextual_literal_mapping_origin || contextual_literal_mapping_target\source != contextual_literal_mapping_middle
+            status: 1
+    ---
+
+    if: status = 0
+        contextual_literal_mapping_descriptor: lm_table_descriptor_new_empty_slice("contextual.literal", 18U)
+        if: contextual_literal_mapping_descriptor = 0 || lm_table_descriptor_add_column(contextual_literal_mapping_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(contextual_literal_mapping_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(contextual_literal_mapping_descriptor, "value", "relation") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        contextual_literal_mapping_row: lm_table_row_new(0)
+        contextual_literal_mapping_key_cell: lm_table_cell_new_cstr("ContextualWide", "ContextualWide", 0, 0, 0)
+        contextual_literal_mapping_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        contextual_literal_mapping_value_cell: lm_table_cell_new_cstr("lm.test.contextual.value", "lm.test.contextual.value", 0, contextual_literal_mapping_origin, 0)
+        if: contextual_literal_mapping_row = 0 || contextual_literal_mapping_key_cell = 0 || contextual_literal_mapping_marker_cell = 0 || contextual_literal_mapping_value_cell = 0 || lm_table_row_take_cell(contextual_literal_mapping_row, contextual_literal_mapping_key_cell) != 0 || lm_table_row_take_cell(contextual_literal_mapping_row, contextual_literal_mapping_marker_cell) != 0 || lm_table_row_take_cell(contextual_literal_mapping_row, contextual_literal_mapping_value_cell) != 0 || lm_table_descriptor_take_materialized_row(contextual_literal_mapping_descriptor, contextual_literal_mapping_row) != 0
+            status: 1
+        else:
+            contextual_literal_mapping_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, contextual_literal_mapping_descriptor) != 0
+                status: 1
+            else:
+                contextual_literal_mapping_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        contextual_literal_mapping_key_text: lm_trans_text_from_cstr("ContextualWide")
+        resolved_contextual_literal_mapping: lm_trans_contextual_literal_value_table(0, contextual_literal_mapping_key_text)
+        if: contextual_literal_mapping_key_text = 0 || resolved_contextual_literal_mapping != contextual_literal_mapping_value_cell\value || resolved_contextual_literal_mapping = contextual_literal_mapping_middle\payload || resolved_contextual_literal_mapping = contextual_literal_mapping_target\payload
             status: 1
     ---
 
@@ -2129,6 +2185,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_trans_text_ref_destroy(@ serialization_codec_wrong_column_key_text)
     lm_table_row_delete_any(serialization_codec_wrong_column_row)
     lm_table_descriptor_delete_any(serialization_codec_wrong_column_descriptor)
+    lm_trans_text_ref_destroy(@ contextual_literal_mapping_key_text)
+    lm_table_row_delete_any(contextual_literal_mapping_row)
+    lm_table_descriptor_delete_any(contextual_literal_mapping_descriptor)
     lm_trans_text_ref_destroy(@ cast_target_key_text)
     lm_table_row_delete_any(cast_target_row)
     lm_table_descriptor_delete_any(cast_target_descriptor)
