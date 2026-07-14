@@ -610,6 +610,7 @@ struct LmTransNamespace {
     LmP0Text * return_type_name;
     unsigned next_return_id;
     const LmOwnPtrStack * hoisted_functions;
+    const LmRegistryView * registry_view;
 };
 typedef struct LmTransL4LoadContext {
     int allow_node_cells;
@@ -8284,8 +8285,10 @@ static LmTransNamespace * lm_trans_namespace_new(void) {
         namespace_->items = lm_trans_ptr_stack_new(lm_trans_symbol_delete_any);
         namespace_->identifiers = lm_trans_identifier_table_new();
         namespace_->registry_identifiers = 0;
+        namespace_->registry_view = 0;
         if (lm_trans_registry != 0) {
             namespace_->registry_identifiers = lm_trans_registry -> identifiers;
+            namespace_->registry_view = lm_trans_registry -> view;
         }
         namespace_->cleanups = lm_trans_ptr_stack_new(lm_trans_cleanup_delete_any);
         namespace_->loops = lm_trans_ptr_stack_new(lm_trans_loop_delete_any);
@@ -8305,6 +8308,7 @@ static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
     if (namespace_ != 0) {
         lm_trans_identifier_table_delete(&namespace_ -> identifiers);
         namespace_->registry_identifiers = 0;
+        namespace_->registry_view = 0;
         lm_trans_ptr_stack_delete(&namespace_ -> items);
         lm_trans_ptr_stack_delete(&namespace_ -> cleanups);
         lm_trans_ptr_stack_delete(&namespace_ -> loops);
@@ -8745,10 +8749,11 @@ static int lm_trans_namespace_materialize_registry_heads(LmTransNamespace *names
 }
 
 static int lm_trans_namespace_attach_registry(LmTransNamespace *namespace_) {
-    if (namespace_ == 0 || lm_trans_registry == 0) {
+    if (namespace_ == 0 || lm_trans_registry == 0 || lm_trans_registry -> view == 0) {
         return 1;
     }
     namespace_->registry_identifiers = lm_trans_registry -> identifiers;
+    namespace_->registry_view = lm_trans_registry -> view;
     return lm_trans_namespace_materialize_registry_heads(namespace_);
 }
 

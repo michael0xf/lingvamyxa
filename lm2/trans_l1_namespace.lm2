@@ -863,8 +863,10 @@ fn: lm_trans_namespace_new () LmTransNamespace
         namespace_\items: lm_trans_ptr_stack_new(lm_trans_symbol_delete_any)
         namespace_\identifiers: lm_trans_identifier_table_new()
         namespace_\registry_identifiers: 0
+        namespace_\registry_view: 0
         if: lm_trans_registry != 0
             namespace_\registry_identifiers: lm_trans_registry\identifiers
+            namespace_\registry_view: lm_trans_registry\view
         namespace_\cleanups: lm_trans_ptr_stack_new(lm_trans_cleanup_delete_any)
         namespace_\loops: lm_trans_ptr_stack_new(lm_trans_loop_delete_any)
         if: namespace_\items = 0 || namespace_\identifiers = 0 || namespace_\cleanups = 0 || namespace_\loops = 0
@@ -880,6 +882,7 @@ sub: lm_trans_namespace_destroy (LmTransNamespace: namespace_)
     if: namespace_ != 0
         lm_trans_identifier_table_delete(@ namespace_\identifiers)
         namespace_\registry_identifiers: 0
+        namespace_\registry_view: 0
         lm_trans_ptr_stack_delete(@ namespace_\items)
         lm_trans_ptr_stack_delete(@ namespace_\cleanups)
         lm_trans_ptr_stack_delete(@ namespace_\loops)
@@ -1249,9 +1252,10 @@ fn: lm_trans_namespace_materialize_registry_heads (LmTransNamespace: namespace_)
 return: lm_trans_namespace_materialize_registry_classes(namespace_)
 
 fn: lm_trans_namespace_attach_registry (LmTransNamespace: namespace_) int
-    if: namespace_ = 0 || lm_trans_registry = 0
+    if: namespace_ = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0
         return: 1
     namespace_\registry_identifiers: lm_trans_registry\identifiers
+    namespace_\registry_view: lm_trans_registry\view
 return: lm_trans_namespace_materialize_registry_heads(namespace_)
 
 fn: lm_trans_namespace_declare_c_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind); const: (LmP0Text: c_name)) int

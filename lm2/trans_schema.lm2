@@ -883,6 +883,7 @@ L4:
                  return_type_name     LmP0Text               9                       0                                0
                  next_return_id       unsigned               10                      0                                0
                  hoisted_functions    LmOwnPtrStack          11                      0                                1
+                 registry_view        LmRegistryView         12                      0                                1
     end: LmTransNamespace
 
     table:
