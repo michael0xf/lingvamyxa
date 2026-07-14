@@ -1,0 +1,11 @@
+L3:
+    L3PreloadedLevel:
+        L1:
+===
+int main(void) { return 0; }
+===
+        end: L1
+    end: L3PreloadedLevel
+
+    import: "fixtures/l3_import_preload_registry.lm4"
+end: L3

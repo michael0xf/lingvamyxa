@@ -3760,6 +3760,7 @@ fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: struct
     const: LmP0Node: node
     LmTransHeadBinding: binding
     @: void popped
+    int: previous_depth
     int: status
 
     binding: lm_own_new_zero(c.sizeof(binding[0]))
@@ -3804,15 +3805,24 @@ fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: struct
                     break
             ---
             else:
-                if: frame\descend_l2 != 0 && lm_trans_frame_is_l2_level_receiver(node\as\frame) != 0 && node\as\frame\body != 0 && node\as\frame\body\first_field != 0
-                    frame: lm_trans_registry_import_frame_new(node\as\frame\body\first_field, 0)
-                    if: frame = 0
-                        status: 1
-                        break
-                    if: lm_own_ptr_stack_push(stack, frame) != 0
-                        lm_own_delete(frame, 0)
-                        status: 1
-                        break
+                if: frame\descend_l2 != 0 && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame) != 0 && node\as\frame\body != 0 && node\as\frame\body\first_field != 0
+                    if: lm_trans_frame_is_l3_level_receiver(node\as\frame)
+                        previous_depth: lm_trans_l3_profile_enter_frame(node\as\frame)
+                        status: lm_trans_registry_load_imports_from_structure(node\as\frame\body, source_path, 0)
+                        lm_trans_l3_profile_restore(previous_depth)
+                        if: status != 0
+                            break
+                    ---
+                    else:
+                        frame: lm_trans_registry_import_frame_new(node\as\frame\body\first_field, 0)
+                        if: frame = 0
+                            status: 1
+                            break
+                        if: lm_own_ptr_stack_push(stack, frame) != 0
+                            lm_own_delete(frame, 0)
+                            status: 1
+                            break
+                    ---
             ---
         ---
     lm_trans_ptr_stack_delete(@ stack)

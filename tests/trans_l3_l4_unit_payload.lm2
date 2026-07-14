@@ -1,0 +1,23 @@
+L4:
+    table:
+        name: unit
+        columns((class: class) (class: backend) (node: payload))
+        rows:
+                 lm_test_l3_unit_payload  c.static-unit
+                 L3:
+                     external:
+                         fn: lm_test_l3_unit_payload () int
+                             return: 31
+                         end: lm_test_l3_unit_payload
+                     end: external
+                 end: L3
+    end: unit
+end: L4
+
+unit
+
+external:
+    fn: main () int
+        return: c.lm_test_l3_unit_payload() != 31
+    end: main
+end: external

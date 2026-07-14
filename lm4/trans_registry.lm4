@@ -68,6 +68,7 @@ table:
              `class.receiver`           relation
              `receiver.type`            relation
              `receiver.level`           relation
+             `receiver.l3.exclude`      relation
              `receiver.function`        relation
              `receiver.statement`       relation
              `receiver.atom.statement`  relation
@@ -563,6 +564,7 @@ table:
     rows:
              L1            `receiver.level`
              L2            `receiver.level`
+             L3            `receiver.level`
              fn            `receiver.function`
              callable      `receiver.function`
              fm            `receiver.function`
@@ -619,7 +621,14 @@ table:
     rows:
              L1     lm_trans_emit_l1_frame
              L2     lm_trans_emit_l2_frame
+             L3     lm_trans_emit_l3_frame
 end: `receiver.level`
+
+table:
+    name: `receiver.l3.exclude`
+    columns((class: class) (int: value))
+    rows:
+end: `receiver.l3.exclude`
 
 table:
     name: `receiver.statement`
@@ -698,6 +707,7 @@ table:
     rows:
              import  `l4.payload`
              L2      `l4.payload`
+             L3      `l4.payload`
 end: `namespace.l4.payload`
 
 table:

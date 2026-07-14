@@ -1,0 +1,23 @@
+L4:
+    table:
+        name: `receiver.l3`
+        columns((class: class) (int: marker) (int: exclude))
+        rows:
+                 `return`  7  1
+    end: `receiver.l3`
+end: L4
+
+L3:
+    external:
+        sub: l3DepthScopeProbe ()
+        end: l3DepthScopeProbe
+    end: external
+end: L3
+
+L2:
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

@@ -6063,6 +6063,10 @@ fn: lm_trans_lower_statement_frame (
         ---
     ---
 
+    if: symbol != 0 && lm_trans_l3_receiver_is_excluded(namespace_, dispatch_head)
+        c.fprintf(c.stderr, "trans L3 error: receiver \"%.*s\" is not available in L3\n", (cast: int dispatch_head\length), dispatch_head\data)
+        return: 1
+
     if: symbol != 0
         if: lm_trans_symbol_is(symbol, "receiver.statement")
             if: lm_trans_text_equals(dispatch_head, "@")

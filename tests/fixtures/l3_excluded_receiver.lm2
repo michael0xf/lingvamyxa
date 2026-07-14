@@ -1,0 +1,7 @@
+L3:
+    external:
+        fn: l3ImportedDepthProbe () int
+            return: 0
+        end: l3ImportedDepthProbe
+    end: external
+end: L3
