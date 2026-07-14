@@ -1,9 +1,9 @@
 L4:
     table:
         name: unit
-        columns((class: class) (class: backend) (node: payload))
+        columns((class: class) (int: marker) (node: payload) (int: extra) (class: backend))
         rows:
-                 lm_test_unit_source           c.static-unit
+                 lm_test_unit_source           7
                  L2:
                      external:
                          fn: lm_test_unit_source () int
@@ -11,7 +11,8 @@ L4:
                          end: lm_test_unit_source
                      end: external
                  end: L2
-                 lm_test_unit_payload_overlay  c.static-unit
+                 9  c.static-unit
+                 lm_test_unit_payload_overlay  7
                  L2:
                      external:
                          fn: lm_test_unit_payload_overlay () int
@@ -19,7 +20,8 @@ L4:
                          end: lm_test_unit_payload_overlay
                      end: external
                  end: L2
-                 lm_test_unit_backend_overlay  c.static-unit
+                 9  c.static-unit
+                 lm_test_unit_backend_overlay  7
                  L2:
                      external:
                          fn: lm_test_unit_backend_overlay () int
@@ -27,7 +29,8 @@ L4:
                          end: lm_test_unit_backend_overlay
                      end: external
                  end: L2
-                 lm_test_unit_backend_join     c.other
+                 9  c.static-unit
+                 lm_test_unit_backend_join     7
                  L2:
                      external:
                          fn: lm_test_unit_backend_join () int
@@ -35,7 +38,8 @@ L4:
                          end: lm_test_unit_backend_join
                      end: external
                  end: L2
-                 lm_test_unit_duplicate        c.static-unit
+                 9  c.other
+                 lm_test_unit_duplicate        7
                  L2:
                      external:
                          fn: lm_test_unit_duplicate () int
@@ -43,7 +47,8 @@ L4:
                          end: lm_test_unit_duplicate
                      end: external
                  end: L2
-                 lm_test_unit_late_none        c.static-unit
+                 9  c.static-unit
+                 lm_test_unit_late_none        7
                  L2:
                      external:
                          fn: lm_test_unit_late_none () int
@@ -51,7 +56,8 @@ L4:
                          end: lm_test_unit_late_none
                      end: external
                  end: L2
-                 lm_test_unit_text_overlay     c.static-unit
+                 9  c.static-unit
+                 lm_test_unit_text_overlay     7
                  L2:
                      external:
                          fn: lm_test_unit_text_overlay () int
@@ -59,8 +65,18 @@ L4:
                          end: lm_test_unit_text_overlay
                      end: external
                  end: L2
-                 lm_test_unit_late_none        None  None
-                 lm_test_unit_none             None  None
+                 9  c.static-unit
+                 lm_test_unit_text_schema_fallback  7
+                 L2:
+                     external:
+                         fn: lm_test_unit_text_schema_fallback () int
+                             return: 19
+                         end: lm_test_unit_text_schema_fallback
+                     end: external
+                 end: L2
+                 9  c.static-unit
+                 lm_test_unit_late_none        None  None  None  None
+                 lm_test_unit_none             None  None  None  None
     end: unit
 
     table:
@@ -104,6 +120,13 @@ L4:
         columns((class: class) (char: payload))
         rows:
                  lm_test_unit_text_overlay  "static int lm_test_unit_text_overlay(void) { return 24; }"
+    end: `unit.payload`
+
+    table:
+        name: `unit.payload`
+        columns((class: class) (@: char payload))
+        rows:
+                 lm_test_unit_text_schema_fallback  "static int lm_test_unit_text_schema_fallback(void) { return 26; }"
     end: `unit.payload`
 
     table:
@@ -162,6 +185,8 @@ external:
             return: 8
         if: c.lm_test_unit_joined() != 25
             return: 9
+        if: c.lm_test_unit_text_schema_fallback() != 26
+            return: 10
         return: 0
     end: main
 end: external

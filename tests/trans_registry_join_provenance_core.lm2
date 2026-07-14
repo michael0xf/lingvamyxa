@@ -223,13 +223,15 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: unit_backend_origin
     LmTransRegistryFact: unit_backend_middle
     LmTransRegistryFact: unit_backend_target
-    LmTransRegistryFact: unit_backend_unrelated
     LmTransRegistryFact: unit_wrong_payload_origin
     LmTransRegistryFact: unit_wrong_payload_middle
     LmTransRegistryFact: unit_wrong_payload_target
     LmTransRegistryFact: unit_wrong_backend_origin
     LmTransRegistryFact: unit_wrong_backend_middle
     LmTransRegistryFact: unit_wrong_backend_target
+    LmTransRegistryFact: unit_text_payload_origin
+    LmTransRegistryFact: unit_text_payload_middle
+    LmTransRegistryFact: unit_text_payload_target
     LmTransRegistryFact: layout_origin
     LmTransRegistryFact: layout_middle
     LmTransRegistryFact: layout_target
@@ -316,6 +318,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: layout_descriptor
     LmTableDescriptor: unit_descriptor
     LmTableDescriptor: unit_wrong_descriptor
+    LmTableDescriptor: unit_text_descriptor
     LmTableRow: row
     LmTableRow: call_lowering_row
     LmTableRow: materialize_argument_row
@@ -355,6 +358,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: layout_row
     LmTableRow: unit_row
     LmTableRow: unit_wrong_row
+    LmTableRow: unit_text_row
     LmTableCell: key_cell
     LmTableCell: value_cell
     LmTableCell: marker_cell
@@ -479,11 +483,15 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: condition_wrong_node_cell
     LmTableCell: condition_wrong_marker_cell
     LmTableCell: unit_key_cell
+    LmTableCell: unit_marker_cell
     LmTableCell: unit_backend_cell
     LmTableCell: unit_payload_cell
+    LmTableCell: unit_extra_cell
     LmTableCell: unit_wrong_key_cell
     LmTableCell: unit_wrong_backend_cell
     LmTableCell: unit_wrong_payload_cell
+    LmTableCell: unit_text_key_cell
+    LmTableCell: unit_text_payload_cell
     LmTableCell: layout_key_cell
     LmTableCell: layout_backend_cell
     LmTableCell: layout_marker_cell
@@ -508,14 +516,18 @@ fn: lm_test_registry_join_provenance_core () int
     const: LmRegistryViewRow: layout_view_row
     const: LmRegistryViewRow: unit_backend_view_row
     const: LmRegistryViewRow: unit_wrong_backend_view_row
-    const: LmOwnPtrStack: unit_backend_rows
-    LmOwnPtrStack: unit_unrelated_backend_rows
     const: LmTableCell: resolved_layout_source_key_cell
     const: LmP0Node: resolved_node
     const: LmP0Node: resolved_condition_body
     const: LmP0Node: resolved_condition_unrelated_body
     const: LmP0Node: resolved_unit_node
     const: LmP0Node: resolved_unit_wrong_node
+    const: LmP0Node: resolved_unit_unrelated_node
+    const: LmP0Node: resolved_unit_text_node
+    const: @: char resolved_unit_text
+    const: @: char resolved_unit_wrong_text
+    const: @: char resolved_unit_unrelated_text
+    const: @: char resolved_unit_text_payload
     const: @: char resolved_value
     const: @: char resolved_call_lowering_binding
     const: @: char resolved_materialize_argument_binding
@@ -2321,27 +2333,35 @@ fn: lm_test_registry_join_provenance_core () int
     unit_backend_origin: 0
     unit_backend_middle: 0
     unit_backend_target: 0
-    unit_backend_unrelated: 0
     unit_wrong_payload_origin: 0
     unit_wrong_payload_middle: 0
     unit_wrong_payload_target: 0
     unit_wrong_backend_origin: 0
     unit_wrong_backend_middle: 0
     unit_wrong_backend_target: 0
+    unit_text_payload_origin: 0
+    unit_text_payload_middle: 0
+    unit_text_payload_target: 0
     unit_descriptor: 0
     unit_wrong_descriptor: 0
+    unit_text_descriptor: 0
     condition_descriptor: 0
     condition_wrong_descriptor: 0
     unit_row: 0
     unit_wrong_row: 0
+    unit_text_row: 0
     condition_row: 0
     condition_wrong_row: 0
     unit_key_cell: 0
+    unit_marker_cell: 0
     unit_backend_cell: 0
     unit_payload_cell: 0
+    unit_extra_cell: 0
     unit_wrong_key_cell: 0
     unit_wrong_backend_cell: 0
     unit_wrong_payload_cell: 0
+    unit_text_key_cell: 0
+    unit_text_payload_cell: 0
     condition_key_cell: 0
     condition_node_cell: 0
     condition_marker_cell: 0
@@ -2349,7 +2369,6 @@ fn: lm_test_registry_join_provenance_core () int
     condition_wrong_node_cell: 0
     condition_wrong_marker_cell: 0
     unit_wrong_source_node: 0
-    unit_unrelated_backend_rows: 0
     if: status = 0
         source_node: lm_test_registry_node_new("node-payload")
         node_origin: lm_test_registry_push_node_fact("origin.node", "NodeWitness", source_node, 0)
@@ -2394,23 +2413,24 @@ fn: lm_test_registry_join_provenance_core () int
             unit_backend_middle: lm_test_registry_join_fact("origin.unit.backend", "middle.unit.backend", "NodeWitness")
         if: unit_backend_middle != 0
             unit_backend_target: lm_test_registry_join_fact("middle.unit.backend", "unit.backend", "NodeWitness")
-        unit_backend_unrelated: lm_test_registry_push_value_fact("unrelated.unit.backend", "NodeWitness", "c.static-unit", 0)
-        if: unit_payload_middle = 0 || unit_payload_target = 0 || unit_backend_origin = 0 || unit_backend_middle = 0 || unit_backend_target = 0 || unit_backend_unrelated = 0 || unit_payload_middle\source != node_origin || unit_payload_target\source != unit_payload_middle || unit_backend_middle\source != unit_backend_origin || unit_backend_target\source != unit_backend_middle || unit_backend_unrelated\source != 0
+        if: unit_payload_middle = 0 || unit_payload_target = 0 || unit_backend_origin = 0 || unit_backend_middle = 0 || unit_backend_target = 0 || unit_payload_middle\source != node_origin || unit_payload_target\source != unit_payload_middle || unit_backend_middle\source != unit_backend_origin || unit_backend_target\source != unit_backend_middle
             status: 1
     ---
 
     if: status = 0
         unit_descriptor: lm_table_descriptor_new_empty_slice("unit", 4U)
-        if: unit_descriptor = 0 || lm_table_descriptor_add_column(unit_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(unit_descriptor, "backend", "class") != 0 || lm_table_descriptor_add_column(unit_descriptor, "payload", "node") != 0
+        if: unit_descriptor = 0 || lm_table_descriptor_add_column(unit_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(unit_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(unit_descriptor, "payload", "node") != 0 || lm_table_descriptor_add_column(unit_descriptor, "extra", "int") != 0 || lm_table_descriptor_add_column(unit_descriptor, "backend", "class") != 0
             status: 1
     ---
 
     if: status = 0
         unit_row: lm_table_row_new(0)
         unit_key_cell: lm_table_cell_new_cstr("NodeWitness", "NodeWitness", 0, 0, 0)
-        unit_backend_cell: lm_table_cell_new_cstr("c.static-unit", "c.static-unit", 0, unit_backend_origin, 0)
+        unit_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
         unit_payload_cell: lm_table_cell_new_cstr("node-payload", 0, node_origin\payload_node, node_origin, 0)
-        if: unit_row = 0 || unit_key_cell = 0 || unit_backend_cell = 0 || unit_payload_cell = 0 || lm_table_row_take_cell(unit_row, unit_key_cell) != 0 || lm_table_row_take_cell(unit_row, unit_backend_cell) != 0 || lm_table_row_take_cell(unit_row, unit_payload_cell) != 0 || lm_table_descriptor_take_materialized_row(unit_descriptor, unit_row) != 0
+        unit_extra_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        unit_backend_cell: lm_table_cell_new_cstr("c.static-unit", "c.static-unit", 0, unit_backend_origin, 0)
+        if: unit_row = 0 || unit_key_cell = 0 || unit_marker_cell = 0 || unit_payload_cell = 0 || unit_extra_cell = 0 || unit_backend_cell = 0 || lm_table_row_take_cell(unit_row, unit_key_cell) != 0 || lm_table_row_take_cell(unit_row, unit_marker_cell) != 0 || lm_table_row_take_cell(unit_row, unit_payload_cell) != 0 || lm_table_row_take_cell(unit_row, unit_extra_cell) != 0 || lm_table_row_take_cell(unit_row, unit_backend_cell) != 0 || lm_table_descriptor_take_materialized_row(unit_descriptor, unit_row) != 0
             status: 1
         else:
             unit_row: 0
@@ -2439,7 +2459,7 @@ fn: lm_test_registry_join_provenance_core () int
 
     if: status = 0
         unit_wrong_descriptor: lm_table_descriptor_new_empty_slice("unit", 4U)
-        if: unit_wrong_descriptor = 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "class", "char") != 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "backend", "char") != 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "payload", "node") != 0
+        if: unit_wrong_descriptor = 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "backend", "char") != 0 || lm_table_descriptor_add_column(unit_wrong_descriptor, "payload", "char") != 0
             status: 1
     ---
 
@@ -2460,10 +2480,34 @@ fn: lm_test_registry_join_provenance_core () int
     ---
 
     if: status = 0
-        unit_unrelated_backend_rows: lm_trans_ptr_stack_new(0)
-        unit_backend_rows: lm_trans_registry_relation_stack_for_table("unit.backend")
-        if: unit_unrelated_backend_rows = 0 || unit_backend_rows = 0 || lm_own_ptr_stack_push(unit_unrelated_backend_rows, unit_backend_unrelated) != 0
+        unit_text_payload_origin: lm_test_registry_push_value_fact("origin.text.unit.payload", "TextWitness", "static int lm_test_unit_text_witness(void) { return 27; }", 0)
+        if: unit_text_payload_origin != 0
+            unit_text_payload_middle: lm_test_registry_join_fact("origin.text.unit.payload", "middle.text.unit.payload", "TextWitness")
+        if: unit_text_payload_middle != 0
+            unit_text_payload_target: lm_test_registry_join_fact("middle.text.unit.payload", "unit.payload", "TextWitness")
+        if: unit_text_payload_origin = 0 || unit_text_payload_middle = 0 || unit_text_payload_target = 0 || unit_text_payload_middle\source != unit_text_payload_origin || unit_text_payload_target\source != unit_text_payload_middle
             status: 1
+    ---
+
+    if: status = 0
+        unit_text_descriptor: lm_table_descriptor_new_empty_slice("unit.payload", 12U)
+        if: unit_text_descriptor = 0 || lm_table_descriptor_add_column(unit_text_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(unit_text_descriptor, "payload", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        unit_text_row: lm_table_row_new(0)
+        unit_text_key_cell: lm_table_cell_new_cstr("TextWitness", "TextWitness", 0, 0, 0)
+        unit_text_payload_cell: lm_table_cell_new_cstr("static int lm_test_unit_text_witness(void) { return 27; }", "static int lm_test_unit_text_witness(void) { return 27; }", 0, unit_text_payload_origin, 0)
+        if: unit_text_row = 0 || unit_text_key_cell = 0 || unit_text_payload_cell = 0 || lm_table_row_take_cell(unit_text_row, unit_text_key_cell) != 0 || lm_table_row_take_cell(unit_text_row, unit_text_payload_cell) != 0 || lm_table_descriptor_take_materialized_row(unit_text_descriptor, unit_text_row) != 0
+            status: 1
+        else:
+            unit_text_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, unit_text_descriptor) != 0
+                status: 1
+            else:
+                unit_text_descriptor: 0
+        ---
     ---
 
     if: status = 0
@@ -2561,15 +2605,24 @@ fn: lm_test_registry_join_provenance_core () int
         unit_wrong_backend_view_row: lm_registry_view_lookup_exact(lm_trans_registry\view, "WrongSchemaWitness", "unit.backend")
         resolved_unit_backend: lm_trans_registry_backend_view_value(0, "unit.backend", unit_backend_view_row)
         resolved_unit_wrong_backend: lm_trans_registry_backend_view_value(0, "unit.backend", unit_wrong_backend_view_row)
-        resolved_unit_node: lm_trans_unit_source_payload_node(0, "NodeWitness", unit_backend_rows, unit_payload_target)
-        resolved_unit_wrong_node: lm_trans_unit_source_payload_node(0, "WrongSchemaWitness", unit_backend_rows, unit_wrong_payload_target)
+        resolved_unit_text: 0
+        resolved_unit_node: 0
+        resolved_unit_wrong_text: 0
+        resolved_unit_wrong_node: 0
+        resolved_unit_unrelated_text: 0
+        resolved_unit_unrelated_node: 0
+        resolved_unit_text_payload: 0
+        resolved_unit_text_node: 0
+        if: lm_trans_unit_source_payload_resolve(0, unit_payload_target, @ resolved_unit_text, @ resolved_unit_node) = 0 || lm_trans_unit_source_payload_resolve(0, unit_wrong_payload_target, @ resolved_unit_wrong_text, @ resolved_unit_wrong_node) = 0 || lm_trans_unit_source_payload_resolve(0, node_unrelated, @ resolved_unit_unrelated_text, @ resolved_unit_unrelated_node) = 0 || lm_trans_unit_source_payload_resolve(0, unit_text_payload_target, @ resolved_unit_text_payload, @ resolved_unit_text_node) = 0
+            status: 1
         resolved_condition_key_cell: 0
         resolved_condition_node_cell: lm_trans_registry_source_path_typed_node_cell(0, "unit.payload", "class", "class", "node", "payload", unit_payload_target, @ resolved_condition_key_cell)
-        if: unit_backend_view_row = 0 || unit_backend_view_row\source != unit_backend_target || unit_wrong_backend_view_row = 0 || unit_wrong_backend_view_row\source != unit_wrong_backend_target || resolved_unit_backend != unit_backend_cell\value || resolved_unit_backend = unit_backend_middle\payload || resolved_unit_backend = unit_backend_target\payload || resolved_unit_wrong_backend != unit_wrong_backend_target\payload || resolved_unit_wrong_backend = unit_wrong_backend_cell\value || resolved_unit_node != unit_payload_cell\node || resolved_condition_node_cell != unit_payload_cell || resolved_condition_key_cell != unit_key_cell || resolved_unit_node = unit_payload_middle\payload_node || resolved_unit_node = unit_payload_target\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_backend_rows, node_unrelated) != node_unrelated\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_unrelated_backend_rows, unit_payload_target) != unit_payload_target\payload_node || resolved_unit_wrong_node != unit_wrong_payload_target\payload_node || resolved_unit_wrong_node = unit_wrong_payload_cell\node
+        if: unit_backend_view_row = 0 || unit_backend_view_row\source != unit_backend_target || unit_wrong_backend_view_row = 0 || unit_wrong_backend_view_row\source != unit_wrong_backend_target || resolved_unit_backend != unit_backend_cell\value || resolved_unit_backend = unit_backend_middle\payload || resolved_unit_backend = unit_backend_target\payload || resolved_unit_wrong_backend != unit_wrong_backend_target\payload || resolved_unit_wrong_backend = unit_wrong_backend_cell\value || resolved_unit_text != 0 || resolved_unit_node != unit_payload_cell\node || resolved_condition_node_cell != unit_payload_cell || resolved_condition_key_cell != unit_key_cell || resolved_unit_node = unit_payload_middle\payload_node || resolved_unit_node = unit_payload_target\payload_node || resolved_unit_wrong_text != 0 || resolved_unit_wrong_node != unit_wrong_payload_target\payload_node || resolved_unit_wrong_node = unit_wrong_payload_cell\node || resolved_unit_unrelated_text != 0 || resolved_unit_unrelated_node != node_unrelated\payload_node || resolved_unit_text_payload != unit_text_payload_cell\value || resolved_unit_text_payload = unit_text_payload_origin\payload || resolved_unit_text_payload = unit_text_payload_middle\payload || resolved_unit_text_payload = unit_text_payload_target\payload || resolved_unit_text_node != 0
             status: 1
     ---
 
-    lm_trans_ptr_stack_delete(@ unit_unrelated_backend_rows)
+    lm_table_row_delete_any(unit_text_row)
+    lm_table_descriptor_delete_any(unit_text_descriptor)
     lm_table_row_delete_any(unit_wrong_row)
     lm_table_descriptor_delete_any(unit_wrong_descriptor)
     lm_table_row_delete_any(unit_row)
