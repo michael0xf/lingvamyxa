@@ -1382,6 +1382,11 @@ fn: lm_trans_alias_source_target (
     const: LmTableCell: source_target_cell
     const: LmTableCell: source_address_depth_cell
     const: LmTableCell: source_const_cell
+    const: @: char source_key_descriptor
+    const: @: char source_backend_descriptor
+    const: @: char source_target_descriptor
+    const: @: char source_address_depth_descriptor
+    const: @: char source_const_descriptor
     const: @: char result
     size_t: descriptor_index
     size_t: row_index
@@ -1410,6 +1415,13 @@ fn: lm_trans_alias_source_target (
             source_address_depth_column: lm_table_descriptor_column_at(source_table, 3U)
             source_const_column: lm_table_descriptor_column_at(source_table, 4U)
             source_usable: source_key_column != 0 && source_key_column\name != 0 && c.strcmp(source_key_column\name, "class") = 0 && source_backend_column != 0 && source_backend_column\name != 0 && c.strcmp(source_backend_column\name, "backend") = 0 && source_target_column != 0 && source_target_column\name != 0 && c.strcmp(source_target_column\name, "target") = 0 && source_address_depth_column != 0 && source_address_depth_column\name != 0 && c.strcmp(source_address_depth_column\name, "target.address-depth") = 0 && source_const_column != 0 && source_const_column\name != 0 && c.strcmp(source_const_column\name, "target.const") = 0
+            if: source_usable != 0
+                source_key_descriptor: lm_table_column_descriptor_descriptor_at(source_key_column, 0U)
+                source_backend_descriptor: lm_table_column_descriptor_descriptor_at(source_backend_column, 0U)
+                source_target_descriptor: lm_table_column_descriptor_descriptor_at(source_target_column, 0U)
+                source_address_depth_descriptor: lm_table_column_descriptor_descriptor_at(source_address_depth_column, 0U)
+                source_const_descriptor: lm_table_column_descriptor_descriptor_at(source_const_column, 0U)
+                source_usable: lm_table_column_descriptor_descriptor_count(source_key_column) = 1U && source_key_descriptor != 0 && c.strcmp(source_key_descriptor, "class") = 0 && lm_table_column_descriptor_descriptor_count(source_backend_column) = 1U && source_backend_descriptor != 0 && c.strcmp(source_backend_descriptor, "class") = 0 && lm_table_column_descriptor_descriptor_count(source_target_column) = 1U && source_target_descriptor != 0 && c.strcmp(source_target_descriptor, "class") = 0 && lm_table_column_descriptor_descriptor_count(source_address_depth_column) = 1U && source_address_depth_descriptor != 0 && c.strcmp(source_address_depth_descriptor, "size_t") = 0 && lm_table_column_descriptor_descriptor_count(source_const_column) = 1U && source_const_descriptor != 0 && c.strcmp(source_const_descriptor, "int") = 0
         ---
         if: source_usable != 0
             row_index: lm_table_descriptor_materialized_row_count(source_table)
@@ -1422,7 +1434,7 @@ fn: lm_trans_alias_source_target (
                     source_target_cell: lm_table_row_cell_at(source_row, 2U)
                     source_address_depth_cell: lm_table_row_cell_at(source_row, 3U)
                     source_const_cell: lm_table_row_cell_at(source_row, 4U)
-                    source_usable: source_key_cell != 0 && source_key_cell\value != 0 && c.strcmp(source_key_cell\value, name) = 0 && lm_trans_source_backend_is_witness(facade_backend_rows, name, "c.typedef", source_backend_cell) != 0 && source_target_cell != 0 && source_target_cell\value != 0 && source_target_cell\source = facade_target_row && c.strcmp(source_target_cell\value, facade_target_row\payload) = 0 && source_address_depth_cell != 0 && source_const_cell != 0
+                    source_usable: source_key_cell != 0 && source_key_cell\value != 0 && c.strcmp(source_key_cell\value, name) = 0 && lm_trans_source_backend_is_witness(facade_backend_rows, name, "c.typedef", source_backend_cell) != 0 && lm_trans_registry_text_cell_is_facade_witness(source_target_cell, facade_target_row) != 0 && source_address_depth_cell != 0 && source_const_cell != 0
                     if: source_usable != 0
                         source_address_depth: 0U
                         source_const_flag: 0U
@@ -1430,11 +1442,11 @@ fn: lm_trans_alias_source_target (
                         if: source_address_depth_cell\value = 0
                             source_same: source_address_depth_cell\explicit_none != 0 && source_address_depth_cell\node = 0 && source_address_depth_cell\source = 0 && facade_address_depth_row = 0
                         else:
-                            source_same: facade_address_depth_row != 0 && facade_address_depth_row\payload != 0 && source_address_depth_cell\source = facade_address_depth_row && c.strcmp(source_address_depth_cell\value, facade_address_depth_row\payload) = 0 && lm_trans_parse_size_payload(source_address_depth_cell\value, @ source_address_depth) != 0
+                            source_same: lm_trans_registry_text_cell_is_facade_witness(source_address_depth_cell, facade_address_depth_row) != 0 && lm_trans_parse_size_payload(source_address_depth_cell\value, @ source_address_depth) != 0
                         if: source_same != 0 && source_const_cell\value = 0
                             source_same: source_const_cell\explicit_none != 0 && source_const_cell\node = 0 && source_const_cell\source = 0 && facade_const_row = 0
                         if: source_same != 0 && source_const_cell\value != 0
-                            source_same: facade_const_row != 0 && facade_const_row\payload != 0 && source_const_cell\source = facade_const_row && c.strcmp(source_const_cell\value, facade_const_row\payload) = 0 && lm_trans_parse_size_payload(source_const_cell\value, @ source_const_flag) != 0
+                            source_same: lm_trans_registry_text_cell_is_facade_witness(source_const_cell, facade_const_row) != 0 && lm_trans_parse_size_payload(source_const_cell\value, @ source_const_flag) != 0
                         if: source_same != 0
                             if: lm_trans_registry_view_is_selected() != 0
                                 out_address_depth[0]: source_address_depth

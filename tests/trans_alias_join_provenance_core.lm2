@@ -1,0 +1,252 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_alias_join_provenance_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_alias_push_value_fact (
+    const: @(char table_name)
+    const: @(char key)
+    const: @(char payload)
+) LmTransRegistryFact
+    LmP0Text: table_text
+    LmP0Text: key_text
+    LmP0Text: payload_text
+    const: LmRegistryViewRow: view_row
+    int: status
+
+    table_text: lm_trans_text_from_cstr(table_name)
+    key_text: lm_trans_text_from_cstr(key)
+    payload_text: lm_trans_text_from_cstr(payload)
+    if: table_text = 0 || key_text = 0 || payload_text = 0
+        lm_trans_text_ref_destroy(@ table_text)
+        lm_trans_text_ref_destroy(@ key_text)
+        lm_trans_text_ref_destroy(@ payload_text)
+        return: 0
+
+    status: lm_trans_registry_push_row_values(table_text, key_text, payload_text)
+    lm_trans_text_ref_destroy(@ table_text)
+    lm_trans_text_ref_destroy(@ key_text)
+    lm_trans_text_ref_destroy(@ payload_text)
+    if: status != 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0 || lm_trans_registry\loaded_fact_count = 0U
+        return: 0
+
+    view_row: lm_registry_view_fact_at(lm_trans_registry\view, lm_trans_registry\loaded_fact_count - 1U)
+    if: view_row = 0
+        return: 0
+return: cast: (LmTransRegistryFact) view_row\source
+
+fn: lm_test_alias_join_tables (const: @(char source_table); const: @(char target_table)) int
+    LmP0Text: source_text
+    LmP0Text: target_text
+    int: status
+
+    source_text: lm_trans_text_from_cstr(source_table)
+    target_text: lm_trans_text_from_cstr(target_table)
+    status: 1
+    if: source_text != 0 && target_text != 0
+        status: lm_trans_registry_join_table(source_text, target_text)
+    lm_trans_text_ref_destroy(@ source_text)
+    lm_trans_text_ref_destroy(@ target_text)
+return: status
+
+fn: lm_test_alias_lookup_fact (const: @(char table_name); const: @(char key)) LmTransRegistryFact
+    LmP0Text: key_text
+    LmTransRegistryFact: fact
+
+    key_text: lm_trans_text_from_cstr(key)
+    fact: 0
+    if: key_text != 0
+        fact: lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry\identifiers, key_text, table_name)
+    lm_trans_text_ref_destroy(@ key_text)
+return: fact
+
+fn: lm_test_alias_join_provenance_core () int
+    LmTransRegistryFact: backend_origin
+    LmTransRegistryFact: target_origin
+    LmTransRegistryFact: address_depth_origin
+    LmTransRegistryFact: const_origin
+    LmTransRegistryFact: backend_middle
+    LmTransRegistryFact: target_middle
+    LmTransRegistryFact: address_depth_middle
+    LmTransRegistryFact: const_middle
+    LmTransRegistryFact: backend_target
+    LmTransRegistryFact: target_target
+    LmTransRegistryFact: address_depth_target
+    LmTransRegistryFact: const_target
+    LmTransRegistryFact: backend_unrelated
+    LmTransRegistryFact: target_unrelated
+    LmTransRegistryFact: address_depth_unrelated
+    LmTransRegistryFact: const_unrelated
+    LmTableDescriptor: descriptor
+    LmTableDescriptor: wrong_descriptor
+    LmTableRow: row
+    LmTableRow: wrong_row
+    LmTableCell: key_cell
+    LmTableCell: backend_cell
+    LmTableCell: target_cell
+    LmTableCell: address_depth_cell
+    LmTableCell: const_cell
+    LmTableCell: wrong_key_cell
+    LmTableCell: wrong_backend_cell
+    LmTableCell: wrong_target_cell
+    LmTableCell: wrong_address_depth_cell
+    LmTableCell: wrong_const_cell
+    const: LmOwnPtrStack: backend_rows
+    LmOwnPtrStack: unrelated_backend_rows
+    const: @: char resolved_target
+    size_t: resolved_address_depth
+    size_t: resolved_const
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    descriptor: 0
+    wrong_descriptor: 0
+    row: 0
+    wrong_row: 0
+    unrelated_backend_rows: 0
+    status: 0
+
+    backend_origin: lm_test_alias_push_value_fact("origin.alias.backend", "AliasWitness", "c.typedef")
+    target_origin: lm_test_alias_push_value_fact("origin.alias.target", "AliasWitness", "char")
+    address_depth_origin: lm_test_alias_push_value_fact("origin.alias.target.address-depth", "AliasWitness", "1")
+    const_origin: lm_test_alias_push_value_fact("origin.alias.target.const", "AliasWitness", "1")
+    if: backend_origin = 0 || target_origin = 0 || address_depth_origin = 0 || const_origin = 0 || lm_test_alias_join_tables("origin.alias", "middle.alias") != 0 || lm_test_alias_join_tables("middle.alias", "alias") != 0
+        status: 1
+
+    backend_middle: lm_test_alias_lookup_fact("middle.alias.backend", "AliasWitness")
+    target_middle: lm_test_alias_lookup_fact("middle.alias.target", "AliasWitness")
+    address_depth_middle: lm_test_alias_lookup_fact("middle.alias.target.address-depth", "AliasWitness")
+    const_middle: lm_test_alias_lookup_fact("middle.alias.target.const", "AliasWitness")
+    backend_target: lm_test_alias_lookup_fact("alias.backend", "AliasWitness")
+    target_target: lm_test_alias_lookup_fact("alias.target", "AliasWitness")
+    address_depth_target: lm_test_alias_lookup_fact("alias.target.address-depth", "AliasWitness")
+    const_target: lm_test_alias_lookup_fact("alias.target.const", "AliasWitness")
+    if: status = 0 && (backend_middle = 0 || target_middle = 0 || address_depth_middle = 0 || const_middle = 0 || backend_target = 0 || target_target = 0 || address_depth_target = 0 || const_target = 0 || backend_middle\source != backend_origin || target_middle\source != target_origin || address_depth_middle\source != address_depth_origin || const_middle\source != const_origin || backend_target\source != backend_middle || target_target\source != target_middle || address_depth_target\source != address_depth_middle || const_target\source != const_middle)
+        status: 1
+
+    backend_unrelated: lm_test_alias_push_value_fact("unrelated.alias.backend", "AliasWitness", "c.typedef")
+    target_unrelated: lm_test_alias_push_value_fact("unrelated.alias.target", "AliasWitness", "char")
+    address_depth_unrelated: lm_test_alias_push_value_fact("unrelated.alias.target.address-depth", "AliasWitness", "1")
+    const_unrelated: lm_test_alias_push_value_fact("unrelated.alias.target.const", "AliasWitness", "1")
+    if: status = 0 && (backend_unrelated = 0 || target_unrelated = 0 || address_depth_unrelated = 0 || const_unrelated = 0 || backend_unrelated\source != 0 || target_unrelated\source != 0 || address_depth_unrelated\source != 0 || const_unrelated\source != 0)
+        status: 1
+
+    if: status = 0
+        descriptor: lm_table_descriptor_new_empty_slice("alias", 5U)
+        if: descriptor = 0 || lm_table_descriptor_add_column(descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(descriptor, "backend", "class") != 0 || lm_table_descriptor_add_column(descriptor, "target", "class") != 0 || lm_table_descriptor_add_column(descriptor, "target.address-depth", "size_t") != 0 || lm_table_descriptor_add_column(descriptor, "target.const", "int") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        row: lm_table_row_new(0)
+        key_cell: lm_table_cell_new_cstr("AliasWitness", "AliasWitness", 0, 0, 0)
+        backend_cell: lm_table_cell_new_cstr("c.typedef", "c.typedef", 0, backend_origin, 0)
+        target_cell: lm_table_cell_new_cstr("char", "char", 0, target_origin, 0)
+        address_depth_cell: lm_table_cell_new_cstr("1", "1", 0, address_depth_origin, 0)
+        const_cell: lm_table_cell_new_cstr("1", "1", 0, const_origin, 0)
+        if: row = 0 || key_cell = 0 || backend_cell = 0 || target_cell = 0 || address_depth_cell = 0 || const_cell = 0 || lm_table_row_take_cell(row, key_cell) != 0 || lm_table_row_take_cell(row, backend_cell) != 0 || lm_table_row_take_cell(row, target_cell) != 0 || lm_table_row_take_cell(row, address_depth_cell) != 0 || lm_table_row_take_cell(row, const_cell) != 0 || lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+            status: 1
+        else:
+            row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, descriptor) != 0
+                status: 1
+            else:
+                descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        wrong_descriptor: lm_table_descriptor_new_empty_slice("alias", 5U)
+        if: wrong_descriptor = 0 || lm_table_descriptor_add_column(wrong_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(wrong_descriptor, "backend", "class") != 0 || lm_table_descriptor_add_column(wrong_descriptor, "target", "char") != 0 || lm_table_descriptor_add_column(wrong_descriptor, "target.address-depth", "int") != 0 || lm_table_descriptor_add_column(wrong_descriptor, "target.const", "size_t") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        wrong_row: lm_table_row_new(0)
+        wrong_key_cell: lm_table_cell_new_cstr("AliasWitness", "AliasWitness", 0, 0, 0)
+        wrong_backend_cell: lm_table_cell_new_cstr("c.typedef", "c.typedef", 0, backend_origin, 0)
+        wrong_target_cell: lm_table_cell_new_cstr("char", "char", 0, target_origin, 0)
+        wrong_address_depth_cell: lm_table_cell_new_cstr("1", "1", 0, address_depth_origin, 0)
+        wrong_const_cell: lm_table_cell_new_cstr("1", "1", 0, const_origin, 0)
+        if: wrong_row = 0 || wrong_key_cell = 0 || wrong_backend_cell = 0 || wrong_target_cell = 0 || wrong_address_depth_cell = 0 || wrong_const_cell = 0 || lm_table_row_take_cell(wrong_row, wrong_key_cell) != 0 || lm_table_row_take_cell(wrong_row, wrong_backend_cell) != 0 || lm_table_row_take_cell(wrong_row, wrong_target_cell) != 0 || lm_table_row_take_cell(wrong_row, wrong_address_depth_cell) != 0 || lm_table_row_take_cell(wrong_row, wrong_const_cell) != 0 || lm_table_descriptor_take_materialized_row(wrong_descriptor, wrong_row) != 0
+            status: 1
+        else:
+            wrong_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, wrong_descriptor) != 0
+                status: 1
+            else:
+                wrong_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        backend_rows: lm_trans_registry_relation_stack_for_table("alias.backend")
+        unrelated_backend_rows: lm_trans_ptr_stack_new(0)
+        if: backend_rows = 0 || unrelated_backend_rows = 0 || lm_own_ptr_stack_push(unrelated_backend_rows, backend_unrelated) != 0 || target_cell\value = wrong_target_cell\value
+            status: 1
+    ---
+
+    if: status = 0
+        resolved_address_depth: 71U
+        resolved_const: 81U
+        resolved_target: lm_trans_alias_source_target(0, "AliasWitness", backend_rows, target_target, address_depth_target, const_target, @ resolved_address_depth, @ resolved_const)
+        if: resolved_target != target_cell\value || resolved_target = wrong_target_cell\value || resolved_target = target_origin\payload || resolved_target = target_middle\payload || resolved_target = target_target\payload || resolved_address_depth != 1U || resolved_const != 1U
+            status: 1
+    ---
+
+    if: status = 0
+        resolved_address_depth: 71U
+        resolved_const: 81U
+        resolved_target: lm_trans_alias_source_target(0, "AliasWitness", backend_rows, target_unrelated, address_depth_target, const_target, @ resolved_address_depth, @ resolved_const)
+        if: resolved_target != target_unrelated\payload || resolved_address_depth != 71U || resolved_const != 81U
+            status: 1
+    ---
+
+    if: status = 0
+        resolved_address_depth: 71U
+        resolved_const: 81U
+        resolved_target: lm_trans_alias_source_target(0, "AliasWitness", backend_rows, target_target, address_depth_unrelated, const_target, @ resolved_address_depth, @ resolved_const)
+        if: resolved_target != target_target\payload || resolved_address_depth != 71U || resolved_const != 81U
+            status: 1
+    ---
+
+    if: status = 0
+        resolved_address_depth: 71U
+        resolved_const: 81U
+        resolved_target: lm_trans_alias_source_target(0, "AliasWitness", backend_rows, target_target, address_depth_target, const_unrelated, @ resolved_address_depth, @ resolved_const)
+        if: resolved_target != target_target\payload || resolved_address_depth != 71U || resolved_const != 81U
+            status: 1
+    ---
+
+    if: status = 0
+        resolved_address_depth: 71U
+        resolved_const: 81U
+        resolved_target: lm_trans_alias_source_target(0, "AliasWitness", unrelated_backend_rows, target_target, address_depth_target, const_target, @ resolved_address_depth, @ resolved_const)
+        if: resolved_target != target_target\payload || resolved_address_depth != 71U || resolved_const != 81U || lm_trans_registry_assert_source_table_materialization() != 0
+            status: 1
+    ---
+
+    lm_trans_ptr_stack_delete(@ unrelated_backend_rows)
+    lm_table_row_delete_any(wrong_row)
+    lm_table_descriptor_delete_any(wrong_descriptor)
+    lm_table_row_delete_any(row)
+    lm_table_descriptor_delete_any(descriptor)
+    lm_trans_registry_destroy()
+return: status
