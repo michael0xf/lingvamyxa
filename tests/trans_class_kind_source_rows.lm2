@@ -1,0 +1,116 @@
+L4:
+    table:
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 LmClassKindSourceDirect  opaqueReference
+                 LmClassKindSourceDirect  None
+                 default                  function
+    end: class
+
+    table:
+        name: class
+        columns((class: class) (@: char kind))
+        rows:
+                 LmClassKindSourceSchemaFallback  opaqueReference
+    end: class
+
+    table:
+        name: `lm.test.class.kind.source.seed`
+        columns((class: class) (class: kind))
+        rows:
+                 LmClassKindSourceJoined  opaqueReference
+    end: `lm.test.class.kind.source.seed`
+
+    join: (`lm.test.class.kind.source.seed`) class
+        columns((class: class) (class: kind))
+        rows:
+    end: class
+
+    table:
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 LmClassKindSourceJoined  None
+    end: class
+
+    table:
+        name: `class.kind`
+        columns((class: class) (class: kind))
+        rows:
+                 LmClassKindCompatDirect  opaqueReference
+                 LmClassKindCompatDirect  None
+    end: `class.kind`
+
+    table:
+        name: `class.kind`
+        columns((class: class) (@: char kind))
+        rows:
+                 LmClassKindCompatSchemaFallback  opaqueReference
+    end: `class.kind`
+
+    table:
+        name: `lm.test.class.kind.compat.seed`
+        columns((class: class) (class: kind))
+        rows:
+                 LmClassKindCompatJoined  opaqueReference
+    end: `lm.test.class.kind.compat.seed`
+
+    join: (`lm.test.class.kind.compat.seed`) `class.kind`
+        columns((class: class) (class: kind))
+        rows:
+    end: `class.kind`
+
+    table:
+        name: `class.kind`
+        columns((class: class) (class: kind))
+        rows:
+                 LmClassKindCompatJoined  None
+    end: `class.kind`
+
+    table:
+        name: `class.c.projection`
+        columns((class: class) (@: char spelling))
+        rows:
+                 LmClassKindSourceDirect          int
+                 LmClassKindSourceSchemaFallback  int
+                 LmClassKindSourceJoined          int
+                 LmClassKindCompatDirect          int
+                 LmClassKindCompatSchemaFallback  int
+                 LmClassKindCompatJoined          int
+    end: `class.c.projection`
+
+    sub: lm_test_class_kind_runtime_default (int: value)
+end: L4
+
+prototype
+
+L1:
+===
+typedef int LmClassKindSourceDirect;
+typedef int LmClassKindSourceSchemaFallback;
+typedef int LmClassKindSourceJoined;
+typedef int LmClassKindCompatDirect;
+typedef int LmClassKindCompatSchemaFallback;
+typedef int LmClassKindCompatJoined;
+
+#define lm_test_require_pointer(value) ((void)sizeof(*(value)), 0)
+
+static void lm_test_class_kind_runtime_default(int value) {
+    (void)value;
+}
+===
+
+external:
+    fn: main () int
+        LmClassKindSourceDirect: source_direct 0
+        LmClassKindSourceSchemaFallback: source_schema_fallback 0
+        LmClassKindSourceJoined: source_joined 0
+        LmClassKindCompatDirect: compat_direct 0
+        LmClassKindCompatSchemaFallback: compat_schema_fallback 0
+        LmClassKindCompatJoined: compat_joined 0
+
+        c.lm_test_class_kind_runtime_default(7)
+        return: c.lm_test_require_pointer(source_direct) || c.lm_test_require_pointer(source_schema_fallback) || c.lm_test_require_pointer(source_joined) || c.lm_test_require_pointer(compat_direct) || c.lm_test_require_pointer(compat_schema_fallback) || c.lm_test_require_pointer(compat_joined)
+    end: main
+end: external

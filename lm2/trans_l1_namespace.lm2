@@ -1368,7 +1368,7 @@ fn: lm_trans_class_is_reference_base (const: (LmP0Text: name)) int
         return: 0
     if: lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.reference-base", "class", "class", "value", "int") != 0
         return: 1
-    class_kind: lm_trans_registry_lookup(name, "class.kind")
+    class_kind: lm_trans_namespace_class_kind_value(0, name)
     if: class_kind != 0 && c.strcmp(class_kind, "opaqueReference") = 0
         return: 1
     semantic: lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.semantic", "class", "class", "value", "char")

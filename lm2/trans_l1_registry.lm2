@@ -1952,6 +1952,99 @@ fn: lm_trans_namespace_registry_source_n2_typed_value (
         return: source_value
 return: selected_value
 
+fn: lm_trans_class_kind_selected_row_value (
+    const: (LmTransNamespace: source_namespace)
+    const: (LmTransRegistryFact: facade_row)
+    const: @(char table_name)
+    const: @(char selected_value)
+) const: @: char
+    const: @: char source_value
+
+    if: selected_value = 0
+        return: 0
+    if: facade_row = 0 || facade_row\payload = 0 || c.strcmp(facade_row\payload, selected_value) != 0
+        return: selected_value
+
+    source_value: lm_trans_registry_source_n2_typed_value(source_namespace, table_name, "class", "class", "kind", "class", facade_row)
+    if: source_value != 0
+        return: source_value
+return: selected_value
+
+fn: lm_trans_namespace_class_kind_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+    LmTransRegistryFact: facade_row
+    const: @: char selected_value
+    const: @: char value
+    int: private_registry
+
+    if: name = 0
+        return: 0
+
+    private_registry: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
+
+    if: private_registry
+        facade_row: lm_trans_registry_lookup_row_in_identifiers(namespace_\registry_identifiers, name, "class")
+        if: facade_row != 0
+            value: lm_trans_class_kind_selected_row_value(namespace_, facade_row, "class", facade_row\payload)
+            if: value != 0
+                return: value
+            ---
+        ---
+        facade_row: lm_trans_registry_lookup_row_in_identifiers(namespace_\registry_identifiers, name, "class.kind")
+        if: facade_row != 0
+            value: lm_trans_class_kind_selected_row_value(namespace_, facade_row, "class.kind", facade_row\payload)
+            if: value != 0
+                return: value
+            ---
+        ---
+    ---
+
+    if: c.lm_trans_registry != 0 && c.lm_trans_registry->identifiers != 0
+        selected_value: lm_trans_registry_lookup_exact(name, "class")
+        facade_row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, name, "class")
+        value: lm_trans_class_kind_selected_row_value(0, facade_row, "class", selected_value)
+        if: value != 0
+            return: value
+
+        selected_value: lm_trans_registry_lookup_exact(name, "class.kind")
+        facade_row: lm_trans_registry_lookup_row_in_identifiers(c.lm_trans_registry->identifiers, name, "class.kind")
+        value: lm_trans_class_kind_selected_row_value(0, facade_row, "class.kind", selected_value)
+        if: value != 0
+            return: value
+    ---
+
+    if: private_registry
+        facade_row: lm_trans_registry_lookup_default_row_in_identifiers(namespace_\registry_identifiers, "class")
+        if: facade_row != 0
+            value: lm_trans_class_kind_selected_row_value(namespace_, facade_row, "class", facade_row\payload)
+            if: value != 0
+                return: value
+            ---
+        ---
+        facade_row: lm_trans_registry_lookup_default_row_in_identifiers(namespace_\registry_identifiers, "class.kind")
+        if: facade_row != 0
+            value: lm_trans_class_kind_selected_row_value(namespace_, facade_row, "class.kind", facade_row\payload)
+            if: value != 0
+                return: value
+            ---
+        ---
+    ---
+
+    if: c.lm_trans_registry != 0 && c.lm_trans_registry->identifiers != 0
+        selected_value: lm_trans_registry_lookup_default("class")
+        facade_row: lm_trans_registry_lookup_default_row_in_identifiers(c.lm_trans_registry->identifiers, "class")
+        value: lm_trans_class_kind_selected_row_value(0, facade_row, "class", selected_value)
+        if: value != 0
+            return: value
+
+        selected_value: lm_trans_registry_lookup_default("class.kind")
+        facade_row: lm_trans_registry_lookup_default_row_in_identifiers(c.lm_trans_registry->identifiers, "class.kind")
+        value: lm_trans_class_kind_selected_row_value(0, facade_row, "class.kind", selected_value)
+        if: value != 0
+            return: value
+    ---
+
+return: 0
+
 fn: lm_trans_namespace_registry_source_n2_key_typed_value (
     const: (LmTransNamespace: namespace_)
     const: (LmP0Text: key)

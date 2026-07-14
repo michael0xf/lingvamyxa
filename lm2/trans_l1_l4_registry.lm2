@@ -1531,7 +1531,7 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
     if: name = 0 || error_name = 0
         return: 1
 
-    class_kind: lm_trans_namespace_registry_lookup(namespace_, lm_trans_text_from_cstr(name), "class.kind")
+    class_kind: lm_trans_namespace_class_kind_value(namespace_, lm_trans_text_from_cstr(name))
     is_sub: class_kind != 0 && c.strcmp(class_kind, "procedure") = 0
     is_external: lm_trans_fn_is_external(namespace_, lm_trans_text_from_cstr(name))
 
