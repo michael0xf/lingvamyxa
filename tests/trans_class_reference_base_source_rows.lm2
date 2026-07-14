@@ -1,0 +1,72 @@
+L4:
+    table:
+        name: `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+                 short  1
+                 short  0
+                 short  None
+    end: `class.reference-base`
+
+    table:
+        name: `class.reference-base`
+        columns((class: class) (class: value))
+        rows:
+                 long  int
+    end: `class.reference-base`
+
+    table:
+        name: `lm.test.class.reference-base.seed`
+        columns((class: class) (int: value))
+        rows:
+                 float  1
+    end: `lm.test.class.reference-base.seed`
+
+    join: (`lm.test.class.reference-base.seed`) `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+    end: `class.reference-base`
+
+    table:
+        name: `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+                 float  None
+    end: `class.reference-base`
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestClassReferenceBase  c.struct
+    end: `layout.backend`
+
+    table:
+        name: LmTestClassReferenceBase
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 direct    short  0
+                 fallback  long   1
+                 joined    float  2
+    end: LmTestClassReferenceBase
+end: L4
+
+layout
+
+L1:
+===
+static int lm_test_class_reference_base_source_rows(void) {
+    short direct = 7;
+    long fallback = 8;
+    float joined = 9.0f;
+    LmTestClassReferenceBase value = { &direct, &fallback, &joined };
+
+    return *value.direct != 7 || *value.fallback != 8 || *value.joined != 9.0f;
+}
+===
+
+external:
+    fn: main () int
+        return: c.lm_test_class_reference_base_source_rows()
+    end: main
+end: external

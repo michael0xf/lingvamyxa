@@ -8574,7 +8574,7 @@ static int lm_trans_class_is_reference_base(const LmP0Text *name) {
     if (name == 0) {
         return 0;
     }
-    if (lm_trans_registry_has(name, "class.reference-base")) {
+    if (lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.reference-base", "class", "class", "value", "int") != 0) {
         return 1;
     }
     class_kind = lm_trans_registry_lookup(name, "class.kind");
@@ -29768,7 +29768,7 @@ static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace *
     }
     result = lm_trans_class_is_reference_base(class_text);
     if (result == 0 && namespace_ != 0) {
-        result = lm_trans_namespace_registry_lookup(namespace_, class_text, "class.reference-base") != 0;
+        result = lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_text, "class.reference-base", "class", "class", "value", "int") != 0;
     }
     if (result == 0 && namespace_ != 0) {
         semantic = lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_text, "class.semantic", "class", "class", "value", "char");
