@@ -616,6 +616,9 @@ fn: lm_trans_registry_column_is_class_typed (const: (LmL4Column: column)) int
     lm_trans_text_ref_destroy(@ payload)
 return: is_class || lm_trans_registry_column_has_descriptor(column, "class")
 
+fn: lm_trans_registry_serialization_codec_value (const: (LmP0Text: key)) const: @: char
+return: lm_trans_namespace_registry_source_n2_typed_value(0, key, "serialization.codec", "class", "class", "codec", "char")
+
 fn: lm_trans_registry_column_serialization_codec (const: (LmL4Column: column)) const: @: char
     LmP0Text: payload
     const: @: char codec
@@ -630,7 +633,7 @@ fn: lm_trans_registry_column_serialization_codec (const: (LmL4Column: column)) c
     i: 0U
     while: i < column\descriptor_count
         if: column\descriptors[i] != 0 && lm_trans_registry_identifier_value(column\descriptors[i], payload) != 0
-            codec: lm_trans_registry_lookup(payload, "serialization.codec")
+            codec: lm_trans_registry_serialization_codec_value(payload)
             if: codec != 0
                 lm_trans_text_ref_destroy(@ payload)
                 return: codec
@@ -639,7 +642,7 @@ fn: lm_trans_registry_column_serialization_codec (const: (LmL4Column: column)) c
         i: i + 1U
 
     if: column\name != 0 && lm_trans_registry_identifier_value(column\name, payload) != 0
-        codec: lm_trans_registry_lookup(payload, "serialization.codec")
+        codec: lm_trans_registry_serialization_codec_value(payload)
         if: codec != 0
             lm_trans_text_ref_destroy(@ payload)
             return: codec
@@ -657,7 +660,7 @@ fn: lm_trans_registry_descriptor_payload_is_numeric (const: (LmP0Text: payload))
     if: lm_trans_text_equals(payload, "int") != 0 || lm_trans_text_equals(payload, "size_t") != 0 || lm_trans_text_equals(payload, "int8") != 0 || lm_trans_text_equals(payload, "uint8") != 0 || lm_trans_text_equals(payload, "categoryFlag") != 0 || lm_trans_text_equals(payload, "decimal") != 0 || lm_trans_text_equals(payload, "serial") != 0
         return: 1
 
-    codec: lm_trans_registry_lookup(payload, "serialization.codec")
+    codec: lm_trans_registry_serialization_codec_value(payload)
     if: codec != 0 && c.strcmp(codec, "lmx.decimal-atom") = 0
         return: 1
 return: 0

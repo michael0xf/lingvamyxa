@@ -2459,6 +2459,7 @@ static int lm_trans_registry_join_table(const LmP0Text *source_table, const LmP0
 static int lm_trans_registry_push_row_atoms(const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Text *payload_atom);
 static int lm_trans_registry_column_has_descriptor(const LmL4Column *column, const char *descriptor);
 static int lm_trans_registry_column_is_class_typed(const LmL4Column *column);
+static const char * lm_trans_registry_serialization_codec_value(const LmP0Text *key);
 static const char * lm_trans_registry_column_serialization_codec(const LmL4Column *column);
 static int lm_trans_registry_descriptor_payload_is_numeric(const LmP0Text *payload);
 static int lm_trans_registry_column_is_numeric_typed(const LmL4Column *column);
@@ -5529,6 +5530,10 @@ static int lm_trans_registry_column_is_class_typed(const LmL4Column *column) {
     return is_class || lm_trans_registry_column_has_descriptor(column, "class");
 }
 
+static const char * lm_trans_registry_serialization_codec_value(const LmP0Text *key) {
+    return lm_trans_namespace_registry_source_n2_typed_value(0, key, "serialization.codec", "class", "class", "codec", "char");
+}
+
 static const char * lm_trans_registry_column_serialization_codec(const LmL4Column *column) {
     LmP0Text * payload;
     const char *codec;
@@ -5543,7 +5548,7 @@ static const char * lm_trans_registry_column_serialization_codec(const LmL4Colum
     i = 0U;
     while (i < column -> descriptor_count) {
         if (column -> descriptors[i] != 0 && lm_trans_registry_identifier_value(column -> descriptors[i], payload) != 0) {
-            codec = lm_trans_registry_lookup(payload, "serialization.codec");
+            codec = lm_trans_registry_serialization_codec_value(payload);
             if (codec != 0) {
                 lm_trans_text_ref_destroy(&payload);
                 return codec;
@@ -5552,7 +5557,7 @@ static const char * lm_trans_registry_column_serialization_codec(const LmL4Colum
         i = i + 1U;
     }
     if (column -> name != 0 && lm_trans_registry_identifier_value(column -> name, payload) != 0) {
-        codec = lm_trans_registry_lookup(payload, "serialization.codec");
+        codec = lm_trans_registry_serialization_codec_value(payload);
         if (codec != 0) {
             lm_trans_text_ref_destroy(&payload);
             return codec;
@@ -5570,7 +5575,7 @@ static int lm_trans_registry_descriptor_payload_is_numeric(const LmP0Text *paylo
     if (lm_trans_text_equals(payload, "int") != 0 || lm_trans_text_equals(payload, "size_t") != 0 || lm_trans_text_equals(payload, "int8") != 0 || lm_trans_text_equals(payload, "uint8") != 0 || lm_trans_text_equals(payload, "categoryFlag") != 0 || lm_trans_text_equals(payload, "decimal") != 0 || lm_trans_text_equals(payload, "serial") != 0) {
         return 1;
     }
-    codec = lm_trans_registry_lookup(payload, "serialization.codec");
+    codec = lm_trans_registry_serialization_codec_value(payload);
     if (codec != 0 && strcmp(codec, "lmx.decimal-atom") == 0) {
         return 1;
     }

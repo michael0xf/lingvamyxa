@@ -1,0 +1,109 @@
+L4:
+    table:
+        name: `serialization.codec`
+        columns((class: class) (@: char codec))
+        rows:
+                 LmCodecDirect           `lmx.decimal-atom`
+                 LmCodecDirect           `lmx.char`
+                 LmCodecDirect           None
+                 LmCodecFallback         `lmx.decimal-atom`
+                 LmCodecJoined           `lmx.decimal-atom`
+                 LmCodecNumericFallback  `lmx.decimal-atom`
+                 default                 `lmx.char`
+    end: `serialization.codec`
+
+    table:
+        name: `serialization.codec`
+        columns((class: class) (class: codec))
+        rows:
+                 LmCodecFallback         `lmx.char`
+                 LmCodecNumericFallback  `lmx.symbol-atom`
+    end: `serialization.codec`
+
+    table:
+        name: `lm.test.serialization.codec.seed`
+        columns((class: class) (@: char codec))
+        rows:
+                 LmCodecJoined  `lmx.char`
+    end: `lm.test.serialization.codec.seed`
+
+    join: (`lm.test.serialization.codec.seed`) `serialization.codec`
+        columns((class: class) (@: char codec))
+        rows:
+    end: `serialization.codec`
+
+    table:
+        name: `serialization.codec`
+        columns((class: class) (@: char codec))
+        rows:
+                 LmCodecJoined  None
+    end: `serialization.codec`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmCodecDirect: value))
+        rows:
+                 LM_TEST_CODEC_DIRECT  "11"
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmCodecFallback: value))
+        rows:
+                 LM_TEST_CODEC_FALLBACK  "12"
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmCodecJoined: value))
+        rows:
+                 LM_TEST_CODEC_JOINED  "13"
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) LmCodecDefault)
+        rows:
+                 LM_TEST_CODEC_DEFAULT  "14"
+    end: `define.value`
+
+    table:
+        name: `define.value`
+        columns((class: class) (LmCodecNumericFallback: value))
+        rows:
+                 LM_TEST_CODEC_NUMERIC_FALLBACK  lm_test_symbol_token
+    end: `define.value`
+end: L4
+
+define
+
+L1:
+===
+#define lm_test_symbol_token 15
+
+#if !defined(LM_TEST_CODEC_DIRECT) || LM_TEST_CODEC_DIRECT != 11
+#error "direct serialization codec source row differs"
+#endif
+
+#if !defined(LM_TEST_CODEC_FALLBACK) || LM_TEST_CODEC_FALLBACK != 12
+#error "wrong-schema serialization codec did not use the facade value"
+#endif
+
+#if !defined(LM_TEST_CODEC_JOINED) || LM_TEST_CODEC_JOINED != 13
+#error "joined serialization codec did not use the facade value"
+#endif
+
+#if !defined(LM_TEST_CODEC_DEFAULT) || LM_TEST_CODEC_DEFAULT != 14
+#error "default serialization codec source row differs"
+#endif
+
+#if !defined(LM_TEST_CODEC_NUMERIC_FALLBACK) || LM_TEST_CODEC_NUMERIC_FALLBACK != 15
+#error "wrong-schema numeric codec did not use the facade value"
+#endif
+===
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
