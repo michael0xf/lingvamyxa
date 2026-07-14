@@ -1,0 +1,69 @@
+L4:
+    table:
+        name: namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 LmTestDirectLevel    `receiver.level`
+                 LmTestFallbackLevel  `receiver.level`
+                 LmTestJoinedLevel    `receiver.level`
+    end: namespace
+
+    table:
+        name: `receiver.level`
+        columns((class: class) (binding: receiver))
+        rows:
+                 LmTestDirectLevel  lm_trans_emit_l2_frame
+                 LmTestDirectLevel  lm_trans_emit_l1_frame
+                 LmTestDirectLevel  None
+    end: `receiver.level`
+
+    table:
+        name: `receiver.level`
+        columns((class: class) (class: receiver))
+        rows:
+                 LmTestFallbackLevel  lm_trans_emit_l1_frame
+    end: `receiver.level`
+
+    table:
+        name: `lm.test.receiver.level.seed`
+        columns((class: class) (binding: receiver))
+        rows:
+                 LmTestJoinedLevel  lm_trans_emit_l1_frame
+    end: `lm.test.receiver.level.seed`
+
+    join: (`lm.test.receiver.level.seed`) `receiver.level`
+        columns((class: class) (binding: receiver))
+        rows:
+    end: `receiver.level`
+
+    table:
+        name: `receiver.level`
+        columns((class: class) (binding: receiver))
+        rows:
+                 LmTestJoinedLevel  None
+    end: `receiver.level`
+end: L4
+
+LmTestDirectLevel:
+===
+static int lm_test_receiver_level_direct(void) { return 101; }
+===
+end: LmTestDirectLevel
+
+LmTestFallbackLevel:
+===
+static int lm_test_receiver_level_fallback(void) { return 202; }
+===
+end: LmTestFallbackLevel
+
+LmTestJoinedLevel:
+===
+static int lm_test_receiver_level_joined(void) { return 303; }
+===
+end: LmTestJoinedLevel
+
+external:
+    fn: main () int
+        return: c.lm_test_receiver_level_direct() != 101 || c.lm_test_receiver_level_fallback() != 202 || c.lm_test_receiver_level_joined() != 303
+    end: main
+end: external

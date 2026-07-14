@@ -25945,7 +25945,7 @@ static const char * lm_trans_level_receiver_binding_from_head(const LmP0Text *he
     if (receiver_type == 0 || strcmp(receiver_type, "receiver.level") != 0) {
         return 0;
     }
-    return lm_trans_registry_lookup(head, "receiver.level");
+    return lm_trans_namespace_registry_source_n2_typed_value(0, head, "receiver.level", "class", "class", "receiver", "binding");
 }
 
 static const char * lm_trans_level_receiver_binding_from_frame(const LmP0Frame *frame) {
