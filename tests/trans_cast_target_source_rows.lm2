@@ -19,22 +19,27 @@ L4:
 
     table:
         name: `lm.test.cast.target.seed`
-        columns((class: class) (int: value))
+        columns((class: class) (int: marker) (int: target))
         rows:
-                 LmOwnPtrStack  1
+                 LmOwnPtrStack  7  1
     end: `lm.test.cast.target.seed`
 
-    join: (`lm.test.cast.target.seed`) `cast.target`
-        columns((class: class) (int: value))
+    join: (`lm.test.cast.target.seed`) `lm.test.cast.target.middle`
+        columns((class: class) (int: marker) (int: target))
         rows:
-    end: `cast.target`
+    end: `lm.test.cast.target.middle`
+
+    join: (`lm.test.cast.target.middle`) `cast`
+        columns((class: class) (int: marker) (int: target))
+        rows:
+    end: `cast`
 
     table:
-        name: `cast.target`
-        columns((class: class) (int: value))
+        name: `cast`
+        columns((class: class) (int: marker) (int: target))
         rows:
-                 LmOwnPtrStack  None
-    end: `cast.target`
+                 LmOwnPtrStack  8  None
+    end: `cast`
 end: L4
 
 external:

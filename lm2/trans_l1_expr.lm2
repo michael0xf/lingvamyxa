@@ -3811,6 +3811,12 @@ fn: lm_trans_validate_profile_c_printf_call (const: (LmP0Frame: frame); const: (
         return: 0
 return: lm_trans_validate_c_printf_call(frame, namespace_)
 
+fn: lm_trans_class_range_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: key)) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, key, "class.range", "class", "class", "value", "char")
+
+fn: lm_trans_cast_target_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: key)) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, key, "cast.target", "class", "class", "value", "int")
+
 fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTransNamespace: namespace_)) int
     LmP0Text: key
     const: @: char range
@@ -3821,11 +3827,11 @@ fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTrans
         c.fprintf(c.stderr, "trans L2 error: cast target expects a type\n")
         lm_trans_text_ref_destroy(@ key)
         return: 0
-    range: lm_trans_namespace_registry_source_n2_typed_value(namespace_, key, "class.range", "class", "class", "value", "char")
+    range: lm_trans_class_range_value(namespace_, key)
     if: range != 0
         lm_trans_text_ref_destroy(@ key)
         return: 1
-    if: (lm_trans_namespace_registry_source_n2_typed_value(namespace_, key, "cast.target", "class", "class", "value", "int") != 0)
+    if: (lm_trans_cast_target_value(namespace_, key) != 0)
         lm_trans_text_ref_destroy(@ key)
         return: 1
     c.fprintf(c.stderr, "trans L2 error: cast target type \"%.*s\" is not listed in class.range or cast.target\n", (cast: int key\length), key\data)

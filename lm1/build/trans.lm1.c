@@ -2885,6 +2885,8 @@ static void lm_trans_printf_conversion_rule_resolve(const LmTransNamespace *name
 static int lm_trans_validate_printf_expected_arg(const LmP0Frame *frame, const LmTransNamespace *namespace_, size_t arg_index, const char *expected_class);
 static int lm_trans_validate_c_printf_call(const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_validate_profile_c_printf_call(const LmP0Frame *frame, const LmTransNamespace *namespace_);
+static const char * lm_trans_class_range_value(const LmTransNamespace *namespace_, const LmP0Text *key);
+static const char * lm_trans_cast_target_value(const LmTransNamespace *namespace_, const LmP0Text *key);
 static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTransNamespace *namespace_);
 static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name);
 static LmOwnPtrStack * lm_trans_instanceof_requirement_keys_new(const LmTransNamespace *namespace_, const LmP0Text *protocol_name);
@@ -14466,6 +14468,14 @@ static int lm_trans_validate_profile_c_printf_call(const LmP0Frame *frame, const
     return lm_trans_validate_c_printf_call(frame, namespace_);
 }
 
+static const char * lm_trans_class_range_value(const LmTransNamespace *namespace_, const LmP0Text *key) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, key, "class.range", "class", "class", "value", "char");
+}
+
+static const char * lm_trans_cast_target_value(const LmTransNamespace *namespace_, const LmP0Text *key) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, key, "cast.target", "class", "class", "value", "int");
+}
+
 static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTransNamespace *namespace_) {
     LmP0Text * key;
     const char *range;
@@ -14478,12 +14488,12 @@ static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTran
         lm_trans_text_ref_destroy(&key);
         return 0;
     }
-    range = lm_trans_namespace_registry_source_n2_typed_value(namespace_, key, "class.range", "class", "class", "value", "char");
+    range = lm_trans_class_range_value(namespace_, key);
     if (range != 0) {
         lm_trans_text_ref_destroy(&key);
         return 1;
     }
-    if (lm_trans_namespace_registry_source_n2_typed_value(namespace_, key, "cast.target", "class", "class", "value", "int") != 0) {
+    if (lm_trans_cast_target_value(namespace_, key) != 0) {
         lm_trans_text_ref_destroy(&key);
         return 1;
     }
