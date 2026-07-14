@@ -1,5 +1,12 @@
 L4:
     table:
+        name: `operator.postfix`
+        columns((class: class) (@: char ansi_c) (binding: emitter))
+        rows:
+                 postinc  "++"  lm_trans_expr_emit_operator
+    end: `operator.postfix`
+
+    table:
         name: expr_emitter_binding
         columns((class: class) (class: binding_table))
         rows:
@@ -38,11 +45,13 @@ end: L4
 external:
     fn: main () int
         int: value 2
-        int: result
+        int: postfix_result
+        int: prefix_result
+        int: infix_result
 
-        result: value++
-        result: -value
-        result: result + value
-        return: result != 0 || value != 3
+        postfix_result: value postinc
+        prefix_result: ! value
+        infix_result: postfix_result + value
+        return: postfix_result != 2 || prefix_result != 0 || infix_result != 5 || value != 3
     end: main
 end: external
