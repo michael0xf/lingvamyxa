@@ -33,7 +33,9 @@ fn: lm_test_generated_prelude_source_rows_core () int
     const: LmRegistryViewRow: view_row
     LmOwnPtrStack: selected_keys
     LmP0Text: prelude
+    LmP0Text: selected_key
     const: @: char source_key
+    const: @: char selected_value
     size_t: i
     int: covered
     int: status
@@ -54,6 +56,7 @@ fn: lm_test_generated_prelude_source_rows_core () int
     expected_keys[2]: "after"
     selected_keys: 0
     prelude: 0
+    selected_key: 0
     status: 0
 
     i: 0U
@@ -92,6 +95,26 @@ fn: lm_test_generated_prelude_source_rows_core () int
         if: covered = 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "1") != 0 || value_cell\source != facts[i] || value_cell\value = facts[i]\payload || key_cell = 0 || key_cell\value = 0 || key_cell\source != 0 || source_key = 0 || source_key != key_cell\value || c.strcmp(source_key, expected_keys[i]) != 0 || source_key = facts[i]\key
             status: 1
             break
+        selected_key: lm_trans_text_from_cstr(expected_keys[i])
+        if: selected_key = 0
+            status: 1
+        else:
+            lm_trans_registry\view_mode: 0
+            selected_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, selected_key, "prelude.sequence", "class", "class", "value", "int")
+            if: selected_value != facts[i]\payload
+                status: 1
+            lm_trans_registry\view_mode: 1
+            selected_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, selected_key, "prelude.sequence", "class", "class", "value", "int")
+            if: selected_value != facts[i]\payload
+                status: 1
+            lm_trans_registry\view_mode: 2
+            selected_value: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, selected_key, "prelude.sequence", "class", "class", "value", "int")
+            if: selected_value != value_cell\value || selected_value = facts[i]\payload
+                status: 1
+        ---
+        lm_trans_text_ref_destroy(@ selected_key)
+        if: status != 0
+            break
         i: i + 1U
 
     if: status = 0
@@ -121,6 +144,7 @@ fn: lm_test_generated_prelude_source_rows_core () int
         status: 1
 
     lm_trans_ptr_stack_delete(@ selected_keys)
+    lm_trans_text_ref_destroy(@ selected_key)
     lm_trans_text_ref_destroy(@ prelude)
     lm_trans_registry_destroy()
 return: status

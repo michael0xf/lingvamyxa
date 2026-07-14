@@ -34619,7 +34619,7 @@ static int lm_trans_l4_atom_receiver_prelude_sequence(const LmP0Text *atom, int 
         fprintf(stderr, "trans L4 error: prelude sequence \"%.*s\" has no item rows\n", (((int)atom -> length)), atom -> data);
         return 1;
     }
-    if (lm_trans_registry_has(atom, "prelude.sequence")) {
+    if (lm_trans_namespace_registry_source_path_n2_named_typed_value(0, atom, "prelude.sequence", "class", "class", "value", "int") != 0) {
         return 0;
     }
     return lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("prelude.sequence"), atom, lm_trans_text_from_cstr("1"), "class", "class", "value", "int");
