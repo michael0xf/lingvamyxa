@@ -6562,21 +6562,22 @@ fn: lm_trans_emit_configured_prelude_sequences (
     LmTransNamespace: namespace_
     @: int out_emitted
 ) int
-    const: LmOwnPtrStack: rows
-    LmTransRegistryFact: row
+    LmOwnPtrStack: sequence_names
+    const: @: char sequence_name
     size_t: i
 
-    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("prelude"), "sequence")
-    if: rows = 0
+    sequence_names: lm_trans_namespace_registry_source_relation_keys_new(namespace_, lm_trans_text_from_cstr("prelude"), "sequence")
+    if: sequence_names = 0
         return: 0
+    finally: lm_trans_ptr_stack_delete(@ sequence_names)
 
     i: 0U
-    while: i < rows\count
-        row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(rows, i))
-        if: row != 0 && row\key != 0
+    while: i < sequence_names\count
+        sequence_name: lm_own_ptr_stack_at(sequence_names, i)
+        if: sequence_name != 0
             if: out_emitted != 0 && out_emitted[0] && lm_trans_put(file, "\n") != 0
                 return: 1
-            if: lm_trans_emit_atom_statement_sequence(file, lm_trans_text_from_cstr(row\key), 0U, namespace_) != 0
+            if: lm_trans_emit_atom_statement_sequence(file, lm_trans_text_from_cstr(sequence_name), 0U, namespace_) != 0
                 return: 1
             if: out_emitted != 0
                 out_emitted[0]: 1

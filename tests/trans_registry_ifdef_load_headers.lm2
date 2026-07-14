@@ -19,9 +19,39 @@ L4:
                      define: LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE 3
                  end: L2
     end: ifdef
+
+    table:
+        name: `prelude.sequence`
+        columns((class: class) (int: value))
+        rows:
+                 lmTestPreludeBeforeGenerated  1
+    end: `prelude.sequence`
+
+    table:
+        name: `lmTestPreludeBeforeGenerated.item`
+        columns((class: class) (size_t: index))
+        rows:
+                 include  0
+    end: `lmTestPreludeBeforeGenerated.item`
 end: L4
 
 L4: loadHeaders
+
+L4:
+    table:
+        name: `prelude.sequence`
+        columns((class: class) (int: value))
+        rows:
+                 lmTestPreludeAfterGenerated  1
+    end: `prelude.sequence`
+
+    table:
+        name: `lmTestPreludeAfterGenerated.item`
+        columns((class: class) (size_t: index))
+        rows:
+                 include  0
+    end: `lmTestPreludeAfterGenerated.item`
+end: L4
 
 external:
     fn: main () int

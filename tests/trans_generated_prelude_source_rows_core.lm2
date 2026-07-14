@@ -1,0 +1,126 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_generated_prelude_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_generated_prelude_source_row_push (const: @(char key)) int
+return: lm_trans_registry_push_generated_source_n2_row_values(
+    lm_trans_text_from_cstr("prelude.sequence"),
+    lm_trans_text_from_cstr(key),
+    lm_trans_text_from_cstr("1"),
+    "class",
+    "class",
+    "value",
+    "int"
+)
+
+fn: lm_test_generated_prelude_source_rows_core () int
+    [3]: LmTransRegistryFact facts
+    const: [3]: @: char expected_keys
+    const: LmTableDescriptor: descriptor
+    const: LmTableColumnDescriptor: key_column
+    const: LmTableColumnDescriptor: value_column
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+    const: LmRegistryViewRow: view_row
+    LmOwnPtrStack: selected_keys
+    LmP0Text: prelude
+    const: @: char source_key
+    size_t: i
+    int: covered
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    expected_keys[0]: "before"
+    expected_keys[1]: "generated"
+    expected_keys[2]: "after"
+    selected_keys: 0
+    prelude: 0
+    status: 0
+
+    i: 0U
+    while: i < 3U
+        if: lm_test_generated_prelude_source_row_push(expected_keys[i]) != 0
+            status: 1
+            break
+        view_row: lm_registry_view_fact_at(lm_trans_registry\view, i)
+        if: view_row = 0 || view_row\source = 0
+            status: 1
+            break
+        facts[i]: cast: (LmTransRegistryFact) view_row\source
+        i: i + 1U
+
+    if: status = 0 && (lm_registry_view_source_table_count(lm_trans_registry\view) != 3U || lm_registry_view_fact_count(lm_trans_registry\view) != 3U)
+        status: 1
+
+    i: 0U
+    while: status = 0 && i < 3U
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, i)
+        key_column: lm_table_descriptor_column_at(descriptor, 0U)
+        value_column: lm_table_descriptor_column_at(descriptor, 1U)
+        if: descriptor = 0 || descriptor\name = 0 || c.strcmp(descriptor\name, "prelude.sequence") != 0 || lm_table_descriptor_column_count(descriptor) != 2U || lm_table_descriptor_materialized_row_count(descriptor) != 1U
+            status: 1
+            break
+        if: key_column = 0 || key_column\name = 0 || key_column\type_name = 0 || c.strcmp(key_column\name, "class") != 0 || c.strcmp(key_column\type_name, "class") != 0 || lm_table_column_descriptor_descriptor_count(key_column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(key_column, 0U), "class") != 0
+            status: 1
+            break
+        if: value_column = 0 || value_column\name = 0 || value_column\type_name = 0 || c.strcmp(value_column\name, "value") != 0 || c.strcmp(value_column\type_name, "int") != 0 || lm_table_column_descriptor_descriptor_count(value_column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(value_column, 0U), "int") != 0
+            status: 1
+            break
+
+        covered: 0
+        value_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, "prelude.sequence", 16U, i, 0, 0, @ key_cell, @ covered)
+        source_key: lm_registry_view_source_path_key_at_slice(lm_trans_registry\view, "prelude.sequence", 16U, i, @ covered)
+        if: covered = 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "1") != 0 || value_cell\source != facts[i] || value_cell\value = facts[i]\payload || key_cell = 0 || key_cell\value = 0 || key_cell\source != 0 || source_key = 0 || source_key != key_cell\value || c.strcmp(source_key, expected_keys[i]) != 0 || source_key = facts[i]\key
+            status: 1
+            break
+        i: i + 1U
+
+    if: status = 0
+        covered: 0
+        if: lm_registry_view_source_path_key_at_slice(lm_trans_registry\view, "prelude.sequence", 16U, 3U, @ covered) != 0 || covered = 0
+            status: 1
+    ---
+
+    if: status = 0
+        prelude: lm_trans_text_from_cstr("prelude")
+        selected_keys: lm_trans_namespace_registry_source_relation_keys_new(0, prelude, "sequence")
+        if: selected_keys = 0 || selected_keys\count != 3U
+            status: 1
+        else:
+            i: 0U
+            while: i < 3U
+                covered: 0
+                source_key: lm_registry_view_source_path_key_at_slice(lm_trans_registry\view, "prelude.sequence", 16U, i, @ covered)
+                if: covered = 0 || lm_own_ptr_stack_at(selected_keys, i) != source_key
+                    status: 1
+                    break
+                i: i + 1U
+        ---
+    ---
+
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_ptr_stack_delete(@ selected_keys)
+    lm_trans_text_ref_destroy(@ prelude)
+    lm_trans_registry_destroy()
+return: status
