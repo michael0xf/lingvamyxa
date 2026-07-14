@@ -3567,7 +3567,6 @@ static const char * lm_trans_registry_backend_view_value(const LmTransNamespace 
 static int lm_trans_registry_collect_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *receiver_name, const char *backend_payload, const char *error_name, int require_class);
 static int lm_trans_registry_append_relation_name(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, LmP0Text *key_text, const char *key);
 static int lm_trans_registry_collect_relation_rows(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, const LmOwnPtrStack *rows);
-static int lm_trans_registry_collect_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class);
 static int lm_trans_registry_collect_source_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class);
 static int lm_trans_l4_is_function_pointer_type(const LmTransNamespace *namespace_, const char *name);
 static int lm_trans_emit_abi_typed_name(FILE *file, const char *class_name, size_t address_depth, int is_const, const char *name);
@@ -32927,23 +32926,6 @@ static int lm_trans_registry_collect_relation_rows(LmOwnPtrStack *names, const L
     return 0;
 }
 
-static int lm_trans_registry_collect_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class) {
-    const LmOwnPtrStack * rows;
-    LmP0Text * owner_text;
-    int status;
-    if (names == 0 || owner_name == 0 || relation_name == 0 || error_name == 0) {
-        return 1;
-    }
-    owner_text = lm_trans_l4_text_view_new(owner_name);
-    if (owner_text == 0) {
-        return 1;
-    }
-    rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, relation_name);
-    status = lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows);
-    lm_trans_l4_text_view_delete(&owner_text);
-    return status;
-}
-
 static int lm_trans_registry_collect_source_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class) {
     const LmOwnPtrStack * rows;
     LmP0Text * owner_text;
@@ -33760,7 +33742,7 @@ static int lm_trans_emit_l4_prototypes(FILE *file, const LmTransNamespace *names
     if (names == 0) {
         return 1;
     }
-    if (lm_trans_registry_collect_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
+    if (lm_trans_registry_collect_source_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }
@@ -34149,7 +34131,7 @@ static int lm_trans_declare_l4_fn_descriptors(LmTransNamespace *namespace_) {
     if (names == 0) {
         return 1;
     }
-    if (lm_trans_registry_collect_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
+    if (lm_trans_registry_collect_source_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0) {
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }
