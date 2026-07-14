@@ -1,0 +1,45 @@
+L4:
+    table:
+        name: fn
+        columns((class: class) (class: descriptor) (class: receiver))
+        rows:
+                 LmWideAbiParams  callableDescriptor  fn
+                 LmAbiParamFallback  callableDescriptor  fn
+    end: fn
+
+    table:
+        name: LmWideAbiParams
+        columns((class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`))
+        rows:
+                 count   int   1     None  None  None  None  None
+                 text    char  0     1     1     None  None  None
+                 return  None  None  None  None  int   None  None
+    end: LmWideAbiParams
+
+    table:
+        name: LmAbiParamFallback
+        columns((class: class) (@: char `param.class`) (size_t: `param.index`) (class: `return.class`))
+        rows:
+                 value   int   0     None
+                 return  None  None  int
+    end: LmAbiParamFallback
+end: L4
+
+fn
+
+L1:
+===
+static int LmWideAbiParams(const char *text, int count) {
+    return text[0] == 'o' ? count : 0;
+}
+
+static int LmAbiParamFallback(int value) {
+    return value + 1;
+}
+===
+
+external:
+    fn: main () int
+        return: c.LmWideAbiParams("ok", 7) != 7 || c.LmAbiParamFallback(4) != 5
+    end: main
+end: external

@@ -3574,6 +3574,8 @@ static int lm_trans_emit_abi_typed_name(FILE *file, const char *class_name, size
 static int lm_trans_registry_latest_size_payload(const LmOwnPtrStack *rows, const LmP0Text *key, size_t default_value, size_t *out_value);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_any(const LmOwnPtrStack *stack);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_return_row(const LmOwnPtrStack *stack);
+static const LmTableCell * lm_trans_abi_source_text_cell(const LmTransNamespace *namespace_, const char *source_path, const char *value_descriptor, const LmTransRegistryFact *facade_row, const LmTableCell **out_key_cell);
+static const char * lm_trans_abi_source_text_value(const LmTransNamespace *namespace_, const char *source_path, const char *value_descriptor, const LmTransRegistryFact *facade_row, const LmTableCell **out_key_cell);
 static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity, size_t *out_count, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name);
 static int lm_trans_emit_abi_params(FILE *file, LmTransAbiParam **params, size_t count);
 static int lm_trans_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const char *backend_payload, const LmTableCell *source_backend_cell);
@@ -33132,15 +33134,55 @@ static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_return_row(
     return lm_trans_registry_relation_stack_latest_any(stack);
 }
 
+static const LmTableCell * lm_trans_abi_source_text_cell(const LmTransNamespace *namespace_, const char *source_path, const char *value_descriptor, const LmTransRegistryFact *facade_row, const LmTableCell **out_key_cell) {
+    const LmTableCell * source_cell;
+    if (out_key_cell != 0) {
+        out_key_cell[0] = 0;
+    }
+    if (source_path == 0 || value_descriptor == 0 || facade_row == 0) {
+        return 0;
+    }
+    source_cell = lm_trans_registry_source_path_typed_cell_kind(namespace_, source_path, "name", "class", value_descriptor, 0, facade_row, 0, out_key_cell);
+    if (source_cell != 0) {
+        return source_cell;
+    }
+    return lm_trans_registry_source_path_typed_cell_kind(namespace_, source_path, "class", "class", value_descriptor, 0, facade_row, 0, out_key_cell);
+}
+
+static const char * lm_trans_abi_source_text_value(const LmTransNamespace *namespace_, const char *source_path, const char *value_descriptor, const LmTransRegistryFact *facade_row, const LmTableCell **out_key_cell) {
+    const LmTableCell * source_cell;
+    if (facade_row == 0 || facade_row -> payload == 0) {
+        return 0;
+    }
+    source_cell = lm_trans_abi_source_text_cell(namespace_, source_path, value_descriptor, facade_row, out_key_cell);
+    if (source_cell != 0 && lm_trans_registry_view_is_selected() != 0) {
+        return source_cell -> value;
+    }
+    return facade_row -> payload;
+}
+
 static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity, size_t *out_count, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name) {
     const LmOwnPtrStack * class_rows;
     const LmOwnPtrStack * index_rows;
     const LmOwnPtrStack * address_depth_rows;
     const LmOwnPtrStack * const_rows;
+    const LmTableCell * source_key_cell;
     LmP0Text * owner_text;
     LmP0Text * param_text;
     LmTransRegistryFact * row;
     LmTransRegistryFact * index_row;
+    LmTransRegistryFact * address_depth_row;
+    LmTransRegistryFact * const_row;
+    const char *class_payload;
+    const char *index_payload;
+    const char *address_depth_payload;
+    const char *const_payload;
+    const char *param_name;
+    char *class_path;
+    char *index_path;
+    char *address_depth_path;
+    char *const_path;
+    size_t source_path_length;
     size_t i;
     size_t j;
     size_t index;
@@ -33163,11 +33205,30 @@ static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity
     index_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.index");
     address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.address-depth");
     const_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.const");
+    class_path = 0;
+    index_path = 0;
+    address_depth_path = 0;
+    const_path = 0;
+    if (lm_trans_registry_view_parity_enabled() != 0) {
+        class_path = lm_trans_registry_source_relation_path_new(owner_name, "param.class", &source_path_length);
+        index_path = lm_trans_registry_source_relation_path_new(owner_name, "param.index", &source_path_length);
+        address_depth_path = lm_trans_registry_source_relation_path_new(owner_name, "param.address-depth", &source_path_length);
+        const_path = lm_trans_registry_source_relation_path_new(owner_name, "param.const", &source_path_length);
+        if (class_path == 0 || index_path == 0 || address_depth_path == 0 || const_path == 0) {
+            status = 1;
+        }
+    }
     if (class_rows != 0) {
         i = 0U;
         while (status == 0 && i < class_rows -> count) {
             row = lm_own_ptr_stack_at(class_rows, i);
             if (row != 0 && row -> key != 0 && row -> payload != 0) {
+                source_key_cell = 0;
+                class_payload = lm_trans_abi_source_text_value(namespace_, class_path, "class", row, &source_key_cell);
+                param_name = row -> key;
+                if (source_key_cell != 0 && source_key_cell -> value != 0 && lm_trans_registry_view_is_selected() != 0) {
+                    param_name = source_key_cell -> value;
+                }
                 if (out_count[0] >= capacity) {
                     fprintf(stderr, "trans L4 %s error: too many parameters in %s\n", error_name, owner_name);
                     status = 1;
@@ -33175,19 +33236,26 @@ static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity
                 else {
                     lm_trans_text_assign_cstr(param_text, row -> key);
                     index_row = lm_trans_registry_relation_stack_latest_row(index_rows, param_text);
-                    if (index_row == 0 || lm_trans_parse_size_payload(index_row -> payload, &index) == 0) {
+                    index_payload = lm_trans_abi_source_text_value(namespace_, index_path, "size_t", index_row, 0);
+                    if (class_payload == 0 || index_payload == 0 || lm_trans_parse_size_payload(index_payload, &index) == 0) {
                         fprintf(stderr, "trans L4 %s error: parameter %s.%s requires param.index\n", error_name, owner_name, row -> key);
                         status = 1;
                     }
                     else {
-                        params[out_count[0]]->name = row -> key;
-                        params[out_count[0]]->class_name = row -> payload;
+                        params[out_count[0]]->name = param_name;
+                        params[out_count[0]]->class_name = class_payload;
                         params[out_count[0]]->index = index;
-                        if (lm_trans_registry_latest_size_payload(address_depth_rows, param_text, 0U, &params[out_count[0]] -> address_depth) == 0) {
+                        address_depth_row = lm_trans_registry_relation_stack_latest_row(address_depth_rows, param_text);
+                        address_depth_payload = lm_trans_abi_source_text_value(namespace_, address_depth_path, "size_t", address_depth_row, 0);
+                        params[out_count[0]]->address_depth = 0U;
+                        if (address_depth_row != 0 && (address_depth_payload == 0 || lm_trans_parse_size_payload(address_depth_payload, &params[out_count[0]] -> address_depth) == 0)) {
                             fprintf(stderr, "trans L4 %s error: parameter %s.%s has invalid param.address-depth\n", error_name, owner_name, row -> key);
                             status = 1;
                         }
-                        if (status == 0 && lm_trans_registry_latest_size_payload(const_rows, param_text, 0U, &const_flag) == 0) {
+                        const_row = lm_trans_registry_relation_stack_latest_row(const_rows, param_text);
+                        const_payload = lm_trans_abi_source_text_value(namespace_, const_path, "int", const_row, 0);
+                        const_flag = 0U;
+                        if (status == 0 && const_row != 0 && (const_payload == 0 || lm_trans_parse_size_payload(const_payload, &const_flag) == 0)) {
                             fprintf(stderr, "trans L4 %s error: parameter %s.%s has invalid param.const\n", error_name, owner_name, row -> key);
                             status = 1;
                         }
@@ -33217,6 +33285,10 @@ static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity
             i = i + 1U;
         }
     }
+    lm_own_delete(const_path, 0);
+    lm_own_delete(address_depth_path, 0);
+    lm_own_delete(index_path, 0);
+    lm_own_delete(class_path, 0);
     lm_trans_l4_text_view_delete(&owner_text);
     lm_trans_l4_text_view_delete(&param_text);
     return status;
