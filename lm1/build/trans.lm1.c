@@ -2500,6 +2500,7 @@ static const LmOwnPtrStack * lm_trans_registry_view_relation_stack(const LmP0Tex
 static int lm_trans_registry_relation_stacks_same(const LmOwnPtrStack *legacy_stack, const LmOwnPtrStack *view_stack);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack(const LmP0Text *key, const char *relation_name);
 static const LmOwnPtrStack * lm_trans_namespace_registry_relation_stack(const LmTransNamespace *namespace_, const LmP0Text *key, const char *relation_name);
+static const LmRegistryView * lm_trans_namespace_registry_view(const LmTransNamespace *namespace_);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_for_table(const char *table);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_row(const LmOwnPtrStack *stack, const LmP0Text *key);
 static char * lm_trans_registry_source_relation_path_new(const char *table, const char *relation_name, size_t *out_length);
@@ -3455,7 +3456,6 @@ static int lm_trans_emit_l2_registry_ifdef_table(FILE *output, LmTransNamespace 
 static int lm_trans_emit_l1_os_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_l1_ifdef_frame(FILE *output, const LmP0Frame *frame);
 static int lm_trans_emit_l1_include_target_text(FILE *output, const char *data, size_t length);
-static const LmRegistryView * lm_trans_namespace_registry_include_view(const LmTransNamespace *namespace_);
 static const char * lm_trans_registry_include_view_target(const LmTransNamespace *namespace_, const LmRegistryViewRow *view_row, const char *source_path, int direct_n2);
 static int lm_trans_emit_registry_include_table(FILE *output, const LmTransNamespace *namespace_);
 static int lm_trans_emit_core_include_table(FILE *output, const LmTransNamespace *namespace_, int *out_emitted);
@@ -6597,6 +6597,19 @@ static const LmOwnPtrStack * lm_trans_namespace_registry_relation_stack(const Lm
         }
     }
     return lm_trans_registry_relation_stack(key, relation_name);
+}
+
+static const LmRegistryView * lm_trans_namespace_registry_view(const LmTransNamespace *namespace_) {
+    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && (lm_trans_registry == 0 || namespace_ -> registry_identifiers != lm_trans_registry->identifiers)) {
+        return 0;
+    }
+    if (namespace_ != 0 && namespace_ -> registry_view != 0) {
+        return namespace_ -> registry_view;
+    }
+    if (lm_trans_registry != 0) {
+        return lm_trans_registry->view;
+    }
+    return 0;
 }
 
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_for_table(const char *table) {
@@ -30388,19 +30401,6 @@ static int lm_trans_emit_l1_include_target_text(FILE *output, const char *data, 
     return lm_trans_put(output, "\n");
 }
 
-static const LmRegistryView * lm_trans_namespace_registry_include_view(const LmTransNamespace *namespace_) {
-    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && (lm_trans_registry == 0 || namespace_ -> registry_identifiers != lm_trans_registry->identifiers)) {
-        return 0;
-    }
-    if (namespace_ != 0 && namespace_ -> registry_view != 0) {
-        return namespace_ -> registry_view;
-    }
-    if (lm_trans_registry != 0) {
-        return lm_trans_registry->view;
-    }
-    return 0;
-}
-
 static const char * lm_trans_registry_include_view_target(const LmTransNamespace *namespace_, const LmRegistryViewRow *view_row, const char *source_path, int direct_n2) {
     LmTransRegistryFact * facade_row;
     const char *target;
@@ -30434,7 +30434,7 @@ static int lm_trans_emit_registry_include_table(FILE *output, const LmTransNames
     const char *target;
     int emitted;
     emitted = 0;
-    view = lm_trans_namespace_registry_include_view(namespace_);
+    view = lm_trans_namespace_registry_view(namespace_);
     if (view != 0) {
         fact_count = lm_registry_view_fact_count(view);
         i = 0U;
@@ -30497,7 +30497,7 @@ static int lm_trans_emit_core_include_table(FILE *output, const LmTransNamespace
     const char *target;
     int emitted;
     emitted = 0;
-    view = lm_trans_namespace_registry_include_view(namespace_);
+    view = lm_trans_namespace_registry_view(namespace_);
     if (view != 0) {
         fact_count = lm_registry_view_fact_count(view);
         i = 0U;
@@ -31699,15 +31699,48 @@ static int lm_trans_emit_l4_constant_defines(FILE *file, const LmTransNamespace 
 
 static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *namespace_) {
     const LmOwnPtrStack * rows;
+    const LmRegistryView * view;
+    const LmRegistryViewRow * view_row;
     LmTransRegistryFact * row;
     const char *value;
     size_t i;
+    size_t row_count;
     int emitted;
+    emitted = 0;
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view != 0) {
+        row_count = lm_registry_view_table_row_count(view, "define.value");
+        i = 0U;
+        while (i < row_count) {
+            view_row = lm_registry_view_table_row_at(view, "define.value", i);
+            if (view_row != 0 && view_row -> key != 0 && (view_row -> payload != 0 || view_row -> payload_node != 0)) {
+                value = view_row -> payload;
+                row = ((LmTransRegistryFact *)view_row -> source);
+                if (row != 0 && row -> payload != 0) {
+                    value = lm_trans_registry_source_path_n2_named_typed_value(namespace_, "define.value", "class", "class", "value", "char", row);
+                }
+                if (lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(view_row -> key)) != 0) {
+                    return 1;
+                }
+                if (value != 0 && value[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0)) {
+                    return 1;
+                }
+                if (lm_trans_put(file, "\n") != 0) {
+                    return 1;
+                }
+                emitted = 1;
+            }
+            i = i + 1U;
+        }
+        if (emitted && lm_trans_put(file, "\n") != 0) {
+            return 1;
+        }
+        return 0;
+    }
     rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("define"), "value");
     if (rows == 0) {
         return 0;
     }
-    emitted = 0;
     i = 0U;
     while (i < rows -> count) {
         row = lm_own_ptr_stack_at(rows, i);
@@ -31715,7 +31748,7 @@ static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *nam
             if (lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(row -> key)) != 0) {
                 return 1;
             }
-            value = lm_trans_registry_source_n2_value(namespace_, "define.value", "class", "value", row);
+            value = lm_trans_registry_source_path_n2_named_typed_value(namespace_, "define.value", "class", "class", "value", "char", row);
             if (value != 0 && value[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0)) {
                 return 1;
             }

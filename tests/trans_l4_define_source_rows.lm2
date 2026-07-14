@@ -20,6 +20,18 @@ L4:
     end: `define.value`
 
     table:
+        name: `define.value`
+        columns((class: class) (node: value))
+        rows:
+                 LM_TEST_DEFINE_NODE_FALLBACK
+                 L2:
+                     fn: lm_test_define_node_payload () int
+                         return: 0
+                     end: lm_test_define_node_payload
+                 end: L2
+    end: `define.value`
+
+    table:
         name: `lm.test.define.seed`
         columns((class: class) (@: char value))
         rows:
@@ -30,6 +42,45 @@ L4:
         columns((class: class) (@: char value))
         rows:
     end: `define.value`
+
+    table:
+        name: define
+        columns((class: class) (@: char value) (int: marker))
+        rows:
+                 LM_TEST_DEFINE_WIDE_SOURCE       31  1
+                 LM_TEST_DEFINE_WIDE_DUPLICATE    37  2
+                 LM_TEST_DEFINE_WIDE_DUPLICATE    37  3
+                 LM_TEST_DEFINE_WIDE_EMPTY        ""  4
+                 LM_TEST_DEFINE_WIDE_LATE_NONE    41  5
+                 LM_TEST_DEFINE_WIDE_LATE_NONE    None  6
+                 LM_TEST_DEFINE_WIDE_NONE         None  7
+    end: define
+
+    table:
+        name: `define.value`
+        columns((class: class) (@: char value))
+        rows:
+                 LM_TEST_DEFINE_WIDE_PHYSICAL  43
+    end: `define.value`
+
+    table:
+        name: `lm.test.define.wide.seed`
+        columns((class: class) (@: char value) (int: marker))
+        rows:
+                 LM_TEST_DEFINE_WIDE_JOINED  47  8
+    end: `lm.test.define.wide.seed`
+
+    join: (`lm.test.define.wide.seed`) define
+        columns((class: class) (@: char value) (int: marker))
+        rows:
+    end: define
+
+    table:
+        name: define
+        columns((class: class) (int: value) (int: marker))
+        rows:
+                 LM_TEST_DEFINE_WIDE_SCHEMA_FALLBACK  53  9
+    end: define
 end: L4
 
 define
@@ -56,12 +107,48 @@ L1:
 #error "wrong-schema source descriptor did not fall back to the facade row"
 #endif
 
+#ifndef LM_TEST_DEFINE_NODE_FALLBACK
+#error "node-backed wrong-schema source row did not preserve an empty define"
+#endif
+
 #if LM_TEST_DEFINE_JOINED != 29
 #error "joined source row did not fall back to its facade value"
 #endif
 
 #ifdef LM_TEST_DEFINE_NONE
 #error "None source cell unexpectedly emitted a define"
+#endif
+
+#if LM_TEST_DEFINE_WIDE_SOURCE != 31
+#error "N-column define.value source row was not emitted"
+#endif
+
+#if LM_TEST_DEFINE_WIDE_DUPLICATE != 37
+#error "duplicate N-column define rows changed value"
+#endif
+
+#ifndef LM_TEST_DEFINE_WIDE_EMPTY
+#error "empty N-column source define was not emitted"
+#endif
+
+#if LM_TEST_DEFINE_WIDE_LATE_NONE != 41
+#error "N-column None row unexpectedly removed an earlier define"
+#endif
+
+#if LM_TEST_DEFINE_WIDE_PHYSICAL != 43
+#error "physical define.value row was not merged with the N-column source"
+#endif
+
+#if LM_TEST_DEFINE_WIDE_JOINED != 47
+#error "joined N-column define row was not emitted"
+#endif
+
+#if LM_TEST_DEFINE_WIDE_SCHEMA_FALLBACK != 53
+#error "wrong-schema N-column source descriptor did not fall back to the facade row"
+#endif
+
+#ifdef LM_TEST_DEFINE_WIDE_NONE
+#error "N-column None source cell unexpectedly emitted a define"
 #endif
 ===
 

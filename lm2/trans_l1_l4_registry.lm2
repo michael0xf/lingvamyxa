@@ -842,23 +842,52 @@ return: 0
 
 fn: lm_trans_emit_l4_define_table (FILE: file; const: (LmTransNamespace: namespace_)) int
     const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
     LmTransRegistryFact: row
     const: @: char value
     size_t: i
+    size_t: row_count
     int: emitted
+
+    emitted: 0
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view != 0
+        row_count: lm_registry_view_table_row_count(view, "define.value")
+        i: 0U
+        while: i < row_count
+            view_row: lm_registry_view_table_row_at(view, "define.value", i)
+            if: view_row != 0 && view_row\key != 0 && (view_row\payload != 0 || view_row\payload_node != 0)
+                value: view_row\payload
+                row: cast: (LmTransRegistryFact) view_row\source
+                if: row != 0 && row\payload != 0
+                    value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "define.value", "class", "class", "value", "char", row)
+                ---
+                if: lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(view_row\key)) != 0
+                    return: 1
+                if: value != 0 && value[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0)
+                    return: 1
+                if: lm_trans_put(file, "\n") != 0
+                    return: 1
+                emitted: 1
+            ---
+            i: i + 1U
+        if: emitted && lm_trans_put(file, "\n") != 0
+            return: 1
+        return: 0
+    ---
 
     rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("define"), "value")
     if: rows = 0
         return: 0
 
-    emitted: 0
     i: 0U
     while: i < rows\count
         row: lm_own_ptr_stack_at(rows, i)
         if: row != 0 && row\key != 0
             if: lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(row\key)) != 0
                 return: 1
-            value: lm_trans_registry_source_n2_value(namespace_, "define.value", "class", "value", row)
+            value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "define.value", "class", "class", "value", "char", row)
             if: value != 0 && value[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0)
                 return: 1
             if: lm_trans_put(file, "\n") != 0
