@@ -118,6 +118,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: middle
     LmTransRegistryFact: target
     LmTransRegistryFact: unrelated
+    LmTransRegistryFact: call_lowering_origin
+    LmTransRegistryFact: call_lowering_middle
+    LmTransRegistryFact: call_lowering_target
     LmTransRegistryFact: node_origin
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
@@ -175,6 +178,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: expr_spelling_middle
     LmTransRegistryFact: expr_spelling_target
     LmTableDescriptor: descriptor
+    LmTableDescriptor: call_lowering_descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
@@ -188,6 +192,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: unit_descriptor
     LmTableDescriptor: unit_wrong_descriptor
     LmTableRow: row
+    LmTableRow: call_lowering_row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
@@ -203,6 +208,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: key_cell
     LmTableCell: value_cell
     LmTableCell: marker_cell
+    LmTableCell: call_lowering_key_cell
+    LmTableCell: call_lowering_marker_cell
+    LmTableCell: call_lowering_binding_cell
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
@@ -245,6 +253,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Node: unit_wrong_source_node
     LmTransHeadBinding: receiver_head_binding
     LmTransBinding: receiver_expr_binding
+    LmTransCallLoweringHandler: resolved_call_lowering_handler
     LmP0Frame: receiver_family_frame
     const: LmTableCell: resolved_cell
     const: LmTableCell: resolved_node_cell
@@ -265,6 +274,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: LmP0Node: resolved_unit_node
     const: LmP0Node: resolved_unit_wrong_node
     const: @: char resolved_value
+    const: @: char resolved_call_lowering_binding
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
@@ -338,6 +348,51 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_cell: lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, target)
         resolved_value: lm_trans_expr_source_path_value(target_key_text, "target.value", "value", "char")
         if: target_key_text = 0 || resolved_cell != value_cell || resolved_value != value_cell\value || resolved_value = target\payload || lm_trans_registry_fact_has_source(origin, origin) = 0 || lm_trans_registry_fact_has_source(middle, origin) = 0 || lm_trans_registry_fact_has_source(target, origin) = 0 || lm_trans_registry_fact_has_source(target, middle) = 0 || lm_trans_registry_fact_has_source(unrelated, origin) != 0 || lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, unrelated) != 0
+            status: 1
+    ---
+
+    call_lowering_origin: 0
+    call_lowering_middle: 0
+    call_lowering_target: 0
+    call_lowering_descriptor: 0
+    call_lowering_row: 0
+    call_lowering_key_cell: 0
+    call_lowering_marker_cell: 0
+    call_lowering_binding_cell: 0
+    if: status = 0
+        call_lowering_origin: lm_test_registry_push_value_fact("lm.test.call.lowering.origin", "function", "lm_trans_call_lower_value", 0)
+        call_lowering_middle: lm_test_registry_push_value_fact("lm.test.call.lowering.middle", "function", "lm_trans_call_lower_value", call_lowering_origin)
+        call_lowering_target: lm_test_registry_push_value_fact("call.lowering", "function", "lm_trans_call_lower_value", call_lowering_middle)
+        if: call_lowering_origin = 0 || call_lowering_middle = 0 || call_lowering_target = 0 || call_lowering_middle\source != call_lowering_origin || call_lowering_target\source != call_lowering_middle
+            status: 1
+    ---
+
+    if: status = 0
+        call_lowering_descriptor: lm_table_descriptor_new_empty_slice("call", 4U)
+        if: call_lowering_descriptor = 0 || lm_table_descriptor_add_column(call_lowering_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(call_lowering_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(call_lowering_descriptor, "lowering", "binding") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        call_lowering_row: lm_table_row_new(0)
+        call_lowering_key_cell: lm_table_cell_new_cstr("function", "function", 0, 0, 0)
+        call_lowering_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        call_lowering_binding_cell: lm_table_cell_new_cstr("lm_trans_call_lower_value", "lm_trans_call_lower_value", 0, call_lowering_origin, 0)
+        if: call_lowering_row = 0 || call_lowering_key_cell = 0 || call_lowering_marker_cell = 0 || call_lowering_binding_cell = 0 || lm_table_row_take_cell(call_lowering_row, call_lowering_key_cell) != 0 || lm_table_row_take_cell(call_lowering_row, call_lowering_marker_cell) != 0 || lm_table_row_take_cell(call_lowering_row, call_lowering_binding_cell) != 0 || lm_table_descriptor_take_materialized_row(call_lowering_descriptor, call_lowering_row) != 0
+            status: 1
+        else:
+            call_lowering_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, call_lowering_descriptor) != 0
+                status: 1
+            else:
+                call_lowering_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_call_lowering_binding: lm_trans_call_lowering_binding_from_class("function")
+        resolved_call_lowering_handler: lm_trans_call_lowering_handler_binding(resolved_call_lowering_binding)
+        if: resolved_call_lowering_binding != call_lowering_binding_cell\value || resolved_call_lowering_binding = call_lowering_middle\payload || resolved_call_lowering_binding = call_lowering_target\payload || resolved_call_lowering_handler != @lm_trans_call_lower_value
             status: 1
     ---
 
@@ -1005,6 +1060,8 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)
+    lm_table_row_delete_any(call_lowering_row)
+    lm_table_descriptor_delete_any(call_lowering_descriptor)
     lm_table_row_delete_any(row)
     lm_table_descriptor_delete_any(descriptor)
     lm_trans_registry_destroy()

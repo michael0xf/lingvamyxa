@@ -2739,6 +2739,7 @@ static int lm_trans_emit_expr_atom(FILE *file, const LmP0Text *atom, const LmTra
 static int lm_trans_call_lower_value(const LmP0Text *head, const LmTransSymbol *symbol, LmTransCallLowering *out);
 static int lm_trans_call_lower_statement(const LmP0Text *head, const LmTransSymbol *symbol, LmTransCallLowering *out);
 static LmTransCallLoweringHandler lm_trans_call_lowering_handler_binding(const char *binding);
+static const char * lm_trans_call_lowering_binding_from_class(const char *lowering_class);
 static int lm_trans_lower_call(const LmP0Text *head, const LmTransNamespace *namespace_, const char *lowering_class, LmTransCallLowering *out);
 static int lm_trans_atom_is_prefix_expr_operator(const LmP0Text *text);
 static int lm_trans_atom_is_postfix_expr_operator(const LmP0Text *text);
@@ -10332,6 +10333,21 @@ static LmTransCallLoweringHandler lm_trans_call_lowering_handler_binding(const c
     return handler;
 }
 
+static const char * lm_trans_call_lowering_binding_from_class(const char *lowering_class) {
+    LmP0Text * lowering_key;
+    const char *binding;
+    if (lowering_class == 0) {
+        return 0;
+    }
+    lowering_key = lm_trans_text_from_cstr(lowering_class);
+    if (lowering_key == 0) {
+        return 0;
+    }
+    binding = lm_trans_namespace_registry_source_path_n2_named_typed_value(0, lowering_key, "call.lowering", "class", "class", "handler", "binding");
+    lm_trans_text_ref_destroy(&lowering_key);
+    return binding;
+}
+
 static int lm_trans_lower_call(const LmP0Text *head, const LmTransNamespace *namespace_, const char *lowering_class, LmTransCallLowering *out) {
     const LmTransSymbol * symbol;
     const char *binding;
@@ -10351,7 +10367,7 @@ static int lm_trans_lower_call(const LmP0Text *head, const LmTransNamespace *nam
     if (lm_trans_is_c_reference_name(head)) {
         return 0;
     }
-    binding = lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(lowering_class), "call.lowering", "class", "class", "handler", "binding");
+    binding = lm_trans_call_lowering_binding_from_class(lowering_class);
     handler = lm_trans_call_lowering_handler_binding(binding);
     if (handler == 0) {
         effective_lowering_class = "";

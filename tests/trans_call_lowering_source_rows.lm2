@@ -16,6 +16,30 @@ L4:
         rows:
                  callable  lm_trans_call_lower_statement
     end: `call.lowering`
+
+    table:
+        name: `lm.test.call.lowering.seed`
+        columns((class: class) (int: marker) (binding: lowering))
+        rows:
+                 function  1  lm_trans_call_lower_value
+    end: `lm.test.call.lowering.seed`
+
+    join: (`lm.test.call.lowering.seed`) `lm.test.call.lowering.middle`
+        columns((class: class) (int: marker) (binding: lowering))
+        rows:
+    end: `lm.test.call.lowering.middle`
+
+    join: (`lm.test.call.lowering.middle`) call
+        columns((class: class) (int: marker) (binding: lowering))
+        rows:
+    end: call
+
+    table:
+        name: call
+        columns((class: class) (int: marker) (binding: lowering))
+        rows:
+                 function  2  None
+    end: call
 end: L4
 
 fn: seven () int
