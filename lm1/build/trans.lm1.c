@@ -2489,6 +2489,7 @@ static int lm_trans_registry_view_row_same(const LmTransRegistryFact *legacy_row
 static int lm_trans_registry_view_parity_enabled(void);
 static int lm_trans_registry_view_is_selected(void);
 static int lm_trans_registry_fact_has_source(const LmTransRegistryFact *facade_row, const LmTransRegistryFact *source_row);
+static int lm_trans_registry_text_cell_is_facade_witness(const LmTableCell *source_cell, const LmTransRegistryFact *facade_row);
 static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *payload_column_name, const LmTransRegistryFact *facade_row, int expect_node, const char *expected_key_descriptor, const char *expected_payload_descriptor, int accept_any_payload_descriptor);
 static const char * lm_trans_registry_source_n2_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *value_column_name, const LmTransRegistryFact *facade_row);
 static const char * lm_trans_registry_source_n2_typed_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor, const LmTransRegistryFact *facade_row);
@@ -6219,6 +6220,21 @@ static int lm_trans_registry_fact_has_source(const LmTransRegistryFact *facade_r
         row = row -> source;
     }
     return 0;
+}
+
+static int lm_trans_registry_text_cell_is_facade_witness(const LmTableCell *source_cell, const LmTransRegistryFact *facade_row) {
+    const LmTransRegistryFact * source_row;
+    if (source_cell == 0 || source_cell -> explicit_none != 0 || source_cell -> value == 0 || source_cell -> node != 0 || source_cell -> source == 0 || facade_row == 0 || facade_row -> key == 0 || facade_row -> payload == 0 || facade_row -> payload_node != 0) {
+        return 0;
+    }
+    source_row = ((const LmTransRegistryFact *)source_cell -> source);
+    if (source_row -> key == 0 || source_row -> payload == 0 || source_row -> payload_node != 0 || lm_trans_registry_fact_has_source(facade_row, source_row) == 0) {
+        return 0;
+    }
+    if (strcmp(source_row -> key, facade_row -> key) != 0 || strcmp(source_cell -> value, source_row -> payload) != 0) {
+        return 0;
+    }
+    return strcmp(source_cell -> value, facade_row -> payload) == 0;
 }
 
 static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *payload_column_name, const LmTransRegistryFact *facade_row, int expect_node, const char *expected_key_descriptor, const char *expected_payload_descriptor, int accept_any_payload_descriptor) {
@@ -31192,7 +31208,7 @@ static const LmTableRow * lm_trans_layout_source_row_for_fact(const LmTableDescr
     while (source_row_index[0] < row_count) {
         source_row = lm_table_descriptor_materialized_row_at(source_table, source_row_index[0]);
         source_field_class_cell = lm_table_row_cell_at(source_row, 1U);
-        if (source_field_class_cell != 0 && source_field_class_cell -> source == facade_row) {
+        if (lm_trans_registry_text_cell_is_facade_witness(source_field_class_cell, facade_row) != 0) {
             source_row_index[0] = source_row_index[0] + 1U;
             return source_row;
         }
@@ -31300,6 +31316,15 @@ static void lm_trans_collect_layout_field_source_row(const LmTableDescriptor *so
                     source_usable = 0;
                 }
                 if (source_usable != 0 && source_const_payload != 0 && lm_trans_parse_size_payload(source_const_payload, &source_const_flag) == 0) {
+                    source_usable = 0;
+                }
+                if (source_usable != 0 && lm_trans_registry_text_cell_is_facade_witness(source_field_index_cell, facade_index_row) == 0) {
+                    source_usable = 0;
+                }
+                if (source_usable != 0 && source_address_depth_payload != 0 && lm_trans_registry_text_cell_is_facade_witness(source_address_depth_cell, facade_address_depth_row) == 0) {
+                    source_usable = 0;
+                }
+                if (source_usable != 0 && source_const_payload != 0 && lm_trans_registry_text_cell_is_facade_witness(source_const_cell, facade_const_row) == 0) {
                     source_usable = 0;
                 }
             }

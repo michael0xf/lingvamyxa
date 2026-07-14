@@ -1093,6 +1093,18 @@ fn: lm_trans_registry_fact_has_source (const: (LmTransRegistryFact: facade_row);
         row: row\source
 return: 0
 
+fn: lm_trans_registry_text_cell_is_facade_witness (const: (LmTableCell: source_cell); const: (LmTransRegistryFact: facade_row)) int
+    const: LmTransRegistryFact: source_row
+
+    if: source_cell = 0 || source_cell\explicit_none != 0 || source_cell\value = 0 || source_cell\node != 0 || source_cell\source = 0 || facade_row = 0 || facade_row\key = 0 || facade_row\payload = 0 || facade_row\payload_node != 0
+        return: 0
+    source_row: cast: (const: LmTransRegistryFact) source_cell\source
+    if: source_row\key = 0 || source_row\payload = 0 || source_row\payload_node != 0 || lm_trans_registry_fact_has_source(facade_row, source_row) = 0
+        return: 0
+    if: c.strcmp(source_row\key, facade_row\key) != 0 || c.strcmp(source_cell\value, source_row\payload) != 0
+        return: 0
+return: c.strcmp(source_cell\value, facade_row\payload) = 0
+
 fn: lm_trans_registry_source_n2_cell (
     const: (LmTransNamespace: namespace_)
     const: @(char table_name)

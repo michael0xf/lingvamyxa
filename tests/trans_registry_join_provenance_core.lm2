@@ -125,6 +125,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: layout_origin
     LmTransRegistryFact: layout_middle
     LmTransRegistryFact: layout_target
+    LmTransRegistryFact: layout_unrelated
     LmTableDescriptor: descriptor
     LmTableDescriptor: node_descriptor
     LmTableDescriptor: layout_descriptor
@@ -143,9 +144,13 @@ fn: lm_test_registry_join_provenance_core () int
     const: LmTableCell: resolved_cell
     const: LmTableCell: resolved_node_cell
     const: LmRegistryViewRow: layout_view_row
+    const: LmTableDescriptor: layout_source_table
+    const: LmTableRow: resolved_layout_source_row
     const: LmP0Node: resolved_node
     const: @: char resolved_value
     const: @: char resolved_layout_backend
+    size_t: layout_source_row_index
+    size_t: unrelated_layout_source_row_index
     int: status
 
     lm_trans_registry_destroy()
@@ -199,6 +204,7 @@ fn: lm_test_registry_join_provenance_core () int
     layout_origin: 0
     layout_middle: 0
     layout_target: 0
+    layout_unrelated: 0
     layout_descriptor: 0
     layout_row: 0
     layout_key_cell: 0
@@ -210,7 +216,8 @@ fn: lm_test_registry_join_provenance_core () int
             layout_middle: lm_test_registry_join_fact("lm.test.layout.backend.origin", "lm.test.layout.backend.middle", "LayoutWitness")
         if: layout_middle != 0
             layout_target: lm_test_registry_join_fact("lm.test.layout.backend.middle", "layout.backend", "LayoutWitness")
-        if: layout_origin = 0 || layout_middle = 0 || layout_target = 0 || layout_middle\source != layout_origin || layout_target\source != layout_middle
+        layout_unrelated: lm_test_registry_push_value_fact("layout.unrelated.backend", "LayoutWitness", "c.struct", 0)
+        if: layout_origin = 0 || layout_middle = 0 || layout_target = 0 || layout_unrelated = 0 || layout_middle\source != layout_origin || layout_target\source != layout_middle || layout_unrelated\source != 0
             status: 1
     ---
 
@@ -240,6 +247,15 @@ fn: lm_test_registry_join_provenance_core () int
         layout_view_row: lm_registry_view_lookup_exact(lm_trans_registry\view, "LayoutWitness", "layout.backend")
         resolved_layout_backend: lm_trans_registry_layout_view_backend(0, layout_view_row)
         if: layout_view_row = 0 || layout_view_row\source != layout_target || resolved_layout_backend != layout_backend_cell\value || resolved_layout_backend = layout_view_row\payload || resolved_layout_backend = layout_target\payload
+            status: 1
+    ---
+
+    if: status = 0
+        layout_source_table: lm_registry_view_find_source_table_slice(lm_trans_registry\view, "layout", 6U)
+        layout_source_row_index: 0U
+        unrelated_layout_source_row_index: 0U
+        resolved_layout_source_row: lm_trans_layout_source_row_for_fact(layout_source_table, @ layout_source_row_index, layout_target)
+        if: layout_source_table = 0 || resolved_layout_source_row != lm_table_descriptor_materialized_row_at(layout_source_table, 0U) || layout_source_row_index != 1U || lm_trans_layout_source_row_for_fact(layout_source_table, @ unrelated_layout_source_row_index, layout_unrelated) != 0 || unrelated_layout_source_row_index != 0U
             status: 1
     ---
 

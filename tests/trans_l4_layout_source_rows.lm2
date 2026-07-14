@@ -9,6 +9,7 @@ L4:
                  LmTestSourceOverlay    c.struct
                  LmTestSourceInner      c.struct
                  LmTestSourceOuter      c.struct
+                 LmTestSourceJoined     c.struct
     end: `layout.backend`
 
     table:
@@ -34,6 +35,23 @@ L4:
                  text   char  0  1     1
                  value  int   1  None  None
     end: LmTestSourceQualified
+
+    table:
+        name: `lm.test.layout.fields.seed`
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+        rows:
+                 value  char  0  1  1
+    end: `lm.test.layout.fields.seed`
+
+    join: (`lm.test.layout.fields.seed`) `lm.test.layout.fields.middle`
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+        rows:
+    end: `lm.test.layout.fields.middle`
+
+    join: (`lm.test.layout.fields.middle`) LmTestSourceJoined
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+        rows:
+    end: LmTestSourceJoined
 
     table:
         name: LmTestSourceOverlay
@@ -97,6 +115,7 @@ L1:
 static int lm_test_layout_source_rows(void) {
     LmTestSourceDepth depth = { 7, 0 };
     LmTestSourceQualified qualified = { "ok", 11 };
+    LmTestSourceJoined joined = { "joined" };
     LmTestSourceOuter outer = { 0 };
 
     outer.items[1].value = 13;
@@ -110,13 +129,16 @@ static int lm_test_layout_source_rows(void) {
     if (strcmp(qualified.text, "ok") != 0 || qualified.value != 11) {
         return 3;
     }
+    if (strcmp(joined.value, "joined") != 0) {
+        return 4;
+    }
     if (offsetof(LmTestSourceOverlay, middle) != 0U ||
         offsetof(LmTestSourceOverlay, tail) != 1U ||
         offsetof(LmTestSourceOverlay, first) != 2U) {
-        return 4;
+        return 5;
     }
     if (outer.items[1].value != 13) {
-        return 5;
+        return 6;
     }
     return 0;
 }

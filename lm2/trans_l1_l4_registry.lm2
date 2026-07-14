@@ -296,7 +296,7 @@ fn: lm_trans_layout_source_row_for_fact (
     while: source_row_index[0] < row_count
         source_row: lm_table_descriptor_materialized_row_at(source_table, source_row_index[0])
         source_field_class_cell: lm_table_row_cell_at(source_row, 1U)
-        if: source_field_class_cell != 0 && source_field_class_cell\source = facade_row
+        if: lm_trans_registry_text_cell_is_facade_witness(source_field_class_cell, facade_row) != 0
             source_row_index[0]: source_row_index[0] + 1U
             return: source_row
         if: source_field_class_cell != 0 && source_field_class_cell\source != 0
@@ -400,6 +400,12 @@ sub: lm_trans_collect_layout_field_source_row (
                 if: source_usable != 0 && source_address_depth_payload != 0 && lm_trans_parse_size_payload(source_address_depth_payload, @ source_address_depth) = 0
                     source_usable: 0
                 if: source_usable != 0 && source_const_payload != 0 && lm_trans_parse_size_payload(source_const_payload, @ source_const_flag) = 0
+                    source_usable: 0
+                if: source_usable != 0 && lm_trans_registry_text_cell_is_facade_witness(source_field_index_cell, facade_index_row) = 0
+                    source_usable: 0
+                if: source_usable != 0 && source_address_depth_payload != 0 && lm_trans_registry_text_cell_is_facade_witness(source_address_depth_cell, facade_address_depth_row) = 0
+                    source_usable: 0
+                if: source_usable != 0 && source_const_payload != 0 && lm_trans_registry_text_cell_is_facade_witness(source_const_cell, facade_const_row) = 0
                     source_usable: 0
             ---
         ---
