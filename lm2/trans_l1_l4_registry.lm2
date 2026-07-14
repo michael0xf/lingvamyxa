@@ -2390,7 +2390,7 @@ fn: lm_trans_registry_init () int
 return: 0
 
 sub: lm_trans_registry_destroy ()
-    lm_trans_expr_emitter_binding_view_cache_reset()
+    lm_trans_expr_binding_view_cache_reset()
     if: lm_trans_registry = 0
         return
     lm_trans_l4_payload_pointer_bindings_destroy()

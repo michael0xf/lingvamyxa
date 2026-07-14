@@ -151,10 +151,14 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: expr_meta_default_early
     LmTransRegistryFact: expr_meta_default_late
     LmTransRegistryFact: expr_meta_wrong
+    LmTransRegistryFact: expr_spelling_origin
+    LmTransRegistryFact: expr_spelling_middle
+    LmTransRegistryFact: expr_spelling_target
     LmTableDescriptor: descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: expr_meta_descriptor
     LmTableDescriptor: expr_meta_wrong_descriptor
+    LmTableDescriptor: expr_spelling_descriptor
     LmTableDescriptor: node_descriptor
     LmTableDescriptor: condition_descriptor
     LmTableDescriptor: condition_wrong_descriptor
@@ -165,6 +169,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: receiver_row
     LmTableRow: expr_meta_row
     LmTableRow: expr_meta_wrong_row
+    LmTableRow: expr_spelling_row
     LmTableRow: node_row
     LmTableRow: condition_row
     LmTableRow: condition_wrong_row
@@ -182,6 +187,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: expr_meta_marker_cell
     LmTableCell: expr_meta_wrong_key_cell
     LmTableCell: expr_meta_wrong_binding_cell
+    LmTableCell: expr_spelling_key_cell
+    LmTableCell: expr_spelling_binding_cell
+    LmTableCell: expr_spelling_marker_cell
     LmTableCell: node_key_cell
     LmTableCell: node_value_cell
     LmTableCell: condition_key_cell
@@ -230,6 +238,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_expr_meta_binding
     const: @: char resolved_expr_meta_default
     const: @: char resolved_expr_meta_wrong
+    const: @: char resolved_expr_spelling_binding
     LmP0Text: target_key_text
     LmP0Text: receiver_key_text
     size_t: layout_source_row_index
@@ -422,6 +431,53 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_expr_meta_default: lm_trans_expr_emitter_binding_view_lookup("ExprMetaMissing")
         resolved_expr_meta_wrong: lm_trans_expr_emitter_binding_view_lookup("ExprMetaWrongSchema")
         if: resolved_expr_meta_binding != expr_meta_binding_cell\value || resolved_expr_meta_binding = expr_meta_older\payload || resolved_expr_meta_binding = expr_meta_target\payload || resolved_expr_meta_default != expr_meta_default_late\payload || resolved_expr_meta_default = expr_meta_default_early\payload || resolved_expr_meta_wrong != expr_meta_wrong\payload || resolved_expr_meta_wrong = expr_meta_wrong_binding_cell\value
+            status: 1
+    ---
+
+    expr_spelling_origin: 0
+    expr_spelling_middle: 0
+    expr_spelling_target: 0
+    expr_spelling_descriptor: 0
+    expr_spelling_row: 0
+    expr_spelling_key_cell: 0
+    expr_spelling_binding_cell: 0
+    expr_spelling_marker_cell: 0
+    if: status = 0 && lm_trans_expr_spelling_binding_view_lookup("ExprSpellingMetaMissing") != 0
+        status: 1
+
+    if: status = 0
+        expr_spelling_origin: lm_test_registry_push_value_fact("lm.test.expr.spelling.meta.origin.binding_table", "ExprSpellingMetaWitness", "lm.test.spelling.joined", 0)
+        expr_spelling_middle: lm_test_registry_push_value_fact("lm.test.expr.spelling.meta.middle.binding_table", "ExprSpellingMetaWitness", "lm.test.spelling.joined", expr_spelling_origin)
+        expr_spelling_target: lm_test_registry_push_value_fact("expr_spelling_binding.binding_table", "ExprSpellingMetaWitness", "lm.test.spelling.joined", expr_spelling_middle)
+        if: expr_spelling_origin = 0 || expr_spelling_middle = 0 || expr_spelling_target = 0 || expr_spelling_middle\source != expr_spelling_origin || expr_spelling_target\source != expr_spelling_middle
+            status: 1
+    ---
+
+    if: status = 0
+        expr_spelling_descriptor: lm_table_descriptor_new_empty_slice("expr_spelling_binding", 21U)
+        if: expr_spelling_descriptor = 0 || lm_table_descriptor_add_column(expr_spelling_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(expr_spelling_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(expr_spelling_descriptor, "binding_table", "class") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        expr_spelling_row: lm_table_row_new(0)
+        expr_spelling_key_cell: lm_table_cell_new_cstr("ExprSpellingMetaWitness", "ExprSpellingMetaWitness", 0, 0, 0)
+        expr_spelling_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        expr_spelling_binding_cell: lm_table_cell_new_cstr("lm.test.spelling.joined", "lm.test.spelling.joined", 0, expr_spelling_origin, 0)
+        if: expr_spelling_row = 0 || expr_spelling_key_cell = 0 || expr_spelling_marker_cell = 0 || expr_spelling_binding_cell = 0 || lm_table_row_take_cell(expr_spelling_row, expr_spelling_key_cell) != 0 || lm_table_row_take_cell(expr_spelling_row, expr_spelling_marker_cell) != 0 || lm_table_row_take_cell(expr_spelling_row, expr_spelling_binding_cell) != 0 || lm_table_descriptor_take_materialized_row(expr_spelling_descriptor, expr_spelling_row) != 0
+            status: 1
+        else:
+            expr_spelling_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, expr_spelling_descriptor) != 0
+                status: 1
+            else:
+                expr_spelling_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_expr_spelling_binding: lm_trans_expr_spelling_binding_view_lookup("ExprSpellingMetaWitness")
+        if: resolved_expr_spelling_binding != expr_spelling_binding_cell\value || resolved_expr_spelling_binding = expr_spelling_origin\payload || resolved_expr_spelling_binding = expr_spelling_middle\payload || resolved_expr_spelling_binding = expr_spelling_target\payload
             status: 1
     ---
 
@@ -759,6 +815,8 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(node_descriptor)
     lm_table_row_delete_any(layout_row)
     lm_table_descriptor_delete_any(layout_descriptor)
+    lm_table_row_delete_any(expr_spelling_row)
+    lm_table_descriptor_delete_any(expr_spelling_descriptor)
     lm_table_row_delete_any(expr_meta_wrong_row)
     lm_table_descriptor_delete_any(expr_meta_wrong_descriptor)
     lm_table_row_delete_any(expr_meta_row)
