@@ -1,0 +1,198 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_generated_abi_param_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_generated_abi_fact_at (size_t: index) LmTransRegistryFact
+    const: LmRegistryViewRow: row
+
+    row: lm_registry_view_fact_at(lm_trans_registry\view, index)
+    if: row = 0 || row\source = 0
+        return: 0
+return: cast: (LmTransRegistryFact) row\source
+
+fn: lm_test_generated_abi_fact_is (
+    const: (LmTransRegistryFact: fact)
+    const: @(char table)
+    const: @(char key)
+    const: @(char payload)
+) int
+return: fact != 0 && fact\table != 0 && c.strcmp(fact\table, table) = 0 && fact\key != 0 && c.strcmp(fact\key, key) = 0 && fact\payload != 0 && c.strcmp(fact\payload, payload) = 0
+
+fn: lm_test_generated_abi_column_is (
+    const: (LmTableColumnDescriptor: column)
+    const: @(char name)
+    const: @(char type_name)
+    const: @(char descriptor)
+) int
+    const: @: char actual_descriptor
+
+    if: column = 0 || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, name) != 0 || c.strcmp(column\type_name, type_name) != 0 || lm_table_column_descriptor_descriptor_count(column) != 1U
+        return: 0
+    actual_descriptor: lm_table_column_descriptor_descriptor_at(column, 0U)
+return: actual_descriptor != 0 && c.strcmp(actual_descriptor, descriptor) = 0
+
+fn: lm_test_generated_abi_path_cell_is (
+    const: @(char path)
+    size_t: index
+    const: @(char key)
+    const: (LmTransRegistryFact: fact)
+) int
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+    int: covered
+
+    key_cell: 0
+    covered: 0
+    value_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, path, c.strlen(path), index, 0, 0, @ key_cell, @ covered)
+    if: covered = 0 || key_cell = 0 || key_cell\value = 0 || key_cell\source != 0 || c.strcmp(key_cell\value, key) != 0 || value_cell = 0 || value_cell\value = 0 || value_cell\source != fact || value_cell\value = fact\payload || c.strcmp(value_cell\value, fact\payload) != 0
+        return: 0
+return: 1
+
+fn: lm_test_generated_abi_param_source_rows_core () int
+    LmP0Text: function_name
+    LmTransFormalParam: scalar_param
+    LmTransFormalParam: pointer_param
+    LmTransRegistryFact: scalar_class_fact
+    LmTransRegistryFact: scalar_index_fact
+    LmTransRegistryFact: pointer_class_fact
+    LmTransRegistryFact: pointer_index_fact
+    LmTransRegistryFact: pointer_depth_fact
+    LmTransRegistryFact: pointer_const_fact
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: cell
+    LmOwnPtrStack: selected_keys
+    @: LmTransAbiParam abi_params
+    const: @: char source_key
+    size_t: abi_count
+    size_t: i
+    int: covered
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    function_name: lm_trans_text_from_cstr("LmGeneratedAbiProbe")
+    scalar_param: lm_trans_formal_param_new()
+    pointer_param: lm_trans_formal_param_new()
+    selected_keys: 0
+    abi_params: lm_trans_l4_abi_params_new(2U)
+    status: 0
+    if: function_name = 0 || scalar_param = 0 || pointer_param = 0 || abi_params = 0
+        status: 1
+
+    if: status = 0
+        scalar_param\has_name: 0
+        if: lm_trans_text_assign_cstr(scalar_param\type\class_name, "int") = 0
+            status: 1
+    ---
+    if: status = 0
+        pointer_param\has_name: 1
+        pointer_param\type\address_depth: 1U
+        pointer_param\type\is_const: 1
+        if: lm_trans_text_assign_cstr(pointer_param\name, "label") = 0 || lm_trans_text_assign_cstr(pointer_param\type\class_name, "char") = 0
+            status: 1
+    ---
+
+    if: status = 0 && lm_trans_registry_materialize_fn_descriptor_param(function_name, scalar_param, 0U) != 0
+        status: 1
+    if: status = 0 && lm_trans_registry_materialize_fn_descriptor_param(function_name, pointer_param, 1U) != 0
+        status: 1
+
+    scalar_class_fact: lm_test_generated_abi_fact_at(0U)
+    scalar_index_fact: lm_test_generated_abi_fact_at(1U)
+    pointer_class_fact: lm_test_generated_abi_fact_at(3U)
+    pointer_index_fact: lm_test_generated_abi_fact_at(4U)
+    pointer_depth_fact: lm_test_generated_abi_fact_at(5U)
+    pointer_const_fact: lm_test_generated_abi_fact_at(6U)
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 8U || lm_registry_view_fact_count(lm_trans_registry\view) != 8U || lm_registry_view_source_table_count(lm_trans_registry\view) != 2U)
+        status: 1
+    if: status = 0 && (lm_test_generated_abi_fact_is(scalar_class_fact, "LmGeneratedAbiProbe.param.class", "arg0", "int") = 0 || lm_test_generated_abi_fact_is(scalar_index_fact, "LmGeneratedAbiProbe.param.index", "arg0", "0") = 0 || lm_test_generated_abi_fact_is(pointer_class_fact, "LmGeneratedAbiProbe.param.class", "label", "char") = 0 || lm_test_generated_abi_fact_is(pointer_index_fact, "LmGeneratedAbiProbe.param.index", "label", "1") = 0 || lm_test_generated_abi_fact_is(pointer_depth_fact, "LmGeneratedAbiProbe.param.address-depth", "label", "1") = 0 || lm_test_generated_abi_fact_is(pointer_const_fact, "LmGeneratedAbiProbe.param.const", "label", "1") = 0)
+        status: 1
+
+    i: 0U
+    while: status = 0 && i < 2U
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, i)
+        if: descriptor = 0 || descriptor\name = 0 || c.strcmp(descriptor\name, "LmGeneratedAbiProbe.param") != 0 || lm_table_descriptor_column_count(descriptor) != 5U || lm_table_descriptor_materialized_row_count(descriptor) != 1U || lm_test_generated_abi_column_is(lm_table_descriptor_column_at(descriptor, 0U), "name", "class", "class") = 0 || lm_test_generated_abi_column_is(lm_table_descriptor_column_at(descriptor, 1U), "class", "class", "class") = 0 || lm_test_generated_abi_column_is(lm_table_descriptor_column_at(descriptor, 2U), "index", "size_t", "size_t") = 0 || lm_test_generated_abi_column_is(lm_table_descriptor_column_at(descriptor, 3U), "address-depth", "size_t", "size_t") = 0 || lm_test_generated_abi_column_is(lm_table_descriptor_column_at(descriptor, 4U), "const", "int", "int") = 0
+            status: 1
+            break
+        row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+        if: row = 0 || row\local_sequence != 0U || lm_table_row_cell_count(row) != 5U
+            status: 1
+            break
+        i: i + 1U
+
+    if: status = 0
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, 0U)
+        row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+        cell: lm_table_row_cell_at(row, 3U)
+        if: cell = 0 || cell\atom = 0 || c.strcmp(cell\atom, "None") != 0 || cell\value != 0 || cell\node != 0 || cell\source != 0 || cell\explicit_none = 0
+            status: 1
+        cell: lm_table_row_cell_at(row, 4U)
+        if: cell = 0 || cell\atom = 0 || c.strcmp(cell\atom, "None") != 0 || cell\value != 0 || cell\node != 0 || cell\source != 0 || cell\explicit_none = 0
+            status: 1
+    ---
+
+    if: status = 0 && (lm_test_generated_abi_path_cell_is("LmGeneratedAbiProbe.param.class", 0U, "arg0", scalar_class_fact) = 0 || lm_test_generated_abi_path_cell_is("LmGeneratedAbiProbe.param.class", 1U, "label", pointer_class_fact) = 0 || lm_test_generated_abi_path_cell_is("LmGeneratedAbiProbe.param.index", 0U, "arg0", scalar_index_fact) = 0 || lm_test_generated_abi_path_cell_is("LmGeneratedAbiProbe.param.index", 1U, "label", pointer_index_fact) = 0 || lm_test_generated_abi_path_cell_is("LmGeneratedAbiProbe.param.address-depth", 0U, "label", pointer_depth_fact) = 0 || lm_test_generated_abi_path_cell_is("LmGeneratedAbiProbe.param.const", 0U, "label", pointer_const_fact) = 0)
+        status: 1
+
+    if: status = 0
+        covered: 0
+        if: lm_registry_view_source_path_has_key_slice(lm_trans_registry\view, "LmGeneratedAbiProbe.param.address-depth", c.strlen("LmGeneratedAbiProbe.param.address-depth"), "arg0", 4U, @ covered) != 0 || covered = 0
+            status: 1
+        covered: 0
+        if: lm_registry_view_source_path_has_key_slice(lm_trans_registry\view, "LmGeneratedAbiProbe.param.const", c.strlen("LmGeneratedAbiProbe.param.const"), "arg0", 4U, @ covered) != 0 || covered = 0
+            status: 1
+    ---
+
+    if: status = 0
+        selected_keys: lm_trans_namespace_registry_source_relation_keys_new(0, function_name, "param.class")
+        if: selected_keys = 0 || selected_keys\count != 2U
+            status: 1
+        else:
+            i: 0U
+            while: i < 2U
+                covered: 0
+                source_key: lm_registry_view_source_path_key_at_slice(lm_trans_registry\view, "LmGeneratedAbiProbe.param.class", c.strlen("LmGeneratedAbiProbe.param.class"), i, @ covered)
+                if: covered = 0 || source_key = 0 || lm_own_ptr_stack_at(selected_keys, i) != source_key
+                    status: 1
+                    break
+                i: i + 1U
+            if: status = 0 && (lm_own_ptr_stack_at(selected_keys, 0U) = scalar_class_fact\key || lm_own_ptr_stack_at(selected_keys, 1U) = pointer_class_fact\key)
+                status: 1
+        ---
+    ---
+
+    abi_count: 0U
+    if: status = 0 && lm_trans_collect_abi_params(abi_params, 2U, @ abi_count, 0, "LmGeneratedAbiProbe", "generated ABI test") != 0
+        status: 1
+    if: status = 0 && (abi_count != 2U || abi_params[0]\name = 0 || c.strcmp(abi_params[0]\name, "arg0") != 0 || abi_params[0]\class_name = 0 || c.strcmp(abi_params[0]\class_name, "int") != 0 || abi_params[0]\index != 0U || abi_params[0]\address_depth != 0U || abi_params[0]\is_const != 0 || abi_params[1]\name = 0 || c.strcmp(abi_params[1]\name, "label") != 0 || abi_params[1]\class_name = 0 || c.strcmp(abi_params[1]\class_name, "char") != 0 || abi_params[1]\index != 1U || abi_params[1]\address_depth != 1U || abi_params[1]\is_const = 0)
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_l4_abi_params_delete(abi_params, 2U)
+    lm_trans_ptr_stack_delete(@ selected_keys)
+    lm_trans_formal_param_delete(pointer_param)
+    lm_trans_formal_param_delete(scalar_param)
+    lm_trans_text_ref_destroy(@ function_name)
+    lm_trans_registry_destroy()
+return: status
