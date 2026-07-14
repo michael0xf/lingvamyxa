@@ -18,7 +18,9 @@ L4:
         name: `lm.test.namespace.seed`
         columns((class: class) (class: `receiver.type`))
         rows:
-                 LmTestJoinedStatement  `receiver.statement`
+                 LmTestJoined0  `receiver.statement`
+                 LmTestJoined0  `receiver.statement`
+                 LmTestJoined2  `receiver.statement`
     end: `lm.test.namespace.seed`
 
     join: (`lm.test.namespace.seed`) namespace
@@ -30,7 +32,8 @@ L4:
         name: namespace
         columns((class: class) (class: `receiver.type`))
         rows:
-                 LmTestJoinedStatement  None
+                 LmTestJoined0  None
+                 LmTestJoined2  None
     end: namespace
 
     table:
@@ -39,7 +42,8 @@ L4:
         rows:
                  LmTestDirectStatement    lm_trans_statement_emit_assert
                  LmTestFallbackStatement  lm_trans_statement_emit_assert
-                 LmTestJoinedStatement    lm_trans_statement_emit_assert
+                 LmTestJoined0            lm_trans_statement_emit_assert
+                 LmTestJoined2            lm_trans_statement_emit_assert
     end: `receiver.statement`
 end: L4
 
@@ -48,7 +52,8 @@ L2:
         fn: main () int
             LmTestDirectStatement: 1 = 1
             LmTestFallbackStatement: 2 = 2
-            LmTestJoinedStatement: 3 = 3
+            LmTestJoined0: 3 = 3
+            LmTestJoined2: 4 = 4
             return: 0
         end: main
     end: external
