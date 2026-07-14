@@ -2642,6 +2642,19 @@ fn: lm_trans_materialize_callable_descriptor_value (FILE: file; LmTransExprStack
     return: status
 end: lm_trans_materialize_callable_descriptor_value
 
+fn: lm_trans_materialize_argument_binding_from_class (const: @(char class_name)) const: @: char
+    LmP0Text: class_text
+    const: @: char binding
+
+    if: class_name = 0
+        return: 0
+    class_text: lm_trans_text_from_cstr(class_name)
+    if: class_text = 0
+        return: 0
+    binding: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, class_text, "materialize.argument", "class", "class", "materializer", "binding")
+    lm_trans_text_ref_destroy(@ class_text)
+return: binding
+
 fn: lm_trans_expr_stack_try_materialize_segment (FILE: file; LmTransExprStack: stack; const: (LmTransExprSegment: segment); const: (LmTransNamespace: namespace_); @: int out_consumed) int
     const: @: char binding
     const: @: char class_name
@@ -2667,7 +2680,7 @@ fn: lm_trans_expr_stack_try_materialize_segment (FILE: file; LmTransExprStack: s
         else:
             class_name: "callable.zero-arg.value"
         ---
-    binding: lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(class_name), "materialize.argument", "class", "class", "materializer", "binding")
+    binding: lm_trans_materialize_argument_binding_from_class(class_name)
     if: (binding = 0)
         return: 0
     resolved: lm_trans_expr_binding_new()

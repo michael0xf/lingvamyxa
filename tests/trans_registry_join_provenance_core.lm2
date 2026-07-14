@@ -121,6 +121,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: call_lowering_origin
     LmTransRegistryFact: call_lowering_middle
     LmTransRegistryFact: call_lowering_target
+    LmTransRegistryFact: materialize_argument_origin
+    LmTransRegistryFact: materialize_argument_middle
+    LmTransRegistryFact: materialize_argument_target
     LmTransRegistryFact: node_origin
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
@@ -179,6 +182,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: expr_spelling_target
     LmTableDescriptor: descriptor
     LmTableDescriptor: call_lowering_descriptor
+    LmTableDescriptor: materialize_argument_descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
@@ -193,6 +197,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: unit_wrong_descriptor
     LmTableRow: row
     LmTableRow: call_lowering_row
+    LmTableRow: materialize_argument_row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
@@ -211,6 +216,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: call_lowering_key_cell
     LmTableCell: call_lowering_marker_cell
     LmTableCell: call_lowering_binding_cell
+    LmTableCell: materialize_argument_key_cell
+    LmTableCell: materialize_argument_marker_cell
+    LmTableCell: materialize_argument_binding_cell
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
@@ -253,6 +261,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Node: unit_wrong_source_node
     LmTransHeadBinding: receiver_head_binding
     LmTransBinding: receiver_expr_binding
+    LmTransBinding: resolved_materialize_argument
     LmTransCallLoweringHandler: resolved_call_lowering_handler
     LmP0Frame: receiver_family_frame
     const: LmTableCell: resolved_cell
@@ -275,6 +284,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: LmP0Node: resolved_unit_wrong_node
     const: @: char resolved_value
     const: @: char resolved_call_lowering_binding
+    const: @: char resolved_materialize_argument_binding
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
@@ -393,6 +403,52 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_call_lowering_binding: lm_trans_call_lowering_binding_from_class("function")
         resolved_call_lowering_handler: lm_trans_call_lowering_handler_binding(resolved_call_lowering_binding)
         if: resolved_call_lowering_binding != call_lowering_binding_cell\value || resolved_call_lowering_binding = call_lowering_middle\payload || resolved_call_lowering_binding = call_lowering_target\payload || resolved_call_lowering_handler != @lm_trans_call_lower_value
+            status: 1
+    ---
+
+    materialize_argument_origin: 0
+    materialize_argument_middle: 0
+    materialize_argument_target: 0
+    materialize_argument_descriptor: 0
+    materialize_argument_row: 0
+    materialize_argument_key_cell: 0
+    materialize_argument_marker_cell: 0
+    materialize_argument_binding_cell: 0
+    resolved_materialize_argument: 0
+    if: status = 0
+        materialize_argument_origin: lm_test_registry_push_value_fact("lm.test.materialize.argument.origin", "array.value", "lm_trans_materialize_array_value", 0)
+        materialize_argument_middle: lm_test_registry_push_value_fact("lm.test.materialize.argument.middle", "array.value", "lm_trans_materialize_array_value", materialize_argument_origin)
+        materialize_argument_target: lm_test_registry_push_value_fact("materialize.argument", "array.value", "lm_trans_materialize_array_value", materialize_argument_middle)
+        if: materialize_argument_origin = 0 || materialize_argument_middle = 0 || materialize_argument_target = 0 || materialize_argument_middle\source != materialize_argument_origin || materialize_argument_target\source != materialize_argument_middle
+            status: 1
+    ---
+
+    if: status = 0
+        materialize_argument_descriptor: lm_table_descriptor_new_empty_slice("materialize", 11U)
+        if: materialize_argument_descriptor = 0 || lm_table_descriptor_add_column(materialize_argument_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(materialize_argument_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(materialize_argument_descriptor, "argument", "binding") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        materialize_argument_row: lm_table_row_new(0)
+        materialize_argument_key_cell: lm_table_cell_new_cstr("array.value", "array.value", 0, 0, 0)
+        materialize_argument_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        materialize_argument_binding_cell: lm_table_cell_new_cstr("lm_trans_materialize_array_value", "lm_trans_materialize_array_value", 0, materialize_argument_origin, 0)
+        if: materialize_argument_row = 0 || materialize_argument_key_cell = 0 || materialize_argument_marker_cell = 0 || materialize_argument_binding_cell = 0 || lm_table_row_take_cell(materialize_argument_row, materialize_argument_key_cell) != 0 || lm_table_row_take_cell(materialize_argument_row, materialize_argument_marker_cell) != 0 || lm_table_row_take_cell(materialize_argument_row, materialize_argument_binding_cell) != 0 || lm_table_descriptor_take_materialized_row(materialize_argument_descriptor, materialize_argument_row) != 0
+            status: 1
+        else:
+            materialize_argument_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, materialize_argument_descriptor) != 0
+                status: 1
+            else:
+                materialize_argument_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_materialize_argument_binding: lm_trans_materialize_argument_binding_from_class("array.value")
+        resolved_materialize_argument: lm_trans_expr_binding_new()
+        if: resolved_materialize_argument = 0 || resolved_materialize_argument_binding != materialize_argument_binding_cell\value || resolved_materialize_argument_binding = materialize_argument_middle\payload || resolved_materialize_argument_binding = materialize_argument_target\payload || lm_trans_binding_resolve(resolved_materialize_argument_binding, resolved_materialize_argument) = 0 || resolved_materialize_argument\expr_segment_materializer != @lm_trans_materialize_array_value
             status: 1
     ---
 
@@ -1060,6 +1116,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)
+    lm_own_delete(resolved_materialize_argument, 0)
+    lm_table_row_delete_any(materialize_argument_row)
+    lm_table_descriptor_delete_any(materialize_argument_descriptor)
     lm_table_row_delete_any(call_lowering_row)
     lm_table_descriptor_delete_any(call_lowering_descriptor)
     lm_table_row_delete_any(row)

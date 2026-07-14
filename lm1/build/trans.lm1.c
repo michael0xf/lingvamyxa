@@ -2838,6 +2838,7 @@ static int lm_trans_should_force_zero_arg_callable(const LmTransExprSegment *seg
 static int lm_trans_expr_stack_push_forced_zero_arg_callable(LmTransExprStack *stack, const LmP0Text *name, const LmTransSymbol *symbol);
 static int lm_trans_materialize_zero_arg_callable(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
 static int lm_trans_materialize_callable_descriptor_value(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
+static const char * lm_trans_materialize_argument_binding_from_class(const char *class_name);
 static int lm_trans_expr_stack_try_materialize_segment(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
 static int lm_trans_expr_segments_parse_fields(LmOwnPtrStack *segments, const LmP0Field *first);
 static int lm_trans_expr_stack_push_segments(FILE *file, LmTransExprStack *stack, const LmOwnPtrStack *segments, const LmTransNamespace *namespace_);
@@ -13064,6 +13065,21 @@ static int lm_trans_materialize_callable_descriptor_value(FILE *file, LmTransExp
     return status;
 }
 
+static const char * lm_trans_materialize_argument_binding_from_class(const char *class_name) {
+    LmP0Text * class_text;
+    const char *binding;
+    if (class_name == 0) {
+        return 0;
+    }
+    class_text = lm_trans_text_from_cstr(class_name);
+    if (class_text == 0) {
+        return 0;
+    }
+    binding = lm_trans_namespace_registry_source_path_n2_named_typed_value(0, class_text, "materialize.argument", "class", "class", "materializer", "binding");
+    lm_trans_text_ref_destroy(&class_text);
+    return binding;
+}
+
 static int lm_trans_expr_stack_try_materialize_segment(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed) {
     const char *binding;
     const char *class_name;
@@ -13096,7 +13112,7 @@ static int lm_trans_expr_stack_try_materialize_segment(FILE *file, LmTransExprSt
             class_name = "callable.zero-arg.value";
         }
     }
-    binding = lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(class_name), "materialize.argument", "class", "class", "materializer", "binding");
+    binding = lm_trans_materialize_argument_binding_from_class(class_name);
     if (binding == 0) {
         return 0;
     }

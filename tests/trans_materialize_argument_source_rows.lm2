@@ -19,22 +19,27 @@ L4:
 
     table:
         name: `lm.test.materialize.argument.seed`
-        columns((class: class) (binding: materializer))
+        columns((class: class) (int: marker) (binding: argument))
         rows:
-                 `array.value`  lm_trans_materialize_array_value
+                 `array.value`  1  lm_trans_materialize_array_value
     end: `lm.test.materialize.argument.seed`
 
-    join: (`lm.test.materialize.argument.seed`) `materialize.argument`
-        columns((class: class) (binding: materializer))
+    join: (`lm.test.materialize.argument.seed`) `lm.test.materialize.argument.middle`
+        columns((class: class) (int: marker) (binding: argument))
         rows:
-    end: `materialize.argument`
+    end: `lm.test.materialize.argument.middle`
+
+    join: (`lm.test.materialize.argument.middle`) materialize
+        columns((class: class) (int: marker) (binding: argument))
+        rows:
+    end: materialize
 
     table:
-        name: `materialize.argument`
-        columns((class: class) (binding: materializer))
+        name: materialize
+        columns((class: class) (int: marker) (binding: argument))
         rows:
-                 `array.value`  None
-    end: `materialize.argument`
+                 `array.value`  2  None
+    end: materialize
 end: L4
 
 callable: AddX (int: value) int
