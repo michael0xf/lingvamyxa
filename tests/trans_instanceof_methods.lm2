@@ -14,18 +14,88 @@ L4:
     end: Hashable
 
     table:
+        name: Serializable
+        columns((class: class) (class: `requires.method`))
+        rows:
+                 serialize 1
+    end: Serializable
+
+    table:
+        name: FlatCallable
+        columns((class: class) (class: `requires.method`))
+        rows:
+                 flatMethod 1
+    end: FlatCallable
+
+    table:
+        name: LegacyCallable
+        columns((class: class) (class: `requires.method`))
+        rows:
+                 legacyMethod 1
+    end: LegacyCallable
+
+    table:
+        name: Stringable
+        columns((class: class) (class: `requires.method`))
+        rows:
+                 toString 1
+    end: Stringable
+
+    table:
+        name: default
+        columns((class: class) (binding: method) (int: marker))
+        rows:
+                 hashCode  lm_default_hash_code  1
+                 hashCode  None                  2
+    end: default
+
+    table:
         name: default
         columns((class: class) (binding: method))
         rows:
-                 hashCode lm_default_hash_code
+                 legacyMethod lm_default_legacy_method
     end: default
 
     table:
         name: User
-        columns((class: class) (binding: method))
+        columns((class: class) (binding: method) (int: marker))
         rows:
-                 equals lm_user_equals
+                 equals  lm_user_equals  3
+                 equals  None            4
     end: User
+
+    table:
+        name: `lm.test.instanceof.user.seed`
+        columns((class: class) (binding: method) (int: marker))
+        rows:
+                 serialize  lm_user_serialize  5
+    end: `lm.test.instanceof.user.seed`
+
+    join: (`lm.test.instanceof.user.seed`) User
+        columns((class: class) (binding: method) (int: marker))
+        rows:
+    end: User
+
+    table:
+        name: User
+        columns((class: class) (binding: method) (int: marker))
+        rows:
+                 serialize  None  6
+    end: User
+
+    table:
+        name: `User.method`
+        columns((class: class) (binding: value))
+        rows:
+                 flatMethod  lm_user_flat_method
+    end: `User.method`
+
+    table:
+        name: `QuotedUser`
+        columns((class: class) (binding: method) (int: marker))
+        rows:
+                 equals  lm_quoted_user_equals  7
+    end: `QuotedUser`
 
     table:
         name: Plain
@@ -38,8 +108,15 @@ end: L4
 external:
     fn: main () int
         assert: instanceof(User, Equatable) = 1
+        assert: instanceof(User, Serializable) = 1
+        assert: instanceof(User, FlatCallable) = 1
+        assert: instanceof(User, Hashable) = 1
         assert: instanceof(Plain, Equatable) = 0
+        assert: instanceof(Plain, Stringable) = 1
         assert: instanceof(Plain, Hashable) = 1
+        assert: instanceof(Plain, LegacyCallable) = 1
+        assert: instanceof(Plain, Serializable) = 0
+        assert: instanceof(`QuotedUser`, Equatable) = 1
         assert: instanceof(User, User) = 1
         assert: instanceof(User, Missing) = 0
         return: 0

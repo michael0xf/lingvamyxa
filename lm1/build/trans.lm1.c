@@ -2843,7 +2843,7 @@ static int lm_trans_validate_printf_expected_arg(const LmP0Frame *frame, const L
 static int lm_trans_validate_c_printf_call(const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_validate_profile_c_printf_call(const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTransNamespace *namespace_);
-static LmTransRegistryFact * lm_trans_instanceof_find_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name);
+static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name);
 static const LmOwnPtrStack * lm_trans_instanceof_requirement_stack(const LmTransNamespace *namespace_, const LmP0Text *protocol_name);
 static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name);
 static int lm_trans_instanceof_arg_key(const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key);
@@ -13842,36 +13842,63 @@ static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTran
     return 0;
 }
 
-static LmTransRegistryFact * lm_trans_instanceof_find_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name) {
-    const LmOwnPtrStack * stack;
-    LmTransRegistryFact * row;
-    LmP0Text * default_key;
+static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name) {
+    LmP0Text * class_payload;
+    char *class_table;
     if (class_name == 0 || method_name == 0) {
         return 0;
     }
-    stack = lm_trans_namespace_registry_relation_stack(namespace_, class_name, "method");
-    row = lm_trans_registry_relation_stack_latest_row(stack, method_name);
-    if (row != 0) {
-        return row;
+    class_payload = lm_trans_text_ref_new(0);
+    if (class_payload == 0 || lm_trans_identifier_payload(class_name, class_payload) == 0) {
+        lm_trans_text_ref_destroy(&class_payload);
+        return 0;
     }
-    stack = lm_trans_namespace_registry_relation_stack(namespace_, class_name, "row");
-    row = lm_trans_registry_relation_stack_latest_row(stack, method_name);
-    if (row != 0) {
-        return row;
+    class_table = lm_trans_text_copy_cstr(class_payload);
+    if (class_table == 0) {
+        {
+            int lm_return_0 = 0;
+            lm_trans_text_ref_destroy(&class_payload);
+            return lm_return_0;
+        }
+    }
+    if (lm_trans_namespace_registry_source_relation_has_key(namespace_, method_name, class_table, "method") != 0) {
+        {
+            int lm_return_1 = 1;
+            lm_own_delete(class_table, 0);
+            lm_trans_text_ref_destroy(&class_payload);
+            return lm_return_1;
+        }
+    }
+    if (lm_trans_namespace_registry_source_relation_has_key(namespace_, method_name, class_table, "row") != 0) {
+        {
+            int lm_return_2 = 1;
+            lm_own_delete(class_table, 0);
+            lm_trans_text_ref_destroy(&class_payload);
+            return lm_return_2;
+        }
     }
     if (lm_trans_text_equals(class_name, "default") != 0) {
-        return 0;
+        {
+            int lm_return_3 = 0;
+            lm_own_delete(class_table, 0);
+            lm_trans_text_ref_destroy(&class_payload);
+            return lm_return_3;
+        }
     }
-    default_key = lm_trans_text_from_cstr("default");
-    if (default_key == 0) {
-        return 0;
+    if (lm_trans_namespace_registry_source_relation_has_key(namespace_, method_name, "default", "method") != 0) {
+        {
+            int lm_return_4 = 1;
+            lm_own_delete(class_table, 0);
+            lm_trans_text_ref_destroy(&class_payload);
+            return lm_return_4;
+        }
     }
-    row = lm_trans_registry_relation_stack_latest_row(lm_trans_namespace_registry_relation_stack(namespace_, default_key, "method"), method_name);
-    if (row == 0) {
-        row = lm_trans_registry_relation_stack_latest_row(lm_trans_namespace_registry_relation_stack(namespace_, default_key, "row"), method_name);
+    {
+        int lm_return_5 = lm_trans_namespace_registry_source_relation_has_key(namespace_, method_name, "default", "row");
+        lm_own_delete(class_table, 0);
+        lm_trans_text_ref_destroy(&class_payload);
+        return lm_return_5;
     }
-    lm_trans_text_ref_destroy(&default_key);
-    return row;
 }
 
 static const LmOwnPtrStack * lm_trans_instanceof_requirement_stack(const LmTransNamespace *namespace_, const LmP0Text *protocol_name) {
@@ -13914,7 +13941,7 @@ static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Tex
         }
         method_key->data = requirement -> key;
         method_key->length = strlen(requirement -> key);
-        if (lm_trans_instanceof_find_method(namespace_, class_name, method_key) == 0) {
+        if (lm_trans_instanceof_has_method(namespace_, class_name, method_key) == 0) {
             lm_trans_text_ref_destroy(&method_key);
             return 0;
         }
