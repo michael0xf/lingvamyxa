@@ -3520,6 +3520,7 @@ static int lm_trans_emit_l4_layout_typedefs(FILE *file, const LmTransNamespace *
 static int lm_trans_registry_collect_constant_define_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_constant_defines(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *namespace_);
+static const char * lm_trans_registry_backend_view_value(const LmTransNamespace *namespace_, const char *source_path, const LmRegistryViewRow *view_row);
 static int lm_trans_registry_collect_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *receiver_name, const char *backend_payload, const char *error_name, int require_class);
 static int lm_trans_registry_append_relation_name(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, LmP0Text *key_text, const char *key);
 static int lm_trans_registry_collect_relation_rows(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class, const LmOwnPtrStack *rows);
@@ -32315,14 +32316,63 @@ static int lm_trans_emit_l4_define_table(FILE *file, const LmTransNamespace *nam
     return 0;
 }
 
+static const char * lm_trans_registry_backend_view_value(const LmTransNamespace *namespace_, const char *source_path, const LmRegistryViewRow *view_row) {
+    LmTransRegistryFact * facade_row;
+    const char *backend;
+    if (view_row == 0 || view_row -> payload == 0) {
+        return 0;
+    }
+    backend = view_row -> payload;
+    facade_row = ((LmTransRegistryFact *)view_row -> source);
+    if (source_path != 0 && facade_row != 0 && facade_row -> payload != 0) {
+        backend = lm_trans_registry_source_path_n2_named_typed_value(namespace_, source_path, "class", "class", "backend", "class", facade_row);
+    }
+    return backend;
+}
+
 static int lm_trans_registry_collect_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *receiver_name, const char *backend_payload, const char *error_name, int require_class) {
     size_t i;
+    size_t row_count;
+    size_t source_path_length;
     LmTransRegistryFact * row;
     const LmOwnPtrStack * rows;
+    const LmRegistryView * view;
+    const LmRegistryViewRow * view_row;
+    const char *backend;
+    char *source_path;
     char *name;
     LmP0Text * key_text;
     if (names == 0 || receiver_name == 0 || backend_payload == 0 || error_name == 0) {
         return 1;
+    }
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view != 0) {
+        source_path = lm_trans_registry_source_relation_path_new(receiver_name, "backend", &source_path_length);
+        if (source_path == 0) {
+            return 1;
+        }
+        key_text = lm_trans_l4_text_view_new("");
+        if (key_text == 0) {
+            lm_own_delete(source_path, 0);
+            return 1;
+        }
+        row_count = lm_registry_view_table_row_count_slice(view, source_path, source_path_length);
+        i = 0U;
+        while (i < row_count) {
+            view_row = lm_registry_view_table_row_at_slice(view, source_path, source_path_length, i);
+            backend = lm_trans_registry_backend_view_value(namespace_, source_path, view_row);
+            if (view_row != 0 && view_row -> key != 0 && backend != 0 && strcmp(backend, backend_payload) == 0) {
+                if (lm_trans_registry_append_relation_name(names, namespace_, receiver_name, "backend", error_name, require_class, key_text, view_row -> key) != 0) {
+                    lm_trans_l4_text_view_delete(&key_text);
+                    lm_own_delete(source_path, 0);
+                    return 1;
+                }
+            }
+            i = i + 1U;
+        }
+        lm_trans_l4_text_view_delete(&key_text);
+        lm_own_delete(source_path, 0);
+        return 0;
     }
     rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr(receiver_name), "backend");
     if (rows == 0) {
