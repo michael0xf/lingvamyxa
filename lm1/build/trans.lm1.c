@@ -3521,6 +3521,7 @@ static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *val
 
 static int lm_trans_layout_backend_is_supported(const char *backend);
 static const char * lm_trans_layout_backend_value(const LmTransNamespace *namespace_, const LmP0Text *class_name);
+static const char * lm_trans_fn_external_value(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_fn_is_external(const LmTransNamespace *namespace_, const LmP0Text *name);
 static LmP0Text * lm_trans_l4_text_view_new(const char *text);
 static void lm_trans_l4_text_view_delete(LmP0Text **view);
@@ -31466,11 +31467,15 @@ static const char * lm_trans_layout_backend_value(const LmTransNamespace *namesp
     return lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class");
 }
 
-static int lm_trans_fn_is_external(const LmTransNamespace *namespace_, const LmP0Text *name) {
+static const char * lm_trans_fn_external_value(const LmTransNamespace *namespace_, const LmP0Text *name) {
     if (name == 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "fn.external", "class", "class", "value", "int") != 0;
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "fn.external", "class", "class", "value", "int");
+}
+
+static int lm_trans_fn_is_external(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    return lm_trans_fn_external_value(namespace_, name) != 0;
 }
 
 static LmP0Text * lm_trans_l4_text_view_new(const char *text) {

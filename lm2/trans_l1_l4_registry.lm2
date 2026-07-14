@@ -13,10 +13,13 @@ fn: lm_trans_layout_backend_value (const: (LmTransNamespace: namespace_); const:
         return: lm_trans_registry_layout_view_backend(namespace_, view_row)
 return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class")
 
-fn: lm_trans_fn_is_external (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+fn: lm_trans_fn_external_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
     if: name = 0
         return: 0
-return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "fn.external", "class", "class", "value", "int") != 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "fn.external", "class", "class", "value", "int")
+
+fn: lm_trans_fn_is_external (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+return: lm_trans_fn_external_value(namespace_, name) != 0
 
 fn: lm_trans_l4_text_view_new (const: @(char text)) LmP0Text
     if: text != 0

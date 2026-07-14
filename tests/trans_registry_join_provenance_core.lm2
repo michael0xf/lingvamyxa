@@ -142,6 +142,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: cast_target_origin
     LmTransRegistryFact: cast_target_middle
     LmTransRegistryFact: cast_target_target
+    LmTransRegistryFact: fn_external_origin
+    LmTransRegistryFact: fn_external_middle
+    LmTransRegistryFact: fn_external_target
     LmTransRegistryFact: c99_policy_origin
     LmTransRegistryFact: c99_policy_middle
     LmTransRegistryFact: c99_policy_target
@@ -226,6 +229,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: callable_partial_form_descriptor
     LmTableDescriptor: class_range_descriptor
     LmTableDescriptor: cast_target_descriptor
+    LmTableDescriptor: fn_external_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
     LmTableDescriptor: class_metadata_descriptor
@@ -249,6 +253,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: callable_partial_form_row
     LmTableRow: class_range_row
     LmTableRow: cast_target_row
+    LmTableRow: fn_external_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
     LmTableRow: class_c_projection_row
@@ -290,6 +295,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: cast_target_key_cell
     LmTableCell: cast_target_marker_cell
     LmTableCell: cast_target_value_cell
+    LmTableCell: fn_external_key_cell
+    LmTableCell: fn_external_marker_cell
+    LmTableCell: fn_external_value_cell
     LmTableCell: c99_policy_key_cell
     LmTableCell: c99_policy_marker_cell
     LmTableCell: c99_policy_value_cell
@@ -392,6 +400,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_callable_partial_form_materializer
     const: @: char resolved_class_range
     const: @: char resolved_cast_target
+    const: @: char resolved_fn_external
     const: @: char resolved_c99_policy
     const: @: char resolved_profile_validator
     const: @: char resolved_class_c_projection
@@ -420,6 +429,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: callable_partial_form_key_text
     LmP0Text: class_range_key_text
     LmP0Text: cast_target_key_text
+    LmP0Text: fn_external_key_text
     LmP0Text: profile_rule_key_text
     LmP0Text: class_c_projection_key_text
     LmP0Text: class_spelling_key_text
@@ -795,6 +805,52 @@ fn: lm_test_registry_join_provenance_core () int
         cast_target_key_text: lm_trans_text_from_cstr("CastWide")
         resolved_cast_target: lm_trans_cast_target_value(0, cast_target_key_text)
         if: cast_target_key_text = 0 || resolved_cast_target != cast_target_value_cell\value || resolved_cast_target = cast_target_middle\payload || resolved_cast_target = cast_target_target\payload
+            status: 1
+    ---
+
+    fn_external_origin: 0
+    fn_external_middle: 0
+    fn_external_target: 0
+    fn_external_descriptor: 0
+    fn_external_row: 0
+    fn_external_key_cell: 0
+    fn_external_marker_cell: 0
+    fn_external_value_cell: 0
+    fn_external_key_text: 0
+    if: status = 0
+        fn_external_origin: lm_test_registry_push_value_fact("lm.test.fn.external.origin", "ExternalWide", "1", 0)
+        fn_external_middle: lm_test_registry_push_value_fact("lm.test.fn.external.middle", "ExternalWide", "1", fn_external_origin)
+        fn_external_target: lm_test_registry_push_value_fact("fn.external", "ExternalWide", "1", fn_external_middle)
+        if: fn_external_origin = 0 || fn_external_middle = 0 || fn_external_target = 0 || fn_external_middle\source != fn_external_origin || fn_external_target\source != fn_external_middle
+            status: 1
+    ---
+
+    if: status = 0
+        fn_external_descriptor: lm_table_descriptor_new_empty_slice("fn", 2U)
+        if: fn_external_descriptor = 0 || lm_table_descriptor_add_column(fn_external_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(fn_external_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(fn_external_descriptor, "external", "int") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        fn_external_row: lm_table_row_new(0)
+        fn_external_key_cell: lm_table_cell_new_cstr("ExternalWide", "ExternalWide", 0, 0, 0)
+        fn_external_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        fn_external_value_cell: lm_table_cell_new_cstr("1", "1", 0, fn_external_origin, 0)
+        if: fn_external_row = 0 || fn_external_key_cell = 0 || fn_external_marker_cell = 0 || fn_external_value_cell = 0 || lm_table_row_take_cell(fn_external_row, fn_external_key_cell) != 0 || lm_table_row_take_cell(fn_external_row, fn_external_marker_cell) != 0 || lm_table_row_take_cell(fn_external_row, fn_external_value_cell) != 0 || lm_table_descriptor_take_materialized_row(fn_external_descriptor, fn_external_row) != 0
+            status: 1
+        else:
+            fn_external_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, fn_external_descriptor) != 0
+                status: 1
+            else:
+                fn_external_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        fn_external_key_text: lm_trans_text_from_cstr("ExternalWide")
+        resolved_fn_external: lm_trans_fn_external_value(0, fn_external_key_text)
+        if: fn_external_key_text = 0 || resolved_fn_external != fn_external_value_cell\value || resolved_fn_external = fn_external_middle\payload || resolved_fn_external = fn_external_target\payload || lm_trans_fn_is_external(0, fn_external_key_text) = 0
             status: 1
     ---
 
@@ -1740,6 +1796,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(profile_validator_descriptor)
     lm_table_row_delete_any(c99_policy_row)
     lm_table_descriptor_delete_any(c99_policy_descriptor)
+    lm_trans_text_ref_destroy(@ fn_external_key_text)
+    lm_table_row_delete_any(fn_external_row)
+    lm_table_descriptor_delete_any(fn_external_descriptor)
     lm_trans_text_ref_destroy(@ cast_target_key_text)
     lm_table_row_delete_any(cast_target_row)
     lm_table_descriptor_delete_any(cast_target_descriptor)

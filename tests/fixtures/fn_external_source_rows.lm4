@@ -16,22 +16,27 @@ end: `fn.external`
 
 table:
     name: `lm.test.fn.external.seed`
-    columns((class: class) (int: value))
+    columns((class: class) (int: marker) (int: external))
     rows:
-             lm_test_external_joined  1
+             lm_test_external_joined  7  1
 end: `lm.test.fn.external.seed`
 
-join: (`lm.test.fn.external.seed`) `fn.external`
-    columns((class: class) (int: value))
+join: (`lm.test.fn.external.seed`) `lm.test.fn.external.middle`
+    columns((class: class) (int: marker) (int: external))
     rows:
-end: `fn.external`
+end: `lm.test.fn.external.middle`
+
+join: (`lm.test.fn.external.middle`) fn
+    columns((class: class) (int: marker) (int: external))
+    rows:
+end: fn
 
 table:
-    name: `fn.external`
-    columns((class: class) (int: value))
+    name: fn
+    columns((class: class) (int: marker) (int: external))
     rows:
-             lm_test_external_joined  None
-end: `fn.external`
+             lm_test_external_joined  8  None
+end: fn
 
 fn: lm_test_external_direct (int: value) int
 sub: lm_test_external_fallback (@: int value)
