@@ -1621,6 +1621,161 @@ fn: lm_trans_namespace_registry_source_relation_has_key (
         return: source_has_key
 return: facade_has_key
 
+fn: lm_trans_registry_relation_key_stack_append (LmOwnPtrStack: keys; const: (LmOwnPtrStack: rows)) int
+    LmTransRegistryFact: row
+    size_t: i
+
+    if: keys = 0
+        return: 1
+    if: rows = 0
+        return: 0
+
+    i: 0U
+    while: i < rows\count
+        row: lm_own_ptr_stack_at(rows, i)
+        if: row = 0
+            if: lm_own_ptr_stack_push(keys, 0) != 0
+                return: 1
+            ---
+        else:
+            if: lm_own_ptr_stack_push(keys, (cast: (@: void) row\key)) != 0
+                return: 1
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_namespace_registry_source_relation_keys_new (
+    const: (LmTransNamespace: namespace_)
+    const: (LmP0Text: table_owner)
+    const: @(char relation_name)
+) LmOwnPtrStack
+    const: LmOwnPtrStack: rows
+    LmOwnPtrStack: keys
+    LmP0Text: owner_payload
+    @: char owner_name
+    @: char source_path
+    const: @: char source_key
+    LmTransRegistryFact: facade_row
+    @: int consumed
+    size_t: source_path_length
+    size_t: source_count
+    size_t: facade_count
+    size_t: match_index
+    size_t: i
+    int: source_covered
+    int: source_exact
+    int: source_found
+    int: private_registry
+
+    if: table_owner = 0 || relation_name = 0
+        return: 0
+
+    keys: lm_trans_ptr_stack_new(0)
+    if: keys = 0
+        return: 0
+    rows: lm_trans_namespace_registry_relation_stack(namespace_, table_owner, relation_name)
+    private_registry: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
+    if: lm_trans_registry_view_parity_enabled() = 0 || private_registry != 0
+        if: lm_trans_registry_relation_key_stack_append(keys, rows) != 0
+            lm_trans_ptr_stack_delete(@ keys)
+        return: keys
+
+    owner_payload: lm_trans_text_ref_new_cstr("")
+    if: owner_payload = 0 || lm_trans_identifier_payload(table_owner, owner_payload) = 0
+        lm_trans_text_ref_destroy(@ owner_payload)
+        if: lm_trans_registry_relation_key_stack_append(keys, rows) != 0
+            lm_trans_ptr_stack_delete(@ keys)
+        return: keys
+    owner_name: lm_trans_text_copy_cstr(owner_payload)
+    lm_trans_text_ref_destroy(@ owner_payload)
+    if: owner_name = 0
+        if: lm_trans_registry_relation_key_stack_append(keys, rows) != 0
+            lm_trans_ptr_stack_delete(@ keys)
+        return: keys
+
+    source_path: lm_trans_registry_source_relation_path_new(owner_name, relation_name, @ source_path_length)
+    lm_own_delete(owner_name, 0)
+    if: source_path = 0
+        if: lm_trans_registry_relation_key_stack_append(keys, rows) != 0
+            lm_trans_ptr_stack_delete(@ keys)
+        return: keys
+
+    facade_count: 0U
+    if: rows != 0
+        facade_count: rows\count
+    consumed: 0
+    if: facade_count != 0U
+        consumed: lm_own_new_zero(c.sizeof(consumed[0]) * facade_count)
+        if: consumed = 0
+            lm_own_delete(source_path, 0)
+            if: lm_trans_registry_relation_key_stack_append(keys, rows) != 0
+                lm_trans_ptr_stack_delete(@ keys)
+            return: keys
+    ---
+
+    source_count: 0U
+    source_exact: 1
+    source_covered: 0
+    source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, source_count, @ source_covered)
+    if: source_covered = 0
+        lm_own_delete(consumed, 0)
+        lm_own_delete(source_path, 0)
+        if: lm_trans_registry_relation_key_stack_append(keys, rows) != 0
+            lm_trans_ptr_stack_delete(@ keys)
+        return: keys
+
+    while: source_key != 0
+        if: source_count >= facade_count
+            source_exact: 0
+        else:
+            facade_row: lm_own_ptr_stack_at(rows, source_count)
+            if: facade_row = 0 || facade_row\key = 0 || c.strcmp(facade_row\key, source_key) != 0
+                source_exact: 0
+        ---
+
+        source_found: 0
+        match_index: 0U
+        while: rows != 0 && match_index < facade_count
+            facade_row: lm_own_ptr_stack_at(rows, match_index)
+            if: consumed[match_index] = 0 && facade_row != 0 && facade_row\key != 0 && c.strcmp(facade_row\key, source_key) = 0
+                consumed[match_index]: 1
+                source_found: 1
+                break
+            match_index: match_index + 1U
+
+        if: source_found = 0
+            lm_own_delete(consumed, 0)
+            lm_trans_ptr_stack_delete(@ keys)
+            lm_trans_registry_view_parity_fail("source relation key membership", source_path)
+            lm_own_delete(source_path, 0)
+            return: 0
+
+        source_count: source_count + 1U
+        source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, source_count, @ source_covered)
+
+    if: source_count != facade_count
+        source_exact: 0
+
+    if: lm_trans_registry_view_is_selected() != 0 && source_exact != 0
+        i: 0U
+        while: i < source_count
+            source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, i, @ source_covered)
+            if: source_key = 0 || lm_own_ptr_stack_push(keys, (cast: (@: void) source_key)) != 0
+                lm_own_delete(consumed, 0)
+                lm_own_delete(source_path, 0)
+                lm_trans_ptr_stack_delete(@ keys)
+                return: 0
+            i: i + 1U
+        ---
+    else:
+        if: lm_trans_registry_relation_key_stack_append(keys, rows) != 0
+            lm_trans_ptr_stack_delete(@ keys)
+    ---
+
+    lm_own_delete(consumed, 0)
+    lm_own_delete(source_path, 0)
+return: keys
+
 fn: lm_trans_registry_lookup_exact (const: (LmP0Text: key); const: @(char table)) const: @: char
     LmTransRegistryFact: row
     const: LmRegistryViewRow: view_row

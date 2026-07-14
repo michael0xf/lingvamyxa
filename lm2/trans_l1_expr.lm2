@@ -3817,20 +3817,23 @@ fn: lm_trans_instanceof_has_method (const: (LmTransNamespace: namespace_); const
         return: 1
 return: lm_trans_namespace_registry_source_relation_has_key(namespace_, method_name, "default", "row")
 
-fn: lm_trans_instanceof_requirement_stack (const: (LmTransNamespace: namespace_); const: (LmP0Text: protocol_name)) const: LmOwnPtrStack
-    const: LmOwnPtrStack: stack
+fn: lm_trans_instanceof_requirement_keys_new (const: (LmTransNamespace: namespace_); const: (LmP0Text: protocol_name)) LmOwnPtrStack
+    const: LmOwnPtrStack: facade_requirements
+    LmOwnPtrStack: keys
 
     if: protocol_name = 0
         return: 0
 
-    stack: lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "requires.method")
-    if: stack != 0 && stack\count != 0U
-        return: stack
-return: lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "row")
+    facade_requirements: lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "requires.method")
+    keys: lm_trans_namespace_registry_source_relation_keys_new(namespace_, protocol_name, "requires.method")
+    if: facade_requirements != 0 && facade_requirements\count != 0U
+        return: keys
+    lm_trans_ptr_stack_delete(@ keys)
+return: lm_trans_namespace_registry_source_relation_keys_new(namespace_, protocol_name, "row")
 
 fn: lm_trans_instanceof (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name); const: (LmP0Text: protocol_name)) int
-    const: LmOwnPtrStack: requirements
-    LmTransRegistryFact: requirement
+    LmOwnPtrStack: requirements
+    const: @: char requirement
     LmP0Text: method_key
     size_t: i
 
@@ -3840,30 +3843,35 @@ fn: lm_trans_instanceof (const: (LmTransNamespace: namespace_); const: (LmP0Text
     if: lm_trans_text_same(class_name, protocol_name) != 0
         return: 1
 
-    requirements: lm_trans_instanceof_requirement_stack(namespace_, protocol_name)
+    requirements: lm_trans_instanceof_requirement_keys_new(namespace_, protocol_name)
     if: requirements = 0 || requirements\count = 0U
+        lm_trans_ptr_stack_delete(@ requirements)
         return: 0
 
     method_key: lm_trans_text_ref_new_cstr("")
     if: method_key = 0
+        lm_trans_ptr_stack_delete(@ requirements)
         return: 0
 
     i: 0U
     while: i < requirements\count
         requirement: lm_own_ptr_stack_at(requirements, i)
-        if: requirement = 0 || requirement\key = 0
+        if: requirement = 0
             lm_trans_text_ref_destroy(@ method_key)
+            lm_trans_ptr_stack_delete(@ requirements)
             return: 0
 
-        method_key\data: requirement\key
-        method_key\length: c.strlen(requirement\key)
+        method_key\data: requirement
+        method_key\length: c.strlen(requirement)
         if: lm_trans_instanceof_has_method(namespace_, class_name, method_key) = 0
             lm_trans_text_ref_destroy(@ method_key)
+            lm_trans_ptr_stack_delete(@ requirements)
             return: 0
 
         i: i + 1U
 
     lm_trans_text_ref_destroy(@ method_key)
+    lm_trans_ptr_stack_delete(@ requirements)
 return: 1
 
 fn: lm_trans_instanceof_arg_key (const: (LmP0Field: first); const: (LmP0Field: stop); LmP0Text: out_key) int

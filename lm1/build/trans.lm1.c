@@ -2503,6 +2503,8 @@ static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_row(const L
 static char * lm_trans_registry_source_relation_path_new(const char *table, const char *relation_name, size_t *out_length);
 static const LmTableRow * lm_trans_registry_source_table_lookup_row(const LmP0Text *key, const char *table, const LmTableDescriptor **out_descriptor, int *out_covered);
 static int lm_trans_namespace_registry_source_relation_has_key(const LmTransNamespace *namespace_, const LmP0Text *key, const char *table, const char *relation_name);
+static int lm_trans_registry_relation_key_stack_append(LmOwnPtrStack *keys, const LmOwnPtrStack *rows);
+static LmOwnPtrStack * lm_trans_namespace_registry_source_relation_keys_new(const LmTransNamespace *namespace_, const LmP0Text *table_owner, const char *relation_name);
 static const char * lm_trans_registry_lookup_exact(const LmP0Text *key, const char *table);
 static const char * lm_trans_registry_lookup_default(const char *table);
 static const char * lm_trans_registry_lookup(const LmP0Text *key, const char *table);
@@ -2844,7 +2846,7 @@ static int lm_trans_validate_c_printf_call(const LmP0Frame *frame, const LmTrans
 static int lm_trans_validate_profile_c_printf_call(const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTransNamespace *namespace_);
 static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name);
-static const LmOwnPtrStack * lm_trans_instanceof_requirement_stack(const LmTransNamespace *namespace_, const LmP0Text *protocol_name);
+static LmOwnPtrStack * lm_trans_instanceof_requirement_keys_new(const LmTransNamespace *namespace_, const LmP0Text *protocol_name);
 static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name);
 static int lm_trans_instanceof_arg_key(const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key);
 static int lm_trans_expr_emit_instanceof_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
@@ -6705,6 +6707,174 @@ static int lm_trans_namespace_registry_source_relation_has_key(const LmTransName
         return source_has_key;
     }
     return facade_has_key;
+}
+
+static int lm_trans_registry_relation_key_stack_append(LmOwnPtrStack *keys, const LmOwnPtrStack *rows) {
+    LmTransRegistryFact * row;
+    size_t i;
+    if (keys == 0) {
+        return 1;
+    }
+    if (rows == 0) {
+        return 0;
+    }
+    i = 0U;
+    while (i < rows -> count) {
+        row = lm_own_ptr_stack_at(rows, i);
+        if (row == 0) {
+            if (lm_own_ptr_stack_push(keys, 0) != 0) {
+                return 1;
+            }
+        }
+        else {
+            if (lm_own_ptr_stack_push(keys, (((void *)row -> key))) != 0) {
+                return 1;
+            }
+        }
+        i = i + 1U;
+    }
+    return 0;
+}
+
+static LmOwnPtrStack * lm_trans_namespace_registry_source_relation_keys_new(const LmTransNamespace *namespace_, const LmP0Text *table_owner, const char *relation_name) {
+    const LmOwnPtrStack * rows;
+    LmOwnPtrStack * keys;
+    LmP0Text * owner_payload;
+    char *owner_name;
+    char *source_path;
+    const char *source_key;
+    LmTransRegistryFact * facade_row;
+    int *consumed;
+    size_t source_path_length;
+    size_t source_count;
+    size_t facade_count;
+    size_t match_index;
+    size_t i;
+    int source_covered;
+    int source_exact;
+    int source_found;
+    int private_registry;
+    if (table_owner == 0 || relation_name == 0) {
+        return 0;
+    }
+    keys = lm_trans_ptr_stack_new(0);
+    if (keys == 0) {
+        return 0;
+    }
+    rows = lm_trans_namespace_registry_relation_stack(namespace_, table_owner, relation_name);
+    private_registry = namespace_ != 0 && namespace_ -> registry_identifiers != 0 && (lm_trans_registry == 0 || namespace_ -> registry_identifiers != lm_trans_registry->identifiers);
+    if (lm_trans_registry_view_parity_enabled() == 0 || private_registry != 0) {
+        if (lm_trans_registry_relation_key_stack_append(keys, rows) != 0) {
+            lm_trans_ptr_stack_delete(&keys);
+        }
+        return keys;
+    }
+    owner_payload = lm_trans_text_ref_new_cstr("");
+    if (owner_payload == 0 || lm_trans_identifier_payload(table_owner, owner_payload) == 0) {
+        lm_trans_text_ref_destroy(&owner_payload);
+        if (lm_trans_registry_relation_key_stack_append(keys, rows) != 0) {
+            lm_trans_ptr_stack_delete(&keys);
+        }
+        return keys;
+    }
+    owner_name = lm_trans_text_copy_cstr(owner_payload);
+    lm_trans_text_ref_destroy(&owner_payload);
+    if (owner_name == 0) {
+        if (lm_trans_registry_relation_key_stack_append(keys, rows) != 0) {
+            lm_trans_ptr_stack_delete(&keys);
+        }
+        return keys;
+    }
+    source_path = lm_trans_registry_source_relation_path_new(owner_name, relation_name, &source_path_length);
+    lm_own_delete(owner_name, 0);
+    if (source_path == 0) {
+        if (lm_trans_registry_relation_key_stack_append(keys, rows) != 0) {
+            lm_trans_ptr_stack_delete(&keys);
+        }
+        return keys;
+    }
+    facade_count = 0U;
+    if (rows != 0) {
+        facade_count = rows -> count;
+    }
+    consumed = 0;
+    if (facade_count != 0U) {
+        consumed = lm_own_new_zero(sizeof(consumed[0]) * facade_count);
+        if (consumed == 0) {
+            lm_own_delete(source_path, 0);
+            if (lm_trans_registry_relation_key_stack_append(keys, rows) != 0) {
+                lm_trans_ptr_stack_delete(&keys);
+            }
+            return keys;
+        }
+    }
+    source_count = 0U;
+    source_exact = 1;
+    source_covered = 0;
+    source_key = lm_registry_view_source_path_key_at_slice(lm_trans_registry->view, source_path, source_path_length, source_count, &source_covered);
+    if (source_covered == 0) {
+        lm_own_delete(consumed, 0);
+        lm_own_delete(source_path, 0);
+        if (lm_trans_registry_relation_key_stack_append(keys, rows) != 0) {
+            lm_trans_ptr_stack_delete(&keys);
+        }
+        return keys;
+    }
+    while (source_key != 0) {
+        if (source_count >= facade_count) {
+            source_exact = 0;
+        }
+        else {
+            facade_row = lm_own_ptr_stack_at(rows, source_count);
+            if (facade_row == 0 || facade_row -> key == 0 || strcmp(facade_row -> key, source_key) != 0) {
+                source_exact = 0;
+            }
+        }
+        source_found = 0;
+        match_index = 0U;
+        while (rows != 0 && match_index < facade_count) {
+            facade_row = lm_own_ptr_stack_at(rows, match_index);
+            if (consumed[match_index] == 0 && facade_row != 0 && facade_row -> key != 0 && strcmp(facade_row -> key, source_key) == 0) {
+                consumed[match_index] = 1;
+                source_found = 1;
+                break;
+            }
+            match_index = match_index + 1U;
+        }
+        if (source_found == 0) {
+            lm_own_delete(consumed, 0);
+            lm_trans_ptr_stack_delete(&keys);
+            lm_trans_registry_view_parity_fail("source relation key membership", source_path);
+            lm_own_delete(source_path, 0);
+            return 0;
+        }
+        source_count = source_count + 1U;
+        source_key = lm_registry_view_source_path_key_at_slice(lm_trans_registry->view, source_path, source_path_length, source_count, &source_covered);
+    }
+    if (source_count != facade_count) {
+        source_exact = 0;
+    }
+    if (lm_trans_registry_view_is_selected() != 0 && source_exact != 0) {
+        i = 0U;
+        while (i < source_count) {
+            source_key = lm_registry_view_source_path_key_at_slice(lm_trans_registry->view, source_path, source_path_length, i, &source_covered);
+            if (source_key == 0 || lm_own_ptr_stack_push(keys, (((void *)source_key))) != 0) {
+                lm_own_delete(consumed, 0);
+                lm_own_delete(source_path, 0);
+                lm_trans_ptr_stack_delete(&keys);
+                return 0;
+            }
+            i = i + 1U;
+        }
+    }
+    else {
+        if (lm_trans_registry_relation_key_stack_append(keys, rows) != 0) {
+            lm_trans_ptr_stack_delete(&keys);
+        }
+    }
+    lm_own_delete(consumed, 0);
+    lm_own_delete(source_path, 0);
+    return keys;
 }
 
 static const char * lm_trans_registry_lookup_exact(const LmP0Text *key, const char *table) {
@@ -13901,21 +14071,24 @@ static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, co
     }
 }
 
-static const LmOwnPtrStack * lm_trans_instanceof_requirement_stack(const LmTransNamespace *namespace_, const LmP0Text *protocol_name) {
-    const LmOwnPtrStack * stack;
+static LmOwnPtrStack * lm_trans_instanceof_requirement_keys_new(const LmTransNamespace *namespace_, const LmP0Text *protocol_name) {
+    const LmOwnPtrStack * facade_requirements;
+    LmOwnPtrStack * keys;
     if (protocol_name == 0) {
         return 0;
     }
-    stack = lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "requires.method");
-    if (stack != 0 && stack -> count != 0U) {
-        return stack;
+    facade_requirements = lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "requires.method");
+    keys = lm_trans_namespace_registry_source_relation_keys_new(namespace_, protocol_name, "requires.method");
+    if (facade_requirements != 0 && facade_requirements -> count != 0U) {
+        return keys;
     }
-    return lm_trans_namespace_registry_relation_stack(namespace_, protocol_name, "row");
+    lm_trans_ptr_stack_delete(&keys);
+    return lm_trans_namespace_registry_source_relation_keys_new(namespace_, protocol_name, "row");
 }
 
 static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name) {
-    const LmOwnPtrStack * requirements;
-    LmTransRegistryFact * requirement;
+    LmOwnPtrStack * requirements;
+    const char *requirement;
     LmP0Text * method_key;
     size_t i;
     if (class_name == 0 || protocol_name == 0) {
@@ -13924,30 +14097,35 @@ static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Tex
     if (lm_trans_text_same(class_name, protocol_name) != 0) {
         return 1;
     }
-    requirements = lm_trans_instanceof_requirement_stack(namespace_, protocol_name);
+    requirements = lm_trans_instanceof_requirement_keys_new(namespace_, protocol_name);
     if (requirements == 0 || requirements -> count == 0U) {
+        lm_trans_ptr_stack_delete(&requirements);
         return 0;
     }
     method_key = lm_trans_text_ref_new_cstr("");
     if (method_key == 0) {
+        lm_trans_ptr_stack_delete(&requirements);
         return 0;
     }
     i = 0U;
     while (i < requirements -> count) {
         requirement = lm_own_ptr_stack_at(requirements, i);
-        if (requirement == 0 || requirement -> key == 0) {
+        if (requirement == 0) {
             lm_trans_text_ref_destroy(&method_key);
+            lm_trans_ptr_stack_delete(&requirements);
             return 0;
         }
-        method_key->data = requirement -> key;
-        method_key->length = strlen(requirement -> key);
+        method_key->data = requirement;
+        method_key->length = strlen(requirement);
         if (lm_trans_instanceof_has_method(namespace_, class_name, method_key) == 0) {
             lm_trans_text_ref_destroy(&method_key);
+            lm_trans_ptr_stack_delete(&requirements);
             return 0;
         }
         i = i + 1U;
     }
     lm_trans_text_ref_destroy(&method_key);
+    lm_trans_ptr_stack_delete(&requirements);
     return 1;
 }
 
