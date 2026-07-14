@@ -1,0 +1,67 @@
+L4:
+    table:
+        name: `class.cTail`
+        columns((class: class) (@: char spelling))
+        rows:
+                 LmCTailDirect  "membership-only"
+                 LmCTailDirect  None
+    end: `class.cTail`
+
+    table:
+        name: `class.cTail`
+        columns((class: class) (class: spelling))
+        rows:
+                 LmCTailFallback  membershipMarker
+    end: `class.cTail`
+
+    table:
+        name: `lm.test.class.ctail.seed`
+        columns((class: class) (int: marker) (@: char cTail))
+        rows:
+                 LmCTailJoined  7  "membership-only"
+    end: `lm.test.class.ctail.seed`
+
+    join: (`lm.test.class.ctail.seed`) `lm.test.class.ctail.middle`
+        columns((class: class) (int: marker) (@: char cTail))
+        rows:
+    end: `lm.test.class.ctail.middle`
+
+    join: (`lm.test.class.ctail.middle`) class
+        columns((class: class) (int: marker) (@: char cTail))
+        rows:
+    end: class
+
+    table:
+        name: class
+        columns((class: class) (int: marker) (@: char cTail))
+        rows:
+                 LmCTailJoined  8  None
+    end: class
+end: L4
+
+L1:
+===
+typedef int LmCTailDirect;
+typedef int LmCTailFallback;
+typedef int LmCTailJoined;
+===
+
+L2:
+    fn: lm_ctail_direct_probe (c.LmCTailDirect: value) int
+        return: value
+    end: lm_ctail_direct_probe
+
+    fn: lm_ctail_fallback_probe (c.LmCTailFallback: value) int
+        return: value
+    end: lm_ctail_fallback_probe
+
+    fn: lm_ctail_joined_probe (c.LmCTailJoined: value) int
+        return: value
+    end: lm_ctail_joined_probe
+
+    external:
+        fn: main () int
+            return: lm_ctail_direct_probe(7) != 7 || lm_ctail_fallback_probe(8) != 8 || lm_ctail_joined_probe(9) != 9
+        end: main
+    end: external
+end: L2

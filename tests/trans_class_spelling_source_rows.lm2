@@ -17,22 +17,29 @@ L4:
 
     table:
         name: `lm.test.class.spelling.seed`
-        columns((class: class) (@: char spelling))
+        columns((class: class) (int: marker) (@: char spelling))
         rows:
-                 joinedType  long
+                 joinedType  7  long
+                 default     9  unsigned
     end: `lm.test.class.spelling.seed`
 
-    join: (`lm.test.class.spelling.seed`) `class.spelling`
-        columns((class: class) (@: char spelling))
+    join: (`lm.test.class.spelling.seed`) `lm.test.class.spelling.middle`
+        columns((class: class) (int: marker) (@: char spelling))
         rows:
-    end: `class.spelling`
+    end: `lm.test.class.spelling.middle`
+
+    join: (`lm.test.class.spelling.middle`) class
+        columns((class: class) (int: marker) (@: char spelling))
+        rows:
+    end: class
 
     table:
-        name: `class.spelling`
-        columns((class: class) (@: char spelling))
+        name: class
+        columns((class: class) (int: marker) (@: char spelling))
         rows:
-                 joinedType  None
-    end: `class.spelling`
+                 joinedType  8  None
+                 default    10  None
+    end: class
 end: L4
 
 external:
@@ -40,7 +47,8 @@ external:
         directType: direct 7
         fallbackType: fallback 8
         joinedType: joined 9
+        MissingSpellingType: defaulted 11
 
-        return: direct != 7 || fallback != 8 || joined != 9
+        return: direct != 7 || fallback != 8 || joined != 9 || defaulted != 11
     end: main
 end: external

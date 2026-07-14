@@ -2697,6 +2697,7 @@ static int lm_trans_symbol_copy_signature(LmTransSymbol *target, const LmTransSy
 static int lm_trans_namespace_declare_compatible(LmTransNamespace *namespace_, const LmP0Text *name, const char *kind);
 static const char * lm_trans_class_c_projection(const LmP0Text *name);
 static const char * lm_trans_class_c_spelling(const LmP0Text *name);
+static const char * lm_trans_class_c_tail_value(const LmP0Text *name);
 static int lm_trans_class_is_reference_base(const LmP0Text *name);
 static int lm_trans_builtin_c_type_tail(const LmP0Text *name);
 static int lm_trans_builtin_c_type_name(const LmP0Text *name);
@@ -9842,7 +9843,7 @@ static const char * lm_trans_class_c_projection(const LmP0Text *name) {
     if (name == 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.c.projection", "class", "class", "spelling", "char");
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, name, "class.c.projection", "class", "class", "spelling", "char");
 }
 
 static const char * lm_trans_class_c_spelling(const LmP0Text *name) {
@@ -9854,7 +9855,14 @@ static const char * lm_trans_class_c_spelling(const LmP0Text *name) {
     if (spelling != 0) {
         return spelling;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.spelling", "class", "class", "spelling", "char");
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, name, "class.spelling", "class", "class", "spelling", "char");
+}
+
+static const char * lm_trans_class_c_tail_value(const LmP0Text *name) {
+    if (name == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, name, "class.cTail", "class", "class", "spelling", "char");
 }
 
 static int lm_trans_class_is_reference_base(const LmP0Text *name) {
@@ -9884,7 +9892,7 @@ static int lm_trans_builtin_c_type_tail(const LmP0Text *name) {
     if (lm_trans_class_is_reference_base(name)) {
         return 0;
     }
-    return lm_trans_class_c_spelling(name) != 0 || lm_trans_registry_has(name, "class.cTail");
+    return lm_trans_class_c_spelling(name) != 0 || lm_trans_class_c_tail_value(name) != 0;
 }
 
 static int lm_trans_builtin_c_type_name(const LmP0Text *name) {

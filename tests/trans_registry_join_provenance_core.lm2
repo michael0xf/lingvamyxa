@@ -148,6 +148,15 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: profile_validator_origin
     LmTransRegistryFact: profile_validator_middle
     LmTransRegistryFact: profile_validator_target
+    LmTransRegistryFact: class_c_projection_origin
+    LmTransRegistryFact: class_c_projection_middle
+    LmTransRegistryFact: class_c_projection_target
+    LmTransRegistryFact: class_spelling_origin
+    LmTransRegistryFact: class_spelling_middle
+    LmTransRegistryFact: class_spelling_target
+    LmTransRegistryFact: class_ctail_origin
+    LmTransRegistryFact: class_ctail_middle
+    LmTransRegistryFact: class_ctail_target
     LmTransRegistryFact: node_origin
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
@@ -213,6 +222,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: cast_target_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
+    LmTableDescriptor: class_metadata_descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
@@ -234,6 +244,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: cast_target_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
+    LmTableRow: class_c_projection_row
+    LmTableRow: class_spelling_row
+    LmTableRow: class_ctail_row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
@@ -274,6 +287,21 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: profile_validator_key_cell
     LmTableCell: profile_validator_marker_cell
     LmTableCell: profile_validator_value_cell
+    LmTableCell: class_c_projection_key_cell
+    LmTableCell: class_c_projection_value_cell
+    LmTableCell: class_c_projection_spelling_none_cell
+    LmTableCell: class_c_projection_ctail_none_cell
+    LmTableCell: class_c_projection_marker_cell
+    LmTableCell: class_spelling_key_cell
+    LmTableCell: class_spelling_projection_none_cell
+    LmTableCell: class_spelling_value_cell
+    LmTableCell: class_spelling_ctail_none_cell
+    LmTableCell: class_spelling_marker_cell
+    LmTableCell: class_ctail_key_cell
+    LmTableCell: class_ctail_projection_none_cell
+    LmTableCell: class_ctail_spelling_none_cell
+    LmTableCell: class_ctail_value_cell
+    LmTableCell: class_ctail_marker_cell
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
@@ -349,6 +377,10 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_cast_target
     const: @: char resolved_c99_policy
     const: @: char resolved_profile_validator
+    const: @: char resolved_class_c_projection
+    const: @: char resolved_class_c_projection_spelling
+    const: @: char resolved_class_spelling
+    const: @: char resolved_class_ctail
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
@@ -370,6 +402,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: class_range_key_text
     LmP0Text: cast_target_key_text
     LmP0Text: profile_rule_key_text
+    LmP0Text: class_c_projection_key_text
+    LmP0Text: class_spelling_key_text
+    LmP0Text: class_ctail_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
     size_t: layout_source_row_index
@@ -819,6 +854,113 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_c99_policy: lm_trans_c99_ub_policy_value(0, profile_rule_key_text)
         resolved_profile_validator: lm_trans_profile_validator_binding(0, profile_rule_key_text)
         if: profile_rule_key_text = 0 || resolved_c99_policy != c99_policy_value_cell\value || resolved_c99_policy = c99_policy_middle\payload || resolved_c99_policy = c99_policy_target\payload || resolved_profile_validator != profile_validator_value_cell\value || resolved_profile_validator = profile_validator_middle\payload || resolved_profile_validator = profile_validator_target\payload || lm_trans_profile_rule_enabled(0, "ProfileWide") = 0 || lm_trans_profile_validator_enabled(0, "ProfileWide", "lm_trans_validate_c_printf_call") = 0
+            status: 1
+    ---
+
+    class_c_projection_origin: 0
+    class_c_projection_middle: 0
+    class_c_projection_target: 0
+    class_spelling_origin: 0
+    class_spelling_middle: 0
+    class_spelling_target: 0
+    class_ctail_origin: 0
+    class_ctail_middle: 0
+    class_ctail_target: 0
+    class_metadata_descriptor: 0
+    class_c_projection_row: 0
+    class_spelling_row: 0
+    class_ctail_row: 0
+    class_c_projection_key_cell: 0
+    class_c_projection_value_cell: 0
+    class_c_projection_spelling_none_cell: 0
+    class_c_projection_ctail_none_cell: 0
+    class_c_projection_marker_cell: 0
+    class_spelling_key_cell: 0
+    class_spelling_projection_none_cell: 0
+    class_spelling_value_cell: 0
+    class_spelling_ctail_none_cell: 0
+    class_spelling_marker_cell: 0
+    class_ctail_key_cell: 0
+    class_ctail_projection_none_cell: 0
+    class_ctail_spelling_none_cell: 0
+    class_ctail_value_cell: 0
+    class_ctail_marker_cell: 0
+    class_c_projection_key_text: 0
+    class_spelling_key_text: 0
+    class_ctail_key_text: 0
+    if: status = 0
+        class_c_projection_origin: lm_test_registry_push_value_fact("lm.test.class.c.projection.origin", "ProjectionWide", "short", 0)
+        class_c_projection_middle: lm_test_registry_push_value_fact("lm.test.class.c.projection.middle", "ProjectionWide", "short", class_c_projection_origin)
+        class_c_projection_target: lm_test_registry_push_value_fact("class.c.projection", "ProjectionWide", "short", class_c_projection_middle)
+        class_spelling_origin: lm_test_registry_push_value_fact("lm.test.class.spelling.origin", "SpellingWide", "long", 0)
+        class_spelling_middle: lm_test_registry_push_value_fact("lm.test.class.spelling.middle", "SpellingWide", "long", class_spelling_origin)
+        class_spelling_target: lm_test_registry_push_value_fact("class.spelling", "SpellingWide", "long", class_spelling_middle)
+        class_ctail_origin: lm_test_registry_push_value_fact("lm.test.class.ctail.origin", "CTailWide", "membership-only", 0)
+        class_ctail_middle: lm_test_registry_push_value_fact("lm.test.class.ctail.middle", "CTailWide", "membership-only", class_ctail_origin)
+        class_ctail_target: lm_test_registry_push_value_fact("class.cTail", "CTailWide", "membership-only", class_ctail_middle)
+        if: class_c_projection_origin = 0 || class_c_projection_middle = 0 || class_c_projection_target = 0 || class_spelling_origin = 0 || class_spelling_middle = 0 || class_spelling_target = 0 || class_ctail_origin = 0 || class_ctail_middle = 0 || class_ctail_target = 0 || class_c_projection_middle\source != class_c_projection_origin || class_c_projection_target\source != class_c_projection_middle || class_spelling_middle\source != class_spelling_origin || class_spelling_target\source != class_spelling_middle || class_ctail_middle\source != class_ctail_origin || class_ctail_target\source != class_ctail_middle
+            status: 1
+    ---
+
+    if: status = 0
+        class_metadata_descriptor: lm_table_descriptor_new_empty_slice("class", 5U)
+        if: class_metadata_descriptor = 0 || lm_table_descriptor_add_column(class_metadata_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(class_metadata_descriptor, "c.projection", "char") != 0 || lm_table_descriptor_add_column(class_metadata_descriptor, "spelling", "char") != 0 || lm_table_descriptor_add_column(class_metadata_descriptor, "cTail", "char") != 0 || lm_table_descriptor_add_column(class_metadata_descriptor, "marker", "int") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        class_c_projection_row: lm_table_row_new(0)
+        class_c_projection_key_cell: lm_table_cell_new_cstr("ProjectionWide", "ProjectionWide", 0, 0, 0)
+        class_c_projection_value_cell: lm_table_cell_new_cstr("short", "short", 0, class_c_projection_origin, 0)
+        class_c_projection_spelling_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_c_projection_ctail_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_c_projection_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: class_c_projection_row = 0 || class_c_projection_key_cell = 0 || class_c_projection_value_cell = 0 || class_c_projection_spelling_none_cell = 0 || class_c_projection_ctail_none_cell = 0 || class_c_projection_marker_cell = 0 || lm_table_row_take_cell(class_c_projection_row, class_c_projection_key_cell) != 0 || lm_table_row_take_cell(class_c_projection_row, class_c_projection_value_cell) != 0 || lm_table_row_take_cell(class_c_projection_row, class_c_projection_spelling_none_cell) != 0 || lm_table_row_take_cell(class_c_projection_row, class_c_projection_ctail_none_cell) != 0 || lm_table_row_take_cell(class_c_projection_row, class_c_projection_marker_cell) != 0 || lm_table_descriptor_take_materialized_row(class_metadata_descriptor, class_c_projection_row) != 0
+            status: 1
+        else:
+            class_c_projection_row: 0
+    ---
+
+    if: status = 0
+        class_spelling_row: lm_table_row_new(0)
+        class_spelling_key_cell: lm_table_cell_new_cstr("SpellingWide", "SpellingWide", 0, 0, 0)
+        class_spelling_projection_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_spelling_value_cell: lm_table_cell_new_cstr("long", "long", 0, class_spelling_origin, 0)
+        class_spelling_ctail_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_spelling_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: class_spelling_row = 0 || class_spelling_key_cell = 0 || class_spelling_projection_none_cell = 0 || class_spelling_value_cell = 0 || class_spelling_ctail_none_cell = 0 || class_spelling_marker_cell = 0 || lm_table_row_take_cell(class_spelling_row, class_spelling_key_cell) != 0 || lm_table_row_take_cell(class_spelling_row, class_spelling_projection_none_cell) != 0 || lm_table_row_take_cell(class_spelling_row, class_spelling_value_cell) != 0 || lm_table_row_take_cell(class_spelling_row, class_spelling_ctail_none_cell) != 0 || lm_table_row_take_cell(class_spelling_row, class_spelling_marker_cell) != 0 || lm_table_descriptor_take_materialized_row(class_metadata_descriptor, class_spelling_row) != 0
+            status: 1
+        else:
+            class_spelling_row: 0
+    ---
+
+    if: status = 0
+        class_ctail_row: lm_table_row_new(0)
+        class_ctail_key_cell: lm_table_cell_new_cstr("CTailWide", "CTailWide", 0, 0, 0)
+        class_ctail_projection_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_ctail_spelling_none_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        class_ctail_value_cell: lm_table_cell_new_cstr("membership-only", "membership-only", 0, class_ctail_origin, 0)
+        class_ctail_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: class_ctail_row = 0 || class_ctail_key_cell = 0 || class_ctail_projection_none_cell = 0 || class_ctail_spelling_none_cell = 0 || class_ctail_value_cell = 0 || class_ctail_marker_cell = 0 || lm_table_row_take_cell(class_ctail_row, class_ctail_key_cell) != 0 || lm_table_row_take_cell(class_ctail_row, class_ctail_projection_none_cell) != 0 || lm_table_row_take_cell(class_ctail_row, class_ctail_spelling_none_cell) != 0 || lm_table_row_take_cell(class_ctail_row, class_ctail_value_cell) != 0 || lm_table_row_take_cell(class_ctail_row, class_ctail_marker_cell) != 0 || lm_table_descriptor_take_materialized_row(class_metadata_descriptor, class_ctail_row) != 0
+            status: 1
+        else:
+            class_ctail_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, class_metadata_descriptor) != 0
+                status: 1
+            else:
+                class_metadata_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        class_c_projection_key_text: lm_trans_text_from_cstr("ProjectionWide")
+        class_spelling_key_text: lm_trans_text_from_cstr("SpellingWide")
+        class_ctail_key_text: lm_trans_text_from_cstr("CTailWide")
+        resolved_class_c_projection: lm_trans_class_c_projection(class_c_projection_key_text)
+        resolved_class_c_projection_spelling: lm_trans_class_c_spelling(class_c_projection_key_text)
+        resolved_class_spelling: lm_trans_class_c_spelling(class_spelling_key_text)
+        resolved_class_ctail: lm_trans_class_c_tail_value(class_ctail_key_text)
+        if: class_c_projection_key_text = 0 || class_spelling_key_text = 0 || class_ctail_key_text = 0 || resolved_class_c_projection != class_c_projection_value_cell\value || resolved_class_c_projection = class_c_projection_middle\payload || resolved_class_c_projection = class_c_projection_target\payload || resolved_class_c_projection_spelling != class_c_projection_value_cell\value || resolved_class_c_projection_spelling = class_c_projection_middle\payload || resolved_class_c_projection_spelling = class_c_projection_target\payload || resolved_class_spelling != class_spelling_value_cell\value || resolved_class_spelling = class_spelling_middle\payload || resolved_class_spelling = class_spelling_target\payload || resolved_class_ctail != class_ctail_value_cell\value || resolved_class_ctail = class_ctail_middle\payload || resolved_class_ctail = class_ctail_target\payload || lm_trans_builtin_c_type_tail(class_ctail_key_text) = 0
             status: 1
     ---
 
@@ -1486,6 +1628,13 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)
+    lm_trans_text_ref_destroy(@ class_ctail_key_text)
+    lm_trans_text_ref_destroy(@ class_spelling_key_text)
+    lm_trans_text_ref_destroy(@ class_c_projection_key_text)
+    lm_table_row_delete_any(class_ctail_row)
+    lm_table_row_delete_any(class_spelling_row)
+    lm_table_row_delete_any(class_c_projection_row)
+    lm_table_descriptor_delete_any(class_metadata_descriptor)
     lm_trans_text_ref_destroy(@ profile_rule_key_text)
     lm_table_row_delete_any(profile_validator_row)
     lm_table_descriptor_delete_any(profile_validator_descriptor)

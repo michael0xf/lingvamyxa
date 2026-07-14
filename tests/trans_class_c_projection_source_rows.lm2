@@ -21,22 +21,27 @@ L4:
 
     table:
         name: `lm.test.class.c.projection.seed`
-        columns((class: class) (@: char spelling))
+        columns((class: class) (int: marker) (@: char `c.projection`))
         rows:
-                 LmProjectionJoined  long
+                 LmProjectionJoined  7  long
     end: `lm.test.class.c.projection.seed`
 
-    join: (`lm.test.class.c.projection.seed`) `class.c.projection`
-        columns((class: class) (@: char spelling))
+    join: (`lm.test.class.c.projection.seed`) `lm.test.class.c.projection.middle`
+        columns((class: class) (int: marker) (@: char `c.projection`))
         rows:
-    end: `class.c.projection`
+    end: `lm.test.class.c.projection.middle`
+
+    join: (`lm.test.class.c.projection.middle`) class
+        columns((class: class) (int: marker) (@: char `c.projection`))
+        rows:
+    end: class
 
     table:
-        name: `class.c.projection`
-        columns((class: class) (@: char spelling))
+        name: class
+        columns((class: class) (int: marker) (@: char `c.projection`))
         rows:
-                 LmProjectionJoined  None
-    end: `class.c.projection`
+                 LmProjectionJoined  8  None
+    end: class
 
     table:
         name: `class.spelling`
