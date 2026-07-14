@@ -3182,7 +3182,7 @@ fn: lm_trans_l4_payload_frame_handler_resolve (const: (LmP0Text: head); @: LmTra
         return: 1
     out[0]: 0
 
-    receiver_type: lm_trans_registry_lookup(head, "namespace.l4.payload")
+    receiver_type: lm_trans_l4_namespace_receiver_type_value(head, "namespace.l4.payload")
     if: receiver_type = 0
         return: 0
 

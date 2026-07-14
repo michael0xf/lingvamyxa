@@ -2796,7 +2796,7 @@ fn: lm_trans_l4_head_binding_resolve_from_pointer_table (const: (LmP0Text: head)
         return: 1
 
     c.memset(out, 0, c.sizeof(out[0]))
-    receiver_type: lm_trans_registry_lookup(head, namespace_table)
+    receiver_type: lm_trans_l4_namespace_receiver_type_value(head, namespace_table)
     if: receiver_type = 0
         return: 0
 
@@ -2844,7 +2844,7 @@ fn: lm_trans_l4_atom_binding_resolve_from_pointer_table (const: (LmP0Text: atom)
         return: 1
 
     c.memset(out, 0, c.sizeof(out[0]))
-    receiver_type: lm_trans_registry_lookup(atom, namespace_table)
+    receiver_type: lm_trans_l4_namespace_receiver_type_value(atom, namespace_table)
     if: receiver_type = 0
         return: 0
 
@@ -3316,7 +3316,7 @@ fn: lm_trans_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP
     if: head != 0
         head_length: cast: int head\length
         head_data: head\data
-    receiver_type: lm_trans_registry_lookup(head, "namespace.l4")
+    receiver_type: lm_trans_l4_namespace_receiver_type_value(head, "namespace.l4")
     if: receiver_type = 0
         return: 0
     if: c.strcmp(receiver_type, "l4.frame") != 0

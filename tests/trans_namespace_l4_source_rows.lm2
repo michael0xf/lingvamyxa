@@ -1,0 +1,178 @@
+L4:
+    table:
+        name: `namespace.l4`
+        columns((class: class) (@: char L4))
+        rows:
+                 table  `l4.frame`
+                 table  None
+    end: `namespace.l4`
+
+    table:
+        name: `lm.test.namespace.l4.direct`
+        columns((class: class) (int: value))
+        rows:
+                 witness  1
+    end: `lm.test.namespace.l4.direct`
+
+    table:
+        name: `namespace.l4`
+        columns((class: class) (@: relation L4))
+        rows:
+                 join  `l4.frame`
+    end: `namespace.l4`
+
+    table:
+        name: `lm.test.namespace.l4.seed`
+        columns((class: class) (@: char L4))
+        rows:
+                 row  `l4.frame`
+    end: `lm.test.namespace.l4.seed`
+
+    join: (`lm.test.namespace.l4.seed`) `namespace.l4`
+        columns((class: class) (@: char L4))
+        rows:
+    end: `namespace.l4`
+
+    table:
+        name: `namespace.l4`
+        columns((class: class) (@: char L4))
+        rows:
+                 row  None
+    end: `namespace.l4`
+
+    row: `lm.test.namespace.l4.direct` joined  2
+
+    table:
+        name: `namespace.l4.root`
+        columns((class: class) (@: char L4))
+        rows:
+                 L4  `l4.root`
+                 L4  None
+    end: `namespace.l4.root`
+end: L4
+
+L4:
+    table:
+        name: `namespace.l4.root`
+        columns((class: class) (@: relation L4))
+        rows:
+                 registry  `l4.root`
+    end: `namespace.l4.root`
+
+    table:
+        name: `lm.test.namespace.l4.root.seed`
+        columns((class: class) (@: char L4))
+        rows:
+                 L4  `l4.root`
+    end: `lm.test.namespace.l4.root.seed`
+end: L4
+
+registry:
+    join: (`lm.test.namespace.l4.root.seed`) `namespace.l4.root`
+        columns((class: class) (@: char L4))
+        rows:
+    end: `namespace.l4.root`
+
+    table:
+        name: `namespace.l4.root`
+        columns((class: class) (@: char L4))
+        rows:
+                 L4  None
+    end: `namespace.l4.root`
+end: registry
+
+L4:
+    table:
+        name: include
+        columns((class: class) (@: char target))
+        rows:
+                 stddef  "<stddef.h>"
+    end: include
+
+    table:
+        name: `namespace.l4.atom`
+        columns((class: class) (@: char L4))
+        rows:
+                 loadHeaders  `l4.atom`
+                 loadHeaders  None
+    end: `namespace.l4.atom`
+end: L4
+
+L4: loadHeaders
+
+L4:
+    table:
+        name: `namespace.l4.atom`
+        columns((class: class) (@: relation L4))
+        rows:
+                 loadHeaders  `l4.atom`
+    end: `namespace.l4.atom`
+end: L4
+
+L4: loadHeaders
+
+L4:
+    table:
+        name: `lm.test.namespace.l4.atom.seed`
+        columns((class: class) (@: char L4))
+        rows:
+                 loadHeaders  `l4.atom`
+    end: `lm.test.namespace.l4.atom.seed`
+
+    join: (`lm.test.namespace.l4.atom.seed`) `namespace.l4.atom`
+        columns((class: class) (@: char L4))
+        rows:
+    end: `namespace.l4.atom`
+
+    table:
+        name: `namespace.l4.atom`
+        columns((class: class) (@: char L4))
+        rows:
+                 loadHeaders  None
+    end: `namespace.l4.atom`
+end: L4
+
+L4: loadHeaders
+
+L4:
+    table:
+        name: `namespace.l4.payload`
+        columns((class: class) (@: char L4))
+        rows:
+                 L2  `l4.payload`
+                 L2  None
+    end: `namespace.l4.payload`
+
+    table:
+        name: `namespace.l4.payload`
+        columns((class: class) (@: relation L4))
+        rows:
+                 import  `l4.payload`
+    end: `namespace.l4.payload`
+
+    table:
+        name: unit
+        columns((class: class) (class: backend) (node: payload))
+        rows:
+                 lm_test_namespace_l4_payload_direct  c.static-unit
+                 L2:
+                     external:
+                         fn: lm_test_namespace_l4_payload_direct () int
+                             return: 31
+                         end: lm_test_namespace_l4_payload_direct
+                     end: external
+                 end: L2
+                 lm_test_namespace_l4_payload_fallback  c.static-unit
+                 import: "fixtures/namespace_l4_payload_import.lm2"
+    end: unit
+end: L4
+
+external:
+    fn: main () int
+        if: c.lm_test_namespace_l4_payload_direct() != 31
+            return: 1
+        if: c.lm_test_namespace_l4_payload_imported() != 32
+            return: 2
+        return: 0
+    end: main
+end: external

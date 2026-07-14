@@ -1972,6 +1972,11 @@ fn: lm_trans_namespace_registry_source_n2_key_typed_value (
         return: selected_value
 return: lm_trans_registry_source_n2_key_typed_value(namespace_, table_name, key_column_name, key_descriptor, value_column_name, facade_row)
 
+fn: lm_trans_l4_namespace_receiver_type_value (const: (LmP0Text: key); const: @(char namespace_table)) const: @: char
+    if: key = 0 || namespace_table = 0
+        return: 0
+return: lm_trans_namespace_registry_source_n2_typed_value(0, key, namespace_table, "class", "class", "L4", "char")
+
 fn: lm_trans_namespace_registry_source_n2_typed_table_link_checked (
     const: (LmTransNamespace: namespace_)
     const: (LmP0Text: key)
