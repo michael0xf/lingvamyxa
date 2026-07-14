@@ -2391,6 +2391,7 @@ return: 0
 
 sub: lm_trans_registry_destroy ()
     lm_trans_expr_binding_view_cache_reset()
+    lm_trans_callable_projection_cache_reset()
     if: lm_trans_registry = 0
         return
     lm_trans_l4_payload_pointer_bindings_destroy()
@@ -2800,9 +2801,13 @@ sub: lm_trans_registry_l4_load_context_delete (LmTransL4LoadContext: context)
 end: lm_trans_registry_l4_load_context_delete
 
 sub: lm_trans_registry_l4_load_context_rollback (LmTransL4LoadContext: context)
+    size_t: row_count
     if: context = 0 || context\source_table = 0 || context\source_table\materialized_rows = 0
         return
+    row_count: context\source_table\materialized_rows\count
     lm_own_ptr_stack_truncate(context\source_table\materialized_rows, context\source_table_initial_row_count)
+    if: row_count != context\source_table_initial_row_count
+        lm_registry_view_note_mutation(lm_trans_registry\view)
 end: lm_trans_registry_l4_load_context_rollback
 
 fn: lm_trans_registry_load_table_frame_common (const: (LmP0Frame: frame); int: allow_node_cells; const: @(char error_context)) int
@@ -3384,6 +3389,7 @@ fn: lm_trans_registry_l4_push_table_row (@: void context; const: (LmP0Text: tabl
     if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
         lm_table_row_delete_any(row)
         return: -1
+    lm_registry_view_note_mutation(lm_trans_registry\view)
     lm_own_ptr_stack_truncate(load_context\projection_facts, 0U)
     load_context\materialized_direct_rows: load_context\materialized_direct_rows + 1U
 return: 0
@@ -3485,6 +3491,7 @@ fn: lm_trans_registry_l4_join_table (@: void context; const: (LmP0Text: source_t
         return: -1
     if: lm_trans_registry_join_table(source_table, target_table) != 0
         lm_own_ptr_stack_truncate(load_context\source_table\materialized_rows, target_row_count)
+        lm_registry_view_note_mutation(lm_trans_registry\view)
         lm_trans_l4_text_view_delete(@ source_value)
         lm_trans_l4_text_view_delete(@ target_value)
         return: -1

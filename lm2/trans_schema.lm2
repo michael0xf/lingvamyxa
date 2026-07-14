@@ -10,6 +10,7 @@ L4:
                  LmTransRegistryCloneFrame   c.struct
                  LmTransExprSegment          c.struct
                  LmTransCallLowering         c.struct
+                 LmTransCallableProjectionCacheEntry c.struct
                  LmTransCallableValue        c.struct
                  LmTransExprAtomLowering     c.struct
                  LmTransExprLoweredRange     c.struct
@@ -237,6 +238,7 @@ L4:
                  LmTransExprSegment             c.struct
                  LmTransStructReturnFieldValue  c.struct
                  LmTransCallLowering            c.struct
+                 LmTransCallableProjectionCacheEntry c.struct
                  LmTransCallableValue           c.struct
                  LmTransExprLoweredRange        c.named-struct
                  LmTransExprStack               c.named-struct
@@ -292,6 +294,7 @@ L4:
                  LmTransExprSegment             1
                  LmTransStructReturnFieldValue  1
                  LmTransCallLowering            1
+                 LmTransCallableProjectionCacheEntry 1
                  LmTransCallableValue           1
                  LmTransExprLoweredRange        1
                  LmTransExprStack               1
@@ -558,6 +561,14 @@ L4:
                  signature  LmTransSymbol          1                       0                                1
                  is_closure int                    2                       0                                0
     end: LmTransCallLowering
+
+    table:
+        name: LmTransCallableProjectionCacheEntry
+        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+        rows:
+                 class_name  char  0  1  0
+                 projection  char  1  1  1
+    end: LmTransCallableProjectionCacheEntry
 
     table:
         name: LmTransCallableValue

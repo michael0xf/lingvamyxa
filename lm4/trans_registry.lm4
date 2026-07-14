@@ -885,6 +885,7 @@ table:
              LmTransBinding           1
              LmTransCallLowering      1
              LmTransCallLoweringHandler 1
+             LmTransCallableProjectionCacheEntry 1
              LmTransCapture           1
              LmTransCDeclarator       1
              LmTransCleanup           1

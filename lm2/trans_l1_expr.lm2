@@ -1005,19 +1005,28 @@ fn: lm_trans_registry_is_function_pointer_type_name (const: (LmTransNamespace: n
     return: lm_trans_namespace_registry_source_relation_has_key(namespace_, name, "functionPointerType", "row")
 end: lm_trans_registry_is_function_pointer_type_name
 
+fn: lm_trans_callable_partial_payload (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "callable.partial", "class", "class", "value", "serial")
+
+fn: lm_trans_callable_capture_payload (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "callable.capture", "class", "class", "value", "serial")
+
+fn: lm_trans_callable_projection_payload (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "callable.projection", "class", "class", "value", "projection")
+
 fn: lm_trans_callable_descriptor_allows_partial (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.partial", "class", "class", "value", "serial") != 0
+    return: lm_trans_callable_partial_payload(namespace_, name) != 0
 end: lm_trans_callable_descriptor_allows_partial
 
 fn: lm_trans_callable_descriptor_allows_capture (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
-    return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.capture", "class", "class", "value", "serial") != 0
+    return: lm_trans_callable_capture_payload(namespace_, name) != 0
 end: lm_trans_callable_descriptor_allows_capture
 
 fn: lm_trans_callable_descriptor_uses_closure_struct (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
     const: @: char projection
     if: name = 0
         return: 0
-    projection: lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.projection", "class", "class", "value", "projection")
+    projection: lm_trans_callable_projection_payload(namespace_, name)
     return: projection != 0 && c.strcmp(projection, "c.closure-struct") = 0
 end: lm_trans_callable_descriptor_uses_closure_struct
 

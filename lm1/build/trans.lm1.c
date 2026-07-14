@@ -38,6 +38,7 @@ typedef struct LmTransRegistryFact LmTransRegistryFact;
 typedef struct LmTransRegistryCloneFrame LmTransRegistryCloneFrame;
 typedef struct LmTransExprSegment LmTransExprSegment;
 typedef struct LmTransCallLowering LmTransCallLowering;
+typedef struct LmTransCallableProjectionCacheEntry LmTransCallableProjectionCacheEntry;
 typedef struct LmTransCallableValue LmTransCallableValue;
 typedef struct LmTransExprAtomLowering LmTransExprAtomLowering;
 typedef struct LmTransExprLoweredRange LmTransExprLoweredRange;
@@ -249,6 +250,7 @@ struct LmRegistryView {
     size_t local_fact_count;
     LmOwnPtrStack * source_tables;
     LmOwnPtrStack * class_names;
+    size_t mutation_generation;
 };
 struct LmTransIdentifierRelation {
     const char *name;
@@ -396,6 +398,10 @@ struct LmTransCallLowering {
     LmP0Text * name;
     const LmTransSymbol * signature;
     int is_closure;
+};
+struct LmTransCallableProjectionCacheEntry {
+    char *class_name;
+    const char *projection;
 };
 struct LmTransCallableValue {
     const LmTransSymbol * symbol;
@@ -2383,6 +2389,7 @@ static int lm_table_descriptor_append_materialized_row_copy(LmTableDescriptor *t
 static int lm_table_descriptor_schema_same(const LmTableDescriptor *left, const LmTableDescriptor *right);
 static int lm_table_descriptor_join_schema_compatible(const LmTableDescriptor *source, const LmTableDescriptor *target);
 static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent);
+static void lm_registry_view_note_mutation(LmRegistryView *view);
 static void lm_registry_view_delete(LmRegistryView *view);
 static int lm_registry_view_class_has_slice(const LmRegistryView *view, const char *name, size_t name_length);
 static int lm_registry_view_class_has(const LmRegistryView *view, const char *name);
@@ -2403,7 +2410,7 @@ static int lm_registry_view_source_path_has_rows(const LmRegistryView *view, con
 static int lm_registry_view_source_path_has_key_slice(const LmRegistryView *view, const char *path, size_t path_length, const char *key, size_t key_length, int *out_covered);
 static const LmTableCell * lm_registry_view_source_path_cell_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, const LmTableDescriptor **out_descriptor, size_t *out_column_index, const LmTableCell **out_key_cell, int *out_covered);
 static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, int *out_covered);
-static int lm_registry_view_append_materialized_rows(const LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length);
+static int lm_registry_view_append_materialized_rows(LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length);
 static size_t lm_registry_view_fact_count(const LmRegistryView *view);
 static const LmRegistryViewRow * lm_registry_view_fact_at(const LmRegistryView *view, size_t index);
 static int lm_registry_view_push_relation(LmRegistryView *view, const char *table, const char *key, const char *payload, const void *payload_node, const void *source);
@@ -2787,6 +2794,9 @@ static int lm_trans_array_param_declarator_from_node(const LmP0Node *node, LmTra
 static int lm_trans_array_param_default_fields(const LmP0Node *node, const LmP0Field **out_first);
 static int lm_trans_expr_segment_set_default(LmTransExprSegment *segment, const LmTransSymbol *callee, size_t index);
 static int lm_trans_registry_is_function_pointer_type_name(const LmTransNamespace *namespace_, const LmP0Text *name);
+static const char * lm_trans_callable_partial_payload(const LmTransNamespace *namespace_, const LmP0Text *name);
+static const char * lm_trans_callable_capture_payload(const LmTransNamespace *namespace_, const LmP0Text *name);
+static const char * lm_trans_callable_projection_payload(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_allows_partial(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_allows_capture(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_uses_closure_struct(const LmTransNamespace *namespace_, const LmP0Text *name);
@@ -3679,6 +3689,11 @@ static int lm_trans_trailer_single_atom(const LmP0Trailer *trailer, LmP0Text *ou
 static const char * lm_trans_symbol_class_name(const char *class_name);
 static int lm_trans_symbol_class_is(const char *class_name, const char *expected);
 static int lm_trans_symbol_is(const LmTransSymbol *symbol, const char *class_name);
+static void lm_trans_callable_projection_cache_entry_delete_any(void *object);
+static void lm_trans_callable_projection_cache_reset(void);
+static int lm_trans_callable_projection_cache_sync(void);
+static LmTransCallableProjectionCacheEntry * lm_trans_callable_projection_cache_entry_new(const char *class_name, const char *projection);
+static const char * lm_trans_callable_projection_from_class(const char *class_name);
 static const char * lm_trans_symbol_callable_projection(const LmTransSymbol *symbol);
 static int lm_trans_callable_projection_class_is(const char *class_name, const char *projection);
 static int lm_trans_callable_projection_is_executable(const char *projection);
@@ -3697,6 +3712,13 @@ static void lm_trans_symbol_destroy(LmTransSymbol *symbol);
 static void lm_trans_symbol_delete_any(void *object);
 static void lm_trans_free_any(void *object);
 
+static LmOwnPtrStack * lm_trans_callable_projection_cache;
+
+static const LmRegistryView * lm_trans_callable_projection_cache_view;
+
+static size_t lm_trans_callable_projection_cache_generation;
+
+static int lm_trans_callable_projection_cache_view_mode;
 #ifndef LM_UNUSED
 #define LM_UNUSED(value) ((void)(value))
 #endif
@@ -4231,6 +4253,12 @@ static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent) {
     return view;
 }
 
+static void lm_registry_view_note_mutation(LmRegistryView *view) {
+    if (view != 0) {
+        view->mutation_generation = view -> mutation_generation + 1U;
+    }
+}
+
 static void lm_registry_view_delete(LmRegistryView *view) {
     if (view == 0) {
         return;
@@ -4302,6 +4330,7 @@ static int lm_registry_view_class_add(LmRegistryView *view, const char *name) {
         lm_own_delete(copy, 0);
         return 1;
     }
+    lm_registry_view_note_mutation(view);
     return 0;
 }
 
@@ -4430,7 +4459,11 @@ static int lm_registry_view_take_local_source_table(LmRegistryView *view, LmTabl
     if (view == 0 || view -> source_tables == 0 || descriptor == 0 || descriptor -> name == 0) {
         return 1;
     }
-    return lm_own_ptr_stack_push(view -> source_tables, descriptor);
+    if (lm_own_ptr_stack_push(view -> source_tables, descriptor) != 0) {
+        return 1;
+    }
+    lm_registry_view_note_mutation(view);
+    return 0;
 }
 
 static size_t lm_registry_view_source_table_count(const LmRegistryView *view) {
@@ -4733,7 +4766,7 @@ static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryVi
     return key_cell -> value;
 }
 
-static int lm_registry_view_append_materialized_rows(const LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length) {
+static int lm_registry_view_append_materialized_rows(LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length) {
     const LmTableDescriptor * source;
     const LmTableRow * row;
     size_t source_count;
@@ -4766,6 +4799,9 @@ static int lm_registry_view_append_materialized_rows(const LmRegistryView *view,
             }
         }
         source_index = source_index + 1U;
+    }
+    if (lm_table_descriptor_materialized_row_count(target) != original_row_count) {
+        lm_registry_view_note_mutation(view);
     }
     return 0;
 }
@@ -4847,6 +4883,7 @@ static int lm_registry_view_push_relation(LmRegistryView *view, const char *tabl
         return 1;
     }
     view->local_fact_count = view -> local_fact_count + 1U;
+    lm_registry_view_note_mutation(view);
     return 0;
 }
 
@@ -11098,12 +11135,24 @@ static int lm_trans_registry_is_function_pointer_type_name(const LmTransNamespac
     return lm_trans_namespace_registry_source_relation_has_key(namespace_, name, "functionPointerType", "row");
 }
 
+static const char * lm_trans_callable_partial_payload(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "callable.partial", "class", "class", "value", "serial");
+}
+
+static const char * lm_trans_callable_capture_payload(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "callable.capture", "class", "class", "value", "serial");
+}
+
+static const char * lm_trans_callable_projection_payload(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "callable.projection", "class", "class", "value", "projection");
+}
+
 static int lm_trans_callable_descriptor_allows_partial(const LmTransNamespace *namespace_, const LmP0Text *name) {
-    return lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.partial", "class", "class", "value", "serial") != 0;
+    return lm_trans_callable_partial_payload(namespace_, name) != 0;
 }
 
 static int lm_trans_callable_descriptor_allows_capture(const LmTransNamespace *namespace_, const LmP0Text *name) {
-    return lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.capture", "class", "class", "value", "serial") != 0;
+    return lm_trans_callable_capture_payload(namespace_, name) != 0;
 }
 
 static int lm_trans_callable_descriptor_uses_closure_struct(const LmTransNamespace *namespace_, const LmP0Text *name) {
@@ -11111,7 +11160,7 @@ static int lm_trans_callable_descriptor_uses_closure_struct(const LmTransNamespa
     if (name == 0) {
         return 0;
     }
-    projection = lm_trans_namespace_registry_source_n2_typed_value(namespace_, name, "callable.projection", "class", "class", "value", "projection");
+    projection = lm_trans_callable_projection_payload(namespace_, name);
     return projection != 0 && strcmp(projection, "c.closure-struct") == 0;
 }
 
@@ -33921,6 +33970,7 @@ static int lm_trans_registry_init(void) {
 
 static void lm_trans_registry_destroy(void) {
     lm_trans_expr_binding_view_cache_reset();
+    lm_trans_callable_projection_cache_reset();
     if (lm_trans_registry == 0) {
         return;
     }
@@ -34356,10 +34406,15 @@ static void lm_trans_registry_l4_load_context_delete(LmTransL4LoadContext *conte
 }
 
 static void lm_trans_registry_l4_load_context_rollback(LmTransL4LoadContext *context) {
+    size_t row_count;
     if (context == 0 || context -> source_table == 0 || context -> source_table -> materialized_rows == 0) {
         return;
     }
+    row_count = context -> source_table -> materialized_rows -> count;
     lm_own_ptr_stack_truncate(context -> source_table -> materialized_rows, context -> source_table_initial_row_count);
+    if (row_count != context -> source_table_initial_row_count) {
+        lm_registry_view_note_mutation(lm_trans_registry -> view);
+    }
 }
 
 static int lm_trans_registry_load_table_frame_common(const LmP0Frame *frame, int allow_node_cells, const char *error_context) {
@@ -35019,6 +35074,7 @@ static int lm_trans_registry_l4_push_table_row(void *context, const LmP0Text *ta
         lm_table_row_delete_any(row);
         return -1;
     }
+    lm_registry_view_note_mutation(lm_trans_registry -> view);
     lm_own_ptr_stack_truncate(load_context -> projection_facts, 0U);
     load_context->materialized_direct_rows = load_context -> materialized_direct_rows + 1U;
     return 0;
@@ -35138,6 +35194,7 @@ static int lm_trans_registry_l4_join_table(void *context, const LmP0Text *source
     }
     if (lm_trans_registry_join_table(source_table, target_table) != 0) {
         lm_own_ptr_stack_truncate(load_context -> source_table -> materialized_rows, target_row_count);
+        lm_registry_view_note_mutation(lm_trans_registry -> view);
         lm_trans_l4_text_view_delete(&source_value);
         lm_trans_l4_text_view_delete(&target_value);
         return -1;
@@ -36382,11 +36439,117 @@ static int lm_trans_symbol_is(const LmTransSymbol *symbol, const char *class_nam
     return symbol != 0 && lm_trans_symbol_class_is(symbol -> class_name, class_name) != 0;
 }
 
+static void lm_trans_callable_projection_cache_entry_delete_any(void *object) {
+    LmTransCallableProjectionCacheEntry * entry;
+    entry = ((LmTransCallableProjectionCacheEntry *)object);
+    if (entry == 0) {
+        return;
+    }
+    lm_own_delete(entry -> class_name, 0);
+    entry->class_name = 0;
+    entry->projection = 0;
+    lm_own_delete(entry, 0);
+}
+
+static void lm_trans_callable_projection_cache_reset(void) {
+    lm_trans_ptr_stack_delete(&lm_trans_callable_projection_cache);
+    lm_trans_callable_projection_cache_view = 0;
+    lm_trans_callable_projection_cache_generation = 0U;
+    lm_trans_callable_projection_cache_view_mode = 0;
+}
+
+static int lm_trans_callable_projection_cache_sync(void) {
+    const LmRegistryView * view;
+    const LmRegistryView * current;
+    size_t generation;
+    view = 0;
+    if (lm_trans_registry != 0) {
+        view = lm_trans_registry -> view;
+    }
+    current = view;
+    generation = 0U;
+    while (current != 0) {
+        generation = generation + current -> mutation_generation;
+        current = current -> parent;
+    }
+    if (lm_trans_callable_projection_cache != 0 && lm_trans_callable_projection_cache_view == view && lm_trans_callable_projection_cache_generation == generation && lm_trans_callable_projection_cache_view_mode == lm_trans_registry -> view_mode) {
+        return 1;
+    }
+    lm_trans_callable_projection_cache_reset();
+    if (view == 0) {
+        return 0;
+    }
+    lm_trans_callable_projection_cache = lm_trans_ptr_stack_new(lm_trans_callable_projection_cache_entry_delete_any);
+    if (lm_trans_callable_projection_cache == 0) {
+        return 0;
+    }
+    lm_trans_callable_projection_cache_view = view;
+    lm_trans_callable_projection_cache_generation = generation;
+    lm_trans_callable_projection_cache_view_mode = lm_trans_registry -> view_mode;
+    return 1;
+}
+
+static LmTransCallableProjectionCacheEntry * lm_trans_callable_projection_cache_entry_new(const char *class_name, const char *projection) {
+    LmTransCallableProjectionCacheEntry * entry;
+    if (class_name == 0) {
+        return 0;
+    }
+    entry = lm_own_new_zero(sizeof(entry[0]));
+    if (entry == 0) {
+        return 0;
+    }
+    entry->class_name = lm_table_descriptor_copy_cstr(class_name);
+    if (entry -> class_name == 0) {
+        lm_own_delete(entry, 0);
+        return 0;
+    }
+    entry->projection = projection;
+    return entry;
+}
+
+static const char * lm_trans_callable_projection_from_class(const char *class_name) {
+    const LmTransCallableProjectionCacheEntry * entry;
+    LmTransCallableProjectionCacheEntry * new_entry;
+    LmP0Text * class_text;
+    const char *projection;
+    size_t index;
+    int cache_ready;
+    if (class_name == 0) {
+        return 0;
+    }
+    cache_ready = lm_trans_callable_projection_cache_sync();
+    if (cache_ready != 0) {
+        index = 0U;
+        while (index < lm_trans_callable_projection_cache -> count) {
+            entry = ((const LmTransCallableProjectionCacheEntry *)lm_own_ptr_stack_at(lm_trans_callable_projection_cache, index));
+            if (entry != 0 && entry -> class_name != 0 && strcmp(entry -> class_name, class_name) == 0) {
+                return entry -> projection;
+            }
+            index = index + 1U;
+        }
+    }
+    class_text = lm_trans_text_from_cstr(class_name);
+    if (class_text == 0) {
+        return 0;
+    }
+    projection = lm_trans_callable_projection_payload(0, class_text);
+    lm_trans_text_ref_destroy(&class_text);
+    if (cache_ready != 0) {
+        new_entry = lm_trans_callable_projection_cache_entry_new(class_name, projection);
+        if (new_entry != 0) {
+            if (lm_own_ptr_stack_push(lm_trans_callable_projection_cache, new_entry) != 0) {
+                lm_trans_callable_projection_cache_entry_delete_any(new_entry);
+            }
+        }
+    }
+    return projection;
+}
+
 static const char * lm_trans_symbol_callable_projection(const LmTransSymbol *symbol) {
     if (symbol == 0 || symbol -> class_name == 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(symbol -> class_name), "callable.projection", "class", "class", "value", "projection");
+    return lm_trans_callable_projection_from_class(symbol -> class_name);
 }
 
 static int lm_trans_callable_projection_class_is(const char *class_name, const char *projection) {
@@ -36394,7 +36557,7 @@ static int lm_trans_callable_projection_class_is(const char *class_name, const c
     if (class_name == 0 || projection == 0) {
         return 0;
     }
-    actual = lm_trans_namespace_registry_source_n2_typed_value(0, lm_trans_text_from_cstr(class_name), "callable.projection", "class", "class", "value", "projection");
+    actual = lm_trans_callable_projection_from_class(class_name);
     return actual != 0 && strcmp(actual, projection) == 0;
 }
 

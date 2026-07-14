@@ -234,6 +234,7 @@ L4:
                  local_fact_count  size_t
                  source_tables     LmOwnPtrStack
                  class_names       LmOwnPtrStack
+                 mutation_generation size_t
     end: `LmRegistryView.field.class`
 
     table:
@@ -246,6 +247,7 @@ L4:
                  local_fact_count  3
                  source_tables     4
                  class_names       5
+                 mutation_generation 6
     end: `LmRegistryView.field.index`
 
     table:
@@ -702,6 +704,11 @@ fn: lm_registry_view_new (const: (LmRegistryView: parent)) LmRegistryView
         return: 0
 return: view
 
+sub: lm_registry_view_note_mutation (LmRegistryView: view)
+    if: view != 0
+        view\mutation_generation: view\mutation_generation + 1U
+end: lm_registry_view_note_mutation
+
 sub: lm_registry_view_delete (LmRegistryView: view)
     if: view = 0
         return
@@ -760,6 +767,7 @@ fn: lm_registry_view_class_add (LmRegistryView: view; const: @(char name)) int
     if: lm_own_ptr_stack_push(view\class_names, copy) != 0
         lm_own_delete(copy, 0)
         return: 1
+    lm_registry_view_note_mutation(view)
 return: 0
 
 fn: lm_registry_view_class_count (const: (LmRegistryView: view)) size_t
@@ -867,7 +875,10 @@ return: lm_registry_view_find_source_table_slice(view\parent, table, table_lengt
 fn: lm_registry_view_take_local_source_table (LmRegistryView: view; LmTableDescriptor: descriptor) int
     if: view = 0 || view\source_tables = 0 || descriptor = 0 || descriptor\name = 0
         return: 1
-return: lm_own_ptr_stack_push(view\source_tables, descriptor)
+    if: lm_own_ptr_stack_push(view\source_tables, descriptor) != 0
+        return: 1
+    lm_registry_view_note_mutation(view)
+return: 0
 
 fn: lm_registry_view_source_table_count (const: (LmRegistryView: view)) size_t
     size_t: count
@@ -1167,7 +1178,7 @@ fn: lm_registry_view_source_path_key_at_slice (
         return: 0
 return: key_cell\value
 
-fn: lm_registry_view_append_materialized_rows (const: (LmRegistryView: view); LmTableDescriptor: target; const: @(char source_table); size_t: source_table_length) int
+fn: lm_registry_view_append_materialized_rows (LmRegistryView: view; LmTableDescriptor: target; const: @(char source_table); size_t: source_table_length) int
     const: LmTableDescriptor: source
     const: LmTableRow: row
     size_t: source_count
@@ -1197,6 +1208,8 @@ fn: lm_registry_view_append_materialized_rows (const: (LmRegistryView: view); Lm
                 index: index + 1U
         ---
         source_index: source_index + 1U
+    if: lm_table_descriptor_materialized_row_count(target) != original_row_count
+        lm_registry_view_note_mutation(view)
 return: 0
 
 fn: lm_registry_view_fact_count (const: (LmRegistryView: view)) size_t
@@ -1270,6 +1283,7 @@ fn: lm_registry_view_push_relation (
         lm_registry_view_row_delete_any(popped)
         return: 1
     view\local_fact_count: view\local_fact_count + 1U
+    lm_registry_view_note_mutation(view)
 return: 0
 
 fn: lm_registry_view_lookup_local_exact_slice (const: (LmRegistryView: view); const: @(char key); size_t: key_length; const: @(char table); size_t: table_length) const: LmRegistryViewRow

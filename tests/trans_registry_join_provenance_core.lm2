@@ -124,6 +124,15 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: materialize_argument_origin
     LmTransRegistryFact: materialize_argument_middle
     LmTransRegistryFact: materialize_argument_target
+    LmTransRegistryFact: callable_partial_origin
+    LmTransRegistryFact: callable_partial_middle
+    LmTransRegistryFact: callable_partial_target
+    LmTransRegistryFact: callable_capture_origin
+    LmTransRegistryFact: callable_capture_middle
+    LmTransRegistryFact: callable_capture_target
+    LmTransRegistryFact: callable_projection_origin
+    LmTransRegistryFact: callable_projection_middle
+    LmTransRegistryFact: callable_projection_target
     LmTransRegistryFact: node_origin
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
@@ -183,6 +192,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: descriptor
     LmTableDescriptor: call_lowering_descriptor
     LmTableDescriptor: materialize_argument_descriptor
+    LmTableDescriptor: callable_capability_descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
@@ -198,6 +208,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: row
     LmTableRow: call_lowering_row
     LmTableRow: materialize_argument_row
+    LmTableRow: callable_capability_row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
@@ -219,6 +230,10 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: materialize_argument_key_cell
     LmTableCell: materialize_argument_marker_cell
     LmTableCell: materialize_argument_binding_cell
+    LmTableCell: callable_capability_key_cell
+    LmTableCell: callable_partial_cell
+    LmTableCell: callable_capture_cell
+    LmTableCell: callable_projection_cell
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
@@ -285,6 +300,10 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_value
     const: @: char resolved_call_lowering_binding
     const: @: char resolved_materialize_argument_binding
+    const: @: char resolved_callable_partial
+    const: @: char resolved_callable_capture
+    const: @: char resolved_callable_projection
+    const: @: char resolved_callable_projection_from_class
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
@@ -301,6 +320,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_expr_meta_wrong
     const: @: char resolved_expr_spelling_binding
     LmP0Text: target_key_text
+    LmP0Text: callable_capability_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
     size_t: layout_source_row_index
@@ -449,6 +469,89 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_materialize_argument_binding: lm_trans_materialize_argument_binding_from_class("array.value")
         resolved_materialize_argument: lm_trans_expr_binding_new()
         if: resolved_materialize_argument = 0 || resolved_materialize_argument_binding != materialize_argument_binding_cell\value || resolved_materialize_argument_binding = materialize_argument_middle\payload || resolved_materialize_argument_binding = materialize_argument_target\payload || lm_trans_binding_resolve(resolved_materialize_argument_binding, resolved_materialize_argument) = 0 || resolved_materialize_argument\expr_segment_materializer != @lm_trans_materialize_array_value
+            status: 1
+    ---
+
+    callable_partial_origin: 0
+    callable_partial_middle: 0
+    callable_partial_target: 0
+    callable_capture_origin: 0
+    callable_capture_middle: 0
+    callable_capture_target: 0
+    callable_projection_origin: 0
+    callable_projection_middle: 0
+    callable_projection_target: 0
+    callable_capability_descriptor: 0
+    callable_capability_row: 0
+    callable_capability_key_cell: 0
+    callable_partial_cell: 0
+    callable_capture_cell: 0
+    callable_projection_cell: 0
+    callable_capability_key_text: 0
+    if: status = 0
+        callable_partial_origin: lm_test_registry_push_value_fact("lm.test.callable.partial.origin", "CallableWide", "1", 0)
+        callable_partial_middle: lm_test_registry_push_value_fact("lm.test.callable.partial.middle", "CallableWide", "1", callable_partial_origin)
+        callable_partial_target: lm_test_registry_push_value_fact("callable.partial", "CallableWide", "1", callable_partial_middle)
+        callable_capture_origin: lm_test_registry_push_value_fact("lm.test.callable.capture.origin", "CallableWide", "1", 0)
+        callable_capture_middle: lm_test_registry_push_value_fact("lm.test.callable.capture.middle", "CallableWide", "1", callable_capture_origin)
+        callable_capture_target: lm_test_registry_push_value_fact("callable.capture", "CallableWide", "1", callable_capture_middle)
+        callable_projection_origin: lm_test_registry_push_value_fact("lm.test.callable.projection.origin", "CallableWide", "c.closure-struct", 0)
+        callable_projection_middle: lm_test_registry_push_value_fact("lm.test.callable.projection.middle", "CallableWide", "c.closure-struct", callable_projection_origin)
+        callable_projection_target: lm_test_registry_push_value_fact("callable.projection", "CallableWide", "c.closure-struct", callable_projection_middle)
+        if: callable_partial_origin = 0 || callable_partial_middle = 0 || callable_partial_target = 0 || callable_capture_origin = 0 || callable_capture_middle = 0 || callable_capture_target = 0 || callable_projection_origin = 0 || callable_projection_middle = 0 || callable_projection_target = 0 || callable_partial_middle\source != callable_partial_origin || callable_partial_target\source != callable_partial_middle || callable_capture_middle\source != callable_capture_origin || callable_capture_target\source != callable_capture_middle || callable_projection_middle\source != callable_projection_origin || callable_projection_target\source != callable_projection_middle
+            status: 1
+    ---
+
+    if: status = 0
+        resolved_callable_projection_from_class: lm_trans_callable_projection_from_class("CallableWide")
+        if: resolved_callable_projection_from_class != callable_projection_target\payload
+            status: 1
+    ---
+
+    if: status = 0
+        callable_capability_descriptor: lm_table_descriptor_new_empty_slice("callable", 8U)
+        if: callable_capability_descriptor = 0 || lm_table_descriptor_add_column(callable_capability_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(callable_capability_descriptor, "partial", "serial") != 0 || lm_table_descriptor_add_column(callable_capability_descriptor, "capture", "serial") != 0 || lm_table_descriptor_add_column(callable_capability_descriptor, "projection", "projection") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        callable_capability_row: lm_table_row_new(0)
+        callable_capability_key_cell: lm_table_cell_new_cstr("CallableWide", "CallableWide", 0, 0, 0)
+        callable_partial_cell: lm_table_cell_new_cstr("1", "1", 0, callable_partial_origin, 0)
+        callable_capture_cell: lm_table_cell_new_cstr("1", "1", 0, callable_capture_origin, 0)
+        callable_projection_cell: lm_table_cell_new_cstr("c.closure-struct", "c.closure-struct", 0, callable_projection_origin, 0)
+        if: callable_capability_row = 0 || callable_capability_key_cell = 0 || callable_partial_cell = 0 || callable_capture_cell = 0 || callable_projection_cell = 0 || lm_table_row_take_cell(callable_capability_row, callable_capability_key_cell) != 0 || lm_table_row_take_cell(callable_capability_row, callable_partial_cell) != 0 || lm_table_row_take_cell(callable_capability_row, callable_capture_cell) != 0 || lm_table_row_take_cell(callable_capability_row, callable_projection_cell) != 0 || lm_table_descriptor_take_materialized_row(callable_capability_descriptor, callable_capability_row) != 0
+            status: 1
+        else:
+            callable_capability_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, callable_capability_descriptor) != 0
+                status: 1
+            else:
+                callable_capability_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        callable_capability_key_text: lm_trans_text_from_cstr("CallableWide")
+        resolved_callable_partial: lm_trans_callable_partial_payload(0, callable_capability_key_text)
+        resolved_callable_capture: lm_trans_callable_capture_payload(0, callable_capability_key_text)
+        resolved_callable_projection: lm_trans_callable_projection_payload(0, callable_capability_key_text)
+        resolved_callable_projection_from_class: lm_trans_callable_projection_from_class("CallableWide")
+        if: callable_capability_key_text = 0 || resolved_callable_partial != callable_partial_cell\value || resolved_callable_partial = callable_partial_middle\payload || resolved_callable_partial = callable_partial_target\payload || resolved_callable_capture != callable_capture_cell\value || resolved_callable_capture = callable_capture_middle\payload || resolved_callable_capture = callable_capture_target\payload || resolved_callable_projection != callable_projection_cell\value || resolved_callable_projection = callable_projection_middle\payload || resolved_callable_projection = callable_projection_target\payload || resolved_callable_projection_from_class != callable_projection_cell\value || lm_trans_callable_descriptor_allows_partial(0, callable_capability_key_text) = 0 || lm_trans_callable_descriptor_allows_capture(0, callable_capability_key_text) = 0 || lm_trans_callable_descriptor_uses_closure_struct(0, callable_capability_key_text) = 0 || lm_trans_callable_projection_class_is("CallableWide", "c.closure-struct") = 0
+            status: 1
+    ---
+
+    if: status = 0
+        lm_trans_registry\view_mode: 0
+        resolved_callable_projection_from_class: lm_trans_callable_projection_from_class("CallableWide")
+        if: resolved_callable_projection_from_class != callable_projection_target\payload
+            status: 1
+    ---
+
+    if: status = 0
+        lm_trans_registry\view_mode: 2
+        resolved_callable_projection_from_class: lm_trans_callable_projection_from_class("CallableWide")
+        if: resolved_callable_projection_from_class != callable_projection_cell\value
             status: 1
     ---
 
@@ -1116,6 +1219,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)
+    lm_trans_text_ref_destroy(@ callable_capability_key_text)
+    lm_table_row_delete_any(callable_capability_row)
+    lm_table_descriptor_delete_any(callable_capability_descriptor)
     lm_own_delete(resolved_materialize_argument, 0)
     lm_table_row_delete_any(materialize_argument_row)
     lm_table_descriptor_delete_any(materialize_argument_descriptor)
