@@ -252,6 +252,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: receiver_unwrap_origin
     LmTransRegistryFact: receiver_unwrap_middle
     LmTransRegistryFact: receiver_unwrap_target
+    LmTransRegistryFact: receiver_positional_argument_origin
+    LmTransRegistryFact: receiver_positional_argument_middle
+    LmTransRegistryFact: receiver_positional_argument_target
+    LmTransRegistryFact: receiver_positional_index_origin
+    LmTransRegistryFact: receiver_positional_index_middle
+    LmTransRegistryFact: receiver_positional_index_target
     LmTransRegistryFact: receiver_type_row
     LmTransRegistryFact: receiver_type_class_row
     LmTransRegistryFact: expr_meta_older
@@ -289,6 +295,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
+    LmTableDescriptor: receiver_positional_descriptor
     LmTableDescriptor: expr_meta_descriptor
     LmTableDescriptor: expr_meta_wrong_descriptor
     LmTableDescriptor: expr_spelling_descriptor
@@ -325,6 +332,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
+    LmTableRow: receiver_positional_row
     LmTableRow: expr_meta_row
     LmTableRow: expr_meta_wrong_row
     LmTableRow: expr_spelling_row
@@ -429,6 +437,11 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: receiver_formal_param_key_cell
     LmTableCell: receiver_formal_param_marker_cell
     LmTableCell: receiver_unwrap_cell
+    LmTableCell: receiver_positional_key_cell
+    LmTableCell: receiver_positional_marker_cell
+    LmTableCell: receiver_positional_argument_cell
+    LmTableCell: receiver_positional_extra_cell
+    LmTableCell: receiver_positional_index_cell
     LmTableCell: expr_meta_key_cell
     LmTableCell: expr_meta_binding_cell
     LmTableCell: expr_meta_marker_cell
@@ -465,6 +478,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransBinding: resolved_materialize_argument
     LmTransCallLoweringHandler: resolved_call_lowering_handler
     LmP0Frame: receiver_family_frame
+    LmP0Frame: receiver_positional_frame
     const: LmTableCell: resolved_cell
     const: LmTableCell: resolved_node_cell
     const: LmTableCell: resolved_condition_node_cell
@@ -530,6 +544,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_expr_meta_default
     const: @: char resolved_expr_meta_wrong
     const: @: char resolved_expr_spelling_binding
+    const: @: char resolved_positional_argument_payload
+    const: @: char resolved_positional_index_payload
     LmP0Text: target_key_text
     LmP0Text: callable_capability_key_text
     LmP0Text: callable_partial_form_key_text
@@ -553,10 +569,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: class_semantic_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
+    LmP0Text: receiver_positional_key_text
     LmP0Text: layout_owner_text
     LmP0Text: layout_field_text
     size_t: condition_row_count
     size_t: resolved_unwrap_index
+    size_t: resolved_positional_index
     int: condition_present
     int: condition_view_rows
     int: status
@@ -1849,6 +1867,71 @@ fn: lm_test_registry_join_provenance_core () int
         ---
     ---
 
+    receiver_positional_argument_origin: 0
+    receiver_positional_argument_middle: 0
+    receiver_positional_argument_target: 0
+    receiver_positional_index_origin: 0
+    receiver_positional_index_middle: 0
+    receiver_positional_index_target: 0
+    receiver_positional_descriptor: 0
+    receiver_positional_row: 0
+    receiver_positional_key_cell: 0
+    receiver_positional_marker_cell: 0
+    receiver_positional_argument_cell: 0
+    receiver_positional_extra_cell: 0
+    receiver_positional_index_cell: 0
+    receiver_positional_key_text: 0
+    receiver_positional_frame: 0
+    if: status = 0
+        receiver_positional_argument_origin: lm_test_registry_push_value_fact("lm.test.receiver.positional.argument.origin", "ReceiverPositionalWitness", "name", 0)
+        receiver_positional_argument_middle: lm_test_registry_push_value_fact("lm.test.receiver.positional.argument.middle", "ReceiverPositionalWitness", "name", receiver_positional_argument_origin)
+        receiver_positional_argument_target: lm_test_registry_push_value_fact("receiver.positional-name.argument", "ReceiverPositionalWitness", "name", receiver_positional_argument_middle)
+        receiver_positional_index_origin: lm_test_registry_push_value_fact("lm.test.receiver.positional.index.origin", "ReceiverPositionalWitness", "2", 0)
+        receiver_positional_index_middle: lm_test_registry_push_value_fact("lm.test.receiver.positional.index.middle", "ReceiverPositionalWitness", "2", receiver_positional_index_origin)
+        receiver_positional_index_target: lm_test_registry_push_value_fact("receiver.positional-name.index", "ReceiverPositionalWitness", "2", receiver_positional_index_middle)
+        if: receiver_positional_argument_origin = 0 || receiver_positional_argument_middle = 0 || receiver_positional_argument_target = 0 || receiver_positional_index_origin = 0 || receiver_positional_index_middle = 0 || receiver_positional_index_target = 0 || receiver_positional_argument_middle\source != receiver_positional_argument_origin || receiver_positional_argument_target\source != receiver_positional_argument_middle || receiver_positional_index_middle\source != receiver_positional_index_origin || receiver_positional_index_target\source != receiver_positional_index_middle
+            status: 1
+    ---
+
+    if: status = 0
+        receiver_positional_descriptor: lm_table_descriptor_new_empty_slice("receiver.positional-name", 24U)
+        if: receiver_positional_descriptor = 0 || lm_table_descriptor_add_column(receiver_positional_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(receiver_positional_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(receiver_positional_descriptor, "argument", "class") != 0 || lm_table_descriptor_add_column(receiver_positional_descriptor, "extra", "int") != 0 || lm_table_descriptor_add_column(receiver_positional_descriptor, "index", "size_t") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        receiver_positional_row: lm_table_row_new(0)
+        receiver_positional_key_cell: lm_table_cell_new_cstr("ReceiverPositionalWitness", "ReceiverPositionalWitness", 0, 0, 0)
+        receiver_positional_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        receiver_positional_argument_cell: lm_table_cell_new_cstr("name", "name", 0, receiver_positional_argument_origin, 0)
+        receiver_positional_extra_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        receiver_positional_index_cell: lm_table_cell_new_cstr("2", "2", 0, receiver_positional_index_origin, 0)
+        if: receiver_positional_row = 0 || receiver_positional_key_cell = 0 || receiver_positional_marker_cell = 0 || receiver_positional_argument_cell = 0 || receiver_positional_extra_cell = 0 || receiver_positional_index_cell = 0 || lm_table_row_take_cell(receiver_positional_row, receiver_positional_key_cell) != 0 || lm_table_row_take_cell(receiver_positional_row, receiver_positional_marker_cell) != 0 || lm_table_row_take_cell(receiver_positional_row, receiver_positional_argument_cell) != 0 || lm_table_row_take_cell(receiver_positional_row, receiver_positional_extra_cell) != 0 || lm_table_row_take_cell(receiver_positional_row, receiver_positional_index_cell) != 0 || lm_table_descriptor_take_materialized_row(receiver_positional_descriptor, receiver_positional_row) != 0
+            status: 1
+        else:
+            receiver_positional_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, receiver_positional_descriptor) != 0
+                status: 1
+            else:
+                receiver_positional_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        receiver_positional_key_text: lm_trans_text_from_cstr("ReceiverPositionalWitness")
+        receiver_positional_frame: lm_trans_registry_new_frame()
+        if: receiver_positional_key_text = 0 || receiver_positional_frame = 0
+            status: 1
+        else:
+            receiver_positional_frame\head[0]: receiver_positional_key_text[0]
+            resolved_positional_argument_payload: lm_trans_positional_name_argument_payload(receiver_positional_key_text)
+            resolved_positional_index_payload: lm_trans_positional_name_index_payload(receiver_positional_key_text)
+            resolved_positional_index: 0U
+            if: resolved_positional_argument_payload != receiver_positional_argument_cell\value || resolved_positional_argument_payload = receiver_positional_argument_middle\payload || resolved_positional_argument_payload = receiver_positional_argument_target\payload || resolved_positional_index_payload != receiver_positional_index_cell\value || resolved_positional_index_payload = receiver_positional_index_middle\payload || resolved_positional_index_payload = receiver_positional_index_target\payload || lm_trans_frame_positional_name_index(receiver_positional_frame, @ resolved_positional_index) = 0 || resolved_positional_index != 2U
+                status: 1
+        ---
+    ---
+
     expr_meta_older: 0
     expr_meta_origin: 0
     expr_meta_middle: 0
@@ -2395,8 +2478,11 @@ fn: lm_test_registry_join_provenance_core () int
     lm_trans_text_ref_destroy(@ target_key_text)
     lm_trans_text_ref_destroy(@ receiver_key_text)
     lm_trans_text_ref_destroy(@ receiver_family_key_text)
+    lm_trans_text_ref_destroy(@ receiver_positional_key_text)
     lm_own_delete(receiver_head_binding, 0)
     lm_own_delete(receiver_expr_binding, 0)
+    lm_table_row_delete_any(receiver_positional_row)
+    lm_table_descriptor_delete_any(receiver_positional_descriptor)
     lm_table_row_delete_any(receiver_formal_param_row)
     lm_table_descriptor_delete_any(receiver_formal_param_descriptor)
     lm_table_row_delete_any(receiver_family_row)

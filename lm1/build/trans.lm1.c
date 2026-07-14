@@ -3014,6 +3014,8 @@ static int lm_trans_emit_env_type(FILE *file, const LmTransFunctionHeader *funct
 static const LmP0Field * lm_trans_control_body_start(const LmP0Frame *frame);
 static int lm_trans_emit_control_condition(FILE *file, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_parse_size_payload(const char *payload, size_t *out_value);
+static const char * lm_trans_positional_name_index_payload(const LmP0Text *receiver_key);
+static const char * lm_trans_positional_name_argument_payload(const LmP0Text *receiver_key);
 static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *out_index);
 static const char * lm_trans_formal_param_unwrap_index_payload(const LmP0Text *receiver_key);
 static int lm_trans_frame_formal_param_unwrap_index(const LmP0Frame *frame, size_t *out_index);
@@ -16817,23 +16819,18 @@ static int lm_trans_parse_size_payload(const char *payload, size_t *out_value) {
     return 1;
 }
 
+static const char * lm_trans_positional_name_index_payload(const LmP0Text *receiver_key) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, receiver_key, "receiver.positional-name.index", "class", "class", "index", "size_t");
+}
+
+static const char * lm_trans_positional_name_argument_payload(const LmP0Text *receiver_key) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, receiver_key, "receiver.positional-name.argument", "class", "class", "argument", "class");
+}
+
 static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *out_index) {
     const char *index_payload;
-    const LmTableDescriptor * source_table;
-    const LmTableRow * source_row;
-    const LmTableColumnDescriptor * source_key_column;
-    const LmTableColumnDescriptor * source_argument_column;
-    const LmTableColumnDescriptor * source_index_column;
-    const LmTableCell * source_argument_cell;
-    const LmTableCell * source_index_cell;
+    const char *argument_payload;
     LmP0Text * receiver_key;
-    size_t facade_index;
-    size_t source_index;
-    int facade_found;
-    int source_covered;
-    int source_found;
-    int source_same;
-    int source_usable;
     if (frame == 0 || out_index == 0) {
         return 0;
     }
@@ -16848,87 +16845,29 @@ static int lm_trans_frame_positional_name_index(const LmP0Frame *frame, size_t *
             return lm_return_0;
         }
     }
-    facade_index = 0U;
-    facade_found = 0;
-    index_payload = lm_trans_registry_lookup(receiver_key, "receiver.positional-name.index");
+    index_payload = lm_trans_positional_name_index_payload(receiver_key);
     if (index_payload != 0) {
-        if (lm_trans_parse_size_payload(index_payload, &facade_index) == 0) {
+        if (lm_trans_parse_size_payload(index_payload, out_index) == 0) {
             fprintf(stderr, "trans registry error: receiver.positional-name.index for \"%.*s\" must be a non-negative integer\n", (((int)receiver_key -> length)), receiver_key -> data);
             exit(2);
         }
-        facade_found = 1;
-    }
-    else {
-        if (lm_trans_registry_has(receiver_key, "receiver.positional-name.argument")) {
-            facade_index = 0U;
-            facade_found = 1;
-        }
-    }
-    if (lm_trans_registry_view_parity_enabled() == 0) {
-        if (facade_found != 0) {
-            out_index[0] = facade_index;
-        }
         {
-            int lm_return_1 = facade_found;
+            int lm_return_1 = 1;
             lm_trans_text_ref_destroy(&receiver_key);
             return lm_return_1;
         }
     }
-    source_covered = 0;
-    source_table = 0;
-    source_row = lm_trans_registry_source_table_lookup_row(receiver_key, "receiver.positional-name", &source_table, &source_covered);
-    source_found = 0;
-    source_index = 0U;
-    source_usable = source_row == 0;
-    if (source_row != 0) {
-        source_usable = lm_table_descriptor_column_count(source_table) == 3U && lm_table_row_cell_count(source_row) == 3U;
-        if (source_usable != 0) {
-            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
-            source_argument_column = lm_table_descriptor_column_at(source_table, 1U);
-            source_index_column = lm_table_descriptor_column_at(source_table, 2U);
-            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_argument_column != 0 && source_argument_column -> name != 0 && strcmp(source_argument_column -> name, "argument") == 0 && source_index_column != 0 && source_index_column -> name != 0 && strcmp(source_index_column -> name, "index") == 0;
-        }
-        if (source_usable != 0) {
-            source_argument_cell = lm_table_row_cell_at(source_row, 1U);
-            source_index_cell = lm_table_row_cell_at(source_row, 2U);
-            if (source_index_cell != 0 && source_index_cell -> value != 0) {
-                if (lm_trans_parse_size_payload(source_index_cell -> value, &source_index) != 0) {
-                    source_found = 1;
-                }
-                else {
-                    source_usable = 0;
-                }
-            }
-            else {
-                if (source_argument_cell != 0 && source_argument_cell -> value != 0) {
-                    source_index = 0U;
-                    source_found = 1;
-                }
-            }
-        }
-    }
-    if (source_covered != 0 && source_usable != 0 && source_found != 0 && facade_found == 0) {
-        lm_trans_registry_view_parity_fail("source positional-name row", "receiver.positional-name");
-    }
-    source_same = source_found == facade_found;
-    if (source_same != 0 && source_found != 0) {
-        source_same = source_index == facade_index;
-    }
-    if (lm_trans_registry_view_is_selected() != 0 && source_covered != 0 && source_usable != 0 && source_same != 0) {
-        if (source_found != 0) {
-            out_index[0] = source_index;
-        }
+    argument_payload = lm_trans_positional_name_argument_payload(receiver_key);
+    if (argument_payload != 0) {
+        out_index[0] = 0U;
         {
-            int lm_return_2 = source_found;
+            int lm_return_2 = 1;
             lm_trans_text_ref_destroy(&receiver_key);
             return lm_return_2;
         }
     }
-    if (facade_found != 0) {
-        out_index[0] = facade_index;
-    }
     {
-        int lm_return_3 = facade_found;
+        int lm_return_3 = 0;
         lm_trans_text_ref_destroy(&receiver_key);
         return lm_return_3;
     }
