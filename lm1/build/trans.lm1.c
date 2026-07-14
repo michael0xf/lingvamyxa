@@ -8581,7 +8581,7 @@ static int lm_trans_class_is_reference_base(const LmP0Text *name) {
     if (class_kind != 0 && strcmp(class_kind, "opaqueReference") == 0) {
         return 1;
     }
-    semantic = lm_trans_registry_lookup(name, "class.semantic");
+    semantic = lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.semantic", "class", "class", "value", "char");
     if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
         return 1;
     }
@@ -29771,7 +29771,7 @@ static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace *
         result = lm_trans_namespace_registry_lookup(namespace_, class_text, "class.reference-base") != 0;
     }
     if (result == 0 && namespace_ != 0) {
-        semantic = lm_trans_namespace_registry_lookup(namespace_, class_text, "class.semantic");
+        semantic = lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_text, "class.semantic", "class", "class", "value", "char");
         if (semantic != 0 && strcmp(semantic, "opaqueHandle") == 0) {
             result = 1;
         }

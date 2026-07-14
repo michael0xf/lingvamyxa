@@ -1,0 +1,71 @@
+L4:
+    table:
+        name: `class.semantic`
+        columns((class: class) (@: char value))
+        rows:
+                 int  opaqueHandle
+                 int  integer
+                 int  None
+    end: `class.semantic`
+
+    table:
+        name: `class.semantic`
+        columns((class: class) (class: value))
+        rows:
+                 short  opaqueHandle
+    end: `class.semantic`
+
+    table:
+        name: `lm.test.class.semantic.seed`
+        columns((class: class) (@: char value))
+        rows:
+                 long  opaqueHandle
+    end: `lm.test.class.semantic.seed`
+
+    join: (`lm.test.class.semantic.seed`) `class.semantic`
+        columns((class: class) (@: char value))
+        rows:
+    end: `class.semantic`
+
+    table:
+        name: `class.semantic`
+        columns((class: class) (@: char value))
+        rows:
+                 long  None
+    end: `class.semantic`
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmTestClassSemantic  c.struct
+    end: `layout.backend`
+
+    table:
+        name: LmTestClassSemantic
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 direct    int    0
+                 fallback  short  1
+                 joined    long   2
+    end: LmTestClassSemantic
+end: L4
+
+layout
+
+L1:
+===
+static int lm_test_class_semantic_source_rows(void) {
+    short fallback_value = 8;
+    long joined_value = 9;
+    LmTestClassSemantic value = { 7, &fallback_value, &joined_value };
+
+    return value.direct != 7 || *value.fallback != 8 || *value.joined != 9;
+}
+===
+
+external:
+    fn: main () int
+        return: c.lm_test_class_semantic_source_rows()
+    end: main
+end: external
