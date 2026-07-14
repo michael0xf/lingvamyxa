@@ -1,0 +1,62 @@
+L4:
+    table:
+        name: `lm.test.os.join-order.seed`
+        columns((class: class) (node: body) (int: marker))
+        rows:
+                 win
+                 L2:
+                     fn: lm_test_os_join_order_value () int
+                         return: 81
+                     end: lm_test_os_join_order_value
+                 end: L2
+                 1
+                 mac
+                 L2:
+                     fn: lm_test_os_join_order_value () int
+                         return: 82
+                     end: lm_test_os_join_order_value
+                 end: L2
+                 2
+                 unix
+                 L2:
+                     fn: lm_test_os_join_order_value () int
+                         return: 83
+                     end: lm_test_os_join_order_value
+                 end: L2
+                 3
+                 default
+                 L2:
+                     fn: lm_test_os_join_order_value () int
+                         return: 84
+                     end: lm_test_os_join_order_value
+                 end: L2
+                 4
+    end: `lm.test.os.join-order.seed`
+
+    join: (`lm.test.os.join-order.seed`) `lm.test.os.join-order.middle`
+        columns((class: class) (node: body) (int: marker))
+        rows:
+    end: `lm.test.os.join-order.middle`
+
+    join: (`lm.test.os.join-order.middle`) os
+        columns((class: class) (node: body) (int: marker))
+        rows:
+    end: os
+end: L4
+
+os
+
+L1:
+===
+int main(void) {
+#if defined(_WIN32)
+    return lm_test_os_join_order_value() != 81;
+#elif defined(__APPLE__)
+    return lm_test_os_join_order_value() != 82;
+#elif defined(__unix__)
+    return lm_test_os_join_order_value() != 83;
+#else
+    return lm_test_os_join_order_value() != 84;
+#endif
+}
+===

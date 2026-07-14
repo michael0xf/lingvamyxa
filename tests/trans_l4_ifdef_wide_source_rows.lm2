@@ -1,0 +1,78 @@
+L4:
+    table:
+        name: ifdef
+        columns((class: class) (node: body) (int: marker))
+        rows:
+                 _WIN32
+                 L2:
+                     fn: lm_test_ifdef_wide_source_value () int
+                         return: 71
+                     end: lm_test_ifdef_wide_source_value
+                 end: L2
+                 1
+    end: ifdef
+
+    table:
+        name: ifdef
+        columns((class: class) (int: marker) (node: body))
+        rows:
+                 __APPLE__ 2
+                 L2:
+                     fn: lm_test_ifdef_wide_source_value () int
+                         return: 72
+                     end: lm_test_ifdef_wide_source_value
+                 end: L2
+    end: ifdef
+
+    table:
+        name: `ifdef.body`
+        columns((class: class) (node: body))
+        rows:
+                 __unix__
+                 L2:
+                     fn: lm_test_ifdef_wide_source_value () int
+                         return: 73
+                     end: lm_test_ifdef_wide_source_value
+                 end: L2
+    end: `ifdef.body`
+
+    table:
+        name: `lm.test.ifdef.wide.default.seed`
+        columns((class: class) (node: body) (int: marker))
+        rows:
+                 default
+                 L2:
+                     fn: lm_test_ifdef_wide_source_value () int
+                         return: 74
+                     end: lm_test_ifdef_wide_source_value
+                 end: L2
+                 3
+    end: `lm.test.ifdef.wide.default.seed`
+
+    join: (`lm.test.ifdef.wide.default.seed`) `lm.test.ifdef.wide.default.middle`
+        columns((class: class) (node: body) (int: marker))
+        rows:
+    end: `lm.test.ifdef.wide.default.middle`
+
+    join: (`lm.test.ifdef.wide.default.middle`) ifdef
+        columns((class: class) (node: body) (int: marker))
+        rows:
+    end: ifdef
+end: L4
+
+ifdef
+
+L1:
+===
+int main(void) {
+#if defined(_WIN32)
+    return lm_test_ifdef_wide_source_value() != 71;
+#elif defined(__APPLE__)
+    return lm_test_ifdef_wide_source_value() != 72;
+#elif defined(__unix__)
+    return lm_test_ifdef_wide_source_value() != 73;
+#else
+    return lm_test_ifdef_wide_source_value() != 74;
+#endif
+}
+===

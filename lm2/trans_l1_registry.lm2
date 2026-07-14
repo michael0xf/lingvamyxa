@@ -522,15 +522,11 @@ return: 0
 fn: lm_trans_registry_join_table (const: (LmP0Text: source_table); const: (LmP0Text: target_table)) int
     LmP0Text: source_name
     LmP0Text: target_name
-    LmTransIdentifierTable: identifiers
-    LmTransIdentifierCard: card
-    LmTransIdentifierRelation: relation
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
     LmTransRegistryFact: row
-    const: @: char relation_suffix
-    size_t: bucket_index
-    size_t: relation_bucket_index
-    size_t: symbol_index
-    size_t: symbol_count
+    size_t: fact_index
+    size_t: fact_count
     size_t: copied
     int: status
 
@@ -548,33 +544,23 @@ fn: lm_trans_registry_join_table (const: (LmP0Text: source_table); const: (LmP0T
         lm_trans_text_ref_destroy(@ target_name)
         return: 1
 
-    identifiers: c.lm_trans_registry->identifiers
+    view: c.lm_trans_registry->view
+    if: view = 0
+        lm_trans_text_ref_destroy(@ source_name)
+        lm_trans_text_ref_destroy(@ target_name)
+        return: 1
+
     copied: 0U
     status: 0
-    if: identifiers != 0 && identifiers\buckets != 0
-        bucket_index: 0U
-        while: status = 0 && bucket_index < identifiers\bucket_count
-            card: identifiers\buckets[bucket_index]
-            while: status = 0 && card != 0
-                if: card\relation_buckets != 0
-                    relation_bucket_index: 0U
-                    while: status = 0 && relation_bucket_index < card\relation_bucket_count
-                        relation: card\relation_buckets[relation_bucket_index]
-                        while: status = 0 && relation != 0
-                            relation_suffix: 0
-                            if: relation\symbols != 0 && lm_trans_registry_join_relation_matches(relation\name, source_name, @ relation_suffix) != 0
-                                symbol_count: relation\symbols\count
-                                symbol_index: 0U
-                                while: status = 0 && symbol_index < symbol_count
-                                    row: lm_own_ptr_stack_at(relation\symbols, symbol_index)
-                                    status: lm_trans_registry_join_copy_row(row, source_name, target_name, @ copied)
-                                    symbol_index: symbol_index + 1U
-                            ---
-                            relation: relation\next
-                        relation_bucket_index: relation_bucket_index + 1U
-                ---
-                card: card\next
-            bucket_index: bucket_index + 1U
+    fact_count: lm_registry_view_fact_count(view)
+    fact_index: 0U
+    while: status = 0 && fact_index < fact_count
+        view_row: lm_registry_view_fact_at(view, fact_index)
+        row: 0
+        if: view_row != 0
+            row: cast: (LmTransRegistryFact) view_row\source
+        status: lm_trans_registry_join_copy_row(row, source_name, target_name, @ copied)
+        fact_index: fact_index + 1U
 
     ---
     lm_trans_text_ref_destroy(@ source_name)
@@ -1224,7 +1210,7 @@ fn: lm_trans_registry_source_n2_typed_value (
         return: source_cell\value
 return: facade_row\payload
 
-fn: lm_trans_registry_source_path_typed_cell (
+fn: lm_trans_registry_source_path_typed_cell_kind (
     const: (LmTransNamespace: namespace_)
     const: @(char source_path)
     const: @(char key_column_name)
@@ -1232,6 +1218,8 @@ fn: lm_trans_registry_source_path_typed_cell (
     const: @(char value_descriptor)
     const: @(char n2_value_column_name)
     const: (LmTransRegistryFact: facade_row)
+    int: expect_node
+    const: @(LmTableCell out_key_cell)
 ) const: LmTableCell
     const: LmTableDescriptor: source_table
     const: LmTableColumnDescriptor: source_key_column
@@ -1239,7 +1227,6 @@ fn: lm_trans_registry_source_path_typed_cell (
     const: LmTableRow: source_row
     const: LmTableCell: source_key_cell
     const: LmTableCell: source_value_cell
-    const: LmTransRegistryFact: source_value_fact
     const: @: char source_descriptor
     size_t: source_path_length
     size_t: descriptor_index
@@ -1249,7 +1236,13 @@ fn: lm_trans_registry_source_path_typed_cell (
     int: source_usable
     int: column_usable
 
-    if: facade_row = 0 || facade_row\key = 0 || facade_row\payload = 0 || source_path = 0 || key_column_name = 0 || key_descriptor = 0 || value_descriptor = 0 || lm_trans_registry_view_parity_enabled() = 0
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: facade_row = 0 || facade_row\key = 0 || source_path = 0 || key_column_name = 0 || key_descriptor = 0 || value_descriptor = 0 || lm_trans_registry_view_parity_enabled() = 0
+        return: 0
+    if: expect_node != 0 && (facade_row\payload != 0 || facade_row\payload_node = 0)
+        return: 0
+    if: expect_node = 0 && facade_row\payload = 0
         return: 0
     if: namespace_ != 0 && namespace_\registry_identifiers != 0 && namespace_\registry_identifiers != c.lm_trans_registry->identifiers
         return: 0
@@ -1285,11 +1278,14 @@ fn: lm_trans_registry_source_path_typed_cell (
                         source_row: lm_table_descriptor_materialized_row_at(source_table, row_index)
                         source_key_cell: lm_table_row_cell_at(source_row, 0U)
                         source_value_cell: lm_table_row_cell_at(source_row, column_index)
-                        source_value_fact: 0
-                        if: source_value_cell != 0
-                            source_value_fact: cast: (const: LmTransRegistryFact) source_value_cell\source
-                        column_usable: source_value_fact != 0 && source_value_fact\key != 0 && source_value_fact\payload != 0 && source_key_cell != 0 && source_key_cell\value != 0 && c.strcmp(source_key_cell\value, source_value_fact\key) = 0 && source_value_cell != 0 && source_value_cell\explicit_none = 0 && lm_trans_registry_fact_has_source(facade_row, source_value_fact) != 0 && source_value_cell\value != 0 && source_value_cell\node = 0 && c.strcmp(source_value_cell\value, source_value_fact\payload) = 0
+                        column_usable: source_key_cell != 0 && source_key_cell\value != 0 && c.strcmp(source_key_cell\value, facade_row\key) = 0
+                        if: column_usable != 0 && expect_node != 0
+                            column_usable: lm_trans_registry_node_cell_is_facade_witness(source_value_cell, facade_row) != 0
+                        if: column_usable != 0 && expect_node = 0
+                            column_usable: lm_trans_registry_text_cell_is_facade_witness(source_value_cell, facade_row) != 0
                         if: column_usable != 0
+                            if: out_key_cell != 0
+                                out_key_cell[0]: source_key_cell
                             return: source_value_cell
                     ---
                 ---
@@ -1297,6 +1293,29 @@ fn: lm_trans_registry_source_path_typed_cell (
         ---
     ---
 return: 0
+
+fn: lm_trans_registry_source_path_typed_cell (
+    const: (LmTransNamespace: namespace_)
+    const: @(char source_path)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_descriptor)
+    const: @(char n2_value_column_name)
+    const: (LmTransRegistryFact: facade_row)
+) const: LmTableCell
+return: lm_trans_registry_source_path_typed_cell_kind(namespace_, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, 0, 0)
+
+fn: lm_trans_registry_source_path_typed_node_cell (
+    const: (LmTransNamespace: namespace_)
+    const: @(char source_path)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char node_descriptor)
+    const: @(char n2_node_column_name)
+    const: (LmTransRegistryFact: facade_row)
+    const: @(LmTableCell out_key_cell)
+) const: LmTableCell
+return: lm_trans_registry_source_path_typed_cell_kind(namespace_, source_path, key_column_name, key_descriptor, node_descriptor, n2_node_column_name, facade_row, 1, out_key_cell)
 
 fn: lm_trans_registry_source_path_typed_value (
     const: (LmTransNamespace: namespace_)

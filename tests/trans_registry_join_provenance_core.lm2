@@ -122,6 +122,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
     LmTransRegistryFact: node_unrelated
+    LmTransRegistryFact: condition_middle
+    LmTransRegistryFact: condition_target
+    LmTransRegistryFact: condition_unrelated
     LmTransRegistryFact: unit_payload_middle
     LmTransRegistryFact: unit_payload_target
     LmTransRegistryFact: unit_backend_origin
@@ -140,11 +143,15 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: layout_unrelated
     LmTableDescriptor: descriptor
     LmTableDescriptor: node_descriptor
+    LmTableDescriptor: condition_descriptor
+    LmTableDescriptor: condition_wrong_descriptor
     LmTableDescriptor: layout_descriptor
     LmTableDescriptor: unit_descriptor
     LmTableDescriptor: unit_wrong_descriptor
     LmTableRow: row
     LmTableRow: node_row
+    LmTableRow: condition_row
+    LmTableRow: condition_wrong_row
     LmTableRow: layout_row
     LmTableRow: unit_row
     LmTableRow: unit_wrong_row
@@ -153,6 +160,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: marker_cell
     LmTableCell: node_key_cell
     LmTableCell: node_value_cell
+    LmTableCell: condition_key_cell
+    LmTableCell: condition_node_cell
+    LmTableCell: condition_marker_cell
+    LmTableCell: condition_wrong_key_cell
+    LmTableCell: condition_wrong_node_cell
+    LmTableCell: condition_wrong_marker_cell
     LmTableCell: unit_key_cell
     LmTableCell: unit_backend_cell
     LmTableCell: unit_payload_cell
@@ -166,18 +179,29 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Node: unit_wrong_source_node
     const: LmTableCell: resolved_cell
     const: LmTableCell: resolved_node_cell
+    const: LmTableCell: resolved_condition_node_cell
+    const: LmTableCell: resolved_condition_key_cell
+    const: LmRegistryViewRow: condition_view_row
+    const: LmRegistryViewRow: condition_unrelated_view_row
     const: LmRegistryViewRow: layout_view_row
     const: LmOwnPtrStack: unit_backend_rows
     LmOwnPtrStack: unit_unrelated_backend_rows
     const: LmTableDescriptor: layout_source_table
     const: LmTableRow: resolved_layout_source_row
     const: LmP0Node: resolved_node
+    const: LmP0Node: resolved_condition_body
+    const: LmP0Node: resolved_condition_unrelated_body
     const: LmP0Node: resolved_unit_node
     const: LmP0Node: resolved_unit_wrong_node
     const: @: char resolved_value
+    const: @: char resolved_condition_name
+    const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
     size_t: layout_source_row_index
     size_t: unrelated_layout_source_row_index
+    size_t: condition_row_count
+    int: condition_present
+    int: condition_view_rows
     int: status
 
     lm_trans_registry_destroy()
@@ -293,6 +317,9 @@ fn: lm_test_registry_join_provenance_core () int
     node_middle: 0
     node_target: 0
     node_unrelated: 0
+    condition_middle: 0
+    condition_target: 0
+    condition_unrelated: 0
     unit_payload_middle: 0
     unit_payload_target: 0
     unit_backend_origin: 0
@@ -307,14 +334,24 @@ fn: lm_test_registry_join_provenance_core () int
     unit_wrong_backend_target: 0
     unit_descriptor: 0
     unit_wrong_descriptor: 0
+    condition_descriptor: 0
+    condition_wrong_descriptor: 0
     unit_row: 0
     unit_wrong_row: 0
+    condition_row: 0
+    condition_wrong_row: 0
     unit_key_cell: 0
     unit_backend_cell: 0
     unit_payload_cell: 0
     unit_wrong_key_cell: 0
     unit_wrong_backend_cell: 0
     unit_wrong_payload_cell: 0
+    condition_key_cell: 0
+    condition_node_cell: 0
+    condition_marker_cell: 0
+    condition_wrong_key_cell: 0
+    condition_wrong_node_cell: 0
+    condition_wrong_marker_cell: 0
     unit_wrong_source_node: 0
     unit_unrelated_backend_rows: 0
     if: status = 0
@@ -436,14 +473,99 @@ fn: lm_test_registry_join_provenance_core () int
     if: status = 0
         resolved_node_cell: lm_trans_registry_source_n2_cell(0, "target.node", "class", "body", node_target, 1, "class", "node", 0)
         resolved_node: lm_trans_registry_source_n2_node(0, "target.node", "class", "body", node_target)
-        if: resolved_node_cell != node_value_cell || resolved_node != node_origin\payload_node || resolved_node = node_middle\payload_node || resolved_node = node_target\payload_node || lm_trans_registry_source_n2_cell(0, "target.node", "class", "body", node_unrelated, 1, "class", "node", 0) != 0 || lm_trans_registry_source_n2_node(0, "target.node", "class", "body", node_unrelated) = node_origin\payload_node || lm_trans_registry_assert_source_table_materialization() != 0
+        resolved_condition_key_cell: 0
+        resolved_condition_node_cell: lm_trans_registry_source_path_typed_node_cell(0, "target.node", "class", "class", "node", "body", node_target, @ resolved_condition_key_cell)
+        if: resolved_node_cell != node_value_cell || resolved_condition_node_cell != node_value_cell || resolved_condition_key_cell != node_key_cell || resolved_node != node_origin\payload_node || resolved_node = node_middle\payload_node || resolved_node = node_target\payload_node || lm_trans_registry_source_n2_cell(0, "target.node", "class", "body", node_unrelated, 1, "class", "node", 0) != 0 || lm_trans_registry_source_path_typed_node_cell(0, "target.node", "class", "class", "node", "body", node_unrelated, @ resolved_condition_key_cell) != 0 || lm_trans_registry_source_n2_node(0, "target.node", "class", "body", node_unrelated) = node_origin\payload_node || lm_trans_registry_assert_source_table_materialization() != 0
             status: 1
+    ---
+
+    if: status = 0
+        condition_middle: lm_test_registry_join_fact("origin.node", "middle.os.body", "NodeWitness")
+        if: condition_middle != 0
+            condition_target: lm_test_registry_join_fact("middle.os.body", "os.body", "NodeWitness")
+        condition_view_row: lm_registry_view_lookup_exact(lm_trans_registry\view, "NodeWitness", "os.body")
+        if: condition_middle = 0 || condition_target = 0 || condition_middle\source != node_origin || condition_target\source != condition_middle || condition_view_row = 0 || condition_view_row\source != condition_target
+            status: 1
+    ---
+
+    if: status = 0
+        condition_descriptor: lm_table_descriptor_new_empty_slice("os", 2U)
+        if: condition_descriptor = 0 || lm_table_descriptor_add_column(condition_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(condition_descriptor, "body", "node") != 0 || lm_table_descriptor_add_column(condition_descriptor, "marker", "int") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        condition_row: lm_table_row_new(0)
+        condition_key_cell: lm_table_cell_new_cstr("NodeWitness", "NodeWitness", 0, 0, 0)
+        condition_node_cell: lm_table_cell_new_cstr("node-payload", 0, node_origin\payload_node, node_origin, 0)
+        condition_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: condition_row = 0 || condition_key_cell = 0 || condition_node_cell = 0 || condition_marker_cell = 0 || lm_table_row_take_cell(condition_row, condition_key_cell) != 0 || lm_table_row_take_cell(condition_row, condition_node_cell) != 0 || lm_table_row_take_cell(condition_row, condition_marker_cell) != 0 || lm_table_descriptor_take_materialized_row(condition_descriptor, condition_row) != 0
+            status: 1
+        else:
+            condition_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, condition_descriptor) != 0
+                status: 1
+            else:
+                condition_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        condition_wrong_descriptor: lm_table_descriptor_new_empty_slice("os", 2U)
+        if: condition_wrong_descriptor = 0 || lm_table_descriptor_add_column(condition_wrong_descriptor, "class", "char") != 0 || lm_table_descriptor_add_column(condition_wrong_descriptor, "body", "node") != 0 || lm_table_descriptor_add_column(condition_wrong_descriptor, "marker", "int") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        condition_wrong_row: lm_table_row_new(0)
+        condition_wrong_key_cell: lm_table_cell_new_cstr("NodeWitness", "NodeWitness", 0, 0, 0)
+        condition_wrong_node_cell: lm_table_cell_new_cstr("node-payload", 0, node_origin\payload_node, node_origin, 0)
+        condition_wrong_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: condition_wrong_row = 0 || condition_wrong_key_cell = 0 || condition_wrong_node_cell = 0 || condition_wrong_marker_cell = 0 || lm_table_row_take_cell(condition_wrong_row, condition_wrong_key_cell) != 0 || lm_table_row_take_cell(condition_wrong_row, condition_wrong_node_cell) != 0 || lm_table_row_take_cell(condition_wrong_row, condition_wrong_marker_cell) != 0 || lm_table_descriptor_take_materialized_row(condition_wrong_descriptor, condition_wrong_row) != 0
+            status: 1
+        else:
+            condition_wrong_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, condition_wrong_descriptor) != 0
+                status: 1
+            else:
+                condition_wrong_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_condition_key_cell: 0
+        resolved_condition_node_cell: lm_trans_registry_source_path_typed_node_cell(0, "os.body", "class", "class", "node", "body", condition_target, @ resolved_condition_key_cell)
+        condition_row_count: lm_trans_registry_condition_row_count(0, "os", @ condition_view_rows, @ condition_present)
+        resolved_condition_name: 0
+        resolved_condition_body: 0
+        if: lm_trans_registry_condition_row_at(0, "os", 0U, condition_view_rows, @ resolved_condition_name, @ resolved_condition_body) = 0
+            status: 1
+        else:
+            if: resolved_condition_node_cell != condition_node_cell || resolved_condition_node_cell = condition_wrong_node_cell || resolved_condition_key_cell != condition_key_cell || resolved_condition_key_cell = condition_wrong_key_cell || condition_row_count != 1U || condition_view_rows = 0 || condition_present = 0 || resolved_condition_name != condition_key_cell\value || resolved_condition_name = condition_view_row\key || resolved_condition_body != condition_node_cell\node || resolved_condition_body = condition_middle\payload_node || resolved_condition_body = condition_target\payload_node
+                status: 1
+        ---
+    ---
+
+    if: status = 0
+        condition_unrelated: lm_test_registry_push_node_fact("os.body", "NodeWitness", source_node, 0)
+        condition_unrelated_view_row: lm_registry_view_lookup_exact(lm_trans_registry\view, "NodeWitness", "os.body")
+        condition_row_count: lm_trans_registry_condition_row_count(0, "os", @ condition_view_rows, @ condition_present)
+        resolved_condition_unrelated_name: 0
+        resolved_condition_unrelated_body: 0
+        if: condition_unrelated = 0 || condition_unrelated_view_row = 0 || condition_unrelated_view_row\source != condition_unrelated || condition_row_count != 2U || lm_trans_registry_condition_row_at(0, "os", 1U, condition_view_rows, @ resolved_condition_unrelated_name, @ resolved_condition_unrelated_body) = 0
+            status: 1
+        else:
+            if: resolved_condition_unrelated_name != condition_unrelated_view_row\key || resolved_condition_unrelated_name = condition_key_cell\value || resolved_condition_unrelated_body != condition_unrelated\payload_node || resolved_condition_unrelated_body = condition_node_cell\node || lm_trans_registry_source_path_typed_node_cell(0, "os.body", "class", "class", "node", "body", condition_unrelated, @ resolved_condition_key_cell) != 0
+                status: 1
+        ---
     ---
 
     if: status = 0
         resolved_unit_node: lm_trans_unit_source_payload_node(0, "NodeWitness", unit_backend_rows, unit_payload_target)
         resolved_unit_wrong_node: lm_trans_unit_source_payload_node(0, "WrongSchemaWitness", unit_backend_rows, unit_wrong_payload_target)
-        if: resolved_unit_node != unit_payload_cell\node || resolved_unit_node = unit_payload_middle\payload_node || resolved_unit_node = unit_payload_target\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_backend_rows, node_unrelated) != node_unrelated\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_unrelated_backend_rows, unit_payload_target) != unit_payload_target\payload_node || resolved_unit_wrong_node != unit_wrong_payload_target\payload_node || resolved_unit_wrong_node = unit_wrong_payload_cell\node
+        resolved_condition_key_cell: 0
+        resolved_condition_node_cell: lm_trans_registry_source_path_typed_node_cell(0, "unit.payload", "class", "class", "node", "payload", unit_payload_target, @ resolved_condition_key_cell)
+        if: resolved_unit_node != unit_payload_cell\node || resolved_condition_node_cell != unit_payload_cell || resolved_condition_key_cell != unit_key_cell || resolved_unit_node = unit_payload_middle\payload_node || resolved_unit_node = unit_payload_target\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_backend_rows, node_unrelated) != node_unrelated\payload_node || lm_trans_unit_source_payload_node(0, "NodeWitness", unit_unrelated_backend_rows, unit_payload_target) != unit_payload_target\payload_node || resolved_unit_wrong_node != unit_wrong_payload_target\payload_node || resolved_unit_wrong_node = unit_wrong_payload_cell\node
             status: 1
     ---
 
@@ -452,6 +574,10 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(unit_wrong_descriptor)
     lm_table_row_delete_any(unit_row)
     lm_table_descriptor_delete_any(unit_descriptor)
+    lm_table_row_delete_any(condition_wrong_row)
+    lm_table_descriptor_delete_any(condition_wrong_descriptor)
+    lm_table_row_delete_any(condition_row)
+    lm_table_descriptor_delete_any(condition_descriptor)
     lm_table_row_delete_any(node_row)
     lm_table_descriptor_delete_any(node_descriptor)
     lm_table_row_delete_any(layout_row)
