@@ -26,6 +26,61 @@ L4:
                  LM_TEST_CONSTANT_BACKEND_OVERLAY  c.other
                  LM_TEST_CONSTANT_SPLIT            c.define
     end: `constant.backend`
+
+    table:
+        name: constant
+        columns((class: class) (class: backend) (int: value) (int: marker))
+        rows:
+                 LM_TEST_CONSTANT_WIDE_SOURCE           c.define  31    1
+                 LM_TEST_CONSTANT_WIDE_DUPLICATE        c.define  37    2
+                 LM_TEST_CONSTANT_WIDE_DUPLICATE        c.define  39    3
+                 LM_TEST_CONSTANT_WIDE_LATE_NONE        c.define  41    4
+                 LM_TEST_CONSTANT_WIDE_LATE_NONE        None      None  5
+                 LM_TEST_CONSTANT_WIDE_NONE             None      None  6
+                 LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  c.define  43    7
+    end: constant
+
+    table:
+        name: `constant.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  c.other
+                 LM_TEST_CONSTANT_WIDE_PHYSICAL         c.define
+    end: `constant.backend`
+
+    table:
+        name: `constant.value`
+        columns((class: class) (int: value))
+        rows:
+                 LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  47
+                 LM_TEST_CONSTANT_WIDE_PHYSICAL         53
+    end: `constant.value`
+
+    table:
+        name: `lm.test.constant.wide.seed`
+        columns((class: class) (class: backend) (int: value) (int: marker))
+        rows:
+                 LM_TEST_CONSTANT_WIDE_JOINED  c.define  59  8
+    end: `lm.test.constant.wide.seed`
+
+    join: (`lm.test.constant.wide.seed`) constant
+        columns((class: class) (class: backend) (int: value) (int: marker))
+        rows:
+    end: constant
+
+    table:
+        name: constant
+        columns((class: class) (@: char backend) (int: value) (int: marker))
+        rows:
+                 LM_TEST_CONSTANT_WIDE_BACKEND_SCHEMA_FALLBACK  "c.define"  61  9
+    end: constant
+
+    table:
+        name: constant
+        columns((class: class) (class: backend) (@: char value) (int: marker))
+        rows:
+                 LM_TEST_CONSTANT_WIDE_VALUE_SCHEMA_FALLBACK  c.define  "67"  10
+    end: constant
 end: L4
 
 constant
@@ -54,6 +109,42 @@ L1:
 
 #ifdef LM_TEST_CONSTANT_NONE
 #error "None source cells unexpectedly emitted a constant"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_SOURCE != 31
+#error "N-column constant source value differs"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_DUPLICATE != 39
+#error "latest duplicate N-column constant row was ignored"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_LATE_NONE != 41
+#error "N-column None cells unexpectedly removed an earlier constant"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY != 47
+#error "N-column any-c.define membership or split value overlay changed"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_PHYSICAL != 53
+#error "physical constant rows were not merged with N-column rows"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_JOINED != 59
+#error "joined N-column constant row was not emitted"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_BACKEND_SCHEMA_FALLBACK != 61
+#error "wrong-schema N-column backend did not fall back to the facade row"
+#endif
+
+#if LM_TEST_CONSTANT_WIDE_VALUE_SCHEMA_FALLBACK != 67
+#error "wrong-schema N-column value did not fall back to the facade row"
+#endif
+
+#ifdef LM_TEST_CONSTANT_WIDE_NONE
+#error "N-column None source cells unexpectedly emitted a constant"
 #endif
 ===
 
