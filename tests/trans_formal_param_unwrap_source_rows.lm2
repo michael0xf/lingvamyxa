@@ -1,0 +1,71 @@
+L4:
+    table:
+        name: `class.c.projection`
+        columns((class: class) (@: char spelling))
+        rows:
+                 LmTestDirectUnwrap    int
+                 LmTestFallbackUnwrap  int
+                 LmTestJoinedUnwrap    int
+    end: `class.c.projection`
+
+    table:
+        name: `receiver.formal-param.unwrap`
+        columns((class: class) (size_t: index))
+        rows:
+                 LmTestDirectUnwrap    0
+                 LmTestDirectUnwrap    1
+                 LmTestDirectUnwrap    None
+                 LmTestFallbackUnwrap  0
+    end: `receiver.formal-param.unwrap`
+
+    table:
+        name: `receiver.formal-param.unwrap`
+        columns((class: class) (int: index))
+        rows:
+                 LmTestFallbackUnwrap  1
+    end: `receiver.formal-param.unwrap`
+
+    table:
+        name: `lm.test.formal-param.unwrap.seed`
+        columns((class: class) (size_t: index))
+        rows:
+                 LmTestJoinedUnwrap  1
+    end: `lm.test.formal-param.unwrap.seed`
+
+    table:
+        name: `receiver.formal-param.unwrap`
+        columns((class: class) (size_t: index))
+        rows:
+                 LmTestJoinedUnwrap  0
+    end: `receiver.formal-param.unwrap`
+
+    join: (`lm.test.formal-param.unwrap.seed`) `receiver.formal-param.unwrap`
+        columns((class: class) (size_t: index))
+        rows:
+    end: `receiver.formal-param.unwrap`
+
+    table:
+        name: `receiver.formal-param.unwrap`
+        columns((class: class) (size_t: index))
+        rows:
+                 LmTestJoinedUnwrap  None
+    end: `receiver.formal-param.unwrap`
+end: L4
+
+fn: lm_test_direct_unwrap (LmTestDirectUnwrap: (int: stale) (int: value)) int
+    return: value + 1
+end: lm_test_direct_unwrap
+
+fn: lm_test_fallback_unwrap (LmTestFallbackUnwrap: (int: stale) (int: value)) int
+    return: value + 2
+end: lm_test_fallback_unwrap
+
+fn: lm_test_joined_unwrap (LmTestJoinedUnwrap: (int: stale) (int: value)) int
+    return: value + 3
+end: lm_test_joined_unwrap
+
+external:
+    fn: main () int
+        return: lm_test_direct_unwrap(10) != 11 || lm_test_fallback_unwrap(10) != 12 || lm_test_joined_unwrap(10) != 13
+    end: main
+end: external

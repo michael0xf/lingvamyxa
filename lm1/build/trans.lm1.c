@@ -15578,7 +15578,7 @@ static int lm_trans_frame_formal_param_unwrap_index(const LmP0Frame *frame, size
             return lm_return_0;
         }
     }
-    index_payload = lm_trans_registry_lookup(receiver_key, "receiver.formal-param.unwrap");
+    index_payload = lm_trans_namespace_registry_source_n2_typed_value(0, receiver_key, "receiver.formal-param.unwrap", "class", "class", "index", "size_t");
     if (index_payload == 0) {
         {
             int lm_return_1 = 0;
