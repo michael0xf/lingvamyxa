@@ -12888,7 +12888,7 @@ static int lm_trans_profile_validator_enabled(const LmTransNamespace *namespace_
     if (rule_text == 0) {
         return 0;
     }
-    binding = lm_trans_namespace_registry_lookup(namespace_, rule_text, "profile.validator");
+    binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, rule_text, "profile.validator", "class", "class", "binding", "char");
     enabled = binding != 0 && strcmp(binding, binding_name) == 0;
     lm_trans_text_ref_destroy(&rule_text);
     return enabled;
