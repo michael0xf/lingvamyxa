@@ -77,6 +77,17 @@ return: lm_registry_view_source_path_has_key_slice(view, path, c.strlen(path), k
 fn: lm_test_source_path_key_at (const: (LmRegistryView: view); const: @(char path); size_t: index; @: int out_covered) const: @: char
 return: lm_registry_view_source_path_key_at_slice(view, path, c.strlen(path), index, out_covered)
 
+fn: lm_test_source_path_cell_at (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: index
+    const: @(LmTableDescriptor out_descriptor)
+    @: size_t out_column_index
+    const: @(LmTableCell out_key_cell)
+    @: int out_covered
+) const: LmTableCell
+return: lm_registry_view_source_path_cell_at_slice(view, path, c.strlen(path), index, out_descriptor, out_column_index, out_key_cell, out_covered)
+
 external:
     fn: main () int
         LmRegistryView: view
@@ -100,7 +111,9 @@ external:
         const: LmTableRow: selected_row
         const: LmTableRow: joined_row
         const: LmTableCell: cell
+        const: LmTableCell: selected_key_cell
         const: LmTableColumnDescriptor: column
+        size_t: selected_column_index
         int: covered
         int: status
 
@@ -343,6 +356,21 @@ external:
             if: selected_row = 0 || selected_table != local_catalog_table || selected_row\local_sequence != 1U || cell = 0 || cell\value = 0 || c.strcmp(cell\value, "localDefault") != 0 || covered = 0
                 status: 1
             ---
+        if: status = 0
+            covered: 0
+            selected_table: 0
+            selected_column_index: 0U
+            selected_key_cell: 0
+            cell: lm_test_source_path_cell_at(local_view, "source.ncolumn.left.part", 3U, @ selected_table, @ selected_column_index, @ selected_key_cell, @ covered)
+            if: cell = 0 || cell\value = 0 || c.strcmp(cell\value, "localLeft") != 0 || selected_table != local_catalog_table || selected_column_index != 1U || selected_key_cell = 0 || selected_key_cell\value = 0 || c.strcmp(selected_key_cell\value, "duplicate") != 0 || covered = 0
+                status: 1
+            ---
+        if: status = 0
+            covered: 0
+            cell: lm_registry_view_source_path_cell_at_slice(local_view, "source.ncolumn.left.part", 24U, 4U, 0, 0, 0, @ covered)
+            if: cell = 0 || cell\value = 0 || c.strcmp(cell\value, "localDefault") != 0 || covered = 0
+                status: 1
+            ---
         lm_table_descriptor_delete_any(local_source)
         local_source: 0
         lm_registry_view_delete(local_view)
@@ -421,6 +449,41 @@ external:
             status: 1
         covered: 1
         if: status = 0 && (lm_test_source_path_key_at(view, "missing.path", 0U, @ covered) != 0 || covered != 0)
+            status: 1
+        covered: 0
+        selected_table: 0
+        selected_column_index: 0U
+        selected_key_cell: 0
+        cell: lm_test_source_path_cell_at(view, "source.ncolumn.left.part", 0U, @ selected_table, @ selected_column_index, @ selected_key_cell, @ covered)
+        if: status = 0 && (cell = 0 || cell\value = 0 || c.strcmp(cell\value, "left raw") != 0 || cell\node != 0 || selected_table = 0 || selected_table\name = 0 || c.strcmp(selected_table\name, "source.ncolumn") != 0 || selected_column_index != 1U || selected_key_cell = 0 || selected_key_cell\value = 0 || c.strcmp(selected_key_cell\value, "ordered") != 0 || covered = 0)
+            status: 1
+        covered: 0
+        selected_table: 0
+        selected_column_index: 0U
+        selected_key_cell: 0
+        cell: lm_test_source_path_cell_at(view, "source.ncolumn.body", 0U, @ selected_table, @ selected_column_index, @ selected_key_cell, @ covered)
+        if: status = 0 && (cell = 0 || cell\value != 0 || cell\node != selected_table || selected_table = 0 || selected_column_index != 3U || selected_key_cell = 0 || selected_key_cell\value = 0 || c.strcmp(selected_key_cell\value, "ordered") != 0 || covered = 0)
+            status: 1
+        covered: 0
+        selected_table: 0
+        selected_column_index: 99U
+        selected_key_cell: cell
+        cell: lm_test_source_path_cell_at(view, "duplicate.columns.value", 0U, @ selected_table, @ selected_column_index, @ selected_key_cell, @ covered)
+        if: status = 0 && (cell = 0 || cell\value = 0 || c.strcmp(cell\value, "present") != 0 || selected_table = 0 || selected_column_index != 2U || selected_key_cell = 0 || selected_key_cell\value = 0 || c.strcmp(selected_key_cell\value, "duplicate") != 0 || covered = 0)
+            status: 1
+        covered: 0
+        selected_table: lm_registry_view_source_table_at(view, 0U)
+        selected_column_index: 99U
+        selected_key_cell: cell
+        cell: lm_test_source_path_cell_at(view, "dynamic.overlay", 0U, @ selected_table, @ selected_column_index, @ selected_key_cell, @ covered)
+        if: status = 0 && (cell != 0 || selected_table != 0 || selected_column_index != 0U || selected_key_cell != 0 || covered = 0)
+            status: 1
+        covered: 1
+        selected_table: lm_registry_view_source_table_at(view, 0U)
+        selected_column_index: 99U
+        selected_key_cell: cell
+        cell: lm_test_source_path_cell_at(view, "missing.path", 0U, @ selected_table, @ selected_column_index, @ selected_key_cell, @ covered)
+        if: status = 0 && (cell != 0 || selected_table != 0 || selected_column_index != 0U || selected_key_cell != 0 || covered != 0)
             status: 1
         if: status = 0 && (lm_registry_view_append_materialized_rows(view, joined, "source.ncolumn", 14U) != 0 || lm_table_descriptor_materialized_row_count(joined) != 11U)
             status: 1

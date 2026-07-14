@@ -2399,6 +2399,7 @@ static int lm_table_descriptor_source_path_column_matches(const LmTableDescripto
 static int lm_registry_view_source_path_has_rows_slice(const LmRegistryView *view, const char *path, size_t path_length, int *out_covered);
 static int lm_registry_view_source_path_has_rows(const LmRegistryView *view, const char *path, int *out_covered);
 static int lm_registry_view_source_path_has_key_slice(const LmRegistryView *view, const char *path, size_t path_length, const char *key, size_t key_length, int *out_covered);
+static const LmTableCell * lm_registry_view_source_path_cell_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, const LmTableDescriptor **out_descriptor, size_t *out_column_index, const LmTableCell **out_key_cell, int *out_covered);
 static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, int *out_covered);
 static int lm_registry_view_append_materialized_rows(const LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length);
 static size_t lm_registry_view_fact_count(const LmRegistryView *view);
@@ -4606,7 +4607,7 @@ static int lm_registry_view_source_path_has_key_slice(const LmRegistryView *view
     return 0;
 }
 
-static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, int *out_covered) {
+static const LmTableCell * lm_registry_view_source_path_cell_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, const LmTableDescriptor **out_descriptor, size_t *out_column_index, const LmTableCell **out_key_cell, int *out_covered) {
     const LmTableDescriptor * descriptor;
     const LmTableRow * row;
     const LmTableCell * key_cell;
@@ -4619,6 +4620,15 @@ static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryVi
     size_t row_index;
     size_t fact_index;
     int descriptor_covered;
+    if (out_descriptor != 0) {
+        out_descriptor[0] = 0;
+    }
+    if (out_column_index != 0) {
+        out_column_index[0] = 0U;
+    }
+    if (out_key_cell != 0) {
+        out_key_cell[0] = 0;
+    }
     if (out_covered != 0) {
         out_covered[0] = 0;
     }
@@ -4652,7 +4662,16 @@ static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryVi
                         payload_cell = lm_table_row_cell_at(row, column_index);
                         if (key_cell != 0 && key_cell -> value != 0 && payload_cell != 0 && (payload_cell -> value != 0 || payload_cell -> node != 0)) {
                             if (fact_index == index) {
-                                return key_cell -> value;
+                                if (out_descriptor != 0) {
+                                    out_descriptor[0] = descriptor;
+                                }
+                                if (out_column_index != 0) {
+                                    out_column_index[0] = column_index;
+                                }
+                                if (out_key_cell != 0) {
+                                    out_key_cell[0] = key_cell;
+                                }
+                                return payload_cell;
                             }
                             fact_index = fact_index + 1U;
                         }
@@ -4665,6 +4684,15 @@ static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryVi
         table_index = table_index + 1U;
     }
     return 0;
+}
+
+static const char * lm_registry_view_source_path_key_at_slice(const LmRegistryView *view, const char *path, size_t path_length, size_t index, int *out_covered) {
+    const LmTableCell * key_cell;
+    key_cell = 0;
+    if (lm_registry_view_source_path_cell_at_slice(view, path, path_length, index, 0, 0, &key_cell, out_covered) == 0 || key_cell == 0) {
+        return 0;
+    }
+    return key_cell -> value;
 }
 
 static int lm_registry_view_append_materialized_rows(const LmRegistryView *view, LmTableDescriptor *target, const char *source_table, size_t source_table_length) {
