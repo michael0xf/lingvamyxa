@@ -1,0 +1,243 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_registry_join_provenance_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_registry_push_value_fact (
+    const: @(char table_name)
+    const: @(char key)
+    const: @(char payload)
+    const: (LmTransRegistryFact: source)
+) LmTransRegistryFact
+    LmP0Text: table_text
+    LmP0Text: key_text
+    LmP0Text: payload_text
+    const: LmRegistryViewRow: view_row
+    int: status
+
+    table_text: lm_trans_text_from_cstr(table_name)
+    key_text: lm_trans_text_from_cstr(key)
+    payload_text: lm_trans_text_from_cstr(payload)
+    if: table_text = 0 || key_text = 0 || payload_text = 0
+        lm_trans_text_ref_destroy(@ table_text)
+        lm_trans_text_ref_destroy(@ key_text)
+        lm_trans_text_ref_destroy(@ payload_text)
+        return: 0
+
+    if: source != 0
+        status: lm_trans_registry_push_row_values_from(table_text, key_text, payload_text, source)
+    else:
+        status: lm_trans_registry_push_row_values(table_text, key_text, payload_text)
+
+    lm_trans_text_ref_destroy(@ table_text)
+    lm_trans_text_ref_destroy(@ key_text)
+    lm_trans_text_ref_destroy(@ payload_text)
+    if: status != 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0 || lm_trans_registry\loaded_fact_count = 0U
+        return: 0
+
+    view_row: lm_registry_view_fact_at(lm_trans_registry\view, lm_trans_registry\loaded_fact_count - 1U)
+    if: view_row = 0
+        return: 0
+return: cast: (LmTransRegistryFact) view_row\source
+
+fn: lm_test_registry_node_new (const: @(char spelling)) LmP0Node
+    LmP0Text: spelling_text
+    LmP0Node: node
+
+    if: spelling = 0
+        return: 0
+
+    spelling_text: lm_trans_text_from_cstr(spelling)
+    if: spelling_text = 0
+        return: 0
+    node: lm_trans_registry_synthetic_atom_node(spelling_text)
+    lm_trans_text_ref_destroy(@ spelling_text)
+return: node
+
+fn: lm_test_registry_push_node_fact (
+    const: @(char table_name)
+    const: @(char key)
+    const: (LmP0Node: payload_node)
+    const: (LmTransRegistryFact: source)
+) LmTransRegistryFact
+    LmP0Text: table_text
+    LmP0Text: key_text
+    const: LmRegistryViewRow: view_row
+    int: status
+
+    table_text: lm_trans_text_from_cstr(table_name)
+    key_text: lm_trans_text_from_cstr(key)
+    if: table_text = 0 || key_text = 0 || payload_node = 0
+        lm_trans_text_ref_destroy(@ table_text)
+        lm_trans_text_ref_destroy(@ key_text)
+        return: 0
+
+    if: source != 0
+        status: lm_trans_registry_push_row_node_values_from(table_text, key_text, payload_node, source)
+    else:
+        status: lm_trans_registry_push_row_node_values(table_text, key_text, payload_node)
+
+    lm_trans_text_ref_destroy(@ table_text)
+    lm_trans_text_ref_destroy(@ key_text)
+    if: status != 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0 || lm_trans_registry\loaded_fact_count = 0U
+        return: 0
+
+    view_row: lm_registry_view_fact_at(lm_trans_registry\view, lm_trans_registry\loaded_fact_count - 1U)
+    if: view_row = 0
+        return: 0
+return: cast: (LmTransRegistryFact) view_row\source
+
+fn: lm_test_registry_join_fact (const: @(char source_table); const: @(char target_table); const: @(char key)) LmTransRegistryFact
+    LmP0Text: source_text
+    LmP0Text: target_text
+    LmP0Text: key_text
+    LmTransRegistryFact: fact
+
+    source_text: lm_trans_text_from_cstr(source_table)
+    target_text: lm_trans_text_from_cstr(target_table)
+    key_text: lm_trans_text_from_cstr(key)
+    fact: 0
+    if: source_text != 0 && target_text != 0 && key_text != 0 && lm_trans_registry_join_table(source_text, target_text) = 0
+        fact: lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry\identifiers, key_text, target_table)
+    ---
+    lm_trans_text_ref_destroy(@ source_text)
+    lm_trans_text_ref_destroy(@ target_text)
+    lm_trans_text_ref_destroy(@ key_text)
+return: fact
+
+fn: lm_test_registry_join_provenance_core () int
+    LmTransRegistryFact: origin
+    LmTransRegistryFact: middle
+    LmTransRegistryFact: target
+    LmTransRegistryFact: unrelated
+    LmTransRegistryFact: node_origin
+    LmTransRegistryFact: node_middle
+    LmTransRegistryFact: node_target
+    LmTransRegistryFact: node_unrelated
+    LmTableDescriptor: descriptor
+    LmTableDescriptor: node_descriptor
+    LmTableRow: row
+    LmTableRow: node_row
+    LmTableCell: key_cell
+    LmTableCell: value_cell
+    LmTableCell: marker_cell
+    LmTableCell: node_key_cell
+    LmTableCell: node_value_cell
+    LmP0Node: source_node
+    const: LmTableCell: resolved_cell
+    const: LmTableCell: resolved_node_cell
+    const: LmP0Node: resolved_node
+    const: @: char resolved_value
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    origin: lm_test_registry_push_value_fact("origin.value", "Witness", "payload", 0)
+    middle: lm_test_registry_push_value_fact("middle.value", "Witness", "payload", origin)
+    target: lm_test_registry_push_value_fact("target.value", "Witness", "payload", middle)
+    unrelated: lm_test_registry_push_value_fact("unrelated.value", "Witness", "payload", 0)
+    status: 0
+    if: origin = 0 || middle = 0 || target = 0 || unrelated = 0 || middle\source != origin || target\source != middle || unrelated\source != 0
+        status: 1
+
+    descriptor: lm_table_descriptor_new_empty_slice("target", 6U)
+    if: status = 0 && (descriptor = 0 || lm_table_descriptor_add_column(descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(descriptor, "value", "char") != 0 || lm_table_descriptor_add_column(descriptor, "marker", "int") != 0)
+        status: 1
+
+    row: 0
+    key_cell: 0
+    value_cell: 0
+    marker_cell: 0
+    if: status = 0
+        row: lm_table_row_new(0)
+        key_cell: lm_table_cell_new_cstr("Witness", "Witness", 0, 0, 0)
+        value_cell: lm_table_cell_new_cstr("payload", "payload", 0, origin, 0)
+        marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        if: row = 0 || key_cell = 0 || value_cell = 0 || marker_cell = 0 || lm_table_row_take_cell(row, key_cell) != 0 || lm_table_row_take_cell(row, value_cell) != 0 || lm_table_row_take_cell(row, marker_cell) != 0 || lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+            status: 1
+        else:
+            row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, descriptor) != 0
+                status: 1
+            else:
+                descriptor: 0
+        ---
+
+    if: status = 0
+        resolved_cell: lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, target)
+        resolved_value: lm_trans_registry_source_path_typed_value(0, "target.value", "class", "class", "char", target)
+        if: resolved_cell != value_cell || resolved_value != value_cell\value || resolved_value = target\payload || lm_trans_registry_fact_has_source(origin, origin) = 0 || lm_trans_registry_fact_has_source(middle, origin) = 0 || lm_trans_registry_fact_has_source(target, origin) = 0 || lm_trans_registry_fact_has_source(target, middle) = 0 || lm_trans_registry_fact_has_source(unrelated, origin) != 0 || lm_trans_registry_source_path_typed_cell(0, "target.value", "class", "class", "char", 0, unrelated) != 0
+            status: 1
+    ---
+
+    node_descriptor: 0
+    node_row: 0
+    source_node: 0
+    node_origin: 0
+    node_middle: 0
+    node_target: 0
+    node_unrelated: 0
+    if: status = 0
+        source_node: lm_test_registry_node_new("node-payload")
+        node_origin: lm_test_registry_push_node_fact("origin.node", "NodeWitness", source_node, 0)
+        if: node_origin != 0
+            node_middle: lm_test_registry_join_fact("origin.node", "middle.node", "NodeWitness")
+        if: node_middle != 0
+            node_target: lm_test_registry_join_fact("middle.node", "target.node", "NodeWitness")
+        node_unrelated: lm_test_registry_push_node_fact("unrelated.node", "NodeWitness", source_node, 0)
+        if: source_node = 0 || node_origin = 0 || node_middle = 0 || node_target = 0 || node_unrelated = 0 || node_origin\payload_node = source_node || node_middle\payload_node = node_origin\payload_node || node_target\payload_node = node_middle\payload_node || node_middle\source != node_origin || node_target\source != node_middle || node_unrelated\source != 0
+            status: 1
+    ---
+
+    if: status = 0
+        node_descriptor: lm_table_descriptor_new_empty_slice("target.node", 11U)
+        if: node_descriptor = 0 || lm_table_descriptor_add_column(node_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(node_descriptor, "body", "node") != 0
+            status: 1
+    ---
+
+    node_key_cell: 0
+    node_value_cell: 0
+    if: status = 0
+        node_row: lm_table_row_new(0)
+        node_key_cell: lm_table_cell_new_cstr("NodeWitness", "NodeWitness", 0, 0, 0)
+        node_value_cell: lm_table_cell_new_cstr("node-payload", 0, node_origin\payload_node, node_origin, 0)
+        if: node_row = 0 || node_key_cell = 0 || node_value_cell = 0 || lm_table_row_take_cell(node_row, node_key_cell) != 0 || lm_table_row_take_cell(node_row, node_value_cell) != 0 || lm_table_descriptor_take_materialized_row(node_descriptor, node_row) != 0
+            status: 1
+        else:
+            node_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, node_descriptor) != 0
+                status: 1
+            else:
+                node_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_node_cell: lm_trans_registry_source_n2_cell(0, "target.node", "class", "body", node_target, 1, "class", "node", 0)
+        resolved_node: lm_trans_registry_source_n2_node(0, "target.node", "class", "body", node_target)
+        if: resolved_node_cell != node_value_cell || resolved_node != node_origin\payload_node || resolved_node = node_middle\payload_node || resolved_node = node_target\payload_node || lm_trans_registry_source_n2_cell(0, "target.node", "class", "body", node_unrelated, 1, "class", "node", 0) != 0 || lm_trans_registry_source_n2_node(0, "target.node", "class", "body", node_unrelated) = node_origin\payload_node || lm_trans_registry_assert_source_table_materialization() != 0
+            status: 1
+    ---
+
+    lm_table_row_delete_any(node_row)
+    lm_table_descriptor_delete_any(node_descriptor)
+    lm_table_row_delete_any(row)
+    lm_table_descriptor_delete_any(descriptor)
+    lm_trans_registry_destroy()
+return: status

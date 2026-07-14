@@ -6,6 +6,7 @@ L4:
                  LmTransIdentifierRelation   c.struct
                  LmTransIdentifierCard       c.struct
                  LmTransNamespace            c.struct
+                 LmTransRegistryFact         c.struct
                  LmTransRegistryCloneFrame   c.struct
                  LmTransExprSegment          c.struct
                  LmTransCallLowering         c.struct
@@ -383,6 +384,7 @@ L4:
                  key           char                   1                       1                                0
                  payload       char                   2                       1                                0
                  payload_node  LmP0Node               3                       0                                1
+                 source        LmTransRegistryFact    4                       0                                1
     end: LmTransRegistryFact
 
     table:
