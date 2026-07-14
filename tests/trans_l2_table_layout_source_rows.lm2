@@ -8,6 +8,7 @@ L4:
                  Partial    layout
                  Overlay    layout
                  SplitOnly  layout
+                 WrongSchema layout
     end: class
 
     table:
@@ -19,10 +20,24 @@ L4:
 
     table:
         name: Qualified
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+        columns((class: class) (int: marker) (int: `field.const`) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`))
         rows:
-                 text  char  0  1  1
+                 text  7  0  0  9  char  0
     end: Qualified
+
+    table:
+        name: `Qualified.field.address-depth`
+        columns((class: class) (size_t: depth))
+        rows:
+                 text  1
+    end: `Qualified.field.address-depth`
+
+    table:
+        name: `Qualified.field.const`
+        columns((class: class) (int: value))
+        rows:
+                 text  1
+    end: `Qualified.field.const`
 
     table:
         name: Partial
@@ -53,11 +68,32 @@ L4:
     end: `SplitOnly.field.class`
 
     table:
-        name: `SplitOnly.field.index`
-        columns((class: class) (size_t: index))
+        name: WrongSchema
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
         rows:
-                 flag  0
-    end: `SplitOnly.field.index`
+                 value  int  0  0  0
+    end: WrongSchema
+
+    table:
+        name: `WrongSchema.field.class`
+        columns((class: class) (char: field))
+        rows:
+                 value  int
+    end: `WrongSchema.field.class`
+
+    table:
+        name: `WrongSchema.field.address-depth`
+        columns((class: class) (int: depth))
+        rows:
+                 value  0
+    end: `WrongSchema.field.address-depth`
+
+    table:
+        name: `WrongSchema.field.const`
+        columns((class: class) (size_t: value))
+        rows:
+                 value  0
+    end: `WrongSchema.field.const`
 
     table:
         name: `layout.backend`
@@ -68,6 +104,7 @@ L4:
                  Partial    c.struct
                  Overlay    c.struct
                  SplitOnly  c.struct
+                 WrongSchema c.struct
     end: `layout.backend`
 
     table:
@@ -79,6 +116,7 @@ L4:
                  Partial    1
                  Overlay    1
                  SplitOnly  1
+                 WrongSchema 1
     end: `class.reference-base`
 end: L4
 
@@ -105,12 +143,16 @@ typedef struct Overlay {
 typedef struct SplitOnly {
     int flag;
 } SplitOnly;
+
+typedef struct WrongSchema {
+    int value;
+} WrongSchema;
 ===
 
 L2:
     table:
         name: layoutTable
-        columns((Plain: plain) (Qualified: qualified) (Partial: partial) (Overlay: overlay) (SplitOnly: split))
+        columns((Plain: plain) (Qualified: qualified) (Partial: partial) (Overlay: overlay) (SplitOnly: split) (WrongSchema: wrong))
         rows:
                  Plain:
                      value: 7
@@ -122,6 +164,8 @@ L2:
                      value: None
                  SplitOnly:
                      flag: true
+                 WrongSchema:
+                     value: 6
     end: layoutTable
 
     external:
@@ -136,6 +180,8 @@ L2:
                 return: 4
             if: layoutTable\split\flag != 1
                 return: 5
+            if: layoutTable\wrong\value != 6
+                return: 6
             return: 0
         end: main
     end: external
