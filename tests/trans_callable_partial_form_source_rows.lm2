@@ -23,22 +23,27 @@ L4:
 
     table:
         name: `lm.test.callable.partial.form.seed`
-        columns((class: class) (binding: materializer))
+        columns((class: class) (int: marker) (binding: form))
         rows:
-                 joinedPartial  lm_trans_materialize_partial_callable
+                 joinedPartial  7  lm_trans_materialize_partial_callable
     end: `lm.test.callable.partial.form.seed`
 
-    join: (`lm.test.callable.partial.form.seed`) `callable.partial.form`
-        columns((class: class) (binding: materializer))
+    join: (`lm.test.callable.partial.form.seed`) `lm.test.callable.partial.form.middle`
+        columns((class: class) (int: marker) (binding: form))
         rows:
-    end: `callable.partial.form`
+    end: `lm.test.callable.partial.form.middle`
+
+    join: (`lm.test.callable.partial.form.middle`) `callable.partial`
+        columns((class: class) (int: marker) (binding: form))
+        rows:
+    end: `callable.partial`
 
     table:
-        name: `callable.partial.form`
-        columns((class: class) (binding: materializer))
+        name: `callable.partial`
+        columns((class: class) (int: marker) (binding: form))
         rows:
-                 joinedPartial  None
-    end: `callable.partial.form`
+                 joinedPartial  8  None
+    end: `callable.partial`
 end: L4
 
 callable: AddX (int: value) int

@@ -133,6 +133,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: callable_projection_origin
     LmTransRegistryFact: callable_projection_middle
     LmTransRegistryFact: callable_projection_target
+    LmTransRegistryFact: callable_partial_form_origin
+    LmTransRegistryFact: callable_partial_form_middle
+    LmTransRegistryFact: callable_partial_form_target
     LmTransRegistryFact: node_origin
     LmTransRegistryFact: node_middle
     LmTransRegistryFact: node_target
@@ -193,6 +196,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: call_lowering_descriptor
     LmTableDescriptor: materialize_argument_descriptor
     LmTableDescriptor: callable_capability_descriptor
+    LmTableDescriptor: callable_partial_form_descriptor
     LmTableDescriptor: receiver_descriptor
     LmTableDescriptor: receiver_family_descriptor
     LmTableDescriptor: receiver_formal_param_descriptor
@@ -209,6 +213,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: call_lowering_row
     LmTableRow: materialize_argument_row
     LmTableRow: callable_capability_row
+    LmTableRow: callable_partial_form_row
     LmTableRow: receiver_row
     LmTableRow: receiver_family_row
     LmTableRow: receiver_formal_param_row
@@ -234,6 +239,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: callable_partial_cell
     LmTableCell: callable_capture_cell
     LmTableCell: callable_projection_cell
+    LmTableCell: callable_partial_form_key_cell
+    LmTableCell: callable_partial_form_marker_cell
+    LmTableCell: callable_partial_form_materializer_cell
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
@@ -304,6 +312,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_callable_capture
     const: @: char resolved_callable_projection
     const: @: char resolved_callable_projection_from_class
+    const: @: char resolved_callable_partial_form_materializer
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
@@ -321,6 +330,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_expr_spelling_binding
     LmP0Text: target_key_text
     LmP0Text: callable_capability_key_text
+    LmP0Text: callable_partial_form_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
     size_t: layout_source_row_index
@@ -552,6 +562,52 @@ fn: lm_test_registry_join_provenance_core () int
         lm_trans_registry\view_mode: 2
         resolved_callable_projection_from_class: lm_trans_callable_projection_from_class("CallableWide")
         if: resolved_callable_projection_from_class != callable_projection_cell\value
+            status: 1
+    ---
+
+    callable_partial_form_origin: 0
+    callable_partial_form_middle: 0
+    callable_partial_form_target: 0
+    callable_partial_form_descriptor: 0
+    callable_partial_form_row: 0
+    callable_partial_form_key_cell: 0
+    callable_partial_form_marker_cell: 0
+    callable_partial_form_materializer_cell: 0
+    callable_partial_form_key_text: 0
+    if: status = 0
+        callable_partial_form_origin: lm_test_registry_push_value_fact("lm.test.callable.partial.form.origin", "call-frame", "lm_trans_materialize_call_frame_partial", 0)
+        callable_partial_form_middle: lm_test_registry_push_value_fact("lm.test.callable.partial.form.middle", "call-frame", "lm_trans_materialize_call_frame_partial", callable_partial_form_origin)
+        callable_partial_form_target: lm_test_registry_push_value_fact("callable.partial.form", "call-frame", "lm_trans_materialize_call_frame_partial", callable_partial_form_middle)
+        if: callable_partial_form_origin = 0 || callable_partial_form_middle = 0 || callable_partial_form_target = 0 || callable_partial_form_middle\source != callable_partial_form_origin || callable_partial_form_target\source != callable_partial_form_middle
+            status: 1
+    ---
+
+    if: status = 0
+        callable_partial_form_descriptor: lm_table_descriptor_new_empty_slice("callable.partial", 16U)
+        if: callable_partial_form_descriptor = 0 || lm_table_descriptor_add_column(callable_partial_form_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(callable_partial_form_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(callable_partial_form_descriptor, "form", "binding") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        callable_partial_form_row: lm_table_row_new(0)
+        callable_partial_form_key_cell: lm_table_cell_new_cstr("call-frame", "call-frame", 0, 0, 0)
+        callable_partial_form_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        callable_partial_form_materializer_cell: lm_table_cell_new_cstr("lm_trans_materialize_call_frame_partial", "lm_trans_materialize_call_frame_partial", 0, callable_partial_form_origin, 0)
+        if: callable_partial_form_row = 0 || callable_partial_form_key_cell = 0 || callable_partial_form_marker_cell = 0 || callable_partial_form_materializer_cell = 0 || lm_table_row_take_cell(callable_partial_form_row, callable_partial_form_key_cell) != 0 || lm_table_row_take_cell(callable_partial_form_row, callable_partial_form_marker_cell) != 0 || lm_table_row_take_cell(callable_partial_form_row, callable_partial_form_materializer_cell) != 0 || lm_table_descriptor_take_materialized_row(callable_partial_form_descriptor, callable_partial_form_row) != 0
+            status: 1
+        else:
+            callable_partial_form_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, callable_partial_form_descriptor) != 0
+                status: 1
+            else:
+                callable_partial_form_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        callable_partial_form_key_text: lm_trans_text_from_cstr("call-frame")
+        resolved_callable_partial_form_materializer: lm_trans_callable_partial_form_materializer(0, callable_partial_form_key_text)
+        if: callable_partial_form_key_text = 0 || resolved_callable_partial_form_materializer != callable_partial_form_materializer_cell\value || resolved_callable_partial_form_materializer = callable_partial_form_middle\payload || resolved_callable_partial_form_materializer = callable_partial_form_target\payload || lm_trans_callable_partial_form_is(0, callable_partial_form_key_text, "lm_trans_materialize_call_frame_partial") = 0 || lm_trans_callable_partial_call_frame_enabled(0) = 0
             status: 1
     ---
 
@@ -1219,6 +1275,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(receiver_family_descriptor)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)
+    lm_trans_text_ref_destroy(@ callable_partial_form_key_text)
+    lm_table_row_delete_any(callable_partial_form_row)
+    lm_table_descriptor_delete_any(callable_partial_form_descriptor)
     lm_trans_text_ref_destroy(@ callable_capability_key_text)
     lm_table_row_delete_any(callable_capability_row)
     lm_table_descriptor_delete_any(callable_capability_descriptor)

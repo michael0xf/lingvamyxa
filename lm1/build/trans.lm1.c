@@ -2800,6 +2800,7 @@ static const char * lm_trans_callable_projection_payload(const LmTransNamespace 
 static int lm_trans_callable_descriptor_allows_partial(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_allows_capture(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_uses_closure_struct(const LmTransNamespace *namespace_, const LmP0Text *name);
+static const char * lm_trans_callable_partial_form_materializer(const LmTransNamespace *namespace_, const LmP0Text *form);
 static int lm_trans_callable_partial_form_is(const LmTransNamespace *namespace_, const LmP0Text *form, const char *binding_name);
 static int lm_trans_callable_partial_call_frame_enabled(const LmTransNamespace *namespace_);
 static int lm_trans_callable_descriptor_is_raw_function_reference(const LmTransNamespace *namespace_, const LmP0Text *name);
@@ -11164,17 +11165,29 @@ static int lm_trans_callable_descriptor_uses_closure_struct(const LmTransNamespa
     return projection != 0 && strcmp(projection, "c.closure-struct") == 0;
 }
 
+static const char * lm_trans_callable_partial_form_materializer(const LmTransNamespace *namespace_, const LmP0Text *form) {
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, form, "callable.partial.form", "class", "class", "materializer", "binding");
+}
+
 static int lm_trans_callable_partial_form_is(const LmTransNamespace *namespace_, const LmP0Text *form, const char *binding_name) {
     const char *binding;
     if (form == 0 || binding_name == 0) {
         return 0;
     }
-    binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, form, "callable.partial.form", "class", "class", "materializer", "binding");
+    binding = lm_trans_callable_partial_form_materializer(namespace_, form);
     return binding != 0 && strcmp(binding, binding_name) == 0;
 }
 
 static int lm_trans_callable_partial_call_frame_enabled(const LmTransNamespace *namespace_) {
-    return lm_trans_callable_partial_form_is(namespace_, lm_trans_text_from_cstr("call-frame"), "lm_trans_materialize_call_frame_partial");
+    LmP0Text * form;
+    int result;
+    form = lm_trans_text_from_cstr("call-frame");
+    if (form == 0) {
+        return 0;
+    }
+    result = lm_trans_callable_partial_form_is(namespace_, form, "lm_trans_materialize_call_frame_partial");
+    lm_trans_text_ref_destroy(&form);
+    return result;
 }
 
 static int lm_trans_callable_descriptor_is_raw_function_reference(const LmTransNamespace *namespace_, const LmP0Text *name) {
