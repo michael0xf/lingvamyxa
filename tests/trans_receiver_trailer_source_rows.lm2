@@ -1,0 +1,57 @@
+L4:
+    table:
+        name: namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 LmTestDirectTrailer    `receiver.trailer`
+                 LmTestFallbackTrailer  `receiver.trailer`
+                 LmTestJoinedTrailer    `receiver.trailer`
+    end: namespace
+
+    table:
+        name: `receiver.trailer`
+        columns((class: class) (binding: receiver))
+        rows:
+                 LmTestDirectTrailer  lm_trans_validate_end_trailer
+                 LmTestDirectTrailer  0
+                 LmTestDirectTrailer  None
+    end: `receiver.trailer`
+
+    table:
+        name: `receiver.trailer`
+        columns((class: class) (class: receiver))
+        rows:
+                 LmTestFallbackTrailer  lm_trans_validate_end_trailer
+    end: `receiver.trailer`
+
+    table:
+        name: `lm.test.receiver.trailer.seed`
+        columns((class: class) (binding: receiver))
+        rows:
+                 LmTestJoinedTrailer  lm_trans_validate_end_trailer
+    end: `lm.test.receiver.trailer.seed`
+
+    join: (`lm.test.receiver.trailer.seed`) `receiver.trailer`
+        columns((class: class) (binding: receiver))
+        rows:
+    end: `receiver.trailer`
+
+    table:
+        name: `receiver.trailer`
+        columns((class: class) (binding: receiver))
+        rows:
+                 LmTestJoinedTrailer  None
+    end: `receiver.trailer`
+end: L4
+
+L2:
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
+
+LmTestDirectTrailer: L1
+LmTestFallbackTrailer: L1
+LmTestJoinedTrailer: L1

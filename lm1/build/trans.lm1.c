@@ -3322,6 +3322,7 @@ static const char * lm_trans_level_receiver_binding_from_frame(const LmP0Frame *
 static int lm_trans_frame_has_level_receiver_binding(const LmP0Frame *frame, const char *binding);
 static int lm_trans_frame_is_l1_level_receiver(const LmP0Frame *frame);
 static int lm_trans_frame_is_l2_level_receiver(const LmP0Frame *frame);
+static const char * lm_trans_trailer_receiver_binding_from_head(const LmP0Text *head);
 static int lm_trans_top_level_level_binding(const LmTransHeadBinding *binding, LmTransTopLevelItem *out);
 static const LmP0Text * lm_trans_end_frame_target(const LmP0Frame *frame);
 static int lm_trans_end_frame_targets_level_receiver_binding(const LmP0Frame *frame, const char *binding);
@@ -25982,6 +25983,13 @@ static int lm_trans_frame_is_l2_level_receiver(const LmP0Frame *frame) {
     return lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l2_frame");
 }
 
+static const char * lm_trans_trailer_receiver_binding_from_head(const LmP0Text *head) {
+    if (head == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_n2_typed_value(0, head, "receiver.trailer", "class", "class", "receiver", "binding");
+}
+
 static int lm_trans_top_level_level_binding(const LmTransHeadBinding *binding, LmTransTopLevelItem *out) {
     const char *receiver;
     if (binding == 0 || out == 0 || binding -> receiver_type == 0 || strcmp(binding -> receiver_type, "receiver.level") != 0) {
@@ -26013,7 +26021,7 @@ static const LmP0Text * lm_trans_end_frame_target(const LmP0Frame *frame) {
         return 0;
     }
     receiver_type = lm_trans_registry_lookup(frame -> head, "namespace");
-    if (receiver_type == 0 || strcmp(receiver_type, "receiver.trailer") != 0 || lm_trans_registry_lookup(frame -> head, "receiver.trailer") == 0) {
+    if (receiver_type == 0 || strcmp(receiver_type, "receiver.trailer") != 0 || lm_trans_trailer_receiver_binding_from_head(frame -> head) == 0) {
         return 0;
     }
     field = frame -> body -> first_field;
