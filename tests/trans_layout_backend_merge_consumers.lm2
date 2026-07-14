@@ -1,0 +1,103 @@
+L4:
+    table:
+        name: `forward.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmMergeCall  c.struct
+    end: `forward.backend`
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmMergeDirect  c.named-struct
+                 LmMergeDirect  c.struct
+                 LmMergeDirect  None
+    end: `layout.backend`
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: value))
+        rows:
+                 LmMergeCall  c.struct
+    end: `layout.backend`
+
+    table:
+        name: `lm.test.layout.backend.merge.seed`
+        columns((class: class) (class: backend))
+        rows:
+                 LmMergeJoined  c.struct
+    end: `lm.test.layout.backend.merge.seed`
+
+    join: (`lm.test.layout.backend.merge.seed`) `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+    end: `layout.backend`
+
+    table:
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmMergeJoined  None
+    end: `layout.backend`
+
+    table:
+        name: LmMergeDirect
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 direct_value  int  0
+    end: LmMergeDirect
+
+    table:
+        name: LmMergeJoined
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 joined_value  long  0
+    end: LmMergeJoined
+
+    table:
+        name: LmMergeCall
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 call_value  short  0
+    end: LmMergeCall
+
+    table:
+        name: `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+                 LmMergeDirect  1
+                 LmMergeJoined  1
+                 LmMergeCall    1
+    end: `class.reference-base`
+end: L4
+
+forward
+
+L1:
+===
+#include <stddef.h>
+
+struct LmMergeCall { short call_value; };
+
+static int lm_test_layout_backend_merge_consumers(void) {
+    return offsetof(LmMergeCombined, direct_value) != 0U ||
+           offsetof(LmMergeCombined, joined_value) <= offsetof(LmMergeCombined, direct_value) ||
+           offsetof(LmMergeCombined, call_value) <= offsetof(LmMergeCombined, joined_value) ||
+           offsetof(LmMergeCombined, local_value) <= offsetof(LmMergeCombined, call_value);
+}
+===
+
+fn: lm_make_merge_call () LmMergeCall
+    return: 0
+end: lm_make_merge_call
+
+merge: (LmMergeDirect LmMergeJoined lm_make_merge_call()) LmMergeCombined
+    int: local_value 29
+end: LmMergeCombined
+
+external:
+    fn: main () int
+        return: c.lm_test_layout_backend_merge_consumers() || lm_make_merge_call() != 0 || LmMergeCombined\local_value != 29
+    end: main
+end: external
