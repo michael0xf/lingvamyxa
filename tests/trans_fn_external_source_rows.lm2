@@ -1,5 +1,62 @@
 import: "fixtures/fn_external_source_rows.lm4"
 
+registry:
+    table:
+        name: `lm.test.fn.external.seed`
+        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+        rows:
+                 lm_test_external_joined  7  procedure  1  sub
+    end: `lm.test.fn.external.seed`
+
+    join: (`lm.test.fn.external.seed`) `lm.test.fn.external.middle`
+        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+        rows:
+    end: `lm.test.fn.external.middle`
+
+    join: (`lm.test.fn.external.middle`) fn
+        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+        rows:
+    end: fn
+
+    table:
+        name: fn
+        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+        rows:
+                 lm_test_external_joined  8  None  None  None
+    end: fn
+
+    table:
+        name: fn
+        columns((class: class) (class: descriptor) (int: external))
+        rows:
+                 lm_test_external_receiver_n2        procedure  1
+                 lm_test_external_receiver_fallback  procedure  1
+    end: fn
+
+    table:
+        name: `fn.receiver`
+        columns((class: class) (class: value))
+        rows:
+                 lm_test_external_receiver_n2  sub
+    end: `fn.receiver`
+
+    table:
+        name: `fn.receiver`
+        columns((class: class) (class: receiver))
+        rows:
+                 lm_test_external_receiver_fallback  sub
+    end: `fn.receiver`
+
+    table:
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 lm_test_external_joined             procedure
+                 lm_test_external_receiver_n2        procedure
+                 lm_test_external_receiver_fallback  procedure
+    end: class
+end: registry
+
 prototype
 
 L1:
@@ -12,8 +69,20 @@ void lm_test_external_fallback(int *value) {
     *value += 20;
 }
 
-int lm_test_external_joined(int value) {
-    return value + 30;
+static int lm_test_external_joined_called;
+static int lm_test_external_receiver_n2_called;
+static int lm_test_external_receiver_fallback_called;
+
+void lm_test_external_joined(void) {
+    lm_test_external_joined_called = 1;
+}
+
+void lm_test_external_receiver_n2(void) {
+    lm_test_external_receiver_n2_called = 1;
+}
+
+void lm_test_external_receiver_fallback(void) {
+    lm_test_external_receiver_fallback_called = 1;
 }
 ===
 
@@ -21,6 +90,9 @@ external:
     fn: main () int
         int: value 1
         lm_test_external_fallback(@ value)
-        return: lm_test_external_direct(1) != 11 || value != 21 || lm_test_external_joined(1) != 31
+        lm_test_external_joined()
+        lm_test_external_receiver_n2()
+        lm_test_external_receiver_fallback()
+        return: lm_test_external_direct(1) != 11 || value != 21 || c.lm_test_external_joined_called = 0 || c.lm_test_external_receiver_n2_called = 0 || c.lm_test_external_receiver_fallback_called = 0
     end: main
 end: external

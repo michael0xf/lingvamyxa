@@ -145,6 +145,11 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: fn_external_origin
     LmTransRegistryFact: fn_external_middle
     LmTransRegistryFact: fn_external_target
+    LmTransRegistryFact: fn_receiver_origin
+    LmTransRegistryFact: fn_receiver_middle
+    LmTransRegistryFact: fn_receiver_target
+    LmTransRegistryFact: fn_receiver_n2_origin
+    LmTransRegistryFact: fn_receiver_n2_target
     LmTransRegistryFact: namespace_l4_origin
     LmTransRegistryFact: namespace_l4_middle
     LmTransRegistryFact: namespace_l4_target
@@ -242,6 +247,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: class_range_descriptor
     LmTableDescriptor: cast_target_descriptor
     LmTableDescriptor: fn_external_descriptor
+    LmTableDescriptor: fn_receiver_n2_descriptor
     LmTableDescriptor: namespace_l4_descriptor
     LmTableDescriptor: c99_policy_descriptor
     LmTableDescriptor: profile_validator_descriptor
@@ -267,6 +273,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableRow: class_range_row
     LmTableRow: cast_target_row
     LmTableRow: fn_external_row
+    LmTableRow: fn_receiver_n2_row
     LmTableRow: namespace_l4_row
     LmTableRow: c99_policy_row
     LmTableRow: profile_validator_row
@@ -312,6 +319,9 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: fn_external_key_cell
     LmTableCell: fn_external_marker_cell
     LmTableCell: fn_external_value_cell
+    LmTableCell: fn_receiver_value_cell
+    LmTableCell: fn_receiver_n2_key_cell
+    LmTableCell: fn_receiver_n2_value_cell
     LmTableCell: namespace_l4_key_cell
     LmTableCell: namespace_l4_marker_cell
     LmTableCell: namespace_l4_value_cell
@@ -421,6 +431,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_class_range
     const: @: char resolved_cast_target
     const: @: char resolved_fn_external
+    const: @: char resolved_fn_receiver
     const: @: char resolved_namespace_l4
     const: @: char resolved_namespace_l4_root
     const: @: char resolved_namespace_l4_atom
@@ -454,6 +465,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: class_range_key_text
     LmP0Text: cast_target_key_text
     LmP0Text: fn_external_key_text
+    LmP0Text: fn_receiver_n2_key_text
     LmP0Text: namespace_l4_key_text
     LmP0Text: profile_rule_key_text
     LmP0Text: class_c_projection_key_text
@@ -836,23 +848,30 @@ fn: lm_test_registry_join_provenance_core () int
     fn_external_origin: 0
     fn_external_middle: 0
     fn_external_target: 0
+    fn_receiver_origin: 0
+    fn_receiver_middle: 0
+    fn_receiver_target: 0
     fn_external_descriptor: 0
     fn_external_row: 0
     fn_external_key_cell: 0
     fn_external_marker_cell: 0
     fn_external_value_cell: 0
+    fn_receiver_value_cell: 0
     fn_external_key_text: 0
     if: status = 0
         fn_external_origin: lm_test_registry_push_value_fact("lm.test.fn.external.origin", "ExternalWide", "1", 0)
         fn_external_middle: lm_test_registry_push_value_fact("lm.test.fn.external.middle", "ExternalWide", "1", fn_external_origin)
         fn_external_target: lm_test_registry_push_value_fact("fn.external", "ExternalWide", "1", fn_external_middle)
-        if: fn_external_origin = 0 || fn_external_middle = 0 || fn_external_target = 0 || fn_external_middle\source != fn_external_origin || fn_external_target\source != fn_external_middle
+        fn_receiver_origin: lm_test_registry_push_value_fact("lm.test.fn.receiver.origin", "ExternalWide", "sub", 0)
+        fn_receiver_middle: lm_test_registry_push_value_fact("lm.test.fn.receiver.middle", "ExternalWide", "sub", fn_receiver_origin)
+        fn_receiver_target: lm_test_registry_push_value_fact("fn.receiver", "ExternalWide", "sub", fn_receiver_middle)
+        if: fn_external_origin = 0 || fn_external_middle = 0 || fn_external_target = 0 || fn_receiver_origin = 0 || fn_receiver_middle = 0 || fn_receiver_target = 0 || fn_external_middle\source != fn_external_origin || fn_external_target\source != fn_external_middle || fn_receiver_middle\source != fn_receiver_origin || fn_receiver_target\source != fn_receiver_middle
             status: 1
     ---
 
     if: status = 0
         fn_external_descriptor: lm_table_descriptor_new_empty_slice("fn", 2U)
-        if: fn_external_descriptor = 0 || lm_table_descriptor_add_column(fn_external_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(fn_external_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(fn_external_descriptor, "external", "int") != 0
+        if: fn_external_descriptor = 0 || lm_table_descriptor_add_column(fn_external_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(fn_external_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(fn_external_descriptor, "external", "int") != 0 || lm_table_descriptor_add_column(fn_external_descriptor, "receiver", "class") != 0
             status: 1
     ---
 
@@ -861,7 +880,8 @@ fn: lm_test_registry_join_provenance_core () int
         fn_external_key_cell: lm_table_cell_new_cstr("ExternalWide", "ExternalWide", 0, 0, 0)
         fn_external_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
         fn_external_value_cell: lm_table_cell_new_cstr("1", "1", 0, fn_external_origin, 0)
-        if: fn_external_row = 0 || fn_external_key_cell = 0 || fn_external_marker_cell = 0 || fn_external_value_cell = 0 || lm_table_row_take_cell(fn_external_row, fn_external_key_cell) != 0 || lm_table_row_take_cell(fn_external_row, fn_external_marker_cell) != 0 || lm_table_row_take_cell(fn_external_row, fn_external_value_cell) != 0 || lm_table_descriptor_take_materialized_row(fn_external_descriptor, fn_external_row) != 0
+        fn_receiver_value_cell: lm_table_cell_new_cstr("sub", "sub", 0, fn_receiver_origin, 0)
+        if: fn_external_row = 0 || fn_external_key_cell = 0 || fn_external_marker_cell = 0 || fn_external_value_cell = 0 || fn_receiver_value_cell = 0 || lm_table_row_take_cell(fn_external_row, fn_external_key_cell) != 0 || lm_table_row_take_cell(fn_external_row, fn_external_marker_cell) != 0 || lm_table_row_take_cell(fn_external_row, fn_external_value_cell) != 0 || lm_table_row_take_cell(fn_external_row, fn_receiver_value_cell) != 0 || lm_table_descriptor_take_materialized_row(fn_external_descriptor, fn_external_row) != 0
             status: 1
         else:
             fn_external_row: 0
@@ -875,7 +895,50 @@ fn: lm_test_registry_join_provenance_core () int
     if: status = 0
         fn_external_key_text: lm_trans_text_from_cstr("ExternalWide")
         resolved_fn_external: lm_trans_fn_external_value(0, fn_external_key_text)
-        if: fn_external_key_text = 0 || resolved_fn_external != fn_external_value_cell\value || resolved_fn_external = fn_external_middle\payload || resolved_fn_external = fn_external_target\payload || lm_trans_fn_is_external(0, fn_external_key_text) = 0
+        resolved_fn_receiver: lm_trans_fn_receiver_value(0, fn_external_key_text)
+        if: fn_external_key_text = 0 || resolved_fn_external != fn_external_value_cell\value || resolved_fn_external = fn_external_middle\payload || resolved_fn_external = fn_external_target\payload || resolved_fn_receiver != fn_receiver_value_cell\value || resolved_fn_receiver = fn_receiver_middle\payload || resolved_fn_receiver = fn_receiver_target\payload || lm_trans_fn_is_external(0, fn_external_key_text) = 0
+            status: 1
+    ---
+
+    fn_receiver_n2_origin: 0
+    fn_receiver_n2_target: 0
+    fn_receiver_n2_descriptor: 0
+    fn_receiver_n2_row: 0
+    fn_receiver_n2_key_cell: 0
+    fn_receiver_n2_value_cell: 0
+    fn_receiver_n2_key_text: 0
+    if: status = 0
+        fn_receiver_n2_origin: lm_test_registry_push_value_fact("lm.test.fn.receiver.n2.origin", "ExternalReceiverN2", "sub", 0)
+        fn_receiver_n2_target: lm_test_registry_push_value_fact("fn.receiver", "ExternalReceiverN2", "sub", fn_receiver_n2_origin)
+        if: fn_receiver_n2_origin = 0 || fn_receiver_n2_target = 0 || fn_receiver_n2_target\source != fn_receiver_n2_origin
+            status: 1
+    ---
+
+    if: status = 0
+        fn_receiver_n2_descriptor: lm_table_descriptor_new_empty_slice("fn.receiver", 11U)
+        if: fn_receiver_n2_descriptor = 0 || lm_table_descriptor_add_column(fn_receiver_n2_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(fn_receiver_n2_descriptor, "value", "class") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        fn_receiver_n2_row: lm_table_row_new(0)
+        fn_receiver_n2_key_cell: lm_table_cell_new_cstr("ExternalReceiverN2", "ExternalReceiverN2", 0, 0, 0)
+        fn_receiver_n2_value_cell: lm_table_cell_new_cstr("sub", "sub", 0, fn_receiver_n2_origin, 0)
+        if: fn_receiver_n2_row = 0 || fn_receiver_n2_key_cell = 0 || fn_receiver_n2_value_cell = 0 || lm_table_row_take_cell(fn_receiver_n2_row, fn_receiver_n2_key_cell) != 0 || lm_table_row_take_cell(fn_receiver_n2_row, fn_receiver_n2_value_cell) != 0 || lm_table_descriptor_take_materialized_row(fn_receiver_n2_descriptor, fn_receiver_n2_row) != 0
+            status: 1
+        else:
+            fn_receiver_n2_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, fn_receiver_n2_descriptor) != 0
+                status: 1
+            else:
+                fn_receiver_n2_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        fn_receiver_n2_key_text: lm_trans_text_from_cstr("ExternalReceiverN2")
+        resolved_fn_receiver: lm_trans_fn_receiver_value(0, fn_receiver_n2_key_text)
+        if: fn_receiver_n2_key_text = 0 || resolved_fn_receiver != fn_receiver_n2_value_cell\value || resolved_fn_receiver = fn_receiver_n2_target\payload
             status: 1
     ---
 
@@ -1900,6 +1963,9 @@ fn: lm_test_registry_join_provenance_core () int
     lm_trans_text_ref_destroy(@ fn_external_key_text)
     lm_table_row_delete_any(fn_external_row)
     lm_table_descriptor_delete_any(fn_external_descriptor)
+    lm_trans_text_ref_destroy(@ fn_receiver_n2_key_text)
+    lm_table_row_delete_any(fn_receiver_n2_row)
+    lm_table_descriptor_delete_any(fn_receiver_n2_descriptor)
     lm_trans_text_ref_destroy(@ cast_target_key_text)
     lm_table_row_delete_any(cast_target_row)
     lm_table_descriptor_delete_any(cast_target_descriptor)

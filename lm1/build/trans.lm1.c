@@ -3523,6 +3523,7 @@ static int lm_trans_layout_backend_is_supported(const char *backend);
 static const char * lm_trans_layout_backend_value(const LmTransNamespace *namespace_, const LmP0Text *class_name);
 static const char * lm_trans_fn_external_value(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_fn_is_external(const LmTransNamespace *namespace_, const LmP0Text *name);
+static const char * lm_trans_fn_receiver_value(const LmTransNamespace *namespace_, const LmP0Text *name);
 static LmP0Text * lm_trans_l4_text_view_new(const char *text);
 static void lm_trans_l4_text_view_delete(LmP0Text **view);
 static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace *namespace_, const char *class_name);
@@ -31478,6 +31479,13 @@ static int lm_trans_fn_is_external(const LmTransNamespace *namespace_, const LmP
     return lm_trans_fn_external_value(namespace_, name) != 0;
 }
 
+static const char * lm_trans_fn_receiver_value(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    if (name == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "fn.receiver", "class", "class", "value", "class");
+}
+
 static LmP0Text * lm_trans_l4_text_view_new(const char *text) {
     if (text != 0) {
         return lm_trans_text_from_cstr(text);
@@ -33726,7 +33734,7 @@ static int lm_trans_declare_l4_fn_descriptor(LmTransNamespace *namespace_, const
         lm_trans_l4_text_view_delete(&name_text);
         return 0;
     }
-    receiver_name = lm_trans_namespace_registry_lookup(namespace_, name_text, "fn.receiver");
+    receiver_name = lm_trans_fn_receiver_value(namespace_, name_text);
     if (receiver_name != 0 && strcmp(receiver_name, "sub") == 0) {
         lm_trans_function_header_destroy(function);
         lm_trans_l4_text_view_delete(&name_text);
