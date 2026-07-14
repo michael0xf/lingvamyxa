@@ -4,8 +4,33 @@ L4:
         columns((class: class) (class: `receiver.type`))
         rows:
                  LmTestDirectTrailer    `receiver.trailer`
+                 LmTestDirectTrailer    None
+    end: namespace
+
+    table:
+        name: namespace
+        columns((class: class) (relation: `receiver.type`))
+        rows:
                  LmTestFallbackTrailer  `receiver.trailer`
-                 LmTestJoinedTrailer    `receiver.trailer`
+    end: namespace
+
+    table:
+        name: `lm.test.namespace.trailer.seed`
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 LmTestJoinedTrailer  `receiver.trailer`
+    end: `lm.test.namespace.trailer.seed`
+
+    join: (`lm.test.namespace.trailer.seed`) namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+    end: namespace
+
+    table:
+        name: namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 LmTestJoinedTrailer  None
     end: namespace
 
     table:

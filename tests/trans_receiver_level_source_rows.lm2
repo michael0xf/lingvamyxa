@@ -4,8 +4,33 @@ L4:
         columns((class: class) (class: `receiver.type`))
         rows:
                  LmTestDirectLevel    `receiver.level`
+                 LmTestDirectLevel    None
+    end: namespace
+
+    table:
+        name: namespace
+        columns((class: class) (relation: `receiver.type`))
+        rows:
                  LmTestFallbackLevel  `receiver.level`
-                 LmTestJoinedLevel    `receiver.level`
+    end: namespace
+
+    table:
+        name: `lm.test.namespace.level.seed`
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 LmTestJoinedLevel  `receiver.level`
+    end: `lm.test.namespace.level.seed`
+
+    join: (`lm.test.namespace.level.seed`) namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+    end: namespace
+
+    table:
+        name: namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 LmTestJoinedLevel  None
     end: namespace
 
     table:

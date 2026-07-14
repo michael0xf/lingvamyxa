@@ -446,13 +446,15 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
         return: 1
 return: 0
 
+fn: lm_trans_namespace_receiver_type_from_head (const: (LmP0Text: head)) const: @: char
+    if: head = 0
+        return: 0
+return: lm_trans_namespace_registry_source_n2_typed_value(0, head, "namespace", "class", "class", "receiver.type", "class")
+
 fn: lm_trans_level_receiver_binding_from_head (const: (LmP0Text: head)) const: @: char
     const: @: char receiver_type
 
-    if: head = 0
-        return: 0
-
-    receiver_type: lm_trans_registry_lookup(head, "namespace")
+    receiver_type: lm_trans_namespace_receiver_type_from_head(head)
     if: receiver_type = 0 || c.strcmp(receiver_type, "receiver.level") != 0
         return: 0
 return: lm_trans_namespace_registry_source_n2_typed_value(0, head, "receiver.level", "class", "class", "receiver", "binding")
@@ -511,7 +513,7 @@ fn: lm_trans_end_frame_target (const: (LmP0Frame: frame)) const: LmP0Text
     if: frame = 0 || frame\head = 0 || frame\body = 0
         return: 0
 
-    receiver_type: lm_trans_registry_lookup(frame\head, "namespace")
+    receiver_type: lm_trans_namespace_receiver_type_from_head(frame\head)
     if: receiver_type = 0 || c.strcmp(receiver_type, "receiver.trailer") != 0 || lm_trans_trailer_receiver_binding_from_head(frame\head) = 0
         return: 0
 

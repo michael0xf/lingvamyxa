@@ -3316,6 +3316,7 @@ static int lm_trans_top_level_emit_atom_sequence(FILE *file, LmTransNamespace *n
 static int lm_trans_top_level_declare_atom_sequence(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_atom_binding(const LmP0Text *atom, LmTransTopLevelItem *out);
 static int lm_trans_top_level_statement_binding(const LmTransHeadBinding *binding, LmTransTopLevelItem *out);
+static const char * lm_trans_namespace_receiver_type_from_head(const LmP0Text *head);
 static const char * lm_trans_level_receiver_binding_from_head(const LmP0Text *head);
 static const char * lm_trans_level_receiver_binding_from_frame(const LmP0Frame *frame);
 static int lm_trans_frame_has_level_receiver_binding(const LmP0Frame *frame, const char *binding);
@@ -25937,12 +25938,16 @@ static int lm_trans_top_level_statement_binding(const LmTransHeadBinding *bindin
     return 0;
 }
 
-static const char * lm_trans_level_receiver_binding_from_head(const LmP0Text *head) {
-    const char *receiver_type;
+static const char * lm_trans_namespace_receiver_type_from_head(const LmP0Text *head) {
     if (head == 0) {
         return 0;
     }
-    receiver_type = lm_trans_registry_lookup(head, "namespace");
+    return lm_trans_namespace_registry_source_n2_typed_value(0, head, "namespace", "class", "class", "receiver.type", "class");
+}
+
+static const char * lm_trans_level_receiver_binding_from_head(const LmP0Text *head) {
+    const char *receiver_type;
+    receiver_type = lm_trans_namespace_receiver_type_from_head(head);
     if (receiver_type == 0 || strcmp(receiver_type, "receiver.level") != 0) {
         return 0;
     }
@@ -26010,7 +26015,7 @@ static const LmP0Text * lm_trans_end_frame_target(const LmP0Frame *frame) {
     if (frame == 0 || frame -> head == 0 || frame -> body == 0) {
         return 0;
     }
-    receiver_type = lm_trans_registry_lookup(frame -> head, "namespace");
+    receiver_type = lm_trans_namespace_receiver_type_from_head(frame -> head);
     if (receiver_type == 0 || strcmp(receiver_type, "receiver.trailer") != 0 || lm_trans_trailer_receiver_binding_from_head(frame -> head) == 0) {
         return 0;
     }
