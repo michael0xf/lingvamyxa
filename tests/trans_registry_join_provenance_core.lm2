@@ -144,8 +144,17 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: receiver_origin
     LmTransRegistryFact: receiver_middle
     LmTransRegistryFact: receiver_target
+    LmTransRegistryFact: expr_meta_older
+    LmTransRegistryFact: expr_meta_origin
+    LmTransRegistryFact: expr_meta_middle
+    LmTransRegistryFact: expr_meta_target
+    LmTransRegistryFact: expr_meta_default_early
+    LmTransRegistryFact: expr_meta_default_late
+    LmTransRegistryFact: expr_meta_wrong
     LmTableDescriptor: descriptor
     LmTableDescriptor: receiver_descriptor
+    LmTableDescriptor: expr_meta_descriptor
+    LmTableDescriptor: expr_meta_wrong_descriptor
     LmTableDescriptor: node_descriptor
     LmTableDescriptor: condition_descriptor
     LmTableDescriptor: condition_wrong_descriptor
@@ -154,6 +163,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: unit_wrong_descriptor
     LmTableRow: row
     LmTableRow: receiver_row
+    LmTableRow: expr_meta_row
+    LmTableRow: expr_meta_wrong_row
     LmTableRow: node_row
     LmTableRow: condition_row
     LmTableRow: condition_wrong_row
@@ -166,6 +177,11 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: receiver_key_cell
     LmTableCell: receiver_binding_cell
     LmTableCell: receiver_marker_cell
+    LmTableCell: expr_meta_key_cell
+    LmTableCell: expr_meta_binding_cell
+    LmTableCell: expr_meta_marker_cell
+    LmTableCell: expr_meta_wrong_key_cell
+    LmTableCell: expr_meta_wrong_binding_cell
     LmTableCell: node_key_cell
     LmTableCell: node_value_cell
     LmTableCell: condition_key_cell
@@ -206,6 +222,9 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
     const: @: char resolved_receiver_binding
+    const: @: char resolved_expr_meta_binding
+    const: @: char resolved_expr_meta_default
+    const: @: char resolved_expr_meta_wrong
     LmP0Text: receiver_key_text
     size_t: layout_source_row_index
     size_t: unrelated_layout_source_row_index
@@ -305,6 +324,95 @@ fn: lm_test_registry_join_provenance_core () int
         receiver_key_text: lm_trans_text_from_cstr("ReceiverWitness")
         resolved_receiver_binding: lm_trans_atom_statement_receiver_binding(receiver_key_text)
         if: receiver_key_text = 0 || resolved_receiver_binding != receiver_binding_cell\value || resolved_receiver_binding = receiver_middle\payload || resolved_receiver_binding = receiver_target\payload
+            status: 1
+    ---
+
+    expr_meta_older: 0
+    expr_meta_origin: 0
+    expr_meta_middle: 0
+    expr_meta_target: 0
+    expr_meta_default_early: 0
+    expr_meta_default_late: 0
+    expr_meta_wrong: 0
+    expr_meta_descriptor: 0
+    expr_meta_wrong_descriptor: 0
+    expr_meta_row: 0
+    expr_meta_wrong_row: 0
+    expr_meta_key_cell: 0
+    expr_meta_binding_cell: 0
+    expr_meta_marker_cell: 0
+    expr_meta_wrong_key_cell: 0
+    expr_meta_wrong_binding_cell: 0
+    if: status = 0
+        expr_meta_default_early: lm_test_registry_push_value_fact("expr_emitter_binding", "default", "lm.test.meta.default.early", 0)
+        expr_meta_older: lm_test_registry_push_value_fact("expr_emitter_binding.binding_table", "ExprMetaWitness", "lm.test.meta.older", 0)
+        if: expr_meta_default_early = 0 || expr_meta_older = 0
+            status: 1
+        else:
+            resolved_expr_meta_binding: lm_trans_expr_emitter_binding_view_lookup("ExprMetaWitness")
+            if: resolved_expr_meta_binding != expr_meta_older\payload
+                status: 1
+        ---
+    ---
+
+    if: status = 0
+        expr_meta_origin: lm_test_registry_push_value_fact("lm.test.expr.meta.origin.binding_table", "ExprMetaWitness", "lm.test.meta.joined", 0)
+        expr_meta_middle: lm_test_registry_push_value_fact("lm.test.expr.meta.middle.binding_table", "ExprMetaWitness", "lm.test.meta.joined", expr_meta_origin)
+        expr_meta_target: lm_test_registry_push_value_fact("expr_emitter_binding.binding_table", "ExprMetaWitness", "lm.test.meta.joined", expr_meta_middle)
+        expr_meta_default_late: lm_test_registry_push_value_fact("expr_emitter_binding.binding_table", "default", "lm.test.meta.default.late", 0)
+        expr_meta_wrong: lm_test_registry_push_value_fact("expr_emitter_binding.binding_table", "ExprMetaWrongSchema", "lm.test.meta.wrong", 0)
+        if: expr_meta_origin = 0 || expr_meta_middle = 0 || expr_meta_target = 0 || expr_meta_default_late = 0 || expr_meta_wrong = 0 || expr_meta_middle\source != expr_meta_origin || expr_meta_target\source != expr_meta_middle
+            status: 1
+    ---
+
+    if: status = 0
+        expr_meta_descriptor: lm_table_descriptor_new_empty_slice("expr_emitter_binding", 20U)
+        if: expr_meta_descriptor = 0 || lm_table_descriptor_add_column(expr_meta_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(expr_meta_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(expr_meta_descriptor, "binding_table", "class") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        expr_meta_row: lm_table_row_new(0)
+        expr_meta_key_cell: lm_table_cell_new_cstr("ExprMetaWitness", "ExprMetaWitness", 0, 0, 0)
+        expr_meta_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+        expr_meta_binding_cell: lm_table_cell_new_cstr("lm.test.meta.joined", "lm.test.meta.joined", 0, expr_meta_origin, 0)
+        if: expr_meta_row = 0 || expr_meta_key_cell = 0 || expr_meta_marker_cell = 0 || expr_meta_binding_cell = 0 || lm_table_row_take_cell(expr_meta_row, expr_meta_key_cell) != 0 || lm_table_row_take_cell(expr_meta_row, expr_meta_marker_cell) != 0 || lm_table_row_take_cell(expr_meta_row, expr_meta_binding_cell) != 0 || lm_table_descriptor_take_materialized_row(expr_meta_descriptor, expr_meta_row) != 0
+            status: 1
+        else:
+            expr_meta_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, expr_meta_descriptor) != 0
+                status: 1
+            else:
+                expr_meta_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        expr_meta_wrong_descriptor: lm_table_descriptor_new_empty_slice("expr_emitter_binding.binding_table", 34U)
+        if: expr_meta_wrong_descriptor = 0 || lm_table_descriptor_add_column(expr_meta_wrong_descriptor, "class", "char") != 0 || lm_table_descriptor_add_column(expr_meta_wrong_descriptor, "binding_table", "class") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        expr_meta_wrong_row: lm_table_row_new(0)
+        expr_meta_wrong_key_cell: lm_table_cell_new_cstr("ExprMetaWrongSchema", "ExprMetaWrongSchema", 0, 0, 0)
+        expr_meta_wrong_binding_cell: lm_table_cell_new_cstr("lm.test.meta.wrong", "lm.test.meta.wrong", 0, expr_meta_wrong, 0)
+        if: expr_meta_wrong_row = 0 || expr_meta_wrong_key_cell = 0 || expr_meta_wrong_binding_cell = 0 || lm_table_row_take_cell(expr_meta_wrong_row, expr_meta_wrong_key_cell) != 0 || lm_table_row_take_cell(expr_meta_wrong_row, expr_meta_wrong_binding_cell) != 0 || lm_table_descriptor_take_materialized_row(expr_meta_wrong_descriptor, expr_meta_wrong_row) != 0
+            status: 1
+        else:
+            expr_meta_wrong_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, expr_meta_wrong_descriptor) != 0
+                status: 1
+            else:
+                expr_meta_wrong_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_expr_meta_binding: lm_trans_expr_emitter_binding_view_lookup("ExprMetaWitness")
+        resolved_expr_meta_default: lm_trans_expr_emitter_binding_view_lookup("ExprMetaMissing")
+        resolved_expr_meta_wrong: lm_trans_expr_emitter_binding_view_lookup("ExprMetaWrongSchema")
+        if: resolved_expr_meta_binding != expr_meta_binding_cell\value || resolved_expr_meta_binding = expr_meta_older\payload || resolved_expr_meta_binding = expr_meta_target\payload || resolved_expr_meta_default != expr_meta_default_late\payload || resolved_expr_meta_default = expr_meta_default_early\payload || resolved_expr_meta_wrong != expr_meta_wrong\payload || resolved_expr_meta_wrong = expr_meta_wrong_binding_cell\value
             status: 1
     ---
 
@@ -638,6 +746,10 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(node_descriptor)
     lm_table_row_delete_any(layout_row)
     lm_table_descriptor_delete_any(layout_descriptor)
+    lm_table_row_delete_any(expr_meta_wrong_row)
+    lm_table_descriptor_delete_any(expr_meta_wrong_descriptor)
+    lm_table_row_delete_any(expr_meta_row)
+    lm_table_descriptor_delete_any(expr_meta_descriptor)
     lm_trans_text_ref_destroy(@ receiver_key_text)
     lm_table_row_delete_any(receiver_row)
     lm_table_descriptor_delete_any(receiver_descriptor)

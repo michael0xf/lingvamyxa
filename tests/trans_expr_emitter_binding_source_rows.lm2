@@ -40,6 +40,104 @@ L4:
         rows:
                  `operator.infix`  None
     end: expr_emitter_binding
+
+    table:
+        name: `operator.prefix.ansi_c`
+        columns((class: class) (@: char ansi_c))
+        rows:
+                 lmTestMetaPrefix  "-"
+    end: `operator.prefix.ansi_c`
+
+    table:
+        name: `operator.postfix.ansi_c`
+        columns((class: class) (@: char ansi_c))
+        rows:
+                 lmTestMetaPostfix  "++"
+    end: `operator.postfix.ansi_c`
+
+    table:
+        name: `operator.infix.ansi_c`
+        columns((class: class) (@: char ansi_c))
+        rows:
+                 lmTestMetaInfix  "+"
+    end: `operator.infix.ansi_c`
+
+    table:
+        name: `lm.test.meta.prefix.emitter`
+        columns((class: class) (binding: emitter))
+        rows:
+                 `!`               lm_trans_expr_emit_operator
+                 lmTestMetaPrefix  lm_trans_expr_emit_operator
+    end: `lm.test.meta.prefix.emitter`
+
+    table:
+        name: `lm.test.meta.postfix.emitter`
+        columns((class: class) (binding: emitter))
+        rows:
+                 postinc            lm_trans_expr_emit_operator
+                 lmTestMetaPostfix  lm_trans_expr_emit_operator
+    end: `lm.test.meta.postfix.emitter`
+
+    table:
+        name: `lm.test.meta.infix.emitter`
+        columns((class: class) (binding: emitter))
+        rows:
+                 `+`              lm_trans_expr_emit_operator
+                 lmTestMetaInfix  lm_trans_expr_emit_operator
+    end: `lm.test.meta.infix.emitter`
+
+    table:
+        name: expr_emitter_binding
+        columns((class: class) (class: binding_table))
+        rows:
+                 `operator.prefix`  `operator.infix.emitter`
+    end: expr_emitter_binding
+
+    table:
+        name: expr_emitter_binding
+        columns((class: class) (int: marker) (class: binding_table))
+        rows:
+                 `operator.prefix`  1  `lm.test.meta.prefix.emitter`
+    end: expr_emitter_binding
+
+    table:
+        name: expr_emitter_binding
+        columns((class: class) (class: binding_table) (int: marker))
+        rows:
+                 `operator.postfix`  `operator.infix.emitter`  2
+    end: expr_emitter_binding
+
+    table:
+        name: `expr_emitter_binding.binding_table`
+        columns((class: class) (class: binding_table))
+        rows:
+                 `operator.postfix`  `lm.test.meta.postfix.emitter`
+                 `operator.infix`    `operator.prefix.emitter`
+    end: `expr_emitter_binding.binding_table`
+
+    table:
+        name: `lm.test.expr_emitter_binding.wide.seed`
+        columns((class: class) (int: marker) (class: binding_table))
+        rows:
+                 `operator.infix`  3  `lm.test.meta.infix.emitter`
+    end: `lm.test.expr_emitter_binding.wide.seed`
+
+    join: (`lm.test.expr_emitter_binding.wide.seed`) `lm.test.expr_emitter_binding.wide.middle`
+        columns((class: class) (int: marker) (class: binding_table))
+        rows:
+    end: `lm.test.expr_emitter_binding.wide.middle`
+
+    join: (`lm.test.expr_emitter_binding.wide.middle`) expr_emitter_binding
+        columns((class: class) (int: marker) (class: binding_table))
+        rows:
+    end: expr_emitter_binding
+
+    table:
+        name: `expr_emitter_binding.binding_table`
+        columns((class: class) (class: binding_table))
+        rows:
+                 `operator.postfix`  None
+    end: `expr_emitter_binding.binding_table`
 end: L4
 
 external:
@@ -48,10 +146,16 @@ external:
         int: postfix_result
         int: prefix_result
         int: infix_result
+        int: meta_postfix_result
+        int: meta_prefix_result
+        int: meta_infix_result
 
         postfix_result: value postinc
         prefix_result: ! value
         infix_result: postfix_result + value
-        return: postfix_result != 2 || prefix_result != 0 || infix_result != 5 || value != 3
+        meta_prefix_result: lmTestMetaPrefix value
+        meta_postfix_result: value lmTestMetaPostfix
+        meta_infix_result: meta_prefix_result lmTestMetaInfix meta_postfix_result
+        return: postfix_result != 2 || prefix_result != 0 || infix_result != 5 || value != 4 || meta_prefix_result != -3 || meta_postfix_result != 3 || meta_infix_result != 0
     end: main
 end: external

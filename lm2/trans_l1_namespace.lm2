@@ -221,6 +221,135 @@ fn: lm_trans_registry_has_expr_emitter_binding (const: (LmP0Text: key); const: @
         return: 1
 return: 0
 
+fn: lm_trans_expr_emitter_binding_view_row_matches (const: (LmRegistryViewRow: view_row)) int
+    if: view_row = 0 || view_row\table = 0
+        return: 0
+return: c.strcmp(view_row\table, "expr_emitter_binding") = 0 || c.strcmp(view_row\table, "expr_emitter_binding.binding_table") = 0
+
+LmOwnPtrStack: lm_trans_expr_emitter_binding_view_rows
+const: LmRegistryView: lm_trans_expr_emitter_binding_cached_view
+size_t: lm_trans_expr_emitter_binding_cached_fact_count
+
+sub: lm_trans_expr_emitter_binding_view_cache_reset ()
+    lm_trans_ptr_stack_delete(@ lm_trans_expr_emitter_binding_view_rows)
+    lm_trans_expr_emitter_binding_cached_view: 0
+    lm_trans_expr_emitter_binding_cached_fact_count: 0U
+end: lm_trans_expr_emitter_binding_view_cache_reset
+
+fn: lm_trans_expr_emitter_binding_view_cached_rows (const: (LmRegistryView: view)) const: LmOwnPtrStack
+    const: LmRegistryViewRow: view_row
+    size_t: fact_count
+    size_t: i
+
+    if: view = 0
+        return: 0
+    fact_count: lm_registry_view_fact_count(view)
+    if: lm_trans_expr_emitter_binding_view_rows = 0 || lm_trans_expr_emitter_binding_cached_view != view || lm_trans_expr_emitter_binding_cached_fact_count > fact_count || (view\parent != 0 && lm_trans_expr_emitter_binding_cached_fact_count != fact_count)
+        lm_trans_expr_emitter_binding_view_cache_reset()
+        lm_trans_expr_emitter_binding_view_rows: lm_trans_ptr_stack_new(0)
+        if: lm_trans_expr_emitter_binding_view_rows = 0
+            return: 0
+        lm_trans_expr_emitter_binding_cached_view: view
+    ---
+
+    i: lm_trans_expr_emitter_binding_cached_fact_count
+    while: i < fact_count
+        view_row: lm_registry_view_fact_at(view, i)
+        if: lm_trans_expr_emitter_binding_view_row_matches(view_row) != 0
+            if: lm_own_ptr_stack_push(lm_trans_expr_emitter_binding_view_rows, cast: (@: void) view_row) != 0
+                lm_trans_expr_emitter_binding_view_cache_reset()
+                return: 0
+            ---
+        i: i + 1U
+    lm_trans_expr_emitter_binding_cached_fact_count: fact_count
+return: lm_trans_expr_emitter_binding_view_rows
+
+fn: lm_trans_expr_emitter_binding_view_row_facade_values (
+    const: (LmRegistryViewRow: view_row)
+    const: @@(char out_class_name)
+    const: @@(char out_binding_table)
+) int
+    const: LmTransRegistryFact: facade_row
+
+    if: out_class_name != 0
+        out_class_name[0]: 0
+    if: out_binding_table != 0
+        out_binding_table[0]: 0
+    if: out_class_name = 0 || out_binding_table = 0 || lm_trans_expr_emitter_binding_view_row_matches(view_row) = 0 || view_row\key = 0 || view_row\payload = 0
+        return: 0
+
+    out_class_name[0]: view_row\key
+    out_binding_table[0]: view_row\payload
+    facade_row: cast: (const: LmTransRegistryFact) view_row\source
+    if: facade_row != 0 && facade_row\key != 0 && facade_row\payload != 0
+        out_class_name[0]: facade_row\key
+        out_binding_table[0]: facade_row\payload
+return: 1
+
+fn: lm_trans_expr_emitter_binding_view_row_values (
+    const: (LmRegistryViewRow: view_row)
+    const: @@(char out_class_name)
+    const: @@(char out_binding_table)
+) int
+    const: LmTransRegistryFact: facade_row
+    const: LmTableCell: source_key_cell
+    const: LmTableCell: source_binding_cell
+
+    if: lm_trans_expr_emitter_binding_view_row_facade_values(view_row, out_class_name, out_binding_table) = 0
+        return: 0
+
+    facade_row: cast: (const: LmTransRegistryFact) view_row\source
+    if: lm_trans_registry_view_is_selected() = 0
+        return: 1
+
+    source_key_cell: 0
+    source_binding_cell: lm_trans_registry_source_path_typed_cell_kind(0, view_row\table, "class", "class", "class", "binding_table", facade_row, 0, @ source_key_cell)
+    if: source_key_cell != 0 && source_key_cell\value != 0 && source_binding_cell != 0 && source_binding_cell\value != 0
+        out_class_name[0]: source_key_cell\value
+        out_binding_table[0]: source_binding_cell\value
+    ---
+return: 1
+
+fn: lm_trans_expr_emitter_binding_view_lookup (const: @(char class_name)) const: @: char
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: LmRegistryViewRow: fallback_row
+    const: LmOwnPtrStack: rows
+    const: @: char row_class_name
+    const: @: char binding_table
+    size_t: i
+
+    if: class_name = 0
+        return: 0
+    view: lm_trans_namespace_registry_view(0)
+    if: view = 0
+        return: 0
+    rows: lm_trans_expr_emitter_binding_view_cached_rows(view)
+    if: rows = 0
+        c.exit(2)
+
+    fallback_row: 0
+    i: rows\count
+    while: i > 0U
+        i: i - 1U
+        view_row: lm_own_ptr_stack_at(rows, i)
+        row_class_name: 0
+        binding_table: 0
+        if: lm_trans_expr_emitter_binding_view_row_facade_values(view_row, @ row_class_name, @ binding_table) != 0
+            if: c.strcmp(row_class_name, class_name) = 0
+                if: lm_trans_expr_emitter_binding_view_row_values(view_row, @ row_class_name, @ binding_table) != 0
+                    return: binding_table
+                return: 0
+            if: fallback_row = 0 && c.strcmp(row_class_name, "default") = 0
+                fallback_row: view_row
+        ---
+    ---
+    row_class_name: 0
+    binding_table: 0
+    if: lm_trans_expr_emitter_binding_view_row_values(fallback_row, @ row_class_name, @ binding_table) != 0
+        return: binding_table
+return: 0
+
 fn: lm_trans_expr_emitter_binding_table (const: @(char class_name)) const: @: char
     LmP0Text: class_text
     const: @: char table
@@ -228,7 +357,9 @@ fn: lm_trans_expr_emitter_binding_table (const: @(char class_name)) const: @: ch
     class_text: lm_trans_text_ref_new_cstr(class_name)
     if: class_text = 0
         c.exit(2)
-    table: lm_trans_namespace_registry_source_n2_typed_value(0, class_text, "expr_emitter_binding", "class", "class", "binding_table", "class")
+    table: lm_trans_expr_emitter_binding_view_lookup(class_name)
+    if: table = 0
+        table: lm_trans_namespace_registry_source_n2_typed_value(0, class_text, "expr_emitter_binding", "class", "class", "binding_table", "class")
     if: table != 0 && lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, table) != 0
         lm_trans_text_ref_destroy(@ class_text)
         c.exit(2)
@@ -264,6 +395,46 @@ fn: lm_trans_registry_has_any_expr_emitter_binding (const: (LmP0Text: key)) int
     size_t: i
     LmTransRegistryFact: row
     const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: @: char class_name
+    const: @: char binding_table
+    LmP0Text: class_text
+    int: found
+
+    view: lm_trans_namespace_registry_view(0)
+    if: view != 0
+        rows: lm_trans_expr_emitter_binding_view_cached_rows(view)
+        if: rows = 0
+            c.exit(2)
+        i: 0U
+        while: i < rows\count
+            view_row: lm_own_ptr_stack_at(rows, i)
+            class_name: 0
+            binding_table: 0
+            if: lm_trans_expr_emitter_binding_view_row_facade_values(view_row, @ class_name, @ binding_table) != 0
+                class_text: lm_trans_text_ref_new_cstr(class_name)
+                if: class_text = 0
+                    c.exit(2)
+                if: lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, binding_table) != 0
+                    lm_trans_text_ref_destroy(@ class_text)
+                    c.exit(2)
+                found: lm_trans_registry_has_expr_emitter_binding(key, binding_table, class_name)
+                lm_trans_text_ref_destroy(@ class_text)
+                if: found
+                    class_name: 0
+                    binding_table: 0
+                    if: lm_trans_expr_emitter_binding_view_row_values(view_row, @ class_name, @ binding_table) = 0
+                        return: 1
+                    if: lm_trans_registry_has_expr_emitter_binding(key, binding_table, class_name)
+                        return: 1
+                    ---
+                ---
+            ---
+            i: i + 1U
+        ---
+        return: 0
+    ---
 
     rows: lm_trans_registry_relation_stack(lm_trans_text_from_cstr("expr_emitter_binding"), "row")
     if: rows = 0
@@ -273,9 +444,15 @@ fn: lm_trans_registry_has_any_expr_emitter_binding (const: (LmP0Text: key)) int
     while: i < rows\count
         row: lm_own_ptr_stack_at(rows, i)
         if: row != 0 && row\payload != 0 && row\key != 0
-            if: lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", lm_trans_text_from_cstr(row\key), row\payload) != 0
+            class_text: lm_trans_text_ref_new_cstr(row\key)
+            if: class_text = 0
                 c.exit(2)
-            if: lm_trans_registry_has_expr_emitter_binding(key, row\payload, row\key)
+            if: lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, row\payload) != 0
+                lm_trans_text_ref_destroy(@ class_text)
+                c.exit(2)
+            found: lm_trans_registry_has_expr_emitter_binding(key, row\payload, row\key)
+            lm_trans_text_ref_destroy(@ class_text)
+            if: found
                 return: 1
             ---
         i: i + 1U
