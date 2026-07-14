@@ -1,19 +1,19 @@
 L4:
     table:
         name: alias
-        columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
+        columns((class: class) (int: marker) (int: `target.const`) (class: target) (int: extra) (size_t: `target.address-depth`) (class: backend))
         rows:
-                 LmTestAliasSource           c.typedef  int       None  None
-                 LmTestAliasPointer          c.typedef  char      1     1
-                 LmTestAliasValueOverlay     c.typedef  int       0     0
-                 LmTestAliasBackendOverlay   c.typedef  long      None  None
-                 LmTestAliasDepthOverlay     c.typedef  char      1     None
-                 LmTestAliasConstOverlay     c.typedef  int       None  None
-                 LmTestAliasDuplicate        c.typedef  int       None  None
-                 LmTestAliasDuplicate        c.typedef  double    None  None
-                 LmTestAliasLateNone         c.typedef  char      1     1
-                 LmTestAliasLateNone         None       None      None  None
-                 LmTestAliasNone             None       None      None  None
+                 LmTestAliasSource           7  None  int     9  None  c.typedef
+                 LmTestAliasPointer          7  1     char    9  1     c.typedef
+                 LmTestAliasValueOverlay     7  0     int     9  0     c.typedef
+                 LmTestAliasBackendOverlay   7  None  long    9  None  c.typedef
+                 LmTestAliasDepthOverlay     7  None  char    9  1     c.typedef
+                 LmTestAliasConstOverlay     7  None  int     9  None  c.typedef
+                 LmTestAliasDuplicate        7  None  int     9  None  c.typedef
+                 LmTestAliasDuplicate        7  None  double  9  None  c.typedef
+                 LmTestAliasLateNone         7  1     char    9  1     c.typedef
+                 LmTestAliasLateNone         None None  None    None None None
+                 LmTestAliasNone             None None  None    None None None
     end: alias
 
     table:
@@ -62,6 +62,27 @@ L4:
         rows:
                  LmTestAliasConstOverlay  1
                  LmTestAliasSplit         1
+    end: `alias.target.const`
+
+    table:
+        name: `alias.target`
+        columns((class: class) (char: target))
+        rows:
+                 LmTestAliasSchemaFallback  double
+    end: `alias.target`
+
+    table:
+        name: `alias.target.address-depth`
+        columns((class: class) (int: depth))
+        rows:
+                 LmTestAliasSchemaFallback  0
+    end: `alias.target.address-depth`
+
+    table:
+        name: `alias.target.const`
+        columns((class: class) (size_t: value))
+        rows:
+                 LmTestAliasSchemaFallback  0
     end: `alias.target.const`
 
     table:

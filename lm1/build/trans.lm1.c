@@ -3577,7 +3577,9 @@ static int lm_trans_collect_abi_return(const LmTransNamespace *namespace_, const
 static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity, size_t *out_count, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name);
 static int lm_trans_emit_abi_params(FILE *file, LmTransAbiParam **params, size_t count);
 static int lm_trans_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const char *backend_payload, const LmTableCell *source_backend_cell);
-static const char * lm_trans_alias_source_target(const LmTransNamespace *namespace_, const char *name, const LmOwnPtrStack *facade_backend_rows, const LmTransRegistryFact *facade_target_row, const LmTransRegistryFact *facade_address_depth_row, const LmTransRegistryFact *facade_const_row, size_t *out_address_depth, size_t *out_const_flag);
+static const char * lm_trans_alias_source_target(const LmTransNamespace *namespace_, const LmTransRegistryFact *facade_target_row);
+static const char * lm_trans_alias_source_address_depth(const LmTransNamespace *namespace_, const LmTransRegistryFact *facade_address_depth_row);
+static const char * lm_trans_alias_source_const(const LmTransNamespace *namespace_, const LmTransRegistryFact *facade_const_row);
 static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *namespace_);
 static int lm_trans_registry_collect_forward_backend_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *backend_payload);
 static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace *namespace_);
@@ -32787,109 +32789,29 @@ static int lm_trans_source_backend_is_witness(const LmOwnPtrStack *facade_backen
     return 0;
 }
 
-static const char * lm_trans_alias_source_target(const LmTransNamespace *namespace_, const char *name, const LmOwnPtrStack *facade_backend_rows, const LmTransRegistryFact *facade_target_row, const LmTransRegistryFact *facade_address_depth_row, const LmTransRegistryFact *facade_const_row, size_t *out_address_depth, size_t *out_const_flag) {
-    const LmTableDescriptor * source_table;
-    const LmTableRow * source_row;
-    const LmTableColumnDescriptor * source_key_column;
-    const LmTableColumnDescriptor * source_backend_column;
-    const LmTableColumnDescriptor * source_target_column;
-    const LmTableColumnDescriptor * source_address_depth_column;
-    const LmTableColumnDescriptor * source_const_column;
-    const LmTableCell * source_key_cell;
-    const LmTableCell * source_backend_cell;
-    const LmTableCell * source_target_cell;
-    const LmTableCell * source_address_depth_cell;
-    const LmTableCell * source_const_cell;
-    const char *source_key_descriptor;
-    const char *source_backend_descriptor;
-    const char *source_target_descriptor;
-    const char *source_address_depth_descriptor;
-    const char *source_const_descriptor;
-    const char *result;
-    size_t descriptor_index;
-    size_t row_index;
-    size_t source_address_depth;
-    size_t source_const_flag;
-    int source_same;
-    int source_usable;
+static const char * lm_trans_alias_source_target(const LmTransNamespace *namespace_, const LmTransRegistryFact *facade_target_row) {
     if (facade_target_row == 0 || facade_target_row -> payload == 0) {
         return 0;
     }
-    result = facade_target_row -> payload;
-    if (name == 0 || facade_backend_rows == 0 || out_address_depth == 0 || out_const_flag == 0 || lm_trans_registry_view_parity_enabled() == 0) {
-        return result;
+    return lm_trans_registry_source_path_n2_named_typed_value(namespace_, "alias.target", "class", "class", "target", "class", facade_target_row);
+}
+
+static const char * lm_trans_alias_source_address_depth(const LmTransNamespace *namespace_, const LmTransRegistryFact *facade_address_depth_row) {
+    if (facade_address_depth_row == 0 || facade_address_depth_row -> payload == 0) {
+        return 0;
     }
-    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
-        return result;
+    return lm_trans_registry_source_path_n2_named_typed_value(namespace_, "alias.target.address-depth", "class", "class", "depth", "size_t", facade_address_depth_row);
+}
+
+static const char * lm_trans_alias_source_const(const LmTransNamespace *namespace_, const LmTransRegistryFact *facade_const_row) {
+    if (facade_const_row == 0 || facade_const_row -> payload == 0) {
+        return 0;
     }
-    descriptor_index = lm_registry_view_source_table_count(lm_trans_registry->view);
-    while (descriptor_index > 0U) {
-        descriptor_index = descriptor_index - 1U;
-        source_table = lm_registry_view_source_table_at(lm_trans_registry->view, descriptor_index);
-        source_usable = source_table != 0 && source_table -> name != 0 && strcmp(source_table -> name, "alias") == 0 && lm_table_descriptor_column_count(source_table) == 5U;
-        if (source_usable != 0) {
-            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
-            source_backend_column = lm_table_descriptor_column_at(source_table, 1U);
-            source_target_column = lm_table_descriptor_column_at(source_table, 2U);
-            source_address_depth_column = lm_table_descriptor_column_at(source_table, 3U);
-            source_const_column = lm_table_descriptor_column_at(source_table, 4U);
-            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_backend_column != 0 && source_backend_column -> name != 0 && strcmp(source_backend_column -> name, "backend") == 0 && source_target_column != 0 && source_target_column -> name != 0 && strcmp(source_target_column -> name, "target") == 0 && source_address_depth_column != 0 && source_address_depth_column -> name != 0 && strcmp(source_address_depth_column -> name, "target.address-depth") == 0 && source_const_column != 0 && source_const_column -> name != 0 && strcmp(source_const_column -> name, "target.const") == 0;
-            if (source_usable != 0) {
-                source_key_descriptor = lm_table_column_descriptor_descriptor_at(source_key_column, 0U);
-                source_backend_descriptor = lm_table_column_descriptor_descriptor_at(source_backend_column, 0U);
-                source_target_descriptor = lm_table_column_descriptor_descriptor_at(source_target_column, 0U);
-                source_address_depth_descriptor = lm_table_column_descriptor_descriptor_at(source_address_depth_column, 0U);
-                source_const_descriptor = lm_table_column_descriptor_descriptor_at(source_const_column, 0U);
-                source_usable = lm_table_column_descriptor_descriptor_count(source_key_column) == 1U && source_key_descriptor != 0 && strcmp(source_key_descriptor, "class") == 0 && lm_table_column_descriptor_descriptor_count(source_backend_column) == 1U && source_backend_descriptor != 0 && strcmp(source_backend_descriptor, "class") == 0 && lm_table_column_descriptor_descriptor_count(source_target_column) == 1U && source_target_descriptor != 0 && strcmp(source_target_descriptor, "class") == 0 && lm_table_column_descriptor_descriptor_count(source_address_depth_column) == 1U && source_address_depth_descriptor != 0 && strcmp(source_address_depth_descriptor, "size_t") == 0 && lm_table_column_descriptor_descriptor_count(source_const_column) == 1U && source_const_descriptor != 0 && strcmp(source_const_descriptor, "int") == 0;
-            }
-        }
-        if (source_usable != 0) {
-            row_index = lm_table_descriptor_materialized_row_count(source_table);
-            while (row_index > 0U) {
-                row_index = row_index - 1U;
-                source_row = lm_table_descriptor_materialized_row_at(source_table, row_index);
-                if (source_row != 0 && lm_table_row_cell_count(source_row) == 5U) {
-                    source_key_cell = lm_table_row_cell_at(source_row, 0U);
-                    source_backend_cell = lm_table_row_cell_at(source_row, 1U);
-                    source_target_cell = lm_table_row_cell_at(source_row, 2U);
-                    source_address_depth_cell = lm_table_row_cell_at(source_row, 3U);
-                    source_const_cell = lm_table_row_cell_at(source_row, 4U);
-                    source_usable = source_key_cell != 0 && source_key_cell -> value != 0 && strcmp(source_key_cell -> value, name) == 0 && lm_trans_source_backend_is_witness(facade_backend_rows, name, "c.typedef", source_backend_cell) != 0 && lm_trans_registry_text_cell_is_facade_witness(source_target_cell, facade_target_row) != 0 && source_address_depth_cell != 0 && source_const_cell != 0;
-                    if (source_usable != 0) {
-                        source_address_depth = 0U;
-                        source_const_flag = 0U;
-                        source_same = 1;
-                        if (source_address_depth_cell -> value == 0) {
-                            source_same = source_address_depth_cell -> explicit_none != 0 && source_address_depth_cell -> node == 0 && source_address_depth_cell -> source == 0 && facade_address_depth_row == 0;
-                        }
-                        else {
-                            source_same = lm_trans_registry_text_cell_is_facade_witness(source_address_depth_cell, facade_address_depth_row) != 0 && lm_trans_parse_size_payload(source_address_depth_cell -> value, &source_address_depth) != 0;
-                        }
-                        if (source_same != 0 && source_const_cell -> value == 0) {
-                            source_same = source_const_cell -> explicit_none != 0 && source_const_cell -> node == 0 && source_const_cell -> source == 0 && facade_const_row == 0;
-                        }
-                        if (source_same != 0 && source_const_cell -> value != 0) {
-                            source_same = lm_trans_registry_text_cell_is_facade_witness(source_const_cell, facade_const_row) != 0 && lm_trans_parse_size_payload(source_const_cell -> value, &source_const_flag) != 0;
-                        }
-                        if (source_same != 0) {
-                            if (lm_trans_registry_view_is_selected() != 0) {
-                                out_address_depth[0] = source_address_depth;
-                                out_const_flag[0] = source_const_flag;
-                                return source_target_cell -> value;
-                            }
-                            return result;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return result;
+    return lm_trans_registry_source_path_n2_named_typed_value(namespace_, "alias.target.const", "class", "class", "value", "int", facade_const_row);
 }
 
 static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *namespace_) {
     LmOwnPtrStack * names;
-    const LmOwnPtrStack * backend_rows;
     const LmOwnPtrStack * target_rows;
     const LmOwnPtrStack * address_depth_rows;
     const LmOwnPtrStack * const_rows;
@@ -32898,6 +32820,8 @@ static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *n
     LmTransRegistryFact * const_row;
     const char *name;
     const char *target;
+    const char *address_depth_payload;
+    const char *const_payload;
     LmP0Text * name_text;
     size_t i;
     size_t address_depth;
@@ -32916,7 +32840,6 @@ static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *n
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }
-    backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "backend");
     target_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target");
     address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.address-depth");
     const_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.const");
@@ -32925,7 +32848,8 @@ static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *n
         name = lm_own_ptr_stack_at(names, i);
         lm_trans_text_assign_cstr(name_text, name);
         target_row = lm_trans_registry_relation_stack_latest_row(target_rows, name_text);
-        if (target_row == 0 || target_row -> payload == 0) {
+        target = lm_trans_alias_source_target(namespace_, target_row);
+        if (target == 0) {
             fprintf(stderr, "trans L4 alias error: %s requires alias.target\n", name);
             lm_trans_l4_text_view_delete(&name_text);
             lm_trans_ptr_stack_delete(&names);
@@ -32935,14 +32859,15 @@ static int lm_trans_emit_l4_alias_typedefs(FILE *file, const LmTransNamespace *n
         const_flag = 0U;
         address_depth_row = lm_trans_registry_relation_stack_latest_row(address_depth_rows, name_text);
         const_row = lm_trans_registry_relation_stack_latest_row(const_rows, name_text);
-        if ((address_depth_row != 0 && lm_trans_parse_size_payload(address_depth_row -> payload, &address_depth) == 0) || (const_row != 0 && lm_trans_parse_size_payload(const_row -> payload, &const_flag) == 0)) {
+        address_depth_payload = lm_trans_alias_source_address_depth(namespace_, address_depth_row);
+        const_payload = lm_trans_alias_source_const(namespace_, const_row);
+        if ((address_depth_row != 0 && (address_depth_payload == 0 || lm_trans_parse_size_payload(address_depth_payload, &address_depth) == 0)) || (const_row != 0 && (const_payload == 0 || lm_trans_parse_size_payload(const_payload, &const_flag) == 0))) {
             fprintf(stderr, "trans L4 alias error: %s has invalid alias target flags\n", name);
             lm_trans_l4_text_view_delete(&name_text);
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
-        target = lm_trans_alias_source_target(namespace_, name, backend_rows, target_row, address_depth_row, const_row, &address_depth, &const_flag);
-        if (target == 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target, address_depth, const_flag != 0U, name) != 0 || lm_trans_put(file, ";\n") != 0) {
+        if (lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target, address_depth, const_flag != 0U, name) != 0 || lm_trans_put(file, ";\n") != 0) {
             lm_trans_l4_text_view_delete(&name_text);
             lm_trans_ptr_stack_delete(&names);
             return 1;
