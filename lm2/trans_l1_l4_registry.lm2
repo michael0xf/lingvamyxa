@@ -1,6 +1,11 @@
 fn: lm_trans_layout_backend_is_supported (const: @(char backend)) int
 return: backend != 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.named-struct") = 0 || c.strcmp(backend, "c.union") = 0 || c.strcmp(backend, "c.named-union") = 0)
 
+fn: lm_trans_layout_backend_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name)) const: @: char
+    if: class_name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class")
+
 fn: lm_trans_l4_text_view_new (const: @(char text)) LmP0Text
     if: text != 0
         return: lm_trans_text_from_cstr(text)

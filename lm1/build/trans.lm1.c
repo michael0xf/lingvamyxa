@@ -3441,6 +3441,7 @@ static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *val
 
 
 static int lm_trans_layout_backend_is_supported(const char *backend);
+static const char * lm_trans_layout_backend_value(const LmTransNamespace *namespace_, const LmP0Text *class_name);
 static LmP0Text * lm_trans_l4_text_view_new(const char *text);
 static void lm_trans_l4_text_view_delete(LmP0Text **view);
 static int lm_trans_layout_class_requires_pointer_field(const LmTransNamespace *namespace_, const char *class_name);
@@ -17789,7 +17790,7 @@ static int lm_trans_named_structure_escape_return_info(const LmP0Field *return_f
                 result = 0;
             }
             else {
-                if (lm_trans_namespace_registry_lookup(namespace_, variable_type, "layout.backend") == 0) {
+                if (lm_trans_layout_backend_value(namespace_, variable_type) == 0) {
                     result = 0;
                 }
                 else {
@@ -20758,7 +20759,7 @@ static const LmP0Structure * lm_trans_l2_table_cell_inline_layout_body(const LmP
     if (lm_trans_effective_address_depth(expected_type -> class_name, expected_type -> address_depth) != 1U) {
         return 0;
     }
-    backend = lm_trans_namespace_registry_lookup(namespace_, expected_type -> class_name, "layout.backend");
+    backend = lm_trans_layout_backend_value(namespace_, expected_type -> class_name);
     if (backend == 0 || lm_trans_layout_backend_is_supported(backend) == 0) {
         return 0;
     }
@@ -21445,7 +21446,7 @@ static int lm_trans_merge_source_layout_name_from_atom_new(const LmP0Text *atom,
             return lm_return_0;
         }
     }
-    backend = lm_trans_namespace_registry_lookup(namespace_, payload, "layout.backend");
+    backend = lm_trans_layout_backend_value(namespace_, payload);
     if (backend == 0 || lm_trans_layout_backend_is_supported(backend) == 0) {
         {
             int lm_return_1 = 0;
@@ -21497,7 +21498,7 @@ static int lm_trans_merge_source_layout_name_from_call_new(const LmP0Node *node,
             return lm_return_1;
         }
     }
-    backend = lm_trans_namespace_registry_lookup(namespace_, type -> class_name, "layout.backend");
+    backend = lm_trans_layout_backend_value(namespace_, type -> class_name);
     if (backend == 0 || lm_trans_layout_backend_is_supported(backend) == 0) {
         {
             int lm_return_2 = 0;
@@ -22400,7 +22401,7 @@ static int lm_trans_statement_stack_schedule_else(FILE *file, LmTransStatementSt
 static int lm_trans_statement_stack_schedule_named_structure(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
     int had_layout;
     LM_UNUSED(stack);
-    had_layout = lm_trans_namespace_registry_lookup(namespace_, frame -> head, "layout.backend") != 0;
+    had_layout = lm_trans_layout_backend_value(namespace_, frame -> head) != 0;
     if (lm_trans_declare_named_structure_layout(namespace_, frame) != 0) {
         return 1;
     }
@@ -29750,6 +29751,13 @@ static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *val
 
 static int lm_trans_layout_backend_is_supported(const char *backend) {
     return backend != 0 && (strcmp(backend, "c.struct") == 0 || strcmp(backend, "c.named-struct") == 0 || strcmp(backend, "c.union") == 0 || strcmp(backend, "c.named-union") == 0);
+}
+
+static const char * lm_trans_layout_backend_value(const LmTransNamespace *namespace_, const LmP0Text *class_name) {
+    if (class_name == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class");
 }
 
 static LmP0Text * lm_trans_l4_text_view_new(const char *text) {
