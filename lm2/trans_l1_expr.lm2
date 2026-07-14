@@ -1415,7 +1415,7 @@ fn: lm_trans_layout_type_implicit_address_depth (const: (LmP0Text: class_name)) 
         return: 0U
     if: lm_trans_class_is_reference_base(class_name)
         return: 1U
-    projection: lm_trans_registry_lookup(class_name, "class.c.projection")
+    projection: lm_trans_class_c_projection(class_name)
     if: projection != 0 && (c.strcmp(projection, "c.struct") = 0 || c.strcmp(projection, "c.named-struct") = 0 || c.strcmp(projection, "c.union") = 0 || c.strcmp(projection, "c.named-union") = 0)
         return: 1U
 return: 0U

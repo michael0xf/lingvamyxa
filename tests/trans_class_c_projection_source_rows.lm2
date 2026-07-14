@@ -1,0 +1,95 @@
+L4:
+    table:
+        name: `class.c.projection`
+        columns((class: class) (@: char spelling))
+        rows:
+                 LmProjectionDirect             short
+                 LmProjectionDirect             int
+                 LmProjectionDirect             None
+                 LmProjectionReference          int
+                 LmProjectionKindReference      short
+                 LmProjectionSemanticReference  long
+                 `c.LmProjectionRaw`             c.struct
+    end: `class.c.projection`
+
+    table:
+        name: `class.c.projection`
+        columns((class: class) (class: spelling))
+        rows:
+                 LmProjectionFallback  short
+    end: `class.c.projection`
+
+    table:
+        name: `lm.test.class.c.projection.seed`
+        columns((class: class) (@: char spelling))
+        rows:
+                 LmProjectionJoined  long
+    end: `lm.test.class.c.projection.seed`
+
+    join: (`lm.test.class.c.projection.seed`) `class.c.projection`
+        columns((class: class) (@: char spelling))
+        rows:
+    end: `class.c.projection`
+
+    table:
+        name: `class.c.projection`
+        columns((class: class) (@: char spelling))
+        rows:
+                 LmProjectionJoined  None
+    end: `class.c.projection`
+
+    table:
+        name: `class.spelling`
+        columns((class: class) (@: char spelling))
+        rows:
+                 LmProjectionDirect  long
+    end: `class.spelling`
+
+    table:
+        name: `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+                 LmProjectionReference  1
+    end: `class.reference-base`
+
+    table:
+        name: `class.kind`
+        columns((class: class) (class: kind))
+        rows:
+                 LmProjectionKindReference  opaqueReference
+    end: `class.kind`
+
+    table:
+        name: `class.semantic`
+        columns((class: class) (@: char value))
+        rows:
+                 LmProjectionSemanticReference  opaqueHandle
+    end: `class.semantic`
+end: L4
+
+L1:
+===
+typedef struct LmProjectionRaw { int value; } LmProjectionRaw;
+typedef int LmProjectionReference;
+typedef short LmProjectionKindReference;
+typedef long LmProjectionSemanticReference;
+===
+
+L2:
+    fn: lm_projection_raw_probe (c.LmProjectionRaw: value) int
+        return: value != 0
+    end: lm_projection_raw_probe
+
+    external:
+        fn: main () int
+            LmProjectionDirect: direct 7
+            LmProjectionFallback: fallback 8
+            LmProjectionJoined: joined 9
+            LmProjectionReference: reference 0
+            LmProjectionKindReference: kind_reference 0
+            LmProjectionSemanticReference: semantic_reference 0
+
+            return: direct != 7 || fallback != 8 || joined != 9 || reference != 0 || kind_reference != 0 || semantic_reference != 0 || lm_projection_raw_probe(0)
+        end: main
+    end: external
+end: L2

@@ -1343,12 +1343,17 @@ fn: lm_trans_namespace_declare_compatible (LmTransNamespace: namespace_; const: 
 
 return: lm_trans_namespace_declare(namespace_, name, kind)
 
+fn: lm_trans_class_c_projection (const: (LmP0Text: name)) const: @: char
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.c.projection", "class", "class", "spelling", "char")
+
 fn: lm_trans_class_c_spelling (const: (LmP0Text: name)) const: @: char
     const: @: char spelling
 
     if: name = 0
         return: 0
-    spelling: lm_trans_registry_lookup(name, "class.c.projection")
+    spelling: lm_trans_class_c_projection(name)
     if: spelling != 0
         return: spelling
 return: lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.spelling", "class", "class", "spelling", "char")

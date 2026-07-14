@@ -2643,6 +2643,7 @@ static int lm_trans_namespace_set_env_arg(LmTransNamespace *namespace_, const Lm
 static int lm_trans_namespace_set_closure_call_name(LmTransNamespace *namespace_, const LmP0Text *name, const LmP0Text *closure_call_name);
 static int lm_trans_symbol_copy_signature(LmTransSymbol *target, const LmTransSymbol *source);
 static int lm_trans_namespace_declare_compatible(LmTransNamespace *namespace_, const LmP0Text *name, const char *kind);
+static const char * lm_trans_class_c_projection(const LmP0Text *name);
 static const char * lm_trans_class_c_spelling(const LmP0Text *name);
 static int lm_trans_class_is_reference_base(const LmP0Text *name);
 static int lm_trans_builtin_c_type_tail(const LmP0Text *name);
@@ -8556,12 +8557,19 @@ static int lm_trans_namespace_declare_compatible(LmTransNamespace *namespace_, c
     return lm_trans_namespace_declare(namespace_, name, kind);
 }
 
+static const char * lm_trans_class_c_projection(const LmP0Text *name) {
+    if (name == 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.c.projection", "class", "class", "spelling", "char");
+}
+
 static const char * lm_trans_class_c_spelling(const LmP0Text *name) {
     const char *spelling;
     if (name == 0) {
         return 0;
     }
-    spelling = lm_trans_registry_lookup(name, "class.c.projection");
+    spelling = lm_trans_class_c_projection(name);
     if (spelling != 0) {
         return spelling;
     }
@@ -10336,7 +10344,7 @@ static size_t lm_trans_layout_type_implicit_address_depth(const LmP0Text *class_
     if (lm_trans_class_is_reference_base(class_name)) {
         return 1U;
     }
-    projection = lm_trans_registry_lookup(class_name, "class.c.projection");
+    projection = lm_trans_class_c_projection(class_name);
     if (projection != 0 && (strcmp(projection, "c.struct") == 0 || strcmp(projection, "c.named-struct") == 0 || strcmp(projection, "c.union") == 0 || strcmp(projection, "c.named-union") == 0)) {
         return 1U;
     }
