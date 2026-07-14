@@ -1187,38 +1187,28 @@ fn: lm_trans_callable_return_type_from_node (const: (LmP0Node: node); LmTransL4C
 end: lm_trans_callable_return_type_from_node
 
 fn: lm_trans_callable_descriptor_return_type (const: (LmTransNamespace: namespace_); const: (LmP0Text: descriptor_name); LmTransL4CallableType: out) int
-    const: LmOwnPtrStack: class_rows
-    const: LmOwnPtrStack: address_depth_rows
-    const: LmOwnPtrStack: const_rows
-    LmTransRegistryFact: class_row
-    LmP0Text: return_key
-    size_t: const_flag
+    const: @: char class_payload
+    @: char descriptor_cstr
+    int: is_const
     if: (out = 0)
         return: 0
     if: (lm_trans_callable_type_reset(out) != 0)
         return: 0
-    return_key: lm_trans_text_ref_new_cstr("return")
-    if: (return_key = 0)
+    descriptor_cstr: lm_trans_text_copy_cstr(descriptor_name)
+    if: (descriptor_cstr = 0)
         return: 0
-    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, descriptor_name, "return.class")
-    class_row: lm_trans_registry_relation_stack_latest_row(class_rows, return_key)
-    if: ((class_row = 0) || (class_row\payload = 0))
-        lm_trans_text_ref_destroy(@ return_key)
+    if: (lm_trans_collect_abi_return(namespace_, descriptor_cstr, 2, @ class_payload, @ out\address_depth, @ is_const) != 0)
+        lm_own_delete(descriptor_cstr, 0)
         return: 0
     LmP0Text: class_name
-    class_name: lm_trans_text_from_cstr(class_row\payload)
+    class_name: lm_trans_text_from_cstr(class_payload)
     if: (class_name = 0)
-        lm_trans_text_ref_destroy(@ return_key)
+        lm_own_delete(descriptor_cstr, 0)
         return: 0
     out\class_name[0]: class_name[0]
     lm_trans_text_ref_destroy(@ class_name)
-    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, descriptor_name, "return.address-depth")
-    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, descriptor_name, "return.const")
-    if: ((lm_trans_registry_latest_size_payload(address_depth_rows, return_key, 0U, @ out\address_depth) = 0) || (lm_trans_registry_latest_size_payload(const_rows, return_key, 0U, @ const_flag) = 0))
-        lm_trans_text_ref_destroy(@ return_key)
-        return: 0
-    out\is_const: (const_flag != 0U)
-    lm_trans_text_ref_destroy(@ return_key)
+    out\is_const: is_const
+    lm_own_delete(descriptor_cstr, 0)
     return: 1
 end: lm_trans_callable_descriptor_return_type
 

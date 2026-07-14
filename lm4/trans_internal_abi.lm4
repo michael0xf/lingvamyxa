@@ -306,6 +306,15 @@ fn: lm_trans_collect_abi_params (
     const: @: char error_name
 ) int
 
+fn: lm_trans_collect_abi_return (
+    const: (LmTransNamespace: namespace_)
+    const: @(char owner_name)
+    int: return_key_policy
+    const: @@(char out_class_name)
+    @: size_t out_address_depth
+    @: int out_is_const
+) int
+
 fn: lm_trans_emit_abi_params (
     FILE: file
     @: LmTransAbiParam params
@@ -427,13 +436,6 @@ fn: lm_trans_emit_merge_named_structure_storage (
     unsigned: indent
     LmTransNamespace: namespace_
     const: @: char qualifier
-) int
-
-fn: lm_trans_registry_latest_size_payload (
-    const: LmOwnPtrStack: rows
-    const: LmP0Text: key
-    size_t: default_value
-    @: size_t out_value
 ) int
 
 fn: lm_trans_text_all_char (

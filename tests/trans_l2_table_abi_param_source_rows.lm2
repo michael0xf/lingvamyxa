@@ -13,12 +13,12 @@ L4:
         rows:
                  count   int   1     None  None  None  None  None
                  text    char  0     1     1     None  None  None
-                 return  None  None  None  None  int   None  None
+                 return  None  None  None  None  char  1     1
     end: LmWideAbiParams
 
     table:
         name: LmAbiParamFallback
-        columns((class: class) (@: char `param.class`) (size_t: `param.index`) (class: `return.class`))
+        columns((class: class) (@: char `param.class`) (size_t: `param.index`) (@: char `return.class`))
         rows:
                  value   int   0     None
                  return  None  None  int
@@ -29,8 +29,8 @@ fn
 
 L1:
 ===
-static int LmWideAbiParams(const char *text, int count) {
-    return text[0] == 'o' ? count : 0;
+static const char *LmWideAbiParams(const char *text, int count) {
+    return text[0] == 'o' && count == 7 ? text : 0;
 }
 
 static int LmAbiParamFallback(int value) {
@@ -40,6 +40,6 @@ static int LmAbiParamFallback(int value) {
 
 external:
     fn: main () int
-        return: c.LmWideAbiParams("ok", 7) != 7 || c.LmAbiParamFallback(4) != 5
+        return: c.LmWideAbiParams("ok", 7) = 0 || c.LmAbiParamFallback(4) != 5
     end: main
 end: external

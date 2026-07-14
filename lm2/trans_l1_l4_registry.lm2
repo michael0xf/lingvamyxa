@@ -1265,18 +1265,6 @@ fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t:
     lm_trans_l4_text_view_delete(@ class_text)
 return: 0
 
-fn: lm_trans_registry_latest_size_payload (const: (LmOwnPtrStack: rows); const: (LmP0Text: key); size_t: default_value; @: size_t out_value) int
-    LmTransRegistryFact: row
-
-    if: out_value = 0
-        return: 0
-
-    out_value[0]: default_value
-    row: lm_trans_registry_relation_stack_latest_row(rows, key)
-    if: row = 0
-        return: 1
-return: lm_trans_parse_size_payload(row\payload, out_value)
-
 fn: lm_trans_registry_relation_stack_latest_any (const: (LmOwnPtrStack: stack)) LmTransRegistryFact
     if: stack = 0 || stack\count = 0U
         return: 0
@@ -1324,6 +1312,97 @@ fn: lm_trans_abi_source_text_value (
     if: source_cell != 0 && lm_trans_registry_view_is_selected() != 0
         return: source_cell\value
 return: facade_row\payload
+
+fn: lm_trans_collect_abi_return (
+    const: (LmTransNamespace: namespace_)
+    const: @(char owner_name)
+    int: return_key_policy
+    const: @@(char out_class_name)
+    @: size_t out_address_depth
+    @: int out_is_const
+) int
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    LmP0Text: owner_text
+    LmP0Text: return_key
+    LmTransRegistryFact: class_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: const_row
+    const: @: char class_payload
+    const: @: char address_depth_payload
+    const: @: char const_payload
+    @: char class_path
+    @: char address_depth_path
+    @: char const_path
+    size_t: source_path_length
+    size_t: address_depth
+    size_t: const_flag
+    int: status
+
+    if: out_class_name != 0
+        out_class_name[0]: 0
+    if: out_address_depth != 0
+        out_address_depth[0]: 0U
+    if: out_is_const != 0
+        out_is_const[0]: 0
+    if: owner_name = 0 || out_class_name = 0 || out_address_depth = 0 || out_is_const = 0 || return_key_policy < 0 || return_key_policy > 2
+        return: 3
+
+    owner_text: lm_trans_l4_text_view_new(owner_name)
+    return_key: lm_trans_l4_text_view_new("return")
+    if: owner_text = 0 || return_key = 0
+        lm_trans_l4_text_view_delete(@ owner_text)
+        lm_trans_l4_text_view_delete(@ return_key)
+        return: 3
+
+    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.class")
+    if: return_key_policy = 2
+        class_row: lm_trans_registry_relation_stack_latest_row(class_rows, return_key)
+    else:
+        class_row: lm_trans_registry_relation_stack_latest_return_row(class_rows)
+    if: class_row = 0 || class_row\payload = 0 || (class_row\key = 0 && return_key_policy != 1)
+        lm_trans_l4_text_view_delete(@ owner_text)
+        lm_trans_l4_text_view_delete(@ return_key)
+        return: 1
+    if: class_row\key != 0
+        lm_trans_text_assign_cstr(return_key, class_row\key)
+
+    class_path: 0
+    address_depth_path: 0
+    const_path: 0
+    status: 0
+    if: lm_trans_registry_view_parity_enabled() != 0
+        class_path: lm_trans_registry_source_relation_path_new(owner_name, "return.class", @ source_path_length)
+        address_depth_path: lm_trans_registry_source_relation_path_new(owner_name, "return.address-depth", @ source_path_length)
+        const_path: lm_trans_registry_source_relation_path_new(owner_name, "return.const", @ source_path_length)
+        if: class_path = 0 || address_depth_path = 0 || const_path = 0
+            status: 3
+    ---
+
+    class_payload: lm_trans_abi_source_text_value(namespace_, class_path, "class", class_row, 0)
+    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.address-depth")
+    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.const")
+    address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, return_key)
+    const_row: lm_trans_registry_relation_stack_latest_row(const_rows, return_key)
+    address_depth_payload: lm_trans_abi_source_text_value(namespace_, address_depth_path, "size_t", address_depth_row, 0)
+    const_payload: lm_trans_abi_source_text_value(namespace_, const_path, "int", const_row, 0)
+    address_depth: 0U
+    const_flag: 0U
+    if: status = 0 && (class_payload = 0 || (address_depth_row != 0 && (address_depth_payload = 0 || lm_trans_parse_size_payload(address_depth_payload, @ address_depth) = 0)) || (const_row != 0 && (const_payload = 0 || lm_trans_parse_size_payload(const_payload, @ const_flag) = 0)))
+        status: 2
+
+    if: status = 0
+        out_class_name[0]: class_payload
+        out_address_depth[0]: address_depth
+        out_is_const[0]: const_flag != 0U
+
+    lm_own_delete(const_path, 0)
+    lm_own_delete(address_depth_path, 0)
+    lm_own_delete(class_path, 0)
+    lm_trans_l4_text_view_delete(@ owner_text)
+    lm_trans_l4_text_view_delete(@ return_key)
+return: status
 
 fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @: size_t out_count; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char error_name)) int
     const: LmOwnPtrStack: class_rows
@@ -1745,47 +1824,25 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: nam
 return: 0
 
 fn: lm_trans_emit_abi_return_type (FILE: file; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char error_name)) int
-    LmP0Text: owner_text
-    const: LmOwnPtrStack: class_rows
-    const: LmOwnPtrStack: address_depth_rows
-    const: LmOwnPtrStack: const_rows
-    LmTransRegistryFact: class_row
-    LmP0Text: return_key
+    const: @: char class_name
     size_t: address_depth
-    size_t: const_flag
+    int: is_const
     int: status
 
     if: file = 0 || owner_name = 0 || error_name = 0
         return: 1
 
-    owner_text: lm_trans_l4_text_view_new(owner_name)
-    return_key: lm_trans_l4_text_view_new("")
-    if: owner_text = 0 || return_key = 0
-        lm_trans_l4_text_view_delete(@ owner_text)
-        lm_trans_l4_text_view_delete(@ return_key)
-        return: 1
-
-    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.class")
-    class_row: lm_trans_registry_relation_stack_latest_return_row(class_rows)
-    if: class_row = 0 || class_row\key = 0 || class_row\payload = 0
+    status: lm_trans_collect_abi_return(namespace_, owner_name, 0, @ class_name, @ address_depth, @ is_const)
+    if: status = 1
         c.fprintf(c.stderr, "trans L4 %s error: %s requires return.class\n", error_name, owner_name)
-        lm_trans_l4_text_view_delete(@ owner_text)
-        lm_trans_l4_text_view_delete(@ return_key)
         return: 1
-
-    lm_trans_text_assign_cstr(return_key, class_row\key)
-    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.address-depth")
-    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.const")
-    if: lm_trans_registry_latest_size_payload(address_depth_rows, return_key, 0U, @ address_depth) = 0 || lm_trans_registry_latest_size_payload(const_rows, return_key, 0U, @ const_flag) = 0
+    if: status = 2
         c.fprintf(c.stderr, "trans L4 %s error: %s has invalid return flags\n", error_name, owner_name)
-        lm_trans_l4_text_view_delete(@ owner_text)
-        lm_trans_l4_text_view_delete(@ return_key)
+        return: 1
+    if: status != 0
         return: 1
 
-    status: lm_trans_emit_abi_typed_name(file, class_row\payload, address_depth, const_flag != 0U, 0)
-    lm_trans_l4_text_view_delete(@ owner_text)
-    lm_trans_l4_text_view_delete(@ return_key)
-return: status
+return: lm_trans_emit_abi_typed_name(file, class_name, address_depth, is_const, 0)
 
 fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
     @: LmTransAbiParam params
@@ -1986,50 +2043,26 @@ fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); s
 return: wrapper
 
 fn: lm_trans_registry_synthetic_return_node (const: (LmTransNamespace: namespace_); const: @(char name)) LmP0Node
-    LmP0Text: name_text
-    LmP0Text: return_key
-    const: LmOwnPtrStack: class_rows
-    const: LmOwnPtrStack: address_depth_rows
-    const: LmOwnPtrStack: const_rows
-    LmTransRegistryFact: class_row
+    const: @: char class_name
     LmP0Node: return_node
     size_t: address_depth
-    size_t: const_flag
+    int: is_const
+    int: status
 
     if: name = 0
         return: 0
 
-    name_text: lm_trans_l4_text_view_new(name)
-    return_key: lm_trans_l4_text_view_new("")
-    if: name_text = 0 || return_key = 0
-        lm_trans_l4_text_view_delete(@ name_text)
-        lm_trans_l4_text_view_delete(@ return_key)
-        return: 0
-
-    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, name_text, "return.class")
-    class_row: lm_trans_registry_relation_stack_latest_return_row(class_rows)
-    if: class_row = 0 || class_row\payload = 0
+    status: lm_trans_collect_abi_return(namespace_, name, 1, @ class_name, @ address_depth, @ is_const)
+    if: status = 1
         c.fprintf(c.stderr, "trans L4 fn import error: %s requires return.class\n", name)
-        lm_trans_l4_text_view_delete(@ name_text)
-        lm_trans_l4_text_view_delete(@ return_key)
         return: 0
-
-    if: class_row\key != 0
-        lm_trans_text_assign_cstr(return_key, class_row\key)
-    else:
-        lm_trans_text_assign_cstr(return_key, "return")
-    ---
-    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, name_text, "return.address-depth")
-    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, name_text, "return.const")
-    if: lm_trans_registry_latest_size_payload(address_depth_rows, return_key, 0U, @ address_depth) = 0 || lm_trans_registry_latest_size_payload(const_rows, return_key, 0U, @ const_flag) = 0
+    if: status = 2
         c.fprintf(c.stderr, "trans L4 fn import error: %s has invalid return flags\n", name)
-        lm_trans_l4_text_view_delete(@ name_text)
-        lm_trans_l4_text_view_delete(@ return_key)
+        return: 0
+    if: status != 0
         return: 0
 
-    return_node: lm_trans_registry_synthetic_callable_type_node(class_row\payload, address_depth, const_flag != 0U, 0)
-    lm_trans_l4_text_view_delete(@ name_text)
-    lm_trans_l4_text_view_delete(@ return_key)
+    return_node: lm_trans_registry_synthetic_callable_type_node(class_name, address_depth, is_const, 0)
 return: return_node
 
 fn: lm_trans_registry_synthetic_params_node (const: (LmTransNamespace: namespace_); const: @(char name)) LmP0Node

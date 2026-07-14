@@ -766,6 +766,7 @@ static int lm_trans_receiver_sub(const LmP0Frame *frame, int is_external, LmTran
 static int lm_trans_top_level_function_header(const LmP0Frame *frame, LmTransFunctionHeader *out);
 static int lm_trans_l4_root_head_binding_resolve(const LmP0Text *head, LmTransL4HeadBinding *out);
 static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity, size_t *out_count, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name);
+static int lm_trans_collect_abi_return(const LmTransNamespace *namespace_, const char *owner_name, int return_key_policy, const char **out_class_name, size_t *out_address_depth, int *out_is_const);
 static int lm_trans_emit_abi_params(FILE *file, LmTransAbiParam **params, size_t count);
 static int lm_trans_emit_abi_return_type(FILE *file, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name);
 static LmTransAbiParam ** lm_trans_expr_abi_params_new(size_t capacity);
@@ -786,7 +787,6 @@ static int lm_trans_emit_named_structure_storage(FILE *file, const LmP0Frame *fr
 static int lm_trans_declare_merge_named_structure_layout(LmTransNamespace *namespace_, const LmP0Frame *frame);
 static int lm_trans_emit_merge_named_structure_typedef(FILE *file, const LmP0Frame *frame, unsigned indent, const LmTransNamespace *namespace_);
 static int lm_trans_emit_merge_named_structure_storage(FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_, const char *qualifier);
-static int lm_trans_registry_latest_size_payload(const LmOwnPtrStack *rows, const LmP0Text *key, size_t default_value, size_t *out_value);
 static int lm_trans_text_all_char(const LmP0Text *text, char ch);
 static int lm_trans_write_all(FILE *file, const char *data, size_t length);
 static int lm_trans_put(FILE *file, const char *text);
@@ -3571,11 +3571,11 @@ static int lm_trans_registry_collect_relation_names(LmOwnPtrStack *names, const 
 static int lm_trans_registry_collect_source_relation_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_, const char *owner_name, const char *relation_name, const char *error_name, int require_class);
 static int lm_trans_l4_is_function_pointer_type(const LmTransNamespace *namespace_, const char *name);
 static int lm_trans_emit_abi_typed_name(FILE *file, const char *class_name, size_t address_depth, int is_const, const char *name);
-static int lm_trans_registry_latest_size_payload(const LmOwnPtrStack *rows, const LmP0Text *key, size_t default_value, size_t *out_value);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_any(const LmOwnPtrStack *stack);
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_return_row(const LmOwnPtrStack *stack);
 static const LmTableCell * lm_trans_abi_source_text_cell(const LmTransNamespace *namespace_, const char *source_path, const char *value_descriptor, const LmTransRegistryFact *facade_row, const LmTableCell **out_key_cell);
 static const char * lm_trans_abi_source_text_value(const LmTransNamespace *namespace_, const char *source_path, const char *value_descriptor, const LmTransRegistryFact *facade_row, const LmTableCell **out_key_cell);
+static int lm_trans_collect_abi_return(const LmTransNamespace *namespace_, const char *owner_name, int return_key_policy, const char **out_class_name, size_t *out_address_depth, int *out_is_const);
 static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity, size_t *out_count, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name);
 static int lm_trans_emit_abi_params(FILE *file, LmTransAbiParam **params, size_t count);
 static int lm_trans_source_backend_is_witness(const LmOwnPtrStack *facade_backend_rows, const char *name, const char *backend_payload, const LmTableCell *source_backend_cell);
@@ -11572,44 +11572,33 @@ static int lm_trans_callable_return_type_from_node(const LmP0Node *node, LmTrans
 }
 
 static int lm_trans_callable_descriptor_return_type(const LmTransNamespace *namespace_, const LmP0Text *descriptor_name, LmTransL4CallableType *out) {
-    const LmOwnPtrStack * class_rows;
-    const LmOwnPtrStack * address_depth_rows;
-    const LmOwnPtrStack * const_rows;
-    LmTransRegistryFact * class_row;
-    LmP0Text * return_key;
-    size_t const_flag;
+    const char *class_payload;
+    char *descriptor_cstr;
+    int is_const;
     if (out == 0) {
         return 0;
     }
     if (lm_trans_callable_type_reset(out) != 0) {
         return 0;
     }
-    return_key = lm_trans_text_ref_new_cstr("return");
-    if (return_key == 0) {
+    descriptor_cstr = lm_trans_text_copy_cstr(descriptor_name);
+    if (descriptor_cstr == 0) {
         return 0;
     }
-    class_rows = lm_trans_namespace_registry_relation_stack(namespace_, descriptor_name, "return.class");
-    class_row = lm_trans_registry_relation_stack_latest_row(class_rows, return_key);
-    if ((class_row == 0) || (class_row -> payload == 0)) {
-        lm_trans_text_ref_destroy(&return_key);
+    if (lm_trans_collect_abi_return(namespace_, descriptor_cstr, 2, &class_payload, &out -> address_depth, &is_const) != 0) {
+        lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
     LmP0Text * class_name;
-    class_name = lm_trans_text_from_cstr(class_row -> payload);
+    class_name = lm_trans_text_from_cstr(class_payload);
     if (class_name == 0) {
-        lm_trans_text_ref_destroy(&return_key);
+        lm_own_delete(descriptor_cstr, 0);
         return 0;
     }
     out->class_name[0] = class_name[0];
     lm_trans_text_ref_destroy(&class_name);
-    address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, descriptor_name, "return.address-depth");
-    const_rows = lm_trans_namespace_registry_relation_stack(namespace_, descriptor_name, "return.const");
-    if ((lm_trans_registry_latest_size_payload(address_depth_rows, return_key, 0U, &out -> address_depth) == 0) || (lm_trans_registry_latest_size_payload(const_rows, return_key, 0U, &const_flag) == 0)) {
-        lm_trans_text_ref_destroy(&return_key);
-        return 0;
-    }
-    out->is_const = (const_flag != 0U);
-    lm_trans_text_ref_destroy(&return_key);
+    out->is_const = is_const;
+    lm_own_delete(descriptor_cstr, 0);
     return 1;
 }
 
@@ -33105,19 +33094,6 @@ static int lm_trans_emit_abi_typed_name(FILE *file, const char *class_name, size
     return 0;
 }
 
-static int lm_trans_registry_latest_size_payload(const LmOwnPtrStack *rows, const LmP0Text *key, size_t default_value, size_t *out_value) {
-    LmTransRegistryFact * row;
-    if (out_value == 0) {
-        return 0;
-    }
-    out_value[0] = default_value;
-    row = lm_trans_registry_relation_stack_latest_row(rows, key);
-    if (row == 0) {
-        return 1;
-    }
-    return lm_trans_parse_size_payload(row -> payload, out_value);
-}
-
 static LmTransRegistryFact * lm_trans_registry_relation_stack_latest_any(const LmOwnPtrStack *stack) {
     if (stack == 0 || stack -> count == 0U) {
         return 0;
@@ -33159,6 +33135,96 @@ static const char * lm_trans_abi_source_text_value(const LmTransNamespace *names
         return source_cell -> value;
     }
     return facade_row -> payload;
+}
+
+static int lm_trans_collect_abi_return(const LmTransNamespace *namespace_, const char *owner_name, int return_key_policy, const char **out_class_name, size_t *out_address_depth, int *out_is_const) {
+    const LmOwnPtrStack * class_rows;
+    const LmOwnPtrStack * address_depth_rows;
+    const LmOwnPtrStack * const_rows;
+    LmP0Text * owner_text;
+    LmP0Text * return_key;
+    LmTransRegistryFact * class_row;
+    LmTransRegistryFact * address_depth_row;
+    LmTransRegistryFact * const_row;
+    const char *class_payload;
+    const char *address_depth_payload;
+    const char *const_payload;
+    char *class_path;
+    char *address_depth_path;
+    char *const_path;
+    size_t source_path_length;
+    size_t address_depth;
+    size_t const_flag;
+    int status;
+    if (out_class_name != 0) {
+        out_class_name[0] = 0;
+    }
+    if (out_address_depth != 0) {
+        out_address_depth[0] = 0U;
+    }
+    if (out_is_const != 0) {
+        out_is_const[0] = 0;
+    }
+    if (owner_name == 0 || out_class_name == 0 || out_address_depth == 0 || out_is_const == 0 || return_key_policy < 0 || return_key_policy > 2) {
+        return 3;
+    }
+    owner_text = lm_trans_l4_text_view_new(owner_name);
+    return_key = lm_trans_l4_text_view_new("return");
+    if (owner_text == 0 || return_key == 0) {
+        lm_trans_l4_text_view_delete(&owner_text);
+        lm_trans_l4_text_view_delete(&return_key);
+        return 3;
+    }
+    class_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.class");
+    if (return_key_policy == 2) {
+        class_row = lm_trans_registry_relation_stack_latest_row(class_rows, return_key);
+    }
+    else {
+        class_row = lm_trans_registry_relation_stack_latest_return_row(class_rows);
+    }
+    if (class_row == 0 || class_row -> payload == 0 || (class_row -> key == 0 && return_key_policy != 1)) {
+        lm_trans_l4_text_view_delete(&owner_text);
+        lm_trans_l4_text_view_delete(&return_key);
+        return 1;
+    }
+    if (class_row -> key != 0) {
+        lm_trans_text_assign_cstr(return_key, class_row -> key);
+    }
+    class_path = 0;
+    address_depth_path = 0;
+    const_path = 0;
+    status = 0;
+    if (lm_trans_registry_view_parity_enabled() != 0) {
+        class_path = lm_trans_registry_source_relation_path_new(owner_name, "return.class", &source_path_length);
+        address_depth_path = lm_trans_registry_source_relation_path_new(owner_name, "return.address-depth", &source_path_length);
+        const_path = lm_trans_registry_source_relation_path_new(owner_name, "return.const", &source_path_length);
+        if (class_path == 0 || address_depth_path == 0 || const_path == 0) {
+            status = 3;
+        }
+    }
+    class_payload = lm_trans_abi_source_text_value(namespace_, class_path, "class", class_row, 0);
+    address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.address-depth");
+    const_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.const");
+    address_depth_row = lm_trans_registry_relation_stack_latest_row(address_depth_rows, return_key);
+    const_row = lm_trans_registry_relation_stack_latest_row(const_rows, return_key);
+    address_depth_payload = lm_trans_abi_source_text_value(namespace_, address_depth_path, "size_t", address_depth_row, 0);
+    const_payload = lm_trans_abi_source_text_value(namespace_, const_path, "int", const_row, 0);
+    address_depth = 0U;
+    const_flag = 0U;
+    if (status == 0 && (class_payload == 0 || (address_depth_row != 0 && (address_depth_payload == 0 || lm_trans_parse_size_payload(address_depth_payload, &address_depth) == 0)) || (const_row != 0 && (const_payload == 0 || lm_trans_parse_size_payload(const_payload, &const_flag) == 0)))) {
+        status = 2;
+    }
+    if (status == 0) {
+        out_class_name[0] = class_payload;
+        out_address_depth[0] = address_depth;
+        out_is_const[0] = const_flag != 0U;
+    }
+    lm_own_delete(const_path, 0);
+    lm_own_delete(address_depth_path, 0);
+    lm_own_delete(class_path, 0);
+    lm_trans_l4_text_view_delete(&owner_text);
+    lm_trans_l4_text_view_delete(&return_key);
+    return status;
 }
 
 static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity, size_t *out_count, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name) {
@@ -33613,46 +33679,26 @@ static int lm_trans_emit_l4_forward_typedefs(FILE *file, const LmTransNamespace 
 }
 
 static int lm_trans_emit_abi_return_type(FILE *file, const LmTransNamespace *namespace_, const char *owner_name, const char *error_name) {
-    LmP0Text * owner_text;
-    const LmOwnPtrStack * class_rows;
-    const LmOwnPtrStack * address_depth_rows;
-    const LmOwnPtrStack * const_rows;
-    LmTransRegistryFact * class_row;
-    LmP0Text * return_key;
+    const char *class_name;
     size_t address_depth;
-    size_t const_flag;
+    int is_const;
     int status;
     if (file == 0 || owner_name == 0 || error_name == 0) {
         return 1;
     }
-    owner_text = lm_trans_l4_text_view_new(owner_name);
-    return_key = lm_trans_l4_text_view_new("");
-    if (owner_text == 0 || return_key == 0) {
-        lm_trans_l4_text_view_delete(&owner_text);
-        lm_trans_l4_text_view_delete(&return_key);
-        return 1;
-    }
-    class_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.class");
-    class_row = lm_trans_registry_relation_stack_latest_return_row(class_rows);
-    if (class_row == 0 || class_row -> key == 0 || class_row -> payload == 0) {
+    status = lm_trans_collect_abi_return(namespace_, owner_name, 0, &class_name, &address_depth, &is_const);
+    if (status == 1) {
         fprintf(stderr, "trans L4 %s error: %s requires return.class\n", error_name, owner_name);
-        lm_trans_l4_text_view_delete(&owner_text);
-        lm_trans_l4_text_view_delete(&return_key);
         return 1;
     }
-    lm_trans_text_assign_cstr(return_key, class_row -> key);
-    address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.address-depth");
-    const_rows = lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.const");
-    if (lm_trans_registry_latest_size_payload(address_depth_rows, return_key, 0U, &address_depth) == 0 || lm_trans_registry_latest_size_payload(const_rows, return_key, 0U, &const_flag) == 0) {
+    if (status == 2) {
         fprintf(stderr, "trans L4 %s error: %s has invalid return flags\n", error_name, owner_name);
-        lm_trans_l4_text_view_delete(&owner_text);
-        lm_trans_l4_text_view_delete(&return_key);
         return 1;
     }
-    status = lm_trans_emit_abi_typed_name(file, class_row -> payload, address_depth, const_flag != 0U, 0);
-    lm_trans_l4_text_view_delete(&owner_text);
-    lm_trans_l4_text_view_delete(&return_key);
-    return status;
+    if (status != 0) {
+        return 1;
+    }
+    return lm_trans_emit_abi_typed_name(file, class_name, address_depth, is_const, 0);
 }
 
 static int lm_trans_emit_l4_prototype_name(FILE *file, const LmTransNamespace *namespace_, const char *name, const char *error_name) {
@@ -33884,50 +33930,27 @@ static LmP0Node * lm_trans_registry_synthetic_callable_type_node(const char *cla
 }
 
 static LmP0Node * lm_trans_registry_synthetic_return_node(const LmTransNamespace *namespace_, const char *name) {
-    LmP0Text * name_text;
-    LmP0Text * return_key;
-    const LmOwnPtrStack * class_rows;
-    const LmOwnPtrStack * address_depth_rows;
-    const LmOwnPtrStack * const_rows;
-    LmTransRegistryFact * class_row;
+    const char *class_name;
     LmP0Node * return_node;
     size_t address_depth;
-    size_t const_flag;
+    int is_const;
+    int status;
     if (name == 0) {
         return 0;
     }
-    name_text = lm_trans_l4_text_view_new(name);
-    return_key = lm_trans_l4_text_view_new("");
-    if (name_text == 0 || return_key == 0) {
-        lm_trans_l4_text_view_delete(&name_text);
-        lm_trans_l4_text_view_delete(&return_key);
-        return 0;
-    }
-    class_rows = lm_trans_namespace_registry_relation_stack(namespace_, name_text, "return.class");
-    class_row = lm_trans_registry_relation_stack_latest_return_row(class_rows);
-    if (class_row == 0 || class_row -> payload == 0) {
+    status = lm_trans_collect_abi_return(namespace_, name, 1, &class_name, &address_depth, &is_const);
+    if (status == 1) {
         fprintf(stderr, "trans L4 fn import error: %s requires return.class\n", name);
-        lm_trans_l4_text_view_delete(&name_text);
-        lm_trans_l4_text_view_delete(&return_key);
         return 0;
     }
-    if (class_row -> key != 0) {
-        lm_trans_text_assign_cstr(return_key, class_row -> key);
-    }
-    else {
-        lm_trans_text_assign_cstr(return_key, "return");
-    }
-    address_depth_rows = lm_trans_namespace_registry_relation_stack(namespace_, name_text, "return.address-depth");
-    const_rows = lm_trans_namespace_registry_relation_stack(namespace_, name_text, "return.const");
-    if (lm_trans_registry_latest_size_payload(address_depth_rows, return_key, 0U, &address_depth) == 0 || lm_trans_registry_latest_size_payload(const_rows, return_key, 0U, &const_flag) == 0) {
+    if (status == 2) {
         fprintf(stderr, "trans L4 fn import error: %s has invalid return flags\n", name);
-        lm_trans_l4_text_view_delete(&name_text);
-        lm_trans_l4_text_view_delete(&return_key);
         return 0;
     }
-    return_node = lm_trans_registry_synthetic_callable_type_node(class_row -> payload, address_depth, const_flag != 0U, 0);
-    lm_trans_l4_text_view_delete(&name_text);
-    lm_trans_l4_text_view_delete(&return_key);
+    if (status != 0) {
+        return 0;
+    }
+    return_node = lm_trans_registry_synthetic_callable_type_node(class_name, address_depth, is_const, 0);
     return return_node;
 }
 
