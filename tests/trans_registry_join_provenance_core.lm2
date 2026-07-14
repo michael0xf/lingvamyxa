@@ -225,6 +225,12 @@ fn: lm_test_registry_join_provenance_core () int
     LmTransRegistryFact: layout_middle
     LmTransRegistryFact: layout_target
     LmTransRegistryFact: layout_unrelated
+    LmTransRegistryFact: layout_field_origin
+    LmTransRegistryFact: layout_field_middle
+    LmTransRegistryFact: layout_field_target
+    LmTransRegistryFact: layout_field_wrong_origin
+    LmTransRegistryFact: layout_field_wrong_middle
+    LmTransRegistryFact: layout_field_wrong_target
     LmTransRegistryFact: receiver_origin
     LmTransRegistryFact: receiver_middle
     LmTransRegistryFact: receiver_target
@@ -268,6 +274,7 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableDescriptor: fn_external_descriptor
     LmTableDescriptor: fn_receiver_n2_descriptor
     LmTableDescriptor: serialization_codec_descriptor
+    LmTableDescriptor: layout_field_wrong_descriptor
     LmTableDescriptor: serialization_codec_n2_descriptor
     LmTableDescriptor: serialization_codec_wrong_column_descriptor
     LmTableDescriptor: none_cell_descriptor
@@ -447,6 +454,10 @@ fn: lm_test_registry_join_provenance_core () int
     LmTableCell: layout_key_cell
     LmTableCell: layout_backend_cell
     LmTableCell: layout_marker_cell
+    LmTableCell: layout_field_class_cell
+    LmTableCell: layout_field_wrong_key_cell
+    LmTableCell: layout_field_wrong_value_cell
+    LmTableRow: layout_field_wrong_row
     LmP0Node: source_node
     LmP0Node: unit_wrong_source_node
     LmTransHeadBinding: receiver_head_binding
@@ -505,6 +516,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_layout_backend
     const: @: char resolved_layout_source_value
     const: @: char unrelated_layout_source_value
+    const: @: char resolved_layout_field_class
+    const: @: char resolved_layout_field_wrong_class
     const: @: char resolved_unit_backend
     const: @: char resolved_unit_wrong_backend
     const: @: char resolved_receiver_binding
@@ -540,6 +553,8 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: class_semantic_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
+    LmP0Text: layout_owner_text
+    LmP0Text: layout_field_text
     size_t: condition_row_count
     size_t: resolved_unwrap_index
     int: condition_present
@@ -1974,11 +1989,17 @@ fn: lm_test_registry_join_provenance_core () int
     layout_middle: 0
     layout_target: 0
     layout_unrelated: 0
+    layout_field_origin: 0
+    layout_field_middle: 0
+    layout_field_target: 0
     layout_descriptor: 0
     layout_row: 0
     layout_key_cell: 0
     layout_backend_cell: 0
     layout_marker_cell: 0
+    layout_field_class_cell: 0
+    layout_owner_text: 0
+    layout_field_text: 0
     if: status = 0
         layout_origin: lm_test_registry_push_value_fact("lm.test.layout.backend.origin", "LayoutWitness", "c.struct", 0)
         if: layout_origin != 0
@@ -1986,13 +2007,18 @@ fn: lm_test_registry_join_provenance_core () int
         if: layout_middle != 0
             layout_target: lm_test_registry_join_fact("lm.test.layout.backend.middle", "layout.backend", "LayoutWitness")
         layout_unrelated: lm_test_registry_push_value_fact("layout.unrelated.backend", "LayoutWitness", "c.struct", 0)
-        if: layout_origin = 0 || layout_middle = 0 || layout_target = 0 || layout_unrelated = 0 || layout_middle\source != layout_origin || layout_target\source != layout_middle || layout_unrelated\source != 0
+        layout_field_origin: lm_test_registry_push_value_fact("lm.test.layout.field.class.origin", "LayoutWitness", "FieldClassWitness", 0)
+        if: layout_field_origin != 0
+            layout_field_middle: lm_test_registry_join_fact("lm.test.layout.field.class.origin", "lm.test.layout.field.class.middle", "LayoutWitness")
+        if: layout_field_middle != 0
+            layout_field_target: lm_test_registry_join_fact("lm.test.layout.field.class.middle", "layout.field.class", "LayoutWitness")
+        if: layout_origin = 0 || layout_middle = 0 || layout_target = 0 || layout_unrelated = 0 || layout_field_origin = 0 || layout_field_middle = 0 || layout_field_target = 0 || layout_middle\source != layout_origin || layout_target\source != layout_middle || layout_unrelated\source != 0 || layout_field_middle\source != layout_field_origin || layout_field_target\source != layout_field_middle
             status: 1
     ---
 
     if: status = 0
         layout_descriptor: lm_table_descriptor_new_empty_slice("layout", 6U)
-        if: layout_descriptor = 0 || lm_table_descriptor_add_column(layout_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(layout_descriptor, "backend", "class") != 0 || lm_table_descriptor_add_column(layout_descriptor, "marker", "int") != 0
+        if: layout_descriptor = 0 || lm_table_descriptor_add_column(layout_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(layout_descriptor, "backend", "class") != 0 || lm_table_descriptor_add_column(layout_descriptor, "marker", "int") != 0 || lm_table_descriptor_add_column(layout_descriptor, "field.class", "class") != 0
             status: 1
     ---
 
@@ -2001,7 +2027,8 @@ fn: lm_test_registry_join_provenance_core () int
         layout_key_cell: lm_table_cell_new_cstr("LayoutWitness", "LayoutWitness", 0, 0, 0)
         layout_backend_cell: lm_table_cell_new_cstr("c.struct", "c.struct", 0, layout_origin, 0)
         layout_marker_cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
-        if: layout_row = 0 || layout_key_cell = 0 || layout_backend_cell = 0 || layout_marker_cell = 0 || lm_table_row_take_cell(layout_row, layout_key_cell) != 0 || lm_table_row_take_cell(layout_row, layout_backend_cell) != 0 || lm_table_row_take_cell(layout_row, layout_marker_cell) != 0 || lm_table_descriptor_take_materialized_row(layout_descriptor, layout_row) != 0
+        layout_field_class_cell: lm_table_cell_new_cstr("FieldClassWitness", "FieldClassWitness", 0, layout_field_origin, 0)
+        if: layout_row = 0 || layout_key_cell = 0 || layout_backend_cell = 0 || layout_marker_cell = 0 || layout_field_class_cell = 0 || lm_table_row_take_cell(layout_row, layout_key_cell) != 0 || lm_table_row_take_cell(layout_row, layout_backend_cell) != 0 || lm_table_row_take_cell(layout_row, layout_marker_cell) != 0 || lm_table_row_take_cell(layout_row, layout_field_class_cell) != 0 || lm_table_descriptor_take_materialized_row(layout_descriptor, layout_row) != 0
             status: 1
         else:
             layout_row: 0
@@ -2024,6 +2051,58 @@ fn: lm_test_registry_join_provenance_core () int
         resolved_layout_source_value: lm_trans_layout_field_source_value(0, "layout", "backend", "backend", "class", layout_target, @ resolved_layout_source_key_cell)
         unrelated_layout_source_value: lm_trans_layout_field_source_value(0, "layout", "backend", "backend", "class", layout_unrelated, 0)
         if: resolved_layout_source_value != layout_backend_cell\value || resolved_layout_source_value = layout_target\payload || resolved_layout_source_key_cell != layout_key_cell || unrelated_layout_source_value != layout_unrelated\payload
+            status: 1
+    ---
+
+    if: status = 0
+        layout_owner_text: lm_trans_text_from_cstr("layout")
+        layout_field_text: lm_trans_text_from_cstr("LayoutWitness")
+        resolved_layout_field_class: 0
+        if: layout_owner_text = 0 || layout_field_text = 0 || lm_trans_layout_field_class_resolve(layout_owner_text, layout_field_text, 0, @ resolved_layout_field_class) != 1 || resolved_layout_field_class != layout_field_class_cell\value || resolved_layout_field_class = layout_field_target\payload
+            status: 1
+    ---
+
+    layout_field_wrong_origin: 0
+    layout_field_wrong_middle: 0
+    layout_field_wrong_target: 0
+    layout_field_wrong_descriptor: 0
+    layout_field_wrong_row: 0
+    layout_field_wrong_key_cell: 0
+    layout_field_wrong_value_cell: 0
+    if: status = 0
+        layout_field_wrong_origin: lm_test_registry_push_value_fact("lm.test.layout.field.class.wrong.origin", "LayoutWitness", "FieldClassWitness", 0)
+        if: layout_field_wrong_origin != 0
+            layout_field_wrong_middle: lm_test_registry_join_fact("lm.test.layout.field.class.wrong.origin", "lm.test.layout.field.class.wrong.middle", "LayoutWitness")
+        if: layout_field_wrong_middle != 0
+            layout_field_wrong_target: lm_test_registry_join_fact("lm.test.layout.field.class.wrong.middle", "layout.field.class", "LayoutWitness")
+        if: layout_field_wrong_origin = 0 || layout_field_wrong_middle = 0 || layout_field_wrong_target = 0 || layout_field_wrong_middle\source != layout_field_wrong_origin || layout_field_wrong_target\source != layout_field_wrong_middle
+            status: 1
+    ---
+
+    if: status = 0
+        layout_field_wrong_descriptor: lm_table_descriptor_new_empty_slice("layout.field.class", 18U)
+        if: layout_field_wrong_descriptor = 0 || lm_table_descriptor_add_column(layout_field_wrong_descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(layout_field_wrong_descriptor, "field", "char") != 0
+            status: 1
+    ---
+
+    if: status = 0
+        layout_field_wrong_row: lm_table_row_new(0)
+        layout_field_wrong_key_cell: lm_table_cell_new_cstr("LayoutWitness", "LayoutWitness", 0, 0, 0)
+        layout_field_wrong_value_cell: lm_table_cell_new_cstr("FieldClassWitness", "FieldClassWitness", 0, layout_field_wrong_origin, 0)
+        if: layout_field_wrong_row = 0 || layout_field_wrong_key_cell = 0 || layout_field_wrong_value_cell = 0 || lm_table_row_take_cell(layout_field_wrong_row, layout_field_wrong_key_cell) != 0 || lm_table_row_take_cell(layout_field_wrong_row, layout_field_wrong_value_cell) != 0 || lm_table_descriptor_take_materialized_row(layout_field_wrong_descriptor, layout_field_wrong_row) != 0
+            status: 1
+        else:
+            layout_field_wrong_row: 0
+            if: lm_registry_view_take_local_source_table(lm_trans_registry\view, layout_field_wrong_descriptor) != 0
+                status: 1
+            else:
+                layout_field_wrong_descriptor: 0
+        ---
+    ---
+
+    if: status = 0
+        resolved_layout_field_wrong_class: 0
+        if: lm_trans_layout_field_class_resolve(layout_owner_text, layout_field_text, 0, @ resolved_layout_field_wrong_class) != 1 || resolved_layout_field_wrong_class != layout_field_wrong_target\payload || resolved_layout_field_wrong_class = layout_field_wrong_value_cell\value || resolved_layout_field_wrong_class = layout_field_class_cell\value
             status: 1
     ---
 
@@ -2301,6 +2380,10 @@ fn: lm_test_registry_join_provenance_core () int
     lm_table_descriptor_delete_any(condition_descriptor)
     lm_table_row_delete_any(node_row)
     lm_table_descriptor_delete_any(node_descriptor)
+    lm_table_row_delete_any(layout_field_wrong_row)
+    lm_table_descriptor_delete_any(layout_field_wrong_descriptor)
+    lm_trans_text_ref_destroy(@ layout_field_text)
+    lm_trans_text_ref_destroy(@ layout_owner_text)
     lm_table_row_delete_any(layout_row)
     lm_table_descriptor_delete_any(layout_descriptor)
     lm_table_row_delete_any(expr_spelling_row)

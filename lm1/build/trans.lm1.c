@@ -13596,21 +13596,7 @@ static int lm_trans_head_next_field_chain_segment(const LmP0Text *head, size_t *
 
 static int lm_trans_layout_field_class_resolve(const LmP0Text *owner, const LmP0Text *field_name, const LmTransNamespace *namespace_, const char **out_class) {
     char *relation_name;
-    char *source_table_name;
-    const char *facade_class;
-    const char *source_class;
-    const LmTableDescriptor * source_table;
-    const LmTableRow * source_row;
-    const LmTableColumnDescriptor * source_key_column;
-    const LmTableColumnDescriptor * source_field_class_column;
-    const LmTableColumnDescriptor * source_field_index_column;
-    const LmTableColumnDescriptor * source_address_depth_column;
-    const LmTableColumnDescriptor * source_const_column;
-    const LmTableCell * source_field_class_cell;
-    const LmTableCell * source_field_index_cell;
-    size_t source_column_count;
-    int source_covered;
-    int source_usable;
+    const char *field_class;
     if (out_class != 0) {
         out_class[0] = 0;
     }
@@ -13621,63 +13607,12 @@ static int lm_trans_layout_field_class_resolve(const LmP0Text *owner, const LmP0
     if (relation_name == 0) {
         return -1;
     }
-    facade_class = lm_trans_namespace_registry_lookup(namespace_, field_name, relation_name);
+    field_class = lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, field_name, relation_name, "class", "class", "field", "class");
     lm_own_delete(relation_name, 0);
-    if (facade_class == 0) {
+    if (field_class == 0) {
         return 0;
     }
-    out_class[0] = facade_class;
-    if (lm_trans_registry_view_parity_enabled() == 0) {
-        return 1;
-    }
-    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
-        return 1;
-    }
-    source_table_name = lm_trans_text_copy_cstr(owner);
-    if (source_table_name == 0) {
-        return 1;
-    }
-    source_covered = 0;
-    source_table = 0;
-    source_row = lm_trans_registry_source_table_lookup_row(field_name, source_table_name, &source_table, &source_covered);
-    source_class = 0;
-    source_usable = 0;
-    if (source_row != 0) {
-        source_column_count = lm_table_descriptor_column_count(source_table);
-        source_usable = (source_column_count == 3U || source_column_count == 4U || source_column_count == 5U) && lm_table_row_cell_count(source_row) == source_column_count;
-        if (source_usable != 0) {
-            source_key_column = lm_table_descriptor_column_at(source_table, 0U);
-            source_field_class_column = lm_table_descriptor_column_at(source_table, 1U);
-            source_field_index_column = lm_table_descriptor_column_at(source_table, 2U);
-            source_address_depth_column = 0;
-            source_const_column = 0;
-            if (source_column_count >= 4U) {
-                source_address_depth_column = lm_table_descriptor_column_at(source_table, 3U);
-            }
-            if (source_column_count == 5U) {
-                source_const_column = lm_table_descriptor_column_at(source_table, 4U);
-            }
-            source_usable = source_key_column != 0 && source_key_column -> name != 0 && strcmp(source_key_column -> name, "class") == 0 && source_field_class_column != 0 && source_field_class_column -> name != 0 && strcmp(source_field_class_column -> name, "field.class") == 0 && source_field_index_column != 0 && source_field_index_column -> name != 0 && strcmp(source_field_index_column -> name, "field.index") == 0;
-            if (source_usable != 0 && source_address_depth_column != 0) {
-                source_usable = source_address_depth_column -> name != 0 && strcmp(source_address_depth_column -> name, "field.address-depth") == 0;
-            }
-            if (source_usable != 0 && source_const_column != 0) {
-                source_usable = source_const_column -> name != 0 && strcmp(source_const_column -> name, "field.const") == 0;
-            }
-        }
-        if (source_usable != 0) {
-            source_field_class_cell = lm_table_row_cell_at(source_row, 1U);
-            source_field_index_cell = lm_table_row_cell_at(source_row, 2U);
-            source_usable = source_field_class_cell != 0 && source_field_class_cell -> value != 0 && source_field_index_cell != 0 && source_field_index_cell -> value != 0;
-            if (source_usable != 0) {
-                source_class = source_field_class_cell -> value;
-            }
-        }
-    }
-    if (source_covered != 0 && source_usable != 0 && strcmp(source_class, facade_class) == 0 && lm_trans_registry_view_is_selected() != 0) {
-        out_class[0] = source_class;
-    }
-    lm_own_delete(source_table_name, 0);
+    out_class[0] = field_class;
     return 1;
 }
 

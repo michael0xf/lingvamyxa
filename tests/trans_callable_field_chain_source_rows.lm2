@@ -12,9 +12,9 @@ L4:
 
     table:
         name: LmFullCallHolder
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        columns((class: class) (int: marker) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`) (int: `field.const`))
         rows:
-                 callback  LmUnaryCall  0
+                 callback  7  0  9  LmUnaryCall  None  None
     end: LmFullCallHolder
 
     table:
@@ -44,6 +44,20 @@ L4:
         rows:
                  callback  0
     end: `LmSplitCallHolder.field.index`
+
+    table:
+        name: LmWrongDescriptorCallHolder
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 callback  LmUnaryCall  0
+    end: LmWrongDescriptorCallHolder
+
+    table:
+        name: `LmWrongDescriptorCallHolder.field.class`
+        columns((class: class) (char: field))
+        rows:
+                 callback  LmUnaryCall
+    end: `LmWrongDescriptorCallHolder.field.class`
 end: L4
 
 L1:
@@ -63,6 +77,10 @@ typedef struct LmSplitCallHolder {
     LmUnaryCall callback;
 } LmSplitCallHolder;
 
+typedef struct LmWrongDescriptorCallHolder {
+    LmUnaryCall callback;
+} LmWrongDescriptorCallHolder;
+
 static int lm_test_increment(int value) {
     return value + 1;
 }
@@ -70,6 +88,7 @@ static int lm_test_increment(int value) {
 static LmFullCallHolder lm_test_full_call_holder = { lm_test_increment };
 static LmOverlayCallHolder lm_test_overlay_call_holder = { lm_test_increment };
 static LmSplitCallHolder lm_test_split_call_holder = { lm_test_increment };
+static LmWrongDescriptorCallHolder lm_test_wrong_descriptor_call_holder = { lm_test_increment };
 ===
 
 L2:
@@ -85,6 +104,10 @@ L2:
         return: holder\callback(42)
     end: callSplit
 
+    fn: callWrongDescriptor (const: @: LmWrongDescriptorCallHolder holder) int
+        return: holder\callback(43)
+    end: callWrongDescriptor
+
     external:
         fn: main () int
             if: callFull(@ c.lm_test_full_call_holder) != 41
@@ -93,6 +116,8 @@ L2:
                 return: 2
             if: callSplit(@ c.lm_test_split_call_holder) != 43
                 return: 3
+            if: callWrongDescriptor(@ c.lm_test_wrong_descriptor_call_holder) != 44
+                return: 4
             return: 0
         end: main
     end: external
