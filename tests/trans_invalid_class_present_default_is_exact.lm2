@@ -1,0 +1,31 @@
+L4:
+    table:
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 default  function
+    end: class
+
+    table:
+        name: `layout.backend`
+        columns((char: key) (class: backend))
+        rows:
+                 LmUnknownWildcardClass  c.struct
+    end: `layout.backend`
+
+    table:
+        name: `LmUnknownWildcardClass.field.class`
+        columns((char: field) (class: class))
+        rows:
+                 value  int
+    end: `LmUnknownWildcardClass.field.class`
+
+    table:
+        name: `LmUnknownWildcardClass.field.index`
+        columns((char: field) (size_t: index))
+        rows:
+                 value  0
+    end: `LmUnknownWildcardClass.field.index`
+end: L4
+
+layout

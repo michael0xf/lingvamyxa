@@ -2241,7 +2241,7 @@ fn: lm_trans_head_can_declare_storage (
         return: 0
     if: lm_trans_is_reserved_head_name(head)
         return: 0
-    if: lm_trans_registry_has(head, "class.present")
+    if: lm_trans_namespace_class_has(namespace_, head)
         return: 1
 
     symbol: lm_trans_namespace_find(namespace_, head)

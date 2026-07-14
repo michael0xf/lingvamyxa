@@ -144,7 +144,7 @@ fn: lm_trans_registry_collect_layout_names (LmOwnPtrStack: names; const: (LmTran
         row: lm_own_ptr_stack_at(rows, i)
         if: row != 0 && row\key != 0 && row\payload != 0 && lm_trans_layout_backend_is_supported(row\payload)
             lm_trans_text_assign_cstr(key_text, row\key)
-            if: lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") = 0
+            if: lm_trans_namespace_class_has(namespace_, key_text) = 0
                 c.fprintf(c.stderr, "trans L4 layout error: layout.backend key %s is not a class\n", row\key)
                 lm_trans_l4_text_view_delete(@ key_text)
                 return: 1
@@ -720,7 +720,7 @@ fn: lm_trans_registry_collect_constant_define_names (LmOwnPtrStack: names; const
         row: lm_own_ptr_stack_at(rows, i)
         if: row != 0 && row\key != 0 && row\payload != 0 && c.strcmp(row\payload, "c.define") = 0
             lm_trans_text_assign_cstr(key_text, row\key)
-            if: lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") = 0
+            if: lm_trans_namespace_class_has(namespace_, key_text) = 0
                 c.fprintf(c.stderr, "trans L4 constant error: constant.backend key %s is not a class\n", row\key)
                 lm_trans_l4_text_view_delete(@ key_text)
                 return: 1
@@ -893,7 +893,7 @@ fn: lm_trans_registry_collect_backend_names (LmOwnPtrStack: names; const: (LmTra
         row: lm_own_ptr_stack_at(rows, i)
         if: row != 0 && row\key != 0 && row\payload != 0 && c.strcmp(row\payload, backend_payload) = 0
             lm_trans_text_assign_cstr(key_text, row\key)
-            if: require_class && lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") = 0
+            if: require_class && lm_trans_namespace_class_has(namespace_, key_text) = 0
                 c.fprintf(c.stderr, "trans L4 %s error: %s.backend key %s is not a class\n", error_name, receiver_name, row\key)
                 lm_trans_l4_text_view_delete(@ key_text)
                 return: 1
@@ -929,7 +929,7 @@ fn: lm_trans_registry_append_relation_name (
     if: names = 0 || owner_name = 0 || relation_name = 0 || error_name = 0 || key_text = 0 || key = 0
         return: 1
     lm_trans_text_assign_cstr(key_text, key)
-    if: require_class && lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") = 0
+    if: require_class && lm_trans_namespace_class_has(namespace_, key_text) = 0
         c.fprintf(c.stderr, "trans L4 %s error: %s.%s key %s is not a class\n", error_name, owner_name, relation_name, key)
         return: 1
     name: lm_trans_text_copy_cstr(key_text)

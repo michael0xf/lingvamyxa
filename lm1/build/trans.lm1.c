@@ -2382,6 +2382,7 @@ static int lm_table_descriptor_schema_same(const LmTableDescriptor *left, const 
 static int lm_table_descriptor_join_schema_compatible(const LmTableDescriptor *source, const LmTableDescriptor *target);
 static LmRegistryView * lm_registry_view_new(const LmRegistryView *parent);
 static void lm_registry_view_delete(LmRegistryView *view);
+static int lm_registry_view_class_has_slice(const LmRegistryView *view, const char *name, size_t name_length);
 static int lm_registry_view_class_has(const LmRegistryView *view, const char *name);
 static int lm_registry_view_class_add(LmRegistryView *view, const char *name);
 static size_t lm_registry_view_class_count(const LmRegistryView *view);
@@ -2488,6 +2489,7 @@ static const char * lm_trans_registry_source_n2_typed_value(const LmTransNamespa
 static const char * lm_trans_registry_source_n2_key_typed_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const LmTransRegistryFact *facade_row);
 static const LmP0Node * lm_trans_registry_source_n2_node(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *node_column_name, const LmTransRegistryFact *facade_row);
 static void lm_trans_registry_view_parity_fail(const char *operation, const char *table);
+static int lm_trans_namespace_class_has(const LmTransNamespace *namespace_, const LmP0Text *name);
 static const LmRegistryViewRow * lm_trans_registry_view_lookup_exact_text(const LmP0Text *key, const char *table);
 static const LmOwnPtrStack * lm_trans_registry_relation_stack_in_identifiers(const LmTransIdentifierTable *identifiers, const LmP0Text *key, const char *relation_name);
 static const LmOwnPtrStack * lm_trans_registry_view_relation_stack(const LmP0Text *table_owner, const char *relation_name);
@@ -4211,7 +4213,7 @@ static void lm_registry_view_delete(LmRegistryView *view) {
     lm_own_delete(view, 0);
 }
 
-static int lm_registry_view_class_has(const LmRegistryView *view, const char *name) {
+static int lm_registry_view_class_has_slice(const LmRegistryView *view, const char *name, size_t name_length) {
     size_t index;
     const char *candidate;
     if (view == 0 || name == 0) {
@@ -4221,13 +4223,20 @@ static int lm_registry_view_class_has(const LmRegistryView *view, const char *na
         index = 0U;
         while (index < view -> class_names -> count) {
             candidate = lm_own_ptr_stack_at(view -> class_names, index);
-            if (candidate != 0 && strcmp(candidate, name) == 0) {
+            if (candidate != 0 && lm_table_descriptor_cstr_equals_slice(candidate, name, name_length) != 0) {
                 return 1;
             }
             index = index + 1U;
         }
     }
-    return lm_registry_view_class_has(view -> parent, name);
+    return lm_registry_view_class_has_slice(view -> parent, name, name_length);
+}
+
+static int lm_registry_view_class_has(const LmRegistryView *view, const char *name) {
+    if (name == 0) {
+        return 0;
+    }
+    return lm_registry_view_class_has_slice(view, name, strlen(name));
 }
 
 static int lm_registry_view_class_add(LmRegistryView *view, const char *name) {
@@ -6262,6 +6271,59 @@ static void lm_trans_registry_view_parity_fail(const char *operation, const char
     }
     fprintf(stderr, "trans registry view parity error: %s differs for table %s\n", operation, table);
     exit(2);
+}
+
+static int lm_trans_namespace_class_has(const LmTransNamespace *namespace_, const LmP0Text *name) {
+    LmTransRegistryFact * row;
+    LmP0Text * name_payload;
+    const LmRegistryView * view;
+    int private_registry;
+    int legacy_has;
+    int view_has;
+    if (name == 0) {
+        return 0;
+    }
+    private_registry = namespace_ != 0 && namespace_ -> registry_identifiers != 0 && (lm_trans_registry == 0 || namespace_ -> registry_identifiers != lm_trans_registry->identifiers);
+    if (private_registry) {
+        row = lm_trans_registry_lookup_row_in_identifiers(namespace_ -> registry_identifiers, name, "class.present");
+        if (row != 0) {
+            return row -> payload != 0;
+        }
+        if (lm_trans_registry == 0 || lm_trans_registry->identifiers == 0) {
+            return 0;
+        }
+        row = lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry->identifiers, name, "class.present");
+        return row != 0 && row -> payload != 0;
+    }
+    if (lm_trans_registry == 0 || lm_trans_registry->identifiers == 0) {
+        return 0;
+    }
+    row = lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry->identifiers, name, "class.present");
+    legacy_has = row != 0 && row -> payload != 0;
+    if (lm_trans_registry_view_parity_enabled() == 0) {
+        return legacy_has;
+    }
+    view = lm_trans_registry->view;
+    if (namespace_ != 0 && namespace_ -> registry_view != 0) {
+        view = namespace_ -> registry_view;
+    }
+    name_payload = lm_trans_text_ref_new_cstr("");
+    if (name_payload == 0 || lm_trans_identifier_payload(name, name_payload) == 0) {
+        lm_trans_text_ref_destroy(&name_payload);
+        if (legacy_has != 0) {
+            lm_trans_registry_view_parity_fail("class exact membership", "class.present");
+        }
+        return 0;
+    }
+    view_has = lm_registry_view_class_has_slice(view, name_payload -> data, name_payload -> length);
+    lm_trans_text_ref_destroy(&name_payload);
+    if (legacy_has != view_has) {
+        lm_trans_registry_view_parity_fail("class exact membership", "class.present");
+    }
+    if (lm_trans_registry_view_is_selected() != 0) {
+        return view_has;
+    }
+    return legacy_has;
 }
 
 static const LmRegistryViewRow * lm_trans_registry_view_lookup_exact_text(const LmP0Text *key, const char *table) {
@@ -18513,7 +18575,7 @@ static int lm_trans_head_can_declare_storage(const LmP0Text *head, const LmTrans
     if (lm_trans_is_reserved_head_name(head)) {
         return 0;
     }
-    if (lm_trans_registry_has(head, "class.present")) {
+    if (lm_trans_namespace_class_has(namespace_, head)) {
         return 1;
     }
     symbol = lm_trans_namespace_find(namespace_, head);
@@ -30232,7 +30294,7 @@ static int lm_trans_registry_collect_layout_names(LmOwnPtrStack *names, const Lm
         row = lm_own_ptr_stack_at(rows, i);
         if (row != 0 && row -> key != 0 && row -> payload != 0 && lm_trans_layout_backend_is_supported(row -> payload)) {
             lm_trans_text_assign_cstr(key_text, row -> key);
-            if (lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") == 0) {
+            if (lm_trans_namespace_class_has(namespace_, key_text) == 0) {
                 fprintf(stderr, "trans L4 layout error: layout.backend key %s is not a class\n", row -> key);
                 lm_trans_l4_text_view_delete(&key_text);
                 return 1;
@@ -30850,7 +30912,7 @@ static int lm_trans_registry_collect_constant_define_names(LmOwnPtrStack *names,
         row = lm_own_ptr_stack_at(rows, i);
         if (row != 0 && row -> key != 0 && row -> payload != 0 && strcmp(row -> payload, "c.define") == 0) {
             lm_trans_text_assign_cstr(key_text, row -> key);
-            if (lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") == 0) {
+            if (lm_trans_namespace_class_has(namespace_, key_text) == 0) {
                 fprintf(stderr, "trans L4 constant error: constant.backend key %s is not a class\n", row -> key);
                 lm_trans_l4_text_view_delete(&key_text);
                 return 1;
@@ -31035,7 +31097,7 @@ static int lm_trans_registry_collect_backend_names(LmOwnPtrStack *names, const L
         row = lm_own_ptr_stack_at(rows, i);
         if (row != 0 && row -> key != 0 && row -> payload != 0 && strcmp(row -> payload, backend_payload) == 0) {
             lm_trans_text_assign_cstr(key_text, row -> key);
-            if (require_class && lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") == 0) {
+            if (require_class && lm_trans_namespace_class_has(namespace_, key_text) == 0) {
                 fprintf(stderr, "trans L4 %s error: %s.backend key %s is not a class\n", error_name, receiver_name, row -> key);
                 lm_trans_l4_text_view_delete(&key_text);
                 return 1;
@@ -31068,7 +31130,7 @@ static int lm_trans_registry_append_relation_name(LmOwnPtrStack *names, const Lm
         return 1;
     }
     lm_trans_text_assign_cstr(key_text, key);
-    if (require_class && lm_trans_namespace_registry_lookup(namespace_, key_text, "class.present") == 0) {
+    if (require_class && lm_trans_namespace_class_has(namespace_, key_text) == 0) {
         fprintf(stderr, "trans L4 %s error: %s.%s key %s is not a class\n", error_name, owner_name, relation_name, key);
         return 1;
     }

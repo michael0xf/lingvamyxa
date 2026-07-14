@@ -726,7 +726,7 @@ sub: lm_registry_view_delete (LmRegistryView: view)
     lm_own_delete(view, 0)
 end: lm_registry_view_delete
 
-fn: lm_registry_view_class_has (const: (LmRegistryView: view); const: @(char name)) int
+fn: lm_registry_view_class_has_slice (const: (LmRegistryView: view); const: @(char name); size_t: name_length) int
     size_t: index
     const: @: char candidate
 
@@ -736,11 +736,16 @@ fn: lm_registry_view_class_has (const: (LmRegistryView: view); const: @(char nam
         index: 0U
         while: index < view\class_names\count
             candidate: lm_own_ptr_stack_at(view\class_names, index)
-            if: candidate != 0 && c.strcmp(candidate, name) = 0
+            if: candidate != 0 && lm_table_descriptor_cstr_equals_slice(candidate, name, name_length) != 0
                 return: 1
             index: index + 1U
     ---
-return: lm_registry_view_class_has(view\parent, name)
+return: lm_registry_view_class_has_slice(view\parent, name, name_length)
+
+fn: lm_registry_view_class_has (const: (LmRegistryView: view); const: @(char name)) int
+    if: name = 0
+        return: 0
+return: lm_registry_view_class_has_slice(view, name, c.strlen(name))
 
 fn: lm_registry_view_class_add (LmRegistryView: view; const: @(char name)) int
     @: char copy
