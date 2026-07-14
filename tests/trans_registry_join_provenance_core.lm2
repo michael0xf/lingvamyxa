@@ -465,8 +465,7 @@ fn: lm_test_registry_join_provenance_core () int
     const: LmRegistryViewRow: unit_wrong_backend_view_row
     const: LmOwnPtrStack: unit_backend_rows
     LmOwnPtrStack: unit_unrelated_backend_rows
-    const: LmTableDescriptor: layout_source_table
-    const: LmTableRow: resolved_layout_source_row
+    const: LmTableCell: resolved_layout_source_key_cell
     const: LmP0Node: resolved_node
     const: LmP0Node: resolved_condition_body
     const: LmP0Node: resolved_condition_unrelated_body
@@ -504,6 +503,8 @@ fn: lm_test_registry_join_provenance_core () int
     const: @: char resolved_condition_name
     const: @: char resolved_condition_unrelated_name
     const: @: char resolved_layout_backend
+    const: @: char resolved_layout_source_value
+    const: @: char unrelated_layout_source_value
     const: @: char resolved_unit_backend
     const: @: char resolved_unit_wrong_backend
     const: @: char resolved_receiver_binding
@@ -539,8 +540,6 @@ fn: lm_test_registry_join_provenance_core () int
     LmP0Text: class_semantic_key_text
     LmP0Text: receiver_key_text
     LmP0Text: receiver_family_key_text
-    size_t: layout_source_row_index
-    size_t: unrelated_layout_source_row_index
     size_t: condition_row_count
     size_t: resolved_unwrap_index
     int: condition_present
@@ -2021,11 +2020,10 @@ fn: lm_test_registry_join_provenance_core () int
     ---
 
     if: status = 0
-        layout_source_table: lm_registry_view_find_source_table_slice(lm_trans_registry\view, "layout", 6U)
-        layout_source_row_index: 0U
-        unrelated_layout_source_row_index: 0U
-        resolved_layout_source_row: lm_trans_layout_source_row_for_fact(layout_source_table, @ layout_source_row_index, layout_target)
-        if: layout_source_table = 0 || resolved_layout_source_row != lm_table_descriptor_materialized_row_at(layout_source_table, 0U) || layout_source_row_index != 1U || lm_trans_layout_source_row_for_fact(layout_source_table, @ unrelated_layout_source_row_index, layout_unrelated) != 0 || unrelated_layout_source_row_index != 0U
+        resolved_layout_source_key_cell: 0
+        resolved_layout_source_value: lm_trans_layout_field_source_value(0, "layout", "backend", "backend", "class", layout_target, @ resolved_layout_source_key_cell)
+        unrelated_layout_source_value: lm_trans_layout_field_source_value(0, "layout", "backend", "backend", "class", layout_unrelated, 0)
+        if: resolved_layout_source_value != layout_backend_cell\value || resolved_layout_source_value = layout_target\payload || resolved_layout_source_key_cell != layout_key_cell || unrelated_layout_source_value != layout_unrelated\payload
             status: 1
     ---
 

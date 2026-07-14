@@ -9,6 +9,8 @@ L4:
                  LmTestSourceOverlay    c.struct
                  LmTestSourceInner      c.struct
                  LmTestSourceOuter      c.struct
+                 LmTestSourceWideArray  c.struct
+                 LmTestSourceWideOuter  c.struct
                  LmTestSourceJoined     c.struct
     end: `layout.backend`
 
@@ -84,6 +86,27 @@ L4:
     end: LmTestSourceInner
 
     table:
+        name: LmTestSourceWideArray
+        columns((class: class) (int: marker) (size_t: `field.array-count`) (class: `field.class`) (int: `field.const`) (size_t: `field.address-depth`) (size_t: `field.index`))
+        rows:
+                 values  7  3  int  None  None  0
+    end: LmTestSourceWideArray
+
+    table:
+        name: `LmTestSourceWideArray.field.index`
+        columns((class: class) (int: index))
+        rows:
+                 values  0
+    end: `LmTestSourceWideArray.field.index`
+
+    table:
+        name: LmTestSourceWideOuter
+        columns((class: class) (class: `field.union`) (size_t: `field.index`) (size_t: `field.array-count`))
+        rows:
+                 items  LmTestSourceInner  0  2
+    end: LmTestSourceWideOuter
+
+    table:
         name: `LmTestSourceOuter.field.union`
         columns((class: class) (class: union))
         rows:
@@ -117,8 +140,12 @@ static int lm_test_layout_source_rows(void) {
     LmTestSourceQualified qualified = { "ok", 11 };
     LmTestSourceJoined joined = { "joined" };
     LmTestSourceOuter outer = { 0 };
+    LmTestSourceWideArray wide_array = { 0 };
+    LmTestSourceWideOuter wide_outer = { 0 };
 
     outer.items[1].value = 13;
+    wide_array.values[2] = 17;
+    wide_outer.items[1].value = 19;
     if (offsetof(LmTestSourceOrdered, early) != 0U ||
         offsetof(LmTestSourceOrdered, late) != 1U) {
         return 1;
@@ -139,6 +166,9 @@ static int lm_test_layout_source_rows(void) {
     }
     if (outer.items[1].value != 13) {
         return 6;
+    }
+    if (wide_array.values[2] != 17 || wide_outer.items[1].value != 19) {
+        return 7;
     }
     return 0;
 }
