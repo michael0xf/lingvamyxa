@@ -3621,6 +3621,7 @@ static int lm_trans_registry_push_owner_relation_text_with_fact(const LmP0Text *
 static int lm_trans_registry_push_owner_relation_size_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, size_t value, LmTransRegistryFact **out_fact);
 static int lm_trans_table_descriptor_add_generated_column(LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor);
 static int lm_trans_registry_push_generated_source_n2_row_values(const LmP0Text *table_value, const LmP0Text *key_value, const LmP0Text *payload_value, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor);
+static int lm_trans_registry_materialize_generated_callable_source_rows(const LmP0Text *function_name);
 static int lm_trans_table_row_take_generated_fact_cell(LmTableRow *row, const LmTransRegistryFact *fact);
 static int lm_trans_registry_materialize_generated_fn_source_row(const LmP0Text *function_name, const LmTransRegistryFact *descriptor_fact, const LmTransRegistryFact *receiver_fact);
 static int lm_trans_registry_materialize_generated_param_source_row(const LmP0Text *function_name, const LmTransRegistryFact *class_fact, const LmTransRegistryFact *index_fact, const LmTransRegistryFact *address_depth_fact, const LmTransRegistryFact *const_fact);
@@ -34683,6 +34684,22 @@ static int lm_trans_registry_push_generated_source_n2_row_values(const LmP0Text 
     return status;
 }
 
+static int lm_trans_registry_materialize_generated_callable_source_rows(const LmP0Text *function_name) {
+    if (function_name == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.partial"), function_name, lm_trans_text_from_cstr("1"), "class", "class", "value", "serial") != 0) {
+        return 1;
+    }
+    if (lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.capture"), function_name, lm_trans_text_from_cstr("1"), "class", "class", "value", "serial") != 0) {
+        return 1;
+    }
+    if (lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.projection"), function_name, lm_trans_text_from_cstr("c.closure-struct"), "class", "class", "value", "projection") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_table_row_take_generated_fact_cell(LmTableRow *row, const LmTransRegistryFact *fact) {
     LmTableCell * cell;
     if (row == 0) {
@@ -35107,10 +35124,8 @@ static int lm_trans_registry_materialize_fn_descriptor_frame(const LmP0Frame *fr
     if (status == 0 && lm_trans_registry_materialize_fn_descriptor_return(function_name, return_type) != 0) {
         status = 1;
     }
-    if (status == 0 && function -> is_callable_descriptor) {
-        if (lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.partial"), function_name, lm_trans_text_from_cstr("1")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.capture"), function_name, lm_trans_text_from_cstr("1")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.projection"), function_name, lm_trans_text_from_cstr("c.closure-struct")) != 0) {
-            status = 1;
-        }
+    if (status == 0 && function -> is_callable_descriptor && lm_trans_registry_materialize_generated_callable_source_rows(function_name) != 0) {
+        status = 1;
     }
     if (status == 0 && function -> params == 0) {
         fprintf(stderr, "trans fn descriptor error: parameters must be a Structure\n");

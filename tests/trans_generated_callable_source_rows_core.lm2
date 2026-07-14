@@ -1,0 +1,162 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_generated_callable_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_generated_callable_fact_at (size_t: index) LmTransRegistryFact
+    const: LmRegistryViewRow: view_row
+
+    view_row: lm_registry_view_fact_at(lm_trans_registry\view, index)
+    if: view_row = 0 || view_row\source = 0
+        return: 0
+return: cast: (LmTransRegistryFact) view_row\source
+
+fn: lm_test_generated_callable_column_is (
+    const: (LmTableColumnDescriptor: column)
+    const: @(char name)
+    const: @(char type_name)
+    const: @(char descriptor)
+) int
+    const: @: char actual_descriptor
+
+    if: column = 0 || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, name) != 0 || c.strcmp(column\type_name, type_name) != 0 || lm_table_column_descriptor_descriptor_count(column) != 1U
+        return: 0
+    actual_descriptor: lm_table_column_descriptor_descriptor_at(column, 0U)
+return: actual_descriptor != 0 && c.strcmp(actual_descriptor, descriptor) = 0
+
+fn: lm_test_generated_callable_path_cell_is (
+    const: @(char path)
+    size_t: index
+    const: @(char key)
+    const: (LmTransRegistryFact: fact)
+) int
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+    int: covered
+
+    key_cell: 0
+    covered: 0
+    value_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, path, c.strlen(path), index, 0, 0, @ key_cell, @ covered)
+    if: covered = 0 || key_cell = 0 || key_cell\value = 0 || key_cell\source != 0 || c.strcmp(key_cell\value, key) != 0 || key_cell\value = fact\key || value_cell = 0 || value_cell\value = 0 || value_cell\source != fact || value_cell\value = fact\payload || c.strcmp(value_cell\value, fact\payload) != 0
+        return: 0
+return: 1
+
+fn: lm_test_generated_callable_source_rows_core () int
+    const: [2]: @: char keys
+    const: [3]: @: char table_names
+    const: [3]: @: char value_descriptors
+    const: [3]: @: char payloads
+    const: LmTableDescriptor: table
+    const: LmTableRow: row
+    const: LmTableCell: partial_cell
+    const: LmTableCell: capture_cell
+    const: LmTableCell: projection_cell
+    LmTransRegistryFact: fact
+    LmP0Text: key_text
+    size_t: i
+    size_t: relation_index
+    int: covered
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+
+    keys[0]: "LmGeneratedCallableA"
+    keys[1]: "LmGeneratedCallableB"
+    table_names[0]: "callable.partial"
+    table_names[1]: "callable.capture"
+    table_names[2]: "callable.projection"
+    value_descriptors[0]: "serial"
+    value_descriptors[1]: "serial"
+    value_descriptors[2]: "projection"
+    payloads[0]: "1"
+    payloads[1]: "1"
+    payloads[2]: "c.closure-struct"
+    key_text: 0
+    status: 0
+
+    i: 0U
+    while: i < 2U
+        key_text: lm_trans_text_from_cstr(keys[i])
+        if: key_text = 0 || lm_trans_registry_materialize_generated_callable_source_rows(key_text) != 0
+            status: 1
+            lm_trans_text_ref_destroy(@ key_text)
+            break
+        lm_trans_text_ref_destroy(@ key_text)
+        i: i + 1U
+
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 6U || lm_registry_view_fact_count(lm_trans_registry\view) != 6U || lm_registry_view_source_table_count(lm_trans_registry\view) != 6U)
+        status: 1
+
+    i: 0U
+    while: status = 0 && i < 6U
+        relation_index: i % 3U
+        fact: lm_test_generated_callable_fact_at(i)
+        table: lm_registry_view_source_table_at(lm_trans_registry\view, i)
+        row: lm_table_descriptor_materialized_row_at(table, 0U)
+        if: fact = 0 || fact\table = 0 || fact\key = 0 || fact\payload = 0 || c.strcmp(fact\table, table_names[relation_index]) != 0 || c.strcmp(fact\key, keys[i / 3U]) != 0 || c.strcmp(fact\payload, payloads[relation_index]) != 0
+            status: 1
+            break
+        if: table = 0 || table\name = 0 || c.strcmp(table\name, table_names[relation_index]) != 0 || lm_table_descriptor_column_count(table) != 2U || lm_table_descriptor_materialized_row_count(table) != 1U || lm_test_generated_callable_column_is(lm_table_descriptor_column_at(table, 0U), "class", "class", "class") = 0 || lm_test_generated_callable_column_is(lm_table_descriptor_column_at(table, 1U), "value", value_descriptors[relation_index], value_descriptors[relation_index]) = 0 || row = 0 || row\local_sequence != 0U || lm_table_row_cell_count(row) != 2U
+            status: 1
+            break
+        if: lm_test_generated_callable_path_cell_is(table_names[relation_index], i / 3U, keys[i / 3U], fact) = 0
+            status: 1
+            break
+        i: i + 1U
+
+    relation_index: 0U
+    while: status = 0 && relation_index < 3U
+        covered: 0
+        if: lm_registry_view_source_path_key_at_slice(lm_trans_registry\view, table_names[relation_index], c.strlen(table_names[relation_index]), 2U, @ covered) != 0 || covered = 0
+            status: 1
+            break
+        relation_index: relation_index + 1U
+
+    key_text: lm_trans_text_from_cstr(keys[0])
+    if: status = 0 && key_text = 0
+        status: 1
+
+    lm_trans_registry\view_mode: 0
+    if: status = 0 && (lm_trans_callable_partial_payload(0, key_text) != lm_test_generated_callable_fact_at(0U)\payload || lm_trans_callable_capture_payload(0, key_text) != lm_test_generated_callable_fact_at(1U)\payload || lm_trans_callable_projection_payload(0, key_text) != lm_test_generated_callable_fact_at(2U)\payload)
+        status: 1
+    lm_trans_registry\view_mode: 1
+    if: status = 0 && (lm_trans_callable_partial_payload(0, key_text) != lm_test_generated_callable_fact_at(0U)\payload || lm_trans_callable_capture_payload(0, key_text) != lm_test_generated_callable_fact_at(1U)\payload || lm_trans_callable_projection_payload(0, key_text) != lm_test_generated_callable_fact_at(2U)\payload)
+        status: 1
+
+    lm_trans_registry\view_mode: 2
+    covered: 0
+    partial_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, table_names[0], c.strlen(table_names[0]), 0U, 0, 0, 0, @ covered)
+    if: status = 0 && (covered = 0 || partial_cell = 0 || partial_cell\value = 0 || lm_trans_callable_partial_payload(0, key_text) != partial_cell\value || partial_cell\value = lm_test_generated_callable_fact_at(0U)\payload)
+        status: 1
+    covered: 0
+    capture_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, table_names[1], c.strlen(table_names[1]), 0U, 0, 0, 0, @ covered)
+    if: status = 0 && (covered = 0 || capture_cell = 0 || capture_cell\value = 0 || lm_trans_callable_capture_payload(0, key_text) != capture_cell\value || capture_cell\value = lm_test_generated_callable_fact_at(1U)\payload)
+        status: 1
+    covered: 0
+    projection_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, table_names[2], c.strlen(table_names[2]), 0U, 0, 0, 0, @ covered)
+    if: status = 0 && (covered = 0 || projection_cell = 0 || projection_cell\value = 0 || lm_trans_callable_projection_payload(0, key_text) != projection_cell\value || projection_cell\value = lm_test_generated_callable_fact_at(2U)\payload)
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ key_text)
+    lm_trans_registry_destroy()
+return: status

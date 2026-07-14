@@ -2780,6 +2780,17 @@ fn: lm_trans_registry_push_generated_source_n2_row_values (
     lm_table_descriptor_delete_any(descriptor)
 return: status
 
+fn: lm_trans_registry_materialize_generated_callable_source_rows (const: (LmP0Text: function_name)) int
+    if: function_name = 0
+        return: 1
+    if: lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.partial"), function_name, lm_trans_text_from_cstr("1"), "class", "class", "value", "serial") != 0
+        return: 1
+    if: lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.capture"), function_name, lm_trans_text_from_cstr("1"), "class", "class", "value", "serial") != 0
+        return: 1
+    if: lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.projection"), function_name, lm_trans_text_from_cstr("c.closure-struct"), "class", "class", "value", "projection") != 0
+        return: 1
+return: 0
+
 fn: lm_trans_table_row_take_generated_fact_cell (LmTableRow: row; const: (LmTransRegistryFact: fact)) int
     LmTableCell: cell
 
@@ -3172,10 +3183,8 @@ fn: lm_trans_registry_materialize_fn_descriptor_frame (const: (LmP0Frame: frame)
         status: 1
     if: status = 0 && lm_trans_registry_materialize_fn_descriptor_return(function_name, return_type) != 0
         status: 1
-    if: status = 0 && function\is_callable_descriptor
-        if: lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.partial"), function_name, lm_trans_text_from_cstr("1")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.capture"), function_name, lm_trans_text_from_cstr("1")) != 0 || lm_trans_registry_push_row_values(lm_trans_text_from_cstr("callable.projection"), function_name, lm_trans_text_from_cstr("c.closure-struct")) != 0
-            status: 1
-    ---
+    if: status = 0 && function\is_callable_descriptor && lm_trans_registry_materialize_generated_callable_source_rows(function_name) != 0
+        status: 1
 
     if: status = 0 && function\params = 0
         c.fprintf(c.stderr, "trans fn descriptor error: parameters must be a Structure\n")
