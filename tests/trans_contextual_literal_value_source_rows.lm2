@@ -3,23 +3,23 @@ L4:
         name: `contextual.literal`
         columns((class: class) (int: marker) (relation: value))
         rows:
-                 None  1  `lm.test.contextual.direct.old`
-                 None  2  `lm.test.contextual.direct`
-                 true  3  `lm.test.contextual.default`
+                 None  1  `lm.test.contextual.direct.old.value`
+                 None  2  `lm.test.contextual.direct.value`
+                 true  3  `lm.test.contextual.default.value`
     end: `contextual.literal`
 
     table:
         name: `contextual.literal.value`
         columns((class: class) (class: value))
         rows:
-                 OK  `lm.test.contextual.fallback`
+                 OK  `lm.test.contextual.fallback.value`
     end: `contextual.literal.value`
 
     table:
         name: `lm.test.contextual.literal.seed`
         columns((class: class) (int: marker) (relation: value))
         rows:
-                 false  7  `lm.test.contextual.joined`
+                 false  7  `lm.test.contextual.joined.value`
     end: `lm.test.contextual.literal.seed`
 
     join: (`lm.test.contextual.literal.seed`) `lm.test.contextual.literal.middle`
@@ -83,45 +83,57 @@ L4:
     end: long
 
     table:
-        name: `lm.test.contextual.direct`
+        name: `lm.test.contextual.direct.value`
         columns((class: class) (@: char value))
         rows:
                  int  100
                  int  101
                  int  None
-    end: `lm.test.contextual.direct`
+    end: `lm.test.contextual.direct.value`
 
     table:
-        name: `lm.test.contextual.fallback`
+        name: `lm.test.contextual.fallback.value`
         columns((class: class) (class: value))
         rows:
                  int  202
-    end: `lm.test.contextual.fallback`
+    end: `lm.test.contextual.fallback.value`
 
     table:
         name: `lm.test.contextual.target.seed`
-        columns((class: class) (@: char value))
+        columns((class: class) (int: marker) (@: char value))
         rows:
-                 int  303
+                 int  7  303
     end: `lm.test.contextual.target.seed`
 
-    join: (`lm.test.contextual.target.seed`) `lm.test.contextual.joined`
-        columns((class: class) (@: char value))
+    join: (`lm.test.contextual.target.seed`) `lm.test.contextual.target.middle`
+        columns((class: class) (int: marker) (@: char value))
+        rows:
+    end: `lm.test.contextual.target.middle`
+
+    join: (`lm.test.contextual.target.middle`) `lm.test.contextual.joined`
+        columns((class: class) (int: marker) (@: char value))
         rows:
     end: `lm.test.contextual.joined`
 
     table:
         name: `lm.test.contextual.joined`
-        columns((class: class) (@: char value))
+        columns((class: class) (int: marker) (@: char value))
         rows:
-                 int  None
+                 int  8  None
     end: `lm.test.contextual.joined`
 
     table:
         name: `lm.test.contextual.default`
-        columns((class: class) (@: char value))
+        columns((class: class) (int: marker) (@: char value))
         rows:
-                 default  404
+                 default  9  404
+    end: `lm.test.contextual.default`
+
+    table:
+        name: `lm.test.contextual.default`
+        columns((class: class) (int: marker) (@: char value))
+        rows:
+                 default  10  None
     end: `lm.test.contextual.default`
 end: L4
 

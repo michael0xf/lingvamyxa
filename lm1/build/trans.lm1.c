@@ -14988,7 +14988,7 @@ static const char * lm_trans_contextual_literal_value(const LmTransNamespace *na
     if (table_name == 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(namespace_, expected_class, table_name, "class", "class", "value", "char");
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, expected_class, table_name, "class", "class", "value", "char");
 }
 
 static int lm_trans_contextual_literal_set_expected_type(LmTransExprAtomLowering *lowering, const LmTransL4CallableType *expected_type) {
