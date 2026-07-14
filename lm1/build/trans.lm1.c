@@ -3484,6 +3484,7 @@ static LmTransAbiParam * * lm_trans_l4_abi_params_new(size_t capacity);
 static void lm_trans_l4_abi_params_delete(LmTransAbiParam **params, size_t capacity);
 static LmTransLayoutField * * lm_trans_layout_fields_new(size_t capacity);
 static void lm_trans_layout_fields_delete(LmTransLayoutField **fields, size_t capacity);
+static const char * lm_trans_registry_layout_view_backend(const LmTransNamespace *namespace_, const LmRegistryViewRow *view_row);
 static int lm_trans_registry_collect_layout_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_);
 static int lm_trans_collect_layout_field_common(const char *layout_name, const char *field_name, const LmOwnPtrStack *index_rows, const LmOwnPtrStack *address_depth_rows, const LmOwnPtrStack *const_rows, const LmOwnPtrStack *array_count_rows, LmTransLayoutField *field, LmTransRegistryFact **out_index_row, LmTransRegistryFact **out_address_depth_row, LmTransRegistryFact **out_const_row, LmTransRegistryFact **out_array_count_row);
 static const LmTableRow * lm_trans_layout_source_row_for_fact(const LmTableDescriptor *source_table, size_t *source_row_index, const LmTransRegistryFact *facade_row);
@@ -30870,8 +30871,15 @@ static int lm_trans_layout_backend_is_supported(const char *backend) {
 }
 
 static const char * lm_trans_layout_backend_value(const LmTransNamespace *namespace_, const LmP0Text *class_name) {
+    const LmRegistryView * view;
+    const LmRegistryViewRow * view_row;
     if (class_name == 0) {
         return 0;
+    }
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view != 0) {
+        view_row = lm_registry_view_lookup_text_slice(view, class_name -> data, class_name -> length, "layout.backend", 14U);
+        return lm_trans_registry_layout_view_backend(namespace_, view_row);
     }
     return lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class");
 }
@@ -31012,22 +31020,59 @@ static void lm_trans_layout_fields_delete(LmTransLayoutField **fields, size_t ca
     lm_own_delete(fields, 0);
 }
 
+static const char * lm_trans_registry_layout_view_backend(const LmTransNamespace *namespace_, const LmRegistryViewRow *view_row) {
+    LmTransRegistryFact * facade_row;
+    const char *backend;
+    if (view_row == 0 || view_row -> payload == 0) {
+        return 0;
+    }
+    backend = view_row -> payload;
+    facade_row = ((LmTransRegistryFact *)view_row -> source);
+    if (facade_row != 0 && facade_row -> payload != 0) {
+        backend = lm_trans_registry_source_path_n2_named_typed_value(namespace_, "layout.backend", "class", "class", "backend", "class", facade_row);
+    }
+    return backend;
+}
+
 static int lm_trans_registry_collect_layout_names(LmOwnPtrStack *names, const LmTransNamespace *namespace_) {
     size_t i;
+    size_t row_count;
     LmTransRegistryFact * row;
     const LmOwnPtrStack * rows;
+    const LmRegistryView * view;
+    const LmRegistryViewRow * view_row;
+    const char *backend;
     char *name;
     LmP0Text * key_text;
     if (names == 0) {
         return 1;
     }
-    rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend");
-    if (rows == 0) {
-        return 0;
-    }
     key_text = lm_trans_l4_text_view_new("");
     if (key_text == 0) {
         return 1;
+    }
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view != 0) {
+        row_count = lm_registry_view_table_row_count(view, "layout.backend");
+        i = 0U;
+        while (i < row_count) {
+            view_row = lm_registry_view_table_row_at(view, "layout.backend", i);
+            backend = lm_trans_registry_layout_view_backend(namespace_, view_row);
+            if (view_row != 0 && view_row -> key != 0 && backend != 0 && lm_trans_layout_backend_is_supported(backend)) {
+                if (lm_trans_registry_append_relation_name(names, namespace_, "layout", "backend", "layout", 1, key_text, view_row -> key) != 0) {
+                    lm_trans_l4_text_view_delete(&key_text);
+                    return 1;
+                }
+            }
+            i = i + 1U;
+        }
+        lm_trans_l4_text_view_delete(&key_text);
+        return 0;
+    }
+    rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend");
+    if (rows == 0) {
+        lm_trans_l4_text_view_delete(&key_text);
+        return 0;
     }
     i = 0U;
     while (i < rows -> count) {
@@ -31526,6 +31571,7 @@ static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, 
     const LmOwnPtrStack * backend_rows;
     const LmOwnPtrStack * forward_rows;
     const LmRegistryView * view;
+    const LmRegistryViewRow * backend_view_row;
     const LmRegistryViewRow * forward_view_row;
     const char *backend;
     const char *forward_backend;
@@ -31540,11 +31586,18 @@ static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, 
     if (layout_text == 0) {
         return 1;
     }
-    backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend");
-    backend_row = lm_trans_registry_relation_stack_latest_row(backend_rows, layout_text);
     backend = 0;
-    if (backend_row != 0) {
-        backend = backend_row -> payload;
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view != 0) {
+        backend_view_row = lm_registry_view_lookup_exact(view, layout_name, "layout.backend");
+        backend = lm_trans_registry_layout_view_backend(namespace_, backend_view_row);
+    }
+    else {
+        backend_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend");
+        backend_row = lm_trans_registry_relation_stack_latest_row(backend_rows, layout_text);
+        if (backend_row != 0 && backend_row -> payload != 0) {
+            backend = lm_trans_registry_source_path_n2_named_typed_value(namespace_, "layout.backend", "class", "class", "backend", "class", backend_row);
+        }
     }
     if (lm_trans_layout_backend_is_supported(backend) == 0) {
         fprintf(stderr, "trans L4 layout error: layout %s has unsupported layout.backend\n", layout_name);
@@ -31552,7 +31605,6 @@ static int lm_trans_emit_layout_definition(FILE *file, const char *layout_name, 
         return 1;
     }
     forward_backend = 0;
-    view = lm_trans_namespace_registry_view(namespace_);
     if (view != 0) {
         forward_view_row = lm_registry_view_lookup_exact(view, layout_name, "forward.backend");
         forward_backend = lm_trans_registry_forward_view_backend(namespace_, forward_view_row);

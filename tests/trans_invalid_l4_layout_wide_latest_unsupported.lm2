@@ -1,0 +1,11 @@
+L4:
+    table:
+        name: layout
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+                 LmTestLayoutWideLatestUnsupported  c.struct  1
+                 LmTestLayoutWideLatestUnsupported  c.other   2
+    end: layout
+end: L4
+
+layout

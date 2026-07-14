@@ -42,6 +42,30 @@ L4:
     end: `layout.backend`
 
     table:
+        name: layout
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+                 LmMergeWide  c.struct  1
+    end: layout
+
+    table:
+        name: `lm.test.layout.backend.merge.wide.seed`
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+                 LmMergeWideJoined  c.struct  2
+    end: `lm.test.layout.backend.merge.wide.seed`
+
+    join: (`lm.test.layout.backend.merge.wide.seed`) `lm.test.layout.backend.merge.wide.middle`
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+    end: `lm.test.layout.backend.merge.wide.middle`
+
+    join: (`lm.test.layout.backend.merge.wide.middle`) layout
+        columns((class: class) (class: backend) (int: marker))
+        rows:
+    end: layout
+
+    table:
         name: LmMergeDirect
         columns((class: class) (class: `field.class`) (size_t: `field.index`))
         rows:
@@ -63,12 +87,28 @@ L4:
     end: LmMergeCall
 
     table:
+        name: LmMergeWide
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 wide_value  int  0
+    end: LmMergeWide
+
+    table:
+        name: LmMergeWideJoined
+        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        rows:
+                 wide_joined_value  long  0
+    end: LmMergeWideJoined
+
+    table:
         name: `class.reference-base`
         columns((class: class) (int: value))
         rows:
                  LmMergeDirect  1
                  LmMergeJoined  1
                  LmMergeCall    1
+                 LmMergeWide          1
+                 LmMergeWideJoined    1
     end: `class.reference-base`
 end: L4
 
@@ -83,7 +123,9 @@ struct LmMergeCall { short call_value; };
 static int lm_test_layout_backend_merge_consumers(void) {
     return offsetof(LmMergeCombined, direct_value) != 0U ||
            offsetof(LmMergeCombined, joined_value) <= offsetof(LmMergeCombined, direct_value) ||
-           offsetof(LmMergeCombined, call_value) <= offsetof(LmMergeCombined, joined_value) ||
+           offsetof(LmMergeCombined, wide_value) <= offsetof(LmMergeCombined, joined_value) ||
+           offsetof(LmMergeCombined, wide_joined_value) <= offsetof(LmMergeCombined, wide_value) ||
+           offsetof(LmMergeCombined, call_value) <= offsetof(LmMergeCombined, wide_joined_value) ||
            offsetof(LmMergeCombined, local_value) <= offsetof(LmMergeCombined, call_value);
 }
 ===
@@ -92,7 +134,7 @@ fn: lm_make_merge_call () LmMergeCall
     return: 0
 end: lm_make_merge_call
 
-merge: (LmMergeDirect LmMergeJoined lm_make_merge_call()) LmMergeCombined
+merge: (LmMergeDirect LmMergeJoined LmMergeWide LmMergeWideJoined lm_make_merge_call()) LmMergeCombined
     int: local_value 29
 end: LmMergeCombined
 
