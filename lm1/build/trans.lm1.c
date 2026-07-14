@@ -8565,7 +8565,7 @@ static const char * lm_trans_class_c_spelling(const LmP0Text *name) {
     if (spelling != 0) {
         return spelling;
     }
-    return lm_trans_registry_lookup(name, "class.spelling");
+    return lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.spelling", "class", "class", "spelling", "char");
 }
 
 static int lm_trans_class_is_reference_base(const LmP0Text *name) {

@@ -1,0 +1,46 @@
+L4:
+    table:
+        name: `class.spelling`
+        columns((class: class) (@: char spelling))
+        rows:
+                 directType  short
+                 directType  int
+                 directType  None
+    end: `class.spelling`
+
+    table:
+        name: `class.spelling`
+        columns((class: class) (class: spelling))
+        rows:
+                 fallbackType  short
+    end: `class.spelling`
+
+    table:
+        name: `lm.test.class.spelling.seed`
+        columns((class: class) (@: char spelling))
+        rows:
+                 joinedType  long
+    end: `lm.test.class.spelling.seed`
+
+    join: (`lm.test.class.spelling.seed`) `class.spelling`
+        columns((class: class) (@: char spelling))
+        rows:
+    end: `class.spelling`
+
+    table:
+        name: `class.spelling`
+        columns((class: class) (@: char spelling))
+        rows:
+                 joinedType  None
+    end: `class.spelling`
+end: L4
+
+external:
+    fn: main () int
+        directType: direct 7
+        fallbackType: fallback 8
+        joinedType: joined 9
+
+        return: direct != 7 || fallback != 8 || joined != 9
+    end: main
+end: external

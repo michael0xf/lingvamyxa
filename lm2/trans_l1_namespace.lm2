@@ -1351,7 +1351,7 @@ fn: lm_trans_class_c_spelling (const: (LmP0Text: name)) const: @: char
     spelling: lm_trans_registry_lookup(name, "class.c.projection")
     if: spelling != 0
         return: spelling
-return: lm_trans_registry_lookup(name, "class.spelling")
+return: lm_trans_namespace_registry_source_n2_typed_value(0, name, "class.spelling", "class", "class", "spelling", "char")
 
 fn: lm_trans_class_is_reference_base (const: (LmP0Text: name)) int
     const: @: char class_kind
