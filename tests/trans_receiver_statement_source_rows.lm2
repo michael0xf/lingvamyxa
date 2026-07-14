@@ -17,22 +17,27 @@ L4:
 
     table:
         name: `lm.test.receiver.statement.seed`
-        columns((class: class) (binding: receiver))
+        columns((class: class) (int: marker) (binding: statement))
         rows:
-                 `return`  lm_trans_statement_emit_return
+                 `return`  1  lm_trans_statement_emit_return
     end: `lm.test.receiver.statement.seed`
 
-    join: (`lm.test.receiver.statement.seed`) `receiver.statement`
-        columns((class: class) (binding: receiver))
+    join: (`lm.test.receiver.statement.seed`) `lm.test.receiver.statement.middle`
+        columns((class: class) (int: marker) (binding: statement))
         rows:
-    end: `receiver.statement`
+    end: `lm.test.receiver.statement.middle`
+
+    join: (`lm.test.receiver.statement.middle`) receiver
+        columns((class: class) (int: marker) (binding: statement))
+        rows:
+    end: receiver
 
     table:
-        name: `receiver.statement`
-        columns((class: class) (binding: receiver))
+        name: receiver
+        columns((class: class) (int: marker) (binding: statement))
         rows:
-                 `return`  None
-    end: `receiver.statement`
+                 `return`  2  None
+    end: receiver
 end: L4
 
 external:

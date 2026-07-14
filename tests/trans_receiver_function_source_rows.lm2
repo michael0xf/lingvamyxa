@@ -17,22 +17,27 @@ L4:
 
     table:
         name: `lm.test.receiver.function.seed`
-        columns((class: class) (binding: receiver))
+        columns((class: class) (int: marker) (binding: function))
         rows:
-                 callable  lm_trans_receiver_callable
+                 callable  1  lm_trans_receiver_callable
     end: `lm.test.receiver.function.seed`
 
-    join: (`lm.test.receiver.function.seed`) `receiver.function`
-        columns((class: class) (binding: receiver))
+    join: (`lm.test.receiver.function.seed`) `lm.test.receiver.function.middle`
+        columns((class: class) (int: marker) (binding: function))
         rows:
-    end: `receiver.function`
+    end: `lm.test.receiver.function.middle`
+
+    join: (`lm.test.receiver.function.middle`) receiver
+        columns((class: class) (int: marker) (binding: function))
+        rows:
+    end: receiver
 
     table:
-        name: `receiver.function`
-        columns((class: class) (binding: receiver))
+        name: receiver
+        columns((class: class) (int: marker) (binding: function))
         rows:
-                 callable  None
-    end: `receiver.function`
+                 callable  2  None
+    end: receiver
 end: L4
 
 callable: Increment (int: value) int

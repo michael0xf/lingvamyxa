@@ -9325,7 +9325,7 @@ static int lm_trans_head_binding_resolve(const LmTransNamespace *namespace_, con
     memset(out, 0, sizeof(out[0]));
     out->symbol = lm_trans_namespace_find(namespace_, head);
     out->receiver_type = lm_trans_namespace_receiver_type_checked(namespace_, head);
-    out->function_receiver_binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.function", "class", "class", "receiver", "binding");
+    out->function_receiver_binding = lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, head, "receiver.function", "class", "class", "receiver", "binding");
     if (out -> function_receiver_binding != 0) {
         receiver_status = lm_trans_binding_resolve(out -> function_receiver_binding, resolved);
         if (receiver_status == 0 || resolved -> function_receiver == 0) {
@@ -9335,7 +9335,7 @@ static int lm_trans_head_binding_resolve(const LmTransNamespace *namespace_, con
         }
         out->function_receiver = resolved -> function_receiver;
     }
-    out->statement_receiver_binding = lm_trans_namespace_registry_source_n2_typed_value(namespace_, head, "receiver.statement", "class", "class", "receiver", "binding");
+    out->statement_receiver_binding = lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, head, "receiver.statement", "class", "class", "receiver", "binding");
     if (out -> statement_receiver_binding != 0) {
         if (lm_trans_binding_resolve(out -> statement_receiver_binding, resolved) == 0 || resolved -> statement_frame == 0) {
             fprintf(stderr, "trans registry inconsistency: receiver.statement[\"%.*s\"] has unknown statement binding %s\n", (((int)head -> length)), head -> data, out -> statement_receiver_binding);
@@ -27244,7 +27244,7 @@ static const char * lm_trans_level_receiver_binding_from_head(const LmP0Text *he
     if (receiver_type == 0 || strcmp(receiver_type, "receiver.level") != 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(0, head, "receiver.level", "class", "class", "receiver", "binding");
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, head, "receiver.level", "class", "class", "receiver", "binding");
 }
 
 static const char * lm_trans_level_receiver_binding_from_frame(const LmP0Frame *frame) {
@@ -27275,7 +27275,7 @@ static const char * lm_trans_trailer_receiver_binding_from_head(const LmP0Text *
     if (head == 0) {
         return 0;
     }
-    return lm_trans_namespace_registry_source_n2_typed_value(0, head, "receiver.trailer", "class", "class", "receiver", "binding");
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(0, head, "receiver.trailer", "class", "class", "receiver", "binding");
 }
 
 static int lm_trans_top_level_level_binding(const LmTransHeadBinding *binding, LmTransTopLevelItem *out) {

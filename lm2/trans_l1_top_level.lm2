@@ -458,7 +458,7 @@ fn: lm_trans_level_receiver_binding_from_head (const: (LmP0Text: head)) const: @
     receiver_type: lm_trans_namespace_receiver_type_from_head(head)
     if: receiver_type = 0 || c.strcmp(receiver_type, "receiver.level") != 0
         return: 0
-return: lm_trans_namespace_registry_source_n2_typed_value(0, head, "receiver.level", "class", "class", "receiver", "binding")
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, head, "receiver.level", "class", "class", "receiver", "binding")
 
 fn: lm_trans_level_receiver_binding_from_frame (const: (LmP0Frame: frame)) const: @: char
     if: frame != 0
@@ -483,7 +483,7 @@ return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l2_frame
 fn: lm_trans_trailer_receiver_binding_from_head (const: (LmP0Text: head)) const: @: char
     if: head = 0
         return: 0
-return: lm_trans_namespace_registry_source_n2_typed_value(0, head, "receiver.trailer", "class", "class", "receiver", "binding")
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, head, "receiver.trailer", "class", "class", "receiver", "binding")
 
 fn: lm_trans_top_level_level_binding (const: (LmTransHeadBinding: binding); LmTransTopLevelItem: out) int
     const: @: char receiver

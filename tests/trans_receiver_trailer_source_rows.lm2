@@ -51,22 +51,27 @@ L4:
 
     table:
         name: `lm.test.receiver.trailer.seed`
-        columns((class: class) (binding: receiver))
+        columns((class: class) (int: marker) (binding: trailer))
         rows:
-                 LmTestJoinedTrailer  lm_trans_validate_end_trailer
+                 LmTestJoinedTrailer  1  lm_trans_validate_end_trailer
     end: `lm.test.receiver.trailer.seed`
 
-    join: (`lm.test.receiver.trailer.seed`) `receiver.trailer`
-        columns((class: class) (binding: receiver))
+    join: (`lm.test.receiver.trailer.seed`) `lm.test.receiver.trailer.middle`
+        columns((class: class) (int: marker) (binding: trailer))
         rows:
-    end: `receiver.trailer`
+    end: `lm.test.receiver.trailer.middle`
+
+    join: (`lm.test.receiver.trailer.middle`) receiver
+        columns((class: class) (int: marker) (binding: trailer))
+        rows:
+    end: receiver
 
     table:
-        name: `receiver.trailer`
-        columns((class: class) (binding: receiver))
+        name: receiver
+        columns((class: class) (int: marker) (binding: trailer))
         rows:
-                 LmTestJoinedTrailer  None
-    end: `receiver.trailer`
+                 LmTestJoinedTrailer  2  None
+    end: receiver
 end: L4
 
 L2:

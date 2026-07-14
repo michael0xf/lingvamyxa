@@ -51,22 +51,27 @@ L4:
 
     table:
         name: `lm.test.receiver.level.seed`
-        columns((class: class) (binding: receiver))
+        columns((class: class) (int: marker) (binding: level))
         rows:
-                 LmTestJoinedLevel  lm_trans_emit_l1_frame
+                 LmTestJoinedLevel  1  lm_trans_emit_l1_frame
     end: `lm.test.receiver.level.seed`
 
-    join: (`lm.test.receiver.level.seed`) `receiver.level`
-        columns((class: class) (binding: receiver))
+    join: (`lm.test.receiver.level.seed`) `lm.test.receiver.level.middle`
+        columns((class: class) (int: marker) (binding: level))
         rows:
-    end: `receiver.level`
+    end: `lm.test.receiver.level.middle`
+
+    join: (`lm.test.receiver.level.middle`) receiver
+        columns((class: class) (int: marker) (binding: level))
+        rows:
+    end: receiver
 
     table:
-        name: `receiver.level`
-        columns((class: class) (binding: receiver))
+        name: receiver
+        columns((class: class) (int: marker) (binding: level))
         rows:
-                 LmTestJoinedLevel  None
-    end: `receiver.level`
+                 LmTestJoinedLevel  2  None
+    end: receiver
 end: L4
 
 LmTestDirectLevel:
