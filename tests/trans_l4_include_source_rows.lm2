@@ -31,6 +31,37 @@ L4:
         columns((class: class) (@: char target))
         rows:
     end: include
+
+    table:
+        name: include
+        columns((class: class) (@: char target) (int: marker))
+        rows:
+                 lm_test_include_wide_source     "<stdbool.h>"  1
+                 lm_test_include_wide_duplicate  "<math.h>"     2
+                 lm_test_include_wide_duplicate  "<wchar.h>"    3
+                 lm_test_include_wide_late_none  "<stddef.h>"   4
+                 lm_test_include_wide_late_none  None            5
+                 lm_test_include_wide_none       None            6
+    end: include
+
+    table:
+        name: `include.target`
+        columns((class: class) (@: char target))
+        rows:
+                 lm_test_include_wide_physical  "<stdint.h>"
+    end: `include.target`
+
+    table:
+        name: `lm.test.include.wide.seed`
+        columns((class: class) (@: char target) (int: marker))
+        rows:
+                 lm_test_include_wide_joined  "<ctype.h>"  7
+    end: `lm.test.include.wide.seed`
+
+    join: (`lm.test.include.wide.seed`) include
+        columns((class: class) (@: char target) (int: marker))
+        rows:
+    end: include
 end: L4
 
 include
@@ -68,10 +99,30 @@ L1:
 #ifndef assert
 #error "joined include row did not fall back to its facade value"
 #endif
+
+#ifndef bool
+#error "N-column include.target source row was not emitted"
+#endif
+
+#ifndef HUGE_VAL
+#error "first N-column duplicate include target was not emitted"
+#endif
+
+#ifndef WEOF
+#error "second N-column duplicate include target was not emitted"
+#endif
+
+#ifndef offsetof
+#error "N-column None row unexpectedly removed an earlier include"
+#endif
+
+#ifndef INT8_MAX
+#error "physical include.target row was not merged with the N-column source"
+#endif
 ===
 
 external:
     fn: main () int
-        return: 0
+        return: c.isalpha('A') = 0
     end: main
 end: external

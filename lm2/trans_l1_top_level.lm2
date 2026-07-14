@@ -3520,14 +3520,70 @@ fn: lm_trans_emit_l1_include_target_text (FILE: output; const: @(char data); siz
         return: 1
 return: lm_trans_put(output, "\n")
 
+fn: lm_trans_registry_include_view_target (const: (LmTransNamespace: namespace_); const: (LmRegistryViewRow: view_row)) const: @: char
+    LmTransRegistryFact: facade_row
+    const: @: char target
+
+    if: view_row = 0 || view_row\table = 0 || view_row\payload = 0
+        return: 0
+    facade_row: cast: (LmTransRegistryFact) view_row\source
+    if: facade_row = 0 || facade_row\payload = 0
+        return: view_row\payload
+
+    target: 0
+    if: c.strcmp(view_row\table, "include") = 0
+        target: lm_trans_registry_source_n2_typed_value(namespace_, "include", "class", "class", "target", "char", facade_row)
+    else:
+        if: c.strcmp(view_row\table, "include.target") = 0
+            target: lm_trans_registry_source_path_typed_value(namespace_, "include.target", "class", "class", "char", facade_row)
+        ---
+    ---
+    if: target != 0
+        return: target
+return: view_row\payload
+
 fn: lm_trans_emit_registry_include_table (FILE: output; const: (LmTransNamespace: namespace_)) int
     size_t: i
+    size_t: fact_count
     LmTransRegistryFact: row
     const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
     const: @: char target
     int: emitted
+    int: private_registry
 
     emitted: 0
+    private_registry: namespace_ != 0 && namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
+    view: 0
+    if: private_registry = 0
+        if: namespace_ != 0 && namespace_\registry_view != 0
+            view: namespace_\registry_view
+        else:
+            if: c.lm_trans_registry != 0
+                view: c.lm_trans_registry->view
+            ---
+        ---
+    ---
+
+    if: view != 0
+        fact_count: lm_registry_view_fact_count(view)
+        i: 0U
+        while: i < fact_count
+            view_row: lm_registry_view_fact_at(view, i)
+            if: view_row != 0 && view_row\table != 0 && view_row\payload != 0 && (c.strcmp(view_row\table, "include") = 0 || c.strcmp(view_row\table, "include.target") = 0)
+                target: lm_trans_registry_include_view_target(namespace_, view_row)
+                if: target != 0 && lm_trans_emit_l1_include_target_text(output, target, c.strlen(target)) != 0
+                    return: 1
+                if: target != 0
+                    emitted: 1
+            ---
+            i: i + 1U
+        if: emitted
+            return: 0
+        return: 1
+    ---
+
     rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("include"), "row")
     if: rows = 0
         c.fprintf(c.stderr, "trans L1 error: atom include receiver expects table include\n")
