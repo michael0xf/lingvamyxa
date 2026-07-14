@@ -8354,6 +8354,7 @@ static int lm_trans_namespace_materialize_registry_receivers(LmTransNamespace *n
     LmP0Text * table_name;
     const LmOwnPtrStack * rows;
     LmTransRegistryFact * row;
+    const char *receiver_type;
     size_t i;
     if (namespace_ == 0) {
         return 1;
@@ -8374,7 +8375,8 @@ static int lm_trans_namespace_materialize_registry_receivers(LmTransNamespace *n
     while (i < rows -> count) {
         row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(rows, i)));
         if (row != 0 && row -> key != 0 && row -> payload != 0) {
-            if (lm_trans_registry_key_is_c_surface_name(row -> key) == 0 && lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, row -> key, row -> payload) != 0) {
+            receiver_type = lm_trans_registry_source_n2_typed_value(namespace_, "namespace", "class", "class", "receiver.type", "class", row);
+            if (receiver_type != 0 && lm_trans_registry_key_is_c_surface_name(row -> key) == 0 && lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, row -> key, receiver_type) != 0) {
                 {
                     int lm_return_1 = 1;
                     lm_trans_text_ref_destroy(&table_name);
