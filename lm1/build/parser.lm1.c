@@ -5,12 +5,17 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+
 #include <stddef.h>
 #include <stddef.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+
+
+
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
@@ -23,6 +28,7 @@ typedef struct LmP0Document LmP0Document;
 typedef struct LmL4Column LmL4Column;
 typedef struct LmL4Loader LmL4Loader;
 
+
 typedef int LmOwnEdgeKind;
 typedef int LmP0NodeKind;
 typedef unsigned LmP0FrameFlags;
@@ -34,6 +40,7 @@ typedef int LmP0DashFenceStatus;
 typedef unsigned LmP0FieldParseFlags;
 typedef int LmP0FieldParseLoopContinuation;
 typedef LmL4Column *LmP0RegistryColumn;
+
 
 #define LM_OWN_EDGE_BORROWED 1
 #define LM_OWN_EDGE_OWNED 2
@@ -83,6 +90,7 @@ typedef LmL4Column *LmP0RegistryColumn;
 #define LM_P0_DUMP_NODE 1
 #define LM_P0_DUMP_STRUCTURE 2
 #define LM_P0_DUMP_TRAILER 3
+
 
 #include <stddef.h>
 
@@ -298,6 +306,7 @@ typedef struct LmP0PostprocessFrame {
     LmP0Field * field;
 } LmP0PostprocessFrame;
 
+
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields 1
 typedef void (*LmOwnDestroyFields)(void *object);
@@ -338,6 +347,7 @@ typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const 
 #define LM_LMX_TYPEDEF_DEFINED_LmL4FrameIndexRule 1
 typedef int (*LmL4FrameIndexRule)(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 #endif
+
 
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
@@ -403,6 +413,7 @@ static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const L
 static int lm_l4_receiver_join(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+
 
 static LmOwnPtrStack * lm_l4_seen_tables_get(void);
 static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables);
@@ -1826,7 +1837,6 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
-
 static int lm_p0_text_equals(const LmP0Text *text, const char *value);
 static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
 static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
@@ -1850,14 +1860,12 @@ static char * lm_p0_text_copy_cstr(const LmP0Text *text);
 static char * lm_p0_registry_value_copy_cstr(const LmP0Text *value);
 
 
-
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-
 
 #ifndef LM_P0_ENABLE_REGISTRY_COMPARE
 #define LM_P0_ENABLE_REGISTRY_COMPARE 1
@@ -2119,6 +2127,53 @@ char * lm_p0_dump_alloc(const LmP0Document *document);
 #ifndef LM_UNUSED
 #define LM_UNUSED(value) ((void)(value))
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 static LmP0Registry * lm_p0_registry;
 static int lm_p0_text_equals(const LmP0Text *text, const char *value) {

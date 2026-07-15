@@ -5,592 +5,600 @@ L1:
 #endif
 ===
 
+include
+define
+os
+ifdef
+forward
+alias
+constant
+layout
+fn
+prototype
+unit
+
 import: "lm4/own_abi.lm4"
 import: "lm4/parser_abi.lm4"
 import: "lm4/l4_loader_abi.lm4"
 import: "lm2/parser_text.lm2"
 
-L4: loadHeaders
-
 include: "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
 
-L4:
-    table:
-        name: `constant.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LM_P0_STREAM_EVENT_ITEM                           c.define
-                 LM_P0_STREAM_EVENT_DELIM                          c.define
-                 LM_P0_STREAM_EVENT_BLOCK_STRING                   c.define
-                 LM_P0_STREAM_EVENT_DISABLED_BLOCK                 c.define
-                 LM_P0_STREAM_EVENT_MIX                            c.define
-                 LM_P0_TRAILER_ROLE_NONE                           c.define
-                 LM_P0_TRAILER_ROLE_DASH_CUTTER                    c.define
-                 LM_P0_TRAILER_ROLE_END                            c.define
-                 LM_P0_TRAILER_ROLE_RETURN                         c.define
-                 LM_P0_TRAILER_ROLE_UNTIL                          c.define
-                 LM_P0_DASH_FENCE_NONE                             c.define
-                 LM_P0_DASH_FENCE_VALID                            c.define
-                 LM_P0_DASH_FENCE_TOO_LONG                         c.define
-                 LM_P0_DASH_FENCE_TRAILING_TEXT                    c.define
-                 LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON               c.define
-                 LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL            c.define
-                 LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL    c.define
-                 LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS              c.define
-                 LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR  c.define
-                 LM_P0_MAX_FENCE_LENGTH                            c.define
-                 LM_P0_LAYOUT_DELIMITER_STACK_LIMIT                c.define
-                 LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP             c.define
-                 LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY           c.define
-                 LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE          c.define
-                 LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY         c.define
-                 LM_P0_POSTPROCESS_NODE                            c.define
-                 LM_P0_POSTPROCESS_STRUCTURE                       c.define
-                 LM_P0_POSTPROCESS_TRAILER                         c.define
-                 LM_P0_POSTPROCESS_FRAME_WRAP                      c.define
-                 LM_P0_DUMP_NODE                                   c.define
-                 LM_P0_DUMP_STRUCTURE                              c.define
-                 LM_P0_DUMP_TRAILER                                c.define
-    end: `constant.backend`
+table:
+    name: `constant.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LM_P0_STREAM_EVENT_ITEM                           c.define
+             LM_P0_STREAM_EVENT_DELIM                          c.define
+             LM_P0_STREAM_EVENT_BLOCK_STRING                   c.define
+             LM_P0_STREAM_EVENT_DISABLED_BLOCK                 c.define
+             LM_P0_STREAM_EVENT_MIX                            c.define
+             LM_P0_TRAILER_ROLE_NONE                           c.define
+             LM_P0_TRAILER_ROLE_DASH_CUTTER                    c.define
+             LM_P0_TRAILER_ROLE_END                            c.define
+             LM_P0_TRAILER_ROLE_RETURN                         c.define
+             LM_P0_TRAILER_ROLE_UNTIL                          c.define
+             LM_P0_DASH_FENCE_NONE                             c.define
+             LM_P0_DASH_FENCE_VALID                            c.define
+             LM_P0_DASH_FENCE_TOO_LONG                         c.define
+             LM_P0_DASH_FENCE_TRAILING_TEXT                    c.define
+             LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON               c.define
+             LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL            c.define
+             LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL    c.define
+             LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS              c.define
+             LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR  c.define
+             LM_P0_MAX_FENCE_LENGTH                            c.define
+             LM_P0_LAYOUT_DELIMITER_STACK_LIMIT                c.define
+             LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP             c.define
+             LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY           c.define
+             LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE          c.define
+             LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY         c.define
+             LM_P0_POSTPROCESS_NODE                            c.define
+             LM_P0_POSTPROCESS_STRUCTURE                       c.define
+             LM_P0_POSTPROCESS_TRAILER                         c.define
+             LM_P0_POSTPROCESS_FRAME_WRAP                      c.define
+             LM_P0_DUMP_NODE                                   c.define
+             LM_P0_DUMP_STRUCTURE                              c.define
+             LM_P0_DUMP_TRAILER                                c.define
+end: `constant.backend`
 
-    table:
-        name: `constant.value`
-        columns((class: class) (int: value))
-        rows:
-                 LM_P0_STREAM_EVENT_ITEM                           1
-                 LM_P0_STREAM_EVENT_DELIM                          2
-                 LM_P0_STREAM_EVENT_BLOCK_STRING                   3
-                 LM_P0_STREAM_EVENT_DISABLED_BLOCK                 4
-                 LM_P0_STREAM_EVENT_MIX                            5
-                 LM_P0_TRAILER_ROLE_NONE                           0
-                 LM_P0_TRAILER_ROLE_DASH_CUTTER                    1
-                 LM_P0_TRAILER_ROLE_END                            2
-                 LM_P0_TRAILER_ROLE_RETURN                         3
-                 LM_P0_TRAILER_ROLE_UNTIL                          4
-                 LM_P0_DASH_FENCE_NONE                             0
-                 LM_P0_DASH_FENCE_VALID                            1
-                 LM_P0_DASH_FENCE_TOO_LONG                         2
-                 LM_P0_DASH_FENCE_TRAILING_TEXT                    3
-                 LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON               1U
-                 LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL            2U
-                 LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL    4U
-                 LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS              8U
-                 LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR  16U
-                 LM_P0_MAX_FENCE_LENGTH                            80U
-                 LM_P0_LAYOUT_DELIMITER_STACK_LIMIT                256U
-                 LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP             0
-                 LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY           1
-                 LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE          2
-                 LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY         3
-                 LM_P0_POSTPROCESS_NODE                            1
-                 LM_P0_POSTPROCESS_STRUCTURE                       2
-                 LM_P0_POSTPROCESS_TRAILER                         3
-                 LM_P0_POSTPROCESS_FRAME_WRAP                      4
-                 LM_P0_DUMP_NODE                                   1
-                 LM_P0_DUMP_STRUCTURE                              2
-                 LM_P0_DUMP_TRAILER                                3
-    end: `constant.value`
+table:
+    name: `constant.value`
+    columns((class: class) (int: value))
+    rows:
+             LM_P0_STREAM_EVENT_ITEM                           1
+             LM_P0_STREAM_EVENT_DELIM                          2
+             LM_P0_STREAM_EVENT_BLOCK_STRING                   3
+             LM_P0_STREAM_EVENT_DISABLED_BLOCK                 4
+             LM_P0_STREAM_EVENT_MIX                            5
+             LM_P0_TRAILER_ROLE_NONE                           0
+             LM_P0_TRAILER_ROLE_DASH_CUTTER                    1
+             LM_P0_TRAILER_ROLE_END                            2
+             LM_P0_TRAILER_ROLE_RETURN                         3
+             LM_P0_TRAILER_ROLE_UNTIL                          4
+             LM_P0_DASH_FENCE_NONE                             0
+             LM_P0_DASH_FENCE_VALID                            1
+             LM_P0_DASH_FENCE_TOO_LONG                         2
+             LM_P0_DASH_FENCE_TRAILING_TEXT                    3
+             LM_P0_FIELD_PARSE_STOP_ON_SEMICOLON               1U
+             LM_P0_FIELD_PARSE_STOP_ON_SOURCE_LEVEL            2U
+             LM_P0_FIELD_PARSE_REQUIRE_BOUNDED_SOURCE_LEVEL    4U
+             LM_P0_FIELD_PARSE_ALLOW_EMPTY_FIELDS              8U
+             LM_P0_FIELD_PARSE_ALLOW_HEADLESS_AFTER_SEPARATOR  16U
+             LM_P0_MAX_FENCE_LENGTH                            80U
+             LM_P0_LAYOUT_DELIMITER_STACK_LIMIT                256U
+             LM_P0_FIELD_PARSE_LOOP_HEADLESS_GROUP             0
+             LM_P0_FIELD_PARSE_LOOP_COLON_FRAME_BODY           1
+             LM_P0_FIELD_PARSE_LOOP_BOUNDED_STRUCTURE          2
+             LM_P0_FIELD_PARSE_LOOP_COMPACT_FRAME_BODY         3
+             LM_P0_POSTPROCESS_NODE                            1
+             LM_P0_POSTPROCESS_STRUCTURE                       2
+             LM_P0_POSTPROCESS_TRAILER                         3
+             LM_P0_POSTPROCESS_FRAME_WRAP                      4
+             LM_P0_DUMP_NODE                                   1
+             LM_P0_DUMP_STRUCTURE                              2
+             LM_P0_DUMP_TRAILER                                3
+end: `constant.value`
 
-    table:
-        name: `alias.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmP0StreamEventKind   c.typedef
-                 LmP0TrailerRole       c.typedef
-                 LmP0DashFenceStatus   c.typedef
-                 LmP0FieldParseFlags   c.typedef
-                 LmP0FieldParseLoopContinuation c.typedef
-                 LmP0RegistryColumn    c.typedef
-    end: `alias.backend`
+table:
+    name: `alias.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmP0StreamEventKind   c.typedef
+             LmP0TrailerRole       c.typedef
+             LmP0DashFenceStatus   c.typedef
+             LmP0FieldParseFlags   c.typedef
+             LmP0FieldParseLoopContinuation c.typedef
+             LmP0RegistryColumn    c.typedef
+end: `alias.backend`
 
-    table:
-        name: `alias.target`
-        columns((class: class) (class: target))
-        rows:
-                 LmP0StreamEventKind   int
-                 LmP0TrailerRole       int
-                 LmP0DashFenceStatus   int
-                 LmP0FieldParseFlags   unsigned
-                 LmP0FieldParseLoopContinuation int
-                 LmP0RegistryColumn    LmL4Column
-    end: `alias.target`
+table:
+    name: `alias.target`
+    columns((class: class) (class: target))
+    rows:
+             LmP0StreamEventKind   int
+             LmP0TrailerRole       int
+             LmP0DashFenceStatus   int
+             LmP0FieldParseFlags   unsigned
+             LmP0FieldParseLoopContinuation int
+             LmP0RegistryColumn    LmL4Column
+end: `alias.target`
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmP0StreamEvent        c.struct
-                 LmP0Document           c.named-struct
-                 LmP0PendingDelimiter   c.struct
-                 LmP0PendingMix         c.struct
-                 LmP0IndentStack        c.struct
-                 LmP0DisabledState      c.struct
-                 LmP0Stack              c.struct
-                 LmP0Dump               c.struct
-                 LmP0DumpFrame          c.struct
-                 LmP0FieldParseLoopFrame c.struct
-                 LmP0RegistryRow        c.struct
-                 LmP0Registry           c.struct
-                 LmP0PostprocessFrame   c.struct
-    end: `layout.backend`
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmP0StreamEvent        c.struct
+             LmP0Document           c.named-struct
+             LmP0PendingDelimiter   c.struct
+             LmP0PendingMix         c.struct
+             LmP0IndentStack        c.struct
+             LmP0DisabledState      c.struct
+             LmP0Stack              c.struct
+             LmP0Dump               c.struct
+             LmP0DumpFrame          c.struct
+             LmP0FieldParseLoopFrame c.struct
+             LmP0RegistryRow        c.struct
+             LmP0Registry           c.struct
+             LmP0PostprocessFrame   c.struct
+end: `layout.backend`
 
-    table:
-        name: `class.reference-base`
-        columns((class: class) (int: value))
-        rows:
-                 LmP0StreamEvent        1
-                 LmP0Document           1
-                 LmP0PendingDelimiter   1
-                 LmP0PendingMix         1
-                 LmP0IndentStack        1
-                 LmP0DisabledState      1
-                 LmP0Stack              1
-                 LmP0Dump               1
-                 LmP0DumpFrame          1
-                 LmP0FieldParseLoopFrame 1
-                 LmP0RegistryRow        1
-                 LmP0Registry           1
-                 LmP0PostprocessFrame   1
-    end: `class.reference-base`
+table:
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmP0StreamEvent        1
+             LmP0Document           1
+             LmP0PendingDelimiter   1
+             LmP0PendingMix         1
+             LmP0IndentStack        1
+             LmP0DisabledState      1
+             LmP0Stack              1
+             LmP0Dump               1
+             LmP0DumpFrame          1
+             LmP0FieldParseLoopFrame 1
+             LmP0RegistryRow        1
+             LmP0Registry           1
+             LmP0PostprocessFrame   1
+end: `class.reference-base`
 
-    table:
-        name: `LmP0StreamEvent.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 kind         LmP0StreamEventKind
-                 node_flags   unsigned
-                 level        size_t
-                 text         char
-                 text_length  size_t
-                 line         size_t
-                 column       size_t
-                 offset       size_t
-    end: `LmP0StreamEvent.field.class`
+table:
+    name: `LmP0StreamEvent.field.class`
+    columns((class: class) (class: field))
+    rows:
+             kind         LmP0StreamEventKind
+             node_flags   unsigned
+             level        size_t
+             text         char
+             text_length  size_t
+             line         size_t
+             column       size_t
+             offset       size_t
+end: `LmP0StreamEvent.field.class`
 
-    table:
-        name: `LmP0StreamEvent.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 kind         0
-                 node_flags   1
-                 level        2
-                 text         3
-                 text_length  4
-                 line         5
-                 column       6
-                 offset       7
-    end: `LmP0StreamEvent.field.index`
+table:
+    name: `LmP0StreamEvent.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             kind         0
+             node_flags   1
+             level        2
+             text         3
+             text_length  4
+             line         5
+             column       6
+             offset       7
+end: `LmP0StreamEvent.field.index`
 
-    table:
-        name: `LmP0StreamEvent.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 text   1
-    end: `LmP0StreamEvent.field.address-depth`
+table:
+    name: `LmP0StreamEvent.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             text   1
+end: `LmP0StreamEvent.field.address-depth`
 
-    table:
-        name: `LmP0StreamEvent.field.const`
-        columns((class: class) (int: value))
-        rows:
-                 text   1
-    end: `LmP0StreamEvent.field.const`
+table:
+    name: `LmP0StreamEvent.field.const`
+    columns((class: class) (int: value))
+    rows:
+             text   1
+end: `LmP0StreamEvent.field.const`
 
-    table:
-        name: `LmP0Document.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 source            char
-                 source_length     size_t
-                 root              LmP0Node
-                 diagnostic        LmP0Diagnostic
-                 source_owner      LmOwnArena
-                 token_arena       LmOwnArena
-                 tree_arena        LmOwnArena
-                 diagnostic_arena  LmOwnArena
-                 owners_initialized int
-                 frozen            int
-    end: `LmP0Document.field.class`
+table:
+    name: `LmP0Document.field.class`
+    columns((class: class) (class: field))
+    rows:
+             source            char
+             source_length     size_t
+             root              LmP0Node
+             diagnostic        LmP0Diagnostic
+             source_owner      LmOwnArena
+             token_arena       LmOwnArena
+             tree_arena        LmOwnArena
+             diagnostic_arena  LmOwnArena
+             owners_initialized int
+             frozen            int
+end: `LmP0Document.field.class`
 
-    table:
-        name: `LmP0Document.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 source            0
-                 source_length     1
-                 root              2
-                 diagnostic        3
-                 source_owner      4
-                 token_arena       5
-                 tree_arena        6
-                 diagnostic_arena  7
-                 owners_initialized 8
-                 frozen            9
-    end: `LmP0Document.field.index`
+table:
+    name: `LmP0Document.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             source            0
+             source_length     1
+             root              2
+             diagnostic        3
+             source_owner      4
+             token_arena       5
+             tree_arena        6
+             diagnostic_arena  7
+             owners_initialized 8
+             frozen            9
+end: `LmP0Document.field.index`
 
-    table:
-        name: `LmP0Document.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 source            1
-                 root              0
-                 diagnostic        0
-                 source_owner      0
-                 token_arena       0
-                 tree_arena        0
-                 diagnostic_arena  0
-    end: `LmP0Document.field.address-depth`
+table:
+    name: `LmP0Document.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             source            1
+             root              0
+             diagnostic        0
+             source_owner      0
+             token_arena       0
+             tree_arena        0
+             diagnostic_arena  0
+end: `LmP0Document.field.address-depth`
 
-    table:
-        name: `LmP0PendingDelimiter.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 active int
-                 event  LmP0StreamEvent
-    end: `LmP0PendingDelimiter.field.class`
+table:
+    name: `LmP0PendingDelimiter.field.class`
+    columns((class: class) (class: field))
+    rows:
+             active int
+             event  LmP0StreamEvent
+end: `LmP0PendingDelimiter.field.class`
 
-    table:
-        name: `LmP0PendingDelimiter.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 active 0
-                 event  1
-    end: `LmP0PendingDelimiter.field.index`
+table:
+    name: `LmP0PendingDelimiter.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             active 0
+             event  1
+end: `LmP0PendingDelimiter.field.index`
 
-    table:
-        name: `LmP0PendingDelimiter.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 event  0
-    end: `LmP0PendingDelimiter.field.address-depth`
+table:
+    name: `LmP0PendingDelimiter.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             event  0
+end: `LmP0PendingDelimiter.field.address-depth`
 
-    table:
-        name: `LmP0PendingMix.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 events    LmP0StreamEvent
-                 count     size_t
-                 capacity  size_t
-    end: `LmP0PendingMix.field.class`
+table:
+    name: `LmP0PendingMix.field.class`
+    columns((class: class) (class: field))
+    rows:
+             events    LmP0StreamEvent
+             count     size_t
+             capacity  size_t
+end: `LmP0PendingMix.field.class`
 
-    table:
-        name: `LmP0PendingMix.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 events    0
-                 count     1
-                 capacity  2
-    end: `LmP0PendingMix.field.index`
+table:
+    name: `LmP0PendingMix.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             events    0
+             count     1
+             capacity  2
+end: `LmP0PendingMix.field.index`
 
-    table:
-        name: `LmP0PendingMix.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 events 0
-    end: `LmP0PendingMix.field.address-depth`
+table:
+    name: `LmP0PendingMix.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             events 0
+end: `LmP0PendingMix.field.address-depth`
 
-    table:
-        name: `LmP0IndentStack.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 columns   size_t
-                 count     size_t
-                 capacity  size_t
-    end: `LmP0IndentStack.field.class`
+table:
+    name: `LmP0IndentStack.field.class`
+    columns((class: class) (class: field))
+    rows:
+             columns   size_t
+             count     size_t
+             capacity  size_t
+end: `LmP0IndentStack.field.class`
 
-    table:
-        name: `LmP0IndentStack.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 columns   0
-                 count     1
-                 capacity  2
-    end: `LmP0IndentStack.field.index`
+table:
+    name: `LmP0IndentStack.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             columns   0
+             count     1
+             capacity  2
+end: `LmP0IndentStack.field.index`
 
-    table:
-        name: `LmP0IndentStack.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 columns  1
-    end: `LmP0IndentStack.field.address-depth`
+table:
+    name: `LmP0IndentStack.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             columns  1
+end: `LmP0IndentStack.field.address-depth`
 
-    table:
-        name: `LmP0DisabledState.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 body_started   int
-                 pending_item   int
-                 base_level     size_t
-                 top_level      size_t
-                 pending_level  size_t
-    end: `LmP0DisabledState.field.class`
+table:
+    name: `LmP0DisabledState.field.class`
+    columns((class: class) (class: field))
+    rows:
+             body_started   int
+             pending_item   int
+             base_level     size_t
+             top_level      size_t
+             pending_level  size_t
+end: `LmP0DisabledState.field.class`
 
-    table:
-        name: `LmP0DisabledState.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 body_started   0
-                 pending_item   1
-                 base_level     2
-                 top_level      3
-                 pending_level  4
-    end: `LmP0DisabledState.field.index`
+table:
+    name: `LmP0DisabledState.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             body_started   0
+             pending_item   1
+             base_level     2
+             top_level      3
+             pending_level  4
+end: `LmP0DisabledState.field.index`
 
-    table:
-        name: `LmP0Stack.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 parents   LmP0Structure
-                 owners    LmP0Node
-                 hard      uchar
-                 capacity  size_t
-    end: `LmP0Stack.field.class`
+table:
+    name: `LmP0Stack.field.class`
+    columns((class: class) (class: field))
+    rows:
+             parents   LmP0Structure
+             owners    LmP0Node
+             hard      uchar
+             capacity  size_t
+end: `LmP0Stack.field.class`
 
-    table:
-        name: `LmP0Stack.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 parents   0
-                 owners    1
-                 hard      2
-                 capacity  3
-    end: `LmP0Stack.field.index`
+table:
+    name: `LmP0Stack.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             parents   0
+             owners    1
+             hard      2
+             capacity  3
+end: `LmP0Stack.field.index`
 
-    table:
-        name: `LmP0Stack.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 parents  1
-                 owners   1
-                 hard     1
-    end: `LmP0Stack.field.address-depth`
+table:
+    name: `LmP0Stack.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             parents  1
+             owners   1
+             hard     1
+end: `LmP0Stack.field.address-depth`
 
-    table:
-        name: `LmP0Dump.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 data      char
-                 length    size_t
-                 capacity  size_t
-                 failed    int
-    end: `LmP0Dump.field.class`
+table:
+    name: `LmP0Dump.field.class`
+    columns((class: class) (class: field))
+    rows:
+             data      char
+             length    size_t
+             capacity  size_t
+             failed    int
+end: `LmP0Dump.field.class`
 
-    table:
-        name: `LmP0Dump.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 data      0
-                 length    1
-                 capacity  2
-                 failed    3
-    end: `LmP0Dump.field.index`
+table:
+    name: `LmP0Dump.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             data      0
+             length    1
+             capacity  2
+             failed    3
+end: `LmP0Dump.field.index`
 
-    table:
-        name: `LmP0Dump.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 data   1
-    end: `LmP0Dump.field.address-depth`
+table:
+    name: `LmP0Dump.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             data   1
+end: `LmP0Dump.field.address-depth`
 
-    table:
-        name: `LmP0DumpFrame.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 phase      int
-                 node       LmP0Node
-                 structure  LmP0Structure
-                 trailer    LmP0Trailer
-                 field      LmP0Field
-                 indent     size_t
-    end: `LmP0DumpFrame.field.class`
+table:
+    name: `LmP0DumpFrame.field.class`
+    columns((class: class) (class: field))
+    rows:
+             phase      int
+             node       LmP0Node
+             structure  LmP0Structure
+             trailer    LmP0Trailer
+             field      LmP0Field
+             indent     size_t
+end: `LmP0DumpFrame.field.class`
 
-    table:
-        name: `LmP0DumpFrame.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 phase      0
-                 node       1
-                 structure  2
-                 trailer    3
-                 field      4
-                 indent     5
-    end: `LmP0DumpFrame.field.index`
+table:
+    name: `LmP0DumpFrame.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             phase      0
+             node       1
+             structure  2
+             trailer    3
+             field      4
+             indent     5
+end: `LmP0DumpFrame.field.index`
 
-    table:
-        name: `LmP0DumpFrame.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 node       0
-                 structure  0
-                 trailer    0
-                 field      0
-    end: `LmP0DumpFrame.field.address-depth`
+table:
+    name: `LmP0DumpFrame.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             node       0
+             structure  0
+             trailer    0
+             field      0
+end: `LmP0DumpFrame.field.address-depth`
 
-    table:
-        name: `LmP0DumpFrame.field.const`
-        columns((class: class) (int: value))
-        rows:
-                 node       1
-                 structure  1
-                 trailer    1
-                 field      1
-    end: `LmP0DumpFrame.field.const`
+table:
+    name: `LmP0DumpFrame.field.const`
+    columns((class: class) (int: value))
+    rows:
+             node       1
+             structure  1
+             trailer    1
+             field      1
+end: `LmP0DumpFrame.field.const`
 
-    table:
-        name: `LmP0FieldParseLoopFrame.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 indent_stack                  LmP0IndentStack
-                 structure                     LmP0Structure
-                 text                          char
-                 length                        size_t
-                 line                          size_t
-                 column                        size_t
-                 offset                        size_t
-                 flags                         unsigned
-                 short_source_level            size_t
-                 layout_base_level             size_t
-                 i                             size_t
-                 current_source_level          size_t
-                 allow_empty_fields            int
-                 expect_field                  int
-                 headless_group_after_separator int
-                 indent_stack_owned            int
-                 continuation                  LmP0FieldParseLoopContinuation
-                 node                          LmP0Node
-                 start                         size_t
-                 close_index                   size_t
-    end: `LmP0FieldParseLoopFrame.field.class`
+table:
+    name: `LmP0FieldParseLoopFrame.field.class`
+    columns((class: class) (class: field))
+    rows:
+             indent_stack                  LmP0IndentStack
+             structure                     LmP0Structure
+             text                          char
+             length                        size_t
+             line                          size_t
+             column                        size_t
+             offset                        size_t
+             flags                         unsigned
+             short_source_level            size_t
+             layout_base_level             size_t
+             i                             size_t
+             current_source_level          size_t
+             allow_empty_fields            int
+             expect_field                  int
+             headless_group_after_separator int
+             indent_stack_owned            int
+             continuation                  LmP0FieldParseLoopContinuation
+             node                          LmP0Node
+             start                         size_t
+             close_index                   size_t
+end: `LmP0FieldParseLoopFrame.field.class`
 
-    table:
-        name: `LmP0FieldParseLoopFrame.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 indent_stack                  0
-                 structure                     1
-                 text                          2
-                 length                        3
-                 line                          4
-                 column                        5
-                 offset                        6
-                 flags                         7
-                 short_source_level            8
-                 layout_base_level             9
-                 i                             10
-                 current_source_level          11
-                 allow_empty_fields            12
-                 expect_field                  13
-                 headless_group_after_separator 14
-                 indent_stack_owned            15
-                 continuation                  16
-                 node                          17
-                 start                         18
-                 close_index                   19
-    end: `LmP0FieldParseLoopFrame.field.index`
+table:
+    name: `LmP0FieldParseLoopFrame.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             indent_stack                  0
+             structure                     1
+             text                          2
+             length                        3
+             line                          4
+             column                        5
+             offset                        6
+             flags                         7
+             short_source_level            8
+             layout_base_level             9
+             i                             10
+             current_source_level          11
+             allow_empty_fields            12
+             expect_field                  13
+             headless_group_after_separator 14
+             indent_stack_owned            15
+             continuation                  16
+             node                          17
+             start                         18
+             close_index                   19
+end: `LmP0FieldParseLoopFrame.field.index`
 
-    table:
-        name: `LmP0FieldParseLoopFrame.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 indent_stack 0
-                 structure    0
-                 text         1
-                 node         0
-    end: `LmP0FieldParseLoopFrame.field.address-depth`
+table:
+    name: `LmP0FieldParseLoopFrame.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             indent_stack 0
+             structure    0
+             text         1
+             node         0
+end: `LmP0FieldParseLoopFrame.field.address-depth`
 
-    table:
-        name: `LmP0FieldParseLoopFrame.field.const`
-        columns((class: class) (int: value))
-        rows:
-                 text   1
-    end: `LmP0FieldParseLoopFrame.field.const`
+table:
+    name: `LmP0FieldParseLoopFrame.field.const`
+    columns((class: class) (int: value))
+    rows:
+             text   1
+end: `LmP0FieldParseLoopFrame.field.const`
 
-    table:
-        name: `LmP0RegistryRow.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 table    char
-                 key      char
-                 payload  char
-    end: `LmP0RegistryRow.field.class`
+table:
+    name: `LmP0RegistryRow.field.class`
+    columns((class: class) (class: field))
+    rows:
+             table    char
+             key      char
+             payload  char
+end: `LmP0RegistryRow.field.class`
 
-    table:
-        name: `LmP0RegistryRow.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 table    0
-                 key      1
-                 payload  2
-    end: `LmP0RegistryRow.field.index`
+table:
+    name: `LmP0RegistryRow.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             table    0
+             key      1
+             payload  2
+end: `LmP0RegistryRow.field.index`
 
-    table:
-        name: `LmP0RegistryRow.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 table    1
-                 key      1
-                 payload  1
-    end: `LmP0RegistryRow.field.address-depth`
+table:
+    name: `LmP0RegistryRow.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             table    1
+             key      1
+             payload  1
+end: `LmP0RegistryRow.field.address-depth`
 
-    table:
-        name: `LmP0Registry.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 rows     LmOwnPtrStack
-                 loaded   int
-                 loading  int
-                 l4_loader LmL4Loader
-    end: `LmP0Registry.field.class`
+table:
+    name: `LmP0Registry.field.class`
+    columns((class: class) (class: field))
+    rows:
+             rows     LmOwnPtrStack
+             loaded   int
+             loading  int
+             l4_loader LmL4Loader
+end: `LmP0Registry.field.class`
 
-    table:
-        name: `LmP0Registry.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 rows     0
-                 loaded   1
-                 loading  2
-                 l4_loader 3
-    end: `LmP0Registry.field.index`
+table:
+    name: `LmP0Registry.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             rows     0
+             loaded   1
+             loading  2
+             l4_loader 3
+end: `LmP0Registry.field.index`
 
-    table:
-        name: `LmP0Registry.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 rows     0
-                 l4_loader 0
-    end: `LmP0Registry.field.address-depth`
+table:
+    name: `LmP0Registry.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             rows     0
+             l4_loader 0
+end: `LmP0Registry.field.address-depth`
 
-    table:
-        name: `LmP0PostprocessFrame.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 phase      int
-                 node       LmP0Node
-                 structure  LmP0Structure
-                 trailer    LmP0Trailer
-                 field      LmP0Field
-    end: `LmP0PostprocessFrame.field.class`
+table:
+    name: `LmP0PostprocessFrame.field.class`
+    columns((class: class) (class: field))
+    rows:
+             phase      int
+             node       LmP0Node
+             structure  LmP0Structure
+             trailer    LmP0Trailer
+             field      LmP0Field
+end: `LmP0PostprocessFrame.field.class`
 
-    table:
-        name: `LmP0PostprocessFrame.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 phase      0
-                 node       1
-                 structure  2
-                 trailer    3
-                 field      4
-    end: `LmP0PostprocessFrame.field.index`
+table:
+    name: `LmP0PostprocessFrame.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             phase      0
+             node       1
+             structure  2
+             trailer    3
+             field      4
+end: `LmP0PostprocessFrame.field.index`
 
-    table:
-        name: `LmP0PostprocessFrame.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 node       0
-                 structure  0
-                 trailer    0
-                 field      0
-    end: `LmP0PostprocessFrame.field.address-depth`
-end: L4
+table:
+    name: `LmP0PostprocessFrame.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             node       0
+             structure  0
+             trailer    0
+             field      0
+end: `LmP0PostprocessFrame.field.address-depth`
 
 fn: lm_p0_document_init_owners (LmP0Document: document) int
     if: document = 0
