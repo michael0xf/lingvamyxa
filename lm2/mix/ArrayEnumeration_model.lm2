@@ -1,0 +1,15 @@
+table:
+    name: LmArrayEnumeration
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+    rows:
+             items  void    0  2
+             count  size_t  1  0
+             index  size_t  2  0
+end: LmArrayEnumeration
+
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmArrayEnumeration  c.struct
+end: `layout.backend`
