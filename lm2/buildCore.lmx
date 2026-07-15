@@ -5,9 +5,19 @@ L1:
 #endif
 ===
 
-L4: loadHeaders
+L2:
+    include
+    define
+    os
+    ifdef
+    forward
+    alias
+    constant
+    layout
+    fn
+    prototype
+    unit
 
-L4:
     table:
         name: LmBuildOptions
         columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
@@ -46,9 +56,7 @@ L4:
                  has_qt_gxx         lm_build_has_qt_gxx         "C:/Qt/Tools/mingw1310_64/bin/g++.exe"           None
                  include            None                        "<direct.h>"                                     "<unistd.h>"
     end: BUILD
-end: L4
 
-L2:
     import: "lm4/own_abi.lm4"
     
     include: "<stdio.h>" "<stdlib.h>" "<string.h>"

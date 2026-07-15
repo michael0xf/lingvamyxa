@@ -5,19 +5,29 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+#ifndef LM_UNUSED
+#define LM_UNUSED(value) ((void)(value))
+#endif
 #include <stddef.h>
+
+
+
+
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
 
+
 typedef int LmOwnEdgeKind;
+
 
 #define LM_OWN_EDGE_BORROWED 1
 #define LM_OWN_EDGE_OWNED 2
 #define LM_OWN_EDGE_LAZY_OWNED 3
 #define LM_OWN_EDGE_EXTERNAL 4
+
 
 #include <stddef.h>
 
@@ -65,6 +75,7 @@ typedef struct LmBuildOptions {
     int next_build;
 } LmBuildOptions;
 
+
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields 1
 typedef void (*LmOwnDestroyFields)(void *object);
@@ -73,6 +84,7 @@ typedef void (*LmOwnDestroyFields)(void *object);
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
 #endif
+
 
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
@@ -112,9 +124,7 @@ int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 
 
-#ifndef LM_UNUSED
-#define LM_UNUSED(value) ((void)(value))
-#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -477,6 +487,9 @@ static int lm_build_full_build(void);
 static int lm_build_full_project(void);
 static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, char *built_trans);
 int main(int argc, char **argv);
+
+
+
 
 typedef struct LmL5ExecutionContext LmL5ExecutionContext;
 typedef struct LmL5Thread LmL5Thread;
