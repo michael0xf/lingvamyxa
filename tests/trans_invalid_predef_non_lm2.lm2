@@ -1,0 +1,3 @@
+L2:
+    predef: "fixtures/l3_import_preload_registry.lm4"
+end: L2

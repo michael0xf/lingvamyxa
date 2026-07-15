@@ -4762,7 +4762,7 @@ fn: lm_trans_materialize_l2_join_source (LmTransNamespace: namespace_; const: (L
 return: 0
 
 fn: lm_trans_declare_l2_join (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
-    if: lm_trans_l2_table_materialization_suppression_depth > 0
+    if: lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
 return: lm_trans_materialize_l2_join_source(namespace_, frame)
 
@@ -4860,7 +4860,7 @@ fn: lm_trans_declare_l2_table (
 ) int
     if: lm_trans_declare_l2_table_binding(namespace_, frame) != 0
         return: 1
-    if: lm_trans_l2_table_materialization_suppression_depth > 0
+    if: lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
 return: lm_trans_materialize_l2_table_source(namespace_, frame, 0)
 
@@ -6380,6 +6380,22 @@ fn: lm_trans_statement_emit_import (
     if: indent = 0U
         return: 0
     c.fprintf(c.stderr, "trans L2 error: import receiver is top-level only\n")
+return: 1
+
+fn: lm_trans_statement_emit_predef (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(frame)
+    c.LM_UNUSED(namespace_)
+    if: indent = 0U
+        return: 0
+    c.fprintf(c.stderr, "trans L2 error: predef receiver is top-level only\n")
 return: 1
 
 fn: lm_trans_statement_emit_table (
@@ -8322,7 +8338,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", @lm_trans_statement_emit_import) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", @lm_trans_statement_emit_table) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_join", @lm_trans_statement_emit_join) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", @lm_trans_statement_emit_merge_named_structure) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", @lm_trans_statement_emit_const_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", @lm_trans_statement_emit_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_structure_declaration", @lm_trans_statement_emit_structure_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_tagged_declaration", @lm_trans_statement_emit_c_tagged_declaration) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", @lm_trans_statement_emit_import) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_predef", @lm_trans_statement_emit_predef) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", @lm_trans_statement_emit_table) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_join", @lm_trans_statement_emit_join) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", @lm_trans_statement_emit_merge_named_structure) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", @lm_trans_statement_emit_const_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", @lm_trans_statement_emit_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_structure_declaration", @lm_trans_statement_emit_structure_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_tagged_declaration", @lm_trans_statement_emit_c_tagged_declaration) != 0)
         status: 1
     if: status = 0 && lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_contextual_literal_assignment", @lm_trans_statement_emit_contextual_literal_assignment) != 0
         status: 1

@@ -184,6 +184,12 @@ return: lm_trans_emit_l2_import_prelude(file, lm_trans_top_level_item_frame(item
 fn: lm_trans_top_level_emit_import_functions (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_import_functions(file, lm_trans_top_level_item_frame(item), namespace_)
 
+fn: lm_trans_top_level_emit_predef_prelude (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+return: lm_trans_emit_l2_import_prelude(file, lm_trans_top_level_item_frame(item), namespace_)
+
+fn: lm_trans_top_level_emit_predef_functions (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+return: lm_trans_emit_l2_import_functions(file, lm_trans_top_level_item_frame(item), namespace_)
+
 fn: lm_trans_top_level_emit_include (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l1_include_frame(file, item\frame)
@@ -436,6 +442,10 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
         if: lm_trans_import_frame_has_code_path(out\frame)
             out\emit_before_functions: @lm_trans_top_level_emit_import_prelude
             out\emit_function: @lm_trans_top_level_emit_import_functions
+        return: 1
+    if: c.strcmp(receiver, "lm_trans_statement_emit_predef") = 0
+        out\emit_before_functions: @lm_trans_top_level_emit_predef_prelude
+        out\emit_function: @lm_trans_top_level_emit_predef_functions
         return: 1
     if: c.strcmp(receiver, "lm_trans_statement_emit_table") = 0
         out\declare: @lm_trans_top_level_declare_table
@@ -1723,6 +1733,45 @@ fn: lm_trans_emit_l2_structure_functions (FILE: file; const: (LmP0Structure: bod
         field: field\next
 return: 0
 
+fn: lm_trans_frame_is_predef_receiver (const: (LmP0Frame: frame)) int
+    LmTransHeadBinding: binding
+    int: result
+
+    if: frame = 0
+        return: 0
+    binding: lm_trans_head_binding_new()
+    if: binding = 0
+        return: -1
+    if: lm_trans_head_binding_resolve(0, frame\head, binding) != 0
+        lm_own_delete(binding, 0)
+        return: -1
+    result: binding\statement_frame = @lm_trans_statement_emit_predef
+    lm_own_delete(binding, 0)
+return: result
+
+fn: lm_trans_declare_l2_predef_frames (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    int: is_predef
+
+    if: namespace_ = 0
+        return: 1
+
+    field: 0
+    if: body != 0
+        field: body\first_field
+    while: field != 0
+        node: field\value
+        if: node != 0 && lm_trans_node_is_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME
+            is_predef: lm_trans_frame_is_predef_receiver(node\as\frame)
+            if: is_predef < 0
+                return: 1
+            if: is_predef != 0 && lm_trans_declare_l2_predef_frame(namespace_, node\as\frame) != 0
+                return: 1
+        ---
+        field: field\next
+return: 0
+
 fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: (LmP0Structure: body); const: (LmP0Frame: explicit_l2); LmTransNamespace: namespace_; int: declare_items) int
     const: LmP0Field: field
     const: LmP0Node: node
@@ -1735,6 +1784,8 @@ fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: (LmP0Structure
     prelude_file: lm_trans_prelude_file(file)
     if: declare_items
         if: lm_trans_namespace_attach_registry(namespace_) != 0
+            return: 1
+        if: lm_trans_declare_l2_predef_frames(namespace_, body) != 0
             return: 1
 
         field: 0
@@ -1901,6 +1952,39 @@ fn: lm_trans_import_parse_document (const: @(char path); @: LmP0Document out_doc
     lm_p0_document_destroy(out_document[0])
     out_document[0]: 0
 return: 1
+
+fn: lm_trans_validate_l2_predef_frame (const: (LmP0Frame: frame)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    [4096]: char path
+    int: found
+
+    if: frame = 0
+        return: 1
+
+    found: 0
+    field: frame\body\first_field
+    while: field != 0
+        node: field\value
+        if: lm_trans_node_is_ignored(node) = 0
+            if: lm_trans_import_resolve_node(node, path, 4096U, "predef") != 0
+                return: 1
+            if: lm_trans_path_has_extension(path, ".lm2") = 0
+                c.fprintf(c.stderr, "trans L2 predef error: predef target must be an .lm2 module: %s\n", path)
+                return: 1
+            found: 1
+        ---
+        field: field\next
+
+    if: found = 0
+        c.fprintf(c.stderr, "trans L2 predef error: predef receiver expects at least one .lm2 path\n")
+        return: 1
+return: lm_trans_validate_end_trailer(frame)
+
+fn: lm_trans_declare_l2_predef_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+    if: lm_trans_validate_l2_predef_frame(frame) != 0
+        return: 1
+return: lm_trans_declare_l2_import_frame(namespace_, frame)
 
 fn: lm_trans_declare_l2_import_root (LmTransNamespace: namespace_; const: (LmP0Node: root); int: implicit_l2) int
     const: LmP0Field: field
@@ -2613,6 +2697,9 @@ fn: lm_trans_declare_l2_structure_import_core (LmTransNamespace: namespace_; con
     const: LmP0Field: field
     const: LmP0Node: node
     LmTransTopLevelItem: item
+
+    if: lm_trans_declare_l2_predef_frames(namespace_, body) != 0
+        return: 1
 
     field: 0
     if: body != 0
@@ -4005,6 +4092,82 @@ fn: lm_trans_root_has_explicit_l2_frame (const: (LmP0Structure: root)) int
             return: 1
         field: field\next
 return: 0
+
+fn: lm_trans_materialize_l2_predef_structure (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransHeadBinding: binding
+    int: status
+
+    if: namespace_ = 0
+        return: 1
+
+    binding: lm_trans_head_binding_new()
+    if: binding = 0
+        return: 1
+
+    status: 0
+    field: 0
+    if: body != 0
+        field: body\first_field
+    while: status = 0 && field != 0
+        node: field\value
+        if: node != 0 && lm_trans_node_is_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME
+            if: lm_trans_head_binding_resolve(namespace_, node\as\frame\head, binding) != 0
+                status: 1
+            else:
+                if: binding\statement_frame = @lm_trans_statement_emit_table
+                    status: lm_trans_materialize_l2_table_source(namespace_, node\as\frame, 0)
+                else:
+                    if: binding\statement_frame = @lm_trans_statement_emit_join
+                        status: lm_trans_materialize_l2_join_source(namespace_, node\as\frame)
+                    ---
+                ---
+            ---
+        ---
+        field: field\next
+
+    lm_own_delete(binding, 0)
+return: status
+
+fn: lm_trans_materialize_l2_predef_root (const: (LmP0Node: root); const: @(char source_path)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: @: char previous_source_path
+    LmTransNamespace: namespace_
+    int: previous_depth
+    int: status
+
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 1
+
+    namespace_: lm_trans_namespace_new()
+    if: namespace_ = 0
+        return: 1
+    if: lm_trans_namespace_attach_registry(namespace_) != 0
+        lm_trans_namespace_delete(namespace_)
+        return: 1
+
+    previous_source_path: lm_trans_current_source_path
+    lm_trans_current_source_path: source_path
+    status: 0
+    if: lm_trans_root_has_explicit_l2_frame(root\as\structure) = 0
+        status: lm_trans_materialize_l2_predef_structure(namespace_, root\as\structure)
+    else:
+        field: root\as\structure\first_field
+        while: status = 0 && field != 0
+            node: field\value
+            if: node != 0 && lm_trans_node_is_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
+                previous_depth: lm_trans_l3_profile_enter_frame(node\as\frame)
+                status: lm_trans_materialize_l2_predef_structure(namespace_, node\as\frame\body)
+                lm_trans_l3_profile_restore(previous_depth)
+            ---
+            field: field\next
+    ---
+
+    lm_trans_current_source_path: previous_source_path
+    lm_trans_namespace_delete(namespace_)
+return: status
 
 fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: implicit_l2; @: int emitted) int
     const: LmP0Field: field

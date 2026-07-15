@@ -1,0 +1,17 @@
+predef: "l2_predef_cycle_a.lm2"
+
+L1:
+===
+typedef const char *class;
+===
+
+table:
+    name: predefCycleB
+    columns((class: class) (int: value))
+    rows:
+             "b"  2
+end: predefCycleB
+
+fn: lm_test_predef_cycle_value () int
+    return: 29
+end: lm_test_predef_cycle_value

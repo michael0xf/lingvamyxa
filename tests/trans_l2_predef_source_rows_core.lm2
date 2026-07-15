@@ -1,0 +1,76 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_l2_predef_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_l2_predef_table_has_one_row (const: @(char name)) int
+    const: LmTableDescriptor: descriptor
+
+    descriptor: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, name, c.strlen(name))
+return: descriptor != 0 && lm_table_descriptor_materialized_row_count(descriptor) = 1U
+
+fn: lm_test_l2_predef_source_rows_core () int
+    const: @(char source_path)
+    LmP0Document: document
+    const: LmP0Node: root
+    LmTransNamespace: namespace_
+    LmP0Text: helper_name
+    int: status
+
+    source_path: "tests/trans_l2_predef_import.lm2"
+    document: 0
+    namespace_: 0
+    helper_name: 0
+    status: 0
+
+    if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_file(source_path, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || lm_trans_registry_load_inline_root(root, source_path) != 0
+        status: 1
+
+    if: status = 0 && (lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_trans_registry_path_is_predefined("tests/fixtures/l2_predef_registry.lm2") = 0)
+        status: 1
+    if: status = 0 && (lm_test_l2_predef_table_has_one_row("predefHeaders.item") = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0)
+        status: 1
+
+    if: status = 0 && lm_trans_registry_load_inline_root(root, source_path) != 0
+        status: 1
+    if: status = 0 && (lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_table_has_one_row("predefHeaders.item") = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0)
+        status: 1
+
+    lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
+    namespace_: lm_trans_namespace_new()
+    lm_trans_current_source_path: source_path
+    lm_trans_l2_table_materialization_suppression_depth: 0
+    lm_trans_l2_conditional_import_depth: 0
+    if: status = 0 && (lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || namespace_ = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_declare_l2_import_root(namespace_, root, 1) != 0)
+        status: 1
+
+    helper_name: lm_trans_text_from_cstr("lm_test_predef_value")
+    if: status = 0 && (helper_name = 0 || lm_trans_namespace_find(namespace_, helper_name) = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_table_has_one_row("predefHeaders.item") = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_current_source_path: 0
+    lm_trans_text_ref_destroy(@ helper_name)
+    lm_trans_namespace_delete(namespace_)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status

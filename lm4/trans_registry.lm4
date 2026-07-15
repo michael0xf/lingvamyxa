@@ -583,6 +583,7 @@ table:
              define        `receiver.statement`
              `ifndef-default` `receiver.statement`
              import        `receiver.statement`
+             predef        `receiver.statement`
              join          `receiver.statement`
              merge         `receiver.statement`
              os            `receiver.statement`
@@ -628,6 +629,7 @@ table:
     name: `receiver.l3.exclude`
     columns((class: class) (int: value))
     rows:
+             predef  1
 end: `receiver.l3.exclude`
 
 table:
@@ -648,6 +650,7 @@ table:
              define        lm_trans_statement_emit_define_prelude
              `ifndef-default` lm_trans_statement_emit_ifndef_default_prelude
              import        lm_trans_statement_emit_import
+             predef        lm_trans_statement_emit_predef
              join          lm_trans_statement_emit_join
              merge         lm_trans_statement_emit_merge_named_structure
              os            lm_trans_statement_emit_os_prelude

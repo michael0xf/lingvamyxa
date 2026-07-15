@@ -1,0 +1,29 @@
+L1:
+===
+typedef const char *class;
+===
+
+table:
+    name: `predefHeaders.item`
+    columns((class: class) (size_t: index))
+    rows:
+             "include"  0
+end: `predefHeaders.item`
+
+table:
+    name: `prelude.sequence`
+    columns((class: class) (int: value))
+    rows:
+             "predefHeaders"  1
+end: `prelude.sequence`
+
+table:
+    name: include
+    columns((class: class) (const: (@: char target)))
+    rows:
+             "time"  "<time.h>"
+end: include
+
+fn: lm_test_predef_value () int
+    return: 23
+end: lm_test_predef_value

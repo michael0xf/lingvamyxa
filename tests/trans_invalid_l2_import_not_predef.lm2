@@ -1,0 +1,10 @@
+L2:
+    notPreloaded: "<stdint.h>"
+    import: "fixtures/l2_import_not_predef_registry.lm2"
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

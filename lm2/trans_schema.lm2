@@ -377,6 +377,7 @@ L4:
                  binding_pointer_bindings LmOwnPtrStack    11            0
                  view               LmRegistryView         12            0
                  view_mode          int                    13            0
+                 predefined_paths   LmOwnPtrStack         14            0
     end: LmTransRegistry
 
     table:

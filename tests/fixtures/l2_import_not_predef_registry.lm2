@@ -1,0 +1,6 @@
+table:
+    name: `receiver.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+             notPreloaded  lm_trans_statement_emit_include_prelude
+end: `receiver.statement`

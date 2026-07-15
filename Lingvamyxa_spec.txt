@@ -444,13 +444,33 @@ same `.lmx` root before it lowers the sibling `L2:` block.
 But a `.lm2` file does not need that outer wrapper. The same rule applies to
 `.lm3`, `.lm4` and `.lm5`.
 
-The dependency is deliberately attached to the source profile, not to a receiver
-name. For example, a root-level `table:` in a `.lm4` registry file is consumed
-as L4 registry input because the file is `.lm4`. A root-level `table:` in a
-plain `.lmx` file is only ordinary Structure data unless it appears inside an
-explicit `L4:`/`registry:` context or another profile admits it. This prevents
-ordinary data from becoming registry input merely because it uses a receiver
-spelled `table`.
+The implicit root profile is deliberately attached to the source extension,
+not inferred from an arbitrary receiver name. For example, a root-level
+`table:` in a `.lm4` registry file is consumed as legacy L4 registry input
+because the file is `.lm4`. A root-level `table:` in a plain `.lmx` file is only
+ordinary Structure data unless it appears inside an explicit admitted level.
+
+L2 also admits an explicit top-level dependency receiver for migrating registry
+modules away from the implicit `.lm4` profile:
+
+    predef:
+        "model.lm2"
+        "receivers.lm2"
+    end: predef
+
+`predef` has the path-list shape of `import`, but is a hoisted import. Before
+ordinary top-level lowering and before the module prelude is planned, its `.lm2`
+targets expose their declarative `table:` and `join:` surface in source order.
+The same target modules are then declared in the importing L2 namespace and
+pass through the ordinary L2 prelude, prototype, storage and function emission
+phases exactly once. Thus `predef` does not mean "registry-only" or "do not
+translate".
+
+An ordinary `import:` does not acquire this early behavior by containing tables,
+and a `.lm2` module is never heuristically classified by its contents. The
+receiver is top-level-only, preserves normal relative-path resolution and import
+deduplication, and accepts `.lm2` targets only. It is excluded from the L3
+profile as a low-level module-construction operation.
 
 Long version of the "hello.lmx" file:
 

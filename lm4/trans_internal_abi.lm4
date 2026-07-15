@@ -829,6 +829,34 @@ fn: lm_trans_statement_emit_import (
     LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_statement_emit_predef (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_registry_path_is_predefined (
+    const: @: char registry_path
+) int
+
+fn: lm_trans_materialize_l2_table_source (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+    int: require_facade
+) int
+
+fn: lm_trans_materialize_l2_join_source (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_materialize_l2_predef_root (
+    const: LmP0Node: root
+    const: @: char source_path
+) int
+
 fn: lm_trans_frame_is_l2_level_receiver (
     const: LmP0Frame: frame
 ) int
