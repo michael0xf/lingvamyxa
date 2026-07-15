@@ -35893,19 +35893,45 @@ static int lm_trans_unit_source_payload_resolve(const LmTransNamespace *namespac
 
 static int lm_trans_emit_l4_units(FILE *file, const LmTransNamespace *namespace_) {
     LmOwnPtrStack * names;
+    LmTransNamespace * payload_namespace;
+    LmOwnPtrStack * payload_declared_import_paths;
+    LmOwnPtrStack * payload_declared_import_documents;
+    LmOwnPtrStack * previous_declared_import_paths;
+    LmOwnPtrStack * previous_declared_import_documents;
     const LmOwnPtrStack * payload_rows;
     LmTransRegistryFact * payload_row;
     const LmP0Node * payload_node;
     const char *payload_text;
     const char *name;
     size_t i;
+    payload_namespace = 0;
+    payload_declared_import_paths = 0;
+    payload_declared_import_documents = 0;
+    previous_declared_import_paths = lm_trans_declared_import_paths;
+    previous_declared_import_documents = lm_trans_declared_import_documents;
     names = lm_trans_ptr_stack_new(lm_trans_free_any);
     if (names == 0) {
-        return 1;
+        {
+            int lm_return_0 = 1;
+            lm_trans_declared_import_paths = previous_declared_import_paths;
+            lm_trans_declared_import_documents = previous_declared_import_documents;
+            lm_trans_namespace_delete(payload_namespace);
+            lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+            lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+            return lm_return_0;
+        }
     }
     if (lm_trans_registry_collect_backend_names(names, namespace_, "unit", "c.static-unit", "unit", 1) != 0) {
         lm_trans_ptr_stack_delete(&names);
-        return 1;
+        {
+            int lm_return_1 = 1;
+            lm_trans_declared_import_paths = previous_declared_import_paths;
+            lm_trans_declared_import_documents = previous_declared_import_documents;
+            lm_trans_namespace_delete(payload_namespace);
+            lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+            lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+            return lm_return_1;
+        }
     }
     payload_rows = lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("unit"), "payload");
     i = 0U;
@@ -35915,28 +35941,87 @@ static int lm_trans_emit_l4_units(FILE *file, const LmTransNamespace *namespace_
         if (lm_trans_unit_source_payload_resolve(namespace_, payload_row, &payload_text, &payload_node) == 0) {
             fprintf(stderr, "trans L4 unit error: %s requires unit.payload\n", name);
             lm_trans_ptr_stack_delete(&names);
-            return 1;
+            {
+                int lm_return_2 = 1;
+                lm_trans_declared_import_paths = previous_declared_import_paths;
+                lm_trans_declared_import_documents = previous_declared_import_documents;
+                lm_trans_namespace_delete(payload_namespace);
+                lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+                lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+                return lm_return_2;
+            }
         }
         if (payload_node != 0) {
-            if (lm_trans_emit_l4_payload_node(file, payload_node, (((LmTransNamespace *)namespace_))) != 0 || lm_trans_put(file, "\n") != 0) {
+            if (payload_namespace == 0) {
+                payload_namespace = lm_trans_namespace_new();
+                payload_declared_import_paths = lm_trans_ptr_stack_new(lm_own_delete_plain);
+                payload_declared_import_documents = lm_trans_ptr_stack_new(lm_trans_import_document_delete);
+                if (payload_namespace == 0 || payload_declared_import_paths == 0 || payload_declared_import_documents == 0 || lm_trans_namespace_attach_registry(payload_namespace) != 0) {
+                    lm_trans_ptr_stack_delete(&names);
+                    {
+                        int lm_return_3 = 1;
+                        lm_trans_declared_import_paths = previous_declared_import_paths;
+                        lm_trans_declared_import_documents = previous_declared_import_documents;
+                        lm_trans_namespace_delete(payload_namespace);
+                        lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+                        lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+                        return lm_return_3;
+                    }
+                }
+                lm_trans_declared_import_paths = payload_declared_import_paths;
+                lm_trans_declared_import_documents = payload_declared_import_documents;
+            }
+            if (lm_trans_emit_l4_payload_node(file, payload_node, payload_namespace) != 0 || lm_trans_put(file, "\n") != 0) {
                 lm_trans_ptr_stack_delete(&names);
-                return 1;
+                {
+                    int lm_return_4 = 1;
+                    lm_trans_declared_import_paths = previous_declared_import_paths;
+                    lm_trans_declared_import_documents = previous_declared_import_documents;
+                    lm_trans_namespace_delete(payload_namespace);
+                    lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+                    lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+                    return lm_return_4;
+                }
             }
         }
         else {
             if (lm_trans_put(file, payload_text) != 0 || lm_trans_put(file, "\n") != 0) {
                 lm_trans_ptr_stack_delete(&names);
-                return 1;
+                {
+                    int lm_return_5 = 1;
+                    lm_trans_declared_import_paths = previous_declared_import_paths;
+                    lm_trans_declared_import_documents = previous_declared_import_documents;
+                    lm_trans_namespace_delete(payload_namespace);
+                    lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+                    lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+                    return lm_return_5;
+                }
             }
         }
         i = i + 1U;
     }
     if (names -> count != 0U && lm_trans_put(file, "\n") != 0) {
         lm_trans_ptr_stack_delete(&names);
-        return 1;
+        {
+            int lm_return_6 = 1;
+            lm_trans_declared_import_paths = previous_declared_import_paths;
+            lm_trans_declared_import_documents = previous_declared_import_documents;
+            lm_trans_namespace_delete(payload_namespace);
+            lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+            lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+            return lm_return_6;
+        }
     }
     lm_trans_ptr_stack_delete(&names);
-    return 0;
+    {
+        int lm_return_7 = 0;
+        lm_trans_declared_import_paths = previous_declared_import_paths;
+        lm_trans_declared_import_documents = previous_declared_import_documents;
+        lm_trans_namespace_delete(payload_namespace);
+        lm_trans_ptr_stack_delete(&payload_declared_import_documents);
+        lm_trans_ptr_stack_delete(&payload_declared_import_paths);
+        return lm_return_7;
+    }
 }
 
 static int lm_trans_registry_init(void) {

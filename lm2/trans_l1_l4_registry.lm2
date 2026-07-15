@@ -2188,12 +2188,29 @@ return: out_node[0] != 0
 
 fn: lm_trans_emit_l4_units (FILE: file; const: (LmTransNamespace: namespace_)) int
     LmOwnPtrStack: names
+    LmTransNamespace: payload_namespace
+    LmOwnPtrStack: payload_declared_import_paths
+    LmOwnPtrStack: payload_declared_import_documents
+    LmOwnPtrStack: previous_declared_import_paths
+    LmOwnPtrStack: previous_declared_import_documents
     const: LmOwnPtrStack: payload_rows
     LmTransRegistryFact: payload_row
     const: LmP0Node: payload_node
     const: @: char payload_text
     const: @: char name
     size_t: i
+
+    payload_namespace: 0
+    payload_declared_import_paths: 0
+    payload_declared_import_documents: 0
+    previous_declared_import_paths: lm_trans_declared_import_paths
+    previous_declared_import_documents: lm_trans_declared_import_documents
+    finally:
+        lm_trans_declared_import_paths: previous_declared_import_paths
+        lm_trans_declared_import_documents: previous_declared_import_documents
+        lm_trans_namespace_delete(payload_namespace)
+        lm_trans_ptr_stack_delete(@ payload_declared_import_documents)
+        lm_trans_ptr_stack_delete(@ payload_declared_import_paths)
 
     names: lm_trans_ptr_stack_new(lm_trans_free_any)
     if: names = 0
@@ -2212,7 +2229,17 @@ fn: lm_trans_emit_l4_units (FILE: file; const: (LmTransNamespace: namespace_)) i
             lm_trans_ptr_stack_delete(@ names)
             return: 1
         if: payload_node != 0
-            if: lm_trans_emit_l4_payload_node(file, payload_node, (cast: (LmTransNamespace) namespace_)) != 0 || lm_trans_put(file, "\n") != 0
+            if: payload_namespace = 0
+                payload_namespace: lm_trans_namespace_new()
+                payload_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+                payload_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
+                if: payload_namespace = 0 || payload_declared_import_paths = 0 || payload_declared_import_documents = 0 || lm_trans_namespace_attach_registry(payload_namespace) != 0
+                    lm_trans_ptr_stack_delete(@ names)
+                    return: 1
+                lm_trans_declared_import_paths: payload_declared_import_paths
+                lm_trans_declared_import_documents: payload_declared_import_documents
+            ---
+            if: lm_trans_emit_l4_payload_node(file, payload_node, payload_namespace) != 0 || lm_trans_put(file, "\n") != 0
                 lm_trans_ptr_stack_delete(@ names)
                 return: 1
         ---
