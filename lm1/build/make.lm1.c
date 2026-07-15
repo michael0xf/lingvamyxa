@@ -5,6 +5,23 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,6 +74,7 @@ static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     }
     return thread->current->diagnostic_code;
 }
+
 static char * lm_make_env_or_default(char *name, char *fallback) {
     char *value;
     value = getenv(name);

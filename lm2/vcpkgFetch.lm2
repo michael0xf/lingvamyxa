@@ -30,7 +30,7 @@ L4:
 end: L4
 
 import: "lm4/own_abi.lm4"
-import: "lm4/libc_abi.lm4"
+predef: "libc_abi.lm2"
 
 os:
     win:

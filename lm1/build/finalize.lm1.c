@@ -5,6 +5,23 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #if defined(_WIN32)
 /* no POSIX feature macro on Windows */
 #else
@@ -162,6 +179,7 @@ static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     }
     return thread->current->diagnostic_code;
 }
+
 static int lm_finalize_is_path_separator(char value) {
     return value == '/' || value == '\\';
 }
