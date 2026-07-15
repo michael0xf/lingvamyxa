@@ -10,7 +10,7 @@ fn
 prototype
 unit
 
-import: "lm4/parser_abi.lm4"
+predef: "lm2/parser_abi.lm2"
 
 include: "<stdio.h>"
 

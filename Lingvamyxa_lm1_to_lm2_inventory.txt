@@ -29,7 +29,7 @@ The old root files were:
 Their ABI role is now represented by registry source modules and receiver output:
 
     lm4/own_abi.lm4
-    lm4/parser_abi.lm4
+    lm2/parser_abi.lm2
     lm2/l4_loader_abi.lm2
     lm4/core.lm4
     lm4/trans_registry.lm4
@@ -53,11 +53,11 @@ These receivers are used by sources to request ABI/prelude output explicitly:
     prototype
     unit
 
-For example, a source that needs the parser ABI imports the ABI tables and then
+For example, a source that needs the parser ABI loads the ABI tables and then
 calls the receivers:
 
     import: "lm4/own_abi.lm4"
-    import: "lm4/parser_abi.lm4"
+    predef: "lm2/parser_abi.lm2"
     include
     alias
     forward

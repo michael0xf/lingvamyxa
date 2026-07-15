@@ -1870,6 +1870,61 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 static int lm_p0_text_equals(const LmP0Text *text, const char *value);
 static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
 static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
@@ -2209,6 +2264,7 @@ char * lm_p0_dump_alloc(const LmP0Document *document);
 
 
 static LmP0Registry * lm_p0_registry;
+
 
 static int lm_p0_text_equals(const LmP0Text *text, const char *value) {
     size_t value_length;

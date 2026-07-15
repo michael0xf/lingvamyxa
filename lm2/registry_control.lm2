@@ -124,7 +124,7 @@ table:
 end: `class.reference-base`
 
 import: "lm4/own_abi.lm4"
-import: "lm4/parser_abi.lm4"
+predef: "lm2/parser_abi.lm2"
 
 include: "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
 
