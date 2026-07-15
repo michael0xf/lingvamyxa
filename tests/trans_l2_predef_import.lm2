@@ -8,7 +8,7 @@ L2:
         fn: main () int
             LmTestPredefEquals: equals 0
             LmTestPredefMapper: mapper 0
-            return: c.sizeof(c.clock_t) = 0 || lm_test_predef_value() != 23 || equals != 0 || mapper != 0
+            return: c.sizeof(c.clock_t) = 0 || lm_test_predef_value() != 23 || LmTestPredefFunction(41) != 42 || abs(-7) != 7 || equals != 0 || mapper != 0
         end: main
     end: external
 end: L2

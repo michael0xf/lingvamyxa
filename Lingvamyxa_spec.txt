@@ -474,6 +474,17 @@ pass through the ordinary L2 prelude, prototype, storage and function emission
 phases exactly once. Thus `predef` does not mean "registry-only" or "do not
 translate".
 
+During that namespace declaration, a descriptor-only `fn:` directly on a
+`predef` target surface is projected as a predeclared executable function
+binding. `fn.external` selects external linkage; without it the projection is
+an internal function binding. A `functionPointerType` membership keeps the
+descriptor in its function-pointer-type projection, while the explicit
+`callable:` receiver keeps it as callable descriptor data. This is a namespace
+projection only: the materialized `fn` source row remains a
+`callableDescriptor` with receiver `fn`, and the projection does not invent a
+`class.kind` source fact. Outside the `predef` profile, a descriptor-only
+`fn:` retains the descriptor-data semantics described in 7.2.1.
+
 An ordinary `import:` does not acquire this early behavior by containing tables,
 and a `.lm2` module is never heuristically classified by its contents. The
 receiver is top-level-only, preserves normal relative-path resolution and import

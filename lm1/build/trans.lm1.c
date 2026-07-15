@@ -3515,6 +3515,7 @@ static int lm_trans_top_level_declare_generated_return_class(LmTransNamespace *n
 static int lm_trans_top_level_declare_function_params(LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_top_level_declare_function_body_named_structures(LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_top_level_declare_function(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+static int lm_trans_top_level_is_predefined_function_descriptor(const LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_declare_function_compatible(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_l1(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_l2(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
@@ -28695,13 +28696,42 @@ static int lm_trans_top_level_declare_function(LmTransNamespace *namespace_, con
     return status;
 }
 
+static int lm_trans_top_level_is_predefined_function_descriptor(const LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
+    const LmTransFunctionHeader * function;
+    if (item == 0) {
+        return 0;
+    }
+    function = item -> function;
+    if (function == 0 || function -> is_descriptor_only == 0 || function -> is_sub || function -> is_callable_descriptor) {
+        return 0;
+    }
+    if (lm_trans_current_source_path == 0 || lm_trans_registry_path_is_predefined(lm_trans_current_source_path) == 0) {
+        return 0;
+    }
+    if (lm_trans_registry_predefined_descriptor_site_is_hoisted(lm_trans_current_source_path, item -> node) == 0) {
+        return 0;
+    }
+    if (lm_trans_registry_is_function_pointer_type_name(namespace_, function -> name)) {
+        return 0;
+    }
+    return 1;
+}
+
 static int lm_trans_top_level_declare_function_compatible(LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
     int status;
+    int predefined_function;
     if (item == 0 || item -> function == 0) {
         return 1;
     }
-    if (lm_trans_registry_note_class_kind(item -> function -> name, item -> function -> symbol_class) != 0) {
-        return 1;
+    predefined_function = lm_trans_top_level_is_predefined_function_descriptor(namespace_, item);
+    if (predefined_function) {
+        item->function->symbol_class = "function";
+        item->function->is_external = lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, item -> function -> name, "fn.external", "class", "class", "value", "int") != 0;
+    }
+    else {
+        if (lm_trans_registry_note_class_kind(item -> function -> name, item -> function -> symbol_class) != 0) {
+            return 1;
+        }
     }
     if (lm_trans_namespace_declare_compatible(namespace_, item -> function -> name, item -> function -> symbol_class) != 0) {
         return 1;

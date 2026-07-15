@@ -60,11 +60,13 @@ fn: lm_test_l2_predef_source_key_row_count (const: @(char name); const: @(char k
 return: count
 
 fn: lm_test_l2_predef_metadata_is_exact () int
-    if: lm_test_l2_predef_table_has_rows("predefHeaders.item", 2U) = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0 || lm_test_l2_predef_table_has_one_row("functionPointerType") = 0
+    if: lm_test_l2_predef_table_has_rows("predefHeaders.item", 2U) = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_rows("include", 2U) = 0 || lm_test_l2_predef_table_has_one_row("fn.external") = 0 || lm_test_l2_predef_table_has_one_row("functionPointerType") = 0
         return: 0
-    if: lm_test_l2_predef_source_row_count("fn") != 2U || lm_test_l2_predef_source_key_row_count("fn", "LmTestPredefEquals") != 1U || lm_test_l2_predef_source_key_row_count("fn", "LmTestPredefMapper") != 1U || lm_test_l2_predef_source_key_row_count("fn", "lm_test_predef_value") != 0U
+    if: lm_test_l2_predef_source_row_count("fn") != 4U || lm_test_l2_predef_source_key_row_count("fn", "LmTestPredefEquals") != 1U || lm_test_l2_predef_source_key_row_count("fn", "LmTestPredefMapper") != 1U || lm_test_l2_predef_source_key_row_count("fn", "LmTestPredefFunction") != 1U || lm_test_l2_predef_source_key_row_count("fn", "abs") != 1U || lm_test_l2_predef_source_key_row_count("fn", "lm_test_predef_value") != 0U
         return: 0
-    if: lm_test_l2_predef_source_row_count("LmTestPredefEquals.param") != 2U || lm_test_l2_predef_source_row_count("LmTestPredefEquals.return") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefMapper.param") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefMapper.return") != 1U || lm_test_l2_predef_source_row_count("lm_test_predef_value.return") != 0U
+    if: lm_test_l2_predef_source_row_count("LmTestPredefEquals.param") != 2U || lm_test_l2_predef_source_row_count("LmTestPredefEquals.return") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefMapper.param") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefMapper.return") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefFunction.param") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefFunction.return") != 1U || lm_test_l2_predef_source_row_count("abs.param") != 1U || lm_test_l2_predef_source_row_count("abs.return") != 1U || lm_test_l2_predef_source_row_count("lm_test_predef_value.return") != 0U
+        return: 0
+    if: lm_test_l2_predef_source_key_row_count("class.kind", "LmTestPredefFunction") != 0U || lm_test_l2_predef_source_key_row_count("class.kind", "abs") != 0U
         return: 0
 return: 1
 
@@ -74,6 +76,7 @@ fn: lm_test_l2_predef_source_rows_core () int
     const: LmP0Node: root
     LmTransNamespace: namespace_
     LmP0Text: helper_name
+    const: LmTransSymbol: helper_symbol
     FILE: prelude_file
     long: typedef_position
     int: status
@@ -82,6 +85,7 @@ fn: lm_test_l2_predef_source_rows_core () int
     document: 0
     namespace_: 0
     helper_name: 0
+    helper_symbol: 0
     prelude_file: 0
     status: 0
 
@@ -116,7 +120,31 @@ fn: lm_test_l2_predef_source_rows_core () int
         status: 1
 
     helper_name: lm_trans_text_from_cstr("LmTestPredefEquals")
-    if: status = 0 && (helper_name = 0 || lm_trans_namespace_find(namespace_, helper_name) = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_metadata_is_exact() = 0)
+    helper_symbol: 0
+    if: helper_name != 0
+        helper_symbol: lm_trans_namespace_find(namespace_, helper_name)
+    if: status = 0 && (helper_name = 0 || helper_symbol = 0 || lm_trans_symbol_is(helper_symbol, "callableDescriptor") = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_metadata_is_exact() = 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ helper_name)
+    helper_name: lm_trans_text_from_cstr("LmTestPredefMapper")
+    helper_symbol: 0
+    if: helper_name != 0
+        helper_symbol: lm_trans_namespace_find(namespace_, helper_name)
+    if: status = 0 && (helper_name = 0 || helper_symbol = 0 || lm_trans_symbol_is(helper_symbol, "callableDescriptor") = 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ helper_name)
+    helper_name: lm_trans_text_from_cstr("LmTestPredefFunction")
+    helper_symbol: 0
+    if: helper_name != 0
+        helper_symbol: lm_trans_namespace_find(namespace_, helper_name)
+    if: status = 0 && (helper_name = 0 || helper_symbol = 0 || lm_trans_symbol_is(helper_symbol, "function") = 0 || helper_symbol\callable_is_external)
+        status: 1
+    lm_trans_text_ref_destroy(@ helper_name)
+    helper_name: lm_trans_text_from_cstr("abs")
+    helper_symbol: 0
+    if: helper_name != 0
+        helper_symbol: lm_trans_namespace_find(namespace_, helper_name)
+    if: status = 0 && (helper_name = 0 || helper_symbol = 0 || lm_trans_symbol_is(helper_symbol, "function") = 0 || helper_symbol\callable_is_external = 0 || lm_trans_fn_is_external(namespace_, helper_name) = 0)
         status: 1
     lm_trans_text_ref_destroy(@ helper_name)
     helper_name: lm_trans_text_from_cstr("lm_test_predef_value")
