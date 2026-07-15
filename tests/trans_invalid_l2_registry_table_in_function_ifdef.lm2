@@ -1,0 +1,21 @@
+L1:
+===
+#define LM_TEST_LOCAL_REGISTRY_TABLE 1
+===
+
+L2:
+    external:
+        fn: main () int
+            ifdef:
+                `LM_TEST_LOCAL_REGISTRY_TABLE`:
+                    table:
+                        name: nestedLocalRegistryTable
+                        columns((class: class) (int: value))
+                        rows:
+                                 nestedLocalKey  1
+                    end: nestedLocalRegistryTable
+            end: ifdef
+            return: 0
+        end: main
+    end: external
+end: L2

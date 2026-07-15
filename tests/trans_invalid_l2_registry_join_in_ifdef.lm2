@@ -1,0 +1,22 @@
+L2:
+    table:
+        name: conditionalRegistryJoinSeed
+        columns((class: class) (int: value))
+        rows:
+                 conditionalSeedKey  1
+    end: conditionalRegistryJoinSeed
+
+    ifdef:
+        LM_TEST_CONDITIONAL_REGISTRY_JOIN:
+            join: (conditionalRegistryJoinSeed) conditionalRegistryJoin
+                columns((class: class) (int: value))
+                rows:
+            end: conditionalRegistryJoin
+    end: ifdef
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

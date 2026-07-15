@@ -1,0 +1,18 @@
+L2:
+    table:
+        name: registryJoinSeed
+        columns((class: class) (int: value))
+        rows:
+                 seedKey  1
+    end: registryJoinSeed
+
+    external:
+        fn: main () int
+            join: (registryJoinSeed) localRegistryJoin
+                columns((class: class) (int: value))
+                rows:
+            end: localRegistryJoin
+            return: 0
+        end: main
+    end: external
+end: L2

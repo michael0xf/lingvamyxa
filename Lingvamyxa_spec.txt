@@ -8402,10 +8402,17 @@ evaluate the `merge` result before validating the final descriptor.
 Table profile:
 
 In an L2 table profile, `table:` and `join:` are ordinary receiver Frames whose
-bodies are valid LMX Structures. A direct ANSI C lowering may preserve them as
-C structures, recursively: each Frame becomes a nested struct carrying its head,
-and each atom becomes the final scalar leaf. This lowering does not consult or
-mutate an L4 registry view.
+bodies are valid LMX Structures. Their projection is selected by the declared
+schema. The exact leading column `(class: class)` is the Registry projection: it
+materializes a `TableDescriptor` and rows in the active `RegistryView`, with no
+duplicate C storage. Other schemas are runtime tables; they materialize the same
+source descriptor and may additionally lower to static ANSI C row/storage
+structures. A Registry-projected `table` or `join` is a module declaration and
+is not admitted inside an executable function body. It is also not admitted in
+compile-selection `os` or `ifdef` branches, because Registry materialization is
+a translation-time operation and cannot depend on the generated C target. A
+module-level `guard` may contain Registry declarations; `guard` is an
+idempotence/include boundary rather than an alternative branch selection.
 
 In an L4 registry/table profile, the receiver spelling `join` may materialize a
 new table descriptor from several table-producing sources:
@@ -8890,6 +8897,18 @@ The first column is the row key and is normally named `class`. Each later column
 names a relation column. A two-column table materializes the relation directly
 under `name`; an N-column table with N > 2 materializes each non-key column as
 `name.column`, for example `BUILD.l2`, `BUILD.win` and `BUILD.unix`.
+
+In L2, the exact leading column `(class: class)` selects the canonical Registry
+projection. Such a `table` or `join` materializes a `TableDescriptor` and its
+rows in the active `RegistryView`, but does not also create a static C row type,
+array, or variable. This rule is determined by the table schema, independently
+of the source path or `predef`; Registry-projected tables and joins remain
+unconditional module declarations and are rejected inside executable function
+bodies and compile-selection `os`/`ifdef` branches. An L2 table whose leading
+column has another name or type keeps the runtime projection: it still
+materializes its source descriptor and additionally creates the static C
+storage visible as the table value. A `join` with a non-Registry schema keeps
+its ordinary runtime Structure projection.
 
 Inside `columns:`, a bare atom is a column name. An anonymous Structure uses
 its first atom as the column name and the remaining atoms as descriptors, for

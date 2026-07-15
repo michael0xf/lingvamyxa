@@ -2625,6 +2625,8 @@ static int lm_trans_l2_table_materialization_suppression_depth;
 
 static int lm_trans_l2_conditional_import_depth;
 
+static int lm_trans_l2_executable_statement_depth;
+
 static LmTransRegistry * lm_trans_registry;
 
 static LmP0Text * lm_trans_text_ref_new(const LmP0Text *text);
@@ -3182,6 +3184,8 @@ static size_t lm_trans_l2_table_present_field_count(const LmP0Structure *structu
 static void lm_trans_l2_table_columns_destroy(LmTransL4CallableType **types, LmP0Text **names, size_t count);
 static int lm_trans_l2_source_read_columns(const LmP0Structure *body, const char *error_context, LmTransL4CallableType ***out_types, LmP0Text ***out_names, size_t *out_count);
 static int lm_trans_l2_table_read_columns(const LmP0Frame *table_frame, LmTransL4CallableType ***out_types, LmP0Text ***out_names, size_t *out_count);
+static int lm_trans_l2_source_columns_registry_keyed(LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count, int *out_registry_keyed);
+static int lm_trans_l2_source_body_is_registry_keyed(const LmP0Structure *body, const char *error_context, int *out_registry_keyed);
 static const LmP0Frame * lm_trans_l2_table_rows_frame(const LmP0Frame *table_frame);
 static int lm_trans_l2_table_row_count(const LmP0Frame *rows_frame, size_t column_count, size_t *out_row_count);
 static LmTableDescriptor * lm_trans_l2_table_source_descriptor_new(const LmP0Text *table_name, LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count);
@@ -3219,6 +3223,7 @@ static int lm_trans_emit_l2_table_storage(FILE *file, const LmP0Frame *rows_fram
 static int lm_trans_emit_l2_table_pointer(FILE *file, const char *row_type_name, const char *object_name, const char *storage_name, unsigned indent);
 static int lm_trans_emit_l2_table_storage_value(FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_emit_l2_join_structure(FILE *file, const LmP0Frame *frame, unsigned indent);
+static int lm_trans_l2_join_frame_registry_keyed(const LmP0Frame *frame, int *out_registry_keyed);
 static const LmP0Structure * lm_trans_merge_source_list(const LmP0Frame *frame);
 static const LmP0Text * lm_trans_merge_target_name(const LmP0Frame *frame);
 static const LmP0Structure * lm_trans_merge_local_body(const LmP0Frame *frame);
@@ -22776,6 +22781,68 @@ static int lm_trans_l2_table_read_columns(const LmP0Frame *table_frame, LmTransL
     return lm_trans_l2_source_read_columns(table_frame -> body, "table", out_types, out_names, out_count);
 }
 
+static int lm_trans_l2_source_columns_registry_keyed(LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count, int *out_registry_keyed) {
+    LmP0Text * name_payload;
+    LmP0Text * type_payload;
+    if (out_registry_keyed == 0) {
+        return 1;
+    }
+    out_registry_keyed[0] = 0;
+    if (column_types == 0 || column_names == 0 || column_count == 0U || column_types[0] == 0 || column_names[0] == 0 || column_types[0] -> class_name == 0) {
+        return 1;
+    }
+    if (column_types[0] -> address_depth != 0U || column_types[0] -> is_const != 0 || column_types[0] -> array_rank != 0U) {
+        return 0;
+    }
+    name_payload = lm_trans_text_ref_new_cstr("");
+    type_payload = lm_trans_text_ref_new_cstr("");
+    if (name_payload == 0 || type_payload == 0) {
+        lm_trans_text_ref_destroy(&name_payload);
+        lm_trans_text_ref_destroy(&type_payload);
+        return 1;
+    }
+    if (lm_trans_registry_identifier_value(column_names[0], name_payload) == 0 || lm_trans_registry_identifier_value(column_types[0] -> class_name, type_payload) == 0) {
+        {
+            int lm_return_0 = 1;
+            lm_trans_text_ref_destroy(&name_payload);
+            lm_trans_text_ref_destroy(&type_payload);
+            return lm_return_0;
+        }
+    }
+    out_registry_keyed[0] = name_payload -> length == 5U && type_payload -> length == 5U && memcmp(name_payload -> data, "class", 5U) == 0 && memcmp(type_payload -> data, "class", 5U) == 0;
+    {
+        int lm_return_1 = 0;
+        lm_trans_text_ref_destroy(&name_payload);
+        lm_trans_text_ref_destroy(&type_payload);
+        return lm_return_1;
+    }
+}
+
+static int lm_trans_l2_source_body_is_registry_keyed(const LmP0Structure *body, const char *error_context, int *out_registry_keyed) {
+    LmTransL4CallableType * *column_types;
+    LmP0Text * *column_names;
+    size_t column_count;
+    if (body == 0 || out_registry_keyed == 0) {
+        return 1;
+    }
+    out_registry_keyed[0] = 0;
+    column_types = 0;
+    column_names = 0;
+    column_count = 0U;
+    if (lm_trans_l2_source_read_columns(body, error_context, &column_types, &column_names, &column_count) != 0) {
+        {
+            int lm_return_0 = 1;
+            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
+            return lm_return_0;
+        }
+    }
+    {
+        int lm_return_1 = lm_trans_l2_source_columns_registry_keyed(column_types, column_names, column_count, out_registry_keyed);
+        lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
+        return lm_return_1;
+    }
+}
+
 static const LmP0Frame * lm_trans_l2_table_rows_frame(const LmP0Frame *table_frame) {
     const LmP0Frame * rows_frame;
     rows_frame = lm_trans_l2_table_child_frame(table_frame, "rows");
@@ -23525,6 +23592,14 @@ static int lm_trans_materialize_l2_join_source(LmTransNamespace *namespace_, con
 }
 
 static int lm_trans_declare_l2_join(LmTransNamespace *namespace_, const LmP0Frame *frame) {
+    int registry_keyed;
+    if (lm_trans_l2_join_frame_registry_keyed(frame, &registry_keyed) != 0) {
+        return 1;
+    }
+    if (registry_keyed != 0 && lm_trans_l2_table_materialization_suppression_depth > 0) {
+        fprintf(stderr, "trans L2 join error: Registry joins are not allowed in os/ifdef branches\n");
+        return 1;
+    }
     if (lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)) {
         return 0;
     }
@@ -23634,7 +23709,15 @@ static int lm_trans_declare_l2_table_binding(LmTransNamespace *namespace_, const
 }
 
 static int lm_trans_declare_l2_table(LmTransNamespace *namespace_, const LmP0Frame *frame) {
-    if (lm_trans_declare_l2_table_binding(namespace_, frame) != 0) {
+    int registry_keyed;
+    if (frame == 0 || lm_trans_l2_source_body_is_registry_keyed(frame -> body, "table", &registry_keyed) != 0) {
+        return 1;
+    }
+    if (registry_keyed != 0 && lm_trans_l2_table_materialization_suppression_depth > 0) {
+        fprintf(stderr, "trans L2 table error: Registry tables are not allowed in os/ifdef branches\n");
+        return 1;
+    }
+    if (registry_keyed == 0 && lm_trans_declare_l2_table_binding(namespace_, frame) != 0) {
         return 1;
     }
     if (lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)) {
@@ -24000,6 +24083,7 @@ static int lm_trans_emit_l2_table_storage_value(FILE *file, const LmP0Frame *fra
     char *object_name;
     char *row_type_name;
     char *storage_name;
+    int registry_keyed;
     table_name = lm_trans_l2_table_name_atom(frame);
     if (table_name == 0 || lm_trans_atom_can_be_new_binding_name(table_name) == 0) {
         fprintf(stderr, "trans L2 table error: table name must be an identifier\n");
@@ -24023,6 +24107,20 @@ static int lm_trans_emit_l2_table_storage_value(FILE *file, const LmP0Frame *fra
             return lm_return_1;
         }
     }
+    if (lm_trans_l2_source_columns_registry_keyed(column_types, column_names, column_count, &registry_keyed) != 0) {
+        {
+            int lm_return_2 = 1;
+            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
+            return lm_return_2;
+        }
+    }
+    if (registry_keyed != 0) {
+        {
+            int lm_return_3 = 0;
+            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
+            return lm_return_3;
+        }
+    }
     object_name = lm_trans_l2_table_object_name_new(table_name);
     row_type_name = lm_trans_l2_table_row_type_name_new(table_name);
     storage_name = lm_trans_l2_table_storage_name_new(table_name);
@@ -24031,32 +24129,12 @@ static int lm_trans_emit_l2_table_storage_value(FILE *file, const LmP0Frame *fra
         lm_own_delete(row_type_name, 0);
         lm_own_delete(storage_name, 0);
         {
-            int lm_return_2 = 1;
-            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
-            return lm_return_2;
-        }
-    }
-    if (indent != 0U && lm_trans_declare_l2_table_binding(namespace_, frame) != 0) {
-        {
-            int lm_return_3 = 1;
-            lm_own_delete(object_name, 0);
-            lm_own_delete(row_type_name, 0);
-            lm_own_delete(storage_name, 0);
-            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
-            return lm_return_3;
-        }
-    }
-    if (lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent) != 0) {
-        {
             int lm_return_4 = 1;
-            lm_own_delete(object_name, 0);
-            lm_own_delete(row_type_name, 0);
-            lm_own_delete(storage_name, 0);
             lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
             return lm_return_4;
         }
     }
-    if (lm_trans_emit_l2_table_cell_backing_storages(file, rows_frame, object_name, column_types, column_count, row_count, indent, namespace_) != 0) {
+    if (indent != 0U && lm_trans_declare_l2_table_binding(namespace_, frame) != 0) {
         {
             int lm_return_5 = 1;
             lm_own_delete(object_name, 0);
@@ -24066,7 +24144,7 @@ static int lm_trans_emit_l2_table_storage_value(FILE *file, const LmP0Frame *fra
             return lm_return_5;
         }
     }
-    if (lm_trans_emit_l2_table_storage(file, rows_frame, object_name, row_type_name, storage_name, column_types, column_names, column_count, row_count, indent, namespace_) != 0) {
+    if (lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent) != 0) {
         {
             int lm_return_6 = 1;
             lm_own_delete(object_name, 0);
@@ -24076,7 +24154,7 @@ static int lm_trans_emit_l2_table_storage_value(FILE *file, const LmP0Frame *fra
             return lm_return_6;
         }
     }
-    if (lm_trans_emit_l2_table_pointer(file, row_type_name, object_name, storage_name, indent) != 0) {
+    if (lm_trans_emit_l2_table_cell_backing_storages(file, rows_frame, object_name, column_types, column_count, row_count, indent, namespace_) != 0) {
         {
             int lm_return_7 = 1;
             lm_own_delete(object_name, 0);
@@ -24086,18 +24164,55 @@ static int lm_trans_emit_l2_table_storage_value(FILE *file, const LmP0Frame *fra
             return lm_return_7;
         }
     }
+    if (lm_trans_emit_l2_table_storage(file, rows_frame, object_name, row_type_name, storage_name, column_types, column_names, column_count, row_count, indent, namespace_) != 0) {
+        {
+            int lm_return_8 = 1;
+            lm_own_delete(object_name, 0);
+            lm_own_delete(row_type_name, 0);
+            lm_own_delete(storage_name, 0);
+            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
+            return lm_return_8;
+        }
+    }
+    if (lm_trans_emit_l2_table_pointer(file, row_type_name, object_name, storage_name, indent) != 0) {
+        {
+            int lm_return_9 = 1;
+            lm_own_delete(object_name, 0);
+            lm_own_delete(row_type_name, 0);
+            lm_own_delete(storage_name, 0);
+            lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
+            return lm_return_9;
+        }
+    }
     {
-        int lm_return_8 = 0;
+        int lm_return_10 = 0;
         lm_own_delete(object_name, 0);
         lm_own_delete(row_type_name, 0);
         lm_own_delete(storage_name, 0);
         lm_trans_l2_table_columns_destroy(column_types, column_names, column_count);
-        return lm_return_8;
+        return lm_return_10;
     }
 }
 
 static int lm_trans_emit_l2_join_structure(FILE *file, const LmP0Frame *frame, unsigned indent) {
+    int registry_keyed;
+    if (lm_trans_l2_join_frame_registry_keyed(frame, &registry_keyed) != 0) {
+        return 1;
+    }
+    if (registry_keyed != 0) {
+        return 0;
+    }
     return lm_trans_emit_l2_structure_frame_storage(file, frame, indent, "lm_l2_join_", lm_trans_l2_join_target_atom(frame));
+}
+
+static int lm_trans_l2_join_frame_registry_keyed(const LmP0Frame *frame, int *out_registry_keyed) {
+    const LmP0Structure * sources;
+    const LmP0Structure * body;
+    const LmP0Text * target_name;
+    if (lm_trans_l2_join_header(frame, &sources, &target_name, &body) != 0) {
+        return 1;
+    }
+    return lm_trans_l2_source_body_is_registry_keyed(body, "join", out_registry_keyed);
 }
 
 static const LmP0Structure * lm_trans_merge_source_list(const LmP0Frame *frame) {
@@ -25366,14 +25481,34 @@ static int lm_trans_statement_emit_predef(FILE *file, LmTransStatementStack *sta
 }
 
 static int lm_trans_statement_emit_table(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
-    LM_UNUSED(stack);
+    int registry_keyed;
     LM_UNUSED(namespace_);
+    LM_UNUSED(stack);
+    if (lm_trans_l2_executable_statement_depth > 0) {
+        if (frame == 0 || lm_trans_l2_source_body_is_registry_keyed(frame -> body, "table", &registry_keyed) != 0) {
+            return 1;
+        }
+        if (registry_keyed != 0) {
+            fprintf(stderr, "trans L2 table error: Registry tables are top-level only\n");
+            return 1;
+        }
+    }
     return lm_trans_emit_l2_table_storage_value(file, frame, indent, namespace_);
 }
 
 static int lm_trans_statement_emit_join(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
-    LM_UNUSED(stack);
+    int registry_keyed;
     LM_UNUSED(namespace_);
+    LM_UNUSED(stack);
+    if (lm_trans_l2_executable_statement_depth > 0) {
+        if (lm_trans_l2_join_frame_registry_keyed(frame, &registry_keyed) != 0) {
+            return 1;
+        }
+        if (registry_keyed != 0) {
+            fprintf(stderr, "trans L2 join error: Registry joins are top-level only\n");
+            return 1;
+        }
+    }
     return lm_trans_emit_l2_join_structure(file, frame, indent);
 }
 
@@ -26467,6 +26602,7 @@ static int lm_trans_statement_job_emit_indent_text(FILE *file, LmTransStatementS
 static int lm_trans_emit_statement_list(FILE *file, const LmP0Field *first, unsigned indent, LmTransNamespace *namespace_) {
     LmTransStatementStack * stack;
     LmTransStatementJob * job;
+    int previous_executable_depth;
     int status;
     stack = lm_trans_statement_stack_new();
     if (stack == 0) {
@@ -26478,6 +26614,8 @@ static int lm_trans_emit_statement_list(FILE *file, const LmP0Field *first, unsi
         lm_own_delete(stack, 0);
         return 1;
     }
+    previous_executable_depth = lm_trans_l2_executable_statement_depth;
+    lm_trans_l2_executable_statement_depth = previous_executable_depth + 1;
     status = lm_trans_statement_stack_push_list(stack, first, indent, 1, 0);
     while (status == 0 && stack -> jobs != 0 && stack -> jobs -> count > 0U) {
         job = (((LmTransStatementJob *)lm_own_ptr_stack_pop(stack -> jobs)));
@@ -26493,6 +26631,7 @@ static int lm_trans_emit_statement_list(FILE *file, const LmP0Field *first, unsi
         }
         lm_trans_statement_job_delete(job);
     }
+    lm_trans_l2_executable_statement_depth = previous_executable_depth;
     lm_trans_statement_stack_destroy(stack);
     lm_own_delete(stack, 0);
     return status;
@@ -38161,6 +38300,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     lm_trans_emitted_l5_assert_helper = 0;
     lm_trans_l2_table_materialization_suppression_depth = 0;
     lm_trans_l2_conditional_import_depth = 0;
+    lm_trans_l2_executable_statement_depth = 0;
     emitted = 0;
     lm_trans_declared_import_paths = lm_trans_ptr_stack_new(lm_own_delete_plain);
     lm_trans_declared_import_documents = lm_trans_ptr_stack_new(lm_trans_import_document_delete);
@@ -38190,6 +38330,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     lm_trans_ptr_stack_delete(&lm_trans_declared_import_paths);
     lm_trans_l2_table_materialization_suppression_depth = 0;
     lm_trans_l2_conditional_import_depth = 0;
+    lm_trans_l2_executable_statement_depth = 0;
     lm_trans_current_source_path = 0;
     lm_trans_prelude_output = previous_prelude_output;
     if (status == 0 && emitted == 0) {

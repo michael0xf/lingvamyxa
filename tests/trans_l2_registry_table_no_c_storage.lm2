@@ -1,0 +1,26 @@
+L2:
+    table:
+        name: `lm.test.l2.registry.metadata`
+        columns((class: class) (binding: receiver) (node: payload))
+        rows:
+                 metadataKey  lm_trans_statement_emit_assert
+                 metadataPayload:
+                     metadataChild
+                 end: metadataPayload
+    end: `lm.test.l2.registry.metadata`
+
+    join: (`lm.test.l2.registry.metadata`) `lm.test.l2.registry.joined`
+        columns((class: class) (binding: receiver) (node: payload))
+        rows:
+                 directKey  lm_trans_statement_emit_if
+                 directPayload:
+                     directChild
+                 end: directPayload
+    end: `lm.test.l2.registry.joined`
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

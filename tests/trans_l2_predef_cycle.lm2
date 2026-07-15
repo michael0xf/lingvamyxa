@@ -3,7 +3,7 @@ L2:
 
     external:
         fn: main () int
-            return: c.lm_l2_table_predefCycleA = 0 || c.lm_l2_table_predefCycleB = 0 || lm_test_predef_cycle_value() != 29
+            return: lm_test_predef_cycle_value() != 29
         end: main
     end: external
 end: L2

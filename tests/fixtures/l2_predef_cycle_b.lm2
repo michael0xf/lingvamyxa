@@ -1,10 +1,5 @@
 predef: "l2_predef_cycle_a.lm2"
 
-L1:
-===
-typedef const char *class;
-===
-
 table:
     name: predefCycleB
     columns((class: class) (int: value))

@@ -6,7 +6,7 @@ L2:
 
     external:
         fn: main () int
-            return: c.sizeof(c.clock_t) = 0 || c.lm_l2_table_predefHeaders_item = 0 || c.lm_l2_table_prelude_sequence = 0 || c.lm_l2_table_include = 0 || lm_test_predef_value() != 23
+            return: c.sizeof(c.clock_t) = 0 || lm_test_predef_value() != 23
         end: main
     end: external
 end: L2

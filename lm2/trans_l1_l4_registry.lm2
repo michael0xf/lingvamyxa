@@ -4561,6 +4561,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_emitted_l5_assert_helper: 0
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
+    lm_trans_l2_executable_statement_depth: 0
     emitted: 0
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
@@ -4589,6 +4590,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
+    lm_trans_l2_executable_statement_depth: 0
     lm_trans_current_source_path: 0
     lm_trans_prelude_output: previous_prelude_output
     if: status = 0 && emitted = 0

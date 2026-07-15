@@ -1,0 +1,13 @@
+L2:
+    external:
+        fn: main () int
+            table:
+                name: localRegistryTable
+                columns((class: class) (int: value))
+                rows:
+                         localKey  1
+            end: localRegistryTable
+            return: 0
+        end: main
+    end: external
+end: L2

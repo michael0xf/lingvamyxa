@@ -4094,6 +4094,60 @@ fn: lm_trans_l2_table_read_columns (
         return: 1
 return: lm_trans_l2_source_read_columns(table_frame\body, "table", out_types, out_names, out_count)
 
+fn: lm_trans_l2_source_columns_registry_keyed (
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    @: int out_registry_keyed
+) int
+    LmP0Text: name_payload
+    LmP0Text: type_payload
+
+    if: out_registry_keyed = 0
+        return: 1
+    out_registry_keyed[0]: 0
+    if: column_types = 0 || column_names = 0 || column_count = 0U || column_types[0] = 0 || column_names[0] = 0 || column_types[0]\class_name = 0
+        return: 1
+    if: column_types[0]\address_depth != 0U || column_types[0]\is_const != 0 || column_types[0]\array_rank != 0U
+        return: 0
+
+    name_payload: lm_trans_text_ref_new_cstr("")
+    type_payload: lm_trans_text_ref_new_cstr("")
+    if: name_payload = 0 || type_payload = 0
+        lm_trans_text_ref_destroy(@ name_payload)
+        lm_trans_text_ref_destroy(@ type_payload)
+        return: 1
+    finally:
+        lm_trans_text_ref_destroy(@ name_payload)
+        lm_trans_text_ref_destroy(@ type_payload)
+
+    if: lm_trans_registry_identifier_value(column_names[0], name_payload) = 0 || lm_trans_registry_identifier_value(column_types[0]\class_name, type_payload) = 0
+        return: 1
+    out_registry_keyed[0]: name_payload\length = 5U && type_payload\length = 5U && c.memcmp(name_payload\data, "class", 5U) = 0 && c.memcmp(type_payload\data, "class", 5U) = 0
+return: 0
+
+fn: lm_trans_l2_source_body_is_registry_keyed (
+    const: LmP0Structure: body
+    const: @(char error_context)
+    @: int out_registry_keyed
+) int
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+
+    if: body = 0 || out_registry_keyed = 0
+        return: 1
+    out_registry_keyed[0]: 0
+
+    column_types: 0
+    column_names: 0
+    column_count: 0U
+    finally: lm_trans_l2_table_columns_destroy(column_types, column_names, column_count)
+    if: lm_trans_l2_source_read_columns(body, error_context, @ column_types, @ column_names, @ column_count) != 0
+        return: 1
+
+return: lm_trans_l2_source_columns_registry_keyed(column_types, column_names, column_count, out_registry_keyed)
+
 fn: lm_trans_l2_table_rows_frame (const: (LmP0Frame: table_frame)) const: LmP0Frame
     const: LmP0Frame: rows_frame
 
@@ -4762,6 +4816,13 @@ fn: lm_trans_materialize_l2_join_source (LmTransNamespace: namespace_; const: (L
 return: 0
 
 fn: lm_trans_declare_l2_join (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+    int: registry_keyed
+
+    if: lm_trans_l2_join_frame_registry_keyed(frame, @ registry_keyed) != 0
+        return: 1
+    if: registry_keyed != 0 && lm_trans_l2_table_materialization_suppression_depth > 0
+        c.fprintf(c.stderr, "trans L2 join error: Registry joins are not allowed in os/ifdef branches\n")
+        return: 1
     if: lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
 return: lm_trans_materialize_l2_join_source(namespace_, frame)
@@ -4858,7 +4919,14 @@ fn: lm_trans_declare_l2_table (
     LmTransNamespace: namespace_
     const: LmP0Frame: frame
 ) int
-    if: lm_trans_declare_l2_table_binding(namespace_, frame) != 0
+    int: registry_keyed
+
+    if: frame = 0 || lm_trans_l2_source_body_is_registry_keyed(frame\body, "table", @ registry_keyed) != 0
+        return: 1
+    if: registry_keyed != 0 && lm_trans_l2_table_materialization_suppression_depth > 0
+        c.fprintf(c.stderr, "trans L2 table error: Registry tables are not allowed in os/ifdef branches\n")
+        return: 1
+    if: registry_keyed = 0 && lm_trans_declare_l2_table_binding(namespace_, frame) != 0
         return: 1
     if: lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
@@ -5211,6 +5279,7 @@ fn: lm_trans_emit_l2_table_storage_value (
     @: char object_name
     @: char row_type_name
     @: char storage_name
+    int: registry_keyed
 
     table_name: lm_trans_l2_table_name_atom(frame)
     if: table_name = 0 || lm_trans_atom_can_be_new_binding_name(table_name) = 0
@@ -5227,6 +5296,11 @@ fn: lm_trans_emit_l2_table_storage_value (
     rows_frame: lm_trans_l2_table_rows_frame(frame)
     if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
         return: 1
+
+    if: lm_trans_l2_source_columns_registry_keyed(column_types, column_names, column_count, @ registry_keyed) != 0
+        return: 1
+    if: registry_keyed != 0
+        return: 0
 
     object_name: lm_trans_l2_table_object_name_new(table_name)
     row_type_name: lm_trans_l2_table_row_type_name_new(table_name)
@@ -5258,7 +5332,25 @@ fn: lm_trans_emit_l2_join_structure (
     const: LmP0Frame: frame
     unsigned: indent
 ) int
+    int: registry_keyed
+
+    if: lm_trans_l2_join_frame_registry_keyed(frame, @ registry_keyed) != 0
+        return: 1
+    if: registry_keyed != 0
+        return: 0
 return: lm_trans_emit_l2_structure_frame_storage(file, frame, indent, "lm_l2_join_", lm_trans_l2_join_target_atom(frame))
+
+fn: lm_trans_l2_join_frame_registry_keyed (
+    const: LmP0Frame: frame
+    @: int out_registry_keyed
+) int
+    const: LmP0Structure: sources
+    const: LmP0Structure: body
+    const: LmP0Text: target_name
+
+    if: lm_trans_l2_join_header(frame, @ sources, @ target_name, @ body) != 0
+        return: 1
+return: lm_trans_l2_source_body_is_registry_keyed(body, "join", out_registry_keyed)
 
 fn: lm_trans_merge_source_list (const: (LmP0Frame: frame)) const: LmP0Structure
     const: LmP0Field: field
@@ -6405,8 +6497,18 @@ fn: lm_trans_statement_emit_table (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    c.LM_UNUSED(stack)
+    int: registry_keyed
+
     c.LM_UNUSED(namespace_)
+    c.LM_UNUSED(stack)
+    if: lm_trans_l2_executable_statement_depth > 0
+        if: frame = 0 || lm_trans_l2_source_body_is_registry_keyed(frame\body, "table", @ registry_keyed) != 0
+            return: 1
+        if: registry_keyed != 0
+            c.fprintf(c.stderr, "trans L2 table error: Registry tables are top-level only\n")
+            return: 1
+        ---
+    ---
 return: lm_trans_emit_l2_table_storage_value(file, frame, indent, namespace_)
 
 fn: lm_trans_statement_emit_join (
@@ -6416,8 +6518,18 @@ fn: lm_trans_statement_emit_join (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    c.LM_UNUSED(stack)
+    int: registry_keyed
+
     c.LM_UNUSED(namespace_)
+    c.LM_UNUSED(stack)
+    if: lm_trans_l2_executable_statement_depth > 0
+        if: lm_trans_l2_join_frame_registry_keyed(frame, @ registry_keyed) != 0
+            return: 1
+        if: registry_keyed != 0
+            c.fprintf(c.stderr, "trans L2 join error: Registry joins are top-level only\n")
+            return: 1
+        ---
+    ---
 return: lm_trans_emit_l2_join_structure(file, frame, indent)
 
 fn: lm_trans_statement_emit_const_declaration (
@@ -7454,6 +7566,7 @@ fn: lm_trans_emit_statement_list (
 ) int
     LmTransStatementStack: stack
     LmTransStatementJob: job
+    int: previous_executable_depth
     int: status
 
     stack: lm_trans_statement_stack_new()
@@ -7466,6 +7579,8 @@ fn: lm_trans_emit_statement_list (
         lm_own_delete(stack, 0)
         return: 1
 
+    previous_executable_depth: lm_trans_l2_executable_statement_depth
+    lm_trans_l2_executable_statement_depth: previous_executable_depth + 1
     status: lm_trans_statement_stack_push_list(stack, first, indent, 1, 0)
     while: status = 0 && stack\jobs != 0 && stack\jobs\count > 0U
         job: (cast: (LmTransStatementJob) lm_own_ptr_stack_pop(stack\jobs))
@@ -7478,6 +7593,7 @@ fn: lm_trans_emit_statement_list (
             status: job\run(file, stack, job, namespace_)
         lm_trans_statement_job_delete(job)
 
+    lm_trans_l2_executable_statement_depth: previous_executable_depth
     lm_trans_statement_stack_destroy(stack)
     lm_own_delete(stack, 0)
 return: status

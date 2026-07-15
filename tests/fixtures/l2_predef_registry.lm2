@@ -1,8 +1,3 @@
-L1:
-===
-typedef const char *class;
-===
-
 table:
     name: `predefHeaders.item`
     columns((class: class) (size_t: index))
