@@ -3783,7 +3783,6 @@ fn: lm_trans_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP
 return: 0
 
 fn: lm_trans_registry_l4_dispatch_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
-    LmL4FrameReceiver: receiver
     int: head_length
     const: @: char head_data
 
@@ -3794,7 +3793,7 @@ fn: lm_trans_registry_l4_dispatch_frame (const: (LmL4Loader: loader); @: void co
     if: frame\head != 0
         head_length: cast: int frame\head\length
         head_data: frame\head\data
-    receiver: lm_trans_registry_l4_resolve_frame(loader, frame\head)
+    LmL4FrameReceiver: receiver lm_trans_registry_l4_resolve_frame(loader, frame\head)
     if: receiver = 0
         c.fprintf:
             c.stderr

@@ -19,7 +19,7 @@ unit
 
 import: "lm4/own_abi.lm4"
 import: "lm4/parser_abi.lm4"
-import: "lm4/l4_loader_abi.lm4"
+predef: "lm2/l4_loader_abi.lm2"
 import: "lm2/parser_text.lm2"
 
 include: "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
@@ -5582,10 +5582,9 @@ fn: lm_p0_registry_l4_resolve_frame (const: (LmL4Loader: loader); const: (LmP0Te
 end: lm_p0_registry_l4_resolve_frame
 
 fn: lm_p0_registry_l4_dispatch_frame (const: (LmL4Loader: loader); @: void context; const: (LmP0Frame: frame)) int
-    LmL4FrameReceiver: receiver
     if: (frame = 0)
         return: 1
-    receiver: lm_p0_registry_l4_resolve_frame(loader, frame\head)
+    LmL4FrameReceiver: receiver lm_p0_registry_l4_resolve_frame(loader, frame\head)
     if: (receiver = 0)
         int: lm_p0_tmp_26
         if: (frame\head != 0)

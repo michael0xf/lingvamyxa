@@ -24,11 +24,11 @@ lingvamyxa/
     printTree.lm2
     make.lm2
     finalize.lm2
+    l4_loader_abi.lm2
     buildCore.lmx
   lm4/
     own_abi.lm4
     parser_abi.lm4
-    l4_loader_abi.lm4
   qt_app/
     main.cpp
     MainWindow.cpp

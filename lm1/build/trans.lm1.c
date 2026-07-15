@@ -2488,6 +2488,39 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include <string.h>
 static char * lm_table_descriptor_copy_slice(const char *data, size_t length);
 static char * lm_table_descriptor_copy_cstr(const char *value);
@@ -4072,6 +4105,7 @@ static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     }
     return thread->current->diagnostic_code;
 }
+
 
 static char * lm_table_descriptor_copy_slice(const char *data, size_t length) {
     if (data == 0 && length != 0U) {
@@ -37768,7 +37802,6 @@ static LmL4FrameReceiver lm_trans_registry_l4_resolve_frame(const LmL4Loader *lo
 }
 
 static int lm_trans_registry_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
-    LmL4FrameReceiver receiver;
     int head_length;
     const char *head_data;
     if (frame == 0) {
@@ -37780,7 +37813,7 @@ static int lm_trans_registry_l4_dispatch_frame(const LmL4Loader *loader, void *c
         head_length = ((int)frame -> head -> length);
         head_data = frame -> head -> data;
     }
-    receiver = lm_trans_registry_l4_resolve_frame(loader, frame -> head);
+    LmL4FrameReceiver receiver = lm_trans_registry_l4_resolve_frame(loader, frame -> head);
     if (receiver == 0) {
         fprintf(stderr, "trans registry error: registry body expects registered L4 receiver frames, got \"%.*s\"\n", head_length, head_data);
         return 1;

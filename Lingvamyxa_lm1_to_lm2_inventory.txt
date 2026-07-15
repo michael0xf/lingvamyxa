@@ -9,8 +9,8 @@ replacement.
 
 The current rule is:
 
-    L4 tables hold ABI/data facts.
-    L2 sources explicitly import the needed L4 ABI sources.
+    L4 registry files and L2 predef modules hold ABI/data facts.
+    L2 sources explicitly import or predefine the needed ABI sources.
     L2 prelude receivers consume the active namespace and print ANSI C.
     `lm1/build/*.lm1.c` is the portable generated L1 snapshot kept in Git.
     Root `lm1/*.lm1.*` public headers are no longer a source dependency.
@@ -26,11 +26,11 @@ The old root files were:
     lm1/l4_loader.lm1.h
     lm1/trans_legacy.lm1.c
 
-Their ABI role is now represented by L4 sources and receiver output:
+Their ABI role is now represented by registry source modules and receiver output:
 
     lm4/own_abi.lm4
     lm4/parser_abi.lm4
-    lm4/l4_loader_abi.lm4
+    lm2/l4_loader_abi.lm2
     lm4/core.lm4
     lm4/trans_registry.lm4
     lm4/parser_registry.lm4

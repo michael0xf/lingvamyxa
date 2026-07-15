@@ -1837,6 +1837,39 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 static int lm_p0_text_equals(const LmP0Text *text, const char *value);
 static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
 static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
@@ -2176,6 +2209,7 @@ char * lm_p0_dump_alloc(const LmP0Document *document);
 
 
 static LmP0Registry * lm_p0_registry;
+
 static int lm_p0_text_equals(const LmP0Text *text, const char *value) {
     size_t value_length;
     if (text == 0 || value == 0) {
@@ -8244,11 +8278,10 @@ static LmL4FrameReceiver lm_p0_registry_l4_resolve_frame(const LmL4Loader *loade
 }
 
 static int lm_p0_registry_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame) {
-    LmL4FrameReceiver receiver;
     if (frame == 0) {
         return 1;
     }
-    receiver = lm_p0_registry_l4_resolve_frame(loader, frame -> head);
+    LmL4FrameReceiver receiver = lm_p0_registry_l4_resolve_frame(loader, frame -> head);
     if (receiver == 0) {
         int lm_p0_tmp_26;
         if (frame -> head != 0) {

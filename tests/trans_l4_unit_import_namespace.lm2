@@ -19,7 +19,7 @@ unit
 
 import: "lm4/own_abi.lm4"
 import: "lm4/parser_abi.lm4"
-import: "lm4/l4_loader_abi.lm4"
+predef: "lm2/l4_loader_abi.lm2"
 
 external:
     fn: main () int
