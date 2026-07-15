@@ -1,119 +1,127 @@
-L4: loadHeaders
+include
+define
+os
+ifdef
+forward
+alias
+constant
+layout
+fn
+prototype
+unit
 
-L4:
-    table:
-        name: `constant.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE            c.define
-                 LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY           c.define
-                 LM_REGISTRY_CONTROL_NODE_LMX_TRAILER_BODY         c.define
-    end: `constant.backend`
+table:
+    name: `constant.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE            c.define
+             LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY           c.define
+             LM_REGISTRY_CONTROL_NODE_LMX_TRAILER_BODY         c.define
+end: `constant.backend`
 
-    table:
-        name: `constant.value`
-        columns((class: class) (int: value))
-        rows:
-                 LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE            1
-                 LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY           2
-                 LM_REGISTRY_CONTROL_NODE_LMX_TRAILER_BODY         3
-    end: `constant.value`
+table:
+    name: `constant.value`
+    columns((class: class) (int: value))
+    rows:
+             LM_REGISTRY_CONTROL_NODE_LMX_STRUCTURE            1
+             LM_REGISTRY_CONTROL_NODE_LMX_FRAME_BODY           2
+             LM_REGISTRY_CONTROL_NODE_LMX_TRAILER_BODY         3
+end: `constant.value`
 
-    table:
-        name: LmRegistryControlBuffer
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
-        rows:
-                 data      char                   0                       1
-                 length    size_t                 1                       0
-                 capacity  size_t                 2                       0
-                 failed    int                    3                       0
-    end: LmRegistryControlBuffer
+table:
+    name: LmRegistryControlBuffer
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+    rows:
+             data      char                   0                       1
+             length    size_t                 1                       0
+             capacity  size_t                 2                       0
+             failed    int                    3                       0
+end: LmRegistryControlBuffer
 
-    table:
-        name: LmRegistryControlColumn
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
-        rows:
-                 spelling  char                   0                       1
-                 width     size_t                 1                       0
-    end: LmRegistryControlColumn
+table:
+    name: LmRegistryControlColumn
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+    rows:
+             spelling  char                   0                       1
+             width     size_t                 1                       0
+end: LmRegistryControlColumn
 
-    table:
-        name: LmRegistryControlColumnSpellingFrame
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
-        rows:
-                 field  LmP0Field              0                       0                                1
-                 first  int                    1                       0                                0
-    end: LmRegistryControlColumnSpellingFrame
+table:
+    name: LmRegistryControlColumnSpellingFrame
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             field  LmP0Field              0                       0                                1
+             first  int                    1                       0                                0
+end: LmRegistryControlColumnSpellingFrame
 
-    table:
-        name: LmRegistryControlNodeLmxFrame
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
-        rows:
-                 field    LmP0Field              0                       0                                1
-                 trailer  LmP0Trailer            1                       0                                1
-                 phase    int                    2                       0                                0
-                 first    int                    3                       0                                0
-    end: LmRegistryControlNodeLmxFrame
+table:
+    name: LmRegistryControlNodeLmxFrame
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             field    LmP0Field              0                       0                                1
+             trailer  LmP0Trailer            1                       0                                1
+             phase    int                    2                       0                                0
+             first    int                    3                       0                                0
+end: LmRegistryControlNodeLmxFrame
 
-    table:
-        name: LmRegistryControlRenameDescriptorFrame
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
-        rows:
-                 field  LmP0Field              0                       0                                1
-    end: LmRegistryControlRenameDescriptorFrame
+table:
+    name: LmRegistryControlRenameDescriptorFrame
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             field  LmP0Field              0                       0                                1
+end: LmRegistryControlRenameDescriptorFrame
 
-    table:
-        name: LmRegistryControlRenameStructureFrame
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
-        rows:
-                 field  LmP0Field              0                       0                                1
-    end: LmRegistryControlRenameStructureFrame
+table:
+    name: LmRegistryControlRenameStructureFrame
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             field  LmP0Field              0                       0                                1
+end: LmRegistryControlRenameStructureFrame
 
-    table:
-        name: LmRegistryControlError
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
-        rows:
-                 message  char                   0                       1                                1
-    end: LmRegistryControlError
+table:
+    name: LmRegistryControlError
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             message  char                   0                       1                                1
+end: LmRegistryControlError
 
-    table:
-        name: LmRegistryControlRename
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
-        rows:
-                 old_name       char                   0                       1                                1
-                 new_name       char                   1                       1                                1
-                 found_count    size_t                 2                       0                                0
-                 changed_count  size_t                 3                       0                                0
-    end: LmRegistryControlRename
+table:
+    name: LmRegistryControlRename
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             old_name       char                   0                       1                                1
+             new_name       char                   1                       1                                1
+             found_count    size_t                 2                       0                                0
+             changed_count  size_t                 3                       0                                0
+end: LmRegistryControlRename
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmRegistryControlBuffer  c.struct
-                 LmRegistryControlColumn  c.struct
-                 LmRegistryControlColumnSpellingFrame c.struct
-                 LmRegistryControlNodeLmxFrame c.struct
-                 LmRegistryControlRenameDescriptorFrame c.struct
-                 LmRegistryControlRenameStructureFrame c.struct
-                 LmRegistryControlError   c.struct
-                 LmRegistryControlRename  c.struct
-    end: `layout.backend`
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmRegistryControlBuffer  c.struct
+             LmRegistryControlColumn  c.struct
+             LmRegistryControlColumnSpellingFrame c.struct
+             LmRegistryControlNodeLmxFrame c.struct
+             LmRegistryControlRenameDescriptorFrame c.struct
+             LmRegistryControlRenameStructureFrame c.struct
+             LmRegistryControlError   c.struct
+             LmRegistryControlRename  c.struct
+end: `layout.backend`
 
-    table:
-        name: `class.reference-base`
-        columns((class: class) (int: value))
-        rows:
-                 LmRegistryControlBuffer  1
-                 LmRegistryControlColumn  1
-                 LmRegistryControlColumnSpellingFrame 1
-                 LmRegistryControlNodeLmxFrame 1
-                 LmRegistryControlRenameDescriptorFrame 1
-                 LmRegistryControlRenameStructureFrame 1
-                 LmRegistryControlError   1
-                 LmRegistryControlRename  1
-    end: `class.reference-base`
-end: L4
+table:
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmRegistryControlBuffer  1
+             LmRegistryControlColumn  1
+             LmRegistryControlColumnSpellingFrame 1
+             LmRegistryControlNodeLmxFrame 1
+             LmRegistryControlRenameDescriptorFrame 1
+             LmRegistryControlRenameStructureFrame 1
+             LmRegistryControlError   1
+             LmRegistryControlRename  1
+end: `class.reference-base`
 
 import: "lm4/own_abi.lm4"
 import: "lm4/parser_abi.lm4"
