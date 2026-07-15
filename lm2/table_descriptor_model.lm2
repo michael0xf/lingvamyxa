@@ -1,0 +1,268 @@
+table:
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTableColumnDescriptor  c.struct
+             LmTableCell              c.struct
+             LmTableRow               c.struct
+             LmRegistryViewRow        c.struct
+             LmTableDescriptor        c.struct
+             LmRegistryView           c.struct
+end: `forward.backend`
+
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTableColumnDescriptor  c.struct
+             LmTableCell              c.struct
+             LmTableRow               c.struct
+             LmRegistryViewRow        c.struct
+             LmTableDescriptor        c.struct
+             LmRegistryView           c.struct
+end: `layout.backend`
+
+table:
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmTableColumnDescriptor  1
+             LmTableCell              1
+             LmTableRow               1
+             LmRegistryViewRow        1
+             LmTableDescriptor        1
+             LmRegistryView           1
+end: `class.reference-base`
+
+table:
+    name: `LmTableColumnDescriptor.field.class`
+    columns((class: class) (class: field))
+    rows:
+             name           char
+             descriptor     char
+             descriptors    LmOwnPtrStack
+             type_name      char
+             index          size_t
+             address_depth  size_t
+             array_rank     size_t
+             is_const       int
+end: `LmTableColumnDescriptor.field.class`
+
+table:
+    name: `LmTableColumnDescriptor.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             name           0
+             descriptor     1
+             descriptors    2
+             type_name      3
+             index          4
+             address_depth  5
+             array_rank     6
+             is_const       7
+end: `LmTableColumnDescriptor.field.index`
+
+table:
+    name: `LmTableColumnDescriptor.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             name         1
+             descriptor   1
+             descriptors  0
+             type_name    1
+end: `LmTableColumnDescriptor.field.address-depth`
+
+table:
+    name: `LmTableCell.field.class`
+    columns((class: class) (class: field))
+    rows:
+             atom           char
+             value          char
+             node           void
+             source         void
+             explicit_none  int
+end: `LmTableCell.field.class`
+
+table:
+    name: `LmTableCell.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             atom           0
+             value          1
+             node           2
+             source         3
+             explicit_none  4
+end: `LmTableCell.field.index`
+
+table:
+    name: `LmTableCell.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             atom    1
+             value   1
+             node    1
+             source  1
+end: `LmTableCell.field.address-depth`
+
+table:
+    name: `LmTableCell.field.const`
+    columns((class: class) (int: value))
+    rows:
+             node    1
+             source  1
+end: `LmTableCell.field.const`
+
+table:
+    name: `LmTableRow.field.class`
+    columns((class: class) (class: field))
+    rows:
+             cells           LmOwnPtrStack
+             source          LmTableRow
+             local_sequence  size_t
+             source_native   int
+end: `LmTableRow.field.class`
+
+table:
+    name: `LmTableRow.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             cells           0
+             source          1
+             local_sequence  2
+             source_native   3
+end: `LmTableRow.field.index`
+
+table:
+    name: `LmTableRow.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             cells   0
+             source  0
+end: `LmTableRow.field.address-depth`
+
+table:
+    name: `LmTableRow.field.const`
+    columns((class: class) (int: value))
+    rows:
+             source  1
+end: `LmTableRow.field.const`
+
+table:
+    name: `LmRegistryViewRow.field.class`
+    columns((class: class) (class: field))
+    rows:
+             table         char
+             key           char
+             payload       char
+             payload_node  void
+             source        void
+             local_sequence size_t
+end: `LmRegistryViewRow.field.class`
+
+table:
+    name: `LmRegistryViewRow.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             table         0
+             key           1
+             payload       2
+             payload_node  3
+             source        4
+             local_sequence 5
+end: `LmRegistryViewRow.field.index`
+
+table:
+    name: `LmRegistryViewRow.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             table         1
+             key           1
+             payload       1
+             payload_node  1
+             source        1
+end: `LmRegistryViewRow.field.address-depth`
+
+table:
+    name: `LmRegistryViewRow.field.const`
+    columns((class: class) (int: value))
+    rows:
+             payload_node  1
+             source        1
+end: `LmRegistryViewRow.field.const`
+
+table:
+    name: `LmTableDescriptor.field.class`
+    columns((class: class) (class: field))
+    rows:
+             name         char
+             columns      LmOwnPtrStack
+             rows         LmOwnPtrStack
+             source_rows  LmOwnPtrStack
+             materialized_rows LmOwnPtrStack
+end: `LmTableDescriptor.field.class`
+
+table:
+    name: `LmTableDescriptor.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             name         0
+             columns      1
+             rows         2
+             source_rows  3
+             materialized_rows 4
+end: `LmTableDescriptor.field.index`
+
+table:
+    name: `LmTableDescriptor.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             name         1
+             columns      0
+             rows         0
+             materialized_rows 0
+             source_rows  0
+end: `LmTableDescriptor.field.address-depth`
+
+table:
+    name: `LmRegistryView.field.class`
+    columns((class: class) (class: field))
+    rows:
+             parent            LmRegistryView
+             tables            LmOwnPtrStack
+             facts             LmOwnPtrStack
+             local_fact_count  size_t
+             source_tables     LmOwnPtrStack
+             class_names       LmOwnPtrStack
+             mutation_generation size_t
+end: `LmRegistryView.field.class`
+
+table:
+    name: `LmRegistryView.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             parent            0
+             tables            1
+             facts             2
+             local_fact_count  3
+             source_tables     4
+             class_names       5
+             mutation_generation 6
+end: `LmRegistryView.field.index`
+
+table:
+    name: `LmRegistryView.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             parent  0
+             tables  0
+             source_tables 0
+             facts   0
+             class_names 0
+end: `LmRegistryView.field.address-depth`
+
+table:
+    name: `LmRegistryView.field.const`
+    columns((class: class) (int: value))
+    rows:
+             parent  1
+end: `LmRegistryView.field.const`

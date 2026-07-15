@@ -1,3 +1,15 @@
+include
+define
+os
+ifdef
+forward
+alias
+constant
+layout
+fn
+prototype
+unit
+
 import: "lm2/table_descriptor.lm2"
 
 external:
