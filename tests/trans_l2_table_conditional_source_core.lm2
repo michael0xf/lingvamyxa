@@ -63,12 +63,13 @@ fn: lm_test_l2_table_conditional_source_core () int
     const: @(char source)
     LmP0Document: document
     LmTransNamespace: namespace_
+    const: LmP0Frame: seed_frame
     const: LmP0Frame: os_frame
     const: LmP0Frame: ifdef_frame
     const: LmP0Frame: guard_frame
     int: status
 
-    source: "os:\n    unix:\n        table:\n            name: conditionalUnix\n            columns((class: class) (char: value))\n            rows: unixKey \"unix\"\n        end: conditionalUnix\n    default:\n        table:\n            name: conditionalDefault\n            columns((class: class) (char: value))\n            rows: defaultKey \"default\"\n        end: conditionalDefault\nend: os\nifdef:\n    `LM_TEST_CONDITIONAL_TABLE`:\n        table:\n            name: conditionalIfdef\n            columns((class: class) (char: value))\n            rows: ifdefKey \"ifdef\"\n        end: conditionalIfdef\n        guard: LM_TEST_NESTED_TABLE_GUARD\n            extern_c:\n                table:\n                    name: conditionalNested\n                    columns((class: class) (char: value))\n                    rows: nestedKey \"nested\"\n                end: conditionalNested\n            end: extern_c\n        end: guard\n    default:\n        table:\n            name: conditionalIfdefDefault\n            columns((class: class) (char: value))\n            rows: fallbackKey \"fallback\"\n        end: conditionalIfdefDefault\nend: ifdef\nguard: LM_TEST_TOP_TABLE_GUARD\n    table:\n        name: conditionalGuard\n        columns((class: class) (char: value))\n        rows: guardKey \"guard\"\n    end: conditionalGuard\nend: guard\n"
+    source: "table:\n    name: conditionalJoinSeed\n    columns((class: class) (char: value))\n    rows: seedKey \"seed\"\nend: conditionalJoinSeed\nos:\n    unix:\n        table:\n            name: conditionalUnix\n            columns((class: class) (char: value))\n            rows: unixKey \"unix\"\n        end: conditionalUnix\n        join: (conditionalJoinSeed) conditionalUnixJoin\n            columns((class: class) (char: value))\n            rows:\n        end: conditionalUnixJoin\n    default:\n        table:\n            name: conditionalDefault\n            columns((class: class) (char: value))\n            rows: defaultKey \"default\"\n        end: conditionalDefault\nend: os\nifdef:\n    `LM_TEST_CONDITIONAL_TABLE`:\n        table:\n            name: conditionalIfdef\n            columns((class: class) (char: value))\n            rows: ifdefKey \"ifdef\"\n        end: conditionalIfdef\n        join: (conditionalJoinSeed) conditionalIfdefJoin\n            columns((class: class) (char: value))\n            rows:\n        end: conditionalIfdefJoin\n        guard: LM_TEST_NESTED_TABLE_GUARD\n            extern_c:\n                table:\n                    name: conditionalNested\n                    columns((class: class) (char: value))\n                    rows: nestedKey \"nested\"\n                end: conditionalNested\n                join: (conditionalJoinSeed) conditionalNestedJoin\n                    columns((class: class) (char: value))\n                    rows:\n                end: conditionalNestedJoin\n            end: extern_c\n        end: guard\n    default:\n        table:\n            name: conditionalIfdefDefault\n            columns((class: class) (char: value))\n            rows: fallbackKey \"fallback\"\n        end: conditionalIfdefDefault\nend: ifdef\nguard: LM_TEST_TOP_TABLE_GUARD\n    table:\n        name: conditionalGuard\n        columns((class: class) (char: value))\n        rows: guardKey \"guard\"\n    end: conditionalGuard\n    join: (conditionalJoinSeed) conditionalGuardJoin\n        columns((class: class) (char: value))\n        rows:\n    end: conditionalGuardJoin\nend: guard\n"
     document: 0
     namespace_: 0
     status: 0
@@ -79,16 +80,17 @@ fn: lm_test_l2_table_conditional_source_core () int
         lm_trans_registry_destroy()
         return: 1
 
-    os_frame: lm_test_l2_table_conditional_frame_at(document, 0U)
-    ifdef_frame: lm_test_l2_table_conditional_frame_at(document, 1U)
-    guard_frame: lm_test_l2_table_conditional_frame_at(document, 2U)
+    seed_frame: lm_test_l2_table_conditional_frame_at(document, 0U)
+    os_frame: lm_test_l2_table_conditional_frame_at(document, 1U)
+    ifdef_frame: lm_test_l2_table_conditional_frame_at(document, 2U)
+    guard_frame: lm_test_l2_table_conditional_frame_at(document, 3U)
     namespace_: lm_trans_namespace_new()
-    if: os_frame = 0 || ifdef_frame = 0 || guard_frame = 0 || namespace_ = 0 || lm_trans_declare_l2_os_frame(namespace_, os_frame) != 0 || lm_trans_declare_l2_ifdef_frame(namespace_, ifdef_frame) != 0 || lm_trans_declare_l2_guard_frame(namespace_, guard_frame) != 0
+    if: seed_frame = 0 || os_frame = 0 || ifdef_frame = 0 || guard_frame = 0 || namespace_ = 0 || lm_trans_declare_l2_table(namespace_, seed_frame) != 0 || lm_trans_declare_l2_os_frame(namespace_, os_frame) != 0 || lm_trans_declare_l2_ifdef_frame(namespace_, ifdef_frame) != 0 || lm_trans_declare_l2_guard_frame(namespace_, guard_frame) != 0
         status: 1
 
     if: status = 0 && (lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalUnix") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalDefault") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalIfdef") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalNested") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalIfdefDefault") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalGuard") = 0)
         status: 1
-    if: status = 0 && (lm_test_l2_table_conditional_source_absent("conditionalUnix") = 0 || lm_test_l2_table_conditional_source_absent("conditionalDefault") = 0 || lm_test_l2_table_conditional_source_absent("conditionalIfdef") = 0 || lm_test_l2_table_conditional_source_absent("conditionalNested") = 0 || lm_test_l2_table_conditional_source_absent("conditionalIfdefDefault") = 0 || lm_test_l2_table_conditional_source_present("conditionalGuard") = 0 || lm_trans_l2_table_materialization_suppression_depth != 0 || lm_trans_l2_conditional_import_depth != 0)
+    if: status = 0 && (lm_test_l2_table_conditional_source_present("conditionalJoinSeed") = 0 || lm_test_l2_table_conditional_source_absent("conditionalUnix") = 0 || lm_test_l2_table_conditional_source_absent("conditionalDefault") = 0 || lm_test_l2_table_conditional_source_absent("conditionalIfdef") = 0 || lm_test_l2_table_conditional_source_absent("conditionalNested") = 0 || lm_test_l2_table_conditional_source_absent("conditionalIfdefDefault") = 0 || lm_test_l2_table_conditional_source_absent("conditionalUnixJoin") = 0 || lm_test_l2_table_conditional_source_absent("conditionalIfdefJoin") = 0 || lm_test_l2_table_conditional_source_absent("conditionalNestedJoin") = 0 || lm_test_l2_table_conditional_source_present("conditionalGuard") = 0 || lm_test_l2_table_conditional_source_present("conditionalGuardJoin") = 0 || lm_trans_l2_table_materialization_suppression_depth != 0 || lm_trans_l2_conditional_import_depth != 0)
         status: 1
     if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
         status: 1

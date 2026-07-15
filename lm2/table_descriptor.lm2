@@ -1264,7 +1264,16 @@ fn: lm_registry_view_source_path_key_at_slice (
 ) const: @: char
 return: lm_registry_view_source_path_key_at_slice_mode(view, path, path_length, index, 0, out_covered)
 
-fn: lm_registry_view_append_materialized_rows (LmRegistryView: view; LmTableDescriptor: target; const: @(char source_table); size_t: source_table_length) int
+fn: lm_registry_view_append_materialized_rows_mode (
+    LmRegistryView: view
+    LmTableDescriptor: target
+    const: @(char source_table)
+    size_t: source_table_length
+    int: note_mutation
+    int: require_compatible_source
+    size_t: snapshot_source_count
+    const: @(size_t snapshot_row_counts)
+) int
     const: LmTableDescriptor: source
     const: LmTableRow: row
     size_t: source_count
@@ -1272,31 +1281,59 @@ fn: lm_registry_view_append_materialized_rows (LmRegistryView: view; LmTableDesc
     size_t: original_row_count
     size_t: source_index
     size_t: index
+    int: matched
+    int: incompatible
 
     if: view = 0 || target = 0 || source_table = 0
         return: 1
     source: lm_registry_view_find_source_table_slice(view, source_table, source_table_length)
     if: source = 0
-        return: 0
+        return: require_compatible_source != 0
     original_row_count: lm_table_descriptor_materialized_row_count(target)
     source_count: lm_registry_view_source_table_count(view)
+    if: snapshot_row_counts != 0
+        if: snapshot_source_count > source_count
+            return: 1
+        source_count: snapshot_source_count
     source_index: 0U
+    matched: 0
+    incompatible: 0
     while: source_index < source_count
         source: lm_registry_view_source_table_at(view, source_index)
-        if: source != 0 && source\name != 0 && lm_table_descriptor_cstr_equals_slice(source\name, source_table, source_table_length) != 0 && lm_table_descriptor_join_schema_compatible(source, target) != 0
-            row_count: lm_table_descriptor_materialized_row_count(source)
-            index: 0U
-            while: index < row_count
-                row: lm_table_descriptor_materialized_row_at(source, index)
-                if: row = 0 || lm_table_descriptor_append_materialized_row_copy(target, row) != 0
-                    lm_own_ptr_stack_truncate(target\materialized_rows, original_row_count)
-                    return: 1
-                index: index + 1U
+        if: source != 0 && source\name != 0 && lm_table_descriptor_cstr_equals_slice(source\name, source_table, source_table_length) != 0
+            if: lm_table_descriptor_join_schema_compatible(source, target) = 0
+                incompatible: 1
+            else:
+                matched: 1
+                row_count: lm_table_descriptor_materialized_row_count(source)
+                if: snapshot_row_counts != 0
+                    if: snapshot_row_counts[source_index] > row_count
+                        lm_own_ptr_stack_truncate(target\materialized_rows, original_row_count)
+                        return: 1
+                    row_count: snapshot_row_counts[source_index]
+                else:
+                    if: source = target
+                        row_count: original_row_count
+                ---
+                index: 0U
+                while: index < row_count
+                    row: lm_table_descriptor_materialized_row_at(source, index)
+                    if: row = 0 || lm_table_descriptor_append_materialized_row_copy(target, row) != 0
+                        lm_own_ptr_stack_truncate(target\materialized_rows, original_row_count)
+                        return: 1
+                    index: index + 1U
+            ---
         ---
         source_index: source_index + 1U
-    if: lm_table_descriptor_materialized_row_count(target) != original_row_count
+    if: require_compatible_source != 0 && (matched = 0 || incompatible != 0)
+        lm_own_ptr_stack_truncate(target\materialized_rows, original_row_count)
+        return: 1
+    if: note_mutation != 0 && lm_table_descriptor_materialized_row_count(target) != original_row_count
         lm_registry_view_note_mutation(view)
 return: 0
+
+fn: lm_registry_view_append_materialized_rows (LmRegistryView: view; LmTableDescriptor: target; const: @(char source_table); size_t: source_table_length) int
+return: lm_registry_view_append_materialized_rows_mode(view, target, source_table, source_table_length, 1, 0, 0U, 0)
 
 fn: lm_registry_view_fact_count (const: (LmRegistryView: view)) size_t
     size_t: count

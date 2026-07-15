@@ -1,0 +1,37 @@
+L4:
+    table:
+        name: `lm.test.l2.join.namespace.seed`
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 l2JoinAssert  `receiver.statement`
+    end: `lm.test.l2.join.namespace.seed`
+
+    table:
+        name: `lm.test.l2.join.statement.seed`
+        columns((class: class) (binding: receiver))
+        rows:
+                 l2JoinAssert  lm_trans_statement_emit_assert
+    end: `lm.test.l2.join.statement.seed`
+end: L4
+
+L2:
+    join: (`lm.test.l2.join.namespace.seed`) namespace
+        columns((class: class) (class: `receiver.type`))
+        rows:
+                 l2JoinDirect  `receiver.statement`
+    end: namespace
+
+    join: (`lm.test.l2.join.statement.seed`) `receiver.statement`
+        columns((class: class) (binding: receiver))
+        rows:
+                 l2JoinDirect  lm_trans_statement_emit_assert
+    end: `receiver.statement`
+
+    external:
+        fn: main () int
+            l2JoinAssert: 1
+            l2JoinDirect: 1
+            return: 0
+        end: main
+    end: external
+end: L2
