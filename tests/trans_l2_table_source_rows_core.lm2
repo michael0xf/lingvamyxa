@@ -1,0 +1,314 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_l2_table_source_rows_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_l2_table_source_registry_init () int
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+return: 0
+
+fn: lm_test_l2_table_source_root_frame (const: (LmP0Document: document)) const: LmP0Frame
+    const: LmP0Node: root
+    const: LmP0Field: field
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    field: lm_trans_l2_structure_first_present_field(root\as\structure)
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_l2_structure_next_present_field(field) != 0
+        return: 0
+return: field\value\as\frame
+
+fn: lm_test_l2_table_source_column_is (
+    const: (LmTableColumnDescriptor: column)
+    const: @(char name)
+    const: @(char type_name)
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+) int
+    const: @: char descriptor
+
+    if: column = 0 || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, name) != 0 || c.strcmp(column\type_name, type_name) != 0 || column\address_depth != address_depth || column\array_rank != array_rank || column\is_const != is_const || lm_table_column_descriptor_descriptor_count(column) != 1U
+        return: 0
+    descriptor: lm_table_column_descriptor_descriptor_at(column, 0U)
+return: descriptor != 0 && c.strcmp(descriptor, type_name) = 0
+
+fn: lm_test_l2_table_source_path_cell (
+    const: @(char path)
+    size_t: fact_index
+    size_t: expected_column
+    const: (LmTableDescriptor: expected_descriptor)
+    const: (LmTableCell: expected_key)
+    const: (LmTableCell: expected_cell)
+) int
+    const: LmTableDescriptor: descriptor
+    const: LmTableCell: key_cell
+    const: LmTableCell: cell
+    size_t: column_index
+    int: covered
+
+    descriptor: 0
+    key_cell: 0
+    covered: 0
+    cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, path, c.strlen(path), fact_index, @ descriptor, @ column_index, @ key_cell, @ covered)
+return: covered != 0 && descriptor = expected_descriptor && column_index = expected_column && key_cell = expected_key && cell = expected_cell
+
+fn: lm_test_l2_table_relation_count (const: @(char table)) size_t
+    const: LmOwnPtrStack: rows
+
+    rows: lm_trans_registry_relation_stack_for_table(table)
+    if: rows = 0
+        return: 0U
+return: rows\count
+
+fn: lm_test_l2_table_source_rows_core () int
+    const: @(char source)
+    const: @(char conflict_source)
+    LmP0Document: document
+    LmP0Document: conflict_document
+    LmTransNamespace: namespace_
+    const: LmP0Frame: table_frame
+    const: LmP0Frame: conflict_frame
+    const: LmP0Frame: rows_frame
+    const: LmP0Field: source_field
+    const: LmP0Node: source_body_node
+    const: LmP0Field: source_key_field
+    const: LmP0Node: source_key_node
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableRow: source_only_row
+    const: LmTableRow: native_text_row
+    const: LmTableCell: key_cell
+    const: LmTableCell: label_cell
+    const: LmTableCell: body_cell
+    const: LmTableCell: source_only_key_cell
+    const: LmTableCell: source_only_label_cell
+    const: LmTableCell: source_only_body_cell
+    const: LmTableCell: native_text_key_cell
+    const: LmTableCell: native_text_label_cell
+    const: LmTableCell: native_text_body_cell
+    const: LmP0Node: cloned_body_node
+    const: LmP0Node: cloned_key_node
+    const: LmP0Node: cloned_source_only_body_node
+    const: LmP0Node: cloned_native_label_node
+    const: LmP0Node: cloned_native_body_node
+    const: LmP0Field: cloned_body_field
+    const: LmP0Field: cloned_key_field
+    const: LmP0Field: cloned_source_only_body_field
+    const: LmP0Field: cloned_native_label_field
+    const: LmP0Field: cloned_native_body_field
+    const: LmTransRegistryFact: label_fact
+    const: LmTransRegistryFact: body_fact
+    LmP0Text: key_text
+    size_t: loaded_fact_count
+    size_t: view_fact_count
+    size_t: source_table_count
+    size_t: descriptor_row_count
+    size_t: mutation_generation
+    size_t: class_count
+    size_t: label_relation_count
+    size_t: body_relation_count
+    size_t: class_relation_count
+    size_t: class_kind_relation_count
+    size_t: class_present_relation_count
+    int: covered
+    int: projected_covered
+    int: status
+
+    source: "table:\n    name: l2Source\n    columns((class: class) (char: label) (node: body))\n    rows:\n             sampleKey  \"hello\"\n             payload:\n                 nested\n             end: payload\n             nodeKey:\n                 nestedKey\n             end: nodeKey\n             \"source-only\"\n             payload2:\n                 nested2\n             end: payload2\n             nativeText\n             nativeLabel:\n                 nestedLabel\n             end: nativeLabel\n             payload3:\n                 nested3\n             end: payload3\nend: l2Source\n"
+    conflict_source: "table:\n    name: class\n    columns((class: class) (class: kind))\n    rows:\n             LmL2BatchKindConflict opaqueReference\n             LmL2BatchKindConflict function\nend: class\n"
+    document: 0
+    conflict_document: 0
+    namespace_: 0
+    key_text: 0
+    status: 0
+
+    if: lm_test_l2_table_source_registry_init() != 0
+        return: 1
+    if: lm_p0_parse_string(source, @ document) != 0 || document = 0
+        lm_trans_registry_destroy()
+        return: 1
+
+    table_frame: lm_test_l2_table_source_root_frame(document)
+    rows_frame: lm_trans_l2_table_rows_frame(table_frame)
+    source_field: 0
+    if: rows_frame != 0
+        source_field: lm_trans_l2_structure_first_present_field(rows_frame\body)
+    if: source_field != 0
+        source_field: lm_trans_l2_structure_next_present_field(source_field)
+    if: source_field != 0
+        source_field: lm_trans_l2_structure_next_present_field(source_field)
+    source_body_node: 0
+    if: source_field != 0
+        source_body_node: source_field\value
+    source_key_field: lm_trans_l2_structure_next_present_field(source_field)
+    source_key_node: 0
+    if: source_key_field != 0
+        source_key_node: source_key_field\value
+    if: table_frame = 0 || source_body_node = 0 || source_body_node\kind != c.LM_P0_NODE_FRAME || source_key_node = 0 || source_key_node\kind != c.LM_P0_NODE_FRAME
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    namespace_: lm_trans_namespace_new()
+    if: namespace_ = 0 || lm_trans_declare_l2_table(namespace_, table_frame) != 0
+        status: 1
+    if: status != 0
+        lm_trans_namespace_delete(namespace_)
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    descriptor: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "l2Source", 8U)
+    if: status = 0 && (descriptor = 0 || lm_table_descriptor_column_count(descriptor) != 3U || lm_table_descriptor_materialized_row_count(descriptor) != 3U)
+        status: 1
+    if: status = 0 && (lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 0U), "class", "class", 0U, 0U, 0) = 0 || lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 1U), "label", "char", 0U, 0U, 0) = 0 || lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 2U), "body", "node", 0U, 0U, 0) = 0)
+        status: 1
+
+    row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+    key_cell: lm_table_row_cell_at(row, 0U)
+    label_cell: lm_table_row_cell_at(row, 1U)
+    body_cell: lm_table_row_cell_at(row, 2U)
+    if: status = 0 && (row = 0 || row\source_native != 0 || lm_table_row_cell_count(row) != 3U || key_cell = 0 || key_cell\atom = 0 || key_cell\value = 0 || key_cell\node != 0 || key_cell\source != 0 || c.strcmp(key_cell\atom, "sampleKey") != 0 || c.strcmp(key_cell\value, "sampleKey") != 0)
+        status: 1
+    if: status = 0 && (label_cell = 0 || label_cell\atom = 0 || label_cell\value = 0 || label_cell\node != 0 || label_cell\source = 0 || c.strcmp(label_cell\atom, "\"hello\"") != 0 || c.strcmp(label_cell\value, "hello") != 0)
+        status: 1
+    if: status = 0 && (body_cell = 0 || body_cell\atom != 0 || body_cell\value != 0 || body_cell\node = 0 || body_cell\source = 0 || body_cell\node = source_body_node)
+        status: 1
+
+    source_only_row: lm_table_descriptor_materialized_row_at(descriptor, 1U)
+    source_only_key_cell: lm_table_row_cell_at(source_only_row, 0U)
+    source_only_label_cell: lm_table_row_cell_at(source_only_row, 1U)
+    source_only_body_cell: lm_table_row_cell_at(source_only_row, 2U)
+    if: status = 0 && (source_only_row = 0 || source_only_row\source_native = 0 || source_only_key_cell = 0 || source_only_key_cell\atom != 0 || source_only_key_cell\value != 0 || source_only_key_cell\node = 0 || source_only_key_cell\source != 0 || source_only_key_cell\node = source_key_node || source_only_label_cell = 0 || source_only_label_cell\value = 0 || source_only_label_cell\node != 0 || source_only_label_cell\source != 0 || c.strcmp(source_only_label_cell\value, "source-only") != 0 || source_only_body_cell = 0 || source_only_body_cell\value != 0 || source_only_body_cell\node = 0 || source_only_body_cell\source != 0)
+        status: 1
+
+    native_text_row: lm_table_descriptor_materialized_row_at(descriptor, 2U)
+    native_text_key_cell: lm_table_row_cell_at(native_text_row, 0U)
+    native_text_label_cell: lm_table_row_cell_at(native_text_row, 1U)
+    native_text_body_cell: lm_table_row_cell_at(native_text_row, 2U)
+    if: status = 0 && (native_text_row = 0 || native_text_row\source_native = 0 || native_text_key_cell = 0 || native_text_key_cell\atom = 0 || native_text_key_cell\value = 0 || native_text_key_cell\node != 0 || native_text_key_cell\source != 0 || c.strcmp(native_text_key_cell\value, "nativeText") != 0 || native_text_label_cell = 0 || native_text_label_cell\value != 0 || native_text_label_cell\node = 0 || native_text_label_cell\source != 0 || native_text_body_cell = 0 || native_text_body_cell\value != 0 || native_text_body_cell\node = 0 || native_text_body_cell\source != 0)
+        status: 1
+
+    if: status = 0 && (lm_test_l2_table_source_path_cell("l2Source.label", 0U, 1U, descriptor, key_cell, label_cell) = 0 || lm_test_l2_table_source_path_cell("l2Source.body", 0U, 2U, descriptor, key_cell, body_cell) = 0 || lm_test_l2_table_source_path_cell("l2Source.label", 1U, 1U, descriptor, native_text_key_cell, native_text_label_cell) = 0)
+        status: 1
+
+    covered: 0
+    projected_covered: 0
+    if: status = 0 && (lm_registry_view_source_path_has_key_slice(lm_trans_registry\view, "l2Source.label", 14U, "nativeText", 10U, @ covered) = 0 || covered = 0 || lm_registry_view_source_path_has_key_slice_mode(lm_trans_registry\view, "l2Source.label", 14U, "nativeText", 10U, 1, @ projected_covered) != 0 || projected_covered = 0 || lm_registry_view_source_path_key_at_slice_mode(lm_trans_registry\view, "l2Source.label", 14U, 1U, 1, @ projected_covered) != 0 || projected_covered = 0)
+        status: 1
+
+    key_text: lm_trans_text_from_cstr("sampleKey")
+    label_fact: cast: (const: LmTransRegistryFact) label_cell\source
+    body_fact: cast: (const: LmTransRegistryFact) body_cell\source
+    if: status = 0 && (key_text = 0 || label_fact = 0 || label_fact != lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry\identifiers, key_text, "l2Source.label") || label_fact\payload = 0 || label_fact\payload_node != 0 || c.strcmp(label_fact\payload, "hello") != 0 || body_fact = 0 || body_fact != lm_trans_registry_lookup_row_in_identifiers(lm_trans_registry\identifiers, key_text, "l2Source.body") || body_fact\payload != 0 || body_fact\payload_node != body_cell\node)
+        status: 1
+
+    loaded_fact_count: lm_trans_registry\loaded_fact_count
+    view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+    source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    descriptor_row_count: lm_table_descriptor_materialized_row_count(descriptor)
+    mutation_generation: lm_trans_registry\view\mutation_generation
+    class_count: lm_registry_view_class_count(lm_trans_registry\view)
+    label_relation_count: lm_test_l2_table_relation_count("l2Source.label")
+    body_relation_count: lm_test_l2_table_relation_count("l2Source.body")
+    if: status = 0 && (label_relation_count != 1U || body_relation_count != 1U)
+        status: 1
+
+    if: status = 0 && lm_trans_materialize_l2_table_source(namespace_, table_frame, 1) = 0
+        status: 1
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_table_descriptor_materialized_row_count(descriptor) != descriptor_row_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_registry_view_class_count(lm_trans_registry\view) != class_count || lm_test_l2_table_relation_count("l2Source.label") != label_relation_count || lm_test_l2_table_relation_count("l2Source.body") != body_relation_count)
+        status: 1
+
+    if: status = 0 && lm_trans_materialize_l2_table_source(namespace_, table_frame, 0) != 0
+        status: 1
+    if: status = 0 && (lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "l2Source", 8U) != descriptor || lm_table_descriptor_materialized_row_count(descriptor) != 6U || lm_table_descriptor_materialized_row_at(descriptor, 3U)\source_native != 0 || lm_table_descriptor_materialized_row_at(descriptor, 4U)\source_native = 0 || lm_table_descriptor_materialized_row_at(descriptor, 5U)\source_native = 0 || lm_trans_registry\loaded_fact_count != loaded_fact_count + 4U || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count + 4U || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_registry_view_class_count(lm_trans_registry\view) != class_count || lm_test_l2_table_relation_count("l2Source.label") != label_relation_count + 1U || lm_test_l2_table_relation_count("l2Source.body") != body_relation_count + 1U)
+        status: 1
+
+    if: status = 0 && (lm_p0_parse_string(conflict_source, @ conflict_document) != 0 || conflict_document = 0)
+        status: 1
+    conflict_frame: 0
+    if: conflict_document != 0
+        conflict_frame: lm_test_l2_table_source_root_frame(conflict_document)
+    loaded_fact_count: lm_trans_registry\loaded_fact_count
+    view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+    source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    mutation_generation: lm_trans_registry\view\mutation_generation
+    class_count: lm_registry_view_class_count(lm_trans_registry\view)
+    class_relation_count: lm_test_l2_table_relation_count("class")
+    class_kind_relation_count: lm_test_l2_table_relation_count("class.kind")
+    class_present_relation_count: lm_test_l2_table_relation_count("class.present")
+    if: status = 0 && (conflict_frame = 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "class", 5U) != 0 || lm_trans_materialize_l2_table_source(namespace_, conflict_frame, 0) = 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_registry_view_class_count(lm_trans_registry\view) != class_count || lm_test_l2_table_relation_count("class") != class_relation_count || lm_test_l2_table_relation_count("class.kind") != class_kind_relation_count || lm_test_l2_table_relation_count("class.present") != class_present_relation_count || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "class", 5U) != 0)
+        status: 1
+    lm_p0_document_destroy(conflict_document)
+    conflict_document: 0
+
+    cloned_body_node: cast: (const: LmP0Node) body_cell\node
+    cloned_key_node: cast: (const: LmP0Node) source_only_key_cell\node
+    cloned_source_only_body_node: cast: (const: LmP0Node) source_only_body_cell\node
+    cloned_native_label_node: cast: (const: LmP0Node) native_text_label_cell\node
+    cloned_native_body_node: cast: (const: LmP0Node) native_text_body_cell\node
+    lm_trans_namespace_delete(namespace_)
+    namespace_: 0
+    lm_p0_document_destroy(document)
+    document: 0
+
+    cloned_body_field: 0
+    cloned_key_field: 0
+    cloned_source_only_body_field: 0
+    cloned_native_label_field: 0
+    cloned_native_body_field: 0
+    if: cloned_body_node != 0 && cloned_body_node\kind = c.LM_P0_NODE_FRAME
+        cloned_body_field: lm_trans_l2_structure_first_present_field(cloned_body_node\as\frame\body)
+    if: cloned_key_node != 0 && cloned_key_node\kind = c.LM_P0_NODE_FRAME
+        cloned_key_field: lm_trans_l2_structure_first_present_field(cloned_key_node\as\frame\body)
+    if: cloned_source_only_body_node != 0 && cloned_source_only_body_node\kind = c.LM_P0_NODE_FRAME
+        cloned_source_only_body_field: lm_trans_l2_structure_first_present_field(cloned_source_only_body_node\as\frame\body)
+    if: cloned_native_label_node != 0 && cloned_native_label_node\kind = c.LM_P0_NODE_FRAME
+        cloned_native_label_field: lm_trans_l2_structure_first_present_field(cloned_native_label_node\as\frame\body)
+    if: cloned_native_body_node != 0 && cloned_native_body_node\kind = c.LM_P0_NODE_FRAME
+        cloned_native_body_field: lm_trans_l2_structure_first_present_field(cloned_native_body_node\as\frame\body)
+    if: status = 0 && (key_cell\atom = 0 || key_cell\value = 0 || c.strcmp(key_cell\atom, "sampleKey") != 0 || c.strcmp(key_cell\value, "sampleKey") != 0 || label_cell\atom = 0 || label_cell\value = 0 || c.strcmp(label_cell\atom, "\"hello\"") != 0 || c.strcmp(label_cell\value, "hello") != 0 || source_only_label_cell\value = 0 || c.strcmp(source_only_label_cell\value, "source-only") != 0 || native_text_key_cell\atom = 0 || native_text_key_cell\value = 0 || c.strcmp(native_text_key_cell\atom, "nativeText") != 0 || c.strcmp(native_text_key_cell\value, "nativeText") != 0)
+        status: 1
+    if: status = 0 && (cloned_body_node = 0 || cloned_body_node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_equals(cloned_body_node\as\frame\head, "payload") = 0 || cloned_body_field = 0 || cloned_body_field\value = 0 || cloned_body_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(cloned_body_field\value\as\atom, "nested") = 0)
+        status: 1
+    if: status = 0 && (cloned_key_node = 0 || cloned_key_node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_equals(cloned_key_node\as\frame\head, "nodeKey") = 0 || cloned_key_field = 0 || cloned_key_field\value = 0 || cloned_key_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(cloned_key_field\value\as\atom, "nestedKey") = 0)
+        status: 1
+    if: status = 0 && (cloned_source_only_body_node = 0 || cloned_source_only_body_node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_equals(cloned_source_only_body_node\as\frame\head, "payload2") = 0 || cloned_source_only_body_field = 0 || cloned_source_only_body_field\value = 0 || cloned_source_only_body_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(cloned_source_only_body_field\value\as\atom, "nested2") = 0)
+        status: 1
+    if: status = 0 && (cloned_native_label_node = 0 || cloned_native_label_node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_equals(cloned_native_label_node\as\frame\head, "nativeLabel") = 0 || cloned_native_label_field = 0 || cloned_native_label_field\value = 0 || cloned_native_label_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(cloned_native_label_field\value\as\atom, "nestedLabel") = 0)
+        status: 1
+    if: status = 0 && (cloned_native_body_node = 0 || cloned_native_body_node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_equals(cloned_native_body_node\as\frame\head, "payload3") = 0 || cloned_native_body_field = 0 || cloned_native_body_field\value = 0 || cloned_native_body_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(cloned_native_body_field\value\as\atom, "nested3") = 0)
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ key_text)
+    lm_trans_namespace_delete(namespace_)
+    if: document != 0
+        lm_p0_document_destroy(document)
+    if: conflict_document != 0
+        lm_p0_document_destroy(conflict_document)
+    lm_trans_registry_destroy()
+return: status

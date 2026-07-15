@@ -122,6 +122,7 @@ L4:
                  cells           LmOwnPtrStack
                  source          LmTableRow
                  local_sequence  size_t
+                 source_native   int
     end: `LmTableRow.field.class`
 
     table:
@@ -131,6 +132,7 @@ L4:
                  cells           0
                  source          1
                  local_sequence  2
+                 source_native   3
     end: `LmTableRow.field.index`
 
     table:
@@ -350,6 +352,7 @@ sub: lm_table_row_delete_any (@: void object)
         lm_own_delete(row\cells, 0)
         row\cells: 0
     row\source: 0
+    row\source_native: 0
     lm_own_delete(row, 0)
 end: lm_table_row_delete_any
 
@@ -621,6 +624,8 @@ fn: lm_table_row_new (const: (LmTableRow: source)) LmTableRow
         return: 0
     row\cells: lm_table_descriptor_stack_new(lm_table_cell_delete_any)
     row\source: source
+    if: source != 0
+        row\source_native: source\source_native
     if: row\cells = 0
         lm_table_row_delete_any(row)
         return: 0
@@ -1015,10 +1020,11 @@ fn: lm_table_descriptor_source_path_column_matches (
         return: 0
 return: c.memcmp(path + table_name_length + 1U, column\name, column_name_length) = 0
 
-fn: lm_registry_view_source_path_has_rows_slice (
+fn: lm_registry_view_source_path_has_rows_slice_mode (
     const: (LmRegistryView: view)
     const: @(char path)
     size_t: path_length
+    int: projected_only
     @: int out_covered
 ) int
     const: LmTableDescriptor: descriptor
@@ -1050,15 +1056,25 @@ fn: lm_registry_view_source_path_has_rows_slice (
                     row_index: 0U
                     while: row_index < row_count
                         row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
-                        cell: lm_table_row_cell_at(row, column_index)
-                        if: cell != 0 && (cell\value != 0 || cell\node != 0)
-                            return: 1
+                        if: row != 0 && (projected_only = 0 || row\source_native = 0)
+                            cell: lm_table_row_cell_at(row, column_index)
+                            if: cell != 0 && (cell\value != 0 || cell\node != 0)
+                                return: 1
+                            ---
                         row_index: row_index + 1U
                 ---
                 column_index: column_index + 1U
         ---
         table_index: table_index + 1U
 return: 0
+
+fn: lm_registry_view_source_path_has_rows_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    @: int out_covered
+) int
+return: lm_registry_view_source_path_has_rows_slice_mode(view, path, path_length, 0, out_covered)
 
 fn: lm_registry_view_source_path_has_rows (const: (LmRegistryView: view); const: @(char path); @: int out_covered) int
     if: path = 0
@@ -1067,12 +1083,13 @@ fn: lm_registry_view_source_path_has_rows (const: (LmRegistryView: view); const:
         return: 0
 return: lm_registry_view_source_path_has_rows_slice(view, path, c.strlen(path), out_covered)
 
-fn: lm_registry_view_source_path_has_key_slice (
+fn: lm_registry_view_source_path_has_key_slice_mode (
     const: (LmRegistryView: view)
     const: @(char path)
     size_t: path_length
     const: @(char key)
     size_t: key_length
+    int: projected_only
     @: int out_covered
 ) int
     const: LmTableDescriptor: descriptor
@@ -1104,21 +1121,34 @@ fn: lm_registry_view_source_path_has_key_slice (
                 row_index: 0U
                 while: row_index < row_count
                     row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
-                    key_cell: lm_table_row_cell_at(row, 0U)
-                    payload_cell: lm_table_row_cell_at(row, column_index)
-                    if: key_cell != 0 && key_cell\value != 0 && lm_table_descriptor_cstr_equals_slice(key_cell\value, key, key_length) != 0 && payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
-                        return: 1
+                    if: row != 0 && (projected_only = 0 || row\source_native = 0)
+                        key_cell: lm_table_row_cell_at(row, 0U)
+                        payload_cell: lm_table_row_cell_at(row, column_index)
+                        if: key_cell != 0 && key_cell\value != 0 && lm_table_descriptor_cstr_equals_slice(key_cell\value, key, key_length) != 0 && payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
+                            return: 1
+                        ---
                     row_index: row_index + 1U
             ---
             column_index: column_index + 1U
         table_index: table_index + 1U
 return: 0
 
-fn: lm_registry_view_source_path_cell_at_slice (
+fn: lm_registry_view_source_path_has_key_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    const: @(char key)
+    size_t: key_length
+    @: int out_covered
+) int
+return: lm_registry_view_source_path_has_key_slice_mode(view, path, path_length, key, key_length, 0, out_covered)
+
+fn: lm_registry_view_source_path_cell_at_slice_mode (
     const: (LmRegistryView: view)
     const: @(char path)
     size_t: path_length
     size_t: index
+    int: projected_only
     const: @(LmTableDescriptor out_descriptor)
     @: size_t out_column_index
     const: @(LmTableCell out_key_cell)
@@ -1167,27 +1197,63 @@ fn: lm_registry_view_source_path_cell_at_slice (
             row_index: 0U
             while: row_index < row_count
                 row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
-                key_cell: lm_table_row_cell_at(row, 0U)
-                column_index: 1U
-                while: column_index < column_count
-                    if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
-                        payload_cell: lm_table_row_cell_at(row, column_index)
-                        if: key_cell != 0 && key_cell\value != 0 && payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
-                            if: fact_index = index
-                                if: out_descriptor != 0
-                                    out_descriptor[0]: descriptor
-                                if: out_column_index != 0
-                                    out_column_index[0]: column_index
-                                if: out_key_cell != 0
-                                    out_key_cell[0]: key_cell
-                                return: payload_cell
-                            fact_index: fact_index + 1U
+                if: row != 0 && (projected_only = 0 || row\source_native = 0)
+                    key_cell: lm_table_row_cell_at(row, 0U)
+                    column_index: 1U
+                    while: column_index < column_count
+                        if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                            payload_cell: lm_table_row_cell_at(row, column_index)
+                            if: key_cell != 0 && key_cell\value != 0 && payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
+                                if: fact_index = index
+                                    if: out_descriptor != 0
+                                        out_descriptor[0]: descriptor
+                                    if: out_column_index != 0
+                                        out_column_index[0]: column_index
+                                    if: out_key_cell != 0
+                                        out_key_cell[0]: key_cell
+                                    return: payload_cell
+                                fact_index: fact_index + 1U
+                        ---
+                        column_index: column_index + 1U
                     ---
-                    column_index: column_index + 1U
                 row_index: row_index + 1U
         ---
         table_index: table_index + 1U
 return: 0
+
+fn: lm_registry_view_source_path_cell_at_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    size_t: index
+    const: @(LmTableDescriptor out_descriptor)
+    @: size_t out_column_index
+    const: @(LmTableCell out_key_cell)
+    @: int out_covered
+) const: LmTableCell
+return: lm_registry_view_source_path_cell_at_slice_mode(view, path, path_length, index, 0, out_descriptor, out_column_index, out_key_cell, out_covered)
+
+fn: lm_registry_view_source_path_key_at_slice_mode (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    size_t: index
+    int: projected_only
+    @: int out_covered
+) const: @: char
+    const: LmTableCell: key_cell
+
+    key_cell: 0
+    if: projected_only = 0
+        if: lm_registry_view_source_path_cell_at_slice(view, path, path_length, index, 0, 0, @ key_cell, out_covered) = 0 || key_cell = 0
+            return: 0
+        ---
+    else:
+        if: lm_registry_view_source_path_cell_at_slice_mode(view, path, path_length, index, 1, 0, 0, @ key_cell, out_covered) = 0 || key_cell = 0
+            return: 0
+        ---
+    ---
+return: key_cell\value
 
 fn: lm_registry_view_source_path_key_at_slice (
     const: (LmRegistryView: view)
@@ -1196,12 +1262,7 @@ fn: lm_registry_view_source_path_key_at_slice (
     size_t: index
     @: int out_covered
 ) const: @: char
-    const: LmTableCell: key_cell
-
-    key_cell: 0
-    if: lm_registry_view_source_path_cell_at_slice(view, path, path_length, index, 0, 0, @ key_cell, out_covered) = 0 || key_cell = 0
-        return: 0
-return: key_cell\value
+return: lm_registry_view_source_path_key_at_slice_mode(view, path, path_length, index, 0, out_covered)
 
 fn: lm_registry_view_append_materialized_rows (LmRegistryView: view; LmTableDescriptor: target; const: @(char source_table); size_t: source_table_length) int
     const: LmTableDescriptor: source

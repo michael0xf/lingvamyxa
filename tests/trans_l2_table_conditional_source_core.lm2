@@ -1,0 +1,99 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_l2_table_conditional_source_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_l2_table_conditional_registry_init () int
+    if: lm_trans_registry_load_for_source("tests/trans_l2_table_conditional_source_core.lm2") != 0
+        return: 1
+    lm_trans_registry\view_mode: 2
+return: 0
+
+fn: lm_test_l2_table_conditional_frame_at (const: (LmP0Document: document); size_t: index) const: LmP0Frame
+    const: LmP0Node: root
+    const: LmP0Field: field
+    size_t: current
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    field: root\as\structure\first_field
+    current: 0U
+    while: field != 0
+        if: lm_trans_node_is_ignored(field\value) = 0
+            if: current = index
+                if: field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+                    return: field\value\as\frame
+                return: 0
+            current: current + 1U
+        field: field\next
+return: 0
+
+fn: lm_test_l2_table_conditional_binding_exists (const: (LmTransNamespace: namespace_); const: @(char name)) int
+    LmP0Text: name_text
+    const: LmTransSymbol: symbol
+
+    name_text: lm_trans_text_from_cstr(name)
+    if: name_text = 0
+        return: 0
+    symbol: lm_trans_namespace_find(namespace_, name_text)
+    lm_trans_text_ref_destroy(@ name_text)
+return: symbol != 0
+
+fn: lm_test_l2_table_conditional_source_absent (const: @(char name)) int
+return: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, name, c.strlen(name)) = 0 && lm_trans_registry_relation_stack_for_table(name) = 0
+
+fn: lm_test_l2_table_conditional_source_present (const: @(char name)) int
+    const: LmTableDescriptor: descriptor
+    const: LmOwnPtrStack: rows
+
+    descriptor: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, name, c.strlen(name))
+    rows: lm_trans_registry_relation_stack_for_table(name)
+return: descriptor != 0 && lm_table_descriptor_materialized_row_count(descriptor) = 1U && rows != 0 && rows\count = 1U
+
+fn: lm_test_l2_table_conditional_source_core () int
+    const: @(char source)
+    LmP0Document: document
+    LmTransNamespace: namespace_
+    const: LmP0Frame: os_frame
+    const: LmP0Frame: ifdef_frame
+    const: LmP0Frame: guard_frame
+    int: status
+
+    source: "os:\n    unix:\n        table:\n            name: conditionalUnix\n            columns((class: class) (char: value))\n            rows: unixKey \"unix\"\n        end: conditionalUnix\n    default:\n        table:\n            name: conditionalDefault\n            columns((class: class) (char: value))\n            rows: defaultKey \"default\"\n        end: conditionalDefault\nend: os\nifdef:\n    `LM_TEST_CONDITIONAL_TABLE`:\n        table:\n            name: conditionalIfdef\n            columns((class: class) (char: value))\n            rows: ifdefKey \"ifdef\"\n        end: conditionalIfdef\n        guard: LM_TEST_NESTED_TABLE_GUARD\n            extern_c:\n                table:\n                    name: conditionalNested\n                    columns((class: class) (char: value))\n                    rows: nestedKey \"nested\"\n                end: conditionalNested\n            end: extern_c\n        end: guard\n    default:\n        table:\n            name: conditionalIfdefDefault\n            columns((class: class) (char: value))\n            rows: fallbackKey \"fallback\"\n        end: conditionalIfdefDefault\nend: ifdef\nguard: LM_TEST_TOP_TABLE_GUARD\n    table:\n        name: conditionalGuard\n        columns((class: class) (char: value))\n        rows: guardKey \"guard\"\n    end: conditionalGuard\nend: guard\n"
+    document: 0
+    namespace_: 0
+    status: 0
+
+    if: lm_test_l2_table_conditional_registry_init() != 0
+        return: 1
+    if: lm_p0_parse_string(source, @ document) != 0 || document = 0
+        lm_trans_registry_destroy()
+        return: 1
+
+    os_frame: lm_test_l2_table_conditional_frame_at(document, 0U)
+    ifdef_frame: lm_test_l2_table_conditional_frame_at(document, 1U)
+    guard_frame: lm_test_l2_table_conditional_frame_at(document, 2U)
+    namespace_: lm_trans_namespace_new()
+    if: os_frame = 0 || ifdef_frame = 0 || guard_frame = 0 || namespace_ = 0 || lm_trans_declare_l2_os_frame(namespace_, os_frame) != 0 || lm_trans_declare_l2_ifdef_frame(namespace_, ifdef_frame) != 0 || lm_trans_declare_l2_guard_frame(namespace_, guard_frame) != 0
+        status: 1
+
+    if: status = 0 && (lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalUnix") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalDefault") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalIfdef") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalNested") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalIfdefDefault") = 0 || lm_test_l2_table_conditional_binding_exists(namespace_, "conditionalGuard") = 0)
+        status: 1
+    if: status = 0 && (lm_test_l2_table_conditional_source_absent("conditionalUnix") = 0 || lm_test_l2_table_conditional_source_absent("conditionalDefault") = 0 || lm_test_l2_table_conditional_source_absent("conditionalIfdef") = 0 || lm_test_l2_table_conditional_source_absent("conditionalNested") = 0 || lm_test_l2_table_conditional_source_absent("conditionalIfdefDefault") = 0 || lm_test_l2_table_conditional_source_present("conditionalGuard") = 0 || lm_trans_l2_table_materialization_suppression_depth != 0 || lm_trans_l2_conditional_import_depth != 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_namespace_delete(namespace_)
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status

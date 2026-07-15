@@ -2122,6 +2122,9 @@ fn: lm_trans_declare_l2_import_path (LmTransNamespace: namespace_; const: @(char
 
     if: path = 0
         return: 1
+    if: lm_trans_l2_conditional_import_depth > 0
+        c.fprintf(c.stderr, "trans L2 import error: import %s is not supported inside os/ifdef/guard\n", path)
+        return: 1
     if: lm_trans_path_has_extension(path, ".lm4")
         if: lm_trans_string_stack_has(lm_trans_declared_import_paths, path)
             return: 0
@@ -2542,7 +2545,7 @@ fn: lm_trans_declare_l2_os_frame (LmTransNamespace: namespace_; const: (LmP0Fram
             ---
 
             if: lm_trans_os_branch_looks_l2(branch\body)
-                if: lm_trans_declare_l2_structure_import(namespace_, branch\body) != 0
+                if: lm_trans_declare_l2_conditional_structure_import(namespace_, branch\body) != 0
                     return: 1
                 ---
             if: lm_trans_validate_end_trailer(branch) != 0
@@ -2590,7 +2593,7 @@ fn: lm_trans_declare_l2_ifdef_frame (LmTransNamespace: namespace_; const: (LmP0F
             ---
 
             if: lm_trans_os_branch_looks_l2(branch\body)
-                if: lm_trans_declare_l2_structure_import(namespace_, branch\body) != 0
+                if: lm_trans_declare_l2_conditional_structure_import(namespace_, branch\body) != 0
                     return: 1
                 ---
             if: lm_trans_validate_end_trailer(branch) != 0
@@ -2602,7 +2605,7 @@ return: lm_trans_validate_end_trailer(frame)
 fn: lm_trans_top_level_declare_ifdef (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_ifdef_frame(namespace_, lm_trans_top_level_item_frame(item))
 
-fn: lm_trans_declare_l2_structure_import (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
+fn: lm_trans_declare_l2_structure_import_core (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
     const: LmP0Field: field
     const: LmP0Node: node
     LmTransTopLevelItem: item
@@ -2626,11 +2629,33 @@ fn: lm_trans_declare_l2_structure_import (LmTransNamespace: namespace_; const: (
                 if: item\declare(namespace_, item) != 0
                     lm_trans_top_level_item_delete(item)
                     return: 1
+                ---
             ---
         ---
         lm_trans_top_level_item_delete(item)
         field: field\next
 return: 0
+
+fn: lm_trans_declare_l2_structure_import_mode (LmTransNamespace: namespace_; const: (LmP0Structure: body); int: materialize_tables) int
+    int: previous_depth
+    int: previous_import_depth
+    int: status
+
+    previous_depth: lm_trans_l2_table_materialization_suppression_depth
+    previous_import_depth: lm_trans_l2_conditional_import_depth
+    if: materialize_tables = 0
+        lm_trans_l2_table_materialization_suppression_depth: previous_depth + 1
+        lm_trans_l2_conditional_import_depth: previous_import_depth + 1
+    status: lm_trans_declare_l2_structure_import_core(namespace_, body)
+    lm_trans_l2_table_materialization_suppression_depth: previous_depth
+    lm_trans_l2_conditional_import_depth: previous_import_depth
+return: status
+
+fn: lm_trans_declare_l2_structure_import (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
+return: lm_trans_declare_l2_structure_import_mode(namespace_, body, 1)
+
+fn: lm_trans_declare_l2_conditional_structure_import (LmTransNamespace: namespace_; const: (LmP0Structure: body)) int
+return: lm_trans_declare_l2_structure_import_mode(namespace_, body, 0)
 
 fn: lm_trans_top_level_declare_os (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_os_frame(namespace_, lm_trans_top_level_item_frame(item))
@@ -2825,6 +2850,7 @@ return: 0
 fn: lm_trans_declare_l2_guard_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
     LmP0Text: name
     LmP0Structure: body
+    int: previous_import_depth
     int: status
 
     name: lm_trans_text_from_cstr("")
@@ -2837,7 +2863,10 @@ fn: lm_trans_declare_l2_guard_frame (LmTransNamespace: namespace_; const: (LmP0F
         lm_trans_text_ref_destroy(@ name)
         lm_own_delete(body, 0)
         return: 1
+    previous_import_depth: lm_trans_l2_conditional_import_depth
+    lm_trans_l2_conditional_import_depth: previous_import_depth + 1
     status: lm_trans_declare_l2_wrapper_body(namespace_, body)
+    lm_trans_l2_conditional_import_depth: previous_import_depth
     if: status = 0
         status: lm_trans_validate_end_trailer(frame)
     lm_trans_text_ref_destroy(@ name)
@@ -2902,13 +2931,13 @@ fn: lm_trans_declare_l2_registry_os_node (LmTransNamespace: namespace_; const: (
         return: 0
     if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
         previous_depth: lm_trans_l3_profile_enter_frame(node\as\frame)
-        status: lm_trans_declare_l2_structure_import(namespace_, node\as\frame\body)
+        status: lm_trans_declare_l2_conditional_structure_import(namespace_, node\as\frame\body)
         if: status = 0
             status: lm_trans_validate_end_trailer(node\as\frame)
         lm_trans_l3_profile_restore(previous_depth)
         return: status
     if: node\kind = c.LM_P0_NODE_STRUCTURE && lm_trans_os_branch_looks_l2(node\as\structure)
-        return: lm_trans_declare_l2_structure_import(namespace_, node\as\structure)
+        return: lm_trans_declare_l2_conditional_structure_import(namespace_, node\as\structure)
 return: 0
 
 fn: lm_trans_registry_condition_view_row_matches (const: (LmRegistryViewRow: row); const: @(char table_name)) int

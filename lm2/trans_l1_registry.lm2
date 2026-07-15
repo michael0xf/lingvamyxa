@@ -15,6 +15,8 @@ unsigned: lm_trans_next_callable_adapter_id
 unsigned: lm_trans_next_array_value_helper_id
 unsigned: lm_trans_next_l2_structure_object_id
 int: lm_trans_l3_profile_depth
+int: lm_trans_l2_table_materialization_suppression_depth
+int: lm_trans_l2_conditional_import_depth
 
 LmTransRegistry: lm_trans_registry
 
@@ -355,13 +357,18 @@ fn: lm_trans_registry_class_kind_conflicts_with (const: (LmP0Text: name); const:
         return: 1
 return: 0
 
-fn: lm_trans_registry_validate_class_kind_row (const: (LmP0Text: name); const: (LmP0Text: kind)) int
+fn: lm_trans_registry_check_class_kind_row (const: (LmP0Text: name); const: (LmP0Text: kind)) int
     if: name = 0 || kind = 0 || name\data = 0 || kind\data = 0 || name\length = 0U || kind\length = 0U
         c.fprintf(c.stderr, "trans registry class error: class rows require non-empty class and kind\n")
         return: 1
     if: lm_trans_registry_class_kind_conflicts_with(name, kind, "class") != 0
         return: 1
     if: lm_trans_registry_class_kind_conflicts_with(name, kind, "class.kind") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_registry_validate_class_kind_row (const: (LmP0Text: name); const: (LmP0Text: kind)) int
+    if: lm_trans_registry_check_class_kind_row(name, kind) != 0
         return: 1
     if: lm_trans_registry_note_class_present(name) != 0 || lm_trans_registry_note_class_present(kind) != 0
         return: 1
@@ -448,6 +455,58 @@ return: 0
 
 fn: lm_trans_registry_push_row_node_values (const: (LmP0Text: table_value); const: (LmP0Text: key_value); const: (LmP0Node: payload_node)) int
 return: lm_trans_registry_push_row_node_values_from(table_value, key_value, payload_node, 0)
+
+fn: lm_trans_registry_push_row_values_with_fact (
+    const: (LmP0Text: table)
+    const: (LmP0Text: key)
+    const: (LmP0Text: payload)
+    @: LmTransRegistryFact out_fact
+) int
+    const: LmRegistryViewRow: view_row
+    size_t: fact_index
+
+    if: out_fact != 0
+        out_fact[0]: 0
+    if: table = 0 || key = 0 || payload = 0 || out_fact = 0 || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+
+    fact_index: lm_registry_view_fact_count(c.lm_trans_registry->view)
+    if: lm_trans_registry_push_row_values(table, key, payload) != 0
+        return: 1
+    if: lm_registry_view_fact_count(c.lm_trans_registry->view) <= fact_index
+        return: 1
+    fact_index: lm_registry_view_fact_count(c.lm_trans_registry->view) - 1U
+    view_row: lm_registry_view_fact_at(c.lm_trans_registry->view, fact_index)
+    if: view_row = 0 || view_row\source = 0
+        return: 1
+    out_fact[0]: cast: (LmTransRegistryFact) view_row\source
+return: 0
+
+fn: lm_trans_registry_push_row_node_values_with_fact (
+    const: (LmP0Text: table)
+    const: (LmP0Text: key)
+    const: (LmP0Node: payload_node)
+    @: LmTransRegistryFact out_fact
+) int
+    const: LmRegistryViewRow: view_row
+    size_t: fact_index
+
+    if: out_fact != 0
+        out_fact[0]: 0
+    if: table = 0 || key = 0 || payload_node = 0 || out_fact = 0 || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+
+    fact_index: lm_registry_view_fact_count(c.lm_trans_registry->view)
+    if: lm_trans_registry_push_row_node_values(table, key, payload_node) != 0
+        return: 1
+    if: lm_registry_view_fact_count(c.lm_trans_registry->view) <= fact_index
+        return: 1
+    fact_index: lm_registry_view_fact_count(c.lm_trans_registry->view) - 1U
+    view_row: lm_registry_view_fact_at(c.lm_trans_registry->view, fact_index)
+    if: view_row = 0 || view_row\source = 0
+        return: 1
+    out_fact[0]: cast: (LmTransRegistryFact) view_row\source
+return: 0
 
 fn: lm_trans_registry_join_relation_matches (const: @(char relation_name); const: (LmP0Text: source_name); const: @@(char out_suffix)) int
     size_t: relation_length
@@ -1950,6 +2009,348 @@ fn: lm_trans_registry_source_relation_path_new (const: @(char table); const: @(c
     out_length[0]: path_length
 return: path
 
+fn: lm_trans_registry_source_descriptor_column_declares_class_kind (
+    const: (LmTableDescriptor: descriptor)
+    size_t: column_index
+) int
+    const: LmTableColumnDescriptor: column
+    size_t: column_count
+
+    if: descriptor = 0 || descriptor\name = 0
+        return: -1
+    column_count: lm_table_descriptor_column_count(descriptor)
+    if: column_index = 0U || column_index >= column_count
+        return: -1
+    if: column_count = 2U
+        return: c.strcmp(descriptor\name, "class") = 0 || c.strcmp(descriptor\name, "class.kind") = 0
+
+    column: lm_table_descriptor_column_at(descriptor, column_index)
+    if: column = 0 || column\name = 0
+        return: -1
+    if: c.strcmp(descriptor\name, "class") != 0
+        return: 0
+return: c.strcmp(column\name, "kind") = 0
+
+fn: lm_trans_registry_preflight_source_descriptor_class_kinds (
+    const: (LmTableDescriptor: descriptor)
+    size_t: first_row_index
+) int
+    const: LmTableRow: row
+    const: LmTableRow: previous_row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+    const: LmTableCell: previous_key_cell
+    const: LmTableCell: previous_payload_cell
+    LmP0Text: name_text
+    LmP0Text: kind_text
+    size_t: row_count
+    size_t: row_index
+    size_t: previous_row_index
+    size_t: column_count
+    size_t: column_index
+    size_t: previous_column_index
+    int: relation_status
+    int: previous_relation_status
+    int: status
+
+    if: descriptor = 0 || descriptor\name = 0 || descriptor\materialized_rows = 0 || c.lm_trans_registry = 0 || c.lm_trans_registry->identifiers = 0 || c.lm_trans_registry->view = 0
+        return: 1
+    row_count: lm_table_descriptor_materialized_row_count(descriptor)
+    column_count: lm_table_descriptor_column_count(descriptor)
+    if: first_row_index > row_count || column_count = 0U
+        return: 1
+
+    row_index: first_row_index
+    while: row_index < row_count
+        row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+        if: row = 0 || lm_table_row_cell_count(row) != column_count
+            return: 1
+        if: row\source_native = 0
+            key_cell: lm_table_row_cell_at(row, 0U)
+            if: key_cell = 0 || key_cell\value = 0 || key_cell\node != 0
+                return: 1
+
+            column_index: 1U
+            while: column_index < column_count
+                payload_cell: lm_table_row_cell_at(row, column_index)
+                relation_status: lm_trans_registry_source_descriptor_column_declares_class_kind(descriptor, column_index)
+                if: payload_cell = 0 || relation_status < 0 || (payload_cell\value != 0 && payload_cell\node != 0)
+                    return: 1
+
+                if: relation_status != 0 && payload_cell\value != 0
+                    name_text: lm_trans_text_from_cstr(key_cell\value)
+                    kind_text: lm_trans_text_from_cstr(payload_cell\value)
+                    if: name_text = 0 || kind_text = 0
+                        lm_trans_text_ref_destroy(@ name_text)
+                        lm_trans_text_ref_destroy(@ kind_text)
+                        return: 1
+                    status: lm_trans_registry_check_class_kind_row(name_text, kind_text)
+                    lm_trans_text_ref_destroy(@ name_text)
+                    lm_trans_text_ref_destroy(@ kind_text)
+                    if: status != 0
+                        return: 1
+
+                    previous_row_index: first_row_index
+                    while: previous_row_index <= row_index
+                        previous_row: lm_table_descriptor_materialized_row_at(descriptor, previous_row_index)
+                        if: previous_row = 0 || lm_table_row_cell_count(previous_row) != column_count
+                            return: 1
+                        if: previous_row\source_native = 0
+                            previous_key_cell: lm_table_row_cell_at(previous_row, 0U)
+                            if: previous_key_cell = 0 || previous_key_cell\value = 0 || previous_key_cell\node != 0
+                                return: 1
+                            previous_column_index: 1U
+                            while: previous_column_index < column_count && (previous_row_index < row_index || previous_column_index < column_index)
+                                previous_payload_cell: lm_table_row_cell_at(previous_row, previous_column_index)
+                                previous_relation_status: lm_trans_registry_source_descriptor_column_declares_class_kind(descriptor, previous_column_index)
+                                if: previous_payload_cell = 0 || previous_relation_status < 0 || (previous_payload_cell\value != 0 && previous_payload_cell\node != 0)
+                                    return: 1
+                                if: previous_relation_status != 0 && previous_payload_cell\value != 0 && c.strcmp(previous_key_cell\value, key_cell\value) = 0 && c.strcmp(previous_payload_cell\value, payload_cell\value) != 0
+                                    c.fprintf(c.stderr, "trans registry class error: class %s has conflicting kinds %s and %s\n", key_cell\value, previous_payload_cell\value, payload_cell\value)
+                                    return: 1
+                                previous_column_index: previous_column_index + 1U
+                        ---
+                        previous_row_index: previous_row_index + 1U
+                ---
+                column_index: column_index + 1U
+        ---
+        row_index: row_index + 1U
+return: 0
+
+fn: lm_trans_registry_prepare_source_descriptor_row (
+    LmTableDescriptor: descriptor
+    const: @: LmP0Node cells
+    size_t: cell_count
+    int: require_facade
+) int
+    LmTableRow: row
+    LmTableCell: cell
+    const: LmTableColumnDescriptor: column
+    const: LmP0Node: node
+    const: LmP0Text: atom
+    LmP0Text: decoded
+    LmP0Node: node_copy
+    size_t: column_index
+    int: cell_status
+    int: explicit_none
+    int: row_projectable
+    int: status
+    int: wants_node
+
+    if: descriptor = 0 || descriptor\name = 0 || cells = 0 || cell_count = 0U || lm_table_descriptor_column_count(descriptor) != cell_count || c.lm_trans_registry = 0 || c.lm_trans_registry->value_arena = 0
+        return: -1
+
+    row: lm_table_row_new(0)
+    decoded: lm_trans_text_ref_new_cstr("")
+    if: row = 0 || decoded = 0
+        lm_table_row_delete_any(row)
+        lm_trans_text_ref_destroy(@ decoded)
+        return: -1
+
+    status: 0
+    row_projectable: 1
+    column_index: 0U
+    while: status = 0 && column_index < cell_count
+        column: lm_table_descriptor_column_at(descriptor, column_index)
+        node: cells[column_index]
+        atom: 0
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM
+            atom: node\as\atom
+        if: column = 0 || node = 0
+            status: 1
+        else:
+            wants_node: column_index != 0U && lm_table_column_descriptor_has_descriptor(column, "node") != 0
+            explicit_none: atom != 0 && lm_trans_registry_payload_is_null(atom) != 0
+
+            if: column_index = 0U && atom != 0
+                if: lm_trans_registry_literal_value(atom, decoded) = 0 || lm_table_row_take_cell_slice(row, atom\data, atom\length, decoded\data, decoded\length, 0, 0, 0) != 0
+                    status: 1
+                ---
+            else:
+                if: column_index = 0U
+                    row_projectable: 0
+                    if: lm_table_row_take_cell_slice(row, 0, 0U, 0, 0U, node, 0, 0) != 0
+                        status: 1
+                    ---
+                else:
+                    if: atom != 0 && lm_trans_registry_descriptor_cell_is_null(atom, column) != 0
+                        if: lm_table_row_take_cell_slice(row, atom\data, atom\length, 0, 0U, 0, 0, explicit_none) != 0
+                            status: 1
+                        ---
+                    else:
+                        if: wants_node != 0
+                            if: atom != 0
+                                if: lm_table_row_take_cell_slice(row, atom\data, atom\length, 0, 0U, node, 0, 0) != 0
+                                    status: 1
+                                ---
+                            else:
+                                if: lm_table_row_take_cell_slice(row, 0, 0U, 0, 0U, node, 0, 0) != 0
+                                    status: 1
+                                ---
+                            ---
+                        else:
+                            if: atom != 0
+                                cell_status: lm_trans_registry_descriptor_cell_value(atom, column, decoded)
+                                if: cell_status > 0
+                                    if: lm_table_row_take_cell_slice(row, atom\data, atom\length, decoded\data, decoded\length, 0, 0, 0) != 0
+                                        status: 1
+                                    ---
+                                else:
+                                    row_projectable: 0
+                                    if: lm_table_row_take_cell_slice(row, atom\data, atom\length, 0, 0U, node, 0, 0) != 0
+                                        status: 1
+                                    ---
+                                ---
+                            else:
+                                row_projectable: 0
+                                if: lm_table_row_take_cell_slice(row, 0, 0U, 0, 0U, node, 0, 0) != 0
+                                    status: 1
+                                ---
+                            ---
+                        ---
+                    ---
+                ---
+            ---
+        ---
+        column_index: column_index + 1U
+
+    if: status = 0 && require_facade != 0 && row_projectable = 0
+        c.fprintf(c.stderr, "trans L2 table error: row in %s cannot be represented by registry relations\n", descriptor\name)
+        status: 1
+
+    if: status = 0 && row_projectable = 0
+        row\source_native: 1
+        column_index: 0U
+        while: status = 0 && column_index < cell_count
+            cell: lm_own_ptr_stack_at(row\cells, column_index)
+            if: cell = 0
+                status: 1
+            else:
+                if: cell\node != 0
+                    node_copy: lm_trans_registry_clone_node(cast: (const: LmP0Node) cell\node)
+                    if: node_copy = 0
+                        status: 1
+                    else:
+                        cell\node: node_copy
+                    ---
+                ---
+            ---
+            column_index: column_index + 1U
+    ---
+
+    lm_trans_text_ref_destroy(@ decoded)
+    if: status != 0
+        lm_table_row_delete_any(row)
+        return: -1
+    if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+        lm_table_row_delete_any(row)
+        return: -1
+return: 0
+
+fn: lm_trans_registry_project_source_descriptor_row (
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+) int
+    LmTableCell: cell
+    const: LmTableColumnDescriptor: column
+    LmP0Text: atom_text
+    LmP0Text: table_text
+    LmP0Text: key_text
+    LmP0Text: payload_text
+    LmTransRegistryFact: projection
+    const: @: char relation_name
+    @: char relation_path
+    size_t: relation_path_length
+    size_t: cell_count
+    size_t: column_index
+    int: status
+
+    if: descriptor = 0 || descriptor\name = 0 || row = 0 || row\cells = 0 || c.lm_trans_registry = 0 || c.lm_trans_registry->value_arena = 0
+        return: -1
+
+    cell_count: lm_table_descriptor_column_count(descriptor)
+    if: cell_count = 0U || lm_table_row_cell_count(row) != cell_count
+        return: -1
+
+    status: 0
+    column_index: 0U
+    while: status = 0 && column_index < cell_count
+        column: lm_table_descriptor_column_at(descriptor, column_index)
+        cell: lm_own_ptr_stack_at(row\cells, column_index)
+        if: column = 0 || cell = 0
+            status: 1
+        else:
+            if: cell\atom != 0 && lm_table_column_descriptor_has_descriptor(column, "class") != 0
+                atom_text: lm_trans_text_from_cstr(cell\atom)
+                if: atom_text = 0
+                    status: 1
+                else:
+                    if: lm_trans_registry_payload_is_null(atom_text) = 0 && lm_trans_registry_note_class_present(atom_text) != 0
+                        status: 1
+                    lm_trans_text_ref_destroy(@ atom_text)
+                ---
+            ---
+        ---
+        column_index: column_index + 1U
+
+    if: status != 0 || row\source_native != 0
+        return: status != 0
+
+    cell: lm_own_ptr_stack_at(row\cells, 0U)
+    if: cell = 0 || cell\value = 0
+        return: -1
+    key_text: lm_trans_text_from_cstr(cell\value)
+    if: key_text = 0
+        return: -1
+
+    column_index: 1U
+    while: status = 0 && column_index < cell_count
+        column: lm_table_descriptor_column_at(descriptor, column_index)
+        cell: lm_own_ptr_stack_at(row\cells, column_index)
+        if: column = 0 || cell = 0
+            status: 1
+        else:
+            if: cell\value != 0 || cell\node != 0
+                relation_name: "row"
+                if: cell_count > 2U
+                    relation_name: column\name
+                relation_path: lm_trans_registry_source_relation_path_new(descriptor\name, relation_name, @ relation_path_length)
+                c.LM_UNUSED(relation_path_length)
+                table_text: 0
+                payload_text: 0
+                projection: 0
+                if: relation_path != 0
+                    table_text: lm_trans_text_from_cstr(relation_path)
+                if: cell\value != 0
+                    payload_text: lm_trans_text_from_cstr(cell\value)
+                if: relation_path = 0 || table_text = 0 || (cell\value != 0 && payload_text = 0)
+                    status: 1
+                else:
+                    if: cell\node != 0
+                        if: lm_trans_registry_push_row_node_values_with_fact(table_text, key_text, (cast: (const: LmP0Node) cell\node), @ projection) != 0 || projection = 0 || projection\payload_node = 0
+                            status: 1
+                        else:
+                            cell\node: projection\payload_node
+                            cell\source: projection
+                        ---
+                    else:
+                        if: lm_trans_registry_push_row_values_with_fact(table_text, key_text, payload_text, @ projection) != 0 || projection = 0 || projection\payload = 0
+                            status: 1
+                        else:
+                            cell\source: projection
+                        ---
+                    ---
+                ---
+                lm_trans_text_ref_destroy(@ payload_text)
+                lm_trans_text_ref_destroy(@ table_text)
+                lm_own_delete(relation_path, 0)
+            ---
+        ---
+        column_index: column_index + 1U
+
+    lm_trans_text_ref_destroy(@ key_text)
+return: status != 0
+
 fn: lm_trans_namespace_registry_source_relation_has_key (
     const: (LmTransNamespace: namespace_)
     const: (LmP0Text: key)
@@ -1962,8 +2363,10 @@ fn: lm_trans_namespace_registry_source_relation_has_key (
     @: char source_path
     size_t: source_path_length
     int: facade_has_key
+    int: source_any_has_key
     int: source_has_key
     int: source_covered
+    int: projected_covered
 
     if: key = 0 || table = 0 || relation_name = 0
         return: 0
@@ -1990,10 +2393,15 @@ fn: lm_trans_namespace_registry_source_relation_has_key (
         lm_own_delete(source_path, 0)
         return: facade_has_key
     source_covered: 0
-    source_has_key: lm_registry_view_source_path_has_key_slice(c.lm_trans_registry->view, source_path, source_path_length, key_payload\data, key_payload\length, @ source_covered)
+    projected_covered: 0
+    source_any_has_key: lm_registry_view_source_path_has_key_slice(c.lm_trans_registry->view, source_path, source_path_length, key_payload\data, key_payload\length, @ source_covered)
+    source_has_key: lm_registry_view_source_path_has_key_slice_mode(c.lm_trans_registry->view, source_path, source_path_length, key_payload\data, key_payload\length, 1, @ projected_covered)
     lm_trans_text_ref_destroy(@ key_payload)
     lm_own_delete(source_path, 0)
 
+    if: source_covered != projected_covered || (source_has_key != 0 && source_any_has_key = 0)
+        lm_trans_registry_view_parity_fail("projected source relation membership", table)
+    source_covered: projected_covered
     if: source_covered != 0 && source_has_key != 0 && facade_has_key = 0
         lm_trans_registry_view_parity_fail("source relation key membership", table)
     if: lm_trans_registry_view_is_selected() != 0 && source_covered != 0 && (source_has_key != 0 || facade_has_key = 0)
@@ -2095,7 +2503,7 @@ fn: lm_trans_namespace_registry_source_relation_keys_new (
     source_count: 0U
     source_exact: 1
     source_covered: 0
-    source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, source_count, @ source_covered)
+    source_key: lm_registry_view_source_path_key_at_slice_mode(c.lm_trans_registry->view, source_path, source_path_length, source_count, 1, @ source_covered)
     if: source_covered = 0
         lm_own_delete(consumed, 0)
         lm_own_delete(source_path, 0)
@@ -2130,7 +2538,7 @@ fn: lm_trans_namespace_registry_source_relation_keys_new (
             return: 0
 
         source_count: source_count + 1U
-        source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, source_count, @ source_covered)
+        source_key: lm_registry_view_source_path_key_at_slice_mode(c.lm_trans_registry->view, source_path, source_path_length, source_count, 1, @ source_covered)
 
     if: source_count != facade_count
         source_exact: 0
@@ -2138,7 +2546,7 @@ fn: lm_trans_namespace_registry_source_relation_keys_new (
     if: lm_trans_registry_view_is_selected() != 0 && source_exact != 0
         i: 0U
         while: i < source_count
-            source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, i, @ source_covered)
+            source_key: lm_registry_view_source_path_key_at_slice_mode(c.lm_trans_registry->view, source_path, source_path_length, i, 1, @ source_covered)
             if: source_key = 0 || lm_own_ptr_stack_push(keys, (cast: (@: void) source_key)) != 0
                 lm_own_delete(consumed, 0)
                 lm_own_delete(source_path, 0)
@@ -2208,8 +2616,10 @@ fn: lm_trans_registry_table_has_rows (const: @(char table)) int
     const: LmOwnPtrStack: stack
     int: legacy_has_rows
     int: view_has_rows
+    int: source_any_has_rows
     int: source_has_rows
     int: source_covered
+    int: projected_covered
 
     if: table = 0
         return: 0
@@ -2221,7 +2631,12 @@ fn: lm_trans_registry_table_has_rows (const: @(char table)) int
     source_has_rows: 0
     if: lm_trans_registry_view_parity_enabled() != 0
         view_has_rows: lm_registry_view_table_has_rows(c.lm_trans_registry->view, table)
-        source_has_rows: lm_registry_view_source_path_has_rows(c.lm_trans_registry->view, table, @ source_covered)
+        projected_covered: 0
+        source_any_has_rows: lm_registry_view_source_path_has_rows(c.lm_trans_registry->view, table, @ source_covered)
+        source_has_rows: lm_registry_view_source_path_has_rows_slice_mode(c.lm_trans_registry->view, table, c.strlen(table), 1, @ projected_covered)
+        if: source_covered != projected_covered || (source_has_rows != 0 && source_any_has_rows = 0)
+            lm_trans_registry_view_parity_fail("projected source table row presence", table)
+        source_covered: projected_covered
         if: legacy_has_rows != view_has_rows
             lm_trans_registry_view_parity_fail("table row presence", table)
         if: source_covered != 0 && source_has_rows != 0 && legacy_has_rows = 0
@@ -2247,7 +2662,7 @@ return: copied\node = source\node && copied\source = source\source && copied\exp
 fn: lm_trans_registry_source_row_copy_same (const: (LmTableRow: copied); const: (LmTableRow: source)) int
     size_t: cell_index
 
-    if: copied = 0 || source = 0 || copied = source || lm_table_row_cell_count(copied) != lm_table_row_cell_count(source)
+    if: copied = 0 || source = 0 || copied = source || copied\source_native != source\source_native || lm_table_row_cell_count(copied) != lm_table_row_cell_count(source)
         return: 0
     cell_index: 0U
     while: cell_index < lm_table_row_cell_count(copied)
@@ -2313,9 +2728,16 @@ fn: lm_trans_registry_assert_source_table_materialization () int
                 c.fprintf(c.stderr, "trans registry source table error: invalid row %zu for %s\n", row_index, descriptor\name)
                 return: 1
             key_cell: lm_table_row_cell_at(row, 0U)
-            if: key_cell = 0 || key_cell\atom = 0 || key_cell\value = 0 || key_cell\node != 0 || key_cell\source != 0
-                c.fprintf(c.stderr, "trans registry source table error: invalid key cell in %s row %zu\n", descriptor\name, row_index)
-                return: 1
+            if: row\source_native = 0
+                if: key_cell = 0 || key_cell\atom = 0 || key_cell\value = 0 || key_cell\node != 0 || key_cell\source != 0
+                    c.fprintf(c.stderr, "trans registry source table error: invalid projected key cell in %s row %zu\n", descriptor\name, row_index)
+                    return: 1
+                ---
+            else:
+                if: key_cell = 0 || key_cell\source != 0 || (key_cell\node = 0 && (key_cell\atom = 0 || key_cell\value = 0)) || (key_cell\node != 0 && key_cell\value != 0)
+                    c.fprintf(c.stderr, "trans registry source table error: invalid source-native key cell in %s row %zu\n", descriptor\name, row_index)
+                    return: 1
+                ---
 
             if: row\source != 0
                 source_row: row\source
@@ -2335,40 +2757,48 @@ fn: lm_trans_registry_assert_source_table_materialization () int
                         return: 1
                 ---
                 else:
-                    if: cell\source = 0
-                        if: cell\value != 0 || cell\node != 0
-                            c.fprintf(c.stderr, "trans registry source table error: materialized cell has no legacy source in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
+                    if: row\source_native != 0
+                        if: cell\source != 0 || (cell\value != 0 && cell\node != 0) || (cell\value = 0 && cell\node = 0 && cell\atom = 0)
+                            c.fprintf(c.stderr, "trans registry source table error: invalid source-native cell in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
                             return: 1
-                    ---
-                    else:
-                        fact: cast: (const: LmTransRegistryFact) cell\source
-                        if: fact\key = 0 || c.strcmp(fact\key, key_cell\value) != 0 || (fact\payload = 0) != (cell\value = 0) || (fact\payload != 0 && c.strcmp(fact\payload, cell\value) != 0) || fact\payload_node != cell\node
-                            c.fprintf(c.stderr, "trans registry source table error: legacy projection differs in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
-                            return: 1
-                        relation_name: "row"
-                        if: column_count > 2U
-                            column: lm_table_descriptor_column_at(descriptor, cell_index)
-                            if: column = 0 || column\name = 0
-                                return: 1
-                            relation_name: column\name
                         ---
-                        source_path: lm_trans_registry_source_relation_path_new(descriptor\name, relation_name, @ source_path_length)
-                        if: source_path = 0
-                            return: 1
-                        facade_rows: lm_trans_registry_relation_stack_for_table(source_path)
-                        witnessed: 0
-                        facade_index: 0U
-                        while: facade_rows != 0 && facade_index < facade_rows\count
-                            facade_row: cast: (const: LmTransRegistryFact) lm_own_ptr_stack_at(facade_rows, facade_index)
-                            if: facade_row != 0 && facade_row\key != 0 && c.strcmp(facade_row\key, key_cell\value) = 0 && lm_trans_registry_fact_has_source(facade_row, fact) != 0 && (facade_row\payload = 0) = (cell\value = 0)
-                                if: cell\value = 0 || c.strcmp(facade_row\payload, cell\value) = 0
-                                    witnessed: cell\value != 0 || facade_row\payload_node != 0
+                    else:
+                        if: cell\source = 0
+                            if: cell\value != 0 || cell\node != 0
+                                c.fprintf(c.stderr, "trans registry source table error: projected cell has no legacy source in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
+                                return: 1
                             ---
-                            facade_index: facade_index + 1U
-                        lm_own_delete(source_path, 0)
-                        if: witnessed = 0
-                            c.fprintf(c.stderr, "trans registry source table error: no facade provenance for %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
-                            return: 1
+                        else:
+                            fact: cast: (const: LmTransRegistryFact) cell\source
+                            if: fact\key = 0 || c.strcmp(fact\key, key_cell\value) != 0 || (fact\payload = 0) != (cell\value = 0) || (fact\payload != 0 && c.strcmp(fact\payload, cell\value) != 0) || fact\payload_node != cell\node
+                                c.fprintf(c.stderr, "trans registry source table error: legacy projection differs in %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
+                                return: 1
+                            relation_name: "row"
+                            if: column_count > 2U
+                                column: lm_table_descriptor_column_at(descriptor, cell_index)
+                                if: column = 0 || column\name = 0
+                                    return: 1
+                                relation_name: column\name
+                            ---
+                            source_path: lm_trans_registry_source_relation_path_new(descriptor\name, relation_name, @ source_path_length)
+                            if: source_path = 0
+                                return: 1
+                            facade_rows: lm_trans_registry_relation_stack_for_table(source_path)
+                            witnessed: 0
+                            facade_index: 0U
+                            while: facade_rows != 0 && facade_index < facade_rows\count
+                                facade_row: cast: (const: LmTransRegistryFact) lm_own_ptr_stack_at(facade_rows, facade_index)
+                                if: facade_row != 0 && facade_row\key != 0 && c.strcmp(facade_row\key, key_cell\value) = 0 && lm_trans_registry_fact_has_source(facade_row, fact) != 0 && (facade_row\payload = 0) = (cell\value = 0)
+                                    if: cell\value = 0 || c.strcmp(facade_row\payload, cell\value) = 0
+                                        witnessed: cell\value != 0 || facade_row\payload_node != 0
+                                ---
+                                facade_index: facade_index + 1U
+                            lm_own_delete(source_path, 0)
+                            if: witnessed = 0
+                                c.fprintf(c.stderr, "trans registry source table error: no facade provenance for %s row %zu column %zu\n", descriptor\name, row_index, cell_index)
+                                return: 1
+                            ---
+                        ---
                     ---
                 ---
                 cell_index: cell_index + 1U

@@ -1,0 +1,18 @@
+L1:
+===
+#define LM_TEST_L2_GUARD_IMPORT_PREDECLARED 1
+===
+
+L2:
+    import: "fixtures/l2_conditional_import_fixture.lm2"
+
+    guard: LM_TEST_L2_GUARD_IMPORT_PREDECLARED
+        import: "fixtures/l2_conditional_import_fixture.lm2"
+    end: guard
+
+    external:
+        fn: main () int
+            return: lm_test_l2_conditional_import_fixture_value() != 37
+        end: main
+    end: external
+end: L2

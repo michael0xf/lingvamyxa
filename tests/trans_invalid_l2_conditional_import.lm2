@@ -1,0 +1,12 @@
+L2:
+    ifdef:
+        `LM_TEST_FIRST_CONDITIONAL_IMPORT`:
+            import: "fixtures/l2_conditional_import_fixture.lm2"
+        default:
+            external:
+                fn: main () int
+                    return: 0
+                end: main
+            end: external
+    end: ifdef
+end: L2

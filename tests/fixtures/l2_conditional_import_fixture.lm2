@@ -1,0 +1,10 @@
+table:
+    name: conditionalImportFixture
+    columns((int: id) (int: value))
+    rows:
+             1  37
+end: conditionalImportFixture
+
+fn: lm_test_l2_conditional_import_fixture_value () int
+    return: conditionalImportFixture\value
+end: lm_test_l2_conditional_import_fixture_value
