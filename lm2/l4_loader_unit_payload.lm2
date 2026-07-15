@@ -1,5 +1,5 @@
 L2:
-    import: "lm4/own_abi.lm4"
+    predef: "lm2/own_abi.lm2"
 
     LmOwnPtrStack: lm_l4_seen_tables
 

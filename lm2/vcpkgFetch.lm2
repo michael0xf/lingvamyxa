@@ -37,7 +37,7 @@ table:
              LmVcpkgOptions 1
 end: `class.reference-base`
 
-import: "lm4/own_abi.lm4"
+predef: "lm2/own_abi.lm2"
 predef: "libc_abi.lm2"
 
 os:

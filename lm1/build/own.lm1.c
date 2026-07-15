@@ -118,6 +118,74 @@ int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #include <stdlib.h>
 #include <string.h>
 void * lm_own_new_zero(size_t size);
@@ -164,6 +232,7 @@ int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
 static LmOwnPtrStack * lm_own_global_allocation_descriptors;
 
 static int lm_own_global_allocation_descriptors_ready;
+
 void * lm_own_new_zero(size_t size) {
     return calloc(1U, size);
 }

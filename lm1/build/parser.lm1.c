@@ -415,6 +415,73 @@ static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP
 static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 static LmOwnPtrStack * lm_l4_seen_tables_get(void);
 static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables);
 static int lm_l4_text_equals(const LmP0Text *text, const char *value);
@@ -470,6 +537,7 @@ static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0St
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
 
 static LmOwnPtrStack * lm_l4_seen_tables;
+
 static LmOwnPtrStack * lm_l4_seen_tables_get(void) {
     return lm_l4_seen_tables;
 }
@@ -1925,6 +1993,7 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
+
 static int lm_p0_text_equals(const LmP0Text *text, const char *value);
 static int lm_p0_identifier_payload(const LmP0Text *atom, LmP0Text *out_payload);
 static int lm_p0_registry_identifier_value(const LmP0Text *atom, LmP0Text *out_payload);
@@ -2264,6 +2333,8 @@ char * lm_p0_dump_alloc(const LmP0Document *document);
 
 
 static LmP0Registry * lm_p0_registry;
+
+
 
 
 static int lm_p0_text_equals(const LmP0Text *text, const char *value) {

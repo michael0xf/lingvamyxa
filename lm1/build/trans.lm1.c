@@ -1042,6 +1042,73 @@ static int lm_trans_l4_payload_pointer_bindings_init(void);
 static void lm_trans_l4_payload_pointer_bindings_destroy(void);
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 static LmOwnPtrStack * lm_l4_seen_tables_get(void);
 static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables);
 static int lm_l4_text_equals(const LmP0Text *text, const char *value);
@@ -1097,6 +1164,7 @@ static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0St
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
 
 static LmOwnPtrStack * lm_l4_seen_tables;
+
 static LmOwnPtrStack * lm_l4_seen_tables_get(void) {
     return lm_l4_seen_tables;
 }
@@ -2461,6 +2529,7 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
     lm_own_delete(seen, 0);
     return status;
 }
+
 
 
 
@@ -4160,6 +4229,8 @@ static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     }
     return thread->current->diagnostic_code;
 }
+
+
 
 
 
@@ -38958,6 +39029,7 @@ int main(int argc, char **argv) {
     }
     return lm_trans_emit_document(argv[1], argv[2]);
 }
+
 
 static int lm_trans_text_equals(const LmP0Text *text, const char *value) {
     size_t length;

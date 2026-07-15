@@ -1,4 +1,4 @@
-import: "lm4/own_abi.lm4"
+predef: "lm2/own_abi.lm2"
 
 fn: lm_trans_text_equals (const: (LmP0Text: text); const: @(char value)) int
     size_t: length

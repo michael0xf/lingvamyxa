@@ -1,4 +1,4 @@
-import: "lm4/own_abi.lm4"
+predef: "lm2/own_abi.lm2"
 predef: "lm2/parser_abi.lm2"
 include
 alias

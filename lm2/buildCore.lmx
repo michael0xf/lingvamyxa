@@ -57,7 +57,7 @@ L2:
                  include            None                        "<direct.h>"                                     "<unistd.h>"
     end: BUILD
 
-    import: "lm4/own_abi.lm4"
+    predef: "lm2/own_abi.lm2"
     
     include: "<stdio.h>" "<stdlib.h>" "<string.h>"
     

@@ -1,6 +1,6 @@
-predef: "table_descriptor_model.lm2"
+predef: "lm2/own_abi.lm2"
 
-import: "lm4/own_abi.lm4"
+predef: "table_descriptor_model.lm2"
 
 include: "<string.h>"
 

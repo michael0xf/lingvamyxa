@@ -10,7 +10,7 @@ fn
 prototype
 unit
 
-import: "lm4/own_abi.lm4"
+predef: "lm2/own_abi.lm2"
 
 include: "<stdlib.h>" "<string.h>"
 
