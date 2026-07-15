@@ -5,14 +5,19 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+
 #include <stddef.h>
 #include <stddef.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #define LM_TRANS_REGISTRY_CLONE_STRUCTURE 1
 #define LM_TRANS_REGISTRY_CLONE_TRAILER 2
+
+
+
 
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 typedef struct LmOwnValueStack LmOwnValueStack;
@@ -58,12 +63,14 @@ typedef struct LmTransTopLevelItem LmTransTopLevelItem;
 typedef struct LmTransFunctionEmitFrame LmTransFunctionEmitFrame;
 typedef struct LmTransTypePointerSuffix LmTransTypePointerSuffix;
 
+
 typedef int LmOwnEdgeKind;
 typedef int LmP0NodeKind;
 typedef unsigned LmP0FrameFlags;
 typedef unsigned LmP0NodeFlags;
 typedef unsigned LmP0TrailerFlags;
 typedef LmL4Column *LmTransRegistryColumn;
+
 
 #define LM_OWN_EDGE_BORROWED 1
 #define LM_OWN_EDGE_OWNED 2
@@ -81,6 +88,7 @@ typedef LmL4Column *LmTransRegistryColumn;
 #define LM_P0_NODE_MIX 2U
 #define LM_P0_NODE_POSITIONAL_SKIP 4U
 #define LM_P0_TRAILER_TAIL_CUTTER 1U
+
 
 #include <stddef.h>
 
@@ -632,6 +640,7 @@ typedef struct LmTransL4LoadContext {
     size_t source_table_initial_row_count;
 } LmTransL4LoadContext;
 
+
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields 1
 typedef void (*LmOwnDestroyFields)(void *object);
@@ -756,6 +765,7 @@ typedef int (*LmTransL4AtomHandler)(const LmP0Text *atom, int allow_node_cells);
 #define LM_LMX_TYPEDEF_DEFINED_LmTransL4PayloadFrameHandler 1
 typedef int (*LmTransL4PayloadFrameHandler)(FILE *output, const LmP0Frame *frame, LmTransNamespace *namespace_);
 #endif
+
 
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
@@ -1030,6 +1040,7 @@ static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int i
 static int lm_trans_l4_root_receiver_registry(const LmP0Frame *frame, int allow_node_cells);
 static int lm_trans_l4_payload_pointer_bindings_init(void);
 static void lm_trans_l4_payload_pointer_bindings_destroy(void);
+
 
 static LmOwnPtrStack * lm_l4_seen_tables_get(void);
 static void lm_l4_seen_tables_set(LmOwnPtrStack *seen_tables);
@@ -2477,7 +2488,6 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
-
 #include <string.h>
 static char * lm_table_descriptor_copy_slice(const char *data, size_t length);
 static char * lm_table_descriptor_copy_cstr(const char *value);
@@ -2568,7 +2578,6 @@ static const LmRegistryViewRow * lm_registry_view_matching_key_at_slice(const Lm
 static const LmRegistryViewRow * lm_registry_view_matching_key_at(const LmRegistryView *view, const char *table, const char *key, size_t match_index);
 static const LmOwnPtrStack * lm_registry_view_local_source_rows_slice(const LmRegistryView *view, const char *table, size_t table_length);
 static int lm_registry_view_table_has_rows(const LmRegistryView *view, const char *table);
-
 
 
 #include <stdio.h>
