@@ -1,33 +1,6 @@
 import: "lm2/own.lm2"
 import: "lm2/mix/ArrayEnumeration.lm2"
-
-L4:
-    table:
-        name: LmArray
-        columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
-        rows:
-                 items     void    0  2
-                 amount    size_t  1  0
-                 capacity  size_t  2  0
-    end: LmArray
-
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmArray c.struct
-    end: `layout.backend`
-
-    table:
-        name: functionPointerType
-        columns((class: class) (int: value))
-        rows:
-                 LmArrayEquals 1
-    end: functionPointerType
-
-    fn: LmArrayEquals (@: void left; @: void right) int
-
-end: L4
+predef: "Array_model.lm2"
 
 external:
     fn: lm_array_default_capacity () size_t
