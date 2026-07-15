@@ -298,16 +298,46 @@ typedef struct LmP0PostprocessFrame {
     LmP0Field * field;
 } LmP0PostprocessFrame;
 
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields 1
 typedef void (*LmOwnDestroyFields)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushRow
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushRow 1
 typedef int (*LmL4PushRow)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushCell
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushCell 1
 typedef int (*LmL4PushCell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushTableRow
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushTableRow 1
 typedef int (*LmL4PushTableRow)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4NoteKey
+#define LM_LMX_TYPEDEF_DEFINED_LmL4NoteKey 1
 typedef int (*LmL4NoteKey)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushColumnMetadata
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushColumnMetadata 1
 typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4JoinTable
+#define LM_LMX_TYPEDEF_DEFINED_LmL4JoinTable 1
 typedef int (*LmL4JoinTable)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4FrameReceiver
+#define LM_LMX_TYPEDEF_DEFINED_LmL4FrameReceiver 1
 typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4FrameIndexRule
+#define LM_LMX_TYPEDEF_DEFINED_LmL4FrameIndexRule 1
 typedef int (*LmL4FrameIndexRule)(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+#endif
 
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);

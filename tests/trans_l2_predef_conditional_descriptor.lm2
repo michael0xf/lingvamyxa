@@ -1,0 +1,10 @@
+L2:
+    predef: "fixtures/l2_predef_conditional_descriptor.lm2"
+
+    external:
+        fn: main () int
+            LmTestPredefConditional: call lm_test_predef_conditional_ref()
+            return: c.LM_TEST_PREDEF_DESCRIPTOR_INVOKE(call)
+        end: main
+    end: external
+end: L2

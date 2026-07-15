@@ -61,8 +61,14 @@ struct LmOwnArena {
     int frozen;
 };
 
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields 1
 typedef void (*LmOwnDestroyFields)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
+#endif
 
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);

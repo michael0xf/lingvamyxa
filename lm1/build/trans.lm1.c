@@ -288,6 +288,7 @@ typedef struct LmTransRegistry {
     LmRegistryView * view;
     int view_mode;
     LmOwnPtrStack * predefined_paths;
+    LmOwnPtrStack * predefined_descriptor_sites;
 } LmTransRegistry;
 struct LmTransRegistryFact {
     char *table;
@@ -631,37 +632,130 @@ typedef struct LmTransL4LoadContext {
     size_t source_table_initial_row_count;
 } LmTransL4LoadContext;
 
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields 1
 typedef void (*LmOwnDestroyFields)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushRow
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushRow 1
 typedef int (*LmL4PushRow)(void *context, const LmP0Text *table_atom, const LmP0Text *key_atom, const LmP0Node *payload_node);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushCell
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushCell 1
 typedef int (*LmL4PushCell)(void *context, const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushTableRow
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushTableRow 1
 typedef int (*LmL4PushTableRow)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4NoteKey
+#define LM_LMX_TYPEDEF_DEFINED_LmL4NoteKey 1
 typedef int (*LmL4NoteKey)(void *context, const LmP0Text *table_name, const LmL4Column *column, const LmP0Text *key_atom);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4PushColumnMetadata
+#define LM_LMX_TYPEDEF_DEFINED_LmL4PushColumnMetadata 1
 typedef int (*LmL4PushColumnMetadata)(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4JoinTable
+#define LM_LMX_TYPEDEF_DEFINED_LmL4JoinTable 1
 typedef int (*LmL4JoinTable)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4FrameReceiver
+#define LM_LMX_TYPEDEF_DEFINED_LmL4FrameReceiver 1
 typedef int (*LmL4FrameReceiver)(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmL4FrameIndexRule
+#define LM_LMX_TYPEDEF_DEFINED_LmL4FrameIndexRule 1
 typedef int (*LmL4FrameIndexRule)(const LmL4Loader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprSegmentMaterializer
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprSegmentMaterializer 1
 typedef int (*LmTransExprSegmentMaterializer)(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransCallLoweringHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransCallLoweringHandler 1
 typedef int (*LmTransCallLoweringHandler)(const LmP0Text *head, const LmTransSymbol *symbol, LmTransCallLowering *out);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprFrameHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprFrameHandler 1
 typedef int (*LmTransExprFrameHandler)(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprAtomEmitHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprAtomEmitHandler 1
 typedef int (*LmTransExprAtomEmitHandler)(FILE *file, const LmTransExprAtomLowering *lowering, const LmTransNamespace *namespace_);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprAtomStateHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprAtomStateHandler 1
 typedef int (*LmTransExprAtomStateHandler)(const LmTransExprAtomLowering *lowering, const LmP0Node *node, const LmP0Node **previous_operand, int *expect_field_name, int *expect_c_field_name, int *c_dot_path);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprPieceEmitHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprPieceEmitHandler 1
 typedef int (*LmTransExprPieceEmitHandler)(FILE *file, LmTransExprStack *stack, LmTransExprLoweredRange *lowered, const LmTransExprPiece *piece, const LmTransNamespace *namespace_, int *out_suspend);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprJobHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprJobHandler 1
 typedef int (*LmTransExprJobHandler)(FILE *file, LmTransExprStack *stack, LmTransExprJob *job, const LmTransNamespace *namespace_);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprJobDestroyHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprJobDestroyHandler 1
 typedef void (*LmTransExprJobDestroyHandler)(LmTransExprJob *job);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransStatementJobHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransStatementJobHandler 1
 typedef int (*LmTransStatementJobHandler)(FILE *file, LmTransStatementStack *stack, LmTransStatementJob *job, LmTransNamespace *namespace_);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransStatementJobDestroyHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransStatementJobDestroyHandler 1
 typedef void (*LmTransStatementJobDestroyHandler)(LmTransStatementJob *job);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransStatementFrameHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransStatementFrameHandler 1
 typedef int (*LmTransStatementFrameHandler)(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransAtomStatementHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransAtomStatementHandler 1
 typedef int (*LmTransAtomStatementHandler)(FILE *file, const LmP0Node *node, unsigned indent, LmTransNamespace *namespace_);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransFunctionHeaderReceiver
+#define LM_LMX_TYPEDEF_DEFINED_LmTransFunctionHeaderReceiver 1
 typedef int (*LmTransFunctionHeaderReceiver)(const LmP0Frame *frame, int is_external, LmTransFunctionHeader *out);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTypeEmitReceiver
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTypeEmitReceiver 1
 typedef int (*LmTransTypeEmitReceiver)(FILE *file, const LmP0Node *type_node);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTypeStructureValueAllocReceiver
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTypeStructureValueAllocReceiver 1
 typedef int (*LmTransTypeStructureValueAllocReceiver)(FILE *file, unsigned indent, const LmP0Node *type_node, const LmP0Text *target_name, const LmP0Structure *value, int *out_consumed, int *out_needs_null_check);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTypeStructureValueFillReceiver
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTypeStructureValueFillReceiver 1
 typedef int (*LmTransTypeStructureValueFillReceiver)(FILE *file, unsigned indent, const LmP0Node *type_node, const LmP0Text *target_name, const LmP0Structure *value, const LmTransNamespace *namespace_, int *out_consumed);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTopLevelDeclareHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTopLevelDeclareHandler 1
 typedef int (*LmTransTopLevelDeclareHandler)(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTopLevelEmitHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTopLevelEmitHandler 1
 typedef int (*LmTransTopLevelEmitHandler)(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransL4FrameHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransL4FrameHandler 1
 typedef int (*LmTransL4FrameHandler)(const LmP0Frame *frame, int allow_node_cells);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransL4AtomHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransL4AtomHandler 1
 typedef int (*LmTransL4AtomHandler)(const LmP0Text *atom, int allow_node_cells);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransL4PayloadFrameHandler
+#define LM_LMX_TYPEDEF_DEFINED_LmTransL4PayloadFrameHandler 1
 typedef int (*LmTransL4PayloadFrameHandler)(FILE *output, const LmP0Frame *frame, LmTransNamespace *namespace_);
+#endif
 
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
@@ -2627,6 +2721,8 @@ static int lm_trans_l2_conditional_import_depth;
 
 static int lm_trans_l2_executable_statement_depth;
 
+static int lm_trans_l2_conditional_emission_depth;
+
 static LmTransRegistry * lm_trans_registry;
 
 static LmP0Text * lm_trans_text_ref_new(const LmP0Text *text);
@@ -3573,6 +3669,7 @@ static int lm_trans_registry_condition_row_at(const LmTransNamespace *namespace_
 static int lm_trans_declare_l2_registry_os_table(LmTransNamespace *namespace_);
 static int lm_trans_declare_l2_registry_ifdef_table(LmTransNamespace *namespace_);
 static int lm_trans_emit_l2_registry_os_node(FILE *output, const LmP0Node *node, LmTransNamespace *namespace_);
+static int lm_trans_emit_l2_registry_conditional_node(FILE *output, const LmP0Node *node, LmTransNamespace *namespace_);
 static int lm_trans_l4_payload_structure_looks_bare_l2(const LmP0Structure *body);
 static int lm_trans_emit_l4_payload_import_document(FILE *output, const char *payload_path, const LmP0Node *root, LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_payload_import_frame(FILE *output, const LmP0Frame *frame, LmTransNamespace *namespace_);
@@ -3687,6 +3784,7 @@ static int lm_trans_registry_push_column_metadata(const LmP0Text *table_name, Lm
 static char * lm_trans_registry_relation_name_new(const LmP0Text *owner, const char *suffix);
 static int lm_trans_registry_push_owner_relation_text_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload, LmTransRegistryFact **out_fact);
 static int lm_trans_registry_push_owner_relation_size_with_fact(const LmP0Text *owner, const char *suffix, const LmP0Text *key, size_t value, LmTransRegistryFact **out_fact);
+static int lm_trans_registry_owner_relation_has_key(const LmP0Text *owner, const char *relation_name, const LmP0Text *key);
 static int lm_trans_table_descriptor_add_generated_column_shaped(LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor, size_t address_depth, size_t array_rank, int is_const);
 static int lm_trans_table_descriptor_add_generated_column(LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor);
 static int lm_trans_registry_push_generated_source_n2_row_values_shaped(const LmP0Text *table_value, const LmP0Text *key_value, const LmP0Text *payload_value, const char *key_column_name, const char *key_descriptor, size_t key_address_depth, size_t key_array_rank, int key_is_const, const char *value_column_name, const char *value_descriptor, size_t value_address_depth, size_t value_array_rank, int value_is_const);
@@ -3746,6 +3844,9 @@ static int lm_trans_path_has_extension(const char *path, const char *extension);
 static int lm_trans_registry_path_already_loaded(const char *registry_path);
 static int lm_trans_registry_path_is_predefined(const char *registry_path);
 static int lm_trans_registry_note_predefined_path(const char *registry_path);
+static char * lm_trans_registry_predefined_descriptor_site_new(const char *registry_path, const LmP0Node *node);
+static int lm_trans_registry_predefined_descriptor_site_is_hoisted(const char *registry_path, const LmP0Node *node);
+static int lm_trans_registry_note_predefined_descriptor_site(const char *registry_path, const LmP0Node *node);
 static int lm_trans_registry_note_loaded_path(const char *registry_path);
 static int lm_trans_registry_load_import_frame(const LmP0Frame *frame, const char *source_path);
 static int lm_trans_registry_materialize_predef_path(const char *registry_path);
@@ -29243,10 +29344,12 @@ static int lm_trans_top_level_emit_callable_descriptor(FILE *file, LmTransNamesp
         lm_trans_text_ref_destroy(&descriptor_name);
         return 1;
     }
-    if (lm_trans_registry_materialize_fn_descriptor_frame(item -> frame) != 0) {
-        lm_trans_text_ref_destroy(&descriptor_name);
-        lm_own_delete(descriptor_name_storage, 0);
-        return 1;
+    if (lm_trans_registry_predefined_descriptor_site_is_hoisted(lm_trans_current_source_path, item -> node) == 0) {
+        if (lm_trans_registry_materialize_fn_descriptor_frame(item -> frame) != 0) {
+            lm_trans_text_ref_destroy(&descriptor_name);
+            lm_own_delete(descriptor_name_storage, 0);
+            return 1;
+        }
     }
     if (lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) || lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_name)) {
         if (lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) == 0) {
@@ -31623,8 +31726,14 @@ static int lm_trans_top_level_declare_os(LmTransNamespace *namespace_, const LmT
 }
 
 static int lm_trans_emit_l2_os_branch(FILE *output, const LmP0Frame *branch, LmTransNamespace *namespace_) {
+    int previous_emission_depth;
+    int status;
     if (lm_trans_os_branch_looks_l2(branch -> body)) {
-        return lm_trans_emit_l2_structure_with_namespace(output, branch -> body, 0, namespace_, 0);
+        previous_emission_depth = lm_trans_l2_conditional_emission_depth;
+        lm_trans_l2_conditional_emission_depth = previous_emission_depth + 1;
+        status = lm_trans_emit_l2_structure_with_namespace(output, branch -> body, 0, namespace_, 0);
+        lm_trans_l2_conditional_emission_depth = previous_emission_depth;
+        return status;
     }
     return lm_trans_emit_l1_structure(output, branch -> body);
 }
@@ -31872,6 +31981,7 @@ static int lm_trans_declare_l2_guard_frame(LmTransNamespace *namespace_, const L
 static int lm_trans_emit_l2_guard_frame(FILE *output, const LmP0Frame *frame, LmTransNamespace *namespace_) {
     LmP0Text * name;
     LmP0Structure * body;
+    int previous_emission_depth;
     int status;
     name = lm_trans_text_from_cstr("");
     body = lm_trans_p0_structure_view_new();
@@ -31890,11 +32000,11 @@ static int lm_trans_emit_l2_guard_frame(FILE *output, const LmP0Frame *frame, Lm
         lm_own_delete(body, 0);
         return 1;
     }
-    status = 0;
-    if (lm_trans_emit_l2_wrapper_body(output, body, namespace_) != 0) {
-        status = 1;
-    }
-    else {
+    previous_emission_depth = lm_trans_l2_conditional_emission_depth;
+    lm_trans_l2_conditional_emission_depth = previous_emission_depth + 1;
+    status = lm_trans_emit_l2_wrapper_body(output, body, namespace_);
+    lm_trans_l2_conditional_emission_depth = previous_emission_depth;
+    if (status == 0) {
         if (lm_trans_put(output, "#endif\n") != 0) {
             status = 1;
         }
@@ -32263,6 +32373,16 @@ static int lm_trans_emit_l2_registry_os_node(FILE *output, const LmP0Node *node,
     return lm_trans_emit_l1_node(output, node);
 }
 
+static int lm_trans_emit_l2_registry_conditional_node(FILE *output, const LmP0Node *node, LmTransNamespace *namespace_) {
+    int previous_emission_depth;
+    int status;
+    previous_emission_depth = lm_trans_l2_conditional_emission_depth;
+    lm_trans_l2_conditional_emission_depth = previous_emission_depth + 1;
+    status = lm_trans_emit_l2_registry_os_node(output, node, namespace_);
+    lm_trans_l2_conditional_emission_depth = previous_emission_depth;
+    return status;
+}
+
 static int lm_trans_l4_payload_structure_looks_bare_l2(const LmP0Structure *body) {
     const LmP0Field * field;
     const LmP0Node * node;
@@ -32599,7 +32719,7 @@ static int lm_trans_emit_l2_registry_os_table(FILE *output, LmTransNamespace *na
             }
             opened = 1;
         }
-        if (lm_trans_emit_l2_registry_os_node(output, body, namespace_) != 0) {
+        if (lm_trans_emit_l2_registry_conditional_node(output, body, namespace_) != 0) {
             lm_trans_text_ref_destroy(&branch_name);
             return 1;
         }
@@ -32699,7 +32819,7 @@ static int lm_trans_emit_l2_registry_ifdef_table(FILE *output, LmTransNamespace 
             lm_trans_text_ref_destroy(&condition);
             opened = 1;
         }
-        if (lm_trans_emit_l2_registry_os_node(output, body, namespace_) != 0) {
+        if (lm_trans_emit_l2_registry_conditional_node(output, body, namespace_) != 0) {
             lm_trans_text_ref_destroy(&branch_name);
             return 1;
         }
@@ -33142,12 +33262,17 @@ static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_
     const LmP0Field * field;
     const LmP0Node * node;
     LmTransHeadBinding * binding;
+    LmTransFunctionHeader * function;
+    int function_status;
     int status;
     if (namespace_ == 0) {
         return 1;
     }
     binding = lm_trans_head_binding_new();
-    if (binding == 0) {
+    function = lm_trans_function_header_new();
+    if (binding == 0 || function == 0) {
+        lm_trans_function_header_destroy(function);
+        lm_own_delete(binding, 0);
         return 1;
     }
     status = 0;
@@ -33170,10 +33295,30 @@ static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_
                         status = lm_trans_materialize_l2_join_source(namespace_, node -> as -> frame);
                     }
                 }
+                if (status == 0 && binding -> function_receiver_binding != 0 && (strcmp(binding -> function_receiver_binding, "lm_trans_receiver_fn") == 0 || strcmp(binding -> function_receiver_binding, "lm_trans_receiver_callable") == 0)) {
+                    lm_trans_function_header_destroy(function);
+                    function = lm_trans_function_header_new();
+                    if (function == 0) {
+                        status = 1;
+                    }
+                    else {
+                        function_status = binding->function_receiver(node -> as -> frame, 0, function);
+                        if (function_status < 0) {
+                            status = 1;
+                        }
+                        if (function_status > 0 && function -> is_descriptor_only) {
+                            status = lm_trans_registry_materialize_fn_descriptor_frame(node -> as -> frame);
+                            if (status == 0) {
+                                status = lm_trans_registry_note_predefined_descriptor_site(lm_trans_current_source_path, node);
+                            }
+                        }
+                    }
+                }
             }
         }
         field = field -> next;
     }
+    lm_trans_function_header_destroy(function);
     lm_own_delete(binding, 0);
     return status;
 }
@@ -34763,6 +34908,11 @@ static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity
         while (status == 0 && i < class_rows -> count) {
             row = lm_own_ptr_stack_at(class_rows, i);
             if (row != 0 && row -> key != 0 && row -> payload != 0) {
+                lm_trans_text_assign_cstr(param_text, row -> key);
+                if (row != lm_trans_registry_relation_stack_latest_row(class_rows, param_text)) {
+                    i = i + 1U;
+                    continue;
+                }
                 source_key_cell = 0;
                 class_payload = lm_trans_abi_source_text_value(namespace_, class_path, "class", row, &source_key_cell);
                 param_name = row -> key;
@@ -34774,7 +34924,6 @@ static int lm_trans_collect_abi_params(LmTransAbiParam **params, size_t capacity
                     status = 1;
                 }
                 else {
-                    lm_trans_text_assign_cstr(param_text, row -> key);
                     index_row = lm_trans_registry_relation_stack_latest_row(index_rows, param_text);
                     index_payload = lm_trans_abi_source_text_value(namespace_, index_path, "size_t", index_row, 0);
                     if (class_payload == 0 || index_payload == 0 || lm_trans_parse_size_payload(index_payload, &index) == 0) {
@@ -35548,19 +35697,40 @@ static int lm_trans_declare_l4_fn_descriptors(LmTransNamespace *namespace_) {
 
 static int lm_trans_emit_l4_function_pointer_type_name(FILE *file, const LmTransNamespace *namespace_, const char *name, const char *error_name) {
     LmTransAbiParam * *params;
+    LmP0Text * name_text;
     size_t param_capacity;
     size_t param_count;
     int status;
     if (name == 0 || error_name == 0) {
         return 1;
     }
+    name_text = lm_trans_text_from_cstr(name);
+    if (name_text == 0) {
+        return 1;
+    }
+    if (lm_trans_namespace_registry_lookup(namespace_, name_text, "typedef.emitted") != 0) {
+        lm_trans_text_ref_destroy(&name_text);
+        return 0;
+    }
+    if (lm_trans_put(file, "#ifndef LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, "\n#define LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, " 1\n") != 0) {
+        lm_trans_text_ref_destroy(&name_text);
+        return 1;
+    }
     param_capacity = 256U;
     params = lm_trans_l4_abi_params_new(param_capacity);
     if (params == 0) {
+        lm_trans_text_ref_destroy(&name_text);
         return 1;
     }
-    status = lm_trans_collect_abi_params(params, param_capacity, &param_count, namespace_, name, error_name) != 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0;
+    status = lm_trans_collect_abi_params(params, param_capacity, &param_count, namespace_, name, error_name) != 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0;
     lm_trans_l4_abi_params_delete(params, param_capacity);
+    if (status == 0 && lm_trans_put(file, "#endif\n") != 0) {
+        status = 1;
+    }
+    if (status == 0 && lm_trans_l2_conditional_emission_depth == 0 && lm_trans_l4_mark_typedef_emitted_cstr(name) != 0) {
+        status = 1;
+    }
+    lm_trans_text_ref_destroy(&name_text);
     return status;
 }
 
@@ -35775,6 +35945,7 @@ static void lm_trans_registry_destroy(void) {
         lm_trans_identifier_table_delete(&lm_trans_registry -> identifiers);
         lm_own_arena_destroy(lm_trans_registry -> value_arena);
         lm_own_delete(lm_trans_registry -> value_arena, 0);
+        lm_trans_ptr_stack_delete(&lm_trans_registry -> predefined_descriptor_sites);
         lm_trans_ptr_stack_delete(&lm_trans_registry -> predefined_paths);
         lm_trans_ptr_stack_delete(&lm_trans_registry -> loaded_paths);
         lm_own_delete(lm_trans_registry -> source_path, 0);
@@ -35927,6 +36098,15 @@ static int lm_trans_registry_push_owner_relation_size_with_fact(const LmP0Text *
     char buffer[32];
     snprintf(buffer, sizeof(buffer), "%zu", value);
     return lm_trans_registry_push_owner_relation_text_with_fact(owner, suffix, key, lm_trans_text_from_cstr(buffer), out_fact);
+}
+
+static int lm_trans_registry_owner_relation_has_key(const LmP0Text *owner, const char *relation_name, const LmP0Text *key) {
+    const LmOwnPtrStack * rows;
+    if (owner == 0 || relation_name == 0 || key == 0) {
+        return 0;
+    }
+    rows = lm_trans_namespace_registry_relation_stack(0, owner, relation_name);
+    return lm_trans_registry_relation_stack_latest_row(rows, key) != 0;
 }
 
 static int lm_trans_table_descriptor_add_generated_column_shaped(LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor, size_t address_depth, size_t array_rank, int is_const) {
@@ -36378,10 +36558,10 @@ static int lm_trans_registry_materialize_fn_descriptor_return(const LmP0Text *fu
     if (lm_trans_registry_push_owner_relation_text_with_fact(function_name, ".return.class", return_name, return_type -> class_name, &class_fact) != 0) {
         status = 1;
     }
-    if (status == 0 && return_type -> address_depth != 0U && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.address-depth", return_name, return_type -> address_depth, &address_depth_fact) != 0) {
+    if (status == 0 && (return_type -> address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "return.address-depth", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.address-depth", return_name, return_type -> address_depth, &address_depth_fact) != 0) {
         status = 1;
     }
-    if (status == 0 && return_type -> is_const && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.const", return_name, 1U, &const_fact) != 0) {
+    if (status == 0 && (return_type -> is_const || lm_trans_registry_owner_relation_has_key(function_name, "return.const", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.const", return_name, (((size_t)(return_type -> is_const != 0))), &const_fact) != 0) {
         status = 1;
     }
     if (status == 0 && lm_trans_registry_materialize_generated_return_source_row(function_name, class_fact, address_depth_fact, const_fact) != 0) {
@@ -36422,10 +36602,10 @@ static int lm_trans_registry_materialize_fn_descriptor_param(const LmP0Text *fun
     if (status == 0 && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.index", param_name, index, &index_fact) != 0) {
         status = 1;
     }
-    if (status == 0 && param -> type -> address_depth != 0U && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.address-depth", param_name, param -> type -> address_depth, &address_depth_fact) != 0) {
+    if (status == 0 && (param -> type -> address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "param.address-depth", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.address-depth", param_name, param -> type -> address_depth, &address_depth_fact) != 0) {
         status = 1;
     }
-    if (status == 0 && param -> type -> is_const && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.const", param_name, 1U, &const_fact) != 0) {
+    if (status == 0 && (param -> type -> is_const || lm_trans_registry_owner_relation_has_key(function_name, "param.const", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.const", param_name, (((size_t)(param -> type -> is_const != 0))), &const_fact) != 0) {
         status = 1;
     }
     if (status == 0 && lm_trans_registry_note_class_present(param -> type -> class_name) != 0) {
@@ -37550,6 +37730,72 @@ static int lm_trans_registry_note_predefined_path(const char *registry_path) {
     return 0;
 }
 
+static char * lm_trans_registry_predefined_descriptor_site_new(const char *registry_path, const LmP0Node *node) {
+    char *site;
+    int needed;
+    if (registry_path == 0 || node == 0 || node -> span == 0) {
+        return 0;
+    }
+    needed = snprintf(0, 0, "%s#%zu", registry_path, node -> span -> offset);
+    if (needed < 0) {
+        return 0;
+    }
+    site = ((char *)lm_own_new_zero((((size_t)needed)) + 1U));
+    if (site == 0) {
+        return 0;
+    }
+    if (snprintf(site, (((size_t)needed)) + 1U, "%s#%zu", registry_path, node -> span -> offset) != needed) {
+        lm_own_delete(site, 0);
+        return 0;
+    }
+    return site;
+}
+
+static int lm_trans_registry_predefined_descriptor_site_is_hoisted(const char *registry_path, const LmP0Node *node) {
+    const char *stored_site;
+    char *site;
+    size_t index;
+    int found;
+    if (lm_trans_registry == 0 || lm_trans_registry -> predefined_descriptor_sites == 0) {
+        return 0;
+    }
+    site = lm_trans_registry_predefined_descriptor_site_new(registry_path, node);
+    if (site == 0) {
+        return 0;
+    }
+    found = 0;
+    index = 0U;
+    while (index < lm_trans_registry -> predefined_descriptor_sites -> count) {
+        stored_site = lm_own_ptr_stack_at(lm_trans_registry -> predefined_descriptor_sites, index);
+        if (stored_site != 0 && strcmp(stored_site, site) == 0) {
+            found = 1;
+            break;
+        }
+        index = index + 1U;
+    }
+    lm_own_delete(site, 0);
+    return found;
+}
+
+static int lm_trans_registry_note_predefined_descriptor_site(const char *registry_path, const LmP0Node *node) {
+    char *site;
+    if (registry_path == 0 || node == 0 || lm_trans_registry == 0 || lm_trans_registry -> predefined_descriptor_sites == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_predefined_descriptor_site_is_hoisted(registry_path, node)) {
+        return 0;
+    }
+    site = lm_trans_registry_predefined_descriptor_site_new(registry_path, node);
+    if (site == 0) {
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(lm_trans_registry -> predefined_descriptor_sites, site) != 0) {
+        lm_own_delete(site, 0);
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_registry_note_loaded_path(const char *registry_path) {
     char *copy;
     if (registry_path == 0) {
@@ -38114,7 +38360,8 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
     lm_trans_registry->value_arena = lm_own_new_zero(sizeof(lm_trans_registry -> value_arena[0]));
     lm_trans_registry->loaded_paths = lm_trans_ptr_stack_new(lm_own_delete_plain);
     lm_trans_registry->predefined_paths = lm_trans_ptr_stack_new(lm_own_delete_plain);
-    if (lm_trans_registry -> identifiers == 0 || lm_trans_registry -> value_arena == 0 || lm_own_arena_init(lm_trans_registry -> value_arena) != 0 || lm_trans_registry -> loaded_paths == 0 || lm_trans_registry -> predefined_paths == 0) {
+    lm_trans_registry->predefined_descriptor_sites = lm_trans_ptr_stack_new(lm_own_delete_plain);
+    if (lm_trans_registry -> identifiers == 0 || lm_trans_registry -> value_arena == 0 || lm_own_arena_init(lm_trans_registry -> value_arena) != 0 || lm_trans_registry -> loaded_paths == 0 || lm_trans_registry -> predefined_paths == 0 || lm_trans_registry -> predefined_descriptor_sites == 0) {
         lm_trans_registry_destroy();
         return 1;
     }
@@ -38301,6 +38548,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     lm_trans_l2_table_materialization_suppression_depth = 0;
     lm_trans_l2_conditional_import_depth = 0;
     lm_trans_l2_executable_statement_depth = 0;
+    lm_trans_l2_conditional_emission_depth = 0;
     emitted = 0;
     lm_trans_declared_import_paths = lm_trans_ptr_stack_new(lm_own_delete_plain);
     lm_trans_declared_import_documents = lm_trans_ptr_stack_new(lm_trans_import_document_delete);
@@ -38331,6 +38579,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     lm_trans_l2_table_materialization_suppression_depth = 0;
     lm_trans_l2_conditional_import_depth = 0;
     lm_trans_l2_executable_statement_depth = 0;
+    lm_trans_l2_conditional_emission_depth = 0;
     lm_trans_current_source_path = 0;
     lm_trans_prelude_output = previous_prelude_output;
     if (status == 0 && emitted == 0) {

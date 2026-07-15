@@ -7,6 +7,15 @@ table:
              "b"  2
 end: predefCycleB
 
+table:
+    name: functionPointerType
+    columns((class: class) (int: value))
+    rows:
+             LmTestPredefCycleEquals  1
+end: functionPointerType
+
+fn: LmTestPredefCycleEquals (@: void left; @: void right) int
+
 fn: lm_test_predef_cycle_value () int
     return: 29
 end: lm_test_predef_cycle_value

@@ -3,7 +3,8 @@ L2:
 
     external:
         fn: main () int
-            return: lm_test_predef_cycle_value() != 29
+            LmTestPredefCycleEquals: equals 0
+            return: lm_test_predef_cycle_value() != 29 || equals != 0
         end: main
     end: external
 end: L2

@@ -1323,6 +1323,10 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
         while: status = 0 && i < class_rows\count
             row: lm_own_ptr_stack_at(class_rows, i)
             if: row != 0 && row\key != 0 && row\payload != 0
+                lm_trans_text_assign_cstr(param_text, row\key)
+                if: row != lm_trans_registry_relation_stack_latest_row(class_rows, param_text)
+                    i: i + 1U
+                    continue
                 source_key_cell: 0
                 class_payload: lm_trans_abi_source_text_value(namespace_, class_path, "class", row, @ source_key_cell)
                 param_name: row\key
@@ -1332,7 +1336,6 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
                     c.fprintf(c.stderr, "trans L4 %s error: too many parameters in %s\n", error_name, owner_name)
                     status: 1
                 else:
-                    lm_trans_text_assign_cstr(param_text, row\key)
                     index_row: lm_trans_registry_relation_stack_latest_row(index_rows, param_text)
                     index_payload: lm_trans_abi_source_text_value(namespace_, index_path, "size_t", index_row, 0)
                     if: class_payload = 0 || index_payload = 0 || lm_trans_parse_size_payload(index_payload, @ index) = 0
@@ -2033,6 +2036,7 @@ return: 0
 
 fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
     @: LmTransAbiParam params
+    LmP0Text: name_text
     size_t: param_capacity
     size_t: param_count
     int: status
@@ -2040,12 +2044,29 @@ fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransName
     if: name = 0 || error_name = 0
         return: 1
 
+    name_text: lm_trans_text_from_cstr(name)
+    if: name_text = 0
+        return: 1
+    if: lm_trans_namespace_registry_lookup(namespace_, name_text, "typedef.emitted") != 0
+        lm_trans_text_ref_destroy(@ name_text)
+        return: 0
+
+    if: lm_trans_put(file, "#ifndef LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, "\n#define LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, " 1\n") != 0
+        lm_trans_text_ref_destroy(@ name_text)
+        return: 1
+
     param_capacity: 256U
     params: lm_trans_l4_abi_params_new(param_capacity)
     if: params = 0
+        lm_trans_text_ref_destroy(@ name_text)
         return: 1
-    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0
+    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0
     lm_trans_l4_abi_params_delete(params, param_capacity)
+    if: status = 0 && lm_trans_put(file, "#endif\n") != 0
+        status: 1
+    if: status = 0 && lm_trans_l2_conditional_emission_depth = 0 && lm_trans_l4_mark_typedef_emitted_cstr(name) != 0
+        status: 1
+    lm_trans_text_ref_destroy(@ name_text)
 return: status
 
 fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: (LmTransNamespace: namespace_); const: @(char type_name); const: @(char field_name); const: @(char error_name)) int
@@ -2239,6 +2260,7 @@ sub: lm_trans_registry_destroy ()
         lm_trans_identifier_table_delete(@ lm_trans_registry\identifiers)
         lm_own_arena_destroy(lm_trans_registry\value_arena)
         lm_own_delete(lm_trans_registry\value_arena, 0)
+        lm_trans_ptr_stack_delete(@ lm_trans_registry\predefined_descriptor_sites)
         lm_trans_ptr_stack_delete(@ lm_trans_registry\predefined_paths)
         lm_trans_ptr_stack_delete(@ lm_trans_registry\loaded_paths)
         lm_own_delete(lm_trans_registry\source_path, 0)
@@ -2401,6 +2423,14 @@ fn: lm_trans_registry_push_owner_relation_size_with_fact (
         "%zu"
         value
 return: lm_trans_registry_push_owner_relation_text_with_fact(owner, suffix, key, lm_trans_text_from_cstr(buffer), out_fact)
+
+fn: lm_trans_registry_owner_relation_has_key (const: (LmP0Text: owner); const: @(char relation_name); const: (LmP0Text: key)) int
+    const: LmOwnPtrStack: rows
+
+    if: owner = 0 || relation_name = 0 || key = 0
+        return: 0
+    rows: lm_trans_namespace_registry_relation_stack(0, owner, relation_name)
+return: lm_trans_registry_relation_stack_latest_row(rows, key) != 0
 
 fn: lm_trans_table_descriptor_add_generated_column_shaped (
     LmTableDescriptor: table
@@ -2857,9 +2887,9 @@ fn: lm_trans_registry_materialize_fn_descriptor_return (const: (LmP0Text: functi
     status: 0
     if: lm_trans_registry_push_owner_relation_text_with_fact(function_name, ".return.class", return_name, return_type\class_name, @ class_fact) != 0
         status: 1
-    if: status = 0 && return_type\address_depth != 0U && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.address-depth", return_name, return_type\address_depth, @ address_depth_fact) != 0
+    if: status = 0 && (return_type\address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "return.address-depth", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.address-depth", return_name, return_type\address_depth, @ address_depth_fact) != 0
         status: 1
-    if: status = 0 && return_type\is_const && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.const", return_name, 1U, @ const_fact) != 0
+    if: status = 0 && (return_type\is_const || lm_trans_registry_owner_relation_has_key(function_name, "return.const", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.const", return_name, (cast: size_t (return_type\is_const != 0)), @ const_fact) != 0
         status: 1
     if: status = 0 && lm_trans_registry_materialize_generated_return_source_row(function_name, class_fact, address_depth_fact, const_fact) != 0
         status: 1
@@ -2900,9 +2930,9 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: functio
         status: 1
     if: status = 0 && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.index", param_name, index, @ index_fact) != 0
         status: 1
-    if: status = 0 && param\type\address_depth != 0U && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.address-depth", param_name, param\type\address_depth, @ address_depth_fact) != 0
+    if: status = 0 && (param\type\address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "param.address-depth", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.address-depth", param_name, param\type\address_depth, @ address_depth_fact) != 0
         status: 1
-    if: status = 0 && param\type\is_const && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.const", param_name, 1U, @ const_fact) != 0
+    if: status = 0 && (param\type\is_const || lm_trans_registry_owner_relation_has_key(function_name, "param.const", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.const", param_name, (cast: size_t (param\type\is_const != 0)), @ const_fact) != 0
         status: 1
     if: status = 0 && lm_trans_registry_note_class_present(param\type\class_name) != 0
         status: 1
@@ -3890,6 +3920,64 @@ fn: lm_trans_registry_note_predefined_path (const: @(char registry_path)) int
         return: 1
 return: 0
 
+fn: lm_trans_registry_predefined_descriptor_site_new (const: @(char registry_path); const: (LmP0Node: node)) @: char
+    @: char site
+    int: needed
+
+    if: registry_path = 0 || node = 0 || node\span = 0
+        return: 0
+
+    needed: c.snprintf(0, 0, "%s#%zu", registry_path, node\span\offset)
+    if: needed < 0
+        return: 0
+    site: cast: (@: char) lm_own_new_zero((cast: size_t needed) + 1U)
+    if: site = 0
+        return: 0
+    if: c.snprintf(site, (cast: size_t needed) + 1U, "%s#%zu", registry_path, node\span\offset) != needed
+        lm_own_delete(site, 0)
+        return: 0
+return: site
+
+fn: lm_trans_registry_predefined_descriptor_site_is_hoisted (const: @(char registry_path); const: (LmP0Node: node)) int
+    const: @: char stored_site
+    @: char site
+    size_t: index
+    int: found
+
+    if: lm_trans_registry = 0 || lm_trans_registry\predefined_descriptor_sites = 0
+        return: 0
+    site: lm_trans_registry_predefined_descriptor_site_new(registry_path, node)
+    if: site = 0
+        return: 0
+
+    found: 0
+    index: 0U
+    while: index < lm_trans_registry\predefined_descriptor_sites\count
+        stored_site: lm_own_ptr_stack_at(lm_trans_registry\predefined_descriptor_sites, index)
+        if: stored_site != 0 && c.strcmp(stored_site, site) = 0
+            found: 1
+            break
+        index: index + 1U
+
+    lm_own_delete(site, 0)
+return: found
+
+fn: lm_trans_registry_note_predefined_descriptor_site (const: @(char registry_path); const: (LmP0Node: node)) int
+    @: char site
+
+    if: registry_path = 0 || node = 0 || lm_trans_registry = 0 || lm_trans_registry\predefined_descriptor_sites = 0
+        return: 1
+    if: lm_trans_registry_predefined_descriptor_site_is_hoisted(registry_path, node)
+        return: 0
+
+    site: lm_trans_registry_predefined_descriptor_site_new(registry_path, node)
+    if: site = 0
+        return: 1
+    if: lm_own_ptr_stack_push(lm_trans_registry\predefined_descriptor_sites, site) != 0
+        lm_own_delete(site, 0)
+        return: 1
+return: 0
+
 fn: lm_trans_registry_note_loaded_path (const: @(char registry_path)) int
     @: char copy
 
@@ -4387,7 +4475,8 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
     lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
     lm_trans_registry\loaded_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_registry\predefined_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0 || lm_trans_registry\loaded_paths = 0 || lm_trans_registry\predefined_paths = 0
+    lm_trans_registry\predefined_descriptor_sites: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0 || lm_trans_registry\loaded_paths = 0 || lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_descriptor_sites = 0
         lm_trans_registry_destroy()
         return: 1
     lm_trans_registry\source_path: lm_trans_text_copy_cstr_from_cstr(source_path)
@@ -4562,6 +4651,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_executable_statement_depth: 0
+    lm_trans_l2_conditional_emission_depth: 0
     emitted: 0
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
@@ -4591,6 +4681,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_executable_statement_depth: 0
+    lm_trans_l2_conditional_emission_depth: 0
     lm_trans_current_source_path: 0
     lm_trans_prelude_output: previous_prelude_output
     if: status = 0 && emitted = 0

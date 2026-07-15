@@ -11,11 +11,62 @@ int main(int argc, char **argv) {
 #define main lm_test_embedded_trans_main
 ===
 
-fn: lm_test_l2_predef_table_has_one_row (const: @(char name)) int
+fn: lm_test_l2_predef_table_has_rows (const: @(char name); size_t: count) int
     const: LmTableDescriptor: descriptor
 
     descriptor: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, name, c.strlen(name))
-return: descriptor != 0 && lm_table_descriptor_materialized_row_count(descriptor) = 1U
+return: descriptor != 0 && lm_table_descriptor_materialized_row_count(descriptor) = count
+
+fn: lm_test_l2_predef_table_has_one_row (const: @(char name)) int
+    return: lm_test_l2_predef_table_has_rows(name, 1U)
+end: lm_test_l2_predef_table_has_one_row
+
+fn: lm_test_l2_predef_source_row_count (const: @(char name)) size_t
+    const: LmTableDescriptor: descriptor
+    size_t: count
+    size_t: index
+
+    count: 0U
+    index: 0U
+    while: index < lm_registry_view_source_table_count(lm_trans_registry\view)
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, index)
+        if: descriptor != 0 && descriptor\name != 0 && c.strcmp(descriptor\name, name) = 0
+            count: count + lm_table_descriptor_materialized_row_count(descriptor)
+        index: index + 1U
+return: count
+
+fn: lm_test_l2_predef_source_key_row_count (const: @(char name); const: @(char key)) size_t
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    size_t: count
+    size_t: row_index
+    size_t: table_index
+
+    count: 0U
+    table_index: 0U
+    while: table_index < lm_registry_view_source_table_count(lm_trans_registry\view)
+        descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, table_index)
+        if: descriptor != 0 && descriptor\name != 0 && c.strcmp(descriptor\name, name) = 0
+            row_index: 0U
+            while: row_index < lm_table_descriptor_materialized_row_count(descriptor)
+                row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+                key_cell: lm_table_row_cell_at(row, 0U)
+                if: key_cell != 0 && key_cell\value != 0 && c.strcmp(key_cell\value, key) = 0
+                    count: count + 1U
+                row_index: row_index + 1U
+        ---
+        table_index: table_index + 1U
+return: count
+
+fn: lm_test_l2_predef_metadata_is_exact () int
+    if: lm_test_l2_predef_table_has_rows("predefHeaders.item", 2U) = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0 || lm_test_l2_predef_table_has_one_row("functionPointerType") = 0
+        return: 0
+    if: lm_test_l2_predef_source_row_count("fn") != 2U || lm_test_l2_predef_source_key_row_count("fn", "LmTestPredefEquals") != 1U || lm_test_l2_predef_source_key_row_count("fn", "LmTestPredefMapper") != 1U || lm_test_l2_predef_source_key_row_count("fn", "lm_test_predef_value") != 0U
+        return: 0
+    if: lm_test_l2_predef_source_row_count("LmTestPredefEquals.param") != 2U || lm_test_l2_predef_source_row_count("LmTestPredefEquals.return") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefMapper.param") != 1U || lm_test_l2_predef_source_row_count("LmTestPredefMapper.return") != 1U || lm_test_l2_predef_source_row_count("lm_test_predef_value.return") != 0U
+        return: 0
+return: 1
 
 fn: lm_test_l2_predef_source_rows_core () int
     const: @(char source_path)
@@ -23,12 +74,15 @@ fn: lm_test_l2_predef_source_rows_core () int
     const: LmP0Node: root
     LmTransNamespace: namespace_
     LmP0Text: helper_name
+    FILE: prelude_file
+    long: typedef_position
     int: status
 
     source_path: "tests/trans_l2_predef_import.lm2"
     document: 0
     namespace_: 0
     helper_name: 0
+    prelude_file: 0
     status: 0
 
     if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_file(source_path, @ document) != 0 || document = 0
@@ -43,12 +97,12 @@ fn: lm_test_l2_predef_source_rows_core () int
 
     if: status = 0 && (lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_trans_registry_path_is_predefined("tests/fixtures/l2_predef_registry.lm2") = 0)
         status: 1
-    if: status = 0 && (lm_test_l2_predef_table_has_one_row("predefHeaders.item") = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0)
+    if: status = 0 && lm_test_l2_predef_metadata_is_exact() = 0
         status: 1
 
     if: status = 0 && lm_trans_registry_load_inline_root(root, source_path) != 0
         status: 1
-    if: status = 0 && (lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_table_has_one_row("predefHeaders.item") = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0)
+    if: status = 0 && (lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_metadata_is_exact() = 0)
         status: 1
 
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
@@ -57,17 +111,37 @@ fn: lm_test_l2_predef_source_rows_core () int
     lm_trans_current_source_path: source_path
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
+    lm_trans_l2_conditional_emission_depth: 0
     if: status = 0 && (lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || namespace_ = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_declare_l2_import_root(namespace_, root, 1) != 0)
         status: 1
 
+    helper_name: lm_trans_text_from_cstr("LmTestPredefEquals")
+    if: status = 0 && (helper_name = 0 || lm_trans_namespace_find(namespace_, helper_name) = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_metadata_is_exact() = 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ helper_name)
     helper_name: lm_trans_text_from_cstr("lm_test_predef_value")
-    if: status = 0 && (helper_name = 0 || lm_trans_namespace_find(namespace_, helper_name) = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_test_l2_predef_table_has_one_row("predefHeaders.item") = 0 || lm_test_l2_predef_table_has_one_row("prelude.sequence") = 0 || lm_test_l2_predef_table_has_one_row("include") = 0)
+    if: status = 0 && (helper_name = 0 || lm_trans_namespace_find(namespace_, helper_name) = 0)
+        status: 1
+
+    lm_trans_emitted_import_prelude_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    prelude_file: c.tmpfile()
+    if: status = 0 && (lm_trans_emitted_import_prelude_paths = 0 || prelude_file = 0 || lm_trans_emit_l2_import_root_prelude(prelude_file, root, 1, namespace_) != 0 || lm_test_l2_predef_metadata_is_exact() = 0)
+        status: 1
+    if: status = 0
+        typedef_position: c.ftell(prelude_file)
+        if: typedef_position < 0L || lm_trans_emit_l4_function_pointer_type_name(prelude_file, namespace_, "LmTestPredefEquals", "functionPointerType") != 0 || c.ftell(prelude_file) != typedef_position
+            status: 1
+    ---
+    if: status = 0 && lm_test_l2_predef_metadata_is_exact() = 0
         status: 1
     if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
         status: 1
 
     lm_trans_current_source_path: 0
     lm_trans_text_ref_destroy(@ helper_name)
+    if: prelude_file != 0
+        c.fclose(prelude_file)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_prelude_paths)
     lm_trans_namespace_delete(namespace_)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)

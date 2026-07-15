@@ -1,0 +1,36 @@
+L1:
+===
+#ifndef LM_TEST_PREDEF_DESCRIPTOR_BRANCH
+#define LM_TEST_PREDEF_DESCRIPTOR_BRANCH 0
+#endif
+
+#if LM_TEST_PREDEF_DESCRIPTOR_BRANCH
+static const void *lm_test_predef_conditional_target(const void *value) {
+    return value;
+}
+#define LM_TEST_PREDEF_DESCRIPTOR_INVOKE(call) ((call)(0) != 0)
+#else
+static int lm_test_predef_conditional_target(int value) {
+    return value + 1;
+}
+#define LM_TEST_PREDEF_DESCRIPTOR_INVOKE(call) ((call)(41) != 42)
+#endif
+===
+
+table:
+    name: functionPointerType
+    columns((class: class) (int: value))
+    rows:
+             LmTestPredefConditional  1
+end: functionPointerType
+
+ifdef:
+    `LM_TEST_PREDEF_DESCRIPTOR_BRANCH`:
+        fn: LmTestPredefConditional (const: @: void value) const: @: void
+    default:
+        fn: LmTestPredefConditional (int: value) int
+end: ifdef
+
+fn: lm_test_predef_conditional_ref () LmTestPredefConditional
+    return: c.lm_test_predef_conditional_target
+end: lm_test_predef_conditional_ref

@@ -378,6 +378,7 @@ L4:
                  view               LmRegistryView         12            0
                  view_mode          int                    13            0
                  predefined_paths   LmOwnPtrStack         14            0
+                 predefined_descriptor_sites LmOwnPtrStack 15           0
     end: LmTransRegistry
 
     table:

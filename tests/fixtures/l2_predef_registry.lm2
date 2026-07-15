@@ -3,6 +3,7 @@ table:
     columns((class: class) (size_t: index))
     rows:
              "include"  0
+             "fn"       1
 end: `predefHeaders.item`
 
 table:
@@ -18,6 +19,16 @@ table:
     rows:
              "time"  "<time.h>"
 end: include
+
+table:
+    name: functionPointerType
+    columns((class: class) (int: value))
+    rows:
+             LmTestPredefEquals  1
+end: functionPointerType
+
+fn: LmTestPredefEquals (@: void left; @: void right) int
+callable: LmTestPredefMapper (int: value) int
 
 fn: lm_test_predef_value () int
     return: 23

@@ -461,6 +461,14 @@ modules away from the implicit `.lm4` profile:
 `predef` has the path-list shape of `import`, but is a hoisted import. Before
 ordinary top-level lowering and before the module prelude is planned, its `.lm2`
 targets expose their declarative `table:` and `join:` surface in source order.
+Descriptor-only `fn:`/`callable:` metadata is hoisted in the same pass, after
+any preceding tables, so a prelude relation such as `functionPointerType` can
+refer to the descriptor without requiring an embedded L4 block. Functions with
+bodies are not materialized as descriptors by this early pass. Hoisting applies
+to descriptor frames directly in the target module surface; descriptors nested
+under conditional/wrapper receivers are materialized by their ordinary emission
+path. The ordinary pass suppresses rematerialization only for the exact source
+site already handled by the early pass.
 The same target modules are then declared in the importing L2 namespace and
 pass through the ordinary L2 prelude, prototype, storage and function emission
 phases exactly once. Thus `predef` does not mean "registry-only" or "do not

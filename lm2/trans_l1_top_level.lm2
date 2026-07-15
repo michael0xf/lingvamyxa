@@ -657,10 +657,12 @@ fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: n
         lm_trans_text_ref_destroy(@ descriptor_name)
         return: 1
 
-    if: lm_trans_registry_materialize_fn_descriptor_frame(item\frame) != 0
-        lm_trans_text_ref_destroy(@ descriptor_name)
-        lm_own_delete(descriptor_name_storage, 0)
-        return: 1
+    if: lm_trans_registry_predefined_descriptor_site_is_hoisted(lm_trans_current_source_path, item\node) = 0
+        if: lm_trans_registry_materialize_fn_descriptor_frame(item\frame) != 0
+            lm_trans_text_ref_destroy(@ descriptor_name)
+            lm_own_delete(descriptor_name_storage, 0)
+            return: 1
+        ---
 
     if: lm_trans_callable_descriptor_allows_partial(namespace_, descriptor_name) || lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_name)
         if: lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_name) = 0
@@ -2752,8 +2754,15 @@ fn: lm_trans_top_level_declare_os (LmTransNamespace: namespace_; const: (LmTrans
 return: lm_trans_declare_l2_os_frame(namespace_, lm_trans_top_level_item_frame(item))
 
 fn: lm_trans_emit_l2_os_branch (FILE: output; const: (LmP0Frame: branch); LmTransNamespace: namespace_) int
+    int: previous_emission_depth
+    int: status
+
     if: lm_trans_os_branch_looks_l2(branch\body)
-        return: lm_trans_emit_l2_structure_with_namespace(output, branch\body, 0, namespace_, 0)
+        previous_emission_depth: lm_trans_l2_conditional_emission_depth
+        lm_trans_l2_conditional_emission_depth: previous_emission_depth + 1
+        status: lm_trans_emit_l2_structure_with_namespace(output, branch\body, 0, namespace_, 0)
+        lm_trans_l2_conditional_emission_depth: previous_emission_depth
+        return: status
 return: lm_trans_emit_l1_structure(output, branch\body)
 
 fn: lm_trans_emit_l2_os_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
@@ -2967,6 +2976,7 @@ return: status
 fn: lm_trans_emit_l2_guard_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
     LmP0Text: name
     LmP0Structure: body
+    int: previous_emission_depth
     int: status
 
     name: lm_trans_text_from_cstr("")
@@ -2983,10 +2993,11 @@ fn: lm_trans_emit_l2_guard_frame (FILE: output; const: (LmP0Frame: frame); LmTra
         lm_trans_text_ref_destroy(@ name)
         lm_own_delete(body, 0)
         return: 1
-    status: 0
-    if: lm_trans_emit_l2_wrapper_body(output, body, namespace_) != 0
-        status: 1
-    else:
+    previous_emission_depth: lm_trans_l2_conditional_emission_depth
+    lm_trans_l2_conditional_emission_depth: previous_emission_depth + 1
+    status: lm_trans_emit_l2_wrapper_body(output, body, namespace_)
+    lm_trans_l2_conditional_emission_depth: previous_emission_depth
+    if: status = 0
         if: lm_trans_put(output, "#endif\n") != 0
             status: 1
     ---
@@ -3314,6 +3325,16 @@ fn: lm_trans_emit_l2_registry_os_node (FILE: output; const: (LmP0Node: node); Lm
         return: lm_trans_emit_l2_structure_with_namespace(output, node\as\structure, 0, namespace_, 0)
 return: lm_trans_emit_l1_node(output, node)
 
+fn: lm_trans_emit_l2_registry_conditional_node (FILE: output; const: (LmP0Node: node); LmTransNamespace: namespace_) int
+    int: previous_emission_depth
+    int: status
+
+    previous_emission_depth: lm_trans_l2_conditional_emission_depth
+    lm_trans_l2_conditional_emission_depth: previous_emission_depth + 1
+    status: lm_trans_emit_l2_registry_os_node(output, node, namespace_)
+    lm_trans_l2_conditional_emission_depth: previous_emission_depth
+return: status
+
 fn: lm_trans_l4_payload_structure_looks_bare_l2 (const: (LmP0Structure: body)) int
     const: LmP0Field: field
     const: LmP0Node: node
@@ -3624,7 +3645,7 @@ fn: lm_trans_emit_l2_registry_os_table (FILE: output; LmTransNamespace: namespac
                 return: 1
             opened: 1
         ---
-        if: lm_trans_emit_l2_registry_os_node(output, body, namespace_) != 0
+        if: lm_trans_emit_l2_registry_conditional_node(output, body, namespace_) != 0
             lm_trans_text_ref_destroy(@ branch_name)
             return: 1
         emitted: 1
@@ -3710,7 +3731,7 @@ fn: lm_trans_emit_l2_registry_ifdef_table (FILE: output; LmTransNamespace: names
             lm_trans_text_ref_destroy(@ condition)
             opened: 1
         ---
-        if: lm_trans_emit_l2_registry_os_node(output, body, namespace_) != 0
+        if: lm_trans_emit_l2_registry_conditional_node(output, body, namespace_) != 0
             lm_trans_text_ref_destroy(@ branch_name)
             return: 1
         emitted: 1
@@ -4097,13 +4118,18 @@ fn: lm_trans_materialize_l2_predef_structure (LmTransNamespace: namespace_; cons
     const: LmP0Field: field
     const: LmP0Node: node
     LmTransHeadBinding: binding
+    LmTransFunctionHeader: function
+    int: function_status
     int: status
 
     if: namespace_ = 0
         return: 1
 
     binding: lm_trans_head_binding_new()
-    if: binding = 0
+    function: lm_trans_function_header_new()
+    if: binding = 0 || function = 0
+        lm_trans_function_header_destroy(function)
+        lm_own_delete(binding, 0)
         return: 1
 
     status: 0
@@ -4123,10 +4149,27 @@ fn: lm_trans_materialize_l2_predef_structure (LmTransNamespace: namespace_; cons
                         status: lm_trans_materialize_l2_join_source(namespace_, node\as\frame)
                     ---
                 ---
+                if: status = 0 && binding\function_receiver_binding != 0 && (c.strcmp(binding\function_receiver_binding, "lm_trans_receiver_fn") = 0 || c.strcmp(binding\function_receiver_binding, "lm_trans_receiver_callable") = 0)
+                    lm_trans_function_header_destroy(function)
+                    function: lm_trans_function_header_new()
+                    if: function = 0
+                        status: 1
+                    else:
+                        function_status: binding\function_receiver(node\as\frame, 0, function)
+                        if: function_status < 0
+                            status: 1
+                        if: function_status > 0 && function\is_descriptor_only
+                            status: lm_trans_registry_materialize_fn_descriptor_frame(node\as\frame)
+                            if: status = 0
+                                status: lm_trans_registry_note_predefined_descriptor_site(lm_trans_current_source_path, node)
+                            ---
+                    ---
+                ---
             ---
         ---
         field: field\next
 
+    lm_trans_function_header_destroy(function)
     lm_own_delete(binding, 0)
 return: status
 

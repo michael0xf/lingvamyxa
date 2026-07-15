@@ -18,6 +18,7 @@ int: lm_trans_l3_profile_depth
 int: lm_trans_l2_table_materialization_suppression_depth
 int: lm_trans_l2_conditional_import_depth
 int: lm_trans_l2_executable_statement_depth
+int: lm_trans_l2_conditional_emission_depth
 
 LmTransRegistry: lm_trans_registry
 

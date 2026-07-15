@@ -1,0 +1,38 @@
+L1:
+===
+#ifndef LM_TEST_REGISTRY_FUNCTION_POINTER_BRANCH
+#define LM_TEST_REGISTRY_FUNCTION_POINTER_BRANCH 0
+#endif
+===
+
+L4:
+    table:
+        name: functionPointerType
+        columns((class: class) (int: value))
+        rows:
+                 LmRegistryConditionalEquals  1
+    end: functionPointerType
+
+    table:
+        name: ifdef
+        columns((class: class) (node: body))
+        rows:
+                 LM_TEST_REGISTRY_FUNCTION_POINTER_BRANCH
+                 L2:
+                     fn: LmRegistryConditionalEquals (@: void left; @: void right) int
+                 end: L2
+                 default
+                 L2:
+                     fn: LmRegistryConditionalEquals (@: void left; @: void right) int
+                 end: L2
+    end: ifdef
+end: L4
+
+ifdef
+
+external:
+    fn: main () int
+        LmRegistryConditionalEquals: equals 0
+        return: equals != 0
+    end: main
+end: external
