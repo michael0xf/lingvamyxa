@@ -3583,16 +3583,6 @@ return: descriptor
 fn: lm_trans_registry_l4_push_table_row (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count; const: @: LmP0Node cells) int
     LmTransL4LoadContext: load_context
     LmTableDescriptor: descriptor
-    LmTableRow: row
-    LmTableCell: cell
-    const: LmP0Node: node
-    const: LmP0Text: atom
-    LmP0Text: value
-    LmTransRegistryFact: projection
-    size_t: column_index
-    int: cell_status
-    int: explicit_none
-    int: wants_node
 
     c.LM_UNUSED(table_name)
     load_context: cast: (LmTransL4LoadContext) context
@@ -3601,82 +3591,7 @@ fn: lm_trans_registry_l4_push_table_row (@: void context; const: (LmP0Text: tabl
     descriptor: load_context\source_table
     if: lm_table_descriptor_column_count(descriptor) != column_count || load_context\projection_facts\count + 1U != column_count
         return: -1
-    row: lm_table_row_new(0)
-    value: lm_trans_l4_text_view_new("")
-    if: row = 0 || value = 0
-        lm_table_row_delete_any(row)
-        lm_trans_l4_text_view_delete(@ value)
-        return: -1
-
-    column_index: 0U
-    while: column_index < column_count
-        node: cells[column_index]
-        atom: 0
-        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM
-            atom: node\as\atom
-        explicit_none: atom != 0 && lm_trans_registry_payload_is_null(atom) != 0
-        projection: 0
-        cell_status: 0
-        wants_node: 0
-
-        if: column_index = 0U
-            if: atom = 0 || lm_trans_registry_identifier_value(atom, value) = 0
-                lm_table_row_delete_any(row)
-                lm_trans_l4_text_view_delete(@ value)
-                return: -1
-            cell: lm_table_cell_new_slice(atom\data, atom\length, value\data, value\length, 0, 0, explicit_none)
-        else:
-            wants_node: lm_trans_registry_column_has_descriptor(columns[column_index], "node")
-            if: wants_node != 0
-                if: explicit_none != 0
-                    cell: lm_table_cell_new_slice(atom\data, atom\length, 0, 0U, 0, 0, 1)
-                else:
-                    projection: lm_own_ptr_stack_at(load_context\projection_facts, column_index - 1U)
-                    if: projection = 0 || projection\payload_node = 0
-                        lm_table_row_delete_any(row)
-                        lm_trans_l4_text_view_delete(@ value)
-                        return: -1
-                    if: atom != 0
-                        cell: lm_table_cell_new_slice(atom\data, atom\length, 0, 0U, projection\payload_node, projection, 0)
-                    else:
-                        cell: lm_table_cell_new_slice(0, 0U, 0, 0U, projection\payload_node, projection, 0)
-            ---
-            else:
-                if: atom = 0
-                    lm_table_row_delete_any(row)
-                    lm_trans_l4_text_view_delete(@ value)
-                    return: -1
-                cell_status: lm_trans_registry_cell_value(atom, columns[column_index], value)
-                if: cell_status < 0
-                    lm_table_row_delete_any(row)
-                    lm_trans_l4_text_view_delete(@ value)
-                    return: -1
-                if: cell_status = 0
-                    cell: lm_table_cell_new_slice(atom\data, atom\length, 0, 0U, 0, 0, explicit_none)
-                else:
-                    projection: lm_own_ptr_stack_at(load_context\projection_facts, column_index - 1U)
-                    if: projection = 0 || projection\payload = 0
-                        lm_table_row_delete_any(row)
-                        lm_trans_l4_text_view_delete(@ value)
-                        return: -1
-                    cell_status: lm_table_descriptor_cstr_equals_slice(projection\payload, value\data, value\length)
-                    if: cell_status = 0
-                        lm_table_row_delete_any(row)
-                        lm_trans_l4_text_view_delete(@ value)
-                        return: -1
-                    cell: lm_table_cell_new_slice(atom\data, atom\length, projection\payload, c.strlen(projection\payload), 0, projection, 0)
-        ---
-
-        if: cell = 0 || lm_table_row_take_cell(row, cell) != 0
-            lm_table_cell_delete_any(cell)
-            lm_table_row_delete_any(row)
-            lm_trans_l4_text_view_delete(@ value)
-            return: -1
-        column_index: column_index + 1U
-
-    lm_trans_l4_text_view_delete(@ value)
-    if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
-        lm_table_row_delete_any(row)
+    if: lm_trans_registry_materialize_descriptor_row(descriptor, cells, column_count, load_context\projection_facts) != 0
         return: -1
     lm_registry_view_note_mutation(lm_trans_registry\view)
     lm_own_ptr_stack_truncate(load_context\projection_facts, 0U)

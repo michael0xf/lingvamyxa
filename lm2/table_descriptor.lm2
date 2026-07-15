@@ -454,6 +454,20 @@ fn: lm_table_column_descriptor_descriptor_at (const: (LmTableColumnDescriptor: c
         return: 0
 return: lm_own_ptr_stack_at(column\descriptors, index)
 
+fn: lm_table_column_descriptor_has_descriptor (const: (LmTableColumnDescriptor: column); const: @(char descriptor)) int
+    const: @: char candidate
+    size_t: index
+
+    if: column = 0 || descriptor = 0
+        return: 0
+    index: 0U
+    while: index < lm_table_column_descriptor_descriptor_count(column)
+        candidate: lm_table_column_descriptor_descriptor_at(column, index)
+        if: candidate != 0 && c.strcmp(candidate, descriptor) = 0
+            return: 1
+        index: index + 1U
+return: 0
+
 fn: lm_table_descriptor_take_column (LmTableDescriptor: table; LmTableColumnDescriptor: column) int
     if: table = 0 || table\columns = 0 || column = 0 || column\name = 0
         return: 1
@@ -617,6 +631,26 @@ fn: lm_table_row_take_cell (LmTableRow: row; LmTableCell: cell) int
         return: 1
 return: lm_own_ptr_stack_push(row\cells, cell)
 
+fn: lm_table_row_take_cell_slice (
+    LmTableRow: row
+    const: @(char atom)
+    size_t: atom_length
+    const: @(char value)
+    size_t: value_length
+    const: @(void node)
+    const: @(void source)
+    int: explicit_none
+) int
+    LmTableCell: cell
+
+    cell: lm_table_cell_new_slice(atom, atom_length, value, value_length, node, source, explicit_none)
+    if: cell = 0
+        return: 1
+    if: lm_table_row_take_cell(row, cell) != 0
+        lm_table_cell_delete_any(cell)
+        return: 1
+return: 0
+
 fn: lm_table_row_cell_count (const: (LmTableRow: row)) size_t
     if: row = 0 || row\cells = 0
         return: 0U
@@ -649,6 +683,8 @@ fn: lm_table_descriptor_append_materialized_row_copy (LmTableDescriptor: table; 
     LmTableRow: row
     const: LmTableCell: source_cell
     LmTableCell: cell
+    size_t: atom_length
+    size_t: value_length
     size_t: index
 
     if: table = 0 || source_row = 0 || lm_table_row_cell_count(source_row) != lm_table_descriptor_column_count(table)
@@ -662,11 +698,24 @@ fn: lm_table_descriptor_append_materialized_row_copy (LmTableDescriptor: table; 
         if: source_cell = 0
             lm_table_row_delete_any(row)
             return: 1
-        cell: lm_table_cell_new_cstr(source_cell\atom, source_cell\value, source_cell\node, source_cell\source, source_cell\explicit_none)
-        if: cell = 0 || lm_table_row_take_cell(row, cell) != 0
-            lm_table_cell_delete_any(cell)
-            lm_table_row_delete_any(row)
-            return: 1
+        if: source_cell\atom = 0 && source_cell\value = 0
+            cell: lm_table_cell_new_cstr(0, 0, source_cell\node, source_cell\source, source_cell\explicit_none)
+            if: cell = 0 || lm_table_row_take_cell(row, cell) != 0
+                lm_table_cell_delete_any(cell)
+                lm_table_row_delete_any(row)
+                return: 1
+            ---
+        else:
+            atom_length: 0U
+            value_length: 0U
+            if: source_cell\atom != 0
+                atom_length: c.strlen(source_cell\atom)
+            if: source_cell\value != 0
+                value_length: c.strlen(source_cell\value)
+            if: lm_table_row_take_cell_slice(row, source_cell\atom, atom_length, source_cell\value, value_length, source_cell\node, source_cell\source, source_cell\explicit_none) != 0
+                lm_table_row_delete_any(row)
+                return: 1
+            ---
         index: index + 1U
     if: lm_table_descriptor_take_materialized_row(table, row) != 0
         lm_table_row_delete_any(row)
@@ -697,7 +746,7 @@ fn: lm_table_descriptor_schema_same (const: (LmTableDescriptor: left); const: (L
         while: descriptor_index < lm_table_column_descriptor_descriptor_count(left_column)
             left_descriptor: lm_table_column_descriptor_descriptor_at(left_column, descriptor_index)
             right_descriptor: lm_table_column_descriptor_descriptor_at(right_column, descriptor_index)
-            if: left_descriptor = 0 || right_descriptor = 0 || c.strcmp(left_descriptor, right_descriptor) != 0
+            if: left_descriptor = 0 || right_descriptor = 0 || lm_table_column_descriptor_has_descriptor(right_column, left_descriptor) = 0 || c.strcmp(left_descriptor, right_descriptor) != 0
                 return: 0
             descriptor_index: descriptor_index + 1U
         column_index: column_index + 1U

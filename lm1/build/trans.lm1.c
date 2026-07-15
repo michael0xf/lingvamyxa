@@ -2368,6 +2368,7 @@ static LmTableColumnDescriptor * lm_table_column_descriptor_new_slice(const char
 static int lm_table_column_descriptor_add_descriptor_slice(LmTableColumnDescriptor *column, const char *descriptor, size_t descriptor_length);
 static size_t lm_table_column_descriptor_descriptor_count(const LmTableColumnDescriptor *column);
 static const char * lm_table_column_descriptor_descriptor_at(const LmTableColumnDescriptor *column, size_t index);
+static int lm_table_column_descriptor_has_descriptor(const LmTableColumnDescriptor *column, const char *descriptor);
 static int lm_table_descriptor_take_column(LmTableDescriptor *table, LmTableColumnDescriptor *column);
 static int lm_table_descriptor_add_column_slices(LmTableDescriptor *table, const char *name, size_t name_length, const char *type_name, size_t type_name_length, const char **descriptor_data, const size_t *descriptor_lengths, size_t descriptor_count, size_t address_depth, size_t array_rank, int is_const);
 static int lm_table_descriptor_add_column(LmTableDescriptor *table, const char *name, const char *descriptor);
@@ -2381,6 +2382,7 @@ static LmTableCell * lm_table_cell_new_slice(const char *atom, size_t atom_lengt
 static LmTableCell * lm_table_cell_new_cstr(const char *atom, const char *value, const void *node, const void *source, int explicit_none);
 static LmTableRow * lm_table_row_new(const LmTableRow *source);
 static int lm_table_row_take_cell(LmTableRow *row, LmTableCell *cell);
+static int lm_table_row_take_cell_slice(LmTableRow *row, const char *atom, size_t atom_length, const char *value, size_t value_length, const void *node, const void *source, int explicit_none);
 static size_t lm_table_row_cell_count(const LmTableRow *row);
 static const LmTableCell * lm_table_row_cell_at(const LmTableRow *row, size_t index);
 static int lm_table_descriptor_take_materialized_row(LmTableDescriptor *table, LmTableRow *row);
@@ -2487,6 +2489,12 @@ static int lm_trans_registry_text_is_numeric_atom(const LmP0Text *text);
 static int lm_trans_registry_cell_none_cell_matches(const LmP0Text *payload, const LmP0Text *class_atom);
 static int lm_trans_registry_cell_is_null(const LmP0Text *atom, const LmL4Column *column);
 static int lm_trans_registry_cell_value(const LmP0Text *atom, const LmL4Column *column, LmP0Text *out_value);
+static const char * lm_trans_registry_descriptor_column_serialization_codec(const LmTableColumnDescriptor *column);
+static int lm_trans_registry_descriptor_column_is_numeric_typed(const LmTableColumnDescriptor *column);
+static int lm_trans_registry_descriptor_cell_none_cell_matches(const LmP0Text *payload, const char *class_name);
+static int lm_trans_registry_descriptor_cell_is_null(const LmP0Text *atom, const LmTableColumnDescriptor *column);
+static int lm_trans_registry_descriptor_cell_value(const LmP0Text *atom, const LmTableColumnDescriptor *column, LmP0Text *out_value);
+static int lm_trans_registry_materialize_descriptor_row(LmTableDescriptor *descriptor, const LmP0Node **cells, size_t cell_count, const LmOwnPtrStack *projection_facts);
 static int lm_trans_registry_push_table_cell(const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node, int allow_node_cells);
 static int lm_trans_registry_note_class_kind(const LmP0Text *name, const char *kind);
 static int lm_trans_registry_note_class_reference_base(const LmP0Text *name);
@@ -3990,6 +3998,23 @@ static const char * lm_table_column_descriptor_descriptor_at(const LmTableColumn
     return lm_own_ptr_stack_at(column -> descriptors, index);
 }
 
+static int lm_table_column_descriptor_has_descriptor(const LmTableColumnDescriptor *column, const char *descriptor) {
+    const char *candidate;
+    size_t index;
+    if (column == 0 || descriptor == 0) {
+        return 0;
+    }
+    index = 0U;
+    while (index < lm_table_column_descriptor_descriptor_count(column)) {
+        candidate = lm_table_column_descriptor_descriptor_at(column, index);
+        if (candidate != 0 && strcmp(candidate, descriptor) == 0) {
+            return 1;
+        }
+        index = index + 1U;
+    }
+    return 0;
+}
+
 static int lm_table_descriptor_take_column(LmTableDescriptor *table, LmTableColumnDescriptor *column) {
     if (table == 0 || table -> columns == 0 || column == 0 || column -> name == 0) {
         return 1;
@@ -4163,6 +4188,19 @@ static int lm_table_row_take_cell(LmTableRow *row, LmTableCell *cell) {
     return lm_own_ptr_stack_push(row -> cells, cell);
 }
 
+static int lm_table_row_take_cell_slice(LmTableRow *row, const char *atom, size_t atom_length, const char *value, size_t value_length, const void *node, const void *source, int explicit_none) {
+    LmTableCell * cell;
+    cell = lm_table_cell_new_slice(atom, atom_length, value, value_length, node, source, explicit_none);
+    if (cell == 0) {
+        return 1;
+    }
+    if (lm_table_row_take_cell(row, cell) != 0) {
+        lm_table_cell_delete_any(cell);
+        return 1;
+    }
+    return 0;
+}
+
 static size_t lm_table_row_cell_count(const LmTableRow *row) {
     if (row == 0 || row -> cells == 0) {
         return 0U;
@@ -4206,6 +4244,8 @@ static int lm_table_descriptor_append_materialized_row_copy(LmTableDescriptor *t
     LmTableRow * row;
     const LmTableCell * source_cell;
     LmTableCell * cell;
+    size_t atom_length;
+    size_t value_length;
     size_t index;
     if (table == 0 || source_row == 0 || lm_table_row_cell_count(source_row) != lm_table_descriptor_column_count(table)) {
         return 1;
@@ -4221,11 +4261,27 @@ static int lm_table_descriptor_append_materialized_row_copy(LmTableDescriptor *t
             lm_table_row_delete_any(row);
             return 1;
         }
-        cell = lm_table_cell_new_cstr(source_cell -> atom, source_cell -> value, source_cell -> node, source_cell -> source, source_cell -> explicit_none);
-        if (cell == 0 || lm_table_row_take_cell(row, cell) != 0) {
-            lm_table_cell_delete_any(cell);
-            lm_table_row_delete_any(row);
-            return 1;
+        if (source_cell -> atom == 0 && source_cell -> value == 0) {
+            cell = lm_table_cell_new_cstr(0, 0, source_cell -> node, source_cell -> source, source_cell -> explicit_none);
+            if (cell == 0 || lm_table_row_take_cell(row, cell) != 0) {
+                lm_table_cell_delete_any(cell);
+                lm_table_row_delete_any(row);
+                return 1;
+            }
+        }
+        else {
+            atom_length = 0U;
+            value_length = 0U;
+            if (source_cell -> atom != 0) {
+                atom_length = strlen(source_cell -> atom);
+            }
+            if (source_cell -> value != 0) {
+                value_length = strlen(source_cell -> value);
+            }
+            if (lm_table_row_take_cell_slice(row, source_cell -> atom, atom_length, source_cell -> value, value_length, source_cell -> node, source_cell -> source, source_cell -> explicit_none) != 0) {
+                lm_table_row_delete_any(row);
+                return 1;
+            }
         }
         index = index + 1U;
     }
@@ -4263,7 +4319,7 @@ static int lm_table_descriptor_schema_same(const LmTableDescriptor *left, const 
         while (descriptor_index < lm_table_column_descriptor_descriptor_count(left_column)) {
             left_descriptor = lm_table_column_descriptor_descriptor_at(left_column, descriptor_index);
             right_descriptor = lm_table_column_descriptor_descriptor_at(right_column, descriptor_index);
-            if (left_descriptor == 0 || right_descriptor == 0 || strcmp(left_descriptor, right_descriptor) != 0) {
+            if (left_descriptor == 0 || right_descriptor == 0 || lm_table_column_descriptor_has_descriptor(right_column, left_descriptor) == 0 || strcmp(left_descriptor, right_descriptor) != 0) {
                 return 0;
             }
             descriptor_index = descriptor_index + 1U;
@@ -5979,6 +6035,269 @@ static int lm_trans_registry_cell_value(const LmP0Text *atom, const LmL4Column *
         return 1;
     }
     return -1;
+}
+
+static const char * lm_trans_registry_descriptor_column_serialization_codec(const LmTableColumnDescriptor *column) {
+    LmP0Text * payload;
+    const char *descriptor;
+    const char *codec;
+    size_t descriptor_index;
+    if (column == 0) {
+        return 0;
+    }
+    payload = lm_trans_text_ref_new_cstr("");
+    if (payload == 0) {
+        return 0;
+    }
+    descriptor_index = 0U;
+    while (descriptor_index < lm_table_column_descriptor_descriptor_count(column)) {
+        descriptor = lm_table_column_descriptor_descriptor_at(column, descriptor_index);
+        if (descriptor != 0) {
+            payload->data = descriptor;
+            payload->length = strlen(descriptor);
+            codec = lm_trans_registry_serialization_codec_value(payload);
+            if (codec != 0) {
+                lm_trans_text_ref_destroy(&payload);
+                return codec;
+            }
+        }
+        descriptor_index = descriptor_index + 1U;
+    }
+    if (column -> name != 0) {
+        payload->data = column -> name;
+        payload->length = strlen(column -> name);
+        codec = lm_trans_registry_serialization_codec_value(payload);
+        if (codec != 0) {
+            lm_trans_text_ref_destroy(&payload);
+            return codec;
+        }
+    }
+    lm_trans_text_ref_destroy(&payload);
+    return 0;
+}
+
+static int lm_trans_registry_descriptor_column_is_numeric_typed(const LmTableColumnDescriptor *column) {
+    LmP0Text * payload;
+    const char *descriptor;
+    size_t descriptor_index;
+    int result;
+    if (column == 0) {
+        return 0;
+    }
+    payload = lm_trans_text_ref_new_cstr("");
+    if (payload == 0) {
+        return 0;
+    }
+    result = 0;
+    descriptor_index = 0U;
+    while (result == 0 && descriptor_index < lm_table_column_descriptor_descriptor_count(column)) {
+        descriptor = lm_table_column_descriptor_descriptor_at(column, descriptor_index);
+        if (descriptor != 0) {
+            payload->data = descriptor;
+            payload->length = strlen(descriptor);
+            if (lm_trans_registry_descriptor_payload_is_numeric(payload) != 0) {
+                result = 1;
+            }
+        }
+        descriptor_index = descriptor_index + 1U;
+    }
+    if (result == 0 && column -> name != 0) {
+        payload->data = column -> name;
+        payload->length = strlen(column -> name);
+        if (lm_trans_registry_descriptor_payload_is_numeric(payload) != 0) {
+            result = 1;
+        }
+    }
+    lm_trans_text_ref_destroy(&payload);
+    return result;
+}
+
+static int lm_trans_registry_descriptor_cell_none_cell_matches(const LmP0Text *payload, const char *class_name) {
+    LmP0Text * class_text;
+    const char *none_value;
+    int result;
+    if (payload == 0 || class_name == 0) {
+        return 0;
+    }
+    class_text = lm_trans_text_ref_new_cstr(class_name);
+    if (class_text == 0) {
+        return 0;
+    }
+    result = 0;
+    none_value = lm_trans_registry_none_cell_value(class_text);
+    if (none_value != 0 && lm_trans_text_equals(payload, none_value) != 0) {
+        result = 1;
+    }
+    lm_trans_text_ref_destroy(&class_text);
+    return result;
+}
+
+static int lm_trans_registry_descriptor_cell_is_null(const LmP0Text *atom, const LmTableColumnDescriptor *column) {
+    LmP0Text * payload;
+    const char *descriptor;
+    size_t descriptor_index;
+    int result;
+    if (lm_trans_registry_payload_is_null(atom) != 0) {
+        return 1;
+    }
+    if (atom == 0 || column == 0) {
+        return 0;
+    }
+    payload = lm_trans_text_ref_new_cstr("");
+    if (payload == 0) {
+        return 0;
+    }
+    if (lm_trans_registry_identifier_value(atom, payload) == 0) {
+        lm_trans_text_ref_destroy(&payload);
+        return 0;
+    }
+    result = 0;
+    if (column -> name != 0 && lm_trans_registry_descriptor_cell_none_cell_matches(payload, column -> name) != 0) {
+        result = 1;
+    }
+    descriptor_index = 0U;
+    while (result == 0 && descriptor_index < lm_table_column_descriptor_descriptor_count(column)) {
+        descriptor = lm_table_column_descriptor_descriptor_at(column, descriptor_index);
+        if (descriptor != 0 && lm_trans_registry_descriptor_cell_none_cell_matches(payload, descriptor) != 0) {
+            result = 1;
+        }
+        descriptor_index = descriptor_index + 1U;
+    }
+    lm_trans_text_ref_destroy(&payload);
+    return result;
+}
+
+static int lm_trans_registry_descriptor_cell_value(const LmP0Text *atom, const LmTableColumnDescriptor *column, LmP0Text *out_value) {
+    const char *codec;
+    int numeric_typed;
+    if (lm_trans_registry_descriptor_cell_is_null(atom, column) != 0) {
+        return 0;
+    }
+    codec = lm_trans_registry_descriptor_column_serialization_codec(column);
+    if ((codec != 0 && strcmp(codec, "lmx.char") == 0) || lm_table_column_descriptor_has_descriptor(column, "char") != 0) {
+        if (lm_trans_registry_literal_value(atom, out_value) != 0) {
+            return 1;
+        }
+        return -1;
+    }
+    numeric_typed = lm_trans_registry_descriptor_column_is_numeric_typed(column);
+    if (lm_trans_registry_identifier_value(atom, out_value) != 0) {
+        if (numeric_typed != 0 && lm_trans_registry_text_is_numeric_atom(out_value) == 0) {
+            return -1;
+        }
+        return 1;
+    }
+    return -1;
+}
+
+static int lm_trans_registry_materialize_descriptor_row(LmTableDescriptor *descriptor, const LmP0Node **cells, size_t cell_count, const LmOwnPtrStack *projection_facts) {
+    LmTableRow * row;
+    const LmTableColumnDescriptor * column;
+    const LmP0Node * node;
+    const LmP0Text * atom;
+    LmP0Text * value;
+    const LmTransRegistryFact * projection;
+    size_t column_index;
+    int cell_status;
+    int explicit_none;
+    int wants_node;
+    if (descriptor == 0 || cells == 0 || cell_count == 0U || lm_table_descriptor_column_count(descriptor) != cell_count) {
+        return -1;
+    }
+    if (projection_facts == 0 || projection_facts -> count + 1U != cell_count) {
+        return -1;
+    }
+    row = lm_table_row_new(0);
+    value = lm_trans_text_ref_new_cstr("");
+    if (row == 0 || value == 0) {
+        lm_table_row_delete_any(row);
+        lm_trans_text_ref_destroy(&value);
+        return -1;
+    }
+    column_index = 0U;
+    while (column_index < cell_count) {
+        column = lm_table_descriptor_column_at(descriptor, column_index);
+        node = cells[column_index];
+        atom = 0;
+        projection = 0;
+        cell_status = 0;
+        wants_node = 0;
+        if (column == 0) {
+            lm_table_row_delete_any(row);
+            lm_trans_text_ref_destroy(&value);
+            return -1;
+        }
+        if (node != 0 && node -> kind == LM_P0_NODE_ATOM) {
+            atom = node -> as -> atom;
+        }
+        explicit_none = atom != 0 && lm_trans_registry_payload_is_null(atom) != 0;
+        if (column_index == 0U) {
+            if (atom == 0 || lm_trans_registry_identifier_value(atom, value) == 0 || lm_table_row_take_cell_slice(row, atom -> data, atom -> length, value -> data, value -> length, 0, 0, explicit_none) != 0) {
+                lm_table_row_delete_any(row);
+                lm_trans_text_ref_destroy(&value);
+                return -1;
+            }
+        }
+        else {
+            wants_node = lm_table_column_descriptor_has_descriptor(column, "node");
+            if (wants_node != 0) {
+                if (explicit_none != 0) {
+                    cell_status = lm_table_row_take_cell_slice(row, atom -> data, atom -> length, 0, 0U, 0, 0, 1);
+                }
+                else {
+                    projection = lm_own_ptr_stack_at(projection_facts, column_index - 1U);
+                    if (projection == 0 || projection -> payload_node == 0) {
+                        lm_table_row_delete_any(row);
+                        lm_trans_text_ref_destroy(&value);
+                        return -1;
+                    }
+                    if (atom != 0) {
+                        cell_status = lm_table_row_take_cell_slice(row, atom -> data, atom -> length, 0, 0U, projection -> payload_node, projection, 0);
+                    }
+                    else {
+                        cell_status = lm_table_row_take_cell_slice(row, 0, 0U, 0, 0U, projection -> payload_node, projection, 0);
+                    }
+                }
+            }
+            else {
+                if (atom == 0) {
+                    lm_table_row_delete_any(row);
+                    lm_trans_text_ref_destroy(&value);
+                    return -1;
+                }
+                cell_status = lm_trans_registry_descriptor_cell_value(atom, column, value);
+                if (cell_status < 0) {
+                    lm_table_row_delete_any(row);
+                    lm_trans_text_ref_destroy(&value);
+                    return -1;
+                }
+                if (cell_status == 0) {
+                    cell_status = lm_table_row_take_cell_slice(row, atom -> data, atom -> length, 0, 0U, 0, 0, explicit_none);
+                }
+                else {
+                    projection = lm_own_ptr_stack_at(projection_facts, column_index - 1U);
+                    if (projection == 0 || projection -> payload == 0 || lm_table_descriptor_cstr_equals_slice(projection -> payload, value -> data, value -> length) == 0) {
+                        lm_table_row_delete_any(row);
+                        lm_trans_text_ref_destroy(&value);
+                        return -1;
+                    }
+                    cell_status = lm_table_row_take_cell_slice(row, atom -> data, atom -> length, projection -> payload, strlen(projection -> payload), 0, projection, 0);
+                }
+            }
+            if (cell_status != 0) {
+                lm_table_row_delete_any(row);
+                lm_trans_text_ref_destroy(&value);
+                return -1;
+            }
+        }
+        column_index = column_index + 1U;
+    }
+    lm_trans_text_ref_destroy(&value);
+    if (lm_table_descriptor_take_materialized_row(descriptor, row) != 0) {
+        lm_table_row_delete_any(row);
+        return -1;
+    }
+    return 0;
 }
 
 static int lm_trans_registry_push_table_cell(const LmP0Text *table_name, const LmL4Column *column, int split_by_column, const LmP0Text *key_atom, const LmP0Node *payload_node, int allow_node_cells) {
@@ -35148,16 +35467,6 @@ static LmTableDescriptor * lm_trans_registry_l4_source_descriptor_new(const LmP0
 static int lm_trans_registry_l4_push_table_row(void *context, const LmP0Text *table_name, LmL4Column **columns, size_t column_count, const LmP0Node **cells) {
     LmTransL4LoadContext * load_context;
     LmTableDescriptor * descriptor;
-    LmTableRow * row;
-    LmTableCell * cell;
-    const LmP0Node * node;
-    const LmP0Text * atom;
-    LmP0Text * value;
-    LmTransRegistryFact * projection;
-    size_t column_index;
-    int cell_status;
-    int explicit_none;
-    int wants_node;
     LM_UNUSED(table_name);
     load_context = ((LmTransL4LoadContext *)context);
     if (load_context == 0 || load_context -> source_table == 0 || load_context -> projection_facts == 0 || columns == 0 || cells == 0 || column_count == 0U) {
@@ -35167,96 +35476,7 @@ static int lm_trans_registry_l4_push_table_row(void *context, const LmP0Text *ta
     if (lm_table_descriptor_column_count(descriptor) != column_count || load_context -> projection_facts -> count + 1U != column_count) {
         return -1;
     }
-    row = lm_table_row_new(0);
-    value = lm_trans_l4_text_view_new("");
-    if (row == 0 || value == 0) {
-        lm_table_row_delete_any(row);
-        lm_trans_l4_text_view_delete(&value);
-        return -1;
-    }
-    column_index = 0U;
-    while (column_index < column_count) {
-        node = cells[column_index];
-        atom = 0;
-        if (node != 0 && node -> kind == LM_P0_NODE_ATOM) {
-            atom = node -> as -> atom;
-        }
-        explicit_none = atom != 0 && lm_trans_registry_payload_is_null(atom) != 0;
-        projection = 0;
-        cell_status = 0;
-        wants_node = 0;
-        if (column_index == 0U) {
-            if (atom == 0 || lm_trans_registry_identifier_value(atom, value) == 0) {
-                lm_table_row_delete_any(row);
-                lm_trans_l4_text_view_delete(&value);
-                return -1;
-            }
-            cell = lm_table_cell_new_slice(atom -> data, atom -> length, value -> data, value -> length, 0, 0, explicit_none);
-        }
-        else {
-            wants_node = lm_trans_registry_column_has_descriptor(columns[column_index], "node");
-            if (wants_node != 0) {
-                if (explicit_none != 0) {
-                    cell = lm_table_cell_new_slice(atom -> data, atom -> length, 0, 0U, 0, 0, 1);
-                }
-                else {
-                    projection = lm_own_ptr_stack_at(load_context -> projection_facts, column_index - 1U);
-                    if (projection == 0 || projection -> payload_node == 0) {
-                        lm_table_row_delete_any(row);
-                        lm_trans_l4_text_view_delete(&value);
-                        return -1;
-                    }
-                    if (atom != 0) {
-                        cell = lm_table_cell_new_slice(atom -> data, atom -> length, 0, 0U, projection -> payload_node, projection, 0);
-                    }
-                    else {
-                        cell = lm_table_cell_new_slice(0, 0U, 0, 0U, projection -> payload_node, projection, 0);
-                    }
-                }
-            }
-            else {
-                if (atom == 0) {
-                    lm_table_row_delete_any(row);
-                    lm_trans_l4_text_view_delete(&value);
-                    return -1;
-                }
-                cell_status = lm_trans_registry_cell_value(atom, columns[column_index], value);
-                if (cell_status < 0) {
-                    lm_table_row_delete_any(row);
-                    lm_trans_l4_text_view_delete(&value);
-                    return -1;
-                }
-                if (cell_status == 0) {
-                    cell = lm_table_cell_new_slice(atom -> data, atom -> length, 0, 0U, 0, 0, explicit_none);
-                }
-                else {
-                    projection = lm_own_ptr_stack_at(load_context -> projection_facts, column_index - 1U);
-                    if (projection == 0 || projection -> payload == 0) {
-                        lm_table_row_delete_any(row);
-                        lm_trans_l4_text_view_delete(&value);
-                        return -1;
-                    }
-                    cell_status = lm_table_descriptor_cstr_equals_slice(projection -> payload, value -> data, value -> length);
-                    if (cell_status == 0) {
-                        lm_table_row_delete_any(row);
-                        lm_trans_l4_text_view_delete(&value);
-                        return -1;
-                    }
-                    cell = lm_table_cell_new_slice(atom -> data, atom -> length, projection -> payload, strlen(projection -> payload), 0, projection, 0);
-                }
-            }
-        }
-        if (cell == 0 || lm_table_row_take_cell(row, cell) != 0) {
-            lm_table_cell_delete_any(cell);
-            lm_table_row_delete_any(row);
-            lm_trans_l4_text_view_delete(&value);
-            return -1;
-        }
-        column_index = column_index + 1U;
-    }
-    lm_trans_l4_text_view_delete(&value);
-    if (lm_table_descriptor_take_materialized_row(descriptor, row) != 0) {
-        lm_table_row_delete_any(row);
+    if (lm_trans_registry_materialize_descriptor_row(descriptor, cells, column_count, load_context -> projection_facts) != 0) {
         return -1;
     }
     lm_registry_view_note_mutation(lm_trans_registry -> view);

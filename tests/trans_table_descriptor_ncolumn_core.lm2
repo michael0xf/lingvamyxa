@@ -47,7 +47,7 @@ fn: lm_test_ncolumn_column_builder_atomic () int
     descriptor_lengths[1]: 14U
     status: lm_table_descriptor_add_column_slices(table, "value", 5U, "char", 4U, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 2U, 2U, 1U, 1)
     column: lm_table_descriptor_column_at(table, 0U)
-    if: status = 0 && (column = 0 || column\type_name = 0 || c.strcmp(column\type_name, "char") != 0 || column\address_depth != 2U || column\array_rank != 1U || column\is_const = 0 || lm_table_column_descriptor_descriptor_count(column) != 2U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "payload") != 0 || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 1U), "ordered.second") != 0)
+    if: status = 0 && (column = 0 || column\type_name = 0 || c.strcmp(column\type_name, "char") != 0 || column\address_depth != 2U || column\array_rank != 1U || column\is_const = 0 || lm_table_column_descriptor_descriptor_count(column) != 2U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "payload") != 0 || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 1U), "ordered.second") != 0 || lm_table_column_descriptor_has_descriptor(column, "payload") = 0 || lm_table_column_descriptor_has_descriptor(column, "ordered.second") = 0 || lm_table_column_descriptor_has_descriptor(column, "missing") != 0 || lm_table_column_descriptor_has_descriptor(column, 0) != 0)
         status: 1
 
     descriptor_data[1]: 0
@@ -65,6 +65,45 @@ fn: lm_test_ncolumn_column_builder_atomic () int
     lm_table_descriptor_delete_any(table)
 return: status
 
+fn: lm_test_ncolumn_row_cell_builder_atomic () int
+    [16]: char atom_data
+    [16]: char value_data
+    LmTableRow: row
+    const: LmTableCell: cell
+    int: node_marker
+    int: source_marker
+    int: status
+
+    c.strcpy(atom_data, "raw.atom")
+    c.strcpy(value_data, "owned")
+    node_marker: 17
+    source_marker: 23
+    row: lm_table_row_new(0)
+    if: row = 0
+        return: 1
+
+    status: lm_table_row_take_cell_slice(row, atom_data, 8U, value_data, 5U, @ node_marker, @ source_marker, 0)
+    cell: lm_table_row_cell_at(row, 0U)
+    if: status = 0 && (lm_table_row_cell_count(row) != 1U || cell = 0 || cell\atom = 0 || cell\value = 0 || c.strcmp(cell\atom, "raw.atom") != 0 || c.strcmp(cell\value, "owned") != 0 || cell\node != @ node_marker || cell\source != @ source_marker || cell\explicit_none != 0)
+        status: 1
+
+    atom_data[0]: 'X'
+    value_data[0]: 'Y'
+    if: status = 0 && (c.strcmp(cell\atom, "raw.atom") != 0 || c.strcmp(cell\value, "owned") != 0)
+        status: 1
+
+    if: status = 0 && lm_table_row_take_cell_slice(row, 0, 0U, 0, 0U, 0, 0, 0) = 0
+        status: 1
+    if: status = 0 && (lm_table_row_cell_count(row) != 1U || lm_table_row_cell_at(row, 0U) != cell)
+        status: 1
+    if: status = 0 && lm_table_row_take_cell_slice(0, atom_data, 8U, value_data, 5U, @ node_marker, @ source_marker, 0) = 0
+        status: 1
+
+    lm_table_row_delete_any(row)
+    if: status = 0 && (node_marker != 17 || source_marker != 23)
+        status: 1
+return: status
+
 fn: lm_test_ncolumn_schema (const: @(char name)) LmTableDescriptor
     LmTableDescriptor: table
 
@@ -77,15 +116,16 @@ fn: lm_test_ncolumn_schema (const: @(char name)) LmTableDescriptor
 return: table
 
 fn: lm_test_ncolumn_take_cell (LmTableRow: row; const: @(char atom); const: @(char value); const: @(void node); const: @(void source); int: explicit_none) int
-    LmTableCell: cell
+    size_t: atom_length
+    size_t: value_length
 
-    cell: lm_table_cell_new_cstr(atom, value, node, source, explicit_none)
-    if: cell = 0
-        return: 1
-    if: lm_table_row_take_cell(row, cell) != 0
-        lm_table_cell_delete_any(cell)
-        return: 1
-return: 0
+    atom_length: 0U
+    value_length: 0U
+    if: atom != 0
+        atom_length: c.strlen(atom)
+    if: value != 0
+        value_length: c.strlen(value)
+return: lm_table_row_take_cell_slice(row, atom, atom_length, value, value_length, node, source, explicit_none)
 
 fn: lm_test_ncolumn_add_row (
     LmTableDescriptor: table
@@ -178,6 +218,8 @@ external:
 
         status: 0
         if: lm_test_ncolumn_column_builder_atomic() != 0
+            status: 1
+        if: status = 0 && lm_test_ncolumn_row_cell_builder_atomic() != 0
             status: 1
         if: lm_registry_view_fact_at(0, 0U) != 0 || lm_registry_view_push_relation(0, "x", "x", "x", 0, 0) = 0
             status: 1
