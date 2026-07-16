@@ -694,7 +694,6 @@ table:
     columns((class: class) (@: char L4))
     rows:
              L4        `l4.root`
-             registry  `l4.root`
 end: `namespace.l4.root`
 
 table:

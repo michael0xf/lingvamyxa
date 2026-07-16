@@ -436,6 +436,11 @@ lowering block:
         ...
     end: L2
 
+A translator source has no separate root `registry:` level alias. New
+registry/model dependencies are direct L2 `table:`/`join:` modules selected
+with `predef:`; `L4:` remains only as the explicit compatibility wrapper while
+those modules are migrated.
+
 A consumer that understands more than one explicit root level may consume the
 earlier model/registry blocks before lowering or executing the later procedural
 blocks. For example, an L2 translator may load sibling `L4:` tables from the

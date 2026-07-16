@@ -37370,7 +37370,7 @@ static int lm_trans_l4_pointer_bindings_init(void) {
         lm_trans_ptr_stack_delete(&atom_bindings);
         return 1;
     }
-    if (lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "join", "l4.frame", lm_trans_l4_receiver_join) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "callable", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "sub", "l4.frame", lm_trans_l4_receiver_sub_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "L4", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "registry", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0) {
+    if (lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "join", "l4.frame", lm_trans_l4_receiver_join) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "callable", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "sub", "l4.frame", lm_trans_l4_receiver_sub_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "L4", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0) {
         lm_trans_ptr_stack_delete(&frame_bindings);
         lm_trans_ptr_stack_delete(&root_frame_bindings);
         lm_trans_ptr_stack_delete(&atom_bindings);
@@ -38716,9 +38716,6 @@ static int lm_trans_registry_seed_l4_receivers(void) {
         return 1;
     }
     if (lm_trans_registry_seed_l4_receiver("namespace.l4.root", "L4", "l4.root") != 0) {
-        return 1;
-    }
-    if (lm_trans_registry_seed_l4_receiver("namespace.l4.root", "registry", "l4.root") != 0) {
         return 1;
     }
     return 0;

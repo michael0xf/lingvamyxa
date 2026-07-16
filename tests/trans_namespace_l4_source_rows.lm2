@@ -58,13 +58,6 @@ end: L4
 
 L4:
     table:
-        name: `namespace.l4.root`
-        columns((class: class) (@: relation L4))
-        rows:
-                 registry  `l4.root`
-    end: `namespace.l4.root`
-
-    table:
         name: `lm.test.namespace.l4.root.seed`
         columns((class: class) (int: marker) (@: char `l4.root`))
         rows:
@@ -72,7 +65,7 @@ L4:
     end: `lm.test.namespace.l4.root.seed`
 end: L4
 
-registry:
+L4:
     join: (`lm.test.namespace.l4.root.seed`) `lm.test.namespace.l4.root.middle`
         columns((class: class) (int: marker) (@: char `l4.root`))
         rows:
@@ -89,7 +82,7 @@ registry:
         rows:
                  L4  8  None
     end: namespace
-end: registry
+end: L4
 
 L4:
     table:

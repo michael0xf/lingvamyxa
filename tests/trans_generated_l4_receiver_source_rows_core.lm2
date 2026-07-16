@@ -12,14 +12,13 @@ int main(int argc, char **argv) {
 ===
 
 fn: lm_test_generated_l4_receiver_source_rows_core () int
-    const: [8]: @: char table_names
-    const: [8]: @: char keys
-    const: [8]: @: char payloads
+    const: [7]: @: char table_names
+    const: [7]: @: char keys
+    const: [7]: @: char payloads
     const: LmRegistryViewRow: view_row
     LmTransRegistryFact: fact
     const: LmTableDescriptor: descriptor
     const: LmTableDescriptor: first_namespace_descriptor
-    const: LmTableDescriptor: first_root_descriptor
     const: LmTableColumnDescriptor: key_column
     const: LmTableColumnDescriptor: value_column
     const: LmTableRow: row
@@ -52,7 +51,6 @@ fn: lm_test_generated_l4_receiver_source_rows_core () int
     table_names[4]: "namespace.l4"
     table_names[5]: "namespace.l4"
     table_names[6]: "namespace.l4.root"
-    table_names[7]: "namespace.l4.root"
     keys[0]: "table"
     keys[1]: "join"
     keys[2]: "row"
@@ -60,7 +58,6 @@ fn: lm_test_generated_l4_receiver_source_rows_core () int
     keys[4]: "callable"
     keys[5]: "sub"
     keys[6]: "L4"
-    keys[7]: "registry"
     payloads[0]: "l4.frame"
     payloads[1]: "l4.frame"
     payloads[2]: "l4.frame"
@@ -68,16 +65,14 @@ fn: lm_test_generated_l4_receiver_source_rows_core () int
     payloads[4]: "l4.frame"
     payloads[5]: "l4.frame"
     payloads[6]: "l4.root"
-    payloads[7]: "l4.root"
 
     status: lm_trans_registry_seed_l4_receivers()
-    if: status = 0 && (lm_trans_registry\loaded_fact_count != 8U || lm_registry_view_fact_count(lm_trans_registry\view) != 8U || lm_registry_view_source_table_count(lm_trans_registry\view) != 8U)
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 7U || lm_registry_view_fact_count(lm_trans_registry\view) != 7U || lm_registry_view_source_table_count(lm_trans_registry\view) != 7U)
         status: 1
 
     first_namespace_descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, 0U)
-    first_root_descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, 6U)
     i: 0U
-    while: status = 0 && i < 8U
+    while: status = 0 && i < 7U
         view_row: lm_registry_view_fact_at(lm_trans_registry\view, i)
         fact: 0
         if: view_row != 0
@@ -94,8 +89,6 @@ fn: lm_test_generated_l4_receiver_source_rows_core () int
         if: descriptor = 0 || descriptor\name = 0 || c.strcmp(descriptor\name, table_names[i]) != 0 || descriptor\name = fact\table || lm_table_descriptor_column_count(descriptor) != 2U || lm_table_descriptor_materialized_row_count(descriptor) != 1U
             status: 1
         if: i > 0U && i < 6U && descriptor = first_namespace_descriptor
-            status: 1
-        if: i = 7U && descriptor = first_root_descriptor
             status: 1
         if: key_column = 0 || key_column\name = 0 || key_column\type_name = 0 || key_column\index != 0U || c.strcmp(key_column\name, "class") != 0 || c.strcmp(key_column\type_name, "class") != 0 || key_column\address_depth != 0U || key_column\array_rank != 0U || key_column\is_const != 0 || lm_table_column_descriptor_descriptor_count(key_column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(key_column, 0U), "class") != 0
             status: 1
