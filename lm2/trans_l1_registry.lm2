@@ -1537,7 +1537,7 @@ fn: lm_trans_registry_source_n2_typed_value (
         return: source_cell\value
 return: facade_row\payload
 
-fn: lm_trans_registry_source_path_typed_cell_kind_policy (
+fn: lm_trans_registry_source_path_typed_cell_kind_policy_slow (
     const: (LmTransNamespace: namespace_)
     const: @(char source_path)
     const: @(char key_column_name)
@@ -1624,6 +1624,235 @@ fn: lm_trans_registry_source_path_typed_cell_kind_policy (
         ---
     ---
 return: 0
+
+LmTransRegistrySourcePathCacheEntry: lm_trans_registry_source_path_cache
+const: LmRegistryView: lm_trans_registry_source_path_cache_view
+size_t: lm_trans_registry_source_path_cache_generation
+int: lm_trans_registry_source_path_cache_view_mode
+
+fn: lm_trans_registry_source_path_cache_text_equals (const: @(char left); const: @(char right)) int
+    if: left = 0 || right = 0
+        return: left = right
+return: c.strcmp(left, right) = 0
+
+fn: lm_trans_registry_source_path_cache_hash_text (ulong: hash; const: @(char text)) ulong
+    size_t: index
+
+    if: text = 0
+        hash: hash ^ 255UL
+        return: hash * 16777619UL
+    index: 0U
+    while: text[index] != '\0'
+        hash: hash ^ (cast: uchar text[index])
+        hash: hash * 16777619UL
+        index: index + 1U
+    hash: hash ^ 0UL
+return: hash * 16777619UL
+
+fn: lm_trans_registry_source_path_cache_hash (
+    const: @(char source_path)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_descriptor)
+    const: @(char n2_value_column_name)
+    const: (LmTransRegistryFact: facade_row)
+    int: accept_any_value_descriptor
+    int: expect_node
+) ulong
+    ulong: hash
+
+    hash: 2166136261UL
+    hash: lm_trans_registry_source_path_cache_hash_text(hash, source_path)
+    hash: lm_trans_registry_source_path_cache_hash_text(hash, key_column_name)
+    hash: lm_trans_registry_source_path_cache_hash_text(hash, key_descriptor)
+    hash: lm_trans_registry_source_path_cache_hash_text(hash, value_descriptor)
+    hash: lm_trans_registry_source_path_cache_hash_text(hash, n2_value_column_name)
+    if: facade_row != 0
+        hash: lm_trans_registry_source_path_cache_hash_text(hash, facade_row\table)
+        hash: lm_trans_registry_source_path_cache_hash_text(hash, facade_row\key)
+        hash: lm_trans_registry_source_path_cache_hash_text(hash, facade_row\payload)
+    else:
+        hash: lm_trans_registry_source_path_cache_hash_text(hash, 0)
+    ---
+    hash: hash ^ (cast: ulong accept_any_value_descriptor != 0)
+    hash: hash * 16777619UL
+    hash: hash ^ (cast: ulong expect_node != 0)
+return: hash * 16777619UL
+
+sub: lm_trans_registry_source_path_cache_entry_clear (LmTransRegistrySourcePathCacheEntry: entry)
+    if: entry = 0
+        return
+    lm_own_delete(entry\source_path, 0)
+    lm_own_delete(entry\key_column_name, 0)
+    lm_own_delete(entry\key_descriptor, 0)
+    lm_own_delete(entry\value_descriptor, 0)
+    lm_own_delete(entry\n2_value_column_name, 0)
+    c.memset(entry, 0, c.sizeof(entry[0]))
+end: lm_trans_registry_source_path_cache_entry_clear
+
+sub: lm_trans_registry_source_path_cache_reset ()
+    LmTransRegistrySourcePathCacheEntry: entry
+    size_t: index
+
+    if: lm_trans_registry_source_path_cache != 0
+        index: 0U
+        while: index < 1024U
+            entry: lm_trans_registry_source_path_cache + index
+            if: entry\occupied != 0
+                lm_trans_registry_source_path_cache_entry_clear(entry)
+            index: index + 1U
+        lm_own_delete(lm_trans_registry_source_path_cache, 0)
+    ---
+    lm_trans_registry_source_path_cache: 0
+    lm_trans_registry_source_path_cache_view: 0
+    lm_trans_registry_source_path_cache_generation: 0U
+    lm_trans_registry_source_path_cache_view_mode: 0
+end: lm_trans_registry_source_path_cache_reset
+
+fn: lm_trans_registry_source_path_cache_sync () int
+    const: LmRegistryView: view
+    const: LmRegistryView: current
+    size_t: generation
+
+    view: 0
+    if: lm_trans_registry != 0
+        view: lm_trans_registry\view
+    current: view
+    generation: 0U
+    while: current != 0
+        generation: generation + current\mutation_generation
+        current: current\parent
+    if: lm_trans_registry_source_path_cache != 0 && lm_trans_registry_source_path_cache_view = view && lm_trans_registry_source_path_cache_generation = generation && lm_trans_registry_source_path_cache_view_mode = lm_trans_registry\view_mode
+        return: 1
+    lm_trans_registry_source_path_cache_reset()
+    if: view = 0
+        return: 0
+    lm_trans_registry_source_path_cache: lm_own_new_zero(1024U * c.sizeof(lm_trans_registry_source_path_cache[0]))
+    if: lm_trans_registry_source_path_cache = 0
+        return: 0
+    lm_trans_registry_source_path_cache_view: view
+    lm_trans_registry_source_path_cache_generation: generation
+    lm_trans_registry_source_path_cache_view_mode: lm_trans_registry\view_mode
+return: 1
+
+fn: lm_trans_registry_source_path_cache_entry_matches (
+    const: (LmTransRegistrySourcePathCacheEntry: entry)
+    const: @(char source_path)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_descriptor)
+    const: @(char n2_value_column_name)
+    const: (LmTransRegistryFact: facade_row)
+    int: accept_any_value_descriptor
+    int: expect_node
+) int
+    if: entry = 0 || entry\occupied = 0 || entry\facade_row != facade_row || entry\accept_any_value_descriptor != accept_any_value_descriptor || entry\expect_node != expect_node
+        return: 0
+return: lm_trans_registry_source_path_cache_text_equals(entry\source_path, source_path) != 0 && lm_trans_registry_source_path_cache_text_equals(entry\key_column_name, key_column_name) != 0 && lm_trans_registry_source_path_cache_text_equals(entry\key_descriptor, key_descriptor) != 0 && lm_trans_registry_source_path_cache_text_equals(entry\value_descriptor, value_descriptor) != 0 && lm_trans_registry_source_path_cache_text_equals(entry\n2_value_column_name, n2_value_column_name) != 0
+
+sub: lm_trans_registry_source_path_cache_store (
+    ulong: hash
+    const: @(char source_path)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_descriptor)
+    const: @(char n2_value_column_name)
+    const: (LmTransRegistryFact: facade_row)
+    int: accept_any_value_descriptor
+    int: expect_node
+    const: (LmTableCell: value_cell)
+    const: (LmTableCell: key_cell)
+)
+    LmTransRegistrySourcePathCacheEntry: entry
+    @: char source_path_copy
+    @: char key_column_name_copy
+    @: char key_descriptor_copy
+    @: char value_descriptor_copy
+    @: char n2_value_column_name_copy
+    size_t: slot
+
+    if: lm_trans_registry_source_path_cache = 0 || source_path = 0 || key_column_name = 0 || key_descriptor = 0
+        return
+    source_path_copy: lm_table_descriptor_copy_cstr(source_path)
+    key_column_name_copy: lm_table_descriptor_copy_cstr(key_column_name)
+    key_descriptor_copy: lm_table_descriptor_copy_cstr(key_descriptor)
+    value_descriptor_copy: 0
+    n2_value_column_name_copy: 0
+    if: value_descriptor != 0
+        value_descriptor_copy: lm_table_descriptor_copy_cstr(value_descriptor)
+    if: n2_value_column_name != 0
+        n2_value_column_name_copy: lm_table_descriptor_copy_cstr(n2_value_column_name)
+    if: source_path_copy = 0 || key_column_name_copy = 0 || key_descriptor_copy = 0 || (value_descriptor != 0 && value_descriptor_copy = 0) || (n2_value_column_name != 0 && n2_value_column_name_copy = 0)
+        lm_own_delete(source_path_copy, 0)
+        lm_own_delete(key_column_name_copy, 0)
+        lm_own_delete(key_descriptor_copy, 0)
+        lm_own_delete(value_descriptor_copy, 0)
+        lm_own_delete(n2_value_column_name_copy, 0)
+        return
+    ---
+    slot: hash % 1024UL
+    entry: lm_trans_registry_source_path_cache + slot
+    lm_trans_registry_source_path_cache_entry_clear(entry)
+    entry\source_path: source_path_copy
+    entry\key_column_name: key_column_name_copy
+    entry\key_descriptor: key_descriptor_copy
+    entry\value_descriptor: value_descriptor_copy
+    entry\n2_value_column_name: n2_value_column_name_copy
+    entry\facade_row: facade_row
+    entry\accept_any_value_descriptor: accept_any_value_descriptor
+    entry\expect_node: expect_node
+    entry\value_cell: value_cell
+    entry\key_cell: key_cell
+    entry\occupied: 1
+end: lm_trans_registry_source_path_cache_store
+
+fn: lm_trans_registry_source_path_typed_cell_kind_policy (
+    const: (LmTransNamespace: namespace_)
+    const: @(char source_path)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_descriptor)
+    const: @(char n2_value_column_name)
+    const: (LmTransRegistryFact: facade_row)
+    int: accept_any_value_descriptor
+    int: expect_node
+    const: @(LmTableCell out_key_cell)
+) const: LmTableCell
+    const: LmTransRegistrySourcePathCacheEntry: entry
+    const: LmTableCell: value_cell
+    const: LmTableCell: key_cell
+    ulong: hash
+    size_t: slot
+    int: cache_ready
+
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: facade_row = 0 || facade_row\key = 0 || source_path = 0 || key_column_name = 0 || key_descriptor = 0 || (value_descriptor = 0 && accept_any_value_descriptor = 0) || (value_descriptor != 0 && accept_any_value_descriptor != 0) || lm_trans_registry_view_parity_enabled() = 0
+        return: 0
+    if: expect_node != 0 && (facade_row\payload != 0 || facade_row\payload_node = 0)
+        return: 0
+    if: expect_node = 0 && facade_row\payload = 0
+        return: 0
+    if: namespace_ != 0 && namespace_\registry_identifiers != 0 && namespace_\registry_identifiers != c.lm_trans_registry->identifiers
+        return: 0
+    cache_ready: lm_trans_registry_source_path_cache_sync()
+    hash: lm_trans_registry_source_path_cache_hash(source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node)
+    if: cache_ready != 0
+        slot: hash % 1024UL
+        entry: lm_trans_registry_source_path_cache + slot
+        if: lm_trans_registry_source_path_cache_entry_matches(entry, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node) != 0
+            if: out_key_cell != 0
+                out_key_cell[0]: entry\key_cell
+            return: entry\value_cell
+        ---
+    ---
+    key_cell: 0
+    value_cell: lm_trans_registry_source_path_typed_cell_kind_policy_slow(namespace_, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node, @ key_cell)
+    if: out_key_cell != 0
+        out_key_cell[0]: key_cell
+    if: cache_ready != 0
+        lm_trans_registry_source_path_cache_store(hash, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node, value_cell, key_cell)
+return: value_cell
 
 fn: lm_trans_registry_source_path_typed_cell_kind (
     const: (LmTransNamespace: namespace_)

@@ -43,6 +43,7 @@ typedef struct LmTransRegistryFact LmTransRegistryFact;
 typedef struct LmTransRegistryCloneFrame LmTransRegistryCloneFrame;
 typedef struct LmTransExprSegment LmTransExprSegment;
 typedef struct LmTransCallLowering LmTransCallLowering;
+typedef struct LmTransRegistrySourcePathCacheEntry LmTransRegistrySourcePathCacheEntry;
 typedef struct LmTransCallableProjectionCacheEntry LmTransCallableProjectionCacheEntry;
 typedef struct LmTransCallableValue LmTransCallableValue;
 typedef struct LmTransExprAtomLowering LmTransExprAtomLowering;
@@ -409,6 +410,19 @@ struct LmTransCallLowering {
     LmP0Text * name;
     const LmTransSymbol * signature;
     int is_closure;
+};
+struct LmTransRegistrySourcePathCacheEntry {
+    char *source_path;
+    char *key_column_name;
+    char *key_descriptor;
+    char *value_descriptor;
+    char *n2_value_column_name;
+    const LmTransRegistryFact * facade_row;
+    int accept_any_value_descriptor;
+    int expect_node;
+    const LmTableCell * value_cell;
+    const LmTableCell * key_cell;
+    int occupied;
 };
 struct LmTransCallableProjectionCacheEntry {
     char *class_name;
@@ -3035,6 +3049,7 @@ static int lm_registry_view_table_has_rows(const LmRegistryView *view, const cha
 
 
 
+
 static void lm_trans_import_document_delete(void *document);
 static LmP0Text * lm_trans_registry_new_text(void);
 static LmP0Structure * lm_trans_registry_new_structure(void);
@@ -3103,6 +3118,15 @@ static int lm_trans_registry_node_cell_is_facade_witness(const LmTableCell *sour
 static const LmTableCell * lm_trans_registry_source_n2_cell(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *payload_column_name, const LmTransRegistryFact *facade_row, int expect_node, const char *expected_key_descriptor, const char *expected_payload_descriptor, int accept_any_payload_descriptor);
 static const char * lm_trans_registry_source_n2_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *value_column_name, const LmTransRegistryFact *facade_row);
 static const char * lm_trans_registry_source_n2_typed_value(const LmTransNamespace *namespace_, const char *table_name, const char *key_column_name, const char *key_descriptor, const char *value_column_name, const char *value_descriptor, const LmTransRegistryFact *facade_row);
+static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind_policy_slow(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node, const LmTableCell **out_key_cell);
+static int lm_trans_registry_source_path_cache_text_equals(const char *left, const char *right);
+static unsigned long lm_trans_registry_source_path_cache_hash_text(unsigned long hash, const char *text);
+static unsigned long lm_trans_registry_source_path_cache_hash(const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node);
+static void lm_trans_registry_source_path_cache_entry_clear(LmTransRegistrySourcePathCacheEntry *entry);
+static void lm_trans_registry_source_path_cache_reset(void);
+static int lm_trans_registry_source_path_cache_sync(void);
+static int lm_trans_registry_source_path_cache_entry_matches(const LmTransRegistrySourcePathCacheEntry *entry, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node);
+static void lm_trans_registry_source_path_cache_store(unsigned long hash, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node, const LmTableCell *value_cell, const LmTableCell *key_cell);
 static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind_policy(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node, const LmTableCell **out_key_cell);
 static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int expect_node, const LmTableCell **out_key_cell);
 static const LmTableCell * lm_trans_registry_source_path_typed_cell(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row);
@@ -3207,6 +3231,14 @@ static int lm_trans_l2_executable_statement_depth;
 static int lm_trans_l2_conditional_emission_depth;
 
 static LmTransRegistry * lm_trans_registry;
+
+static LmTransRegistrySourcePathCacheEntry * lm_trans_registry_source_path_cache;
+
+static const LmRegistryView * lm_trans_registry_source_path_cache_view;
+
+static size_t lm_trans_registry_source_path_cache_generation;
+
+static int lm_trans_registry_source_path_cache_view_mode;
 
 static LmP0Text * lm_trans_text_ref_new(const LmP0Text *text);
 static LmP0Text * lm_trans_text_ref_new_cstr(const char *text);
@@ -7528,7 +7560,7 @@ static const char * lm_trans_registry_source_n2_typed_value(const LmTransNamespa
     return facade_row -> payload;
 }
 
-static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind_policy(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node, const LmTableCell **out_key_cell) {
+static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind_policy_slow(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node, const LmTableCell **out_key_cell) {
     const LmTableDescriptor * source_table;
     const LmTableColumnDescriptor * source_key_column;
     const LmTableColumnDescriptor * source_value_column;
@@ -7615,6 +7647,212 @@ static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind_policy(
         }
     }
     return 0;
+}
+
+static int lm_trans_registry_source_path_cache_text_equals(const char *left, const char *right) {
+    if (left == 0 || right == 0) {
+        return left == right;
+    }
+    return strcmp(left, right) == 0;
+}
+
+static unsigned long lm_trans_registry_source_path_cache_hash_text(unsigned long hash, const char *text) {
+    size_t index;
+    if (text == 0) {
+        hash = hash ^ 255UL;
+        return hash * 16777619UL;
+    }
+    index = 0U;
+    while (text[index] != '\0') {
+        hash = hash ^ (((unsigned char)text[index]));
+        hash = hash * 16777619UL;
+        index = index + 1U;
+    }
+    hash = hash ^ 0UL;
+    return hash * 16777619UL;
+}
+
+static unsigned long lm_trans_registry_source_path_cache_hash(const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node) {
+    unsigned long hash;
+    hash = 2166136261UL;
+    hash = lm_trans_registry_source_path_cache_hash_text(hash, source_path);
+    hash = lm_trans_registry_source_path_cache_hash_text(hash, key_column_name);
+    hash = lm_trans_registry_source_path_cache_hash_text(hash, key_descriptor);
+    hash = lm_trans_registry_source_path_cache_hash_text(hash, value_descriptor);
+    hash = lm_trans_registry_source_path_cache_hash_text(hash, n2_value_column_name);
+    if (facade_row != 0) {
+        hash = lm_trans_registry_source_path_cache_hash_text(hash, facade_row -> table);
+        hash = lm_trans_registry_source_path_cache_hash_text(hash, facade_row -> key);
+        hash = lm_trans_registry_source_path_cache_hash_text(hash, facade_row -> payload);
+    }
+    else {
+        hash = lm_trans_registry_source_path_cache_hash_text(hash, 0);
+    }
+    hash = hash ^ (((unsigned long)accept_any_value_descriptor != 0));
+    hash = hash * 16777619UL;
+    hash = hash ^ (((unsigned long)expect_node != 0));
+    return hash * 16777619UL;
+}
+
+static void lm_trans_registry_source_path_cache_entry_clear(LmTransRegistrySourcePathCacheEntry *entry) {
+    if (entry == 0) {
+        return;
+    }
+    lm_own_delete(entry -> source_path, 0);
+    lm_own_delete(entry -> key_column_name, 0);
+    lm_own_delete(entry -> key_descriptor, 0);
+    lm_own_delete(entry -> value_descriptor, 0);
+    lm_own_delete(entry -> n2_value_column_name, 0);
+    memset(entry, 0, sizeof(entry[0]));
+}
+
+static void lm_trans_registry_source_path_cache_reset(void) {
+    LmTransRegistrySourcePathCacheEntry * entry;
+    size_t index;
+    if (lm_trans_registry_source_path_cache != 0) {
+        index = 0U;
+        while (index < 1024U) {
+            entry = lm_trans_registry_source_path_cache + index;
+            if (entry -> occupied != 0) {
+                lm_trans_registry_source_path_cache_entry_clear(entry);
+            }
+            index = index + 1U;
+        }
+        lm_own_delete(lm_trans_registry_source_path_cache, 0);
+    }
+    lm_trans_registry_source_path_cache = 0;
+    lm_trans_registry_source_path_cache_view = 0;
+    lm_trans_registry_source_path_cache_generation = 0U;
+    lm_trans_registry_source_path_cache_view_mode = 0;
+}
+
+static int lm_trans_registry_source_path_cache_sync(void) {
+    const LmRegistryView * view;
+    const LmRegistryView * current;
+    size_t generation;
+    view = 0;
+    if (lm_trans_registry != 0) {
+        view = lm_trans_registry -> view;
+    }
+    current = view;
+    generation = 0U;
+    while (current != 0) {
+        generation = generation + current -> mutation_generation;
+        current = current -> parent;
+    }
+    if (lm_trans_registry_source_path_cache != 0 && lm_trans_registry_source_path_cache_view == view && lm_trans_registry_source_path_cache_generation == generation && lm_trans_registry_source_path_cache_view_mode == lm_trans_registry -> view_mode) {
+        return 1;
+    }
+    lm_trans_registry_source_path_cache_reset();
+    if (view == 0) {
+        return 0;
+    }
+    lm_trans_registry_source_path_cache = lm_own_new_zero(1024U * sizeof(lm_trans_registry_source_path_cache[0]));
+    if (lm_trans_registry_source_path_cache == 0) {
+        return 0;
+    }
+    lm_trans_registry_source_path_cache_view = view;
+    lm_trans_registry_source_path_cache_generation = generation;
+    lm_trans_registry_source_path_cache_view_mode = lm_trans_registry -> view_mode;
+    return 1;
+}
+
+static int lm_trans_registry_source_path_cache_entry_matches(const LmTransRegistrySourcePathCacheEntry *entry, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node) {
+    if (entry == 0 || entry -> occupied == 0 || entry -> facade_row != facade_row || entry -> accept_any_value_descriptor != accept_any_value_descriptor || entry -> expect_node != expect_node) {
+        return 0;
+    }
+    return lm_trans_registry_source_path_cache_text_equals(entry -> source_path, source_path) != 0 && lm_trans_registry_source_path_cache_text_equals(entry -> key_column_name, key_column_name) != 0 && lm_trans_registry_source_path_cache_text_equals(entry -> key_descriptor, key_descriptor) != 0 && lm_trans_registry_source_path_cache_text_equals(entry -> value_descriptor, value_descriptor) != 0 && lm_trans_registry_source_path_cache_text_equals(entry -> n2_value_column_name, n2_value_column_name) != 0;
+}
+
+static void lm_trans_registry_source_path_cache_store(unsigned long hash, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node, const LmTableCell *value_cell, const LmTableCell *key_cell) {
+    LmTransRegistrySourcePathCacheEntry * entry;
+    char *source_path_copy;
+    char *key_column_name_copy;
+    char *key_descriptor_copy;
+    char *value_descriptor_copy;
+    char *n2_value_column_name_copy;
+    size_t slot;
+    if (lm_trans_registry_source_path_cache == 0 || source_path == 0 || key_column_name == 0 || key_descriptor == 0) {
+        return;
+    }
+    source_path_copy = lm_table_descriptor_copy_cstr(source_path);
+    key_column_name_copy = lm_table_descriptor_copy_cstr(key_column_name);
+    key_descriptor_copy = lm_table_descriptor_copy_cstr(key_descriptor);
+    value_descriptor_copy = 0;
+    n2_value_column_name_copy = 0;
+    if (value_descriptor != 0) {
+        value_descriptor_copy = lm_table_descriptor_copy_cstr(value_descriptor);
+    }
+    if (n2_value_column_name != 0) {
+        n2_value_column_name_copy = lm_table_descriptor_copy_cstr(n2_value_column_name);
+    }
+    if (source_path_copy == 0 || key_column_name_copy == 0 || key_descriptor_copy == 0 || (value_descriptor != 0 && value_descriptor_copy == 0) || (n2_value_column_name != 0 && n2_value_column_name_copy == 0)) {
+        lm_own_delete(source_path_copy, 0);
+        lm_own_delete(key_column_name_copy, 0);
+        lm_own_delete(key_descriptor_copy, 0);
+        lm_own_delete(value_descriptor_copy, 0);
+        lm_own_delete(n2_value_column_name_copy, 0);
+        return;
+    }
+    slot = hash % 1024UL;
+    entry = lm_trans_registry_source_path_cache + slot;
+    lm_trans_registry_source_path_cache_entry_clear(entry);
+    entry->source_path = source_path_copy;
+    entry->key_column_name = key_column_name_copy;
+    entry->key_descriptor = key_descriptor_copy;
+    entry->value_descriptor = value_descriptor_copy;
+    entry->n2_value_column_name = n2_value_column_name_copy;
+    entry->facade_row = facade_row;
+    entry->accept_any_value_descriptor = accept_any_value_descriptor;
+    entry->expect_node = expect_node;
+    entry->value_cell = value_cell;
+    entry->key_cell = key_cell;
+    entry->occupied = 1;
+}
+
+static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind_policy(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int accept_any_value_descriptor, int expect_node, const LmTableCell **out_key_cell) {
+    const LmTransRegistrySourcePathCacheEntry * entry;
+    const LmTableCell * value_cell;
+    const LmTableCell * key_cell;
+    unsigned long hash;
+    size_t slot;
+    int cache_ready;
+    if (out_key_cell != 0) {
+        out_key_cell[0] = 0;
+    }
+    if (facade_row == 0 || facade_row -> key == 0 || source_path == 0 || key_column_name == 0 || key_descriptor == 0 || (value_descriptor == 0 && accept_any_value_descriptor == 0) || (value_descriptor != 0 && accept_any_value_descriptor != 0) || lm_trans_registry_view_parity_enabled() == 0) {
+        return 0;
+    }
+    if (expect_node != 0 && (facade_row -> payload != 0 || facade_row -> payload_node == 0)) {
+        return 0;
+    }
+    if (expect_node == 0 && facade_row -> payload == 0) {
+        return 0;
+    }
+    if (namespace_ != 0 && namespace_ -> registry_identifiers != 0 && namespace_ -> registry_identifiers != lm_trans_registry->identifiers) {
+        return 0;
+    }
+    cache_ready = lm_trans_registry_source_path_cache_sync();
+    hash = lm_trans_registry_source_path_cache_hash(source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node);
+    if (cache_ready != 0) {
+        slot = hash % 1024UL;
+        entry = lm_trans_registry_source_path_cache + slot;
+        if (lm_trans_registry_source_path_cache_entry_matches(entry, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node) != 0) {
+            if (out_key_cell != 0) {
+                out_key_cell[0] = entry -> key_cell;
+            }
+            return entry -> value_cell;
+        }
+    }
+    key_cell = 0;
+    value_cell = lm_trans_registry_source_path_typed_cell_kind_policy_slow(namespace_, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node, &key_cell);
+    if (out_key_cell != 0) {
+        out_key_cell[0] = key_cell;
+    }
+    if (cache_ready != 0) {
+        lm_trans_registry_source_path_cache_store(hash, source_path, key_column_name, key_descriptor, value_descriptor, n2_value_column_name, facade_row, accept_any_value_descriptor, expect_node, value_cell, key_cell);
+    }
+    return value_cell;
 }
 
 static const LmTableCell * lm_trans_registry_source_path_typed_cell_kind(const LmTransNamespace *namespace_, const char *source_path, const char *key_column_name, const char *key_descriptor, const char *value_descriptor, const char *n2_value_column_name, const LmTransRegistryFact *facade_row, int expect_node, const LmTableCell **out_key_cell) {
@@ -36602,6 +36840,7 @@ static int lm_trans_registry_init(void) {
 static void lm_trans_registry_destroy(void) {
     lm_trans_expr_binding_view_cache_reset();
     lm_trans_callable_projection_cache_reset();
+    lm_trans_registry_source_path_cache_reset();
     if (lm_trans_registry == 0) {
         return;
     }

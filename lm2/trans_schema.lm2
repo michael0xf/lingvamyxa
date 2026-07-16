@@ -9,6 +9,7 @@ table:
              LmTransRegistryCloneFrame   c.struct
              LmTransExprSegment          c.struct
              LmTransCallLowering         c.struct
+             LmTransRegistrySourcePathCacheEntry c.struct
              LmTransCallableProjectionCacheEntry c.struct
              LmTransCallableValue        c.struct
              LmTransExprAtomLowering     c.struct
@@ -352,6 +353,7 @@ table:
              LmTransExprSegment             c.struct
              LmTransStructReturnFieldValue  c.struct
              LmTransCallLowering            c.struct
+             LmTransRegistrySourcePathCacheEntry c.struct
              LmTransCallableProjectionCacheEntry c.struct
              LmTransCallableValue           c.struct
              LmTransExprLoweredRange        c.named-struct
@@ -408,6 +410,7 @@ table:
              LmTransExprSegment             1
              LmTransStructReturnFieldValue  1
              LmTransCallLowering            1
+             LmTransRegistrySourcePathCacheEntry 1
              LmTransCallableProjectionCacheEntry 1
              LmTransCallableValue           1
              LmTransExprLoweredRange        1
@@ -677,6 +680,23 @@ table:
              signature  LmTransSymbol          1                       0                                1
              is_closure int                    2                       0                                0
 end: LmTransCallLowering
+
+table:
+    name: LmTransRegistrySourcePathCacheEntry
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             source_path                 char                   0   1  0
+             key_column_name             char                   1   1  0
+             key_descriptor              char                   2   1  0
+             value_descriptor            char                   3   1  0
+             n2_value_column_name         char                   4   1  0
+             facade_row                  LmTransRegistryFact    5   0  1
+             accept_any_value_descriptor int                    6   0  0
+             expect_node                 int                    7   0  0
+             value_cell                  LmTableCell            8   0  1
+             key_cell                    LmTableCell            9   0  1
+             occupied                    int                   10   0  0
+end: LmTransRegistrySourcePathCacheEntry
 
 table:
     name: LmTransCallableProjectionCacheEntry

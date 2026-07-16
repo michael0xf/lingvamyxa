@@ -771,17 +771,6 @@ table:
 end: `receiver.formal-param.unwrap`
 
 table:
-    name: `expr_spelling_binding`
-    columns((class: class) (class: binding_table))
-    rows:
-             `operator.prefix`   `operator.prefix.ansi_c`
-             `operator.postfix`  `operator.postfix.ansi_c`
-             `operator.infix`    `operator.infix.ansi_c`
-             `operator.index`    `operator.index.ansi_c`
-             `expr.atom`         `expr.atom.ansi_c`
-end: `expr_spelling_binding`
-
-table:
     name: `receiver.modifier`
     columns((class: class) (binding: receiver))
     rows:
@@ -983,17 +972,6 @@ table:
 end: `operator.prefix`
 
 table:
-    name: expr_emitter_binding
-    columns((class: class) (class: binding_table))
-    rows:
-             `operator.prefix`   `operator.prefix.emitter`
-             `operator.postfix`  `operator.postfix.emitter`
-             `operator.infix`    `operator.infix.emitter`
-             `operator.index`    `operator.index.emitter`
-             `expr.atom`         `expr.atom.emitter`
-end: expr_emitter_binding
-
-table:
     name: `operator.postfix`
     columns((class: class) (@: char ansi_c)  (binding: emitter))
     rows:
@@ -1044,3 +1022,25 @@ table:
              false  "false"        lm_trans_expr_emit_contextual_literal
              true   "true"         lm_trans_expr_emit_contextual_literal
 end: `expr.atom`
+
+table:
+    name: `expr_spelling_binding`
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.prefix`   `operator.prefix.ansi_c`
+             `operator.postfix`  `operator.postfix.ansi_c`
+             `operator.infix`    `operator.infix.ansi_c`
+             `operator.index`    `operator.index.ansi_c`
+             `expr.atom`         `expr.atom.ansi_c`
+end: `expr_spelling_binding`
+
+table:
+    name: expr_emitter_binding
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.prefix`   `operator.prefix.emitter`
+             `operator.postfix`  `operator.postfix.emitter`
+             `operator.infix`    `operator.infix.emitter`
+             `operator.index`    `operator.index.emitter`
+             `expr.atom`         `expr.atom.emitter`
+end: expr_emitter_binding

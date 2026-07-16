@@ -1,0 +1,195 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_registry_source_path_cache_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_source_path_cache_push_fact (const: @(char key); const: @(char payload)) LmTransRegistryFact
+    LmP0Text: table_text
+    LmP0Text: key_text
+    LmP0Text: payload_text
+    const: LmRegistryViewRow: view_row
+    int: status
+
+    table_text: lm_trans_text_from_cstr("cache.facade")
+    key_text: lm_trans_text_from_cstr(key)
+    payload_text: lm_trans_text_from_cstr(payload)
+    if: table_text = 0 || key_text = 0 || payload_text = 0
+        lm_trans_text_ref_destroy(@ table_text)
+        lm_trans_text_ref_destroy(@ key_text)
+        lm_trans_text_ref_destroy(@ payload_text)
+        return: 0
+
+    status: lm_trans_registry_push_row_values(table_text, key_text, payload_text)
+    lm_trans_text_ref_destroy(@ table_text)
+    lm_trans_text_ref_destroy(@ key_text)
+    lm_trans_text_ref_destroy(@ payload_text)
+    if: status != 0 || lm_trans_registry\loaded_fact_count = 0U
+        return: 0
+    view_row: lm_registry_view_fact_at(lm_trans_registry\view, lm_trans_registry\loaded_fact_count - 1U)
+    if: view_row = 0
+        return: 0
+return: cast: (LmTransRegistryFact) view_row\source
+
+fn: lm_test_source_path_cache_descriptor_new (
+    const: @(char table_name)
+    const: @(char key)
+    const: @(char payload)
+    const: (LmTransRegistryFact: source)
+    const: @(LmTableCell out_key_cell)
+    const: @(LmTableCell out_value_cell)
+) LmTableDescriptor
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+    LmTableCell: key_cell
+    LmTableCell: value_cell
+
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: out_value_cell != 0
+        out_value_cell[0]: 0
+    descriptor: lm_table_descriptor_new_empty_slice(table_name, c.strlen(table_name))
+    if: descriptor = 0 || lm_table_descriptor_add_column(descriptor, "class", "class") != 0 || lm_table_descriptor_add_column(descriptor, "value", "char") != 0
+        lm_table_descriptor_delete_any(descriptor)
+        return: 0
+    row: lm_table_row_new(0)
+    key_cell: lm_table_cell_new_cstr(key, key, 0, 0, 0)
+    value_cell: lm_table_cell_new_cstr(payload, payload, 0, source, 0)
+    if: row = 0 || key_cell = 0 || value_cell = 0
+        lm_table_cell_delete_any(key_cell)
+        lm_table_cell_delete_any(value_cell)
+        lm_table_row_delete_any(row)
+        lm_table_descriptor_delete_any(descriptor)
+        return: 0
+    if: lm_table_row_take_cell(row, key_cell) != 0
+        lm_table_cell_delete_any(key_cell)
+        lm_table_cell_delete_any(value_cell)
+        lm_table_row_delete_any(row)
+        lm_table_descriptor_delete_any(descriptor)
+        return: 0
+    key_cell: 0
+    if: lm_table_row_take_cell(row, value_cell) != 0
+        lm_table_cell_delete_any(value_cell)
+        lm_table_row_delete_any(row)
+        lm_table_descriptor_delete_any(descriptor)
+        return: 0
+    value_cell: 0
+    if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+        lm_table_row_delete_any(row)
+        lm_table_descriptor_delete_any(descriptor)
+        return: 0
+    row: 0
+    if: out_key_cell != 0
+        out_key_cell[0]: lm_table_row_cell_at(lm_table_descriptor_materialized_row_at(descriptor, 0U), 0U)
+    if: out_value_cell != 0
+        out_value_cell[0]: lm_table_row_cell_at(lm_table_descriptor_materialized_row_at(descriptor, 0U), 1U)
+return: descriptor
+
+fn: lm_test_registry_source_path_cache_core () int
+    LmRegistryView: parent
+    LmRegistryView: child
+    LmTransRegistryFact: facade_row
+    LmTableDescriptor: descriptor
+    const: LmTableCell: hit_key_cell
+    const: LmTableCell: hit_value_cell
+    const: LmTableCell: later_key_cell
+    const: LmTableCell: later_value_cell
+    const: LmTableCell: resolved_key_cell
+    const: LmTableCell: resolved_value_cell
+    const: LmTransRegistrySourcePathCacheEntry: entry
+    ulong: hash
+    size_t: slot
+    size_t: miss_generation
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded: 1
+    lm_trans_registry\view_mode: 2
+    parent: lm_trans_registry\view
+    child: 0
+    facade_row: lm_test_source_path_cache_push_fact("Witness", "payload")
+    descriptor: lm_test_source_path_cache_descriptor_new("cacheHit", "Witness", "payload", facade_row, @ hit_key_cell, @ hit_value_cell)
+    status: 0
+    if: facade_row = 0 || descriptor = 0 || lm_registry_view_take_local_source_table(parent, descriptor) != 0
+        lm_table_descriptor_delete_any(descriptor)
+        status: 1
+    else:
+        descriptor: 0
+    ---
+
+    if: status = 0
+        child: lm_registry_view_new(parent)
+        if: child = 0
+            status: 1
+        else:
+            lm_trans_registry\view: child
+    ---
+
+    resolved_key_cell: 0
+    resolved_value_cell: 0
+    if: status = 0
+        resolved_value_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "cacheHit", "class", "class", "char", 0, facade_row, 0, 0, @ resolved_key_cell)
+        if: resolved_value_cell != hit_value_cell || resolved_key_cell != hit_key_cell
+            status: 1
+    ---
+    if: status = 0
+        lm_trans_registry\view_mode: 1
+        resolved_key_cell: 0
+        resolved_value_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "cacheHit", "class", "class", "char", 0, facade_row, 0, 0, @ resolved_key_cell)
+        if: resolved_value_cell != hit_value_cell || resolved_key_cell != hit_key_cell || lm_trans_registry_source_path_cache_view_mode != 1
+            status: 1
+        lm_trans_registry\view_mode: 2
+    ---
+
+    resolved_key_cell: hit_key_cell
+    if: status = 0
+        resolved_value_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "cacheLater", "class", "class", 0, 0, facade_row, 1, 0, @ resolved_key_cell)
+        if: resolved_value_cell != 0 || resolved_key_cell != 0
+            status: 1
+    ---
+    if: status = 0
+        resolved_key_cell: hit_key_cell
+        resolved_value_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "cacheLater", "class", "class", 0, 0, facade_row, 1, 0, @ resolved_key_cell)
+        hash: lm_trans_registry_source_path_cache_hash("cacheLater", "class", "class", 0, 0, facade_row, 1, 0)
+        slot: hash % 1024UL
+        entry: lm_trans_registry_source_path_cache + slot
+        if: resolved_value_cell != 0 || resolved_key_cell != 0 || lm_trans_registry_source_path_cache_entry_matches(entry, "cacheLater", "class", "class", 0, 0, facade_row, 1, 0) = 0 || entry\value_cell != 0 || entry\key_cell != 0
+            status: 1
+        miss_generation: lm_trans_registry_source_path_cache_generation
+    ---
+
+    if: status = 0
+        descriptor: lm_test_source_path_cache_descriptor_new("cacheLater", "Witness", "payload", facade_row, @ later_key_cell, @ later_value_cell)
+        if: descriptor = 0 || lm_registry_view_take_local_source_table(parent, descriptor) != 0
+            lm_table_descriptor_delete_any(descriptor)
+            status: 1
+        else:
+            descriptor: 0
+    ---
+    if: status = 0
+        resolved_key_cell: 0
+        resolved_value_cell: lm_trans_registry_source_path_typed_cell_kind_policy(0, "cacheLater", "class", "class", 0, 0, facade_row, 1, 0, @ resolved_key_cell)
+        if: resolved_value_cell != later_value_cell || resolved_key_cell != later_key_cell || lm_trans_registry_source_path_cache_view != child || lm_trans_registry_source_path_cache_generation = miss_generation || lm_trans_registry_source_path_cache_generation != parent\mutation_generation + child\mutation_generation
+            status: 1
+    ---
+
+    lm_trans_registry_source_path_cache_reset()
+    if: child != 0
+        lm_registry_view_delete(child)
+    lm_trans_registry\view: parent
+    lm_trans_registry_destroy()
+return: status

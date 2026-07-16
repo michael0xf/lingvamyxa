@@ -106,6 +106,59 @@ fn: lm_test_l2_bootstrap_candidate_order_is_exact () int
         return: 0
 return: lm_trans_registry_candidate_name(7U) = 0
 
+fn: lm_test_l2_trans_registry_profile_is_exact () int
+    const: LmTableDescriptor: int8_table
+    const: LmTableDescriptor: boolean_table
+    const: LmTableDescriptor: category_table
+    const: LmTableDescriptor: operator_table
+    const: LmTableDescriptor: receiver_table
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+    const: LmTableCell: emitter_cell
+    const: @: char receiver_binding
+
+    int8_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "int8", 4U)
+    boolean_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "Boolean", 7U)
+    if: int8_table = 0 || lm_table_descriptor_column_count(int8_table) != 2U || lm_table_descriptor_materialized_row_count(int8_table) != 0U || boolean_table = 0 || lm_table_descriptor_column_count(boolean_table) != 2U || lm_table_descriptor_materialized_row_count(boolean_table) != 4U
+        return: 0
+
+    row: lm_table_descriptor_materialized_row_at(boolean_table, 0U)
+    if: row = 0 || row\source != 0
+        return: 0
+    key_cell: lm_table_row_cell_at(row, 0U)
+    value_cell: lm_table_row_cell_at(row, 1U)
+    if: key_cell = 0 || key_cell\value = 0 || c.strcmp(key_cell\value, "None") != 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "-1") != 0
+        return: 0
+
+    row: lm_table_descriptor_materialized_row_at(boolean_table, 3U)
+    if: row = 0 || row\source != 0
+        return: 0
+    key_cell: lm_table_row_cell_at(row, 0U)
+    value_cell: lm_table_row_cell_at(row, 1U)
+    if: key_cell = 0 || key_cell\value = 0 || c.strcmp(key_cell\value, "OK") != 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "1") != 0
+        return: 0
+
+    category_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "class.category", 14U)
+    if: category_table = 0 || lm_table_descriptor_column_count(category_table) != 11U || lm_table_descriptor_materialized_row_count(category_table) != 9U
+        return: 0
+
+    operator_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "operator.infix", 14U)
+    if: operator_table = 0 || lm_table_descriptor_column_count(operator_table) != 3U || lm_table_descriptor_materialized_row_count(operator_table) != 19U
+        return: 0
+    row: lm_table_descriptor_materialized_row_at(operator_table, 0U)
+    if: row = 0 || row\source != 0
+        return: 0
+    key_cell: lm_table_row_cell_at(row, 0U)
+    value_cell: lm_table_row_cell_at(row, 1U)
+    emitter_cell: lm_table_row_cell_at(row, 2U)
+    if: key_cell = 0 || key_cell\value = 0 || c.strcmp(key_cell\value, "+") != 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "+") != 0 || emitter_cell = 0 || emitter_cell\value = 0 || c.strcmp(emitter_cell\value, "lm_trans_expr_emit_operator") != 0
+        return: 0
+
+    receiver_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "receiver.statement", 18U)
+    receiver_binding: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("table"), "receiver.statement")
+return: receiver_table != 0 && lm_table_descriptor_column_count(receiver_table) = 2U && receiver_binding != 0 && c.strcmp(receiver_binding, "lm_trans_statement_emit_table") = 0
+
 fn: lm_test_l2_predef_source_row_count (const: @(char name)) size_t
     const: LmTableDescriptor: descriptor
     size_t: count
@@ -199,6 +252,9 @@ fn: lm_test_l2_predef_source_rows_core () int
 
     root: lm_p0_document_root(document)
     if: root = 0
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/trans_registry.lm2") = 0 || lm_trans_registry_path_already_loaded("lm4/trans_registry.lm4") != 0 || lm_trans_registry_path_is_predefined("lm2/trans_registry.lm2") != 0 || lm_test_l2_trans_registry_profile_is_exact() = 0)
         status: 1
 
     if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/core.lm2") = 0 || lm_trans_registry_path_already_loaded("lm4/core.lm4") != 0 || lm_trans_registry_path_is_predefined("lm2/core.lm2") != 0 || lm_test_l2_default_core_is_source_table() = 0 || lm_test_l2_bootstrap_candidate_order_is_exact() = 0)

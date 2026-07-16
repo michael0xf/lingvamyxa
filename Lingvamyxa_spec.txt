@@ -8862,7 +8862,7 @@ ordinary ANSI C names and are referenced explicitly through the permanent C
 surface escape, for example `c.LM_TRANS_SYMBOL_VARIABLE`.
 
 When a bootstrap translator reads external registry data, such as
-`lm2/trans_registry.lm4`, class/key spelling follows the same identifier rule as
+`lm2/trans_registry.lm2`, class/key spelling follows the same identifier rule as
 ordinary source names. If the class/key is a valid ordinary Lingvamyxa
 identifier, it is written bare:
 
@@ -8893,7 +8893,7 @@ the exactness visually explicit.
 
 Registry input is layered. The bootstrap translator first loads the default L2
 core registry `lm2/core.lm2`, and then loads the profile-specific registry,
-currently `lm4/trans_registry.lm4`. Lookup checks the visible registry rows from
+currently `lm2/trans_registry.lm2`. Lookup checks the visible registry rows from
 the most local/latest layer back toward the imported base layers. Therefore a
 local `RegistryView` may extend or explicitly override a core class relation
 without changing the core file: classes are visible rows, not one global
