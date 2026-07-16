@@ -1,0 +1,173 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_test_l2_local_source_prepass_core();
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_local_prepass_table (const: @(char name)) const: LmTableDescriptor
+return: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, name, c.strlen(name))
+
+fn: lm_test_local_prepass_case () int
+    const: @(char source_path)
+    const: @(char source)
+    LmP0Document: document
+    const: LmP0Node: root
+    LmTransNamespace: namespace_
+    const: LmTableDescriptor: source_table
+    const: LmTableDescriptor: target_table
+    const: LmTableRow: source_first
+    const: LmTableRow: source_second
+    const: LmTableRow: target_first
+    const: LmTableRow: target_second
+    size_t: early_site_count
+    size_t: loaded_fact_count
+    size_t: view_fact_count
+    size_t: source_table_count
+    size_t: mutation_generation
+    size_t: class_count
+    int: status
+
+    source_path: "tests/trans_l2_local_source_prepass_core.lm2"
+    source: "table:\n    name: LmLocalPrepassSource\n    columns((class: class) (char: value))\n    rows:\n             LmLocalPrepassFirst  \"first\"\nend: LmLocalPrepassSource\ntable:\n    name: LmLocalPrepassSource\n    columns((class: class) (char: value))\n    rows:\n             LmLocalPrepassSecond  \"second\"\nend: LmLocalPrepassSource\njoin: (LmLocalPrepassSource) LmLocalPrepassTarget\n    columns((class: class) (char: value))\n    rows:\nend: LmLocalPrepassTarget\n"
+    document: 0
+    namespace_: 0
+    status: 0
+
+    if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_test_local_prepass_table("LmLocalPrepassSource") != 0 || lm_test_local_prepass_table("LmLocalPrepassTarget") != 0
+        status: 1
+
+    early_site_count: 0U
+    if: lm_trans_registry != 0 && lm_trans_registry\early_l2_source_sites != 0
+        early_site_count: lm_trans_registry\early_l2_source_sites\count
+
+    if: status = 0 && lm_trans_materialize_local_l2_source_root(root, source_path, 1) != 0
+        status: 1
+
+    source_table: lm_test_local_prepass_table("LmLocalPrepassSource")
+    target_table: lm_test_local_prepass_table("LmLocalPrepassTarget")
+    source_first: lm_table_descriptor_materialized_row_at(source_table, 0U)
+    source_second: lm_table_descriptor_materialized_row_at(source_table, 1U)
+    target_first: lm_table_descriptor_materialized_row_at(target_table, 0U)
+    target_second: lm_table_descriptor_materialized_row_at(target_table, 1U)
+    if: status = 0 && (lm_trans_registry\early_l2_source_sites = 0 || lm_trans_registry\early_l2_source_sites\count != early_site_count + 3U || source_table = 0 || target_table = 0 || lm_table_descriptor_materialized_row_count(source_table) != 2U || lm_table_descriptor_materialized_row_count(target_table) != 2U || source_first = 0 || source_second = 0 || target_first = 0 || target_second = 0 || target_first\source != source_first || target_second\source != source_second)
+        status: 1
+
+    loaded_fact_count: lm_trans_registry\loaded_fact_count
+    view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+    source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    mutation_generation: lm_trans_registry\view\mutation_generation
+    class_count: lm_registry_view_class_count(lm_trans_registry\view)
+
+    if: status = 0 && lm_trans_materialize_local_l2_source_root(root, source_path, 1) != 0
+        status: 1
+    if: status = 0 && (lm_trans_registry\early_l2_source_sites\count != early_site_count + 3U || lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_registry_view_class_count(lm_trans_registry\view) != class_count || lm_table_descriptor_materialized_row_count(source_table) != 2U || lm_table_descriptor_materialized_row_count(target_table) != 2U)
+        status: 1
+
+    lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
+    namespace_: lm_trans_namespace_new()
+    lm_trans_current_source_path: source_path
+    lm_trans_l2_table_materialization_suppression_depth: 0
+    lm_trans_l2_conditional_import_depth: 0
+    lm_trans_l2_conditional_emission_depth: 0
+    if: status = 0 && (lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || namespace_ = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_declare_l2_import_root(namespace_, root, 1) != 0)
+        status: 1
+
+    if: status = 0 && (lm_trans_registry\early_l2_source_sites\count != early_site_count + 3U || lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_registry_view_class_count(lm_trans_registry\view) != class_count || lm_table_descriptor_materialized_row_count(source_table) != 2U || lm_table_descriptor_materialized_row_count(target_table) != 2U)
+        status: 1
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_current_source_path: 0
+    lm_trans_namespace_delete(namespace_)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status
+
+fn: lm_test_local_prepass_deferred_import_case () int
+    const: @(char source_path)
+    const: @(char imported_path)
+    const: @(char source)
+    LmP0Document: document
+    const: LmP0Node: root
+    LmTransNamespace: namespace_
+    const: LmTableDescriptor: source_table
+    const: LmTableDescriptor: target_table
+    const: LmTableRow: source_row
+    const: LmTableRow: target_row
+    size_t: early_site_count
+    int: status
+
+    source_path: "tests/trans_l2_local_source_prepass_core.lm2"
+    imported_path: "tests/fixtures/l2_local_source_prepass_import.lm2"
+    source: "import: \"fixtures/l2_local_source_prepass_import.lm2\"\njoin: (LmLocalPrepassImportedSource) LmLocalPrepassImportedTarget\n    columns((class: class) (char: value))\n    rows:\nend: LmLocalPrepassImportedTarget\n"
+    document: 0
+    namespace_: 0
+    status: 0
+
+    if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_trans_registry_path_already_loaded(imported_path) = 0 || lm_trans_registry_path_is_predefined(imported_path) != 0 || lm_test_local_prepass_table("LmLocalPrepassImportedSource") != 0 || lm_test_local_prepass_table("LmLocalPrepassImportedTarget") != 0
+        status: 1
+
+    early_site_count: 0U
+    if: lm_trans_registry != 0 && lm_trans_registry\early_l2_source_sites != 0
+        early_site_count: lm_trans_registry\early_l2_source_sites\count
+
+    if: status = 0 && (lm_trans_materialize_local_l2_source_root(root, source_path, 1) != 0 || lm_trans_materialize_local_l2_source_root(root, source_path, 1) != 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry\early_l2_source_sites\count != early_site_count || lm_test_local_prepass_table("LmLocalPrepassImportedSource") != 0 || lm_test_local_prepass_table("LmLocalPrepassImportedTarget") != 0)
+        status: 1
+
+    lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
+    namespace_: lm_trans_namespace_new()
+    lm_trans_current_source_path: source_path
+    lm_trans_l2_table_materialization_suppression_depth: 0
+    lm_trans_l2_conditional_import_depth: 0
+    lm_trans_l2_conditional_emission_depth: 0
+    if: status = 0 && (lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || namespace_ = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_declare_l2_import_root(namespace_, root, 1) != 0)
+        status: 1
+
+    source_table: lm_test_local_prepass_table("LmLocalPrepassImportedSource")
+    target_table: lm_test_local_prepass_table("LmLocalPrepassImportedTarget")
+    source_row: lm_table_descriptor_materialized_row_at(source_table, 0U)
+    target_row: lm_table_descriptor_materialized_row_at(target_table, 0U)
+    if: status = 0 && (source_table = 0 || target_table = 0 || lm_table_descriptor_materialized_row_count(source_table) != 1U || lm_table_descriptor_materialized_row_count(target_table) != 1U || source_row = 0 || target_row = 0 || target_row\source != source_row)
+        status: 1
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_current_source_path: 0
+    lm_trans_namespace_delete(namespace_)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status
+
+fn: lm_test_l2_local_source_prepass_core () int
+    if: lm_test_local_prepass_case() != 0
+        return: 1
+return: lm_test_local_prepass_deferred_import_case()
