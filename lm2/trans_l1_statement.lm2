@@ -3515,44 +3515,6 @@ fn: lm_trans_l2_c_identifier_new (
     result[out]: '\0'
 return: result
 
-fn: lm_trans_emit_c_string_literal_text (FILE: file; const: (LmP0Text: text)) int
-    size_t: i
-    uchar: ch
-
-    if: file = 0 || text = 0
-        return: 1
-    if: lm_trans_put(file, "\"") != 0
-        return: 1
-    i: 0U
-    while: i < text\length
-        ch: (cast: uchar text\data[i])
-        if: (ch = '\\' || ch = '"') && (c.fputc('\\', file) = c.EOF || c.fputc((cast: int ch), file) = c.EOF)
-            return: 1
-        if: ch = '\n' && lm_trans_put(file, "\\n") != 0
-            return: 1
-        if: ch = '\r' && lm_trans_put(file, "\\r") != 0
-            return: 1
-        if: ch = '\t' && lm_trans_put(file, "\\t") != 0
-            return: 1
-        if: ch != '\\' && ch != '"' && ch != '\n' && ch != '\r' && ch != '\t' && (ch < 32U || ch > 126U) && c.fprintf(file, "\\%03o", (cast: unsigned ch)) < 0
-            return: 1
-        if: ch != '\\' && ch != '"' && ch != '\n' && ch != '\r' && ch != '\t' && ch >= 32U && ch <= 126U && c.fputc((cast: int ch), file) = c.EOF
-            return: 1
-        i: i + 1U
-return: lm_trans_put(file, "\"")
-
-fn: lm_trans_emit_c_string_literal_atom (FILE: file; const: (LmP0Text: atom)) int
-    LmP0Text: payload
-
-    payload: lm_trans_text_ref_new_cstr("")
-    if: payload = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ payload)
-
-    if: lm_trans_registry_literal_value(atom, payload) = 0
-        return: 1
-return: lm_trans_emit_c_string_literal_text(file, payload)
-
 fn: lm_trans_l2_structure_first_present_field (const: (LmP0Structure: structure)) const: LmP0Field
     const: LmP0Field: field
 
@@ -3569,58 +3531,6 @@ fn: lm_trans_l2_structure_next_present_field (const: (LmP0Field: field)) const: 
     while: field != 0 && lm_trans_node_is_ignored(field\value)
         field: field\next
 return: field
-
-fn: lm_trans_l2_structure_has_present_fields (const: (LmP0Structure: structure)) int
-return: lm_trans_l2_structure_first_present_field(structure) != 0
-
-fn: lm_trans_l2_frame_wrapper_node_new (const: (LmP0Frame: frame)) LmP0Node
-    LmP0Node: node
-
-    if: frame = 0
-        return: 0
-    node: (cast: (LmP0Node) lm_own_new_zero(c.sizeof(node[0])))
-    if: node = 0
-        return: 0
-    node\as: (cast: (LmP0NodeAs) lm_own_new_zero(c.sizeof(node\as[0])))
-    if: node\as = 0
-        lm_own_delete(node, 0)
-        return: 0
-    node\kind: c.LM_P0_NODE_FRAME
-    node\as\frame: (cast: (LmP0Frame) frame)
-return: node
-
-sub: lm_trans_l2_frame_wrapper_node_delete (@(LmP0Node node))
-    if: node = 0 || node[0] = 0
-        return
-    lm_own_delete(node[0]\as, 0)
-    lm_own_delete(node[0], 0)
-    node[0]: 0
-end: lm_trans_l2_frame_wrapper_node_delete
-
-fn: lm_trans_l2_structure_member_name_new (const: (LmP0Node: node); size_t: index) @: char
-    const: LmP0Text: base
-    LmP0Text: generated_base
-    [32]: char suffix
-
-    generated_base: 0
-    finally: lm_trans_text_ref_destroy(@ generated_base)
-
-    base: 0
-    if: node != 0 && node\kind = c.LM_P0_NODE_FRAME
-        base: node\as\frame\head
-    if: base = 0 && node != 0 && node\kind = c.LM_P0_NODE_STRUCTURE
-        generated_base: lm_trans_text_ref_new_cstr("structure")
-        if: generated_base = 0
-            return: 0
-        base: generated_base
-    if: base = 0
-        generated_base: lm_trans_text_ref_new_cstr("atom")
-        if: generated_base = 0
-            return: 0
-        base: generated_base
-
-    c.snprintf(suffix, c.sizeof(suffix), "_%zu", index)
-return: lm_trans_l2_c_identifier_new("field_", base, suffix)
 
 fn: lm_trans_l2_object_suffix_name_new (
     const: @(char object_name)
@@ -3642,248 +3552,6 @@ fn: lm_trans_l2_object_suffix_name_new (
     c.memcpy(name + object_length, suffix, suffix_length + 1U)
 return: name
 
-fn: lm_trans_l2_child_object_name_new (
-    const: @(char object_name)
-    const: @(char member_name)
-) @: char
-    size_t: object_length
-    size_t: member_length
-    @: char name
-
-    if: object_name = 0 || member_name = 0
-        return: 0
-
-    object_length: c.strlen(object_name)
-    member_length: c.strlen(member_name)
-    name: (cast: (@: char) lm_own_new_zero(object_length + member_length + 2U))
-    if: name = 0
-        return: 0
-    c.memcpy(name, object_name, object_length)
-    name[object_length]: '_'
-    c.memcpy(name + object_length + 1U, member_name, member_length + 1U)
-return: name
-
-fn: lm_trans_l2_object_type_name_new (const: @(char object_name)) @: char
-return: lm_trans_l2_object_suffix_name_new(object_name, "_type")
-
-fn: lm_trans_l2_object_storage_name_new (const: @(char object_name)) @: char
-return: lm_trans_l2_object_suffix_name_new(object_name, "_storage")
-
-fn: lm_trans_emit_l2_structure_fields_children (
-    FILE: file
-    const: LmP0Structure: structure
-    const: @(char object_name)
-    unsigned: indent
-) int
-    const: LmP0Field: field
-    @: char member_name
-    @: char child_object_name
-    size_t: index
-
-    field: lm_trans_l2_structure_first_present_field(structure)
-    index: 0U
-    while: field != 0
-        if: field\value != 0 && (field\value\kind = c.LM_P0_NODE_STRUCTURE || field\value\kind = c.LM_P0_NODE_FRAME)
-            member_name: lm_trans_l2_structure_member_name_new(field\value, index)
-            if: member_name = 0
-                return: 1
-            child_object_name: lm_trans_l2_child_object_name_new(object_name, member_name)
-            if: child_object_name = 0
-                lm_own_delete(member_name, 0)
-                return: 1
-            if: lm_trans_emit_l2_structure_node_definition(file, field\value, child_object_name, indent) != 0
-                lm_own_delete(child_object_name, 0)
-                lm_own_delete(member_name, 0)
-                return: 1
-            lm_own_delete(child_object_name, 0)
-            lm_own_delete(member_name, 0)
-        index: index + 1U
-        field: lm_trans_l2_structure_next_present_field(field)
-return: 0
-
-fn: lm_trans_emit_l2_structure_node_type (
-    FILE: file
-    const: LmP0Node: node
-    const: @(char object_name)
-    const: @(char member_name)
-    unsigned: indent
-) int
-    @: char child_object_name
-    @: char child_type_name
-    int: status
-
-    if: file = 0 || node = 0 || object_name = 0 || member_name = 0
-        return: 1
-
-    if: node\kind = c.LM_P0_NODE_ATOM
-        return: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "const char *") != 0 || lm_trans_put(file, member_name) != 0 || lm_trans_put(file, ";\n") != 0
-
-    if: node\kind = c.LM_P0_NODE_STRUCTURE || node\kind = c.LM_P0_NODE_FRAME
-        child_object_name: lm_trans_l2_child_object_name_new(object_name, member_name)
-        if: child_object_name = 0
-            return: 1
-        child_type_name: lm_trans_l2_object_type_name_new(child_object_name)
-        if: child_type_name = 0
-            lm_own_delete(child_object_name, 0)
-            return: 1
-        status: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "const ") != 0 || lm_trans_put(file, child_type_name) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, member_name) != 0 || lm_trans_put(file, ";\n") != 0
-        lm_own_delete(child_type_name, 0)
-        lm_own_delete(child_object_name, 0)
-        return: status
-
-return: 1
-
-fn: lm_trans_emit_l2_structure_fields_type (
-    FILE: file
-    const: LmP0Structure: structure
-    const: @(char object_name)
-    unsigned: indent
-) int
-    const: LmP0Field: field
-    @: char member_name
-    size_t: index
-
-    field: lm_trans_l2_structure_first_present_field(structure)
-    if: field = 0
-        return: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "const char *empty;\n") != 0
-
-    index: 0U
-    while: field != 0
-        member_name: lm_trans_l2_structure_member_name_new(field\value, index)
-        if: member_name = 0
-            return: 1
-        if: lm_trans_emit_l2_structure_node_type(file, field\value, object_name, member_name, indent) != 0
-            lm_own_delete(member_name, 0)
-            return: 1
-        lm_own_delete(member_name, 0)
-        index: index + 1U
-        field: lm_trans_l2_structure_next_present_field(field)
-return: 0
-
-fn: lm_trans_emit_l2_structure_field_initializer (
-    FILE: file
-    const: LmP0Node: node
-    const: @(char object_name)
-    const: @(char member_name)
-) int
-    @: char child_object_name
-    @: char child_storage_name
-    int: status
-
-    if: file = 0 || node = 0 || object_name = 0 || member_name = 0
-        return: 1
-
-    if: node\kind = c.LM_P0_NODE_ATOM
-        return: lm_trans_emit_c_string_literal_atom(file, node\as\atom)
-
-    if: node\kind = c.LM_P0_NODE_STRUCTURE || node\kind = c.LM_P0_NODE_FRAME
-        child_object_name: lm_trans_l2_child_object_name_new(object_name, member_name)
-        if: child_object_name = 0
-            return: 1
-        child_storage_name: lm_trans_l2_object_storage_name_new(child_object_name)
-        if: child_storage_name = 0
-            lm_own_delete(child_object_name, 0)
-            return: 1
-        status: lm_trans_put(file, "&") != 0 || lm_trans_put(file, child_storage_name) != 0
-        lm_own_delete(child_storage_name, 0)
-        lm_own_delete(child_object_name, 0)
-        return: status
-
-return: 1
-
-fn: lm_trans_emit_l2_structure_fields_initializer (
-    FILE: file
-    const: LmP0Structure: structure
-    const: @(char object_name)
-) int
-    const: LmP0Field: field
-    @: char member_name
-    size_t: index
-    int: wrote
-
-    field: lm_trans_l2_structure_first_present_field(structure)
-    if: field = 0
-        return: lm_trans_put(file, "0")
-
-    wrote: 0
-    index: 0U
-    while: field != 0
-        if: wrote && lm_trans_put(file, ", ") != 0
-            return: 1
-        member_name: lm_trans_l2_structure_member_name_new(field\value, index)
-        if: member_name = 0
-            return: 1
-        if: lm_trans_emit_l2_structure_field_initializer(file, field\value, object_name, member_name) != 0
-            lm_own_delete(member_name, 0)
-            return: 1
-        lm_own_delete(member_name, 0)
-        wrote: 1
-        index: index + 1U
-        field: lm_trans_l2_structure_next_present_field(field)
-return: 0
-
-fn: lm_trans_emit_l2_structure_node_initializer (
-    FILE: file
-    const: LmP0Node: node
-    const: @(char object_name)
-) int
-    if: file = 0 || node = 0 || object_name = 0
-        return: 1
-
-    if: node\kind = c.LM_P0_NODE_ATOM
-        return: lm_trans_emit_c_string_literal_atom(file, node\as\atom)
-
-    if: node\kind = c.LM_P0_NODE_STRUCTURE
-        return: lm_trans_put(file, "{") != 0 || lm_trans_emit_l2_structure_fields_initializer(file, node\as\structure, object_name) != 0 || lm_trans_put(file, "}") != 0
-
-    if: node\kind = c.LM_P0_NODE_FRAME
-        if: lm_trans_put(file, "{") != 0 || lm_trans_emit_c_string_literal_atom(file, node\as\frame\head) != 0
-            return: 1
-        if: lm_trans_l2_structure_has_present_fields(node\as\frame\body) && (lm_trans_put(file, ", ") != 0 || lm_trans_emit_l2_structure_fields_initializer(file, node\as\frame\body, object_name) != 0)
-            return: 1
-        return: lm_trans_put(file, "}") != 0
-
-return: 1
-
-fn: lm_trans_emit_l2_structure_node_definition (
-    FILE: file
-    const: LmP0Node: node
-    const: @(char object_name)
-    unsigned: indent
-) int
-    @: char type_name
-    @: char storage_name
-
-    if: file = 0 || node = 0 || object_name = 0
-        return: 1
-    if: node\kind != c.LM_P0_NODE_STRUCTURE && node\kind != c.LM_P0_NODE_FRAME
-        return: 0
-
-    if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_emit_l2_structure_fields_children(file, node\as\frame\body, object_name, indent) != 0
-        return: 1
-    if: node\kind = c.LM_P0_NODE_STRUCTURE && lm_trans_emit_l2_structure_fields_children(file, node\as\structure, object_name, indent) != 0
-        return: 1
-
-    type_name: lm_trans_l2_object_type_name_new(object_name)
-    if: type_name = 0
-        return: 1
-    finally: lm_own_delete(type_name, 0)
-
-    storage_name: lm_trans_l2_object_storage_name_new(object_name)
-    if: storage_name = 0
-        return: 1
-    finally: lm_own_delete(storage_name, 0)
-
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "typedef struct ") != 0 || lm_trans_put(file, type_name) != 0 || lm_trans_put(file, " {\n") != 0
-        return: 1
-    if: node\kind = c.LM_P0_NODE_FRAME && (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "const char *head;\n") != 0 || lm_trans_emit_l2_structure_fields_type(file, node\as\frame\body, object_name, indent + 1U) != 0)
-        return: 1
-    if: node\kind = c.LM_P0_NODE_STRUCTURE && lm_trans_emit_l2_structure_fields_type(file, node\as\structure, object_name, indent + 1U) != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} ") != 0 || lm_trans_put(file, type_name) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static const ") != 0 || lm_trans_put(file, type_name) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, storage_name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_l2_structure_node_initializer(file, node, object_name) != 0 || lm_trans_put(file, ";\n") != 0
-        return: 1
-return: 0
-
 fn: lm_trans_l2_table_name_atom (const: (LmP0Frame: frame)) const: LmP0Text
     const: LmP0Field: field
     const: LmP0Frame: child_frame
@@ -3903,72 +3571,6 @@ fn: lm_trans_l2_table_name_atom (const: (LmP0Frame: frame)) const: LmP0Text
         field: lm_trans_l2_structure_next_present_field(field)
     if: frame != 0
         return: frame\head
-return: 0
-
-fn: lm_trans_l2_join_target_atom (const: (LmP0Frame: frame)) const: LmP0Text
-    const: LmP0Field: field
-
-    field: 0
-    if: frame != 0
-        field: lm_trans_l2_structure_first_present_field(frame\body)
-    if: field != 0
-        field: lm_trans_l2_structure_next_present_field(field)
-    if: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM
-        return: field\value\as\atom
-    if: frame != 0
-        return: frame\head
-return: 0
-
-fn: lm_trans_emit_l2_structure_frame_storage (
-    FILE: file
-    const: LmP0Frame: frame
-    unsigned: indent
-    const: @(char prefix)
-    const: LmP0Text: name_hint
-) int
-    [32]: char id_suffix
-    @: char object_name
-    @: char type_name
-    @: char storage_name
-    LmP0Node: node
-
-    if: file = 0 || frame = 0 || prefix = 0 || name_hint = 0
-        return: 1
-
-    lm_trans_next_l2_structure_object_id: lm_trans_next_l2_structure_object_id + 1U
-    c.snprintf(id_suffix, c.sizeof(id_suffix), "_%lu", (cast: ulong lm_trans_next_l2_structure_object_id))
-    object_name: lm_trans_l2_c_identifier_new(prefix, name_hint, id_suffix)
-    if: object_name = 0
-        return: 1
-    finally: lm_own_delete(object_name, 0)
-
-    type_name: lm_trans_l2_object_type_name_new(object_name)
-    if: type_name = 0
-        return: 1
-    finally: lm_own_delete(type_name, 0)
-
-    storage_name: lm_trans_l2_object_storage_name_new(object_name)
-    if: storage_name = 0
-        return: 1
-    finally: lm_own_delete(storage_name, 0)
-
-    node: lm_trans_l2_frame_wrapper_node_new(frame)
-    if: node = 0
-        return: 1
-    finally: lm_trans_l2_frame_wrapper_node_delete(@ node)
-
-    if: lm_trans_emit_l2_structure_node_definition(file, node, object_name, indent) != 0
-        return: 1
-    if: indent = 0U && lm_trans_put(file, "#if defined(__GNUC__) || defined(__clang__)\n__attribute__((used))\n#endif\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static const ") != 0 || lm_trans_put(file, type_name) != 0 || lm_trans_put(file, " *const ") != 0 || lm_trans_put(file, object_name) != 0 || lm_trans_put(file, " = &") != 0 || lm_trans_put(file, storage_name) != 0 || lm_trans_put(file, ";\n") != 0
-        return: 1
-
-    if: indent = 0U && (lm_trans_put(file, "enum { ") != 0 || lm_trans_put(file, object_name) != 0 || lm_trans_put(file, "_anchor = sizeof(") != 0 || lm_trans_put(file, object_name) != 0 || lm_trans_put(file, ") };\n") != 0)
-        return: 1
-    if: indent != 0U && (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)&") != 0 || lm_trans_put(file, object_name) != 0 || lm_trans_put(file, ";\n") != 0)
-        return: 1
-
 return: 0
 
 fn: lm_trans_l2_structure_child_frame (const: (LmP0Structure: structure); const: @: char head) const: LmP0Frame
@@ -4816,14 +4418,12 @@ fn: lm_trans_materialize_l2_join_source (LmTransNamespace: namespace_; const: (L
 return: 0
 
 fn: lm_trans_declare_l2_join (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
-    int: registry_keyed
-
-    if: lm_trans_l2_join_frame_registry_keyed(frame, @ registry_keyed) != 0
+    if: lm_trans_validate_l2_join_frame(frame) != 0
         return: 1
-    if: registry_keyed != 0 && lm_trans_l2_table_materialization_suppression_depth > 0
-        c.fprintf(c.stderr, "trans L2 join error: Registry joins are not allowed in os/ifdef branches\n")
+    if: lm_trans_l2_table_materialization_suppression_depth > 0
+        c.fprintf(c.stderr, "trans L2 join error: joins are not allowed in os/ifdef branches\n")
         return: 1
-    if: lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
+    if: lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0
         return: 0
 return: lm_trans_materialize_l2_join_source(namespace_, frame)
 
@@ -5327,30 +4927,32 @@ fn: lm_trans_emit_l2_table_storage_value (
         return: 1
 return: 0
 
-fn: lm_trans_emit_l2_join_structure (
-    FILE: file
-    const: LmP0Frame: frame
-    unsigned: indent
-) int
-    int: registry_keyed
-
-    if: lm_trans_l2_join_frame_registry_keyed(frame, @ registry_keyed) != 0
-        return: 1
-    if: registry_keyed != 0
-        return: 0
-return: lm_trans_emit_l2_structure_frame_storage(file, frame, indent, "lm_l2_join_", lm_trans_l2_join_target_atom(frame))
-
-fn: lm_trans_l2_join_frame_registry_keyed (
-    const: LmP0Frame: frame
-    @: int out_registry_keyed
-) int
+fn: lm_trans_validate_l2_join_frame (const: (LmP0Frame: frame)) int
     const: LmP0Structure: sources
     const: LmP0Structure: body
     const: LmP0Text: target_name
+    const: LmP0Frame: rows_frame
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    size_t: row_count
 
-    if: lm_trans_l2_join_header(frame, @ sources, @ target_name, @ body) != 0
+    if: lm_trans_l2_join_header(frame, @ sources, @ target_name, @ body) != 0 || lm_trans_l2_join_body_rows(body, @ rows_frame) != 0
         return: 1
-return: lm_trans_l2_source_body_is_registry_keyed(body, "join", out_registry_keyed)
+    c.LM_UNUSED(sources)
+    c.LM_UNUSED(target_name)
+
+    column_types: 0
+    column_names: 0
+    column_count: 0U
+    finally: lm_trans_l2_table_columns_destroy(column_types, column_names, column_count)
+    if: lm_trans_l2_source_read_columns(body, "join", @ column_types, @ column_names, @ column_count) != 0
+        return: 1
+
+    row_count: 0U
+    if: rows_frame != 0 && lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+        return: 1
+return: 0
 
 fn: lm_trans_merge_source_list (const: (LmP0Frame: frame)) const: LmP0Structure
     const: LmP0Field: field
@@ -6518,19 +6120,15 @@ fn: lm_trans_statement_emit_join (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    int: registry_keyed
-
+    c.LM_UNUSED(file)
     c.LM_UNUSED(namespace_)
     c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
     if: lm_trans_l2_executable_statement_depth > 0
-        if: lm_trans_l2_join_frame_registry_keyed(frame, @ registry_keyed) != 0
-            return: 1
-        if: registry_keyed != 0
-            c.fprintf(c.stderr, "trans L2 join error: Registry joins are top-level only\n")
-            return: 1
-        ---
+        c.fprintf(c.stderr, "trans L2 join error: joins are top-level only\n")
+        return: 1
     ---
-return: lm_trans_emit_l2_join_structure(file, frame, indent)
+return: lm_trans_validate_l2_join_frame(frame)
 
 fn: lm_trans_statement_emit_const_declaration (
     FILE: file

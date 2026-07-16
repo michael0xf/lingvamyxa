@@ -192,6 +192,62 @@ fn: lm_test_l2_join_facade_only_kind_conflict (LmTransNamespace: namespace_) int
     lm_p0_document_destroy(document)
 return: status
 
+fn: lm_test_l2_join_emitter_is_source_only (LmTransNamespace: namespace_) int
+    const: @(char source)
+    LmP0Document: document
+    const: LmP0Frame: table_frame
+    const: LmP0Frame: join_frame
+    const: LmTableDescriptor: source_table
+    const: LmTableDescriptor: target_table
+    const: LmTableRow: source_row
+    const: LmTableRow: copied_row
+    const: LmTableRow: direct_row
+    const: LmTableCell: copied_value
+    const: LmTableCell: direct_value
+    FILE: output
+    long: position
+    int: previous_depth
+    int: status
+
+    source: "table:\n    name: LmL2RuntimeJoinSource\n    columns((int: key) (int: value))\n    rows:\n             1  2\nend: LmL2RuntimeJoinSource\njoin: (LmL2RuntimeJoinSource) LmL2RuntimeJoinTarget\n    columns((int: key) (int: value))\n    rows:\n             3  4\nend: LmL2RuntimeJoinTarget\n"
+    document: 0
+    output: 0
+    status: 0
+    if: namespace_ = 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        return: 1
+
+    table_frame: lm_test_l2_join_root_frame_at(document, 0U)
+    join_frame: lm_test_l2_join_root_frame_at(document, 1U)
+    output: c.tmpfile()
+    if: table_frame = 0 || join_frame = 0 || output = 0 || lm_trans_declare_l2_table(namespace_, table_frame) != 0 || lm_trans_declare_l2_join(namespace_, join_frame) != 0
+        status: 1
+
+    source_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmL2RuntimeJoinSource", 21U)
+    target_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmL2RuntimeJoinTarget", 21U)
+    source_row: lm_table_descriptor_materialized_row_at(source_table, 0U)
+    copied_row: lm_table_descriptor_materialized_row_at(target_table, 0U)
+    direct_row: lm_table_descriptor_materialized_row_at(target_table, 1U)
+    copied_value: lm_table_row_cell_at(copied_row, 1U)
+    direct_value: lm_table_row_cell_at(direct_row, 1U)
+    if: status = 0 && (source_table = 0 || target_table = 0 || lm_table_descriptor_column_count(target_table) != 2U || lm_table_descriptor_materialized_row_count(source_table) != 1U || lm_table_descriptor_materialized_row_count(target_table) != 2U || source_row = 0 || copied_row = 0 || copied_row\source != source_row || direct_row = 0 || direct_row\source != 0 || copied_value = 0 || copied_value\value = 0 || c.strcmp(copied_value\value, "2") != 0 || direct_value = 0 || direct_value\value = 0 || c.strcmp(direct_value\value, "4") != 0)
+        status: 1
+
+    previous_depth: lm_trans_l2_executable_statement_depth
+    lm_trans_l2_executable_statement_depth: 0
+    if: status = 0
+        position: c.ftell(output)
+        if: position < 0L || lm_trans_statement_emit_join(output, 0, join_frame, 0U, namespace_) != 0 || c.ftell(output) != position
+            status: 1
+    ---
+    lm_trans_l2_executable_statement_depth: previous_depth
+
+    if: output != 0
+        c.fclose(output)
+    lm_p0_document_destroy(document)
+return: status
+
 fn: lm_test_l2_join_self_snapshot (LmTransNamespace: namespace_) int
     const: @(char source)
     LmP0Document: document
@@ -395,6 +451,8 @@ fn: lm_test_l2_join_source_rows_core () int
     if: status = 0 && lm_test_l2_join_incompatible_schema(namespace_) != 0
         status: 1
     if: status = 0 && lm_test_l2_join_facade_only_kind_conflict(namespace_) != 0
+        status: 1
+    if: status = 0 && lm_test_l2_join_emitter_is_source_only(namespace_) != 0
         status: 1
     if: status = 0 && lm_test_l2_join_self_snapshot(namespace_) != 0
         status: 1

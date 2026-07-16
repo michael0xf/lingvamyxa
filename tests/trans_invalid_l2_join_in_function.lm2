@@ -1,0 +1,18 @@
+L2:
+    table:
+        name: runtimeJoinSeed
+        columns((int: key) (int: value))
+        rows:
+                 1  2
+    end: runtimeJoinSeed
+
+    external:
+        fn: main () int
+            join: (runtimeJoinSeed) localRuntimeJoin
+                columns((int: key) (int: value))
+                rows:
+            end: localRuntimeJoin
+            return: 0
+        end: main
+    end: external
+end: L2

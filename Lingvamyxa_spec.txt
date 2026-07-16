@@ -7195,7 +7195,7 @@ Semantic outline:
     if                         registered receiver, semantics depend on level
     match                      registered receiver; no built-in `case` (not structural syntax) syntax
     merge                      registered L2/L3 structural receiver; ordered merge of Structure/table-producing parts
-    join                       registered table receiver; L2 preserves Structure, L4 may materialize registry tables
+    join                       registered module table receiver; module table profiles materialize source-table rows, with no executable runtime projection
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
     ()                         head receiver spelling for Structure-like variable/aggregate forms
@@ -7319,9 +7319,9 @@ This section defines the shared L2/L3 source-level receiver/operator set for
 executable and descriptor bodies. Most entries are control-flow receivers.
 `merge` is the intentionally broader structural receiver in this list. L2 and
 L3 use the `merge` spelling for ordered Structure construction. Table profiles
-use the receiver `join` for table-shaped Structures; an L2 lowering may preserve
-that Structure directly, while an L4 profile may consume it into a registry
-view. A minimal bootstrap L2 profile may expose only the subset
+use the module receiver `join` to combine table descriptors and source rows in
+the active registry view. `join` is not an executable runtime-Structure
+projection. A minimal bootstrap L2 profile may expose only the subset
 listed in section 20.5, while richer L2 profiles and ordinary L3 profiles may
 admit the full set or profile-specific extensions.
 
@@ -7361,7 +7361,7 @@ Operator summary:
     13. redo                                              L2/L3 loop frame
     14. yield                                             L2/L3 iterator-profile fn
     15. labelled break / labelled continue                L2/L3 labelled loop frame
-    16. merge / join                                      L2/L3 structural merge; table-shaped Structure receiver
+    16. merge / join                                      merge: L2/L3 structural merge; join: module table-source receiver
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
@@ -8420,17 +8420,19 @@ evaluate the `merge` result before validating the final descriptor.
 
 Table profile:
 
-In an L2 table profile, `table:` and `join:` are ordinary receiver Frames whose
-bodies are valid LMX Structures. Their projection is selected by the declared
-schema. The exact leading column `(class: class)` is the Registry projection: it
-materializes a `TableDescriptor` and rows in the active `RegistryView`, with no
-duplicate C storage. Other schemas are runtime tables; they materialize the same
+In an L2 table profile, `table:` and `join:` are ordinary module receiver Frames
+whose bodies are valid LMX Structures. Both materialize a `TableDescriptor` and
+rows in the active `RegistryView`. For `table`, the exact leading column
+`(class: class)` selects the Registry-only projection with no duplicate C
+storage. Other `table` schemas are runtime tables: they materialize the same
 source descriptor and may additionally lower to static ANSI C row/storage
-structures. A Registry-projected `table` or `join` is a module declaration and
-is not admitted inside an executable function body. It is also not admitted in
+structures. `join` is always source-table-only, independently of its schema; it
+does not additionally emit an ANSI C Structure or table value. A
+Registry-projected `table`, and every `join`, is a module declaration and is not
+admitted inside an executable function body. Neither is admitted in
 compile-selection `os` or `ifdef` branches, because Registry materialization is
 a translation-time operation and cannot depend on the generated C target. A
-module-level `guard` may contain Registry declarations; `guard` is an
+module-level `guard` may contain these declarations; `guard` is an
 idempotence/include boundary rather than an alternative branch selection.
 
 In an L4 registry/table profile, the receiver spelling `join` may materialize a
@@ -8926,17 +8928,19 @@ names a relation column. A two-column table materializes the relation directly
 under `name`; an N-column table with N > 2 materializes each non-key column as
 `name.column`, for example `BUILD.l2`, `BUILD.win` and `BUILD.unix`.
 
-In L2, the exact leading column `(class: class)` selects the canonical Registry
-projection. Such a `table` or `join` materializes a `TableDescriptor` and its
-rows in the active `RegistryView`, but does not also create a static C row type,
-array, or variable. This rule is determined by the table schema, independently
-of the source path or `predef`; Registry-projected tables and joins remain
-unconditional module declarations and are rejected inside executable function
-bodies and compile-selection `os`/`ifdef` branches. An L2 table whose leading
-column has another name or type keeps the runtime projection: it still
+In L2, the exact leading column `(class: class)` selects the canonical
+Registry-only projection for `table`. Such a table materializes a
+`TableDescriptor` and its rows in the active `RegistryView`, but does not also
+create a static C row type, array, or variable. This rule is determined by the
+table schema, independently of the source path or `predef`. An L2 table whose
+leading column has another name or type keeps the runtime projection: it still
 materializes its source descriptor and additionally creates the static C
-storage visible as the table value. A `join` with a non-Registry schema keeps
-its ordinary runtime Structure projection.
+storage visible as the table value. Every `join`, including one with a
+non-Registry schema, is instead an unconditional source-table module
+declaration: it appends source/direct rows in the active `RegistryView` and
+emits no runtime C Structure or table value. Registry-projected tables and all
+joins are rejected inside executable function bodies and compile-selection
+`os`/`ifdef` branches.
 
 Inside `columns:`, a bare atom is a column name. An anonymous Structure uses
 its first atom as the column name and the remaining atoms as descriptors, for

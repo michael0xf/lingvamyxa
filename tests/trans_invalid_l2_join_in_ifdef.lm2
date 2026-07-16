@@ -1,0 +1,22 @@
+L2:
+    table:
+        name: conditionalRuntimeJoinSeed
+        columns((int: key) (int: value))
+        rows:
+                 1  2
+    end: conditionalRuntimeJoinSeed
+
+    ifdef:
+        LM_TEST_CONDITIONAL_RUNTIME_JOIN:
+            join: (conditionalRuntimeJoinSeed) conditionalRuntimeJoin
+                columns((int: key) (int: value))
+                rows:
+            end: conditionalRuntimeJoin
+    end: ifdef
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
