@@ -1,87 +1,85 @@
-L4:
-    table:
-        name: `define.value`
-        columns((class: class) (@: char value))
-        rows:
-                 LM_TEST_DEFINE_SOURCE           11
-                 LM_TEST_DEFINE_DUPLICATE        13
-                 LM_TEST_DEFINE_DUPLICATE        13
-                 LM_TEST_DEFINE_EMPTY            ""
-                 LM_TEST_DEFINE_LATE_NONE        17
-                 LM_TEST_DEFINE_LATE_NONE        None
-                 LM_TEST_DEFINE_NONE             None
-    end: `define.value`
+table:
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             LM_TEST_DEFINE_SOURCE           11
+             LM_TEST_DEFINE_DUPLICATE        13
+             LM_TEST_DEFINE_DUPLICATE        13
+             LM_TEST_DEFINE_EMPTY            ""
+             LM_TEST_DEFINE_LATE_NONE        17
+             LM_TEST_DEFINE_LATE_NONE        None
+             LM_TEST_DEFINE_NONE             None
+end: `define.value`
 
-    table:
-        name: `define.value`
-        columns((class: class) (@: char kind))
-        rows:
-                 LM_TEST_DEFINE_SCHEMA_FALLBACK  23
-    end: `define.value`
+table:
+    name: `define.value`
+    columns((class: class) (@: char kind))
+    rows:
+             LM_TEST_DEFINE_SCHEMA_FALLBACK  23
+end: `define.value`
 
-    table:
-        name: `define.value`
-        columns((class: class) (node: value))
-        rows:
-                 LM_TEST_DEFINE_NODE_FALLBACK
-                 L2:
-                     fn: lm_test_define_node_payload () int
-                         return: 0
-                     end: lm_test_define_node_payload
-                 end: L2
-    end: `define.value`
+table:
+    name: `define.value`
+    columns((class: class) (node: value))
+    rows:
+             LM_TEST_DEFINE_NODE_FALLBACK
+             L2:
+                 fn: lm_test_define_node_payload () int
+                     return: 0
+                 end: lm_test_define_node_payload
+             end: L2
+end: `define.value`
 
-    table:
-        name: `lm.test.define.seed`
-        columns((class: class) (@: char value))
-        rows:
-                 LM_TEST_DEFINE_JOINED  29
-    end: `lm.test.define.seed`
+table:
+    name: `lm.test.define.seed`
+    columns((class: class) (@: char value))
+    rows:
+             LM_TEST_DEFINE_JOINED  29
+end: `lm.test.define.seed`
 
-    join: (`lm.test.define.seed`) `define.value`
-        columns((class: class) (@: char value))
-        rows:
-    end: `define.value`
+join: (`lm.test.define.seed`) `define.value`
+    columns((class: class) (@: char value))
+    rows:
+end: `define.value`
 
-    table:
-        name: define
-        columns((class: class) (@: char value) (int: marker))
-        rows:
-                 LM_TEST_DEFINE_WIDE_SOURCE       31  1
-                 LM_TEST_DEFINE_WIDE_DUPLICATE    37  2
-                 LM_TEST_DEFINE_WIDE_DUPLICATE    37  3
-                 LM_TEST_DEFINE_WIDE_EMPTY        ""  4
-                 LM_TEST_DEFINE_WIDE_LATE_NONE    41  5
-                 LM_TEST_DEFINE_WIDE_LATE_NONE    None  6
-                 LM_TEST_DEFINE_WIDE_NONE         None  7
-    end: define
+table:
+    name: define
+    columns((class: class) (@: char value) (int: marker))
+    rows:
+             LM_TEST_DEFINE_WIDE_SOURCE       31  1
+             LM_TEST_DEFINE_WIDE_DUPLICATE    37  2
+             LM_TEST_DEFINE_WIDE_DUPLICATE    37  3
+             LM_TEST_DEFINE_WIDE_EMPTY        ""  4
+             LM_TEST_DEFINE_WIDE_LATE_NONE    41  5
+             LM_TEST_DEFINE_WIDE_LATE_NONE    None  6
+             LM_TEST_DEFINE_WIDE_NONE         None  7
+end: define
 
-    table:
-        name: `define.value`
-        columns((class: class) (@: char value))
-        rows:
-                 LM_TEST_DEFINE_WIDE_PHYSICAL  43
-    end: `define.value`
+table:
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             LM_TEST_DEFINE_WIDE_PHYSICAL  43
+end: `define.value`
 
-    table:
-        name: `lm.test.define.wide.seed`
-        columns((class: class) (@: char value) (int: marker))
-        rows:
-                 LM_TEST_DEFINE_WIDE_JOINED  47  8
-    end: `lm.test.define.wide.seed`
+table:
+    name: `lm.test.define.wide.seed`
+    columns((class: class) (@: char value) (int: marker))
+    rows:
+             LM_TEST_DEFINE_WIDE_JOINED  47  8
+end: `lm.test.define.wide.seed`
 
-    join: (`lm.test.define.wide.seed`) define
-        columns((class: class) (@: char value) (int: marker))
-        rows:
-    end: define
+join: (`lm.test.define.wide.seed`) define
+    columns((class: class) (@: char value) (int: marker))
+    rows:
+end: define
 
-    table:
-        name: define
-        columns((class: class) (int: value) (int: marker))
-        rows:
-                 LM_TEST_DEFINE_WIDE_SCHEMA_FALLBACK  53  9
-    end: define
-end: L4
+table:
+    name: define
+    columns((class: class) (int: value) (int: marker))
+    rows:
+             LM_TEST_DEFINE_WIDE_SCHEMA_FALLBACK  53  9
+end: define
 
 define
 
