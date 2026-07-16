@@ -976,6 +976,7 @@ static int lm_trans_materialize_l2_predef_root(const LmP0Node *root, const char 
 static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const char *source_path);
 static int lm_trans_frame_is_l2_level_receiver(const LmP0Frame *frame);
 static int lm_trans_registry_load_file_path(const char *registry_path, int required, int *out_loaded);
+static int lm_trans_registry_load_bootstrap_file_path(const char *registry_path, int required, int *out_loaded);
 static int lm_trans_registry_candidate_path(const char *source_path, const char *candidate_name, char *registry_path, size_t registry_path_size);
 static int lm_trans_emit_configured_prelude_sequences(FILE *file, LmTransNamespace *namespace_, int *out_emitted);
 static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
@@ -2857,6 +2858,7 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
+
 #include <string.h>
 static char * lm_table_descriptor_copy_slice(const char *data, size_t length);
 static char * lm_table_descriptor_copy_cstr(const char *value);
@@ -4343,7 +4345,9 @@ static int lm_trans_path_segment_equals(const char *path, size_t offset, const c
 static size_t lm_trans_project_root_length_from_source(const char *source_path);
 static int lm_trans_registry_project_path_for_source(const char *source_path, const char *file_name, char *buffer, size_t size);
 static int lm_trans_registry_path_for_source(const char *source_path, const char *file_name, char *buffer, size_t size);
+static int lm_trans_registry_load_file_path_mode(const char *registry_path, int required, int bootstrap_l2, int *out_loaded);
 static int lm_trans_registry_load_file_path(const char *registry_path, int required, int *out_loaded);
+static int lm_trans_registry_load_bootstrap_file_path(const char *registry_path, int required, int *out_loaded);
 static int lm_trans_registry_candidate_path(const char *source_path, const char *candidate_name, char *registry_path, size_t registry_path_size);
 static int lm_trans_registry_seed_l4_receiver(const char *table_name, const char *key, const char *receiver);
 static int lm_trans_registry_seed_l4_receivers(void);
@@ -38867,7 +38871,7 @@ static int lm_trans_registry_path_for_source(const char *source_path, const char
     return 0;
 }
 
-static int lm_trans_registry_load_file_path(const char *registry_path, int required, int *out_loaded) {
+static int lm_trans_registry_load_file_path_mode(const char *registry_path, int required, int bootstrap_l2, int *out_loaded) {
     LmP0Document * document;
     const LmP0Diagnostic * diagnostic;
     int status;
@@ -38907,7 +38911,12 @@ static int lm_trans_registry_load_file_path(const char *registry_path, int requi
         status = lm_trans_registry_load_root(lm_p0_document_root(document), 1, 1);
     }
     else {
-        status = lm_trans_registry_load_inline_root(lm_p0_document_root(document), registry_path);
+        if (bootstrap_l2 != 0 && lm_trans_path_has_extension(registry_path, ".lm2") != 0) {
+            status = lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(document), registry_path);
+        }
+        else {
+            status = lm_trans_registry_load_inline_root(lm_p0_document_root(document), registry_path);
+        }
     }
     if (status != 0) {
         lm_p0_document_destroy(document);
@@ -38921,6 +38930,14 @@ static int lm_trans_registry_load_file_path(const char *registry_path, int requi
         out_loaded[0] = 1;
     }
     return 0;
+}
+
+static int lm_trans_registry_load_file_path(const char *registry_path, int required, int *out_loaded) {
+    return lm_trans_registry_load_file_path_mode(registry_path, required, 0, out_loaded);
+}
+
+static int lm_trans_registry_load_bootstrap_file_path(const char *registry_path, int required, int *out_loaded) {
+    return lm_trans_registry_load_file_path_mode(registry_path, required, 1, out_loaded);
 }
 
 static int lm_trans_registry_candidate_path(const char *source_path, const char *candidate_name, char *registry_path, size_t registry_path_size) {
@@ -38980,18 +38997,24 @@ static const char * lm_trans_registry_core_candidate_name(size_t index) {
 
 static const char * lm_trans_registry_candidate_name(size_t index) {
     if (index == 0U) {
-        return "lm4/trans_registry.lm4";
+        return "lm2/trans_registry.lm2";
     }
     if (index == 1U) {
-        return "trans_registry.lm4";
+        return "trans_registry.lm2";
     }
     if (index == 2U) {
-        return "trans_registry.lmx";
+        return "lm4/trans_registry.lm4";
     }
     if (index == 3U) {
-        return "lm2/trans_registry.lm4";
+        return "trans_registry.lm4";
     }
     if (index == 4U) {
+        return "trans_registry.lmx";
+    }
+    if (index == 5U) {
+        return "lm2/trans_registry.lm4";
+    }
+    if (index == 6U) {
         return "lm2/trans_registry.lmx";
     }
     return 0;
@@ -39002,7 +39025,6 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
     const char *candidate_name;
     const char *override_path;
     const char *view_mode;
-    LmP0Document * document;
     int override_enabled;
     int loaded;
     int registry_loaded;
@@ -39037,7 +39059,6 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
         return 1;
     }
     lm_trans_registry->loaded_fact_count = 0U;
-    document = 0;
     if (lm_trans_registry_l4_runtime_init() != 0) {
         lm_trans_registry_destroy();
         return 1;
@@ -39053,27 +39074,11 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
             lm_trans_registry_destroy();
             return 1;
         }
-        if (lm_trans_registry_load_file_path(registry_path, 0, &loaded) != 0) {
+        if (lm_trans_registry_load_bootstrap_file_path(registry_path, 0, &loaded) != 0) {
             lm_trans_registry_destroy();
             return 1;
         }
         if (loaded != 0) {
-            if (lm_trans_path_has_extension(registry_path, ".lm2") != 0) {
-                document = 0;
-                if (lm_p0_parse_file(registry_path, &document) != 0 || document == 0) {
-                    if (document != 0) {
-                        lm_p0_document_destroy(document);
-                    }
-                    lm_trans_registry_destroy();
-                    return 1;
-                }
-                if (lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(document), registry_path) != 0) {
-                    lm_p0_document_destroy(document);
-                    lm_trans_registry_destroy();
-                    return 1;
-                }
-                lm_p0_document_destroy(document);
-            }
             break;
         }
         candidate_index = candidate_index + 1U;
@@ -39089,7 +39094,7 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
             return 1;
         }
         strcpy(registry_path, override_path);
-        if (lm_trans_registry_load_file_path(registry_path, 1, &loaded) != 0) {
+        if (lm_trans_registry_load_bootstrap_file_path(registry_path, 1, &loaded) != 0) {
             lm_trans_registry_destroy();
             return 1;
         }
@@ -39105,7 +39110,7 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
                 lm_trans_registry_destroy();
                 return 1;
             }
-            if (lm_trans_registry_load_file_path(registry_path, 0, &loaded) != 0) {
+            if (lm_trans_registry_load_bootstrap_file_path(registry_path, 0, &loaded) != 0) {
                 lm_trans_registry_destroy();
                 return 1;
             }
@@ -39118,7 +39123,7 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
         }
     }
     if (registry_loaded == 0) {
-        fprintf(stderr, "trans registry error: cannot read trans_registry.lm4\n");
+        fprintf(stderr, "trans registry error: cannot read trans_registry.lm2 or trans_registry.lm4\n");
         lm_trans_registry_destroy();
         return 1;
     }

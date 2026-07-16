@@ -80,6 +80,32 @@ fn: lm_test_l2_bootstrap_join_is_exact () int
     value_cell: lm_table_row_cell_at(direct_row, 1U)
 return: key_cell != 0 && key_cell\value != 0 && c.strcmp(key_cell\value, "lmTestBootstrapDirect") = 0 && value_cell != 0 && value_cell\value != 0 && c.strcmp(value_cell\value, "relation") = 0
 
+fn: lm_test_l2_bootstrap_candidate_order_is_exact () int
+    const: @: char candidate
+
+    candidate: lm_trans_registry_candidate_name(0U)
+    if: candidate = 0 || c.strcmp(candidate, "lm2/trans_registry.lm2") != 0
+        return: 0
+    candidate: lm_trans_registry_candidate_name(1U)
+    if: candidate = 0 || c.strcmp(candidate, "trans_registry.lm2") != 0
+        return: 0
+    candidate: lm_trans_registry_candidate_name(2U)
+    if: candidate = 0 || c.strcmp(candidate, "lm4/trans_registry.lm4") != 0
+        return: 0
+    candidate: lm_trans_registry_candidate_name(3U)
+    if: candidate = 0 || c.strcmp(candidate, "trans_registry.lm4") != 0
+        return: 0
+    candidate: lm_trans_registry_candidate_name(4U)
+    if: candidate = 0 || c.strcmp(candidate, "trans_registry.lmx") != 0
+        return: 0
+    candidate: lm_trans_registry_candidate_name(5U)
+    if: candidate = 0 || c.strcmp(candidate, "lm2/trans_registry.lm4") != 0
+        return: 0
+    candidate: lm_trans_registry_candidate_name(6U)
+    if: candidate = 0 || c.strcmp(candidate, "lm2/trans_registry.lmx") != 0
+        return: 0
+return: lm_trans_registry_candidate_name(7U) = 0
+
 fn: lm_test_l2_predef_source_row_count (const: @(char name)) size_t
     const: LmTableDescriptor: descriptor
     size_t: count
@@ -135,24 +161,34 @@ return: 1
 fn: lm_test_l2_predef_source_rows_core () int
     const: @(char source_path)
     LmP0Document: document
-    LmP0Document: bootstrap_document
     const: LmP0Node: root
     LmTransNamespace: namespace_
     LmP0Text: helper_name
     const: LmTransSymbol: helper_symbol
     const: @: char bootstrap_kind
+    size_t: bootstrap_source_count
+    size_t: bootstrap_fact_count
+    size_t: bootstrap_loaded_fact_count
+    size_t: bootstrap_mutation_generation
+    size_t: bootstrap_loaded_path_count
     FILE: prelude_file
     long: typedef_position
+    int: bootstrap_loaded
     int: status
 
     source_path: "tests/trans_l2_predef_import.lm2"
     document: 0
-    bootstrap_document: 0
     namespace_: 0
     helper_name: 0
     helper_symbol: 0
     bootstrap_kind: 0
+    bootstrap_source_count: 0U
+    bootstrap_fact_count: 0U
+    bootstrap_loaded_fact_count: 0U
+    bootstrap_mutation_generation: 0U
+    bootstrap_loaded_path_count: 0U
     prelude_file: 0
+    bootstrap_loaded: 0
     status: 0
 
     if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_file(source_path, @ document) != 0 || document = 0
@@ -165,16 +201,22 @@ fn: lm_test_l2_predef_source_rows_core () int
     if: root = 0
         status: 1
 
-    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/core.lm2") = 0 || lm_trans_registry_path_already_loaded("lm4/core.lm4") != 0 || lm_trans_registry_path_is_predefined("lm2/core.lm2") != 0 || lm_test_l2_default_core_is_source_table() = 0)
+    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/core.lm2") = 0 || lm_trans_registry_path_already_loaded("lm4/core.lm4") != 0 || lm_trans_registry_path_is_predefined("lm2/core.lm2") != 0 || lm_test_l2_default_core_is_source_table() = 0 || lm_test_l2_bootstrap_candidate_order_is_exact() = 0)
         status: 1
 
-    if: status = 0 && (lm_p0_parse_file("tests/fixtures/l2_bootstrap_registry.lm2", @ bootstrap_document) != 0 || bootstrap_document = 0 || lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(bootstrap_document), "tests/fixtures/l2_bootstrap_registry.lm2") != 0)
+    if: status = 0 && lm_trans_registry_load_bootstrap_file_path("tests/fixtures/l2_bootstrap_registry.lm2", 1, @ bootstrap_loaded) != 0
         status: 1
     bootstrap_kind: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("lmTestBootstrapValue"), "lmTestBootstrap")
-    if: status = 0 && (lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 0U || lm_test_l2_bootstrap_join_is_exact() = 0 || bootstrap_kind = 0 || c.strcmp(bootstrap_kind, "descriptor") != 0)
+    if: status = 0 && (bootstrap_loaded = 0 || lm_trans_registry_path_already_loaded("tests/fixtures/l2_bootstrap_registry.lm2") = 0 || lm_trans_registry_path_is_predefined("tests/fixtures/l2_bootstrap_registry.lm2") != 0 || lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 0U || lm_test_l2_bootstrap_join_is_exact() = 0 || bootstrap_kind = 0 || c.strcmp(bootstrap_kind, "descriptor") != 0)
         status: 1
-    lm_p0_document_destroy(bootstrap_document)
-    bootstrap_document: 0
+    bootstrap_source_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    bootstrap_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+    bootstrap_loaded_fact_count: lm_trans_registry\loaded_fact_count
+    bootstrap_mutation_generation: lm_trans_registry\view\mutation_generation
+    bootstrap_loaded_path_count: lm_trans_registry\loaded_paths\count
+    bootstrap_loaded: 0
+    if: status = 0 && (lm_trans_registry_load_bootstrap_file_path("tests/fixtures/l2_bootstrap_registry.lm2", 1, @ bootstrap_loaded) != 0 || bootstrap_loaded = 0 || lm_registry_view_source_table_count(lm_trans_registry\view) != bootstrap_source_count || lm_registry_view_fact_count(lm_trans_registry\view) != bootstrap_fact_count || lm_trans_registry\loaded_fact_count != bootstrap_loaded_fact_count || lm_trans_registry\view\mutation_generation != bootstrap_mutation_generation || lm_trans_registry\loaded_paths\count != bootstrap_loaded_path_count || lm_test_l2_bootstrap_join_is_exact() = 0)
+        status: 1
 
     if: status = 0 && lm_trans_registry_load_inline_root(root, source_path) != 0
         status: 1

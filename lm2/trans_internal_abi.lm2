@@ -872,6 +872,12 @@ fn: lm_trans_registry_load_file_path (
     @: int out_loaded
 ) int
 
+fn: lm_trans_registry_load_bootstrap_file_path (
+    const: @: char registry_path
+    int: required
+    @: int out_loaded
+) int
+
 fn: lm_trans_registry_candidate_path (
     const: @: char source_path
     const: @: char candidate_name

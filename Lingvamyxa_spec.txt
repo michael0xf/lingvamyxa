@@ -8914,7 +8914,11 @@ At the earliest bootstrap point, receiver tables are not loaded yet. The
 restricted registry bootstrap therefore recognizes only root `table:` frames
 and ordered `join:` frames, routing them directly to the same L2 source-table
 and join materializers used after bootstrap. This is a bootstrap entry point,
-not a second table model. The core module itself contains only tables. Its path
+not a second table model. The bootstrap file loader parses a selected exact
+path once per successful load and is used for the core module and
+translator-profile candidates. `.lm2` profile candidates are tried before
+legacy `.lm4`/`.lmx` compatibility candidates. Ordinary L2 imports keep their
+normal loader semantics. The core module itself contains only tables. Its path
 is loaded module state and is not recorded as an explicit `predef` path.
 
 The first column is the row key and is normally named `class`. Each later column
