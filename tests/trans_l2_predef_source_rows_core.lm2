@@ -90,21 +90,12 @@ fn: lm_test_l2_bootstrap_candidate_order_is_exact () int
     if: candidate = 0 || c.strcmp(candidate, "trans_registry.lm2") != 0
         return: 0
     candidate: lm_trans_registry_candidate_name(2U)
-    if: candidate = 0 || c.strcmp(candidate, "lm4/trans_registry.lm4") != 0
-        return: 0
-    candidate: lm_trans_registry_candidate_name(3U)
-    if: candidate = 0 || c.strcmp(candidate, "trans_registry.lm4") != 0
-        return: 0
-    candidate: lm_trans_registry_candidate_name(4U)
     if: candidate = 0 || c.strcmp(candidate, "trans_registry.lmx") != 0
         return: 0
-    candidate: lm_trans_registry_candidate_name(5U)
-    if: candidate = 0 || c.strcmp(candidate, "lm2/trans_registry.lm4") != 0
-        return: 0
-    candidate: lm_trans_registry_candidate_name(6U)
+    candidate: lm_trans_registry_candidate_name(3U)
     if: candidate = 0 || c.strcmp(candidate, "lm2/trans_registry.lmx") != 0
         return: 0
-return: lm_trans_registry_candidate_name(7U) = 0
+return: lm_trans_registry_candidate_name(4U) = 0
 
 fn: lm_test_l2_trans_registry_profile_is_exact () int
     const: LmTableDescriptor: int8_table
@@ -254,10 +245,10 @@ fn: lm_test_l2_predef_source_rows_core () int
     if: root = 0
         status: 1
 
-    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/trans_registry.lm2") = 0 || lm_trans_registry_path_already_loaded("lm4/trans_registry.lm4") != 0 || lm_trans_registry_path_is_predefined("lm2/trans_registry.lm2") != 0 || lm_test_l2_trans_registry_profile_is_exact() = 0)
+    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/trans_registry.lm2") = 0 || lm_trans_registry_path_is_predefined("lm2/trans_registry.lm2") != 0 || lm_test_l2_trans_registry_profile_is_exact() = 0)
         status: 1
 
-    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/core.lm2") = 0 || lm_trans_registry_path_already_loaded("lm4/core.lm4") != 0 || lm_trans_registry_path_is_predefined("lm2/core.lm2") != 0 || lm_test_l2_default_core_is_source_table() = 0 || lm_test_l2_bootstrap_candidate_order_is_exact() = 0)
+    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/core.lm2") = 0 || lm_trans_registry_path_is_predefined("lm2/core.lm2") != 0 || lm_test_l2_default_core_is_source_table() = 0 || lm_test_l2_bootstrap_candidate_order_is_exact() = 0)
         status: 1
 
     if: status = 0 && lm_trans_registry_load_bootstrap_file_path("tests/fixtures/l2_bootstrap_registry.lm2", 1, @ bootstrap_loaded) != 0

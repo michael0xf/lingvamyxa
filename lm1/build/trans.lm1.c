@@ -38801,18 +38801,9 @@ static const char * lm_trans_registry_candidate_name(size_t index) {
         return "trans_registry.lm2";
     }
     if (index == 2U) {
-        return "lm4/trans_registry.lm4";
-    }
-    if (index == 3U) {
-        return "trans_registry.lm4";
-    }
-    if (index == 4U) {
         return "trans_registry.lmx";
     }
-    if (index == 5U) {
-        return "lm2/trans_registry.lm4";
-    }
-    if (index == 6U) {
+    if (index == 3U) {
         return "lm2/trans_registry.lmx";
     }
     return 0;
@@ -38921,7 +38912,7 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
         }
     }
     if (registry_loaded == 0) {
-        fprintf(stderr, "trans registry error: cannot read trans_registry.lm2 or trans_registry.lm4\n");
+        fprintf(stderr, "trans registry error: cannot read trans_registry.lm2 or trans_registry.lmx\n");
         lm_trans_registry_destroy();
         return 1;
     }

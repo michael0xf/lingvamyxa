@@ -8926,9 +8926,11 @@ and join materializers used after bootstrap. This is a bootstrap entry point,
 not a second table model. The bootstrap file loader parses a selected exact
 path once per successful load and is used for the core module and
 translator-profile candidates. `.lm2` profile candidates are tried before
-legacy `.lm4`/`.lmx` compatibility candidates. Ordinary L2 imports keep their
-normal loader semantics. The core module itself contains only tables. Its path
-is loaded module state and is not recorded as an explicit `predef` path.
+plain `.lmx` compatibility candidates; legacy `.lm4` registry modules are not
+auto-discovered. An explicit registry path may still select one during the
+compatibility period. Ordinary L2 imports keep their normal loader semantics.
+The core module itself contains only tables. Its path is loaded module state and
+is not recorded as an explicit `predef` path.
 
 The first column is the row key and is normally named `class`. Each later column
 names a relation column. A two-column table materializes the relation directly
