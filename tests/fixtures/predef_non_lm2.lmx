@@ -1,0 +1,6 @@
+table:
+    name: predefNonLm2Marker
+    columns((class: class) (int: value))
+    rows:
+             marker  1
+end: predefNonLm2Marker
