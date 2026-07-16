@@ -28976,7 +28976,7 @@ static int lm_trans_top_level_is_predefined_function_descriptor(const LmTransNam
         return 0;
     }
     function = item -> function;
-    if (function == 0 || function -> is_descriptor_only == 0 || function -> is_sub || function -> is_callable_descriptor) {
+    if (function == 0 || function -> is_descriptor_only == 0 || function -> is_callable_descriptor) {
         return 0;
     }
     if (lm_trans_current_source_path == 0 || lm_trans_registry_path_is_predefined(lm_trans_current_source_path) == 0) {
@@ -28999,7 +28999,9 @@ static int lm_trans_top_level_declare_function_compatible(LmTransNamespace *name
     }
     predefined_function = lm_trans_top_level_is_predefined_function_descriptor(namespace_, item);
     if (predefined_function) {
-        item->function->symbol_class = "function";
+        if (item -> function -> is_sub == 0) {
+            item->function->symbol_class = "function";
+        }
         item->function->is_external = lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, item -> function -> name, "fn.external", "class", "class", "value", "int") != 0;
     }
     else {
@@ -33599,7 +33601,7 @@ static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_
                         status = lm_trans_materialize_l2_join_source(namespace_, node -> as -> frame);
                     }
                 }
-                if (status == 0 && binding -> function_receiver_binding != 0 && (strcmp(binding -> function_receiver_binding, "lm_trans_receiver_fn") == 0 || strcmp(binding -> function_receiver_binding, "lm_trans_receiver_callable") == 0)) {
+                if (status == 0 && binding -> function_receiver_binding != 0 && (strcmp(binding -> function_receiver_binding, "lm_trans_receiver_fn") == 0 || strcmp(binding -> function_receiver_binding, "lm_trans_receiver_callable") == 0 || strcmp(binding -> function_receiver_binding, "lm_trans_receiver_sub") == 0)) {
                     lm_trans_function_header_destroy(function);
                     function = lm_trans_function_header_new();
                     if (function == 0) {
@@ -33611,7 +33613,12 @@ static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_
                             status = 1;
                         }
                         if (function_status > 0 && function -> is_descriptor_only) {
-                            status = lm_trans_registry_materialize_fn_descriptor_frame(node -> as -> frame);
+                            if (function -> is_sub) {
+                                status = lm_trans_registry_materialize_sub_descriptor_frame(node -> as -> frame);
+                            }
+                            else {
+                                status = lm_trans_registry_materialize_fn_descriptor_frame(node -> as -> frame);
+                            }
                             if (status == 0) {
                                 status = lm_trans_registry_note_predefined_descriptor_site(lm_trans_current_source_path, node);
                             }

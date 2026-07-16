@@ -3,6 +3,10 @@ L1:
 static int LmTestPredefFunction(int value) {
     return value + 1;
 }
+
+static void LmTestPredefCleanup(void *value) {
+    (void)value;
+}
 ===
 
 table:
@@ -46,6 +50,7 @@ fn: LmTestPredefEquals (@: void left; @: void right) int
 callable: LmTestPredefMapper (int: value) int
 fn: LmTestPredefFunction (int: value) int
 fn: abs (int: value) int
+sub: LmTestPredefCleanup (@: void value)
 
 fn: lm_test_predef_value () int
     return: 23
