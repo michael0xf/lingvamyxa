@@ -33874,12 +33874,23 @@ static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const ch
     while (status == 0 && field != 0) {
         node = field -> value;
         if (node != 0 && lm_trans_node_is_ignored(node) == 0) {
-            if (node -> kind != LM_P0_NODE_FRAME || lm_trans_text_equals(node -> as -> frame -> head, "table") == 0) {
-                fprintf(stderr, "trans L2 bootstrap error: root expects only table receiver frames\n");
+            if (node -> kind != LM_P0_NODE_FRAME) {
+                fprintf(stderr, "trans L2 bootstrap error: root expects only table or join receiver frames\n");
                 status = 1;
             }
             else {
-                status = lm_trans_materialize_l2_table_source(namespace_, node -> as -> frame, 0);
+                if (lm_trans_text_equals(node -> as -> frame -> head, "table")) {
+                    status = lm_trans_materialize_l2_table_source(namespace_, node -> as -> frame, 0);
+                }
+                else {
+                    if (lm_trans_text_equals(node -> as -> frame -> head, "join")) {
+                        status = lm_trans_materialize_l2_join_source(namespace_, node -> as -> frame);
+                    }
+                    else {
+                        fprintf(stderr, "trans L2 bootstrap error: root expects only table or join receiver frames\n");
+                        status = 1;
+                    }
+                }
                 if (status == 0) {
                     materialized = 1;
                 }
@@ -33888,7 +33899,7 @@ static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const ch
         field = field -> next;
     }
     if (status == 0 && materialized == 0) {
-        fprintf(stderr, "trans L2 bootstrap error: no table receiver frames found\n");
+        fprintf(stderr, "trans L2 bootstrap error: no table or join receiver frames found\n");
         status = 1;
     }
     lm_trans_current_source_path = previous_source_path;

@@ -49,6 +49,37 @@ fn: lm_test_l2_default_core_is_source_table () int
     value_cell: lm_table_row_cell_at(row, 1U)
 return: key_cell != 0 && key_cell\value != 0 && c.strcmp(key_cell\value, "right") = 0 && value_cell != 0 && value_cell\value != 0 && c.strcmp(value_cell\value, "relation") = 0
 
+fn: lm_test_l2_bootstrap_join_is_exact () int
+    const: LmTableDescriptor: source
+    const: LmTableDescriptor: target
+    const: LmTableRow: source_row
+    const: LmTableRow: base_row
+    const: LmTableRow: copied_row
+    const: LmTableRow: direct_row
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+
+    source: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "lmTestBootstrapSource", 21U)
+    target: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "lmTestBootstrap", 15U)
+    if: source = 0 || target = 0 || lm_table_descriptor_materialized_row_count(source) != 1U || lm_table_descriptor_materialized_row_count(target) != 3U
+        return: 0
+
+    source_row: lm_table_descriptor_materialized_row_at(source, 0U)
+    base_row: lm_table_descriptor_materialized_row_at(target, 0U)
+    copied_row: lm_table_descriptor_materialized_row_at(target, 1U)
+    direct_row: lm_table_descriptor_materialized_row_at(target, 2U)
+    if: source_row = 0 || base_row = 0 || copied_row = 0 || direct_row = 0 || source_row\source != 0 || base_row\source != 0 || copied_row\source != source_row || direct_row\source != 0
+        return: 0
+
+    key_cell: lm_table_row_cell_at(copied_row, 0U)
+    value_cell: lm_table_row_cell_at(copied_row, 1U)
+    if: key_cell = 0 || key_cell\value = 0 || c.strcmp(key_cell\value, "lmTestBootstrapCopied") != 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "primitive") != 0
+        return: 0
+
+    key_cell: lm_table_row_cell_at(direct_row, 0U)
+    value_cell: lm_table_row_cell_at(direct_row, 1U)
+return: key_cell != 0 && key_cell\value != 0 && c.strcmp(key_cell\value, "lmTestBootstrapDirect") = 0 && value_cell != 0 && value_cell\value != 0 && c.strcmp(value_cell\value, "relation") = 0
+
 fn: lm_test_l2_predef_source_row_count (const: @(char name)) size_t
     const: LmTableDescriptor: descriptor
     size_t: count
@@ -140,7 +171,7 @@ fn: lm_test_l2_predef_source_rows_core () int
     if: status = 0 && (lm_p0_parse_file("tests/fixtures/l2_bootstrap_registry.lm2", @ bootstrap_document) != 0 || bootstrap_document = 0 || lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(bootstrap_document), "tests/fixtures/l2_bootstrap_registry.lm2") != 0)
         status: 1
     bootstrap_kind: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("lmTestBootstrapValue"), "lmTestBootstrap")
-    if: status = 0 && (lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 0U || lm_test_l2_predef_table_has_one_row("lmTestBootstrap") = 0 || bootstrap_kind = 0 || c.strcmp(bootstrap_kind, "descriptor") != 0)
+    if: status = 0 && (lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 0U || lm_test_l2_bootstrap_join_is_exact() = 0 || bootstrap_kind = 0 || c.strcmp(bootstrap_kind, "descriptor") != 0)
         status: 1
     lm_p0_document_destroy(bootstrap_document)
     bootstrap_document: 0

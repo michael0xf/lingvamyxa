@@ -1,6 +1,19 @@
 table:
+    name: lmTestBootstrapSource
+    columns((class: class) (class: kind))
+    rows:
+        lmTestBootstrapCopied primitive
+end: lmTestBootstrapSource
+
+table:
     name: lmTestBootstrap
     columns((class: class) (class: kind))
     rows:
         lmTestBootstrapValue descriptor
+end: lmTestBootstrap
+
+join: (lmTestBootstrapSource) lmTestBootstrap
+    columns((class: class) (class: kind))
+    rows:
+        lmTestBootstrapDirect relation
 end: lmTestBootstrap
