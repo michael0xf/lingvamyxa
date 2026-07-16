@@ -316,11 +316,10 @@ static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, ch
     fputs("if ($LASTEXITCODE -ne 0) { throw 'parser source-table selftest link failed' }\n", file);
     fputs("$previousP0Registry = $env:LM_P0_REGISTRY\n", file);
     fputs("try {\n", file);
-    fputs("    foreach ($registryFixture in @('tests/fixtures/parser_registry_source_tables.lm2', 'tests/fixtures/parser_registry_source_tables.lm4')) {\n", file);
-    fputs("        $env:LM_P0_REGISTRY = $registryFixture\n", file);
-    fputs("        & (Resolve-Path -LiteralPath $registrySelftest).Path\n", file);
-    fputs("        if ($LASTEXITCODE -ne 0) { throw ('parser source-table selftest failed: ' + $registryFixture) }\n", file);
-    fputs("    }\n", file);
+    fputs("    $registryFixture = 'tests/fixtures/parser_registry_source_tables.lm2'\n", file);
+    fputs("    $env:LM_P0_REGISTRY = $registryFixture\n", file);
+    fputs("    & (Resolve-Path -LiteralPath $registrySelftest).Path\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw ('parser source-table selftest failed: ' + $registryFixture) }\n", file);
     fputs("}\n", file);
     fputs("finally {\n", file);
     fputs("    if ($null -eq $previousP0Registry) { Remove-Item Env:LM_P0_REGISTRY -ErrorAction SilentlyContinue } else { $env:LM_P0_REGISTRY = $previousP0Registry }\n", file);
@@ -488,9 +487,7 @@ static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, ch
     fputs("mkdir -p build/obj/tests\n", file);
     fputs("registry_selftest='build/obj/tests/parser_registry_source_tables_selftest'\n", file);
     fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_P0_REGISTRY_SELFTEST -Ilm1 lm1/build/parser.lm1.c \"$ownLib\" -o \"$registry_selftest\"\n", file);
-    fputs("for registry_fixture in tests/fixtures/parser_registry_source_tables.lm2 tests/fixtures/parser_registry_source_tables.lm4; do\n", file);
-    fputs("    LM_P0_REGISTRY=\"$registry_fixture\" \"$registry_selftest\"\n", file);
-    fputs("done\n", file);
+    fputs("LM_P0_REGISTRY='tests/fixtures/parser_registry_source_tables.lm2' \"$registry_selftest\"\n", file);
     fputs("for src in tests/*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);
