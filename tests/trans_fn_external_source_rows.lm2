@@ -1,61 +1,59 @@
 predef: "fixtures/fn_external_source_rows.lm2"
 
-registry:
-    table:
-        name: `lm.test.fn.external.seed`
-        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
-        rows:
-                 lm_test_external_joined  7  procedure  1  sub
-    end: `lm.test.fn.external.seed`
+table:
+    name: `lm.test.fn.external.seed`
+    columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+    rows:
+             lm_test_external_joined  7  procedure  1  sub
+end: `lm.test.fn.external.seed`
 
-    join: (`lm.test.fn.external.seed`) `lm.test.fn.external.middle`
-        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
-        rows:
-    end: `lm.test.fn.external.middle`
+join: (`lm.test.fn.external.seed`) `lm.test.fn.external.middle`
+    columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+    rows:
+end: `lm.test.fn.external.middle`
 
-    join: (`lm.test.fn.external.middle`) fn
-        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
-        rows:
-    end: fn
+join: (`lm.test.fn.external.middle`) fn
+    columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+    rows:
+end: fn
 
-    table:
-        name: fn
-        columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
-        rows:
-                 lm_test_external_joined  8  None  None  None
-    end: fn
+table:
+    name: fn
+    columns((class: class) (int: marker) (class: descriptor) (int: external) (class: receiver))
+    rows:
+             lm_test_external_joined  8  None  None  None
+end: fn
 
-    table:
-        name: fn
-        columns((class: class) (class: descriptor) (int: external))
-        rows:
-                 lm_test_external_receiver_n2        procedure  1
-                 lm_test_external_receiver_fallback  procedure  1
-    end: fn
+table:
+    name: fn
+    columns((class: class) (class: descriptor) (int: external))
+    rows:
+             lm_test_external_receiver_n2        procedure  1
+             lm_test_external_receiver_fallback  procedure  1
+end: fn
 
-    table:
-        name: `fn.receiver`
-        columns((class: class) (class: value))
-        rows:
-                 lm_test_external_receiver_n2  sub
-    end: `fn.receiver`
+table:
+    name: `fn.receiver`
+    columns((class: class) (class: value))
+    rows:
+             lm_test_external_receiver_n2  sub
+end: `fn.receiver`
 
-    table:
-        name: `fn.receiver`
-        columns((class: class) (class: receiver))
-        rows:
-                 lm_test_external_receiver_fallback  sub
-    end: `fn.receiver`
+table:
+    name: `fn.receiver`
+    columns((class: class) (class: receiver))
+    rows:
+             lm_test_external_receiver_fallback  sub
+end: `fn.receiver`
 
-    table:
-        name: class
-        columns((class: class) (class: kind))
-        rows:
-                 lm_test_external_joined             procedure
-                 lm_test_external_receiver_n2        procedure
-                 lm_test_external_receiver_fallback  procedure
-    end: class
-end: registry
+table:
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+             lm_test_external_joined             procedure
+             lm_test_external_receiver_n2        procedure
+             lm_test_external_receiver_fallback  procedure
+end: class
 
 prototype
 
