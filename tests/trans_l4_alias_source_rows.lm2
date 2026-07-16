@@ -1,107 +1,105 @@
-L4:
-    table:
-        name: alias
-        columns((class: class) (int: marker) (int: `target.const`) (class: target) (int: extra) (size_t: `target.address-depth`) (class: backend))
-        rows:
-                 LmTestAliasSource           7  None  int     9  None  c.typedef
-                 LmTestAliasPointer          7  1     char    9  1     c.typedef
-                 LmTestAliasValueOverlay     7  0     int     9  0     c.typedef
-                 LmTestAliasBackendOverlay   7  None  long    9  None  c.typedef
-                 LmTestAliasDepthOverlay     7  None  char    9  1     c.typedef
-                 LmTestAliasConstOverlay     7  None  int     9  None  c.typedef
-                 LmTestAliasDuplicate        7  None  int     9  None  c.typedef
-                 LmTestAliasDuplicate        7  None  double  9  None  c.typedef
-                 LmTestAliasLateNone         7  1     char    9  1     c.typedef
-                 LmTestAliasLateNone         None None  None    None None None
-                 LmTestAliasNone             None None  None    None None None
-    end: alias
+table:
+    name: alias
+    columns((class: class) (int: marker) (int: `target.const`) (class: target) (int: extra) (size_t: `target.address-depth`) (class: backend))
+    rows:
+             LmTestAliasSource           7  None  int     9  None  c.typedef
+             LmTestAliasPointer          7  1     char    9  1     c.typedef
+             LmTestAliasValueOverlay     7  0     int     9  0     c.typedef
+             LmTestAliasBackendOverlay   7  None  long    9  None  c.typedef
+             LmTestAliasDepthOverlay     7  None  char    9  1     c.typedef
+             LmTestAliasConstOverlay     7  None  int     9  None  c.typedef
+             LmTestAliasDuplicate        7  None  int     9  None  c.typedef
+             LmTestAliasDuplicate        7  None  double  9  None  c.typedef
+             LmTestAliasLateNone         7  1     char    9  1     c.typedef
+             LmTestAliasLateNone         None None  None    None None None
+             LmTestAliasNone             None None  None    None None None
+end: alias
 
-    table:
-        name: alias
-        columns((class: class) (int: marker) (class: backend))
-        rows:
-                 LmTestAliasReordered  1  c.typedef
-    end: alias
+table:
+    name: alias
+    columns((class: class) (int: marker) (class: backend))
+    rows:
+             LmTestAliasReordered  1  c.typedef
+end: alias
 
-    table:
-        name: alias
-        columns((class: class) (@: char backend) (int: marker))
-        rows:
-                 LmTestAliasSchemaFallback  "c.typedef"  2
-    end: alias
+table:
+    name: alias
+    columns((class: class) (@: char backend) (int: marker))
+    rows:
+             LmTestAliasSchemaFallback  "c.typedef"  2
+end: alias
 
-    table:
-        name: `alias.target`
-        columns((class: class) (class: target))
-        rows:
-                 LmTestAliasValueOverlay  unsigned
-                 LmTestAliasSplit         short
-                 LmTestAliasReordered     long
-                 LmTestAliasSchemaFallback double
-    end: `alias.target`
+table:
+    name: `alias.target`
+    columns((class: class) (class: target))
+    rows:
+             LmTestAliasValueOverlay  unsigned
+             LmTestAliasSplit         short
+             LmTestAliasReordered     long
+             LmTestAliasSchemaFallback double
+end: `alias.target`
 
-    table:
-        name: `alias.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmTestAliasBackendOverlay  c.other
-                 LmTestAliasSplit           c.typedef
-    end: `alias.backend`
+table:
+    name: `alias.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestAliasBackendOverlay  c.other
+             LmTestAliasSplit           c.typedef
+end: `alias.backend`
 
-    table:
-        name: `alias.target.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 LmTestAliasDepthOverlay  2
-                 LmTestAliasSplit         1
-    end: `alias.target.address-depth`
+table:
+    name: `alias.target.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             LmTestAliasDepthOverlay  2
+             LmTestAliasSplit         1
+end: `alias.target.address-depth`
 
-    table:
-        name: `alias.target.const`
-        columns((class: class) (int: value))
-        rows:
-                 LmTestAliasConstOverlay  1
-                 LmTestAliasSplit         1
-    end: `alias.target.const`
+table:
+    name: `alias.target.const`
+    columns((class: class) (int: value))
+    rows:
+             LmTestAliasConstOverlay  1
+             LmTestAliasSplit         1
+end: `alias.target.const`
 
-    table:
-        name: `alias.target`
-        columns((class: class) (char: target))
-        rows:
-                 LmTestAliasSchemaFallback  double
-    end: `alias.target`
+table:
+    name: `alias.target`
+    columns((class: class) (char: target))
+    rows:
+             LmTestAliasSchemaFallback  double
+end: `alias.target`
 
-    table:
-        name: `alias.target.address-depth`
-        columns((class: class) (int: depth))
-        rows:
-                 LmTestAliasSchemaFallback  0
-    end: `alias.target.address-depth`
+table:
+    name: `alias.target.address-depth`
+    columns((class: class) (int: depth))
+    rows:
+             LmTestAliasSchemaFallback  0
+end: `alias.target.address-depth`
 
-    table:
-        name: `alias.target.const`
-        columns((class: class) (size_t: value))
-        rows:
-                 LmTestAliasSchemaFallback  0
-    end: `alias.target.const`
+table:
+    name: `alias.target.const`
+    columns((class: class) (size_t: value))
+    rows:
+             LmTestAliasSchemaFallback  0
+end: `alias.target.const`
 
-    table:
-        name: `lm.test.alias.joined.seed`
-        columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
-        rows:
-                 LmTestAliasJoined  c.typedef  char  1  1
-    end: `lm.test.alias.joined.seed`
+table:
+    name: `lm.test.alias.joined.seed`
+    columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
+    rows:
+             LmTestAliasJoined  c.typedef  char  1  1
+end: `lm.test.alias.joined.seed`
 
-    join: (`lm.test.alias.joined.seed`) `lm.test.alias.joined.middle`
-        columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
-        rows:
-    end: `lm.test.alias.joined.middle`
+join: (`lm.test.alias.joined.seed`) `lm.test.alias.joined.middle`
+    columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
+    rows:
+end: `lm.test.alias.joined.middle`
 
-    join: (`lm.test.alias.joined.middle`) alias
-        columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
-        rows:
-    end: alias
-end: L4
+join: (`lm.test.alias.joined.middle`) alias
+    columns((class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`))
+    rows:
+end: alias
 
 alias
 
