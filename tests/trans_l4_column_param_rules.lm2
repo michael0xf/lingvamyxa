@@ -1,4 +1,4 @@
-L4:
+L2:
     table:
         name: `column.param.rule`
         columns((class: class) (const: (int: value))  (@@: char spelling)  ([3]: int item))
@@ -6,7 +6,6 @@ L4:
                  sample  1  "abc"  2
     end: `column.param.rule`
 
-L2:
     external:
         fn: main () int
             return: 0
