@@ -1,86 +1,84 @@
-L4:
-    table:
-        name: `receiver.atom.statement`
-        columns((class: class) (binding: receiver))
-        rows:
-                 lmTestLoadHeadersSequence  lm_trans_atom_statement_emit_sequence_prelude
-    end: `receiver.atom.statement`
+table:
+    name: `receiver.atom.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+             lmTestLoadHeadersSequence  lm_trans_atom_statement_emit_sequence_prelude
+end: `receiver.atom.statement`
 
-    table:
-        name: include
-        columns((class: class) (@: char target))
-        rows:
-                 stddef  "<stddef.h>"
-    end: include
+table:
+    name: include
+    columns((class: class) (@: char target))
+    rows:
+             stddef  "<stddef.h>"
+end: include
 
-    table:
-        name: `lmTestLoadHeadersSequence.item`
-        columns((class: class) (size_t: index))
-        rows:
-                 include  2
-    end: `lmTestLoadHeadersSequence.item`
+table:
+    name: `lmTestLoadHeadersSequence.item`
+    columns((class: class) (size_t: index))
+    rows:
+             include  2
+end: `lmTestLoadHeadersSequence.item`
 
-    table:
-        name: lmTestLoadHeadersSequence
-        columns((class: class) (size_t: item))
-        rows:
-                 include  777
-    end: lmTestLoadHeadersSequence
+table:
+    name: lmTestLoadHeadersSequence
+    columns((class: class) (size_t: item))
+    rows:
+             include  777
+end: lmTestLoadHeadersSequence
 
-    table:
-        name: lmTestLoadHeadersSequence
-        columns((class: class) (size_t: item) (int: marker))
-        rows:
-                 include  0  1
-    end: lmTestLoadHeadersSequence
+table:
+    name: lmTestLoadHeadersSequence
+    columns((class: class) (size_t: item) (int: marker))
+    rows:
+             include  0  1
+end: lmTestLoadHeadersSequence
 
-    table:
-        name: `lm.test.sequence.wide.seed`
-        columns((class: class) (size_t: item) (int: marker))
-        rows:
-                 include  4  2
-    end: `lm.test.sequence.wide.seed`
+table:
+    name: `lm.test.sequence.wide.seed`
+    columns((class: class) (size_t: item) (int: marker))
+    rows:
+             include  4  2
+end: `lm.test.sequence.wide.seed`
 
-    join: (`lm.test.sequence.wide.seed`) `lm.test.sequence.wide.middle`
-        columns((class: class) (size_t: item) (int: marker))
-        rows:
-    end: `lm.test.sequence.wide.middle`
+join: (`lm.test.sequence.wide.seed`) `lm.test.sequence.wide.middle`
+    columns((class: class) (size_t: item) (int: marker))
+    rows:
+end: `lm.test.sequence.wide.middle`
 
-    join: (`lm.test.sequence.wide.middle`) lmTestLoadHeadersSequence
-        columns((class: class) (size_t: item) (int: marker))
-        rows:
-    end: lmTestLoadHeadersSequence
+join: (`lm.test.sequence.wide.middle`) lmTestLoadHeadersSequence
+    columns((class: class) (size_t: item) (int: marker))
+    rows:
+end: lmTestLoadHeadersSequence
 
-    table:
-        name: lmTestLoadHeadersSequence
-        columns((class: class) (int: marker) (size_t: item))
-        rows:
-                 include  3  1
-    end: lmTestLoadHeadersSequence
+table:
+    name: lmTestLoadHeadersSequence
+    columns((class: class) (int: marker) (size_t: item))
+    rows:
+             include  3  1
+end: lmTestLoadHeadersSequence
 
-    table:
-        name: lmTestLoadHeadersSequence
-        columns((class: class) (int: item) (int: marker))
-        rows:
-                 include  5  4
-    end: lmTestLoadHeadersSequence
+table:
+    name: lmTestLoadHeadersSequence
+    columns((class: class) (int: item) (int: marker))
+    rows:
+             include  5  4
+end: lmTestLoadHeadersSequence
 
-    table:
-        name: lmTestLoadHeadersSequence
-        columns((class: class) (size_t: item) (int: marker))
-        rows:
-                 include  6     5
-                 include  None  6
-    end: lmTestLoadHeadersSequence
+table:
+    name: lmTestLoadHeadersSequence
+    columns((class: class) (size_t: item) (int: marker))
+    rows:
+             include  6     5
+             include  None  6
+end: lmTestLoadHeadersSequence
 
-    table:
-        name: `lmTestLoadHeadersSequence.item`
-        columns((class: class) (size_t: index))
-        rows:
-                 include  3
-                 include  7
-    end: `lmTestLoadHeadersSequence.item`
-end: L4
+table:
+    name: `lmTestLoadHeadersSequence.item`
+    columns((class: class) (size_t: index))
+    rows:
+             include  3
+             include  7
+end: `lmTestLoadHeadersSequence.item`
 
 lmTestLoadHeadersSequence
 
