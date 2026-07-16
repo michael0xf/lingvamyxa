@@ -1,4 +1,4 @@
-import: "fixtures/fn_external_source_rows.lm4"
+predef: "fixtures/fn_external_source_rows.lm2"
 
 registry:
     table:

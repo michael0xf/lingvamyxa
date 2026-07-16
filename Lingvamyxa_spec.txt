@@ -485,6 +485,13 @@ projection only: the materialized `fn` source row remains a
 `class.kind` source fact. Outside the `predef` profile, a descriptor-only
 `fn:` retains the descriptor-data semantics described in 7.2.1.
 
+At module-level L2, the top-level atom `prototype` is an explicit consumer of
+materialized `fn` descriptor source rows. During namespace declaration it first
+publishes their callable bindings, honoring relations such as `fn.receiver`,
+`fn.external` and the parameter/return tables, and then emits the corresponding
+ANSI C prototypes. This behavior is driven by the active `RegistryView`; it
+does not depend on a preceding legacy `.lm4` import.
+
 An ordinary `import:` does not acquire this early behavior by containing tables,
 and a `.lm2` module is never heuristically classified by its contents. The
 receiver is top-level-only, preserves normal relative-path resolution and import

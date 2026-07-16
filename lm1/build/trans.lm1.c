@@ -4108,6 +4108,7 @@ static int lm_trans_top_level_emit_atom_constant(FILE *file, LmTransNamespace *n
 static int lm_trans_top_level_emit_atom_define(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_atom_alias(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_atom_forward(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+static int lm_trans_top_level_declare_atom_prototype(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_atom_prototype(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_atom_fn(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_atom_guard(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
@@ -29168,6 +29169,11 @@ static int lm_trans_top_level_emit_atom_forward(FILE *file, LmTransNamespace *na
     return lm_trans_emit_l4_forward_typedefs(file, namespace_);
 }
 
+static int lm_trans_top_level_declare_atom_prototype(LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
+    LM_UNUSED(item);
+    return lm_trans_declare_l4_fn_descriptors(namespace_);
+}
+
 static int lm_trans_top_level_emit_atom_prototype(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
     LM_UNUSED(item);
     return lm_trans_emit_l4_prototypes(file, namespace_);
@@ -29312,6 +29318,7 @@ static int lm_trans_top_level_atom_binding(const LmP0Text *atom, LmTransTopLevel
         return 1;
     }
     if (strcmp(binding, "lm_trans_atom_statement_emit_prototype_prelude") == 0) {
+        out->declare = &lm_trans_top_level_declare_atom_prototype;
         out->emit_before_functions = &lm_trans_top_level_emit_atom_prototype;
         out->emits_top_level = 1;
         return 1;
