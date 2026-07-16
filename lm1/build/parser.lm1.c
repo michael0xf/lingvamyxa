@@ -2485,7 +2485,6 @@ static int lm_p0_registry_l4_dispatch_frame(const LmL4Loader *loader, void *cont
 static LmL4Loader * lm_p0_registry_l4_loader_new(void);
 static const LmL4Loader * lm_p0_registry_l4_loader_get(void);
 static int lm_p0_path_has_extension(const char *path, const char *extension);
-static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4);
 static int lm_p0_registry_require_source_only(const char *phase);
 static int lm_p0_registry_parse_unsigned_payload(const char *payload, unsigned *out_value);
 static const char * lm_p0_registry_lookup_key_by_unsigned_payload(const char *table, unsigned value);
@@ -4911,6 +4910,7 @@ static void lm_p0_dump_append_field_count_line(LmP0Dump *dump, size_t field_coun
 }
 
 static void lm_p0_registry_private_api_anchor(void) {
+    LM_UNUSED(&lm_l4_load_root);
     LM_UNUSED(&lm_registry_view_class_at);
     LM_UNUSED(&lm_registry_view_source_path_key_at_slice);
     LM_UNUSED(&lm_registry_view_append_materialized_rows);
@@ -10150,10 +10150,6 @@ static int lm_p0_path_has_extension(const char *path, const char *extension) {
     return 1;
 }
 
-static int lm_p0_registry_load_root(const LmP0Node *root, int implicit_l4) {
-    return lm_l4_load_root(lm_p0_registry_l4_loader_get(), 0, root, implicit_l4);
-}
-
 static int lm_p0_registry_require_source_only(const char *phase) {
     if (lm_p0_registry == 0 || lm_p0_registry -> view == 0) {
         return 1;
@@ -10258,7 +10254,7 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind) {
 
 static int lm_p0_registry_load_default(void) {
     const char *override_path;
-    const char *candidates[13];
+    const char *candidates[4];
     const char *registry_path;
     LmP0Document * document;
     const LmP0Diagnostic * diagnostic;
@@ -10286,6 +10282,11 @@ static int lm_p0_registry_load_default(void) {
     }
     override_path = getenv("LM_P0_REGISTRY");
     override_enabled = ((override_path != 0) && (override_path[0] != '\0'));
+    if (override_enabled && lm_p0_path_has_extension(override_path, ".lm2") == 0) {
+        fprintf(stderr, "parser registry error: LM_P0_REGISTRY accepts .lm2 source-table modules only: %s\n", override_path);
+        lm_p0_registry_destroy();
+        return 1;
+    }
     if (override_enabled) {
         candidates[0] = override_path;
     }
@@ -10294,16 +10295,7 @@ static int lm_p0_registry_load_default(void) {
     }
     candidates[1] = "../lm2/parser_registry.lm2";
     candidates[2] = "../../lm2/parser_registry.lm2";
-    candidates[3] = "lm4/parser_registry.lm4";
-    candidates[4] = "../lm4/parser_registry.lm4";
-    candidates[5] = "../../lm4/parser_registry.lm4";
-    candidates[6] = "lm2/parser_registry.lm4";
-    candidates[7] = "../lm2/parser_registry.lm4";
-    candidates[8] = "../../lm2/parser_registry.lm4";
-    candidates[9] = "lm2/parser_registry.lmx";
-    candidates[10] = "../lm2/parser_registry.lmx";
-    candidates[11] = "../../lm2/parser_registry.lmx";
-    candidates[12] = 0;
+    candidates[3] = 0;
     document = 0;
     registry_path = 0;
     i = 0U;
@@ -10338,12 +10330,7 @@ static int lm_p0_registry_load_default(void) {
         lm_p0_registry->loading = 0;
         return 0;
     }
-    if (lm_p0_path_has_extension(registry_path, ".lm2") != 0) {
-        status = lm_l4_load_table_join_root(lm_p0_registry_l4_loader_get(), 0, lm_p0_document_root(document));
-    }
-    else {
-        status = lm_p0_registry_load_root(lm_p0_document_root(document), lm_p0_path_has_extension(registry_path, ".lm4"));
-    }
+    status = lm_l4_load_table_join_root(lm_p0_registry_l4_loader_get(), 0, lm_p0_document_root(document));
     lm_p0_document_destroy(document);
     if (status != 0) {
         lm_p0_registry_destroy();

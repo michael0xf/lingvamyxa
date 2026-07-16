@@ -1264,6 +1264,7 @@ end: lm_p0_dump_append_field_count_line
 LmP0Registry: lm_p0_registry
 
 sub: lm_p0_registry_private_api_anchor ()
+    c.LM_UNUSED(@ lm_l4_load_root)
     c.LM_UNUSED(@ lm_registry_view_class_at)
     c.LM_UNUSED(@ lm_registry_view_source_path_key_at_slice)
     c.LM_UNUSED(@ lm_registry_view_append_materialized_rows)
@@ -5645,10 +5646,6 @@ fn: lm_p0_path_has_extension (const: @(char path); const: @(char extension)) int
     return: 1
 end: lm_p0_path_has_extension
 
-fn: lm_p0_registry_load_root (const: (LmP0Node: root); int: implicit_l4) int
-    return: lm_l4_load_root(lm_p0_registry_l4_loader_get(), 0, root, implicit_l4)
-end: lm_p0_registry_load_root
-
 fn: lm_p0_registry_require_source_only (const: @(char phase)) int
     if: lm_p0_registry = 0 || lm_p0_registry\view = 0
         return: 1
@@ -5736,7 +5733,7 @@ end: external
 
 fn: lm_p0_registry_load_default () int
     const: @: char override_path
-    const: [13]: @: char candidates
+    const: [4]: @: char candidates
     const: @: char registry_path
     LmP0Document: document
     const: LmP0Diagnostic: diagnostic
@@ -5759,22 +5756,17 @@ fn: lm_p0_registry_load_default () int
         return: 1
     override_path: c.getenv("LM_P0_REGISTRY")
     override_enabled: ((override_path != 0) && (override_path[0] != '\0'))
+    if: override_enabled && lm_p0_path_has_extension(override_path, ".lm2") = 0
+        c.fprintf(c.stderr, "parser registry error: LM_P0_REGISTRY accepts .lm2 source-table modules only: %s\n", override_path)
+        lm_p0_registry_destroy()
+        return: 1
     if: override_enabled
         candidates[0]: override_path
     else:
         candidates[0]: "lm2/parser_registry.lm2"
     candidates[1]: "../lm2/parser_registry.lm2"
     candidates[2]: "../../lm2/parser_registry.lm2"
-    candidates[3]: "lm4/parser_registry.lm4"
-    candidates[4]: "../lm4/parser_registry.lm4"
-    candidates[5]: "../../lm4/parser_registry.lm4"
-    candidates[6]: "lm2/parser_registry.lm4"
-    candidates[7]: "../lm2/parser_registry.lm4"
-    candidates[8]: "../../lm2/parser_registry.lm4"
-    candidates[9]: "lm2/parser_registry.lmx"
-    candidates[10]: "../lm2/parser_registry.lmx"
-    candidates[11]: "../../lm2/parser_registry.lmx"
-    candidates[12]: 0
+    candidates[3]: 0
     document: 0
     registry_path: 0
     i: 0U
@@ -5803,11 +5795,7 @@ fn: lm_p0_registry_load_default () int
         lm_p0_registry\loaded: 1
         lm_p0_registry\loading: 0
         return: 0
-    if: lm_p0_path_has_extension(registry_path, ".lm2") != 0
-        status: lm_l4_load_table_join_root(lm_p0_registry_l4_loader_get(), 0, lm_p0_document_root(document))
-    else:
-        status: lm_p0_registry_load_root(lm_p0_document_root(document), lm_p0_path_has_extension(registry_path, ".lm4"))
-    ---
+    status: lm_l4_load_table_join_root(lm_p0_registry_l4_loader_get(), 0, lm_p0_document_root(document))
     lm_p0_document_destroy(document)
     if: (status != 0)
         lm_p0_registry_destroy()

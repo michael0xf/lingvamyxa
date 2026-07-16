@@ -320,6 +320,15 @@ static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, ch
     fputs("    $env:LM_P0_REGISTRY = $registryFixture\n", file);
     fputs("    & (Resolve-Path -LiteralPath $registrySelftest).Path\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('parser source-table selftest failed: ' + $registryFixture) }\n", file);
+    fputs("    $legacyRegistryFixture = Join-Path 'build/obj/tests' 'parser_registry_source_tables.lm4'\n", file);
+    fputs("    Copy-Item -LiteralPath $registryFixture -Destination $legacyRegistryFixture -Force\n", file);
+    fputs("    try {\n", file);
+    fputs("        $env:LM_P0_REGISTRY = $legacyRegistryFixture\n", file);
+    fputs("        & (Resolve-Path -LiteralPath $registrySelftest).Path *> $null\n", file);
+    fputs("        $legacyCode = $LASTEXITCODE\n", file);
+    fputs("        if ($legacyCode -ne 1) { throw ('legacy .lm4 parser registry rejection expected exit 1, got ' + $legacyCode) }\n", file);
+    fputs("    }\n", file);
+    fputs("    finally { Remove-Item -LiteralPath $legacyRegistryFixture -Force -ErrorAction SilentlyContinue }\n", file);
     fputs("}\n", file);
     fputs("finally {\n", file);
     fputs("    if ($null -eq $previousP0Registry) { Remove-Item Env:LM_P0_REGISTRY -ErrorAction SilentlyContinue } else { $env:LM_P0_REGISTRY = $previousP0Registry }\n", file);
@@ -488,6 +497,11 @@ static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, ch
     fputs("registry_selftest='build/obj/tests/parser_registry_source_tables_selftest'\n", file);
     fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_P0_REGISTRY_SELFTEST -Ilm1 lm1/build/parser.lm1.c \"$ownLib\" -o \"$registry_selftest\"\n", file);
     fputs("LM_P0_REGISTRY='tests/fixtures/parser_registry_source_tables.lm2' \"$registry_selftest\"\n", file);
+    fputs("legacy_registry_fixture='build/obj/tests/parser_registry_source_tables.lm4'\n", file);
+    fputs("cp tests/fixtures/parser_registry_source_tables.lm2 \"$legacy_registry_fixture\"\n", file);
+    fputs("if LM_P0_REGISTRY=\"$legacy_registry_fixture\" \"$registry_selftest\" >/dev/null 2>&1; then legacy_code=0; else legacy_code=$?; fi\n", file);
+    fputs("rm -f \"$legacy_registry_fixture\"\n", file);
+    fputs("if [ \"$legacy_code\" -ne 1 ]; then echo \"legacy .lm4 parser registry rejection expected exit 1, got $legacy_code\" >&2; exit 1; fi\n", file);
     fputs("for src in tests/*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);

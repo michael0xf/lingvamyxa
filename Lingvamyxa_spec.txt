@@ -523,6 +523,12 @@ profile. Such a registry/model module must first be migrated to an `.lm2`
 module and selected explicitly with `predef:`. This keeps dependency loading
 inside the L2 receiver model instead of giving `import:` a hidden L4 side effect.
 
+The bootstrap parser registry follows the same source-table direction more
+strictly. Its automatic candidates and an explicit `LM_P0_REGISTRY` override
+accept `.lm2` modules only. Legacy `.lm4` and plain `.lmx` parser-registry
+inputs are rejected; parser tables and joins are materialized from the selected
+`.lm2` module through the common table/join loader.
+
 Long version of the "hello.lmx" file:
 
 The `table:` receiver in the L4 part is illustrative registry input. The
