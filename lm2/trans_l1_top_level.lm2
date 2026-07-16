@@ -4203,6 +4203,51 @@ fn: lm_trans_materialize_l2_predef_structure (LmTransNamespace: namespace_; cons
     lm_own_delete(binding, 0)
 return: status
 
+fn: lm_trans_materialize_l2_bootstrap_root (const: (LmP0Node: root); const: @(char source_path)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: @: char previous_source_path
+    LmTransNamespace: namespace_
+    int: materialized
+    int: status
+
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE || source_path = 0
+        return: 1
+
+    namespace_: lm_trans_namespace_new()
+    if: namespace_ = 0
+        return: 1
+    if: lm_trans_namespace_attach_registry(namespace_) != 0
+        lm_trans_namespace_delete(namespace_)
+        return: 1
+
+    previous_source_path: lm_trans_current_source_path
+    lm_trans_current_source_path: source_path
+    materialized: 0
+    status: 0
+    field: root\as\structure\first_field
+    while: status = 0 && field != 0
+        node: field\value
+        if: node != 0 && lm_trans_node_is_ignored(node) = 0
+            if: node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_equals(node\as\frame\head, "table") = 0
+                c.fprintf(c.stderr, "trans L2 bootstrap error: root expects only table receiver frames\n")
+                status: 1
+            else:
+                status: lm_trans_materialize_l2_table_source(namespace_, node\as\frame, 0)
+                if: status = 0
+                    materialized: 1
+            ---
+        ---
+        field: field\next
+
+    if: status = 0 && materialized = 0
+        c.fprintf(c.stderr, "trans L2 bootstrap error: no table receiver frames found\n")
+        status: 1
+
+    lm_trans_current_source_path: previous_source_path
+    lm_trans_namespace_delete(namespace_)
+return: status
+
 fn: lm_trans_materialize_l2_predef_root (const: (LmP0Node: root); const: @(char source_path)) int
     const: LmP0Field: field
     const: LmP0Node: node

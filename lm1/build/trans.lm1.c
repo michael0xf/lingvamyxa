@@ -973,6 +973,7 @@ static int lm_trans_registry_path_is_predefined(const char *registry_path);
 static int lm_trans_materialize_l2_table_source(LmTransNamespace *namespace_, const LmP0Frame *frame, int require_facade);
 static int lm_trans_materialize_l2_join_source(LmTransNamespace *namespace_, const LmP0Frame *frame);
 static int lm_trans_materialize_l2_predef_root(const LmP0Node *root, const char *source_path);
+static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const char *source_path);
 static int lm_trans_frame_is_l2_level_receiver(const LmP0Frame *frame);
 static int lm_trans_registry_load_file_path(const char *registry_path, int required, int *out_loaded);
 static int lm_trans_registry_candidate_path(const char *source_path, const char *candidate_name, char *registry_path, size_t registry_path_size);
@@ -2855,6 +2856,7 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
 
 
 
+
 #include <string.h>
 static char * lm_table_descriptor_copy_slice(const char *data, size_t length);
 static char * lm_table_descriptor_copy_cstr(const char *value);
@@ -4175,6 +4177,7 @@ static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
 static int lm_trans_emit_l1_body(FILE *output, const LmP0Frame *l1, int *emitted);
 static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root);
 static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_, const LmP0Structure *body);
+static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const char *source_path);
 static int lm_trans_materialize_l2_predef_root(const LmP0Node *root, const char *source_path);
 static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_string_stack_has(const LmOwnPtrStack *stack, const char *value);
@@ -33845,6 +33848,54 @@ static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_
     return status;
 }
 
+static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const char *source_path) {
+    const LmP0Field * field;
+    const LmP0Node * node;
+    const char *previous_source_path;
+    LmTransNamespace * namespace_;
+    int materialized;
+    int status;
+    if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE || source_path == 0) {
+        return 1;
+    }
+    namespace_ = lm_trans_namespace_new();
+    if (namespace_ == 0) {
+        return 1;
+    }
+    if (lm_trans_namespace_attach_registry(namespace_) != 0) {
+        lm_trans_namespace_delete(namespace_);
+        return 1;
+    }
+    previous_source_path = lm_trans_current_source_path;
+    lm_trans_current_source_path = source_path;
+    materialized = 0;
+    status = 0;
+    field = root -> as -> structure -> first_field;
+    while (status == 0 && field != 0) {
+        node = field -> value;
+        if (node != 0 && lm_trans_node_is_ignored(node) == 0) {
+            if (node -> kind != LM_P0_NODE_FRAME || lm_trans_text_equals(node -> as -> frame -> head, "table") == 0) {
+                fprintf(stderr, "trans L2 bootstrap error: root expects only table receiver frames\n");
+                status = 1;
+            }
+            else {
+                status = lm_trans_materialize_l2_table_source(namespace_, node -> as -> frame, 0);
+                if (status == 0) {
+                    materialized = 1;
+                }
+            }
+        }
+        field = field -> next;
+    }
+    if (status == 0 && materialized == 0) {
+        fprintf(stderr, "trans L2 bootstrap error: no table receiver frames found\n");
+        status = 1;
+    }
+    lm_trans_current_source_path = previous_source_path;
+    lm_trans_namespace_delete(namespace_);
+    return status;
+}
+
 static int lm_trans_materialize_l2_predef_root(const LmP0Node *root, const char *source_path) {
     const LmP0Field * field;
     const LmP0Node * node;
@@ -38908,12 +38959,18 @@ static int lm_trans_registry_seed_l4_receivers(void) {
 
 static const char * lm_trans_registry_core_candidate_name(size_t index) {
     if (index == 0U) {
-        return "lm4/core.lm4";
+        return "lm2/core.lm2";
     }
     if (index == 1U) {
-        return "core.lm4";
+        return "core.lm2";
     }
     if (index == 2U) {
+        return "lm4/core.lm4";
+    }
+    if (index == 3U) {
+        return "core.lm4";
+    }
+    if (index == 4U) {
         return "lm2/core.lm4";
     }
     return 0;
@@ -38943,6 +39000,7 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
     const char *candidate_name;
     const char *override_path;
     const char *view_mode;
+    LmP0Document * document;
     int override_enabled;
     int loaded;
     int registry_loaded;
@@ -38977,6 +39035,7 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
         return 1;
     }
     lm_trans_registry->loaded_fact_count = 0U;
+    document = 0;
     if (lm_trans_registry_l4_runtime_init() != 0) {
         lm_trans_registry_destroy();
         return 1;
@@ -38997,6 +39056,22 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
             return 1;
         }
         if (loaded != 0) {
+            if (lm_trans_path_has_extension(registry_path, ".lm2") != 0) {
+                document = 0;
+                if (lm_p0_parse_file(registry_path, &document) != 0 || document == 0) {
+                    if (document != 0) {
+                        lm_p0_document_destroy(document);
+                    }
+                    lm_trans_registry_destroy();
+                    return 1;
+                }
+                if (lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(document), registry_path) != 0) {
+                    lm_p0_document_destroy(document);
+                    lm_trans_registry_destroy();
+                    return 1;
+                }
+                lm_p0_document_destroy(document);
+            }
             break;
         }
         candidate_index = candidate_index + 1U;

@@ -857,6 +857,11 @@ fn: lm_trans_materialize_l2_predef_root (
     const: @: char source_path
 ) int
 
+fn: lm_trans_materialize_l2_bootstrap_root (
+    const: LmP0Node: root
+    const: @: char source_path
+) int
+
 fn: lm_trans_frame_is_l2_level_receiver (
     const: LmP0Frame: frame
 ) int

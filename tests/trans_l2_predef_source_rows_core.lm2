@@ -76,19 +76,23 @@ return: 1
 fn: lm_test_l2_predef_source_rows_core () int
     const: @(char source_path)
     LmP0Document: document
+    LmP0Document: bootstrap_document
     const: LmP0Node: root
     LmTransNamespace: namespace_
     LmP0Text: helper_name
     const: LmTransSymbol: helper_symbol
+    const: @: char bootstrap_kind
     FILE: prelude_file
     long: typedef_position
     int: status
 
     source_path: "tests/trans_l2_predef_import.lm2"
     document: 0
+    bootstrap_document: 0
     namespace_: 0
     helper_name: 0
     helper_symbol: 0
+    bootstrap_kind: 0
     prelude_file: 0
     status: 0
 
@@ -99,7 +103,18 @@ fn: lm_test_l2_predef_source_rows_core () int
         return: 1
 
     root: lm_p0_document_root(document)
-    if: root = 0 || lm_trans_registry_load_inline_root(root, source_path) != 0
+    if: root = 0
+        status: 1
+
+    if: status = 0 && (lm_p0_parse_file("tests/fixtures/l2_bootstrap_registry.lm2", @ bootstrap_document) != 0 || bootstrap_document = 0 || lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(bootstrap_document), "tests/fixtures/l2_bootstrap_registry.lm2") != 0)
+        status: 1
+    bootstrap_kind: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("lmTestBootstrapValue"), "lmTestBootstrap")
+    if: status = 0 && (lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 0U || lm_test_l2_predef_table_has_one_row("lmTestBootstrap") = 0 || bootstrap_kind = 0 || c.strcmp(bootstrap_kind, "descriptor") != 0)
+        status: 1
+    lm_p0_document_destroy(bootstrap_document)
+    bootstrap_document: 0
+
+    if: status = 0 && lm_trans_registry_load_inline_root(root, source_path) != 0
         status: 1
 
     if: status = 0 && (lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_paths\count != 1U || lm_trans_registry_path_is_predefined("tests/fixtures/l2_predef_registry.lm2") = 0)

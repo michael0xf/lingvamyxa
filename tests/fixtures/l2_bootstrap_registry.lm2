@@ -1,0 +1,6 @@
+table:
+    name: lmTestBootstrap
+    columns((class: class) (class: kind))
+    rows:
+        lmTestBootstrapValue descriptor
+end: lmTestBootstrap

@@ -4455,10 +4455,14 @@ return: 0
 
 fn: lm_trans_registry_core_candidate_name (size_t: index) const: @: char
     if: index = 0U
-        return: "lm4/core.lm4"
+        return: "lm2/core.lm2"
     if: index = 1U
-        return: "core.lm4"
+        return: "core.lm2"
     if: index = 2U
+        return: "lm4/core.lm4"
+    if: index = 3U
+        return: "core.lm4"
+    if: index = 4U
         return: "lm2/core.lm4"
 return: 0
 
@@ -4480,6 +4484,7 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
     const: @: char candidate_name
     const: @: char override_path
     const: @: char view_mode
+    LmP0Document: document
     int: override_enabled
     int: loaded
     int: registry_loaded
@@ -4510,6 +4515,7 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
         lm_trans_registry_destroy()
         return: 1
     lm_trans_registry\loaded_fact_count: 0U
+    document: 0
 
     if: lm_trans_registry_l4_runtime_init() != 0
         lm_trans_registry_destroy()
@@ -4529,6 +4535,19 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
             lm_trans_registry_destroy()
             return: 1
         if: loaded != 0
+            if: lm_trans_path_has_extension(registry_path, ".lm2") != 0
+                document: 0
+                if: lm_p0_parse_file(registry_path, @ document) != 0 || document = 0
+                    if: document != 0
+                        lm_p0_document_destroy(document)
+                    lm_trans_registry_destroy()
+                    return: 1
+                if: lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(document), registry_path) != 0
+                    lm_p0_document_destroy(document)
+                    lm_trans_registry_destroy()
+                    return: 1
+                lm_p0_document_destroy(document)
+            ---
             break
         candidate_index: candidate_index + 1U
         candidate_name: lm_trans_registry_core_candidate_name(candidate_index)
