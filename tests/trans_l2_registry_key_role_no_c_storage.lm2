@@ -1,0 +1,21 @@
+table:
+    name: define
+    columns((char: class) (@: char value) (int: marker))
+    rows:
+             LM_TEST_L2_REGISTRY_KEY_ROLE  73  1
+end: define
+
+define
+
+L1:
+===
+#if LM_TEST_L2_REGISTRY_KEY_ROLE != 73
+#error "registry key role did not preserve typed facade fallback"
+#endif
+===
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

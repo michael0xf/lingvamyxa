@@ -23159,7 +23159,6 @@ static int lm_trans_l2_table_read_columns(const LmP0Frame *table_frame, LmTransL
 
 static int lm_trans_l2_source_columns_registry_keyed(LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count, int *out_registry_keyed) {
     LmP0Text * name_payload;
-    LmP0Text * type_payload;
     if (out_registry_keyed == 0) {
         return 1;
     }
@@ -23171,25 +23170,21 @@ static int lm_trans_l2_source_columns_registry_keyed(LmTransL4CallableType **col
         return 0;
     }
     name_payload = lm_trans_text_ref_new_cstr("");
-    type_payload = lm_trans_text_ref_new_cstr("");
-    if (name_payload == 0 || type_payload == 0) {
+    if (name_payload == 0) {
         lm_trans_text_ref_destroy(&name_payload);
-        lm_trans_text_ref_destroy(&type_payload);
         return 1;
     }
-    if (lm_trans_registry_identifier_value(column_names[0], name_payload) == 0 || lm_trans_registry_identifier_value(column_types[0] -> class_name, type_payload) == 0) {
+    if (lm_trans_registry_identifier_value(column_names[0], name_payload) == 0) {
         {
             int lm_return_0 = 1;
             lm_trans_text_ref_destroy(&name_payload);
-            lm_trans_text_ref_destroy(&type_payload);
             return lm_return_0;
         }
     }
-    out_registry_keyed[0] = name_payload -> length == 5U && type_payload -> length == 5U && memcmp(name_payload -> data, "class", 5U) == 0 && memcmp(type_payload -> data, "class", 5U) == 0;
+    out_registry_keyed[0] = name_payload -> length == 5U && memcmp(name_payload -> data, "class", 5U) == 0;
     {
         int lm_return_1 = 0;
         lm_trans_text_ref_destroy(&name_payload);
-        lm_trans_text_ref_destroy(&type_payload);
         return lm_return_1;
     }
 }
