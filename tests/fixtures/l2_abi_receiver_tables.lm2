@@ -1,0 +1,170 @@
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestLayout   c.struct
+             LmTestNamed    c.named-struct
+             LmTestUnion    c.union
+             LmTestNode     c.struct
+end: `layout.backend`
+
+table:
+    name: `LmTestLayout.field.class`
+    columns((class: class) (class: field))
+    rows:
+             message  char
+             next     LmTestForward
+end: `LmTestLayout.field.class`
+
+table:
+    name: `LmTestLayout.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             message  0
+             next     1
+end: `LmTestLayout.field.index`
+
+table:
+    name: `LmTestLayout.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             next     1
+end: `LmTestLayout.field.address-depth`
+
+table:
+    name: `LmTestLayout.field.array-count`
+    columns((class: class) (size_t: count))
+    rows:
+             message  16
+end: `LmTestLayout.field.array-count`
+
+table:
+    name: `LmTestNamed.field.class`
+    columns((class: class) (class: field))
+    rows:
+             value  int
+end: `LmTestNamed.field.class`
+
+table:
+    name: `LmTestNamed.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             value  0
+end: `LmTestNamed.field.index`
+
+table:
+    name: `LmTestUnion.field.class`
+    columns((class: class) (class: field))
+    rows:
+             value  int
+             text   char
+end: `LmTestUnion.field.class`
+
+table:
+    name: `LmTestUnion.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             value  0
+             text   1
+end: `LmTestUnion.field.index`
+
+table:
+    name: `LmTestUnion.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             text   1
+end: `LmTestUnion.field.address-depth`
+
+table:
+    name: `LmTestNode.field.class`
+    columns((class: class) (class: field))
+    rows:
+             kind   int
+end: `LmTestNode.field.class`
+
+table:
+    name: `LmTestNode.field.union`
+    columns((class: class) (class: union))
+    rows:
+             as     LmTestNodeAs
+end: `LmTestNode.field.union`
+
+table:
+    name: `LmTestNode.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             kind   0
+             as     1
+end: `LmTestNode.field.index`
+
+table:
+    name: `LmTestNodeAs.field.class`
+    columns((class: class) (class: field))
+    rows:
+             number int
+             text   char
+end: `LmTestNodeAs.field.class`
+
+table:
+    name: `LmTestNodeAs.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             number 0
+             text   1
+end: `LmTestNodeAs.field.index`
+
+table:
+    name: `LmTestNodeAs.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             text   1
+end: `LmTestNodeAs.field.address-depth`
+
+table:
+    name: `alias.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestAlias  c.typedef
+end: `alias.backend`
+
+table:
+    name: `alias.target`
+    columns((class: class) (class: target))
+    rows:
+             LmTestAlias  int
+end: `alias.target`
+
+table:
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestForward  c.struct
+end: `forward.backend`
+
+table:
+    name: functionPointerType
+    columns((class: class) (int: value))
+    rows:
+             LmTestCall  1
+end: functionPointerType
+
+table:
+    name: `unit.backend`
+    columns((class: class) (class: backend))
+    rows:
+             lm_test_unit c.static-unit
+end: `unit.backend`
+
+table:
+    name: `unit.payload`
+    columns((class: class) (node: payload))
+    rows:
+             lm_test_unit
+             L2:
+                 external:
+                     fn: lm_test_unit () int
+                         return: 0
+                     end: lm_test_unit
+                 end: external
+             end: L2
+end: `unit.payload`
