@@ -21,6 +21,34 @@ fn: lm_test_l2_predef_table_has_one_row (const: @(char name)) int
     return: lm_test_l2_predef_table_has_rows(name, 1U)
 end: lm_test_l2_predef_table_has_one_row
 
+fn: lm_test_l2_default_core_is_source_table () int
+    const: LmTableDescriptor: descriptor
+    const: LmTableColumnDescriptor: key_column
+    const: LmTableColumnDescriptor: value_column
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: value_cell
+
+    descriptor: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "class", 5U)
+    if: descriptor = 0 || lm_table_descriptor_column_count(descriptor) != 2U || lm_table_descriptor_materialized_row_count(descriptor) < 180U
+        return: 0
+
+    key_column: lm_table_descriptor_column_at(descriptor, 0U)
+    value_column: lm_table_descriptor_column_at(descriptor, 1U)
+    if: key_column = 0 || key_column\name = 0 || key_column\type_name = 0 || c.strcmp(key_column\name, "class") != 0 || c.strcmp(key_column\type_name, "class") != 0 || value_column = 0 || value_column\name = 0 || value_column\type_name = 0 || c.strcmp(value_column\name, "kind") != 0 || c.strcmp(value_column\type_name, "class") != 0
+        return: 0
+
+    row: lm_table_descriptor_materialized_row_at(descriptor, 0U)
+    key_cell: lm_table_row_cell_at(row, 0U)
+    value_cell: lm_table_row_cell_at(row, 1U)
+    if: key_cell = 0 || key_cell\value = 0 || c.strcmp(key_cell\value, "class") != 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "core") != 0
+        return: 0
+
+    row: lm_table_descriptor_materialized_row_at(descriptor, 179U)
+    key_cell: lm_table_row_cell_at(row, 0U)
+    value_cell: lm_table_row_cell_at(row, 1U)
+return: key_cell != 0 && key_cell\value != 0 && c.strcmp(key_cell\value, "right") = 0 && value_cell != 0 && value_cell\value != 0 && c.strcmp(value_cell\value, "relation") = 0
+
 fn: lm_test_l2_predef_source_row_count (const: @(char name)) size_t
     const: LmTableDescriptor: descriptor
     size_t: count
@@ -104,6 +132,9 @@ fn: lm_test_l2_predef_source_rows_core () int
 
     root: lm_p0_document_root(document)
     if: root = 0
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_path_already_loaded("lm2/core.lm2") = 0 || lm_trans_registry_path_already_loaded("lm4/core.lm4") != 0 || lm_trans_registry_path_is_predefined("lm2/core.lm2") != 0 || lm_test_l2_default_core_is_source_table() = 0)
         status: 1
 
     if: status = 0 && (lm_p0_parse_file("tests/fixtures/l2_bootstrap_registry.lm2", @ bootstrap_document) != 0 || bootstrap_document = 0 || lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(bootstrap_document), "tests/fixtures/l2_bootstrap_registry.lm2") != 0)

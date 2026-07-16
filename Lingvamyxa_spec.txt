@@ -8891,26 +8891,30 @@ name the same class/key. Thus `u32` and u32 are the same registry key. Exact
 forms are used when the key has no bare spelling or when the source must make
 the exactness visually explicit.
 
-Registry input is layered. A bootstrap translator may first load a core
-registry file, for example `lm2/core.lm4`, and then load a profile-specific
-registry file, for example `lm2/trans_registry.lm4`. Lookup checks the visible
-registry rows from the most local/latest layer back toward the imported base
-layers. Therefore a local registry view may extend or explicitly override a
-core class relation without changing the core file. This is the same overlay
-principle used later by L4/L5 registry views: classes are not one global
-immutable table, but visible rows in the active registry view.
+Registry input is layered. The bootstrap translator first loads the default L2
+core registry `lm2/core.lm2`, and then loads the profile-specific registry,
+currently `lm4/trans_registry.lm4`. Lookup checks the visible registry rows from
+the most local/latest layer back toward the imported base layers. Therefore a
+local `RegistryView` may extend or explicitly override a core class relation
+without changing the core file: classes are visible rows, not one global
+immutable table.
 
-The default bootstrap registry table notation is a dense table Structure:
+The default core registry is an implicit L2 module containing dense table
+Structures:
 
-L4:
-    table:
-        name: BUILD
-        columns: class              (l2 binding)                (win char)  (unix char)
-        rows:
-                 exe_suffix         lm_build_exe_suffix         ".exe"     ""
-                 platform_absolute  lm_build_platform_absolute  None       None
-    end: BUILD
-end: L4
+table:
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+        class core
+        core  class
+end: class
+
+At the earliest bootstrap point, receiver tables are not loaded yet. The core
+loader therefore accepts only root `table:` frames and routes them directly to
+the same L2 source-table materializer used after bootstrap. This is a restricted
+bootstrap entry point, not a second table model. The core path is loaded module
+state and is not recorded as an explicit `predef` path.
 
 The first column is the row key and is normally named `class`. Each later column
 names a relation column. A two-column table materializes the relation directly

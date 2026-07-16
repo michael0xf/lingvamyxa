@@ -38964,15 +38964,6 @@ static const char * lm_trans_registry_core_candidate_name(size_t index) {
     if (index == 1U) {
         return "core.lm2";
     }
-    if (index == 2U) {
-        return "lm4/core.lm4";
-    }
-    if (index == 3U) {
-        return "core.lm4";
-    }
-    if (index == 4U) {
-        return "lm2/core.lm4";
-    }
     return 0;
 }
 
