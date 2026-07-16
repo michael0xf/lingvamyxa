@@ -1,0 +1,13 @@
+L2:
+    predef: "fixtures/l3_predef_registry.lm2"
+end: L2
+
+L3:
+    L3PredefLevel:
+        L1:
+===
+int main(void) { return 0; }
+===
+        end: L1
+    end: L3PredefLevel
+end: L3
