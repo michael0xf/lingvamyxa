@@ -870,8 +870,6 @@ table:
              LmP0PendingMix           1
              LmP0PostprocessFrame     1
              LmP0Registry             1
-             LmP0RegistryColumn       1
-             LmP0RegistryRow          1
              LmP0Span                 1
              LmP0Stack                1
              LmP0StreamEvent          1

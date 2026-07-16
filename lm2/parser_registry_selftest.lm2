@@ -1,0 +1,162 @@
+L1:
+===
+#ifdef LM_P0_REGISTRY_SELFTEST
+static int lm_p0_registry_source_tables_selftest(void);
+int main(void) {
+    return lm_p0_registry_source_tables_selftest();
+}
+#endif
+===
+
+fn: lm_p0_registry_selftest_expect_path (const: @(char path); size_t: index; const: @(char expected_key); const: @(char expected_value)) int
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+
+    payload_cell: lm_p0_registry_source_path_cell_at(path, index, @ key_cell)
+    if: payload_cell = 0 || key_cell = 0 || key_cell\value = 0 || payload_cell\value = 0
+        return: 1
+    if: c.strcmp(key_cell\value, expected_key) != 0 || c.strcmp(payload_cell\value, expected_value) != 0
+        return: 1
+return: 0
+
+fn: lm_p0_registry_selftest_expect_lookup (const: @(char path); const: @(char key); const: @(char expected_value)) int
+    LmP0Text: key_text
+    const: @: char actual
+    int: status
+
+    key_text: lm_p0_text_from_cstr(key)
+    if: key_text = 0
+        return: 1
+    actual: lm_p0_registry_lookup(key_text, path)
+    status: actual = 0 || c.strcmp(actual, expected_value) != 0
+    lm_p0_text_view_delete(key_text)
+return: status
+
+fn: lm_p0_registry_source_tables_selftest () int
+    const: LmTableDescriptor: alpha
+    const: LmTableDescriptor: gamma
+    const: LmTableDescriptor: synthetic
+    const: LmTableColumnDescriptor: column
+    const: LmTableRow: alpha_row
+    const: LmTableRow: gamma_row
+    const: LmTableRow: none_row
+    const: LmTableRow: joined_none_row
+    const: LmTableCell: alpha_cell
+    const: LmTableCell: gamma_cell
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+    const: LmTableCell: none_cell
+    LmP0Text: bare_key
+    LmP0Text: incompatible_source
+    LmP0Text: incompatible_target
+    size_t: seed_count
+    size_t: index
+    size_t: synthetic_row_count
+    unsigned: seed_mask
+    int: covered
+    int: status
+
+    lm_p0_registry_destroy()
+    if: lm_p0_registry_load_default() != 0 || lm_p0_registry = 0 || lm_p0_registry\view = 0
+        lm_p0_registry_destroy()
+        return: 1
+
+    status: 0
+    if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U || lm_registry_view_source_table_count(lm_p0_registry\view) != 6U
+        status: 1
+
+    alpha: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, "alpha", 5U)
+    gamma: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, "gamma", 5U)
+    synthetic: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, "synthetic", 9U)
+    if: status = 0 && (alpha = 0 || gamma = 0 || synthetic = 0 || lm_table_descriptor_column_count(alpha) != 4U || lm_table_descriptor_materialized_row_count(alpha) != 4U || lm_table_descriptor_column_count(gamma) != 4U || lm_table_descriptor_materialized_row_count(gamma) != 6U || lm_table_descriptor_column_count(synthetic) != 2U || lm_table_descriptor_materialized_row_count(synthetic) != 1U)
+        status: 1
+
+    column: lm_table_descriptor_column_at(alpha, 0U)
+    if: status = 0 && (column = 0 || column\index != 0U || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, "class") != 0 || c.strcmp(column\type_name, "class") != 0 || lm_table_column_descriptor_descriptor_count(column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "class") != 0)
+        status: 1
+    column: lm_table_descriptor_column_at(alpha, 1U)
+    if: status = 0 && (column = 0 || column\index != 1U || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, "left") != 0 || c.strcmp(column\type_name, "char") != 0 || column\address_depth != 0U || column\array_rank != 0U || column\is_const != 0 || lm_table_column_descriptor_descriptor_count(column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "char") != 0)
+        status: 1
+    column: lm_table_descriptor_column_at(alpha, 2U)
+    if: status = 0 && (column = 0 || column\index != 2U || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, "number") != 0 || c.strcmp(column\type_name, "int") != 0 || lm_table_column_descriptor_descriptor_count(column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "int") != 0)
+        status: 1
+    column: lm_table_descriptor_column_at(alpha, 3U)
+    if: status = 0 && (column = 0 || column\index != 3U || column\name = 0 || column\type_name = 0 || c.strcmp(column\name, "enabled") != 0 || c.strcmp(column\type_name, "boolean") != 0 || lm_table_column_descriptor_descriptor_count(column) != 1U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "boolean") != 0)
+        status: 1
+
+    covered: 1
+    if: status = 0 && (lm_registry_view_source_path_has_rows(lm_p0_registry\view, "alpha", @ covered) != 0 || covered != 0)
+        status: 1
+    covered: 0
+    if: status = 0 && (lm_registry_view_source_path_has_rows(lm_p0_registry\view, "alpha.left", @ covered) = 0 || covered = 0)
+        status: 1
+    covered: 0
+    if: status = 0 && (lm_registry_view_source_path_has_key_slice(lm_p0_registry\view, "alpha.left", 10U, "noneKey", 7U, @ covered) != 0 || covered = 0)
+        status: 1
+
+    if: status = 0 && (lm_p0_registry_selftest_expect_path("alpha.left", 0U, "first", "left-old") != 0 || lm_p0_registry_selftest_expect_path("alpha.left", 1U, "duplicate", "left-first") != 0 || lm_p0_registry_selftest_expect_path("alpha.left", 2U, "duplicate", "left-last") != 0 || lm_p0_registry_source_path_cell_at("alpha.left", 3U, @ key_cell) != 0)
+        status: 1
+    if: status = 0 && (lm_p0_registry_selftest_expect_path("gamma.left", 0U, "first", "left-old") != 0 || lm_p0_registry_selftest_expect_path("gamma.left", 1U, "duplicate", "left-first") != 0 || lm_p0_registry_selftest_expect_path("gamma.left", 2U, "duplicate", "left-last") != 0 || lm_p0_registry_selftest_expect_path("gamma.left", 3U, "betaKey", "beta-left") != 0 || lm_p0_registry_selftest_expect_path("gamma.left", 4U, "directKey", "direct-left") != 0 || lm_p0_registry_source_path_cell_at("gamma.left", 5U, @ key_cell) != 0)
+        status: 1
+    if: status = 0 && (lm_p0_registry_selftest_expect_lookup("alpha.left", "duplicate", "left-last") != 0 || lm_p0_registry_selftest_expect_lookup("alpha.number", "duplicate", "3") != 0 || lm_p0_registry_selftest_expect_lookup("gamma.left", "duplicate", "left-last") != 0 || lm_p0_registry_selftest_expect_lookup("columnOrder.value", "duplicateColumn", "last-column") != 0 || lm_p0_registry_selftest_expect_lookup("synthetic", "explicitKey", "explicit-value") != 0)
+        status: 1
+
+    bare_key: lm_p0_text_from_cstr("duplicate")
+    if: status = 0 && (bare_key = 0 || lm_p0_registry_lookup(bare_key, "alpha") != 0)
+        status: 1
+    lm_p0_text_view_delete(bare_key)
+
+    incompatible_source: lm_p0_text_from_cstr("alpha")
+    incompatible_target: lm_p0_text_from_cstr("synthetic")
+    synthetic_row_count: lm_table_descriptor_materialized_row_count(synthetic)
+    if: status = 0 && (incompatible_source = 0 || incompatible_target = 0 || lm_p0_registry_l4_join_table(0, incompatible_source, incompatible_target) = 0 || lm_table_descriptor_materialized_row_count(synthetic) != synthetic_row_count)
+        status: 1
+    lm_p0_text_view_delete(incompatible_source)
+    lm_p0_text_view_delete(incompatible_target)
+
+    none_row: lm_table_descriptor_materialized_row_at(alpha, 2U)
+    joined_none_row: lm_table_descriptor_materialized_row_at(gamma, 2U)
+    index: 1U
+    while: status = 0 && index < 4U
+        none_cell: lm_table_row_cell_at(none_row, index)
+        if: none_cell = 0 || none_cell\atom = 0 || c.strcmp(none_cell\atom, "None") != 0 || none_cell\value != 0 || none_cell\node != 0 || none_cell\source != 0 || none_cell\explicit_none = 0
+            status: 1
+        none_cell: lm_table_row_cell_at(joined_none_row, index)
+        if: none_cell = 0 || none_cell\value != 0 || none_cell\node != 0 || none_cell\source != 0 || none_cell\explicit_none = 0
+            status: 1
+        index: index + 1U
+
+    alpha_row: lm_table_descriptor_materialized_row_at(alpha, 0U)
+    gamma_row: lm_table_descriptor_materialized_row_at(gamma, 0U)
+    alpha_cell: lm_table_row_cell_at(alpha_row, 1U)
+    gamma_cell: lm_table_row_cell_at(gamma_row, 1U)
+    if: status = 0 && (alpha_row = 0 || gamma_row = 0 || gamma_row = alpha_row || gamma_row\source != alpha_row || alpha_cell = 0 || gamma_cell = 0 || alpha_cell\atom = 0 || gamma_cell\atom = 0 || alpha_cell\value = 0 || gamma_cell\value = 0 || gamma_cell = alpha_cell || alpha_cell\atom = gamma_cell\atom || alpha_cell\value = gamma_cell\value || gamma_cell\source != 0 || c.strcmp(alpha_cell\value, gamma_cell\value) != 0)
+        status: 1
+
+    seed_count: 0U
+    seed_mask: 0U
+    payload_cell: lm_p0_registry_source_path_cell_at("namespace.l4", seed_count, @ key_cell)
+    while: payload_cell != 0
+        if: key_cell = 0 || key_cell\value = 0 || payload_cell\value = 0 || c.strcmp(payload_cell\value, "l4.frame") != 0
+            status: 1
+        else:
+            if: c.strcmp(key_cell\value, "table") = 0
+                seed_mask: seed_mask | 1U
+            if: c.strcmp(key_cell\value, "join") = 0
+                seed_mask: seed_mask | 2U
+            if: c.strcmp(key_cell\value, "row") = 0
+                seed_mask: seed_mask | 4U
+            if: c.strcmp(key_cell\value, "fn") = 0
+                seed_mask: seed_mask | 8U
+            if: c.strcmp(key_cell\value, "callable") = 0
+                seed_mask: seed_mask | 16U
+        ---
+        seed_count: seed_count + 1U
+        payload_cell: lm_p0_registry_source_path_cell_at("namespace.l4", seed_count, @ key_cell)
+    if: seed_count != 5U || seed_mask != 31U
+        status: 1
+
+    if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U || lm_p0_registry_require_source_only("after selftest lookups") != 0
+        status: 1
+    lm_p0_registry_destroy()
+return: status

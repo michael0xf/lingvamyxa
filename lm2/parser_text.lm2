@@ -124,20 +124,3 @@ end: lm_p0_text_view_delete
 
 fn: lm_p0_text_from_cstr (const: @(char text)) LmP0Text
     return: lm_p0_text_view_new_cstr(text)
-
-fn: lm_p0_text_assign_cstr (LmP0Text: out_text; const: @(char text)) int
-    if: out_text = 0
-        return: 0
-    if: text = 0
-        text: ""
-    out_text\data: text
-    out_text\length: c.strlen(text)
-return: 1
-
-fn: lm_p0_text_copy_cstr (const: (LmP0Text: text)) @: char
-    if: text = 0
-        return: 0
-return: lm_p0_copy_bytes(text\data, text\length)
-
-fn: lm_p0_registry_value_copy_cstr (const: (LmP0Text: value)) @: char
-return: lm_p0_text_copy_cstr(value)

@@ -20,6 +20,7 @@ unit
 predef: "lm2/own_abi.lm2"
 predef: "lm2/parser_abi.lm2"
 predef: "lm2/l4_loader_abi.lm2"
+import: "lm2/table_descriptor.lm2"
 import: "lm2/parser_text.lm2"
 
 include: "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
@@ -109,7 +110,6 @@ table:
              LmP0DashFenceStatus   c.typedef
              LmP0FieldParseFlags   c.typedef
              LmP0FieldParseLoopContinuation c.typedef
-             LmP0RegistryColumn    c.typedef
 end: `alias.backend`
 
 table:
@@ -121,7 +121,6 @@ table:
              LmP0DashFenceStatus   int
              LmP0FieldParseFlags   unsigned
              LmP0FieldParseLoopContinuation int
-             LmP0RegistryColumn    LmL4Column
 end: `alias.target`
 
 table:
@@ -138,7 +137,6 @@ table:
              LmP0Dump               c.struct
              LmP0DumpFrame          c.struct
              LmP0FieldParseLoopFrame c.struct
-             LmP0RegistryRow        c.struct
              LmP0Registry           c.struct
              LmP0PostprocessFrame   c.struct
 end: `layout.backend`
@@ -157,7 +155,6 @@ table:
              LmP0Dump               1
              LmP0DumpFrame          1
              LmP0FieldParseLoopFrame 1
-             LmP0RegistryRow        1
              LmP0Registry           1
              LmP0PostprocessFrame   1
 end: `class.reference-base`
@@ -514,37 +511,10 @@ table:
 end: `LmP0FieldParseLoopFrame.field.const`
 
 table:
-    name: `LmP0RegistryRow.field.class`
-    columns((class: class) (class: field))
-    rows:
-             table    char
-             key      char
-             payload  char
-end: `LmP0RegistryRow.field.class`
-
-table:
-    name: `LmP0RegistryRow.field.index`
-    columns((class: class) (size_t: index))
-    rows:
-             table    0
-             key      1
-             payload  2
-end: `LmP0RegistryRow.field.index`
-
-table:
-    name: `LmP0RegistryRow.field.address-depth`
-    columns((class: class) (size_t: depth))
-    rows:
-             table    1
-             key      1
-             payload  1
-end: `LmP0RegistryRow.field.address-depth`
-
-table:
     name: `LmP0Registry.field.class`
     columns((class: class) (class: field))
     rows:
-             rows     LmOwnPtrStack
+             view     LmRegistryView
              loaded   int
              loading  int
              l4_loader LmL4Loader
@@ -554,7 +524,7 @@ table:
     name: `LmP0Registry.field.index`
     columns((class: class) (size_t: index))
     rows:
-             rows     0
+             view     0
              loaded   1
              loading  2
              l4_loader 3
@@ -564,7 +534,7 @@ table:
     name: `LmP0Registry.field.address-depth`
     columns((class: class) (size_t: depth))
     rows:
-             rows     0
+             view     0
              l4_loader 0
 end: `LmP0Registry.field.address-depth`
 
@@ -656,24 +626,6 @@ sub: lm_p0_document_freeze_tree (LmP0Document: document)
         lm_own_arena_freeze(document\source_owner)
         document\frozen: 1
 end: lm_p0_document_freeze_tree
-
-sub: lm_p0_registry_row_destroy_fields (LmP0RegistryRow: row)
-    if: row != 0
-        lm_own_delete(row\table, 0)
-        lm_own_delete(row\key, 0)
-        lm_own_delete(row\payload, 0)
-        row\table: 0
-        row\key: 0
-        row\payload: 0
-end: lm_p0_registry_row_destroy_fields
-
-sub: lm_p0_registry_row_destroy_any (@: void object)
-    LmP0RegistryRow: row
-
-    row: object
-    lm_p0_registry_row_destroy_fields(row)
-    lm_own_delete(row, 0)
-end: lm_p0_registry_row_destroy_any
 
 sub: lm_p0_indent_stack_free (LmP0IndentStack: stack)
     lm_own_delete(stack\columns, 0)
@@ -810,13 +762,71 @@ fn: lm_p0_visual_column_between (const: @(char source); size_t: start; size_t: e
 
 return: column
 
-fn: lm_p0_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: @: char
-    size_t: i
-    LmP0RegistryRow: row
-    LmP0Text: key_payload
-    const: @: char payload
+fn: lm_p0_registry_source_path_cell_at (const: @(char path); size_t: index; const: @(LmTableCell out_key_cell)) const: LmTableCell
+    int: covered
 
-    if: table = 0 || c.lm_p0_registry = 0 || (c.lm_p0_registry->loaded = 0 && c.lm_p0_registry->loading = 0)
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: path = 0 || c.lm_p0_registry = 0 || c.lm_p0_registry->view = 0
+        return: 0
+    covered: 0
+return: lm_registry_view_source_path_cell_at_slice(c.lm_p0_registry->view, path, c.strlen(path), index, 0, 0, out_key_cell, @ covered)
+
+fn: lm_p0_registry_source_path_lookup_cell_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    const: @(char key)
+    size_t: key_length
+    const: @(LmTableCell out_key_cell)
+) const: LmTableCell
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+    size_t: table_index
+    size_t: row_index
+    size_t: column_index
+
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: view = 0 || path = 0 || key = 0
+        return: 0
+
+    table_index: lm_registry_view_source_table_count(view)
+    while: table_index > 0U
+        table_index: table_index - 1U
+        descriptor: lm_registry_view_source_table_at(view, table_index)
+        if: descriptor != 0
+            row_index: lm_table_descriptor_materialized_row_count(descriptor)
+            while: row_index > 0U
+                row_index: row_index - 1U
+                row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+                key_cell: lm_table_row_cell_at(row, 0U)
+                if: key_cell != 0 && key_cell\value != 0 && lm_table_descriptor_cstr_equals_slice(key_cell\value, key, key_length) != 0
+                    column_index: lm_table_descriptor_column_count(descriptor)
+                    while: column_index > 1U
+                        column_index: column_index - 1U
+                        if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                            payload_cell: lm_table_row_cell_at(row, column_index)
+                            if: payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
+                                if: out_key_cell != 0
+                                    out_key_cell[0]: key_cell
+                                return: payload_cell
+                            ---
+                        ---
+                    ---
+                ---
+            ---
+        ---
+    ---
+return: 0
+
+fn: lm_p0_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: @: char
+    LmP0Text: key_payload
+    const: LmTableCell: payload_cell
+
+    if: table = 0 || c.lm_p0_registry = 0 || c.lm_p0_registry->view = 0 || (c.lm_p0_registry->loaded = 0 && c.lm_p0_registry->loading = 0)
         return: 0
     key_payload: lm_p0_text_from_cstr("")
     if: key_payload = 0
@@ -825,62 +835,27 @@ fn: lm_p0_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: 
         lm_p0_text_view_delete(key_payload)
         return: 0
 
-    if: c.lm_p0_registry->rows = 0
-        lm_p0_text_view_delete(key_payload)
-        return: 0
-
-    payload: 0
-    i: c.lm_p0_registry->rows->count
-    while: i > 0U
-        i: i - 1U
-        row: lm_own_ptr_stack_at(c.lm_p0_registry->rows, i)
-        if: row != 0 && row\table != 0 && row\key != 0 && c.strcmp(row\table, table) = 0 && lm_p0_text_equals(key_payload, row\key)
-            payload: row\payload
-            break
-    ---
-
+    payload_cell: lm_p0_registry_source_path_lookup_cell_slice(c.lm_p0_registry->view, table, c.strlen(table), key_payload\data, key_payload\length, 0)
     lm_p0_text_view_delete(key_payload)
-return: payload
+    if: payload_cell = 0
+        return: 0
+return: payload_cell\value
+
+fn: lm_p0_registry_source_path_has_rows (const: @(char table)) int
+    int: covered
+
+    if: table = 0 || c.lm_p0_registry = 0 || c.lm_p0_registry->view = 0
+        return: 0
+    covered: 0
+return: lm_registry_view_source_path_has_rows(c.lm_p0_registry->view, table, @ covered)
 
 fn: lm_p0_registry_table_has_rows (const: @(char table)) int
-    size_t: i
-    LmP0RegistryRow: row
-
-    if: table = 0 || c.lm_p0_registry = 0 || c.lm_p0_registry->loaded = 0
+    if: c.lm_p0_registry = 0 || c.lm_p0_registry->loaded = 0
         return: 0
-
-    if: c.lm_p0_registry->rows = 0
-        return: 0
-
-    i: 0U
-    while: i < c.lm_p0_registry->rows->count
-        row: lm_own_ptr_stack_at(c.lm_p0_registry->rows, i)
-        if: row != 0 && row\table != 0 && c.strcmp(row\table, table) = 0
-            return: 1
-        i: i + 1U
-    ---
-
-return: 0
+return: lm_p0_registry_source_path_has_rows(table)
 
 fn: lm_p0_registry_table_has_rows_loaded_or_loading (const: @(char table)) int
-    size_t: i
-    LmP0RegistryRow: row
-
-    if: table = 0 || c.lm_p0_registry = 0
-        return: 0
-
-    if: c.lm_p0_registry->rows = 0
-        return: 0
-
-    i: 0U
-    while: i < c.lm_p0_registry->rows->count
-        row: lm_own_ptr_stack_at(c.lm_p0_registry->rows, i)
-        if: row != 0 && row\table != 0 && c.strcmp(row\table, table) = 0
-            return: 1
-        i: i + 1U
-    ---
-
-return: 0
+return: lm_p0_registry_source_path_has_rows(table)
 
 fn: lm_p0_count_line_breaks (const: @(char source); size_t: start; size_t: end) size_t
     size_t: count
@@ -1288,14 +1263,36 @@ end: lm_p0_dump_append_field_count_line
 
 LmP0Registry: lm_p0_registry
 
+sub: lm_p0_registry_private_api_anchor ()
+    c.LM_UNUSED(@ lm_registry_view_class_at)
+    c.LM_UNUSED(@ lm_registry_view_source_path_key_at_slice)
+    c.LM_UNUSED(@ lm_registry_view_append_materialized_rows)
+    c.LM_UNUSED(@ lm_registry_view_fact_at)
+    c.LM_UNUSED(@ lm_registry_view_push_relation)
+    c.LM_UNUSED(@ lm_registry_view_lookup_exact)
+    c.LM_UNUSED(@ lm_registry_view_lookup_default)
+    c.LM_UNUSED(@ lm_registry_view_lookup)
+    c.LM_UNUSED(@ lm_registry_view_lookup_text)
+    c.LM_UNUSED(@ lm_registry_view_table_row_at)
+    c.LM_UNUSED(@ lm_registry_view_matching_key_count)
+    c.LM_UNUSED(@ lm_registry_view_matching_key_at)
+    c.LM_UNUSED(@ lm_registry_view_local_source_rows_slice)
+    c.LM_UNUSED(@ lm_registry_view_table_has_rows)
+    c.LM_UNUSED(@ lm_p0_registry_source_tables_selftest)
+end: lm_p0_registry_private_api_anchor
+
 fn: lm_p0_registry_init () int
+    lm_p0_registry_private_api_anchor()
     if: (lm_p0_registry != 0)
         return: 0
     lm_p0_registry: (cast: (LmP0Registry) lm_own_new_zero(c.sizeof(lm_p0_registry[0])))
     if: (lm_p0_registry = 0)
         return: 1
+    lm_p0_registry\view: lm_registry_view_new(0)
     lm_p0_registry\l4_loader: lm_p0_registry_l4_loader_new()
-    if: (lm_p0_registry\l4_loader = 0)
+    if: lm_p0_registry\view = 0 || lm_p0_registry\l4_loader = 0
+        lm_registry_view_delete(lm_p0_registry\view)
+        lm_own_delete(lm_p0_registry\l4_loader, 0)
         lm_own_delete(lm_p0_registry, 0)
         lm_p0_registry: 0
         return: 1
@@ -1305,10 +1302,8 @@ end: lm_p0_registry_init
 sub: lm_p0_registry_destroy ()
     if: (lm_p0_registry = 0)
         return
-    if: (lm_p0_registry\rows != 0)
-        lm_own_ptr_stack_destroy(lm_p0_registry\rows)
-        lm_own_delete(lm_p0_registry\rows, 0)
-        lm_p0_registry\rows: 0
+    lm_registry_view_delete(lm_p0_registry\view)
+    lm_p0_registry\view: 0
     lm_own_delete(lm_p0_registry\l4_loader, 0)
     lm_p0_registry\l4_loader: 0
     lm_p0_registry\loaded: 0
@@ -1408,19 +1403,34 @@ sub: lm_p0_set_diagnostic (LmP0Document: document; int: code; size_t: line; size
 end: lm_p0_set_diagnostic
 
 fn: lm_p0_registry_push_row_values (const: (LmP0Text: table_value); const: (LmP0Text: key_value); const: (LmP0Text: payload_value)) int
-    LmP0RegistryRow: row
-    row: (cast: (LmP0RegistryRow) lm_own_new_zero(c.sizeof(row[0])))
-    if: (row = 0)
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+
+    if: table_value = 0 || key_value = 0 || payload_value = 0 || lm_p0_registry = 0 || lm_p0_registry\view = 0
         return: -1
-    row\table: lm_p0_registry_value_copy_cstr(table_value)
-    row\key: lm_p0_registry_value_copy_cstr(key_value)
-    row\payload: lm_p0_registry_value_copy_cstr(payload_value)
-    if: (((row\table = 0) || (row\key = 0)) || (row\payload = 0))
-        lm_p0_registry_row_destroy_any(row)
+
+    descriptor: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, table_value\data, table_value\length)
+    if: descriptor != 0 && lm_table_descriptor_column_count(descriptor) != 2U
+        descriptor: 0
+    ---
+
+    if: descriptor = 0
+        descriptor: lm_table_descriptor_new_slice(table_value\data, table_value\length)
+        if: descriptor = 0
+            return: -1
+        if: lm_registry_view_take_local_source_table(lm_p0_registry\view, descriptor) != 0
+            lm_table_descriptor_delete_any(descriptor)
+            return: -1
+        ---
+    ---
+
+    row: lm_table_row_new(0)
+    if: row = 0
         return: -1
-    if: (((lm_p0_registry = 0) || (lm_p0_registry\rows = 0)) || (lm_own_ptr_stack_push(lm_p0_registry\rows, row) != 0))
-        lm_p0_registry_row_destroy_any(row)
+    if: lm_table_row_take_cell_slice(row, key_value\data, key_value\length, key_value\data, key_value\length, 0, 0, 0) != 0 || lm_table_row_take_cell_slice(row, payload_value\data, payload_value\length, payload_value\data, payload_value\length, 0, 0, 0) != 0 || lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+        lm_table_row_delete_any(row)
         return: -1
+    lm_registry_view_note_mutation(lm_p0_registry\view)
     return: 0
 end: lm_p0_registry_push_row_values
 
@@ -1529,51 +1539,146 @@ fn: lm_p0_registry_cell_value (const: (LmP0Text: atom); const: (LmL4Column: colu
     return: -1
 end: lm_p0_registry_cell_value
 
-fn: lm_p0_registry_push_table_cell (const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Text: payload_atom)) int
-    LmP0Text: table_payload
-    LmP0Text: column_payload
-    LmP0Text: key_payload
-    LmP0Text: payload_value
-    LmP0Text: relation_table
-    @: char relation_name
-    size_t: relation_length
-    int: status
+fn: lm_p0_registry_source_descriptor_new (const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) LmTableDescriptor
+    LmP0Text: table_value
+    LmP0Text: column_value
+    LmP0Text: descriptor_value
+    LmP0Text: type_value
+    LmTableDescriptor: descriptor
+    const: [16]: @: char descriptor_data
+    [16]: size_t descriptor_lengths
+    const: @: char type_data
+    size_t: type_length
+    size_t: column_index
+    size_t: descriptor_index
+
+    if: table_name = 0 || columns = 0 || column_count = 0U
+        return: 0
+    table_value: lm_p0_text_ref_new_empty()
+    column_value: lm_p0_text_ref_new_empty()
+    descriptor_value: lm_p0_text_ref_new_empty()
+    type_value: lm_p0_text_ref_new_empty()
+    descriptor: 0
+    if: table_value = 0 || column_value = 0 || descriptor_value = 0 || type_value = 0 || lm_p0_registry_identifier_value(table_name, table_value) = 0
+        lm_p0_text_ref_delete(table_value)
+        lm_p0_text_ref_delete(column_value)
+        lm_p0_text_ref_delete(descriptor_value)
+        lm_p0_text_ref_delete(type_value)
+        return: 0
+
+    descriptor: lm_table_descriptor_new_empty_slice(table_value\data, table_value\length)
+    column_index: 0U
+    while: descriptor != 0 && column_index < column_count
+        if: columns[column_index] = 0 || columns[column_index]\name = 0 || lm_p0_registry_identifier_value(columns[column_index]\name, column_value) = 0
+            lm_table_descriptor_delete_any(descriptor)
+            descriptor: 0
+            break
+        type_data: 0
+        type_length: 0U
+        if: columns[column_index]\type_name != 0
+            if: lm_p0_registry_identifier_value(columns[column_index]\type_name, type_value) = 0
+                lm_table_descriptor_delete_any(descriptor)
+                descriptor: 0
+                break
+            type_data: type_value\data
+            type_length: type_value\length
+        ---
+        if: columns[column_index]\descriptor_count > c.sizeof(descriptor_data) / c.sizeof(descriptor_data[0])
+            lm_table_descriptor_delete_any(descriptor)
+            descriptor: 0
+            break
+        descriptor_index: 0U
+        while: descriptor_index < columns[column_index]\descriptor_count
+            if: columns[column_index]\descriptors[descriptor_index] = 0 || lm_p0_registry_identifier_value(columns[column_index]\descriptors[descriptor_index], descriptor_value) = 0
+                lm_table_descriptor_delete_any(descriptor)
+                descriptor: 0
+                break
+            descriptor_data[descriptor_index]: descriptor_value\data
+            descriptor_lengths[descriptor_index]: descriptor_value\length
+            descriptor_index: descriptor_index + 1U
+        if: descriptor = 0
+            break
+        if: lm_table_descriptor_add_column_slices(descriptor, column_value\data, column_value\length, type_data, type_length, (cast: (const: @@: char) descriptor_data), descriptor_lengths, columns[column_index]\descriptor_count, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const) != 0
+            lm_table_descriptor_delete_any(descriptor)
+            descriptor: 0
+            break
+        column_index: column_index + 1U
+
+    lm_p0_text_ref_delete(table_value)
+    lm_p0_text_ref_delete(column_value)
+    lm_p0_text_ref_delete(descriptor_value)
+    lm_p0_text_ref_delete(type_value)
+return: descriptor
+
+fn: lm_p0_registry_materialize_source_row (const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count; const: @: LmP0Node cells) int
+    LmP0Text: table_value
+    LmP0Text: decoded
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+    const: LmP0Node: node
+    const: LmP0Text: atom
+    size_t: column_index
     int: cell_status
+    int: status
 
-    table_payload: lm_p0_text_ref_new_empty()
-    column_payload: lm_p0_text_ref_new_empty()
-    key_payload: lm_p0_text_ref_new_empty()
-    payload_value: lm_p0_text_ref_new_empty()
-    relation_table: lm_p0_text_ref_new_empty()
-    status: -1
+    if: table_name = 0 || columns = 0 || column_count = 0U || cells = 0 || lm_p0_registry = 0 || lm_p0_registry\view = 0
+        return: -1
+    table_value: lm_p0_text_ref_new_empty()
+    decoded: lm_p0_text_ref_new_empty()
+    if: table_value = 0 || decoded = 0 || lm_p0_registry_identifier_value(table_name, table_value) = 0
+        lm_p0_text_ref_delete(table_value)
+        lm_p0_text_ref_delete(decoded)
+        return: -1
+    descriptor: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, table_value\data, table_value\length)
+    if: descriptor = 0 || lm_table_descriptor_column_count(descriptor) != column_count
+        lm_p0_text_ref_delete(table_value)
+        lm_p0_text_ref_delete(decoded)
+        return: -1
 
-    if: table_payload != 0 && column_payload != 0 && key_payload != 0 && payload_value != 0 && relation_table != 0
-        cell_status: lm_p0_registry_cell_value(payload_atom, column, payload_value)
-        if: cell_status = 0
-            status: 0
-        if: cell_status > 0 && lm_p0_registry_identifier_value(table_name, table_payload) != 0 && lm_p0_registry_identifier_value(key_atom, key_payload) != 0
-            if: split_by_column = 0
-                status: lm_p0_registry_push_row_values(table_payload, key_payload, payload_value)
+    row: lm_table_row_new(0)
+    status: 0
+    column_index: 0U
+    while: status = 0 && column_index < column_count
+        node: cells[column_index]
+        if: columns[column_index] = 0 || node = 0 || node\kind != c.LM_P0_NODE_ATOM
+            status: -1
+        else:
+            atom: node\as\atom
+            if: atom = 0
+                status: -1
             else:
-                if: column\name != 0 && lm_p0_registry_identifier_value(column\name, column_payload) != 0
-                    relation_length: table_payload\length + 1U + column_payload\length
-                    relation_name: lm_own_new_zero(relation_length + 1U)
-                    if: relation_name != 0
-                        c.memcpy(relation_name, table_payload\data, table_payload\length)
-                        relation_name[table_payload\length]: '.'
-                        c.memcpy(relation_name + table_payload\length + 1U, column_payload\data, column_payload\length)
-                        relation_name[relation_length]: '\0'
-                        lm_p0_text_assign_cstr(relation_table, relation_name)
-                        status: lm_p0_registry_push_row_values(relation_table, key_payload, payload_value)
-                        lm_own_delete(relation_name, 0)
-    ---
+                if: column_index = 0U
+                    cell_status: lm_p0_registry_identifier_value(atom, decoded)
+                else:
+                    cell_status: lm_p0_registry_cell_value(atom, columns[column_index], decoded)
+                ---
+                if: cell_status < 0 || (column_index = 0U && cell_status = 0)
+                    status: -1
+                else:
+                    if: cell_status = 0
+                        if: lm_table_row_take_cell_slice(row, atom\data, atom\length, 0, 0U, 0, 0, 1) != 0
+                            status: -1
+                        ---
+                    else:
+                        if: lm_table_row_take_cell_slice(row, atom\data, atom\length, decoded\data, decoded\length, 0, 0, 0) != 0
+                            status: -1
+                        ---
+                    ---
+                ---
+            ---
+        ---
+        column_index: column_index + 1U
 
-    lm_p0_text_ref_delete(table_payload)
-    lm_p0_text_ref_delete(column_payload)
-    lm_p0_text_ref_delete(key_payload)
-    lm_p0_text_ref_delete(payload_value)
-    lm_p0_text_ref_delete(relation_table)
-return: status
+    lm_p0_text_ref_delete(table_value)
+    lm_p0_text_ref_delete(decoded)
+    if: status != 0 || row = 0
+        lm_table_row_delete_any(row)
+        return: -1
+    if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+        lm_table_row_delete_any(row)
+        return: -1
+    lm_registry_view_note_mutation(lm_p0_registry\view)
+return: 0
 fn: lm_p0_registry_compare_enabled () int
     const: @: char value
 
@@ -2609,21 +2714,21 @@ fn: lm_p0_scan_registry_compact_atom_piece (const: @(char text); size_t: end_ind
     size_t: i
     size_t: best_length
     size_t: token_length
-    LmP0RegistryRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
     if: (lm_p0_registry_table_has_rows_loaded_or_loading("p0.compact-token") = 0)
         return: lm_p0_scan_builtin_compact_atom_piece(text, end_index, start)
     best_length: 0U
     i: 0U
-    if: ((lm_p0_registry = 0) || (lm_p0_registry\rows = 0))
-        return: lm_p0_scan_builtin_compact_atom_piece(text, end_index, start)
-    while: (i < lm_p0_registry\rows\count)
-        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
-        if: ((((row != 0) && (row\table != 0)) && (row\key != 0)) && (c.strcmp(row\table, "p0.compact-token") = 0))
-            token_length: c.strlen(row\key)
-            if: (((token_length > best_length) && ((start + token_length) <= end_index)) && (c.memcmp((text + start), row\key, token_length) = 0))
+    payload_cell: lm_p0_registry_source_path_cell_at("p0.compact-token", i, @ key_cell)
+    while: payload_cell != 0
+        if: key_cell != 0 && key_cell\value != 0
+            token_length: c.strlen(key_cell\value)
+            if: (((token_length > best_length) && ((start + token_length) <= end_index)) && (c.memcmp((text + start), key_cell\value, token_length) = 0))
                 best_length: token_length
             ---
         i: i + 1U
+        payload_cell: lm_p0_registry_source_path_cell_at("p0.compact-token", i, @ key_cell)
     if: (best_length > 0U)
         return: (start + best_length)
     return: (start + 1U)
@@ -3791,23 +3896,25 @@ end: lm_p0_stack_collapse_soft_to_event
 
 fn: lm_p0_registry_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
     size_t: i
-    LmP0RegistryRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
     const: @: char role_payload
+    LmP0TrailerRole: result
     if: (lm_p0_registry_table_has_rows("trailer.role") = 0)
         return: c.LM_P0_TRAILER_ROLE_NONE
-    if: ((lm_p0_registry = 0) || (lm_p0_registry\rows = 0))
-        return: c.LM_P0_TRAILER_ROLE_NONE
-    i: lm_p0_registry\rows\count
-    while: (i > 0U)
-        i: i - 1U
-        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
-        if: (((((row != 0) && (row\table != 0)) && (row\key != 0)) && (row\payload != 0)) && (c.strcmp(row\table, "namespace") = 0))
-            role_payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(row\payload), "trailer.role")
-            if: ((role_payload != 0) && lm_p0_text_has_prefix_name(text, length, row\key, lm_p0_registry_trailer_allows_bare(row\payload)))
-                return: lm_p0_trailer_role_from_payload(role_payload)
+    result: c.LM_P0_TRAILER_ROLE_NONE
+    i: 0U
+    payload_cell: lm_p0_registry_source_path_cell_at("namespace", i, @ key_cell)
+    while: payload_cell != 0
+        if: key_cell != 0 && key_cell\value != 0 && payload_cell\value != 0
+            role_payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(payload_cell\value), "trailer.role")
+            if: role_payload != 0 && lm_p0_text_has_prefix_name(text, length, key_cell\value, lm_p0_registry_trailer_allows_bare(payload_cell\value))
+                result: lm_p0_trailer_role_from_payload(role_payload)
             ---
         ---
-    return: c.LM_P0_TRAILER_ROLE_NONE
+        i: i + 1U
+        payload_cell: lm_p0_registry_source_path_cell_at("namespace", i, @ key_cell)
+    return: result
 end: lm_p0_registry_trailer_role
 
 fn: lm_p0_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
@@ -5265,89 +5372,26 @@ external:
     end: lm_p0_parse_file
 end: external
 
-fn: lm_p0_registry_join_text3 (const: (LmP0Text: first); const: @(char separator); const: (LmP0Text: second)) @: char
-    size_t: separator_length
-    size_t: length
-    @: char result
-    if: (((first = 0) || (second = 0)) || (separator = 0))
-        return: 0
-    separator_length: c.strlen(separator)
-    length: ((first\length + separator_length) + second\length)
-    result: (cast: (@: char) lm_own_new_zero((length + 1U)))
-    if: (result = 0)
-        return: 0
-    c.memcpy(result, first\data, first\length)
-    c.memcpy((result + first\length), separator, separator_length)
-    c.memcpy(((result + first\length) + separator_length), second\data, second\length)
-    result[length]: '\0'
-    return: result
-end: lm_p0_registry_join_text3
-
 fn: lm_p0_registry_push_generated_row_cstr (const: @(char table); const: @(char key); const: @(char payload)) int
-    return: lm_p0_registry_push_row_atoms(lm_p0_text_from_cstr(table), lm_p0_text_from_cstr(key), lm_p0_text_from_cstr(payload))
-end: lm_p0_registry_push_generated_row_cstr
-
-fn: lm_p0_registry_push_generated_row_text (const: @(char table); const: @(char key); const: (LmP0Text: payload)) int
-    return: lm_p0_registry_push_row_atoms(lm_p0_text_from_cstr(table), lm_p0_text_from_cstr(key), payload)
-end: lm_p0_registry_push_generated_row_text
-
-fn: lm_p0_registry_push_column_metadata (const: (LmP0Text: table_name); @: LmP0RegistryColumn columns; size_t: column_count) int
-    LmP0Text: table_payload
-    LmP0Text: column_payload
-    size_t: index
-    size_t: descriptor_index
-    @: char column_key
-    @: char descriptor_key
-    [32]: char index_buffer
-    [32]: char count_buffer
+    LmP0Text: table_text
+    LmP0Text: key_text
+    LmP0Text: payload_text
     int: status
 
-    if: columns = 0
+    table_text: lm_p0_text_from_cstr(table)
+    key_text: lm_p0_text_from_cstr(key)
+    payload_text: lm_p0_text_from_cstr(payload)
+    if: table_text = 0 || key_text = 0 || payload_text = 0
+        lm_p0_text_view_delete(table_text)
+        lm_p0_text_view_delete(key_text)
+        lm_p0_text_view_delete(payload_text)
         return: -1
-
-    table_payload: lm_p0_text_ref_new_empty()
-    column_payload: lm_p0_text_ref_new_empty()
-    if: table_payload = 0 || column_payload = 0
-        lm_p0_text_ref_delete(table_payload)
-        lm_p0_text_ref_delete(column_payload)
-        return: -1
-
-    status: 0
-    if: lm_p0_registry_identifier_value(table_name, table_payload) = 0
-        status: -1
-
-    index: 0U
-    while: status = 0 && index < column_count
-        column_key: 0
-        if: columns[index] = 0 || columns[index]\name = 0 || lm_p0_registry_identifier_value(columns[index]\name, column_payload) = 0
-            status: -1
-        else:
-            column_key: lm_p0_registry_join_text3(table_payload, ".", column_payload)
-            if: column_key = 0
-                status: -1
-            else:
-                c.snprintf(index_buffer, c.sizeof(index_buffer), "%zu", index)
-                c.snprintf(count_buffer, c.sizeof(count_buffer), "%zu", columns[index]\descriptor_count)
-                if: lm_p0_registry_push_generated_row_text("column.table", column_key, table_payload) != 0 || lm_p0_registry_push_generated_row_text("column.name", column_key, column_payload) != 0 || lm_p0_registry_push_generated_row_cstr("column.index", column_key, index_buffer) != 0 || lm_p0_registry_push_generated_row_cstr("column.descriptor.count", column_key, count_buffer) != 0
-                    status: -1
-                descriptor_index: 0U
-                while: status = 0 && descriptor_index < columns[index]\descriptor_count
-                    c.snprintf(index_buffer, c.sizeof(index_buffer), "%zu", descriptor_index)
-                    descriptor_key: lm_p0_registry_join_text3(lm_p0_text_from_cstr(column_key), ".", lm_p0_text_from_cstr(index_buffer))
-                    if: descriptor_key = 0
-                        status: -1
-                    else:
-                        if: columns[index]\descriptors[descriptor_index] = 0 || lm_p0_registry_push_generated_row_text("column.descriptor", descriptor_key, columns[index]\descriptors[descriptor_index]) != 0
-                            status: -1
-                        lm_own_delete(descriptor_key, 0)
-                    descriptor_index: descriptor_index + 1U
-                lm_own_delete(column_key, 0)
-        ---
-        index: index + 1U
-
-    lm_p0_text_ref_delete(table_payload)
-    lm_p0_text_ref_delete(column_payload)
-return: status
+    status: lm_p0_registry_push_row_atoms(table_text, key_text, payload_text)
+    lm_p0_text_view_delete(table_text)
+    lm_p0_text_view_delete(key_text)
+    lm_p0_text_view_delete(payload_text)
+    return: status
+end: lm_p0_registry_push_generated_row_cstr
 fn: lm_p0_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom); const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
     c.LM_UNUSED(context)
     if: ((((table_atom = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
@@ -5356,66 +5400,34 @@ fn: lm_p0_registry_l4_push_row (@: void context; const: (LmP0Text: table_atom); 
     return: lm_p0_registry_push_row_atoms(table_atom, key_atom, payload_node\as\atom)
 end: lm_p0_registry_l4_push_row
 
-fn: lm_p0_registry_l4_push_cell (@: void context; const: (LmP0Text: table_name); const: (LmL4Column: column); int: split_by_column; const: (LmP0Text: key_atom); const: (LmP0Node: payload_node)) int
-    c.LM_UNUSED(context)
-    if: ((((table_name = 0) || (key_atom = 0)) || (payload_node = 0)) || (payload_node\kind != c.LM_P0_NODE_ATOM))
-        c.fprintf(c.stderr, "parser registry error: table rows currently expect atom cells\n")
-        return: -1
-    return: lm_p0_registry_push_table_cell(table_name, column, split_by_column, key_atom, payload_node\as\atom)
-end: lm_p0_registry_l4_push_cell
-
 fn: lm_p0_registry_l4_push_column_metadata (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count) int
+    LmTableDescriptor: descriptor
+
     c.LM_UNUSED(context)
-    if: (table_name = 0)
+    if: table_name = 0 || lm_p0_registry = 0 || lm_p0_registry\view = 0
         return: -1
-    return: lm_p0_registry_push_column_metadata(table_name, columns, column_count)
+    descriptor: lm_p0_registry_source_descriptor_new(table_name, columns, column_count)
+    if: descriptor = 0
+        return: -1
+    if: lm_registry_view_take_local_source_table(lm_p0_registry\view, descriptor) != 0
+        lm_table_descriptor_delete_any(descriptor)
+        return: -1
+    return: 0
 end: lm_p0_registry_l4_push_column_metadata
 
-fn: lm_p0_registry_join_relation_matches (const: @(char relation_name); const: (LmP0Text: source_name); const: @@(char out_suffix)) int
-    size_t: relation_length
-    if: ((((relation_name = 0) || (source_name = 0)) || (source_name\data = 0)) || (out_suffix = 0))
-        return: 0
-    relation_length: c.strlen(relation_name)
-    if: ((relation_length = source_name\length) && (c.memcmp(relation_name, source_name\data, source_name\length) = 0))
-        out_suffix[0]: ""
-        return: 1
-    if: (((relation_length > (source_name\length + 1U)) && (c.memcmp(relation_name, source_name\data, source_name\length) = 0)) && (relation_name[source_name\length] = '.'))
-        out_suffix[0]: (relation_name + source_name\length)
-        return: 1
-    return: 0
-end: lm_p0_registry_join_relation_matches
-
-fn: lm_p0_registry_join_target_relation_new (const: (LmP0Text: target_name); const: @(char suffix)) @: char
-    size_t: suffix_length
-    size_t: length
-    @: char relation_name
-    if: (((target_name = 0) || (target_name\data = 0)) || (suffix = 0))
-        return: 0
-    suffix_length: c.strlen(suffix)
-    length: (target_name\length + suffix_length)
-    relation_name: (cast: (@: char) lm_own_new_zero((length + 1U)))
-    if: (relation_name = 0)
-        return: 0
-    if: (target_name\length != 0U)
-        c.memcpy(relation_name, target_name\data, target_name\length)
-    if: (suffix_length != 0U)
-        c.memcpy((relation_name + target_name\length), suffix, suffix_length)
-    relation_name[length]: '\0'
-    return: relation_name
-end: lm_p0_registry_join_target_relation_new
+fn: lm_p0_registry_l4_push_table_row (@: void context; const: (LmP0Text: table_name); @: LmL4Column columns; size_t: column_count; const: @: LmP0Node cells) int
+    c.LM_UNUSED(context)
+    return: lm_p0_registry_materialize_source_row(table_name, columns, column_count, cells)
+end: lm_p0_registry_l4_push_table_row
 
 fn: lm_p0_registry_l4_join_table (@: void context; const: (LmP0Text: source_table); const: (LmP0Text: target_table)) int
     LmP0Text: source_name
     LmP0Text: target_name
-    LmP0RegistryRow: row
-    const: @: char suffix
-    @: char target_relation
-    size_t: initial_count
-    size_t: i
-    size_t: copied
+    LmTableDescriptor: target
     int: status
+
     c.LM_UNUSED(context)
-    if: ((((lm_p0_registry = 0) || (lm_p0_registry\rows = 0)) || (source_table = 0)) || (target_table = 0))
+    if: lm_p0_registry = 0 || lm_p0_registry\view = 0 || source_table = 0 || target_table = 0
         return: -1
     source_name: lm_p0_text_ref_new_empty()
     target_name: lm_p0_text_ref_new_empty()
@@ -5427,28 +5439,10 @@ fn: lm_p0_registry_l4_join_table (@: void context; const: (LmP0Text: source_tabl
         lm_p0_text_ref_delete(source_name)
         lm_p0_text_ref_delete(target_name)
         return: -1
-    initial_count: lm_p0_registry\rows\count
-    copied: 0U
-    status: 0
-    i: 0U
-    while: (i < initial_count)
-        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
-        if: (((row != 0) && (row\table != 0)) && ((row\key != 0) && (row\payload != 0)))
-            suffix: 0
-            if: lm_p0_registry_join_relation_matches(row\table, source_name, @ suffix)
-                target_relation: lm_p0_registry_join_target_relation_new(target_name, suffix)
-                if: (target_relation = 0)
-                    status: -1
-                    break
-                if: (lm_p0_registry_push_row_values(lm_p0_text_from_cstr(target_relation), lm_p0_text_from_cstr(row\key), lm_p0_text_from_cstr(row\payload)) != 0)
-                    lm_own_delete(target_relation, 0)
-                    status: -1
-                    break
-                lm_own_delete(target_relation, 0)
-                copied: copied + 1U
-            ---
-        ---
-        i: i + 1U
+    target: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, target_name\data, target_name\length)
+    status: -1
+    if: target != 0
+        status: lm_registry_view_append_materialized_rows_mode(lm_p0_registry\view, target, source_name\data, source_name\length, 1, 1, 0U, 0)
     lm_p0_text_ref_delete(source_name)
     lm_p0_text_ref_delete(target_name)
     return: status
@@ -5608,9 +5602,10 @@ fn: lm_p0_registry_l4_loader_new () LmL4Loader
         return: 0
     loader\error_prefix: "parser"
     loader\push_row: @ lm_p0_registry_l4_push_row
-    loader\push_cell: @ lm_p0_registry_l4_push_cell
+    loader\push_cell: 0
     loader\note_key: 0
     loader\push_column_metadata: @ lm_p0_registry_l4_push_column_metadata
+    loader\push_table_row: @ lm_p0_registry_l4_push_table_row
     loader\join_table: @ lm_p0_registry_l4_join_table
     loader\dispatch_frame: @ lm_p0_registry_l4_dispatch_frame
     loader\formal_param_unwrap_index: @ lm_p0_registry_l4_formal_param_unwrap_index
@@ -5654,6 +5649,17 @@ fn: lm_p0_registry_load_root (const: (LmP0Node: root); int: implicit_l4) int
     return: lm_l4_load_root(lm_p0_registry_l4_loader_get(), 0, root, implicit_l4)
 end: lm_p0_registry_load_root
 
+fn: lm_p0_registry_require_source_only (const: @(char phase)) int
+    if: lm_p0_registry = 0 || lm_p0_registry\view = 0
+        return: 1
+    if: lm_p0_registry\view\parent != 0
+        c.fprintf(c.stderr, "parser registry error: parser view is not isolated %s source-table load\n", phase)
+        return: 1
+    if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U
+        c.fprintf(c.stderr, "parser registry error: legacy facts appeared %s source-table load\n", phase)
+        return: 1
+return: 0
+
 fn: lm_p0_registry_parse_unsigned_payload (const: @(char payload); @: unsigned out_value) int
     @: char end_index
     ulong: value
@@ -5669,20 +5675,21 @@ end: lm_p0_registry_parse_unsigned_payload
 
 fn: lm_p0_registry_lookup_key_by_unsigned_payload (const: @(char table); unsigned: value) const: @: char
     size_t: i
-    LmP0RegistryRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+    const: @: char result
     unsigned: actual
     if: (((table = 0) || (lm_p0_registry = 0)) || (lm_p0_registry\loaded = 0))
         return: 0
-    if: (lm_p0_registry\rows = 0)
-        return: 0
-    i: lm_p0_registry\rows\count
-    while: (i > 0U)
-        i: i - 1U
-        row: (cast: (LmP0RegistryRow) lm_own_ptr_stack_at(lm_p0_registry\rows, i))
-        if: (((((((row != 0) && (row\table != 0)) && (row\key != 0)) && (row\payload != 0)) && (c.strcmp(row\table, table) = 0)) && (lm_p0_registry_parse_unsigned_payload(row\payload, @ actual) = 0)) && (actual = value))
-            return: row\key
-        ---
-    return: 0
+    result: 0
+    i: 0U
+    payload_cell: lm_p0_registry_source_path_cell_at(table, i, @ key_cell)
+    while: payload_cell != 0
+        if: key_cell != 0 && key_cell\value != 0 && payload_cell\value != 0 && lm_p0_registry_parse_unsigned_payload(payload_cell\value, @ actual) = 0 && actual = value
+            result: key_cell\value
+        i: i + 1U
+        payload_cell: lm_p0_registry_source_path_cell_at(table, i, @ key_cell)
+    return: result
 end: lm_p0_registry_lookup_key_by_unsigned_payload
 
 fn: lm_p0_registry_validate_abi_constant (const: @(char table); const: @(char key); unsigned: expected) int
@@ -5740,13 +5747,14 @@ fn: lm_p0_registry_load_default () int
         return: 0
     if: (lm_p0_registry_init() != 0)
         return: 1
-    lm_p0_registry\rows: (cast: (LmOwnPtrStack) lm_own_new_zero(c.sizeof(lm_p0_registry\rows[0])))
-    if: (lm_p0_registry\rows = 0)
+    if: lm_p0_registry_require_source_only("before") != 0
         lm_p0_registry_destroy()
         return: 1
     lm_p0_registry\loading: 1
-    lm_own_ptr_stack_init(lm_p0_registry\rows, lm_p0_registry_row_destroy_any)
     if: (lm_p0_registry_seed_l4_receivers() != 0)
+        lm_p0_registry_destroy()
+        return: 1
+    if: lm_p0_registry_require_source_only("during") != 0
         lm_p0_registry_destroy()
         return: 1
     override_path: c.getenv("LM_P0_REGISTRY")
@@ -5789,6 +5797,9 @@ fn: lm_p0_registry_load_default () int
             return: 1
         i: i + 1U
     if: (document = 0)
+        if: lm_p0_registry_require_source_only("after") != 0
+            lm_p0_registry_destroy()
+            return: 1
         lm_p0_registry\loaded: 1
         lm_p0_registry\loading: 0
         return: 0
@@ -5801,13 +5812,21 @@ fn: lm_p0_registry_load_default () int
     if: (status != 0)
         lm_p0_registry_destroy()
         return: 1
+    if: lm_p0_registry_require_source_only("after") != 0
+        lm_p0_registry_destroy()
+        return: 1
     lm_p0_registry\loaded: 1
     lm_p0_registry\loading: 0
     if: (lm_p0_registry_validate_abi_constants() != 0)
         lm_p0_registry_destroy()
         return: 1
+    if: lm_p0_registry_require_source_only("after validation") != 0
+        lm_p0_registry_destroy()
+        return: 1
     return: 0
 end: lm_p0_registry_load_default
+
+import: "lm2/parser_registry_selftest.lm2"
 
 external:
     sub: lm_p0_document_destroy (LmP0Document: document)
