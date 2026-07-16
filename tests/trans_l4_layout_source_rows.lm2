@@ -1,132 +1,130 @@
-L4:
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmTestSourceOrdered    c.struct
-                 LmTestSourceDepth      c.struct
-                 LmTestSourceQualified  c.struct
-                 LmTestSourceOverlay    c.struct
-                 LmTestSourceInner      c.struct
-                 LmTestSourceOuter      c.struct
-                 LmTestSourceWideArray  c.struct
-                 LmTestSourceWideOuter  c.struct
-                 LmTestSourceJoined     c.struct
-    end: `layout.backend`
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestSourceOrdered    c.struct
+             LmTestSourceDepth      c.struct
+             LmTestSourceQualified  c.struct
+             LmTestSourceOverlay    c.struct
+             LmTestSourceInner      c.struct
+             LmTestSourceOuter      c.struct
+             LmTestSourceWideArray  c.struct
+             LmTestSourceWideOuter  c.struct
+             LmTestSourceJoined     c.struct
+end: `layout.backend`
 
-    table:
-        name: LmTestSourceOrdered
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 late   char  1
-                 early  char  0
-    end: LmTestSourceOrdered
+table:
+    name: LmTestSourceOrdered
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             late   char  1
+             early  char  0
+end: LmTestSourceOrdered
 
-    table:
-        name: LmTestSourceDepth
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
-        rows:
-                 value  int   0  0
-                 next   char  1  1
-    end: LmTestSourceDepth
+table:
+    name: LmTestSourceDepth
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+    rows:
+             value  int   0  0
+             next   char  1  1
+end: LmTestSourceDepth
 
-    table:
-        name: LmTestSourceQualified
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
-        rows:
-                 text   char  0  1     1
-                 value  int   1  None  None
-    end: LmTestSourceQualified
+table:
+    name: LmTestSourceQualified
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    rows:
+             text   char  0  1     1
+             value  int   1  None  None
+end: LmTestSourceQualified
 
-    table:
-        name: `lm.test.layout.fields.seed`
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
-        rows:
-                 value  char  0  1  1
-    end: `lm.test.layout.fields.seed`
+table:
+    name: `lm.test.layout.fields.seed`
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    rows:
+             value  char  0  1  1
+end: `lm.test.layout.fields.seed`
 
-    join: (`lm.test.layout.fields.seed`) `lm.test.layout.fields.middle`
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
-        rows:
-    end: `lm.test.layout.fields.middle`
+join: (`lm.test.layout.fields.seed`) `lm.test.layout.fields.middle`
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    rows:
+end: `lm.test.layout.fields.middle`
 
-    join: (`lm.test.layout.fields.middle`) LmTestSourceJoined
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
-        rows:
-    end: LmTestSourceJoined
+join: (`lm.test.layout.fields.middle`) LmTestSourceJoined
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    rows:
+end: LmTestSourceJoined
 
-    table:
-        name: LmTestSourceOverlay
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 first   char  0
-                 middle  char  1
-    end: LmTestSourceOverlay
+table:
+    name: LmTestSourceOverlay
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             first   char  0
+             middle  char  1
+end: LmTestSourceOverlay
 
-    table:
-        name: `LmTestSourceOverlay.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 tail  char
-    end: `LmTestSourceOverlay.field.class`
+table:
+    name: `LmTestSourceOverlay.field.class`
+    columns((class: class) (class: field))
+    rows:
+             tail  char
+end: `LmTestSourceOverlay.field.class`
 
-    table:
-        name: `LmTestSourceOverlay.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 tail   2
-                 first  3
-    end: `LmTestSourceOverlay.field.index`
+table:
+    name: `LmTestSourceOverlay.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             tail   2
+             first  3
+end: `LmTestSourceOverlay.field.index`
 
-    table:
-        name: LmTestSourceInner
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: LmTestSourceInner
+table:
+    name: LmTestSourceInner
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmTestSourceInner
 
-    table:
-        name: LmTestSourceWideArray
-        columns((class: class) (int: marker) (size_t: `field.array-count`) (class: `field.class`) (int: `field.const`) (size_t: `field.address-depth`) (size_t: `field.index`))
-        rows:
-                 values  7  3  int  None  None  0
-    end: LmTestSourceWideArray
+table:
+    name: LmTestSourceWideArray
+    columns((class: class) (int: marker) (size_t: `field.array-count`) (class: `field.class`) (int: `field.const`) (size_t: `field.address-depth`) (size_t: `field.index`))
+    rows:
+             values  7  3  int  None  None  0
+end: LmTestSourceWideArray
 
-    table:
-        name: `LmTestSourceWideArray.field.index`
-        columns((class: class) (int: index))
-        rows:
-                 values  0
-    end: `LmTestSourceWideArray.field.index`
+table:
+    name: `LmTestSourceWideArray.field.index`
+    columns((class: class) (int: index))
+    rows:
+             values  0
+end: `LmTestSourceWideArray.field.index`
 
-    table:
-        name: LmTestSourceWideOuter
-        columns((class: class) (class: `field.union`) (size_t: `field.index`) (size_t: `field.array-count`))
-        rows:
-                 items  LmTestSourceInner  0  2
-    end: LmTestSourceWideOuter
+table:
+    name: LmTestSourceWideOuter
+    columns((class: class) (class: `field.union`) (size_t: `field.index`) (size_t: `field.array-count`))
+    rows:
+             items  LmTestSourceInner  0  2
+end: LmTestSourceWideOuter
 
-    table:
-        name: `LmTestSourceOuter.field.union`
-        columns((class: class) (class: union))
-        rows:
-                 items  LmTestSourceInner
-    end: `LmTestSourceOuter.field.union`
+table:
+    name: `LmTestSourceOuter.field.union`
+    columns((class: class) (class: union))
+    rows:
+             items  LmTestSourceInner
+end: `LmTestSourceOuter.field.union`
 
-    table:
-        name: `LmTestSourceOuter.field.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 items  0
-    end: `LmTestSourceOuter.field.index`
+table:
+    name: `LmTestSourceOuter.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             items  0
+end: `LmTestSourceOuter.field.index`
 
-    table:
-        name: `LmTestSourceOuter.field.array-count`
-        columns((class: class) (size_t: count))
-        rows:
-                 items  2
-    end: `LmTestSourceOuter.field.array-count`
-end: L4
+table:
+    name: `LmTestSourceOuter.field.array-count`
+    columns((class: class) (size_t: count))
+    rows:
+             items  2
+end: `LmTestSourceOuter.field.array-count`
 
 layout
 
