@@ -1,13 +1,12 @@
-L4:
+L2:
     table:
+        source
         name: `registry.generic-key.smoke`
         columns((@: char key) (@: char value))
         rows:
                  sample  ok
     end: `registry.generic-key.smoke`
-end: L4
 
-L2:
     external:
         fn: main () int
             return: 0
