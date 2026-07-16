@@ -1216,7 +1216,7 @@ fn: lm_trans_declare_l2_structure_import (
     const: LmP0Structure: body
 ) int
 
-fn: lm_trans_declare_l4_fn_descriptors (
+fn: lm_trans_declare_registry_fn_descriptors (
     LmTransNamespace: namespace_
 ) int
 

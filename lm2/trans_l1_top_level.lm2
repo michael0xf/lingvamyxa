@@ -269,7 +269,7 @@ return: lm_trans_emit_l4_forward_typedefs(file, namespace_)
 
 fn: lm_trans_top_level_declare_atom_prototype (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     c.LM_UNUSED(item)
-return: lm_trans_declare_l4_fn_descriptors(namespace_)
+return: lm_trans_declare_registry_fn_descriptors(namespace_)
 
 fn: lm_trans_top_level_emit_atom_prototype (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     c.LM_UNUSED(item)
@@ -2254,7 +2254,7 @@ fn: lm_trans_declare_l2_import_path (LmTransNamespace: namespace_; const: @(char
             return: 1
         if: lm_trans_registry_load_file_path(path, 1, @ loaded) != 0
             return: 1
-        return: lm_trans_declare_l4_fn_descriptors(namespace_)
+        return: lm_trans_declare_registry_fn_descriptors(namespace_)
 
     if: lm_trans_string_stack_has(lm_trans_declared_import_paths, path)
         return: 0

@@ -1052,7 +1052,7 @@ static const LmP0Field * lm_trans_first_active_field(const LmP0Structure *body);
 static int lm_trans_path_has_extension(const char *path, const char *extension);
 static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root);
 static int lm_trans_declare_l2_structure_import(LmTransNamespace *namespace_, const LmP0Structure *body);
-static int lm_trans_declare_l4_fn_descriptors(LmTransNamespace *namespace_);
+static int lm_trans_declare_registry_fn_descriptors(LmTransNamespace *namespace_);
 static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_root_receiver_registry(const LmP0Frame *frame, int allow_node_cells);
 static int lm_trans_l4_payload_pointer_bindings_init(void);
@@ -4327,9 +4327,9 @@ static LmP0Node * lm_trans_registry_synthetic_return_node(const LmTransNamespace
 static LmP0Node * lm_trans_registry_synthetic_params_node(const LmTransNamespace *namespace_, const char *name);
 static LmP0Node * lm_trans_registry_synthetic_fn_frame_node(const char *name, LmP0Node *params_node, LmP0Node *return_node);
 static LmP0Node * lm_trans_registry_synthetic_sub_frame_node(const char *name, LmP0Node *params_node);
-static int lm_trans_declare_l4_sub_descriptor(LmTransNamespace *namespace_, const char *name);
-static int lm_trans_declare_l4_fn_descriptor(LmTransNamespace *namespace_, const char *name);
-static int lm_trans_declare_l4_fn_descriptors(LmTransNamespace *namespace_);
+static int lm_trans_declare_registry_sub_descriptor(LmTransNamespace *namespace_, const char *name);
+static int lm_trans_declare_registry_fn_descriptor(LmTransNamespace *namespace_, const char *name);
+static int lm_trans_declare_registry_fn_descriptors(LmTransNamespace *namespace_);
 static int lm_trans_emit_l4_function_pointer_type_name(FILE *file, const LmTransNamespace *namespace_, const char *name, const char *error_name);
 static int lm_trans_emit_l4_function_pointer_type_field(FILE *file, const LmTransNamespace *namespace_, const char *type_name, const char *field_name, const char *error_name);
 static int lm_trans_emit_l4_function_pointer_type_typedefs(FILE *file, const LmTransNamespace *namespace_);
@@ -29171,7 +29171,7 @@ static int lm_trans_top_level_emit_atom_forward(FILE *file, LmTransNamespace *na
 
 static int lm_trans_top_level_declare_atom_prototype(LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
     LM_UNUSED(item);
-    return lm_trans_declare_l4_fn_descriptors(namespace_);
+    return lm_trans_declare_registry_fn_descriptors(namespace_);
 }
 
 static int lm_trans_top_level_emit_atom_prototype(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
@@ -31438,7 +31438,7 @@ static int lm_trans_declare_l2_import_path(LmTransNamespace *namespace_, const c
         if (lm_trans_registry_load_file_path(path, 1, &loaded) != 0) {
             return 1;
         }
-        return lm_trans_declare_l4_fn_descriptors(namespace_);
+        return lm_trans_declare_registry_fn_descriptors(namespace_);
     }
     if (lm_trans_string_stack_has(lm_trans_declared_import_paths, path)) {
         return 0;
@@ -35944,7 +35944,7 @@ static LmP0Node * lm_trans_registry_synthetic_sub_frame_node(const char *name, L
     return frame_node;
 }
 
-static int lm_trans_declare_l4_sub_descriptor(LmTransNamespace *namespace_, const char *name) {
+static int lm_trans_declare_registry_sub_descriptor(LmTransNamespace *namespace_, const char *name) {
     LmP0Node * params_node;
     LmP0Node * frame_node;
     LmTransFunctionHeader * function;
@@ -35993,7 +35993,7 @@ static int lm_trans_declare_l4_sub_descriptor(LmTransNamespace *namespace_, cons
     return status;
 }
 
-static int lm_trans_declare_l4_fn_descriptor(LmTransNamespace *namespace_, const char *name) {
+static int lm_trans_declare_registry_fn_descriptor(LmTransNamespace *namespace_, const char *name) {
     LmP0Node * params_node;
     LmP0Node * return_node;
     LmP0Node * frame_node;
@@ -36023,7 +36023,7 @@ static int lm_trans_declare_l4_fn_descriptor(LmTransNamespace *namespace_, const
     if (receiver_name != 0 && strcmp(receiver_name, "sub") == 0) {
         lm_trans_function_header_destroy(function);
         lm_trans_l4_text_view_delete(&name_text);
-        return lm_trans_declare_l4_sub_descriptor(namespace_, name);
+        return lm_trans_declare_registry_sub_descriptor(namespace_, name);
     }
     params_node = lm_trans_registry_synthetic_params_node(namespace_, name);
     return_node = lm_trans_registry_synthetic_return_node(namespace_, name);
@@ -36052,7 +36052,7 @@ static int lm_trans_declare_l4_fn_descriptor(LmTransNamespace *namespace_, const
     return status;
 }
 
-static int lm_trans_declare_l4_fn_descriptors(LmTransNamespace *namespace_) {
+static int lm_trans_declare_registry_fn_descriptors(LmTransNamespace *namespace_) {
     LmOwnPtrStack * names;
     const char *name;
     size_t i;
@@ -36070,7 +36070,7 @@ static int lm_trans_declare_l4_fn_descriptors(LmTransNamespace *namespace_) {
     i = 0U;
     while (i < names -> count) {
         name = lm_own_ptr_stack_at(names, i);
-        if (lm_trans_declare_l4_fn_descriptor(namespace_, name) != 0) {
+        if (lm_trans_declare_registry_fn_descriptor(namespace_, name) != 0) {
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }

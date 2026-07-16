@@ -1899,7 +1899,7 @@ fn: lm_trans_registry_synthetic_sub_frame_node (const: @(char name); LmP0Node: p
         return: 0
 return: frame_node
 
-fn: lm_trans_declare_l4_sub_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
+fn: lm_trans_declare_registry_sub_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
     LmP0Node: params_node
     LmP0Node: frame_node
     LmTransFunctionHeader: function
@@ -1949,7 +1949,7 @@ fn: lm_trans_declare_l4_sub_descriptor (LmTransNamespace: namespace_; const: @(c
     lm_trans_l4_text_view_delete(@ name_text)
 return: status
 
-fn: lm_trans_declare_l4_fn_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
+fn: lm_trans_declare_registry_fn_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
     LmP0Node: params_node
     LmP0Node: return_node
     LmP0Node: frame_node
@@ -1978,7 +1978,7 @@ fn: lm_trans_declare_l4_fn_descriptor (LmTransNamespace: namespace_; const: @(ch
     if: receiver_name != 0 && c.strcmp(receiver_name, "sub") = 0
         lm_trans_function_header_destroy(function)
         lm_trans_l4_text_view_delete(@ name_text)
-        return: lm_trans_declare_l4_sub_descriptor(namespace_, name)
+        return: lm_trans_declare_registry_sub_descriptor(namespace_, name)
 
     params_node: lm_trans_registry_synthetic_params_node(namespace_, name)
     return_node: lm_trans_registry_synthetic_return_node(namespace_, name)
@@ -2008,7 +2008,7 @@ fn: lm_trans_declare_l4_fn_descriptor (LmTransNamespace: namespace_; const: @(ch
     lm_trans_l4_text_view_delete(@ name_text)
 return: status
 
-fn: lm_trans_declare_l4_fn_descriptors (LmTransNamespace: namespace_) int
+fn: lm_trans_declare_registry_fn_descriptors (LmTransNamespace: namespace_) int
     LmOwnPtrStack: names
     const: @: char name
     size_t: i
@@ -2026,7 +2026,7 @@ fn: lm_trans_declare_l4_fn_descriptors (LmTransNamespace: namespace_) int
     i: 0U
     while: i < names\count
         name: lm_own_ptr_stack_at(names, i)
-        if: lm_trans_declare_l4_fn_descriptor(namespace_, name) != 0
+        if: lm_trans_declare_registry_fn_descriptor(namespace_, name) != 0
             lm_trans_ptr_stack_delete(@ names)
             return: 1
         i: i + 1U
