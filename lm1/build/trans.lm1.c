@@ -298,6 +298,7 @@ typedef struct LmTransRegistry {
     int view_mode;
     LmOwnPtrStack * predefined_paths;
     LmOwnPtrStack * predefined_descriptor_sites;
+    LmOwnPtrStack * early_l2_source_sites;
 } LmTransRegistry;
 struct LmTransRegistryFact {
     char *table;
@@ -3849,6 +3850,7 @@ static int lm_trans_l2_table_project_source_rows(LmTableDescriptor *target, size
 static int lm_trans_l2_table_materialize_source_rows(LmTransNamespace *namespace_, const LmP0Text *table_name, const LmP0Frame *rows_frame, LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count, size_t row_count, int require_facade);
 static int lm_trans_materialize_l2_table_source(LmTransNamespace *namespace_, const LmP0Frame *frame, int require_facade);
 static int lm_trans_l2_join_header(const LmP0Frame *frame, const LmP0Structure **out_sources, const LmP0Text **out_target, const LmP0Structure **out_body);
+static int lm_trans_l2_join_sources_ready(LmTransNamespace *namespace_, const LmP0Frame *frame, int *out_ready);
 static int lm_trans_l2_join_body_rows(const LmP0Structure *body, const LmP0Frame **out_rows);
 static int lm_trans_l2_join_stage_source_rows(LmRegistryView *view, LmTableDescriptor *target, const LmP0Structure *sources, size_t snapshot_source_count, const size_t *snapshot_row_counts);
 static int lm_trans_l2_join_target_relation_equals(const LmP0Text *target_name, const char *suffix, const char *relation_name);
@@ -3857,12 +3859,14 @@ static int lm_trans_l2_join_pending_descriptor_class_kind_conflicts(const LmTabl
 static int lm_trans_l2_join_preflight_source_facades(const LmP0Structure *sources, const LmP0Text *target_name, const LmTableDescriptor *target, size_t first_row_index, size_t snapshot_fact_count);
 static int lm_trans_l2_join_project_source_facades(const LmP0Structure *sources, const LmP0Text *target_name, size_t snapshot_fact_count);
 static int lm_trans_materialize_l2_join_source(LmTransNamespace *namespace_, const LmP0Frame *frame);
+static int lm_trans_declare_l2_join_mode(LmTransNamespace *namespace_, const LmP0Frame *frame, int materialize_source);
 static int lm_trans_declare_l2_join(LmTransNamespace *namespace_, const LmP0Frame *frame);
 static char * lm_trans_l2_table_object_name_new(const LmP0Text *table_name);
 static char * lm_trans_l2_table_row_type_name_new(const LmP0Text *table_name);
 static char * lm_trans_l2_table_storage_name_new(const LmP0Text *table_name);
 static int lm_trans_l2_table_note_row_layout(LmTransNamespace *namespace_, const LmP0Text *row_type, LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count);
 static int lm_trans_declare_l2_table_binding(LmTransNamespace *namespace_, const LmP0Frame *frame);
+static int lm_trans_declare_l2_table_mode(LmTransNamespace *namespace_, const LmP0Frame *frame, int materialize_source);
 static int lm_trans_declare_l2_table(LmTransNamespace *namespace_, const LmP0Frame *frame);
 static int lm_trans_emit_l2_table_row_type(FILE *file, const char *row_type_name, LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count, unsigned indent);
 static const LmP0Structure * lm_trans_l2_table_cell_inline_layout_body(const LmP0Node *node, const LmTransL4CallableType *expected_type, const LmTransNamespace *namespace_);
@@ -4252,6 +4256,8 @@ static int lm_trans_emit_l1_node(FILE *output, const LmP0Node *node);
 static int lm_trans_emit_l1_frame(FILE *output, const LmP0Frame *l1);
 static int lm_trans_emit_l1_body(FILE *output, const LmP0Frame *l1, int *emitted);
 static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root);
+static int lm_trans_materialize_local_l2_source_structure(LmTransNamespace *namespace_, const LmP0Structure *body, const char *source_path);
+static int lm_trans_materialize_local_l2_source_root(const LmP0Node *root, const char *source_path, int implicit_l2);
 static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_, const LmP0Structure *body);
 static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const char *source_path);
 static int lm_trans_materialize_l2_predef_root(const LmP0Node *root, const char *source_path);
@@ -4403,9 +4409,11 @@ static int lm_trans_path_has_extension(const char *path, const char *extension);
 static int lm_trans_registry_path_already_loaded(const char *registry_path);
 static int lm_trans_registry_path_is_predefined(const char *registry_path);
 static int lm_trans_registry_note_predefined_path(const char *registry_path);
-static char * lm_trans_registry_predefined_descriptor_site_new(const char *registry_path, const LmP0Node *node);
+static char * lm_trans_registry_source_site_new(const char *registry_path, const LmP0Node *node);
 static int lm_trans_registry_predefined_descriptor_site_is_hoisted(const char *registry_path, const LmP0Node *node);
 static int lm_trans_registry_note_predefined_descriptor_site(const char *registry_path, const LmP0Node *node);
+static int lm_trans_registry_early_l2_source_site_is_materialized(const char *source_path, const LmP0Node *node);
+static int lm_trans_registry_note_early_l2_source_site(const char *source_path, const LmP0Node *node);
 static int lm_trans_registry_note_loaded_path(const char *registry_path);
 static int lm_trans_registry_load_import_frame(const LmP0Frame *frame, const char *source_path);
 static int lm_trans_registry_materialize_predef_path(const char *registry_path);
@@ -23480,6 +23488,58 @@ static int lm_trans_l2_join_header(const LmP0Frame *frame, const LmP0Structure *
     return 0;
 }
 
+static int lm_trans_l2_join_sources_ready(LmTransNamespace *namespace_, const LmP0Frame *frame, int *out_ready) {
+    const LmP0Structure * sources;
+    const LmP0Structure * body;
+    const LmP0Text * target_name;
+    const LmP0Field * field;
+    const LmP0Node * node;
+    LmP0Text * source_name;
+    const LmRegistryView * view;
+    if (out_ready != 0) {
+        out_ready[0] = 0;
+    }
+    if (namespace_ == 0 || frame == 0 || out_ready == 0) {
+        return 1;
+    }
+    view = lm_trans_namespace_registry_view(namespace_);
+    if (view == 0 || lm_trans_l2_join_header(frame, &sources, &target_name, &body) != 0) {
+        return 1;
+    }
+    LM_UNUSED(target_name);
+    LM_UNUSED(body);
+    source_name = lm_trans_text_ref_new_cstr("");
+    if (source_name == 0) {
+        return 1;
+    }
+    field = lm_trans_l2_structure_first_present_field(sources);
+    while (field != 0) {
+        node = field -> value;
+        if (node == 0 || node -> kind != LM_P0_NODE_ATOM || lm_trans_registry_identifier_value(node -> as -> atom, source_name) == 0) {
+            fprintf(stderr, "trans L2 join error: source list expects table name atoms\n");
+            {
+                int lm_return_0 = 1;
+                lm_trans_text_ref_destroy(&source_name);
+                return lm_return_0;
+            }
+        }
+        if (lm_registry_view_find_source_table_slice(view, source_name -> data, source_name -> length) == 0) {
+            {
+                int lm_return_1 = 0;
+                lm_trans_text_ref_destroy(&source_name);
+                return lm_return_1;
+            }
+        }
+        field = lm_trans_l2_structure_next_present_field(field);
+    }
+    out_ready[0] = 1;
+    {
+        int lm_return_2 = 0;
+        lm_trans_text_ref_destroy(&source_name);
+        return lm_return_2;
+    }
+}
+
 static int lm_trans_l2_join_body_rows(const LmP0Structure *body, const LmP0Frame **out_rows) {
     const LmP0Field * field;
     const LmP0Frame * child;
@@ -23959,7 +24019,7 @@ static int lm_trans_materialize_l2_join_source(LmTransNamespace *namespace_, con
     }
 }
 
-static int lm_trans_declare_l2_join(LmTransNamespace *namespace_, const LmP0Frame *frame) {
+static int lm_trans_declare_l2_join_mode(LmTransNamespace *namespace_, const LmP0Frame *frame, int materialize_source) {
     if (lm_trans_validate_l2_join_frame(frame) != 0) {
         return 1;
     }
@@ -23967,10 +24027,14 @@ static int lm_trans_declare_l2_join(LmTransNamespace *namespace_, const LmP0Fram
         fprintf(stderr, "trans L2 join error: joins are not allowed in os/ifdef branches\n");
         return 1;
     }
-    if (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0) {
+    if (materialize_source == 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)) {
         return 0;
     }
     return lm_trans_materialize_l2_join_source(namespace_, frame);
+}
+
+static int lm_trans_declare_l2_join(LmTransNamespace *namespace_, const LmP0Frame *frame) {
+    return lm_trans_declare_l2_join_mode(namespace_, frame, 1);
 }
 
 static char * lm_trans_l2_table_object_name_new(const LmP0Text *table_name) {
@@ -24075,7 +24139,7 @@ static int lm_trans_declare_l2_table_binding(LmTransNamespace *namespace_, const
     }
 }
 
-static int lm_trans_declare_l2_table(LmTransNamespace *namespace_, const LmP0Frame *frame) {
+static int lm_trans_declare_l2_table_mode(LmTransNamespace *namespace_, const LmP0Frame *frame, int materialize_source) {
     int registry_keyed;
     if (frame == 0 || lm_trans_l2_source_body_is_registry_keyed(frame -> body, "table", &registry_keyed) != 0) {
         return 1;
@@ -24087,10 +24151,14 @@ static int lm_trans_declare_l2_table(LmTransNamespace *namespace_, const LmP0Fra
     if (registry_keyed == 0 && lm_trans_declare_l2_table_binding(namespace_, frame) != 0) {
         return 1;
     }
-    if (lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)) {
+    if (materialize_source == 0 || lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)) {
         return 0;
     }
     return lm_trans_materialize_l2_table_source(namespace_, frame, 0);
+}
+
+static int lm_trans_declare_l2_table(LmTransNamespace *namespace_, const LmP0Frame *frame) {
+    return lm_trans_declare_l2_table_mode(namespace_, frame, 1);
 }
 
 static int lm_trans_emit_l2_table_row_type(FILE *file, const char *row_type_name, LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count, unsigned indent) {
@@ -29075,10 +29143,16 @@ static int lm_trans_top_level_emit_table(FILE *file, LmTransNamespace *namespace
 }
 
 static int lm_trans_top_level_declare_table(LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
+    if (item != 0 && lm_trans_current_source_path != 0 && lm_trans_registry_early_l2_source_site_is_materialized(lm_trans_current_source_path, item -> node) != 0) {
+        return lm_trans_declare_l2_table_mode(namespace_, lm_trans_top_level_item_frame(item), 0);
+    }
     return lm_trans_declare_l2_table(namespace_, lm_trans_top_level_item_frame(item));
 }
 
 static int lm_trans_top_level_declare_join(LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
+    if (item != 0 && lm_trans_current_source_path != 0 && lm_trans_registry_early_l2_source_site_is_materialized(lm_trans_current_source_path, item -> node) != 0) {
+        return lm_trans_declare_l2_join_mode(namespace_, lm_trans_top_level_item_frame(item), 0);
+    }
     return lm_trans_declare_l2_join(namespace_, lm_trans_top_level_item_frame(item));
 }
 
@@ -33515,6 +33589,95 @@ static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root) {
     return 0;
 }
 
+static int lm_trans_materialize_local_l2_source_structure(LmTransNamespace *namespace_, const LmP0Structure *body, const char *source_path) {
+    const LmP0Field * field;
+    const LmP0Node * node;
+    LmTransHeadBinding * binding;
+    int ready;
+    int status;
+    if (namespace_ == 0 || source_path == 0) {
+        return 1;
+    }
+    binding = lm_trans_head_binding_new();
+    if (binding == 0) {
+        return 1;
+    }
+    status = 0;
+    field = 0;
+    if (body != 0) {
+        field = body -> first_field;
+    }
+    while (status == 0 && field != 0) {
+        node = field -> value;
+        if (node != 0 && lm_trans_node_is_ignored(node) == 0 && node -> kind == LM_P0_NODE_FRAME && lm_trans_registry_early_l2_source_site_is_materialized(source_path, node) == 0) {
+            if (lm_trans_head_binding_resolve(namespace_, node -> as -> frame -> head, binding) != 0) {
+                status = 1;
+            }
+            else {
+                if (binding -> statement_frame == &lm_trans_statement_emit_table) {
+                    status = lm_trans_materialize_l2_table_source(namespace_, node -> as -> frame, 0);
+                    if (status == 0) {
+                        status = lm_trans_registry_note_early_l2_source_site(source_path, node);
+                    }
+                }
+                else {
+                    if (binding -> statement_frame == &lm_trans_statement_emit_join) {
+                        ready = 0;
+                        status = lm_trans_l2_join_sources_ready(namespace_, node -> as -> frame, &ready);
+                        if (status == 0 && ready != 0) {
+                            status = lm_trans_materialize_l2_join_source(namespace_, node -> as -> frame);
+                            if (status == 0) {
+                                status = lm_trans_registry_note_early_l2_source_site(source_path, node);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        field = field -> next;
+    }
+    lm_own_delete(binding, 0);
+    return status;
+}
+
+static int lm_trans_materialize_local_l2_source_root(const LmP0Node *root, const char *source_path, int implicit_l2) {
+    const LmP0Field * field;
+    const LmP0Node * node;
+    const char *previous_source_path;
+    LmTransNamespace * namespace_;
+    int status;
+    if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE || source_path == 0) {
+        return 1;
+    }
+    namespace_ = lm_trans_namespace_new();
+    if (namespace_ == 0) {
+        return 1;
+    }
+    if (lm_trans_namespace_attach_registry(namespace_) != 0) {
+        lm_trans_namespace_delete(namespace_);
+        return 1;
+    }
+    previous_source_path = lm_trans_current_source_path;
+    lm_trans_current_source_path = source_path;
+    status = 0;
+    if (implicit_l2 != 0 && lm_trans_root_has_explicit_l2_frame(root -> as -> structure) == 0) {
+        status = lm_trans_materialize_local_l2_source_structure(namespace_, root -> as -> structure, source_path);
+    }
+    else {
+        field = root -> as -> structure -> first_field;
+        while (status == 0 && field != 0) {
+            node = field -> value;
+            if (node != 0 && lm_trans_node_is_ignored(node) == 0 && node -> kind == LM_P0_NODE_FRAME && lm_trans_frame_is_l2_level_receiver(node -> as -> frame)) {
+                status = lm_trans_materialize_local_l2_source_structure(namespace_, node -> as -> frame -> body, source_path);
+            }
+            field = field -> next;
+        }
+    }
+    lm_trans_current_source_path = previous_source_path;
+    lm_trans_namespace_delete(namespace_);
+    return status;
+}
+
 static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_, const LmP0Structure *body) {
     const LmP0Field * field;
     const LmP0Node * node;
@@ -33546,10 +33709,16 @@ static int lm_trans_materialize_l2_predef_structure(LmTransNamespace *namespace_
             else {
                 if (binding -> statement_frame == &lm_trans_statement_emit_table) {
                     status = lm_trans_materialize_l2_table_source(namespace_, node -> as -> frame, 0);
+                    if (status == 0) {
+                        status = lm_trans_registry_note_early_l2_source_site(lm_trans_current_source_path, node);
+                    }
                 }
                 else {
                     if (binding -> statement_frame == &lm_trans_statement_emit_join) {
                         status = lm_trans_materialize_l2_join_source(namespace_, node -> as -> frame);
+                        if (status == 0) {
+                            status = lm_trans_registry_note_early_l2_source_site(lm_trans_current_source_path, node);
+                        }
                     }
                 }
                 if (status == 0 && binding -> function_receiver_binding != 0 && (strcmp(binding -> function_receiver_binding, "lm_trans_receiver_fn") == 0 || strcmp(binding -> function_receiver_binding, "lm_trans_receiver_callable") == 0 || strcmp(binding -> function_receiver_binding, "lm_trans_receiver_sub") == 0)) {
@@ -33629,7 +33798,10 @@ static int lm_trans_materialize_l2_bootstrap_root(const LmP0Node *root, const ch
                     }
                 }
                 if (status == 0) {
-                    materialized = 1;
+                    status = lm_trans_registry_note_early_l2_source_site(source_path, node);
+                    if (status == 0) {
+                        materialized = 1;
+                    }
                 }
             }
         }
@@ -36352,6 +36524,7 @@ static void lm_trans_registry_destroy(void) {
         lm_trans_identifier_table_delete(&lm_trans_registry -> identifiers);
         lm_own_arena_destroy(lm_trans_registry -> value_arena);
         lm_own_delete(lm_trans_registry -> value_arena, 0);
+        lm_trans_ptr_stack_delete(&lm_trans_registry -> early_l2_source_sites);
         lm_trans_ptr_stack_delete(&lm_trans_registry -> predefined_descriptor_sites);
         lm_trans_ptr_stack_delete(&lm_trans_registry -> predefined_paths);
         lm_trans_ptr_stack_delete(&lm_trans_registry -> loaded_paths);
@@ -38136,7 +38309,7 @@ static int lm_trans_registry_note_predefined_path(const char *registry_path) {
     return 0;
 }
 
-static char * lm_trans_registry_predefined_descriptor_site_new(const char *registry_path, const LmP0Node *node) {
+static char * lm_trans_registry_source_site_new(const char *registry_path, const LmP0Node *node) {
     char *site;
     int needed;
     if (registry_path == 0 || node == 0 || node -> span == 0) {
@@ -38165,7 +38338,7 @@ static int lm_trans_registry_predefined_descriptor_site_is_hoisted(const char *r
     if (lm_trans_registry == 0 || lm_trans_registry -> predefined_descriptor_sites == 0) {
         return 0;
     }
-    site = lm_trans_registry_predefined_descriptor_site_new(registry_path, node);
+    site = lm_trans_registry_source_site_new(registry_path, node);
     if (site == 0) {
         return 0;
     }
@@ -38191,11 +38364,56 @@ static int lm_trans_registry_note_predefined_descriptor_site(const char *registr
     if (lm_trans_registry_predefined_descriptor_site_is_hoisted(registry_path, node)) {
         return 0;
     }
-    site = lm_trans_registry_predefined_descriptor_site_new(registry_path, node);
+    site = lm_trans_registry_source_site_new(registry_path, node);
     if (site == 0) {
         return 1;
     }
     if (lm_own_ptr_stack_push(lm_trans_registry -> predefined_descriptor_sites, site) != 0) {
+        lm_own_delete(site, 0);
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_registry_early_l2_source_site_is_materialized(const char *source_path, const LmP0Node *node) {
+    const char *stored_site;
+    char *site;
+    size_t index;
+    int found;
+    if (lm_trans_registry == 0 || lm_trans_registry -> early_l2_source_sites == 0) {
+        return 0;
+    }
+    site = lm_trans_registry_source_site_new(source_path, node);
+    if (site == 0) {
+        return 0;
+    }
+    found = 0;
+    index = 0U;
+    while (index < lm_trans_registry -> early_l2_source_sites -> count) {
+        stored_site = lm_own_ptr_stack_at(lm_trans_registry -> early_l2_source_sites, index);
+        if (stored_site != 0 && strcmp(stored_site, site) == 0) {
+            found = 1;
+            break;
+        }
+        index = index + 1U;
+    }
+    lm_own_delete(site, 0);
+    return found;
+}
+
+static int lm_trans_registry_note_early_l2_source_site(const char *source_path, const LmP0Node *node) {
+    char *site;
+    if (source_path == 0 || node == 0 || lm_trans_registry == 0 || lm_trans_registry -> early_l2_source_sites == 0) {
+        return 1;
+    }
+    if (lm_trans_registry_early_l2_source_site_is_materialized(source_path, node)) {
+        return 0;
+    }
+    site = lm_trans_registry_source_site_new(source_path, node);
+    if (site == 0) {
+        return 1;
+    }
+    if (lm_own_ptr_stack_push(lm_trans_registry -> early_l2_source_sites, site) != 0) {
         lm_own_delete(site, 0);
         return 1;
     }
@@ -38776,7 +38994,8 @@ static int lm_trans_registry_load_for_source(const char *source_path) {
     lm_trans_registry->loaded_paths = lm_trans_ptr_stack_new(lm_own_delete_plain);
     lm_trans_registry->predefined_paths = lm_trans_ptr_stack_new(lm_own_delete_plain);
     lm_trans_registry->predefined_descriptor_sites = lm_trans_ptr_stack_new(lm_own_delete_plain);
-    if (lm_trans_registry -> identifiers == 0 || lm_trans_registry -> value_arena == 0 || lm_own_arena_init(lm_trans_registry -> value_arena) != 0 || lm_trans_registry -> loaded_paths == 0 || lm_trans_registry -> predefined_paths == 0 || lm_trans_registry -> predefined_descriptor_sites == 0) {
+    lm_trans_registry->early_l2_source_sites = lm_trans_ptr_stack_new(lm_own_delete_plain);
+    if (lm_trans_registry -> identifiers == 0 || lm_trans_registry -> value_arena == 0 || lm_own_arena_init(lm_trans_registry -> value_arena) != 0 || lm_trans_registry -> loaded_paths == 0 || lm_trans_registry -> predefined_paths == 0 || lm_trans_registry -> predefined_descriptor_sites == 0 || lm_trans_registry -> early_l2_source_sites == 0) {
         lm_trans_registry_destroy();
         return 1;
     }
@@ -38921,7 +39140,7 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
         return 1;
     }
     root = lm_p0_document_root(document);
-    if (lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_trans_registry_assert_view_parity() != 0) {
+    if (lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_trans_materialize_local_l2_source_root(root, source_path, lm_trans_path_has_extension(source_path, ".lm2")) != 0 || lm_trans_registry_assert_view_parity() != 0) {
         lm_p0_document_destroy(document);
         lm_trans_registry_destroy();
         return 1;

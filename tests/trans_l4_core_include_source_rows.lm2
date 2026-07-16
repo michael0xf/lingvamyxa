@@ -1,68 +1,66 @@
-L4:
-    table:
-        name: `core.c.include`
-        columns((class: class) (@: char target))
-        rows:
-                 lm_test_core_include_source           "<limits.h>"
-                 lm_test_core_include_duplicate        "<float.h>"
-                 lm_test_core_include_duplicate        "<stdarg.h>"
-                 lm_test_core_include_local            "locale.h"
-                 lm_test_core_include_quoted           `"errno.h"`
-                 lm_test_core_include_late_none        "<time.h>"
-                 lm_test_core_include_late_none        None
-                 lm_test_core_include_none             None
-    end: `core.c.include`
+table:
+    name: `core.c.include`
+    columns((class: class) (@: char target))
+    rows:
+             lm_test_core_include_source           "<limits.h>"
+             lm_test_core_include_duplicate        "<float.h>"
+             lm_test_core_include_duplicate        "<stdarg.h>"
+             lm_test_core_include_local            "locale.h"
+             lm_test_core_include_quoted           `"errno.h"`
+             lm_test_core_include_late_none        "<time.h>"
+             lm_test_core_include_late_none        None
+             lm_test_core_include_none             None
+end: `core.c.include`
 
-    table:
-        name: `core.c.include`
-        columns((class: class) (@: char kind))
-        rows:
-                 lm_test_core_include_schema_fallback  "<signal.h>"
-    end: `core.c.include`
+table:
+    name: `core.c.include`
+    columns((class: class) (@: char kind))
+    rows:
+             lm_test_core_include_schema_fallback  "<signal.h>"
+end: `core.c.include`
 
-    table:
-        name: `lm.test.core.include.seed`
-        columns((class: class) (@: char target))
-        rows:
-                 lm_test_core_include_joined  "<assert.h>"
-    end: `lm.test.core.include.seed`
+table:
+    name: `lm.test.core.include.seed`
+    columns((class: class) (@: char target))
+    rows:
+             lm_test_core_include_joined  "<assert.h>"
+end: `lm.test.core.include.seed`
 
-    join: (`lm.test.core.include.seed`) `core.c.include`
-        columns((class: class) (@: char target))
-        rows:
-    end: `core.c.include`
+join: (`lm.test.core.include.seed`) `core.c.include`
+    columns((class: class) (@: char target))
+    rows:
+end: `core.c.include`
 
-    table:
-        name: core
-        columns((class: class) (@: char `c.include`) (int: marker))
-        rows:
-                 lm_test_core_include_wide_source     "<stdbool.h>"  1
-                 lm_test_core_include_wide_duplicate  "<math.h>"     2
-                 lm_test_core_include_wide_duplicate  "<wchar.h>"    3
-                 lm_test_core_include_wide_late_none  "<stddef.h>"   4
-                 lm_test_core_include_wide_late_none  None            5
-                 lm_test_core_include_wide_none       None            6
-    end: core
+table:
+    name: core
+    columns((class: class) (@: char `c.include`) (int: marker))
+    rows:
+             lm_test_core_include_wide_source     "<stdbool.h>"  1
+             lm_test_core_include_wide_duplicate  "<math.h>"     2
+             lm_test_core_include_wide_duplicate  "<wchar.h>"    3
+             lm_test_core_include_wide_late_none  "<stddef.h>"   4
+             lm_test_core_include_wide_late_none  None            5
+             lm_test_core_include_wide_none       None            6
+end: core
 
-    table:
-        name: `core.c.include`
-        columns((class: class) (@: char target))
-        rows:
-                 lm_test_core_include_wide_physical  "<stdint.h>"
-    end: `core.c.include`
+table:
+    name: `core.c.include`
+    columns((class: class) (@: char target))
+    rows:
+             lm_test_core_include_wide_physical  "<stdint.h>"
+end: `core.c.include`
 
-    table:
-        name: `lm.test.core.include.wide.seed`
-        columns((class: class) (@: char `c.include`) (int: marker))
-        rows:
-                 lm_test_core_include_wide_joined  "<ctype.h>"  7
-    end: `lm.test.core.include.wide.seed`
+table:
+    name: `lm.test.core.include.wide.seed`
+    columns((class: class) (@: char `c.include`) (int: marker))
+    rows:
+             lm_test_core_include_wide_joined  "<ctype.h>"  7
+end: `lm.test.core.include.wide.seed`
 
-    join: (`lm.test.core.include.wide.seed`) core
-        columns((class: class) (@: char `c.include`) (int: marker))
-        rows:
-    end: core
-end: L4
+join: (`lm.test.core.include.wide.seed`) core
+    columns((class: class) (@: char `c.include`) (int: marker))
+    rows:
+end: core
 
 L1:
 ===

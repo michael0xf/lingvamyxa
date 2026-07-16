@@ -14,6 +14,13 @@ L2:
     end: `conditionalHeaders.item`
 
     table:
+        name: include
+        columns((class: class) (@: char target))
+        rows:
+                 conditionalHeaders  "<stddef.h>"
+    end: include
+
+    table:
         name: `prelude.sequence`
         columns((class: class) (int: value))
         rows:

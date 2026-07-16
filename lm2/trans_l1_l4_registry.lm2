@@ -2288,6 +2288,7 @@ sub: lm_trans_registry_destroy ()
         lm_trans_identifier_table_delete(@ lm_trans_registry\identifiers)
         lm_own_arena_destroy(lm_trans_registry\value_arena)
         lm_own_delete(lm_trans_registry\value_arena, 0)
+        lm_trans_ptr_stack_delete(@ lm_trans_registry\early_l2_source_sites)
         lm_trans_ptr_stack_delete(@ lm_trans_registry\predefined_descriptor_sites)
         lm_trans_ptr_stack_delete(@ lm_trans_registry\predefined_paths)
         lm_trans_ptr_stack_delete(@ lm_trans_registry\loaded_paths)
@@ -3947,7 +3948,7 @@ fn: lm_trans_registry_note_predefined_path (const: @(char registry_path)) int
         return: 1
 return: 0
 
-fn: lm_trans_registry_predefined_descriptor_site_new (const: @(char registry_path); const: (LmP0Node: node)) @: char
+fn: lm_trans_registry_source_site_new (const: @(char registry_path); const: (LmP0Node: node)) @: char
     @: char site
     int: needed
 
@@ -3973,7 +3974,7 @@ fn: lm_trans_registry_predefined_descriptor_site_is_hoisted (const: @(char regis
 
     if: lm_trans_registry = 0 || lm_trans_registry\predefined_descriptor_sites = 0
         return: 0
-    site: lm_trans_registry_predefined_descriptor_site_new(registry_path, node)
+    site: lm_trans_registry_source_site_new(registry_path, node)
     if: site = 0
         return: 0
 
@@ -3997,10 +3998,50 @@ fn: lm_trans_registry_note_predefined_descriptor_site (const: @(char registry_pa
     if: lm_trans_registry_predefined_descriptor_site_is_hoisted(registry_path, node)
         return: 0
 
-    site: lm_trans_registry_predefined_descriptor_site_new(registry_path, node)
+    site: lm_trans_registry_source_site_new(registry_path, node)
     if: site = 0
         return: 1
     if: lm_own_ptr_stack_push(lm_trans_registry\predefined_descriptor_sites, site) != 0
+        lm_own_delete(site, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_early_l2_source_site_is_materialized (const: @(char source_path); const: (LmP0Node: node)) int
+    const: @: char stored_site
+    @: char site
+    size_t: index
+    int: found
+
+    if: lm_trans_registry = 0 || lm_trans_registry\early_l2_source_sites = 0
+        return: 0
+    site: lm_trans_registry_source_site_new(source_path, node)
+    if: site = 0
+        return: 0
+
+    found: 0
+    index: 0U
+    while: index < lm_trans_registry\early_l2_source_sites\count
+        stored_site: lm_own_ptr_stack_at(lm_trans_registry\early_l2_source_sites, index)
+        if: stored_site != 0 && c.strcmp(stored_site, site) = 0
+            found: 1
+            break
+        index: index + 1U
+
+    lm_own_delete(site, 0)
+return: found
+
+fn: lm_trans_registry_note_early_l2_source_site (const: @(char source_path); const: (LmP0Node: node)) int
+    @: char site
+
+    if: source_path = 0 || node = 0 || lm_trans_registry = 0 || lm_trans_registry\early_l2_source_sites = 0
+        return: 1
+    if: lm_trans_registry_early_l2_source_site_is_materialized(source_path, node)
+        return: 0
+
+    site: lm_trans_registry_source_site_new(source_path, node)
+    if: site = 0
+        return: 1
+    if: lm_own_ptr_stack_push(lm_trans_registry\early_l2_source_sites, site) != 0
         lm_own_delete(site, 0)
         return: 1
 return: 0
@@ -4512,7 +4553,8 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
     lm_trans_registry\loaded_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_registry\predefined_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_registry\predefined_descriptor_sites: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0 || lm_trans_registry\loaded_paths = 0 || lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_descriptor_sites = 0
+    lm_trans_registry\early_l2_source_sites: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0 || lm_trans_registry\loaded_paths = 0 || lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_descriptor_sites = 0 || lm_trans_registry\early_l2_source_sites = 0
         lm_trans_registry_destroy()
         return: 1
     lm_trans_registry\source_path: lm_trans_text_copy_cstr_from_cstr(source_path)
@@ -4645,7 +4687,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
         return: 1
 
     root: lm_p0_document_root(document)
-    if: lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_trans_registry_assert_view_parity() != 0
+    if: lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_trans_materialize_local_l2_source_root(root, source_path, lm_trans_path_has_extension(source_path, ".lm2")) != 0 || lm_trans_registry_assert_view_parity() != 0
         lm_p0_document_destroy(document)
         lm_trans_registry_destroy()
         return: 1

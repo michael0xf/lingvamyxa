@@ -4021,6 +4021,48 @@ fn: lm_trans_l2_join_header (
         return: 1
 return: 0
 
+fn: lm_trans_l2_join_sources_ready (
+    LmTransNamespace: namespace_
+    const: (LmP0Frame: frame)
+    @: int out_ready
+) int
+    const: LmP0Structure: sources
+    const: LmP0Structure: body
+    const: LmP0Text: target_name
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmP0Text: source_name
+    const: LmRegistryView: view
+
+    if: out_ready != 0
+        out_ready[0]: 0
+    if: namespace_ = 0 || frame = 0 || out_ready = 0
+        return: 1
+
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view = 0 || lm_trans_l2_join_header(frame, @ sources, @ target_name, @ body) != 0
+        return: 1
+    c.LM_UNUSED(target_name)
+    c.LM_UNUSED(body)
+
+    source_name: lm_trans_text_ref_new_cstr("")
+    if: source_name = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ source_name)
+
+    field: lm_trans_l2_structure_first_present_field(sources)
+    while: field != 0
+        node: field\value
+        if: node = 0 || node\kind != c.LM_P0_NODE_ATOM || lm_trans_registry_identifier_value(node\as\atom, source_name) = 0
+            c.fprintf(c.stderr, "trans L2 join error: source list expects table name atoms\n")
+            return: 1
+        if: lm_registry_view_find_source_table_slice(view, source_name\data, source_name\length) = 0
+            return: 0
+        field: lm_trans_l2_structure_next_present_field(field)
+
+    out_ready[0]: 1
+return: 0
+
 fn: lm_trans_l2_join_body_rows (const: (LmP0Structure: body); const: @(LmP0Frame out_rows)) int
     const: LmP0Field: field
     const: LmP0Frame: child
@@ -4417,15 +4459,18 @@ fn: lm_trans_materialize_l2_join_source (LmTransNamespace: namespace_; const: (L
     ---
 return: 0
 
-fn: lm_trans_declare_l2_join (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+fn: lm_trans_declare_l2_join_mode (LmTransNamespace: namespace_; const: (LmP0Frame: frame); int: materialize_source) int
     if: lm_trans_validate_l2_join_frame(frame) != 0
         return: 1
     if: lm_trans_l2_table_materialization_suppression_depth > 0
         c.fprintf(c.stderr, "trans L2 join error: joins are not allowed in os/ifdef branches\n")
         return: 1
-    if: lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0
+    if: materialize_source = 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
 return: lm_trans_materialize_l2_join_source(namespace_, frame)
+
+fn: lm_trans_declare_l2_join (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+return: lm_trans_declare_l2_join_mode(namespace_, frame, 1)
 
 fn: lm_trans_l2_table_object_name_new (const: (LmP0Text: table_name)) @: char
 return: lm_trans_l2_c_identifier_new("lm_l2_table_", table_name, "")
@@ -4515,9 +4560,10 @@ fn: lm_trans_declare_l2_table_binding (
     status: lm_trans_l2_table_note_row_layout(namespace_, row_type_text, column_types, column_names, column_count) != 0 || lm_trans_namespace_declare_c_name(namespace_, table_name, "variable", object_name_text) != 0 || lm_trans_namespace_declare_relation_text(namespace_, table_name, "variable.type", row_type_text) != 0
 return: status != 0
 
-fn: lm_trans_declare_l2_table (
+fn: lm_trans_declare_l2_table_mode (
     LmTransNamespace: namespace_
     const: LmP0Frame: frame
+    int: materialize_source
 ) int
     int: registry_keyed
 
@@ -4528,9 +4574,15 @@ fn: lm_trans_declare_l2_table (
         return: 1
     if: registry_keyed = 0 && lm_trans_declare_l2_table_binding(namespace_, frame) != 0
         return: 1
-    if: lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
+    if: materialize_source = 0 || lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
 return: lm_trans_materialize_l2_table_source(namespace_, frame, 0)
+
+fn: lm_trans_declare_l2_table (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+return: lm_trans_declare_l2_table_mode(namespace_, frame, 1)
 
 fn: lm_trans_emit_l2_table_row_type (
     FILE: file

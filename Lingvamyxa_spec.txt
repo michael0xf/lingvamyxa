@@ -463,6 +463,21 @@ modules away from the implicit `.lm4` profile:
         "receivers.lm2"
     end: predef
 
+Before the module prelude is planned, direct `table:` and `join:` Frames on the
+current L2 module surface are materialized in source order. For an implicit
+`.lm2` module this is the file root; for a mixed or explicitly wrapped source it
+is the body of each explicit `L2:` Frame. The early scan does not descend into
+conditional, guard, function or other receiver bodies, and it does not scan an
+`L3:` surface. The ordinary declaration pass still validates each Frame and
+creates any runtime table binding, but it does not materialize a source site
+that the early pass already completed.
+
+An early local `join:` is materialized only when all of its source tables are
+already visible from the bootstrap registry, a selected `predef`, or preceding
+local source-table Frames. If an ordinary `import:` will provide a missing
+source later, the join remains deferred to the ordinary declaration pass. This
+preserves source order without giving ordinary imports hidden prelude behavior.
+
 `predef` has the path-list shape of `import`, but is a hoisted import. Before
 ordinary top-level lowering and before the module prelude is planned, its `.lm2`
 targets expose their declarative `table:` and `join:` surface in source order.

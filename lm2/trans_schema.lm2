@@ -496,6 +496,7 @@ table:
              view_mode          int                    13            0
              predefined_paths   LmOwnPtrStack         14            0
              predefined_descriptor_sites LmOwnPtrStack 15           0
+             early_l2_source_sites LmOwnPtrStack      16            0
 end: LmTransRegistry
 
 table:
