@@ -494,9 +494,14 @@ does not depend on a preceding legacy `.lm4` import.
 
 An ordinary `import:` does not acquire this early behavior by containing tables,
 and a `.lm2` module is never heuristically classified by its contents. The
-receiver is top-level-only, preserves normal relative-path resolution and import
-deduplication, and accepts `.lm2` targets only. It is excluded from the L3
-profile as a low-level module-construction operation.
+`predef` receiver is top-level-only, preserves normal relative-path resolution
+and import deduplication, and accepts `.lm2` targets only. `predef` is excluded
+from the L3 profile as a low-level module-construction operation.
+
+An ordinary L2 `import:` does not accept the legacy implicit `.lm4` registry
+profile. Such a registry/model module must first be migrated to an `.lm2`
+module and selected explicitly with `predef:`. This keeps dependency loading
+inside the L2 receiver model instead of giving `import:` a hidden L4 side effect.
 
 Long version of the "hello.lmx" file:
 

@@ -4059,6 +4059,11 @@ fn: lm_trans_registry_load_import_frame (const: (LmP0Frame: frame); const: @(cha
                 return: 1
             lm_own_delete(candidate_name, 0)
 
+            if: lm_trans_path_has_extension(registry_path, ".lm4")
+                c.fprintf(c.stderr, "trans L2 import error: import does not accept legacy .lm4 registry targets; migrate the module to .lm2 and load it with predef: %s\n", registry_path)
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+
             if: lm_trans_registry_path_already_loaded(registry_path) = 0
                 if: lm_trans_registry_load_file_path(registry_path, 1, @ loaded) != 0
                     lm_trans_l4_text_view_delete(@ path_value)

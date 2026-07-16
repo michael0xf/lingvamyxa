@@ -1194,10 +1194,6 @@ fn: lm_trans_top_level_emit_merge_named_structure_storage (
     const: LmTransTopLevelItem: item
 ) int
 
-fn: lm_trans_import_frame_has_code_path (
-    const: LmP0Frame: frame
-) int
-
 fn: lm_trans_first_active_field (
     const: LmP0Structure: body
 ) const: LmP0Field

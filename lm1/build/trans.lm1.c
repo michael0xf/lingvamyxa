@@ -1047,7 +1047,6 @@ static int lm_trans_top_level_declare_ifdef(LmTransNamespace *namespace_, const 
 static int lm_trans_top_level_declare_merge_named_structure(LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_merge_named_structure_typedef(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_merge_named_structure_storage(FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
-static int lm_trans_import_frame_has_code_path(const LmP0Frame *frame);
 static const LmP0Field * lm_trans_first_active_field(const LmP0Structure *body);
 static int lm_trans_path_has_extension(const char *path, const char *extension);
 static int lm_trans_root_has_explicit_l2_frame(const LmP0Structure *root);
@@ -2938,7 +2937,6 @@ static int lm_l4_load_table_join_root(const LmL4Loader *loader, void *context, c
 
 
 
-
 #include <string.h>
 static char * lm_table_descriptor_copy_slice(const char *data, size_t length);
 static char * lm_table_descriptor_copy_cstr(const char *value);
@@ -4177,8 +4175,6 @@ static int lm_trans_emit_l2_frame(FILE *file, const LmP0Frame *l2);
 static int lm_trans_emit_l3_frame(FILE *file, const LmP0Frame *l3);
 static const char * lm_trans_import_source_path(void);
 static int lm_trans_import_stack_note(LmOwnPtrStack *stack, const char *path);
-static int lm_trans_import_text_has_extension(const LmP0Text *path, const char *extension);
-static int lm_trans_import_frame_has_code_path(const LmP0Frame *frame);
 static int lm_trans_import_resolve_node(const LmP0Node *node, char *path, size_t path_size, const char *error_name);
 static int lm_trans_import_parse_document(const char *path, LmP0Document **out_document, const char *phase);
 static int lm_trans_validate_l2_predef_frame(const LmP0Frame *frame);
@@ -29403,10 +29399,8 @@ static int lm_trans_top_level_statement_binding(const LmTransHeadBinding *bindin
     }
     if (strcmp(receiver, "lm_trans_statement_emit_import") == 0) {
         out->declare = &lm_trans_top_level_declare_import;
-        if (lm_trans_import_frame_has_code_path(out -> frame)) {
-            out->emit_before_functions = &lm_trans_top_level_emit_import_prelude;
-            out->emit_function = &lm_trans_top_level_emit_import_functions;
-        }
+        out->emit_before_functions = &lm_trans_top_level_emit_import_prelude;
+        out->emit_function = &lm_trans_top_level_emit_import_functions;
         return 1;
     }
     if (strcmp(receiver, "lm_trans_statement_emit_predef") == 0) {
@@ -31031,50 +31025,6 @@ static int lm_trans_import_stack_note(LmOwnPtrStack *stack, const char *path) {
     return 0;
 }
 
-static int lm_trans_import_text_has_extension(const LmP0Text *path, const char *extension) {
-    size_t extension_length;
-    if (path == 0 || extension == 0) {
-        return 0;
-    }
-    extension_length = strlen(extension);
-    if (path -> length < extension_length) {
-        return 0;
-    }
-    return memcmp(path -> data + path -> length - extension_length, extension, extension_length) == 0;
-}
-
-static int lm_trans_import_frame_has_code_path(const LmP0Frame *frame) {
-    const LmP0Field * field;
-    const LmP0Node * node;
-    LmP0Text * path_value;
-    int result;
-    path_value = lm_trans_text_from_cstr("");
-    if (path_value == 0) {
-        return 1;
-    }
-    result = 0;
-    field = 0;
-    if (frame != 0 && frame -> body != 0) {
-        field = frame -> body -> first_field;
-    }
-    while (field != 0) {
-        node = field -> value;
-        if (lm_trans_node_is_ignored(node) == 0) {
-            if (node -> kind != LM_P0_NODE_ATOM || lm_trans_registry_literal_value(node -> as -> atom, path_value) == 0) {
-                result = 1;
-                break;
-            }
-            if (lm_trans_import_text_has_extension(path_value, ".lm4") == 0) {
-                result = 1;
-                break;
-            }
-        }
-        field = field -> next;
-    }
-    lm_trans_text_ref_destroy(&path_value);
-    return result;
-}
-
 static int lm_trans_import_resolve_node(const LmP0Node *node, char *path, size_t path_size, const char *error_name) {
     LmP0Text * path_value;
     char *candidate_name;
@@ -31429,16 +31379,8 @@ static int lm_trans_declare_l2_import_path(LmTransNamespace *namespace_, const c
         return 1;
     }
     if (lm_trans_path_has_extension(path, ".lm4")) {
-        if (lm_trans_string_stack_has(lm_trans_declared_import_paths, path)) {
-            return 0;
-        }
-        if (lm_trans_import_stack_note(lm_trans_declared_import_paths, path) != 0) {
-            return 1;
-        }
-        if (lm_trans_registry_load_file_path(path, 1, &loaded) != 0) {
-            return 1;
-        }
-        return lm_trans_declare_registry_fn_descriptors(namespace_);
+        fprintf(stderr, "trans L2 import error: import does not accept legacy .lm4 registry targets; migrate the module to .lm2 and load it with predef: %s\n", path);
+        return 1;
     }
     if (lm_trans_string_stack_has(lm_trans_declared_import_paths, path)) {
         return 0;
@@ -31476,9 +31418,6 @@ static int lm_trans_emit_l2_import_path_prelude(FILE *file, LmTransNamespace *na
     if (path == 0) {
         return 1;
     }
-    if (lm_trans_path_has_extension(path, ".lm4")) {
-        return lm_trans_registry_load_file_path(path, 1, &loaded);
-    }
     if (lm_trans_string_stack_has(lm_trans_emitted_import_prelude_paths, path)) {
         return 0;
     }
@@ -31513,9 +31452,6 @@ static int lm_trans_emit_l2_import_path_functions(FILE *file, LmTransNamespace *
     int status;
     if (path == 0) {
         return 1;
-    }
-    if (lm_trans_path_has_extension(path, ".lm4")) {
-        return lm_trans_registry_load_file_path(path, 1, &loaded);
     }
     if (lm_trans_string_stack_has(lm_trans_emitted_import_function_paths, path)) {
         return 0;
@@ -38324,6 +38260,11 @@ static int lm_trans_registry_load_import_frame(const LmP0Frame *frame, const cha
                 return 1;
             }
             lm_own_delete(candidate_name, 0);
+            if (lm_trans_path_has_extension(registry_path, ".lm4")) {
+                fprintf(stderr, "trans L2 import error: import does not accept legacy .lm4 registry targets; migrate the module to .lm2 and load it with predef: %s\n", registry_path);
+                lm_trans_l4_text_view_delete(&path_value);
+                return 1;
+            }
             if (lm_trans_registry_path_already_loaded(registry_path) == 0) {
                 if (lm_trans_registry_load_file_path(registry_path, 1, &loaded) != 0) {
                     lm_trans_l4_text_view_delete(&path_value);
