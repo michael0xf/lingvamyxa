@@ -1,0 +1,15 @@
+L2:
+    table:
+        name: misplacedSourceTable
+        source
+        columns((int: key) (int: value))
+        rows:
+                 1  2
+    end: misplacedSourceTable
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

@@ -1,0 +1,33 @@
+table:
+    source
+    name: `define.value`
+    columns((@: char key) (@: char value))
+    rows:
+             LM_TEST_L2_SOURCE_TABLE_GENERIC_KEY  83
+end: `define.value`
+
+define
+
+L1:
+===
+#if LM_TEST_L2_SOURCE_TABLE_GENERIC_KEY != 83
+#error "explicit source table row was not visible through RegistryView"
+#endif
+===
+
+table:
+    name: runtimeKeyTable
+    columns((int: key) (int: value))
+    rows:
+             7  9
+end: runtimeKeyTable
+
+external:
+    fn: main () int
+        if: runtimeKeyTable\key != 7
+            return: 1
+        if: runtimeKeyTable\value != 9
+            return: 2
+        return: 0
+    end: main
+end: external

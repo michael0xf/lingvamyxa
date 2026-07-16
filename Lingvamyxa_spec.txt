@@ -472,6 +472,24 @@ conditional, guard, function or other receiver bodies, and it does not scan an
 creates any runtime table binding, but it does not materialize a source site
 that the early pass already completed.
 
+A `table:` may put the bare atom `source` first in its direct body:
+
+    table:
+        source
+        name: `model.generic-key`
+        columns((@: char key) (@: char value))
+        rows:
+                 sample  ok
+    end: `model.generic-key`
+
+This is an explicit source-only projection. It materializes the same typed
+`TableDescriptor` and rows in the active `RegistryView`, but declares and
+emits no ANSI C table binding or storage, independently of the key column's
+name. The marker must be the first direct table-body field and appear exactly
+once; a misplaced or duplicate marker is an error. The marker belongs to this
+table only; it does not turn the containing module or a `predef:` target into
+a registry-only document.
+
 An early local `join:` is materialized only when all of its source tables are
 already visible from the bootstrap registry, a selected `predef`, or preceding
 local source-table Frames. If an ordinary `import:` will provide a missing
@@ -8462,12 +8480,14 @@ In an L2 table profile, `table:` and `join:` are ordinary module receiver Frames
 whose bodies are valid LMX Structures. Both materialize a `TableDescriptor` and
 rows in the active `RegistryView`. For `table`, an unqualified scalar leading
 column named `class` selects the Registry-only projection with no duplicate C
-storage. The declared type of that key column remains part of the table schema
-and typed compatibility checks; it does not select the projection. Other
-leading column names select runtime tables: they materialize the same
-source descriptor and may additionally lower to static ANSI C row/storage
-structures. `join` is always source-table-only, independently of its schema; it
-does not additionally emit an ANSI C Structure or table value. A
+storage. A first direct body atom `source` selects the same source-only
+projection explicitly, independently of the leading column's name. The
+declared type of the key column remains part of the table schema and typed
+compatibility checks; it does not select the projection. Without the explicit
+marker, other leading column names select runtime tables: they materialize the
+same source descriptor and may additionally lower to static ANSI C row/storage
+structures. `join` is always source-table-only, independently of its schema;
+it does not additionally emit an ANSI C Structure or table value. A
 Registry-projected `table`, and every `join`, is a module declaration and is not
 admitted inside an executable function body. Neither is admitted in
 compile-selection `os` or `ifdef` branches, because Registry materialization is
@@ -8971,14 +8991,15 @@ under `name`; an N-column table with N > 2 materializes each non-key column as
 `name.column`, for example `BUILD.l2`, `BUILD.win` and `BUILD.unix`.
 
 In L2, an unqualified scalar leading column named `class` selects the canonical
-Registry-only projection for `table`. Such a table materializes a
-`TableDescriptor` and its rows in the active `RegistryView`, but does not also
-create a static C row type, array, or variable. The key column's declared type
-is retained in the descriptor and controls typed compatibility and fallback;
-it is not part of projection selection. This rule is determined by the table
-schema, independently of the source path or `predef`. An L2 table whose leading
-column has another name keeps the runtime projection: it still
-materializes its source descriptor and additionally creates the static C
+Registry-only projection for `table`. The first direct body atom `source`
+selects that projection explicitly for any valid table schema. Such a table
+materializes a `TableDescriptor` and its rows in the active `RegistryView`, but
+does not also create a static C row type, array, or variable. The key column's
+declared type is retained in the descriptor and controls typed compatibility
+and fallback; it is not part of projection selection. These rules are
+independent of the source path or `predef`. Without the explicit marker, an L2
+table whose leading column has another name keeps the runtime projection: it
+still materializes its source descriptor and additionally creates the static C
 storage visible as the table value. Every `join`, including one with a
 non-Registry schema, is instead an unconditional source-table module
 declaration: it appends source/direct rows in the active `RegistryView` and

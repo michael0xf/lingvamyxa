@@ -1,0 +1,23 @@
+L1:
+===
+#define LM_TEST_CONDITIONAL_SOURCE_TABLE 1
+===
+
+L2:
+    ifdef:
+        LM_TEST_CONDITIONAL_SOURCE_TABLE:
+            table:
+                source
+                name: conditionalSourceTable
+                columns((int: key) (int: value))
+                rows:
+                         1  2
+            end: conditionalSourceTable
+    end: ifdef
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
