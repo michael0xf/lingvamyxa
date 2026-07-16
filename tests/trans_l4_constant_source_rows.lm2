@@ -1,87 +1,85 @@
-L4:
-    table:
-        name: constant
-        columns((class: class) (class: backend) (int: value))
-        rows:
-                 LM_TEST_CONSTANT_SOURCE           c.define  41
-                 LM_TEST_CONSTANT_VALUE_OVERLAY    c.define  5
-                 LM_TEST_CONSTANT_BACKEND_OVERLAY  c.define  9
-                 LM_TEST_CONSTANT_DUPLICATE        c.define  7
-                 LM_TEST_CONSTANT_DUPLICATE        c.define  8
-                 LM_TEST_CONSTANT_NONE             None      None
-    end: constant
+table:
+    name: constant
+    columns((class: class) (class: backend) (int: value))
+    rows:
+             LM_TEST_CONSTANT_SOURCE           c.define  41
+             LM_TEST_CONSTANT_VALUE_OVERLAY    c.define  5
+             LM_TEST_CONSTANT_BACKEND_OVERLAY  c.define  9
+             LM_TEST_CONSTANT_DUPLICATE        c.define  7
+             LM_TEST_CONSTANT_DUPLICATE        c.define  8
+             LM_TEST_CONSTANT_NONE             None      None
+end: constant
 
-    table:
-        name: `constant.value`
-        columns((class: class) (int: value))
-        rows:
-                 LM_TEST_CONSTANT_VALUE_OVERLAY  6
-                 LM_TEST_CONSTANT_SPLIT          17
-    end: `constant.value`
+table:
+    name: `constant.value`
+    columns((class: class) (int: value))
+    rows:
+             LM_TEST_CONSTANT_VALUE_OVERLAY  6
+             LM_TEST_CONSTANT_SPLIT          17
+end: `constant.value`
 
-    table:
-        name: `constant.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LM_TEST_CONSTANT_BACKEND_OVERLAY  c.other
-                 LM_TEST_CONSTANT_SPLIT            c.define
-    end: `constant.backend`
+table:
+    name: `constant.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LM_TEST_CONSTANT_BACKEND_OVERLAY  c.other
+             LM_TEST_CONSTANT_SPLIT            c.define
+end: `constant.backend`
 
-    table:
-        name: constant
-        columns((class: class) (class: backend) (int: value) (int: marker))
-        rows:
-                 LM_TEST_CONSTANT_WIDE_SOURCE           c.define  31    1
-                 LM_TEST_CONSTANT_WIDE_DUPLICATE        c.define  37    2
-                 LM_TEST_CONSTANT_WIDE_DUPLICATE        c.define  39    3
-                 LM_TEST_CONSTANT_WIDE_LATE_NONE        c.define  41    4
-                 LM_TEST_CONSTANT_WIDE_LATE_NONE        None      None  5
-                 LM_TEST_CONSTANT_WIDE_NONE             None      None  6
-                 LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  c.define  43    7
-    end: constant
+table:
+    name: constant
+    columns((class: class) (class: backend) (int: value) (int: marker))
+    rows:
+             LM_TEST_CONSTANT_WIDE_SOURCE           c.define  31    1
+             LM_TEST_CONSTANT_WIDE_DUPLICATE        c.define  37    2
+             LM_TEST_CONSTANT_WIDE_DUPLICATE        c.define  39    3
+             LM_TEST_CONSTANT_WIDE_LATE_NONE        c.define  41    4
+             LM_TEST_CONSTANT_WIDE_LATE_NONE        None      None  5
+             LM_TEST_CONSTANT_WIDE_NONE             None      None  6
+             LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  c.define  43    7
+end: constant
 
-    table:
-        name: `constant.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  c.other
-                 LM_TEST_CONSTANT_WIDE_PHYSICAL         c.define
-    end: `constant.backend`
+table:
+    name: `constant.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  c.other
+             LM_TEST_CONSTANT_WIDE_PHYSICAL         c.define
+end: `constant.backend`
 
-    table:
-        name: `constant.value`
-        columns((class: class) (int: value))
-        rows:
-                 LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  47
-                 LM_TEST_CONSTANT_WIDE_PHYSICAL         53
-    end: `constant.value`
+table:
+    name: `constant.value`
+    columns((class: class) (int: value))
+    rows:
+             LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY  47
+             LM_TEST_CONSTANT_WIDE_PHYSICAL         53
+end: `constant.value`
 
-    table:
-        name: `lm.test.constant.wide.seed`
-        columns((class: class) (class: backend) (int: value) (int: marker))
-        rows:
-                 LM_TEST_CONSTANT_WIDE_JOINED  c.define  59  8
-    end: `lm.test.constant.wide.seed`
+table:
+    name: `lm.test.constant.wide.seed`
+    columns((class: class) (class: backend) (int: value) (int: marker))
+    rows:
+             LM_TEST_CONSTANT_WIDE_JOINED  c.define  59  8
+end: `lm.test.constant.wide.seed`
 
-    join: (`lm.test.constant.wide.seed`) constant
-        columns((class: class) (class: backend) (int: value) (int: marker))
-        rows:
-    end: constant
+join: (`lm.test.constant.wide.seed`) constant
+    columns((class: class) (class: backend) (int: value) (int: marker))
+    rows:
+end: constant
 
-    table:
-        name: constant
-        columns((class: class) (@: char backend) (int: value) (int: marker))
-        rows:
-                 LM_TEST_CONSTANT_WIDE_BACKEND_SCHEMA_FALLBACK  "c.define"  61  9
-    end: constant
+table:
+    name: constant
+    columns((class: class) (@: char backend) (int: value) (int: marker))
+    rows:
+             LM_TEST_CONSTANT_WIDE_BACKEND_SCHEMA_FALLBACK  "c.define"  61  9
+end: constant
 
-    table:
-        name: constant
-        columns((class: class) (class: backend) (@: char value) (int: marker))
-        rows:
-                 LM_TEST_CONSTANT_WIDE_VALUE_SCHEMA_FALLBACK  c.define  "67"  10
-    end: constant
-end: L4
+table:
+    name: constant
+    columns((class: class) (class: backend) (@: char value) (int: marker))
+    rows:
+             LM_TEST_CONSTANT_WIDE_VALUE_SCHEMA_FALLBACK  c.define  "67"  10
+end: constant
 
 constant
 
