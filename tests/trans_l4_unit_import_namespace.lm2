@@ -24,6 +24,7 @@ predef: "lm2/l4_loader_abi.lm2"
 external:
     fn: main () int
         c.LM_UNUSED(c.lm_l4_load_root)
+        c.LM_UNUSED(c.lm_l4_load_table_join_root)
         c.LM_UNUSED(c.lm_l4_receiver_table)
         c.LM_UNUSED(c.lm_l4_receiver_join)
         c.LM_UNUSED(c.lm_l4_receiver_row)

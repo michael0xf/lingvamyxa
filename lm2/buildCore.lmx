@@ -172,6 +172,7 @@ L2:
 
             fn: lm_build_write_platform_tests_script (FILE: file; @: char output_dir; @: char parser_library; @: char own_library) int
                 c.fputs("$ErrorActionPreference = 'Continue'\n", file)
+                c.fputs("$env:LM_P0_REGISTRY = 'lm2/parser_registry.lm2'\n", file)
                 c.fprintf:
                     file "$printTree = '%s/printTree.lm0%s'\n"
                     output_dir lm_build_exe_suffix()
@@ -341,6 +342,7 @@ L2:
                 c.fprintf:
                     file "ownLib='%s'\n"
                     own_library
+                c.fputs("export LM_P0_REGISTRY='lm2/parser_registry.lm2'\n", file)
                 c.fputs("mkdir -p build/obj/tests\n", file)
                 c.fputs("for src in tests/*.lmx; do\n", file)
                 c.fputs("    [ -e \"$src\" ] || continue\n", file)

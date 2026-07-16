@@ -4766,6 +4766,7 @@ external:
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
 
         if: argc < 0
+            c.LM_UNUSED(c.lm_l4_load_table_join_root)
             return: lm_l4_load_root(0, 0, 0, 0)
 
         if: argc != 3

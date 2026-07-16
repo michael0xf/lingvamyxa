@@ -304,6 +304,7 @@ static char * lm_build_platform_tests_command_format(void) {
 
 static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, char *parser_library, char *own_library) {
     fputs("$ErrorActionPreference = 'Continue'\n", file);
+    fputs("$env:LM_P0_REGISTRY = 'lm2/parser_registry.lm2'\n", file);
     fprintf(file, "$printTree = '%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix());
     fprintf(file, "$trans = '%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix());
     fprintf(file, "$make = '%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix());
@@ -469,6 +470,7 @@ static int lm_build_write_platform_tests_script(FILE *file, char *output_dir, ch
     fprintf(file, "make_tool='%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix());
     fprintf(file, "parserLib='%s'\n", parser_library);
     fprintf(file, "ownLib='%s'\n", own_library);
+    fputs("export LM_P0_REGISTRY='lm2/parser_registry.lm2'\n", file);
     fputs("mkdir -p build/obj/tests\n", file);
     fputs("for src in tests/*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);

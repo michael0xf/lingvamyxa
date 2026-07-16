@@ -841,6 +841,7 @@ static int lm_l4_join_from_frame(const LmL4Loader *loader, void *context, const 
 static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
+static int lm_l4_load_table_join_root(const LmL4Loader *loader, void *context, const LmP0Node *root);
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_join(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
@@ -1178,6 +1179,7 @@ static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const 
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
+static int lm_l4_load_table_join_root(const LmL4Loader *loader, void *context, const LmP0Node *root);
 
 static LmOwnPtrStack * lm_l4_seen_tables;
 
@@ -2545,6 +2547,70 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
     lm_own_delete(seen, 0);
     return status;
 }
+
+static int lm_l4_load_table_join_root(const LmL4Loader *loader, void *context, const LmP0Node *root) {
+    const LmP0Field * field;
+    const LmP0Node * node;
+    const LmP0Frame * frame;
+    LmOwnPtrStack * seen;
+    LmOwnPtrStack * previous_seen;
+    int loaded;
+    int status;
+    if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE) {
+        lm_l4_error(loader, "root must be a Structure");
+        return 1;
+    }
+    seen = lm_own_new_zero(sizeof(seen[0]));
+    if (seen == 0) {
+        lm_l4_error(loader, "cannot allocate table duplicate tracker");
+        return 1;
+    }
+    lm_own_ptr_stack_init(seen, lm_own_delete_plain);
+    previous_seen = lm_l4_seen_tables_get();
+    lm_l4_seen_tables_set(seen);
+    loaded = 0;
+    status = 0;
+    field = lm_l4_node_structure(root) -> first_field;
+    while (field != 0 && status == 0) {
+        node = field -> value;
+        if (lm_l4_node_is_ignored(node) != 0) {
+            field = field -> next;
+            continue;
+        }
+        if (node -> kind != LM_P0_NODE_FRAME) {
+            lm_l4_error(loader, "root fields must be table or join frames");
+            status = 1;
+            field = field -> next;
+            continue;
+        }
+        frame = lm_l4_node_frame(node);
+        if (lm_l4_text_equals(lm_l4_frame_head(frame), "table") != 0) {
+            status = lm_l4_receiver_table(loader, context, frame);
+        }
+        else {
+            if (lm_l4_text_equals(lm_l4_frame_head(frame), "join") != 0) {
+                status = lm_l4_receiver_join(loader, context, frame);
+            }
+            else {
+                lm_l4_error(loader, "root fields must be table or join frames");
+                status = 1;
+            }
+        }
+        if (status == 0) {
+            loaded = 1;
+        }
+        field = field -> next;
+    }
+    if (status == 0 && loaded == 0) {
+        lm_l4_error(loader, "no rows loaded");
+        status = 1;
+    }
+    lm_l4_seen_tables_set(previous_seen);
+    lm_own_ptr_stack_destroy(seen);
+    lm_own_delete(seen, 0);
+    return status;
+}
+
 
 
 
@@ -39560,6 +39626,7 @@ int main(int argc, char **argv) {
     setvbuf(stdout, 0, _IONBF, 0);
     setvbuf(stderr, 0, _IONBF, 0);
     if (argc < 0) {
+        LM_UNUSED(lm_l4_load_table_join_root);
         return lm_l4_load_root(0, 0, 0, 0);
     }
     if (argc != 3) {

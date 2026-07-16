@@ -409,6 +409,7 @@ static int lm_l4_join_from_frame(const LmL4Loader *loader, void *context, const 
 static int lm_l4_row_from_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
+static int lm_l4_load_table_join_root(const LmL4Loader *loader, void *context, const LmP0Node *root);
 static int lm_l4_receiver_table(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_join(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_receiver_row(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
@@ -535,6 +536,7 @@ static int lm_l4_receiver_ignore(const LmL4Loader *loader, void *context, const 
 static int lm_l4_dispatch_frame(const LmL4Loader *loader, void *context, const LmP0Frame *frame);
 static int lm_l4_load_rows(const LmL4Loader *loader, void *context, const LmP0Structure *structure);
 static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0Node *root, int implicit_l4);
+static int lm_l4_load_table_join_root(const LmL4Loader *loader, void *context, const LmP0Node *root);
 
 static LmOwnPtrStack * lm_l4_seen_tables;
 
@@ -1902,6 +1904,70 @@ static int lm_l4_load_root(const LmL4Loader *loader, void *context, const LmP0No
     lm_own_delete(seen, 0);
     return status;
 }
+
+static int lm_l4_load_table_join_root(const LmL4Loader *loader, void *context, const LmP0Node *root) {
+    const LmP0Field * field;
+    const LmP0Node * node;
+    const LmP0Frame * frame;
+    LmOwnPtrStack * seen;
+    LmOwnPtrStack * previous_seen;
+    int loaded;
+    int status;
+    if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE) {
+        lm_l4_error(loader, "root must be a Structure");
+        return 1;
+    }
+    seen = lm_own_new_zero(sizeof(seen[0]));
+    if (seen == 0) {
+        lm_l4_error(loader, "cannot allocate table duplicate tracker");
+        return 1;
+    }
+    lm_own_ptr_stack_init(seen, lm_own_delete_plain);
+    previous_seen = lm_l4_seen_tables_get();
+    lm_l4_seen_tables_set(seen);
+    loaded = 0;
+    status = 0;
+    field = lm_l4_node_structure(root) -> first_field;
+    while (field != 0 && status == 0) {
+        node = field -> value;
+        if (lm_l4_node_is_ignored(node) != 0) {
+            field = field -> next;
+            continue;
+        }
+        if (node -> kind != LM_P0_NODE_FRAME) {
+            lm_l4_error(loader, "root fields must be table or join frames");
+            status = 1;
+            field = field -> next;
+            continue;
+        }
+        frame = lm_l4_node_frame(node);
+        if (lm_l4_text_equals(lm_l4_frame_head(frame), "table") != 0) {
+            status = lm_l4_receiver_table(loader, context, frame);
+        }
+        else {
+            if (lm_l4_text_equals(lm_l4_frame_head(frame), "join") != 0) {
+                status = lm_l4_receiver_join(loader, context, frame);
+            }
+            else {
+                lm_l4_error(loader, "root fields must be table or join frames");
+                status = 1;
+            }
+        }
+        if (status == 0) {
+            loaded = 1;
+        }
+        field = field -> next;
+    }
+    if (status == 0 && loaded == 0) {
+        lm_l4_error(loader, "no rows loaded");
+        status = 1;
+    }
+    lm_l4_seen_tables_set(previous_seen);
+    lm_own_ptr_stack_destroy(seen);
+    lm_own_delete(seen, 0);
+    return status;
+}
+
 
 
 
@@ -8579,7 +8645,7 @@ const char * lm_p0_node_kind_class_name(LmP0NodeKind kind) {
 
 static int lm_p0_registry_load_default(void) {
     const char *override_path;
-    const char *candidates[10];
+    const char *candidates[13];
     const char *registry_path;
     LmP0Document * document;
     const LmP0Diagnostic * diagnostic;
@@ -8609,17 +8675,20 @@ static int lm_p0_registry_load_default(void) {
         candidates[0] = override_path;
     }
     else {
-        candidates[0] = "lm4/parser_registry.lm4";
+        candidates[0] = "lm2/parser_registry.lm2";
     }
-    candidates[1] = "../lm4/parser_registry.lm4";
-    candidates[2] = "../../lm4/parser_registry.lm4";
-    candidates[3] = "lm2/parser_registry.lm4";
-    candidates[4] = "../lm2/parser_registry.lm4";
-    candidates[5] = "../../lm2/parser_registry.lm4";
-    candidates[6] = "lm2/parser_registry.lmx";
-    candidates[7] = "../lm2/parser_registry.lmx";
-    candidates[8] = "../../lm2/parser_registry.lmx";
-    candidates[9] = 0;
+    candidates[1] = "../lm2/parser_registry.lm2";
+    candidates[2] = "../../lm2/parser_registry.lm2";
+    candidates[3] = "lm4/parser_registry.lm4";
+    candidates[4] = "../lm4/parser_registry.lm4";
+    candidates[5] = "../../lm4/parser_registry.lm4";
+    candidates[6] = "lm2/parser_registry.lm4";
+    candidates[7] = "../lm2/parser_registry.lm4";
+    candidates[8] = "../../lm2/parser_registry.lm4";
+    candidates[9] = "lm2/parser_registry.lmx";
+    candidates[10] = "../lm2/parser_registry.lmx";
+    candidates[11] = "../../lm2/parser_registry.lmx";
+    candidates[12] = 0;
     document = 0;
     registry_path = 0;
     i = 0U;
@@ -8650,7 +8719,12 @@ static int lm_p0_registry_load_default(void) {
         lm_p0_registry->loading = 0;
         return 0;
     }
-    status = lm_p0_registry_load_root(lm_p0_document_root(document), lm_p0_path_has_extension(registry_path, ".lm4"));
+    if (lm_p0_path_has_extension(registry_path, ".lm2") != 0) {
+        status = lm_l4_load_table_join_root(lm_p0_registry_l4_loader_get(), 0, lm_p0_document_root(document));
+    }
+    else {
+        status = lm_p0_registry_load_root(lm_p0_document_root(document), lm_p0_path_has_extension(registry_path, ".lm4"));
+    }
     lm_p0_document_destroy(document);
     if (status != 0) {
         lm_p0_registry_destroy();

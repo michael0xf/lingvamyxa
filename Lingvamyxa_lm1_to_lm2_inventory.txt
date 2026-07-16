@@ -9,7 +9,8 @@ replacement.
 
 The current rule is:
 
-    L4 registry files and L2 predef modules hold ABI/data facts.
+    L2 registry and predef modules hold ABI/data facts; legacy L4 paths are
+    compatibility fallbacks only.
     L2 sources explicitly import or predefine the needed ABI sources.
     L2 prelude receivers consume the active namespace and print ANSI C.
     `lm1/build/*.lm1.c` is the portable generated L1 snapshot kept in Git.
@@ -33,7 +34,7 @@ Their ABI role is now represented by registry source modules and receiver output
     lm2/l4_loader_abi.lm2
     lm2/core.lm2
     lm2/trans_registry.lm2
-    lm4/parser_registry.lm4
+    lm2/parser_registry.lm2
 
 `trans_legacy.lm1.c` was a temporary compare-mode oracle and is not part of
 the current build path.
