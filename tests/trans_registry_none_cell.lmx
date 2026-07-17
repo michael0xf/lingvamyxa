@@ -1,4 +1,4 @@
-L4:
+L2:
     table:
         name: class
         columns((class: class) (class: kind))
@@ -21,9 +21,6 @@ L4:
                  skipped           0                    kept
                  present           7                    kept
     end: `registry.none-cell.smoke`
-end: L4
-
-L2:
     external:
         fn: main () int
             return: 0
