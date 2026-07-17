@@ -1,4 +1,4 @@
-L4:
+L2:
     table:
         name: namespace
         columns((class: class) (class: `receiver.type`))
@@ -12,9 +12,6 @@ L4:
         rows:
                  default  lm_trans_statement_emit_assert
     end: `receiver.statement`
-end: L4
-
-L2:
     external:
         fn: main () int
             customAssert: 1 = 1
