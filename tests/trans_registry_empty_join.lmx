@@ -1,4 +1,4 @@
-L4:
+L2:
     table:
         name: int8
         columns((class: class) (int8: `context literal`))
@@ -13,9 +13,6 @@ L4:
                  true    1
                  OK      1
     end: Boolean
-end: L4
-
-L2:
     external:
         fn: main () int
             return: 0
