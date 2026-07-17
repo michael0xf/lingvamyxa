@@ -1,50 +1,52 @@
 import: "lm2/own.lm2"
 
-L4:
-    table:
-        name: `callable.partial.form`
-        columns((class: class) (binding: materializer))
-        rows:
-                 directPartial  lm_trans_materialize_call_frame_partial
-                 directPartial  lm_trans_materialize_partial_callable
-                 directPartial  None
-                 default        lm_trans_materialize_call_frame_partial
-                 default        lm_trans_materialize_partial_callable
-                 default        None
-                 noneOnly       None
-    end: `callable.partial.form`
+table:
+    source
+    name: `callable.partial.form`
+    columns((class: class) (binding: materializer))
+    rows:
+             directPartial  lm_trans_materialize_call_frame_partial
+             directPartial  lm_trans_materialize_partial_callable
+             directPartial  None
+             default        lm_trans_materialize_call_frame_partial
+             default        lm_trans_materialize_partial_callable
+             default        None
+             noneOnly       None
+end: `callable.partial.form`
 
-    table:
-        name: `callable.partial.form`
-        columns((class: class) (class: materializer))
-        rows:
-                 fallbackPartial  lm_trans_materialize_partial_callable
-    end: `callable.partial.form`
+table:
+    source
+    name: `callable.partial.form`
+    columns((class: class) (class: materializer))
+    rows:
+             fallbackPartial  lm_trans_materialize_partial_callable
+end: `callable.partial.form`
 
-    table:
-        name: `lm.test.callable.partial.form.seed`
-        columns((class: class) (int: marker) (binding: form))
-        rows:
-                 joinedPartial  7  lm_trans_materialize_partial_callable
-    end: `lm.test.callable.partial.form.seed`
+table:
+    source
+    name: `lm.test.callable.partial.form.seed`
+    columns((class: class) (int: marker) (binding: form))
+    rows:
+             joinedPartial  7  lm_trans_materialize_partial_callable
+end: `lm.test.callable.partial.form.seed`
 
-    join: (`lm.test.callable.partial.form.seed`) `lm.test.callable.partial.form.middle`
-        columns((class: class) (int: marker) (binding: form))
-        rows:
-    end: `lm.test.callable.partial.form.middle`
+join: (`lm.test.callable.partial.form.seed`) `lm.test.callable.partial.form.middle`
+    columns((class: class) (int: marker) (binding: form))
+    rows:
+end: `lm.test.callable.partial.form.middle`
 
-    join: (`lm.test.callable.partial.form.middle`) `callable.partial`
-        columns((class: class) (int: marker) (binding: form))
-        rows:
-    end: `callable.partial`
+join: (`lm.test.callable.partial.form.middle`) `callable.partial`
+    columns((class: class) (int: marker) (binding: form))
+    rows:
+end: `callable.partial`
 
-    table:
-        name: `callable.partial`
-        columns((class: class) (int: marker) (binding: form))
-        rows:
-                 joinedPartial  8  None
-    end: `callable.partial`
-end: L4
+table:
+    source
+    name: `callable.partial`
+    columns((class: class) (int: marker) (binding: form))
+    rows:
+             joinedPartial  8  None
+end: `callable.partial`
 
 callable: AddX (int: value) int
 
