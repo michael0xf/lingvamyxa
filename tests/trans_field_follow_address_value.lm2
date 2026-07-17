@@ -1,11 +1,11 @@
-L4:
+L2:
 . table:
 . . name: LmTestText
 . . columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
 . . rows:
 . . . length  unsigned  0  0
 . end: LmTestText
-end: L4
+end: L2
 
 L1:
 ===
