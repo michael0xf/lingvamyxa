@@ -1,11 +1,11 @@
-L4:
+L2:
     table:
         name: functionPointerType
         columns((class: class) (int: value))
         rows:
                  LmL2DirectCall 1
     end: functionPointerType
-end: L4
+end: L2
 
 L2:
     fn: LmL2DirectCall (int: value) int
