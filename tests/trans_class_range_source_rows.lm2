@@ -1,44 +1,46 @@
-L4:
-    table:
-        name: `class.range`
-        columns((class: class) (@: char value))
-        rows:
-                 int  "test-int-wrong"
-                 int  "test-int"
-                 int  None
-    end: `class.range`
+table:
+    source
+    name: `class.range`
+    columns((class: class) (@: char value))
+    rows:
+             int  "test-int-wrong"
+             int  "test-int"
+             int  None
+end: `class.range`
 
-    table:
-        name: `class.range`
-        columns((class: class) (class: value))
-        rows:
-                 short  int
-    end: `class.range`
+table:
+    source
+    name: `class.range`
+    columns((class: class) (class: value))
+    rows:
+             short  int
+end: `class.range`
 
-    table:
-        name: `lm.test.class.range.seed`
-        columns((class: class) (int: marker) (@: char range))
-        rows:
-                 long  7  "test-long"
-    end: `lm.test.class.range.seed`
+table:
+    source
+    name: `lm.test.class.range.seed`
+    columns((class: class) (int: marker) (@: char range))
+    rows:
+             long  7  "test-long"
+end: `lm.test.class.range.seed`
 
-    join: (`lm.test.class.range.seed`) `lm.test.class.range.middle`
-        columns((class: class) (int: marker) (@: char range))
-        rows:
-    end: `lm.test.class.range.middle`
+join: (`lm.test.class.range.seed`) `lm.test.class.range.middle`
+    columns((class: class) (int: marker) (@: char range))
+    rows:
+end: `lm.test.class.range.middle`
 
-    join: (`lm.test.class.range.middle`) `class`
-        columns((class: class) (int: marker) (@: char range))
-        rows:
-    end: `class`
+join: (`lm.test.class.range.middle`) `class`
+    columns((class: class) (int: marker) (@: char range))
+    rows:
+end: `class`
 
-    table:
-        name: `class`
-        columns((class: class) (int: marker) (@: char range))
-        rows:
-                 long  8  None
-    end: `class`
-end: L4
+table:
+    source
+    name: `class`
+    columns((class: class) (int: marker) (@: char range))
+    rows:
+             long  8  None
+end: `class`
 
 external:
     fn: main () int

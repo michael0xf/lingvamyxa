@@ -1,115 +1,126 @@
-L4:
-    table:
-        name: layout
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-                 LmLayoutBackendWideDirect       c.struct  1
-                 LmLayoutBackendWideDuplicate    c.union   2
-                 LmLayoutBackendWideDuplicate    c.struct  3
-                 LmLayoutBackendWideLateNone     c.struct  4
-                 LmLayoutBackendWideLateNone     None      5
-                 LmLayoutBackendWideOverlay      c.struct  6
-                 LmLayoutBackendWideOtherOnly    c.other   7
-                 LmLayoutBackendWideNone         None      8
-    end: layout
+table:
+    source
+    name: layout
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+             LmLayoutBackendWideDirect       c.struct  1
+             LmLayoutBackendWideDuplicate    c.union   2
+             LmLayoutBackendWideDuplicate    c.struct  3
+             LmLayoutBackendWideLateNone     c.struct  4
+             LmLayoutBackendWideLateNone     None      5
+             LmLayoutBackendWideOverlay      c.struct  6
+             LmLayoutBackendWideOtherOnly    c.other   7
+             LmLayoutBackendWideNone         None      8
+end: layout
 
-    table:
-        name: layout
-        columns((class: class) (int: marker) (class: backend))
-        rows:
-                 LmLayoutBackendWideReordered  9  c.struct
-    end: layout
+table:
+    source
+    name: layout
+    columns((class: class) (int: marker) (class: backend))
+    rows:
+             LmLayoutBackendWideReordered  9  c.struct
+end: layout
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmLayoutBackendWideOverlay   c.union
-                 LmLayoutBackendWidePhysical  c.struct
-    end: `layout.backend`
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmLayoutBackendWideOverlay   c.union
+             LmLayoutBackendWidePhysical  c.struct
+end: `layout.backend`
 
-    table:
-        name: `lm.test.layout.backend.wide.seed`
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-                 LmLayoutBackendWideJoined  c.struct  10
-    end: `lm.test.layout.backend.wide.seed`
+table:
+    source
+    name: `lm.test.layout.backend.wide.seed`
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+             LmLayoutBackendWideJoined  c.struct  10
+end: `lm.test.layout.backend.wide.seed`
 
-    join: (`lm.test.layout.backend.wide.seed`) `lm.test.layout.backend.wide.middle`
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-    end: `lm.test.layout.backend.wide.middle`
+join: (`lm.test.layout.backend.wide.seed`) `lm.test.layout.backend.wide.middle`
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+end: `lm.test.layout.backend.wide.middle`
 
-    join: (`lm.test.layout.backend.wide.middle`) layout
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-    end: layout
+join: (`lm.test.layout.backend.wide.middle`) layout
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+end: layout
 
-    table:
-        name: layout
-        columns((class: class) (@: char backend) (int: marker))
-        rows:
-                 LmLayoutBackendWideSchemaFallback  "c.struct"  11
-    end: layout
+table:
+    source
+    name: layout
+    columns((class: class) (@: char backend) (int: marker))
+    rows:
+             LmLayoutBackendWideSchemaFallback  "c.struct"  11
+end: layout
 
-    table:
-        name: LmLayoutBackendWideDirect
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: LmLayoutBackendWideDirect
+table:
+    source
+    name: LmLayoutBackendWideDirect
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmLayoutBackendWideDirect
 
-    table:
-        name: LmLayoutBackendWideDuplicate
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 first   int  0
-                 second  int  1
-    end: LmLayoutBackendWideDuplicate
+table:
+    source
+    name: LmLayoutBackendWideDuplicate
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             first   int  0
+             second  int  1
+end: LmLayoutBackendWideDuplicate
 
-    table:
-        name: LmLayoutBackendWideLateNone
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: LmLayoutBackendWideLateNone
+table:
+    source
+    name: LmLayoutBackendWideLateNone
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmLayoutBackendWideLateNone
 
-    table:
-        name: LmLayoutBackendWideOverlay
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 left   int  0
-                 right  int  1
-    end: LmLayoutBackendWideOverlay
+table:
+    source
+    name: LmLayoutBackendWideOverlay
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             left   int  0
+             right  int  1
+end: LmLayoutBackendWideOverlay
 
-    table:
-        name: LmLayoutBackendWidePhysical
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: LmLayoutBackendWidePhysical
+table:
+    source
+    name: LmLayoutBackendWidePhysical
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmLayoutBackendWidePhysical
 
-    table:
-        name: LmLayoutBackendWideJoined
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: LmLayoutBackendWideJoined
+table:
+    source
+    name: LmLayoutBackendWideJoined
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmLayoutBackendWideJoined
 
-    table:
-        name: LmLayoutBackendWideSchemaFallback
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: LmLayoutBackendWideSchemaFallback
+table:
+    source
+    name: LmLayoutBackendWideSchemaFallback
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmLayoutBackendWideSchemaFallback
 
-    table:
-        name: LmLayoutBackendWideReordered
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: LmLayoutBackendWideReordered
-end: L4
+table:
+    source
+    name: LmLayoutBackendWideReordered
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmLayoutBackendWideReordered
 
 layout
 

@@ -1,81 +1,88 @@
-L4:
-    table:
-        name: `c99.ub.policy`
-        columns((class: class) (class: policy))
-        rows:
-                 `c99.null-dereference`  `profile-defined`
-                 `c99.null-dereference`  diagnostic
-                 `c99.null-dereference`  None
-    end: `c99.ub.policy`
+table:
+    source
+    name: `c99.ub.policy`
+    columns((class: class) (class: policy))
+    rows:
+             `c99.null-dereference`  `profile-defined`
+             `c99.null-dereference`  diagnostic
+             `c99.null-dereference`  None
+end: `c99.ub.policy`
 
-    table:
-        name: `c99.ub.policy`
-        columns((class: class) (@: char policy))
-        rows:
-                 `c99.shift-count-range`  diagnostic
-    end: `c99.ub.policy`
+table:
+    source
+    name: `c99.ub.policy`
+    columns((class: class) (@: char policy))
+    rows:
+             `c99.shift-count-range`  diagnostic
+end: `c99.ub.policy`
 
-    table:
-        name: `lm.test.c99.ub.policy.seed`
-        columns((class: class) (int: marker) (class: policy))
-        rows:
-                 `c99.invalid-pointer-cast`  7  checked
-    end: `lm.test.c99.ub.policy.seed`
+table:
+    source
+    name: `lm.test.c99.ub.policy.seed`
+    columns((class: class) (int: marker) (class: policy))
+    rows:
+             `c99.invalid-pointer-cast`  7  checked
+end: `lm.test.c99.ub.policy.seed`
 
-    join: (`lm.test.c99.ub.policy.seed`) `lm.test.c99.ub.policy.middle`
-        columns((class: class) (int: marker) (class: policy))
-        rows:
-    end: `lm.test.c99.ub.policy.middle`
+join: (`lm.test.c99.ub.policy.seed`) `lm.test.c99.ub.policy.middle`
+    columns((class: class) (int: marker) (class: policy))
+    rows:
+end: `lm.test.c99.ub.policy.middle`
 
-    join: (`lm.test.c99.ub.policy.middle`) `c99.ub`
-        columns((class: class) (int: marker) (class: policy))
-        rows:
-    end: `c99.ub`
+join: (`lm.test.c99.ub.policy.middle`) `c99.ub`
+    columns((class: class) (int: marker) (class: policy))
+    rows:
+end: `c99.ub`
 
-    table:
-        name: `c99.ub`
-        columns((class: class) (int: marker) (class: policy))
-        rows:
-                 `c99.invalid-pointer-cast`  8  None
-    end: `c99.ub`
+table:
+    source
+    name: `c99.ub`
+    columns((class: class) (int: marker) (class: policy))
+    rows:
+             `c99.invalid-pointer-cast`  8  None
+end: `c99.ub`
 
-    table:
-        name: `printf.conversion.rule`
-        columns((class: class) (int: marker) (profileRule: profile) (int: extra) (class: expected))
-        rows:
-                 `%d`  7  `c99.null-dereference`  9  int
-                 `%i`  8  `c99.shift-count-range`  9  int
-                 `%u`  9  `c99.invalid-pointer-cast`  9  unsigned
-    end: `printf.conversion.rule`
+table:
+    source
+    name: `printf.conversion.rule`
+    columns((class: class) (int: marker) (profileRule: profile) (int: extra) (class: expected))
+    rows:
+             `%d`  7  `c99.null-dereference`  9  int
+             `%i`  8  `c99.shift-count-range`  9  int
+             `%u`  9  `c99.invalid-pointer-cast`  9  unsigned
+end: `printf.conversion.rule`
 
-    table:
-        name: `printf.conversion.rule.expected`
-        columns((class: class) (class: expected))
-        rows:
-                 `%i`  int
-    end: `printf.conversion.rule.expected`
+table:
+    source
+    name: `printf.conversion.rule.expected`
+    columns((class: class) (class: expected))
+    rows:
+             `%i`  int
+end: `printf.conversion.rule.expected`
 
-    table:
-        name: `printf.conversion.rule.profile`
-        columns((class: class) (profileRule: profile))
-        rows:
-                 `%i`  `c99.shift-count-range`
-    end: `printf.conversion.rule.profile`
+table:
+    source
+    name: `printf.conversion.rule.profile`
+    columns((class: class) (profileRule: profile))
+    rows:
+             `%i`  `c99.shift-count-range`
+end: `printf.conversion.rule.profile`
 
-    table:
-        name: `printf.conversion.rule.expected`
-        columns((class: class) (@: char expected))
-        rows:
-                 `%u`  unsigned
-    end: `printf.conversion.rule.expected`
+table:
+    source
+    name: `printf.conversion.rule.expected`
+    columns((class: class) (@: char expected))
+    rows:
+             `%u`  unsigned
+end: `printf.conversion.rule.expected`
 
-    table:
-        name: `printf.conversion.rule.profile`
-        columns((class: class) (class: profile))
-        rows:
-                 `%u`  `c99.invalid-pointer-cast`
-    end: `printf.conversion.rule.profile`
-end: L4
+table:
+    source
+    name: `printf.conversion.rule.profile`
+    columns((class: class) (class: profile))
+    rows:
+             `%u`  `c99.invalid-pointer-cast`
+end: `printf.conversion.rule.profile`
 
 external:
     fn: main () int

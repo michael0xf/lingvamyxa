@@ -1,78 +1,84 @@
-L4:
-    table:
-        name: namespace
-        columns((class: class) (class: `receiver.type`))
-        rows:
-                 LmTestDirectLevel    `receiver.level`
-                 LmTestDirectLevel    None
-    end: namespace
+table:
+    source
+    name: namespace
+    columns((class: class) (class: `receiver.type`))
+    rows:
+             LmTestDirectLevel    `receiver.level`
+             LmTestDirectLevel    None
+end: namespace
 
-    table:
-        name: namespace
-        columns((class: class) (relation: `receiver.type`))
-        rows:
-                 LmTestFallbackLevel  `receiver.level`
-    end: namespace
+table:
+    source
+    name: namespace
+    columns((class: class) (relation: `receiver.type`))
+    rows:
+             LmTestFallbackLevel  `receiver.level`
+end: namespace
 
-    table:
-        name: `lm.test.namespace.level.seed`
-        columns((class: class) (class: `receiver.type`))
-        rows:
-                 LmTestJoinedLevel  `receiver.level`
-    end: `lm.test.namespace.level.seed`
+table:
+    source
+    name: `lm.test.namespace.level.seed`
+    columns((class: class) (class: `receiver.type`))
+    rows:
+             LmTestJoinedLevel  `receiver.level`
+end: `lm.test.namespace.level.seed`
 
-    join: (`lm.test.namespace.level.seed`) namespace
-        columns((class: class) (class: `receiver.type`))
-        rows:
-    end: namespace
+join: (`lm.test.namespace.level.seed`) namespace
+    columns((class: class) (class: `receiver.type`))
+    rows:
+end: namespace
 
-    table:
-        name: namespace
-        columns((class: class) (class: `receiver.type`))
-        rows:
-                 LmTestJoinedLevel  None
-    end: namespace
+table:
+    source
+    name: namespace
+    columns((class: class) (class: `receiver.type`))
+    rows:
+             LmTestJoinedLevel  None
+end: namespace
 
-    table:
-        name: `receiver.level`
-        columns((class: class) (binding: receiver))
-        rows:
-                 LmTestDirectLevel  lm_trans_emit_l2_frame
-                 LmTestDirectLevel  lm_trans_emit_l1_frame
-                 LmTestDirectLevel  None
-    end: `receiver.level`
+table:
+    source
+    name: `receiver.level`
+    columns((class: class) (binding: receiver))
+    rows:
+             LmTestDirectLevel  lm_trans_emit_l2_frame
+             LmTestDirectLevel  lm_trans_emit_l1_frame
+             LmTestDirectLevel  None
+end: `receiver.level`
 
-    table:
-        name: `receiver.level`
-        columns((class: class) (class: receiver))
-        rows:
-                 LmTestFallbackLevel  lm_trans_emit_l1_frame
-    end: `receiver.level`
+table:
+    source
+    name: `receiver.level`
+    columns((class: class) (class: receiver))
+    rows:
+             LmTestFallbackLevel  lm_trans_emit_l1_frame
+end: `receiver.level`
 
-    table:
-        name: `lm.test.receiver.level.seed`
-        columns((class: class) (int: marker) (binding: level))
-        rows:
-                 LmTestJoinedLevel  1  lm_trans_emit_l1_frame
-    end: `lm.test.receiver.level.seed`
+table:
+    source
+    name: `lm.test.receiver.level.seed`
+    columns((class: class) (int: marker) (binding: level))
+    rows:
+             LmTestJoinedLevel  1  lm_trans_emit_l1_frame
+end: `lm.test.receiver.level.seed`
 
-    join: (`lm.test.receiver.level.seed`) `lm.test.receiver.level.middle`
-        columns((class: class) (int: marker) (binding: level))
-        rows:
-    end: `lm.test.receiver.level.middle`
+join: (`lm.test.receiver.level.seed`) `lm.test.receiver.level.middle`
+    columns((class: class) (int: marker) (binding: level))
+    rows:
+end: `lm.test.receiver.level.middle`
 
-    join: (`lm.test.receiver.level.middle`) receiver
-        columns((class: class) (int: marker) (binding: level))
-        rows:
-    end: receiver
+join: (`lm.test.receiver.level.middle`) receiver
+    columns((class: class) (int: marker) (binding: level))
+    rows:
+end: receiver
 
-    table:
-        name: receiver
-        columns((class: class) (int: marker) (binding: level))
-        rows:
-                 LmTestJoinedLevel  2  None
-    end: receiver
-end: L4
+table:
+    source
+    name: receiver
+    columns((class: class) (int: marker) (binding: level))
+    rows:
+             LmTestJoinedLevel  2  None
+end: receiver
 
 LmTestDirectLevel:
 ===

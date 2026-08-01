@@ -1,255 +1,285 @@
-L4:
-    table:
-        name: Equatable
-        columns((class: class) (class: `requires.method`))
-        rows:
-                 equals 1
-    end: Equatable
+table:
+    source
+    name: Equatable
+    columns((class: class) (class: `requires.method`))
+    rows:
+             equals 1
+end: Equatable
 
-    table:
-        name: Hashable
-        columns((class: class) (class: `requires.method`))
-        rows:
-                 hashCode 1
-    end: Hashable
+table:
+    source
+    name: Hashable
+    columns((class: class) (class: `requires.method`))
+    rows:
+             hashCode 1
+end: Hashable
 
-    table:
-        name: Serializable
-        columns((class: class) (class: `requires.method`))
-        rows:
-                 serialize 1
-    end: Serializable
+table:
+    source
+    name: Serializable
+    columns((class: class) (class: `requires.method`))
+    rows:
+             serialize 1
+end: Serializable
 
-    table:
-        name: FlatCallable
-        columns((class: class) (class: `requires.method`))
-        rows:
-                 flatMethod 1
-    end: FlatCallable
+table:
+    source
+    name: FlatCallable
+    columns((class: class) (class: `requires.method`))
+    rows:
+             flatMethod 1
+end: FlatCallable
 
-    table:
-        name: LegacyCallable
-        columns((class: class) (class: `requires.method`))
-        rows:
-                 legacyMethod 1
-    end: LegacyCallable
+table:
+    source
+    name: LegacyCallable
+    columns((class: class) (class: `requires.method`))
+    rows:
+             legacyMethod 1
+end: LegacyCallable
 
-    table:
-        name: Stringable
-        columns((class: class) (class: `requires.method`))
-        rows:
-                 toString 1
-    end: Stringable
+table:
+    source
+    name: Stringable
+    columns((class: class) (class: `requires.method`))
+    rows:
+             toString 1
+end: Stringable
 
-    table:
-        name: WideProtocol
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-                 wideDirect  1     1
-                 wideDirect  1     2
-                 wideDirect  None  3
-                 ignoredWide None  4
-    end: WideProtocol
+table:
+    source
+    name: WideProtocol
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+             wideDirect  1     1
+             wideDirect  1     2
+             wideDirect  None  3
+             ignoredWide None  4
+end: WideProtocol
 
-    table:
-        name: `lm.test.instanceof.wide.requirement.seed`
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-                 wideJoined 1 5
-    end: `lm.test.instanceof.wide.requirement.seed`
+table:
+    source
+    name: `lm.test.instanceof.wide.requirement.seed`
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+             wideJoined 1 5
+end: `lm.test.instanceof.wide.requirement.seed`
 
-    join: (`lm.test.instanceof.wide.requirement.seed`) WideProtocol
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-    end: WideProtocol
+join: (`lm.test.instanceof.wide.requirement.seed`) WideProtocol
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+end: WideProtocol
 
-    table:
-        name: NoneOnlyProtocol
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-                 absentRequirement None 1
-    end: NoneOnlyProtocol
+table:
+    source
+    name: NoneOnlyProtocol
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+             absentRequirement None 1
+end: NoneOnlyProtocol
 
-    table:
-        name: NoneFallbackProtocol
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-                 absentWideRequirement None 1
-    end: NoneFallbackProtocol
+table:
+    source
+    name: NoneFallbackProtocol
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+             absentWideRequirement None 1
+end: NoneFallbackProtocol
 
-    table:
-        name: NoneFallbackProtocol
-        columns((class: class) (class: requirement))
-        rows:
-                 fallbackRequirement 1
-    end: NoneFallbackProtocol
+table:
+    source
+    name: NoneFallbackProtocol
+    columns((class: class) (class: requirement))
+    rows:
+             fallbackRequirement 1
+end: NoneFallbackProtocol
 
-    table:
-        name: LegacyMultiProtocol
-        columns((class: class) (class: requirement))
-        rows:
-                 legacyA 1
-                 legacyB 1
-    end: LegacyMultiProtocol
+table:
+    source
+    name: LegacyMultiProtocol
+    columns((class: class) (class: requirement))
+    rows:
+             legacyA 1
+             legacyB 1
+end: LegacyMultiProtocol
 
-    table:
-        name: PriorityProtocol
-        columns((class: class) (class: requirement))
-        rows:
-                 legacyPriorityMissing 1
-    end: PriorityProtocol
+table:
+    source
+    name: PriorityProtocol
+    columns((class: class) (class: requirement))
+    rows:
+             legacyPriorityMissing 1
+end: PriorityProtocol
 
-    table:
-        name: PriorityProtocol
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-                 widePriority 1 1
-    end: PriorityProtocol
+table:
+    source
+    name: PriorityProtocol
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+             widePriority 1 1
+end: PriorityProtocol
 
-    table:
-        name: `PhysicalProtocol.requires.method`
-        columns((class: class) (int: deliberatelyUntypedPayload))
-        rows:
-                 physicalRequirement 7
-    end: `PhysicalProtocol.requires.method`
+table:
+    source
+    name: `PhysicalProtocol.requires.method`
+    columns((class: class) (int: deliberatelyUntypedPayload))
+    rows:
+             physicalRequirement 7
+end: `PhysicalProtocol.requires.method`
 
-    table:
-        name: MixedProtocol
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-                 mixedA 1 1
-    end: MixedProtocol
+table:
+    source
+    name: MixedProtocol
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+             mixedA 1 1
+end: MixedProtocol
 
-    table:
-        name: `MixedProtocol.requires.method`
-        columns((class: class) (class: requirement))
-        rows:
-                 mixedB 1
-    end: `MixedProtocol.requires.method`
+table:
+    source
+    name: `MixedProtocol.requires.method`
+    columns((class: class) (class: requirement))
+    rows:
+             mixedB 1
+end: `MixedProtocol.requires.method`
 
-    table:
-        name: MixedProtocol
-        columns((class: class) (class: `requires.method`) (int: marker))
-        rows:
-                 mixedC 1 2
-    end: MixedProtocol
+table:
+    source
+    name: MixedProtocol
+    columns((class: class) (class: `requires.method`) (int: marker))
+    rows:
+             mixedC 1 2
+end: MixedProtocol
 
-    table:
-        name: default
-        columns((class: class) (binding: method) (int: marker))
-        rows:
-                 hashCode  lm_default_hash_code  1
-                 hashCode  None                  2
-    end: default
+table:
+    source
+    name: default
+    columns((class: class) (binding: method) (int: marker))
+    rows:
+             hashCode  lm_default_hash_code  1
+             hashCode  None                  2
+end: default
 
-    table:
-        name: default
-        columns((class: class) (binding: method))
-        rows:
-                 legacyMethod lm_default_legacy_method
-    end: default
+table:
+    source
+    name: default
+    columns((class: class) (binding: method))
+    rows:
+             legacyMethod lm_default_legacy_method
+end: default
 
-    table:
-        name: User
-        columns((class: class) (binding: method) (int: marker))
-        rows:
-                 equals               lm_user_equals                3
-                 equals               None                          4
-                 wideDirect           lm_user_wide_direct           8
-                 wideJoined           lm_user_wide_joined           9
-                 legacyA              lm_user_legacy_a             10
-                 legacyB              lm_user_legacy_b             11
-                 widePriority         lm_user_wide_priority        12
-                 physicalRequirement  lm_user_physical_requirement 13
-                 mixedA               lm_user_mixed_a              14
-                 mixedB               lm_user_mixed_b              15
-                 mixedC               lm_user_mixed_c              16
-                 fallbackRequirement  lm_user_fallback_requirement 17
-    end: User
+table:
+    source
+    name: User
+    columns((class: class) (binding: method) (int: marker))
+    rows:
+             equals               lm_user_equals                3
+             equals               None                          4
+             wideDirect           lm_user_wide_direct           8
+             wideJoined           lm_user_wide_joined           9
+             legacyA              lm_user_legacy_a             10
+             legacyB              lm_user_legacy_b             11
+             widePriority         lm_user_wide_priority        12
+             physicalRequirement  lm_user_physical_requirement 13
+             mixedA               lm_user_mixed_a              14
+             mixedB               lm_user_mixed_b              15
+             mixedC               lm_user_mixed_c              16
+             fallbackRequirement  lm_user_fallback_requirement 17
+end: User
 
-    table:
-        name: `lm.test.instanceof.user.seed`
-        columns((class: class) (binding: method) (int: marker))
-        rows:
-                 serialize  lm_user_serialize  5
-    end: `lm.test.instanceof.user.seed`
+table:
+    source
+    name: `lm.test.instanceof.user.seed`
+    columns((class: class) (binding: method) (int: marker))
+    rows:
+             serialize  lm_user_serialize  5
+end: `lm.test.instanceof.user.seed`
 
-    join: (`lm.test.instanceof.user.seed`) User
-        columns((class: class) (binding: method) (int: marker))
-        rows:
-    end: User
+join: (`lm.test.instanceof.user.seed`) User
+    columns((class: class) (binding: method) (int: marker))
+    rows:
+end: User
 
-    table:
-        name: User
-        columns((class: class) (binding: method) (int: marker))
-        rows:
-                 serialize  None  6
-    end: User
+table:
+    source
+    name: User
+    columns((class: class) (binding: method) (int: marker))
+    rows:
+             serialize  None  6
+end: User
 
-    table:
-        name: `User.method`
-        columns((class: class) (binding: value))
-        rows:
-                 flatMethod  lm_user_flat_method
-    end: `User.method`
+table:
+    source
+    name: `User.method`
+    columns((class: class) (binding: value))
+    rows:
+             flatMethod  lm_user_flat_method
+end: `User.method`
 
-    table:
-        name: `QuotedUser`
-        columns((class: class) (binding: method) (int: marker))
-        rows:
-                 equals  lm_quoted_user_equals  7
-    end: `QuotedUser`
+table:
+    source
+    name: `QuotedUser`
+    columns((class: class) (binding: method) (int: marker))
+    rows:
+             equals  lm_quoted_user_equals  7
+end: `QuotedUser`
 
-    table:
-        name: Plain
-        columns((class: class) (binding: method))
-        rows:
-                 toString lm_plain_to_string
-    end: Plain
+table:
+    source
+    name: Plain
+    columns((class: class) (binding: method))
+    rows:
+             toString lm_plain_to_string
+end: Plain
 
-    table:
-        name: NoWideJoin
-        columns((class: class) (binding: method))
-        rows:
-                 wideDirect lm_no_wide_join_direct
-    end: NoWideJoin
+table:
+    source
+    name: NoWideJoin
+    columns((class: class) (binding: method))
+    rows:
+             wideDirect lm_no_wide_join_direct
+end: NoWideJoin
 
-    table:
-        name: WideJoinedOnly
-        columns((class: class) (binding: method))
-        rows:
-                 wideJoined lm_wide_joined_only
-    end: WideJoinedOnly
+table:
+    source
+    name: WideJoinedOnly
+    columns((class: class) (binding: method))
+    rows:
+             wideJoined lm_wide_joined_only
+end: WideJoinedOnly
 
-    table:
-        name: LegacyAOnly
-        columns((class: class) (binding: method))
-        rows:
-                 legacyA lm_legacy_a_only
-    end: LegacyAOnly
+table:
+    source
+    name: LegacyAOnly
+    columns((class: class) (binding: method))
+    rows:
+             legacyA lm_legacy_a_only
+end: LegacyAOnly
 
-    table:
-        name: LegacyBOnly
-        columns((class: class) (binding: method))
-        rows:
-                 legacyB lm_legacy_b_only
-    end: LegacyBOnly
+table:
+    source
+    name: LegacyBOnly
+    columns((class: class) (binding: method))
+    rows:
+             legacyB lm_legacy_b_only
+end: LegacyBOnly
 
-    table:
-        name: MixedACOnly
-        columns((class: class) (binding: method))
-        rows:
-                 mixedA lm_mixed_ac_only_a
-                 mixedC lm_mixed_ac_only_c
-    end: MixedACOnly
+table:
+    source
+    name: MixedACOnly
+    columns((class: class) (binding: method))
+    rows:
+             mixedA lm_mixed_ac_only_a
+             mixedC lm_mixed_ac_only_c
+end: MixedACOnly
 
-    table:
-        name: LegacyPriorityOnly
-        columns((class: class) (binding: method))
-        rows:
-                 legacyPriorityMissing lm_legacy_priority_only
-    end: LegacyPriorityOnly
-end: L4
+table:
+    source
+    name: LegacyPriorityOnly
+    columns((class: class) (binding: method))
+    rows:
+             legacyPriorityMissing lm_legacy_priority_only
+end: LegacyPriorityOnly
 
 external:
     fn: main () int

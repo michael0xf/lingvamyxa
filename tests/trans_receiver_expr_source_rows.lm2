@@ -1,44 +1,46 @@
-L4:
-    table:
-        name: `receiver.expr`
-        columns((class: class) (binding: receiver))
-        rows:
-                 directCast  lm_trans_expr_emit_instanceof_frame
-                 directCast  lm_trans_expr_emit_cast_frame
-                 directCast  None
-    end: `receiver.expr`
+table:
+    source
+    name: `receiver.expr`
+    columns((class: class) (binding: receiver))
+    rows:
+             directCast  lm_trans_expr_emit_instanceof_frame
+             directCast  lm_trans_expr_emit_cast_frame
+             directCast  None
+end: `receiver.expr`
 
-    table:
-        name: `receiver.expr`
-        columns((class: class) (class: receiver))
-        rows:
-                 fallbackCast  lm_trans_expr_emit_cast_frame
-    end: `receiver.expr`
+table:
+    source
+    name: `receiver.expr`
+    columns((class: class) (class: receiver))
+    rows:
+             fallbackCast  lm_trans_expr_emit_cast_frame
+end: `receiver.expr`
 
-    table:
-        name: `lm.test.receiver.expr.seed`
-        columns((class: class) (int: marker) (binding: expr))
-        rows:
-                 joinedCast  1  lm_trans_expr_emit_cast_frame
-    end: `lm.test.receiver.expr.seed`
+table:
+    source
+    name: `lm.test.receiver.expr.seed`
+    columns((class: class) (int: marker) (binding: expr))
+    rows:
+             joinedCast  1  lm_trans_expr_emit_cast_frame
+end: `lm.test.receiver.expr.seed`
 
-    join: (`lm.test.receiver.expr.seed`) `lm.test.receiver.expr.middle`
-        columns((class: class) (int: marker) (binding: expr))
-        rows:
-    end: `lm.test.receiver.expr.middle`
+join: (`lm.test.receiver.expr.seed`) `lm.test.receiver.expr.middle`
+    columns((class: class) (int: marker) (binding: expr))
+    rows:
+end: `lm.test.receiver.expr.middle`
 
-    join: (`lm.test.receiver.expr.middle`) receiver
-        columns((class: class) (int: marker) (binding: expr))
-        rows:
-    end: receiver
+join: (`lm.test.receiver.expr.middle`) receiver
+    columns((class: class) (int: marker) (binding: expr))
+    rows:
+end: receiver
 
-    table:
-        name: receiver
-        columns((class: class) (int: marker) (binding: expr))
-        rows:
-                 joinedCast  2  None
-    end: receiver
-end: L4
+table:
+    source
+    name: receiver
+    columns((class: class) (int: marker) (binding: expr))
+    rows:
+             joinedCast  2  None
+end: receiver
 
 external:
     fn: main () int

@@ -1,83 +1,90 @@
-L4:
-    table:
-        name: `None.cell`
-        columns((class: class) (decimal: value))
-        rows:
-                 LmNoneDirect    1
-                 LmNoneDirect    0
-                 LmNoneDirect    None
-                 LmNoneFallback  1
-                 LmNoneJoined    1
-    end: `None.cell`
+table:
+    source
+    name: `None.cell`
+    columns((class: class) (decimal: value))
+    rows:
+             LmNoneDirect    1
+             LmNoneDirect    0
+             LmNoneDirect    None
+             LmNoneFallback  1
+             LmNoneJoined    1
+end: `None.cell`
 
-    table:
-        name: `None.cell`
-        columns((class: class) (decimal: sentinel))
-        rows:
-                 LmNoneFallback  0
-    end: `None.cell`
+table:
+    source
+    name: `None.cell`
+    columns((class: class) (decimal: sentinel))
+    rows:
+             LmNoneFallback  0
+end: `None.cell`
 
-    table:
-        name: `lm.test.none-cell.seed`
-        columns((class: class) (int: marker) (decimal: cell))
-        rows:
-                 LmNoneJoined  7  0
-    end: `lm.test.none-cell.seed`
+table:
+    source
+    name: `lm.test.none-cell.seed`
+    columns((class: class) (int: marker) (decimal: cell))
+    rows:
+             LmNoneJoined  7  0
+end: `lm.test.none-cell.seed`
 
-    join: (`lm.test.none-cell.seed`) `lm.test.none-cell.middle`
-        columns((class: class) (int: marker) (decimal: cell))
-        rows:
-    end: `lm.test.none-cell.middle`
+join: (`lm.test.none-cell.seed`) `lm.test.none-cell.middle`
+    columns((class: class) (int: marker) (decimal: cell))
+    rows:
+end: `lm.test.none-cell.middle`
 
-    join: (`lm.test.none-cell.middle`) `None`
-        columns((class: class) (int: marker) (decimal: cell))
-        rows:
-    end: `None`
+join: (`lm.test.none-cell.middle`) `None`
+    columns((class: class) (int: marker) (decimal: cell))
+    rows:
+end: `None`
 
-    table:
-        name: `None`
-        columns((class: class) (int: marker) (decimal: cell))
-        rows:
-                 default  8  0
-    end: `None`
+table:
+    source
+    name: `None`
+    columns((class: class) (int: marker) (decimal: cell))
+    rows:
+             default  8  0
+end: `None`
 
-    table:
-        name: `None`
-        columns((class: class) (int: marker) (decimal: cell))
-        rows:
-                 LmNoneJoined  9   None
-                 default       10  None
-    end: `None`
+table:
+    source
+    name: `None`
+    columns((class: class) (int: marker) (decimal: cell))
+    rows:
+             LmNoneJoined  9   None
+             default       10  None
+end: `None`
 
-    table:
-        name: `define.value`
-        columns((class: class) (LmNoneDirect: value))
-        rows:
-                 LM_TEST_NONE_DIRECT    0
-                 LM_TEST_NONE_SURVIVES  1
-    end: `define.value`
+table:
+    source
+    name: `define.value`
+    columns((class: class) (LmNoneDirect: value))
+    rows:
+             LM_TEST_NONE_DIRECT    0
+             LM_TEST_NONE_SURVIVES  1
+end: `define.value`
 
-    table:
-        name: `define.value`
-        columns((class: class) (LmNoneFallback: value))
-        rows:
-                 LM_TEST_NONE_FALLBACK  0
-    end: `define.value`
+table:
+    source
+    name: `define.value`
+    columns((class: class) (LmNoneFallback: value))
+    rows:
+             LM_TEST_NONE_FALLBACK  0
+end: `define.value`
 
-    table:
-        name: `define.value`
-        columns((class: class) (LmNoneJoined: value))
-        rows:
-                 LM_TEST_NONE_JOINED  0
-    end: `define.value`
+table:
+    source
+    name: `define.value`
+    columns((class: class) (LmNoneJoined: value))
+    rows:
+             LM_TEST_NONE_JOINED  0
+end: `define.value`
 
-    table:
-        name: `define.value`
-        columns((class: class) (LmNoneDefault: value))
-        rows:
-                 LM_TEST_NONE_DEFAULT  0
-    end: `define.value`
-end: L4
+table:
+    source
+    name: `define.value`
+    columns((class: class) (LmNoneDefault: value))
+    rows:
+             LM_TEST_NONE_DEFAULT  0
+end: `define.value`
 
 define
 

@@ -1,124 +1,137 @@
-L4:
-    table:
-        name: class
-        columns((class: class) (class: kind))
-        rows:
-                 Plain      layout
-                 Qualified  layout
-                 Partial    layout
-                 Overlay    layout
-                 SplitOnly  layout
-                 WrongSchema layout
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+             Plain      layout
+             Qualified  layout
+             Partial    layout
+             Overlay    layout
+             SplitOnly  layout
+             WrongSchema layout
+end: class
 
-    table:
-        name: Plain
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: Plain
+table:
+    source
+    name: Plain
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: Plain
 
-    table:
-        name: Qualified
-        columns((class: class) (int: marker) (int: `field.const`) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`))
-        rows:
-                 text  7  0  0  9  char  0
-    end: Qualified
+table:
+    source
+    name: Qualified
+    columns((class: class) (int: marker) (int: `field.const`) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`))
+    rows:
+             text  7  0  0  9  char  0
+end: Qualified
 
-    table:
-        name: `Qualified.field.address-depth`
-        columns((class: class) (size_t: depth))
-        rows:
-                 text  1
-    end: `Qualified.field.address-depth`
+table:
+    source
+    name: `Qualified.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             text  1
+end: `Qualified.field.address-depth`
 
-    table:
-        name: `Qualified.field.const`
-        columns((class: class) (int: value))
-        rows:
-                 text  1
-    end: `Qualified.field.const`
+table:
+    source
+    name: `Qualified.field.const`
+    columns((class: class) (int: value))
+    rows:
+             text  1
+end: `Qualified.field.const`
 
-    table:
-        name: Partial
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
-        rows:
-                 value  int  0  None  None
-    end: Partial
+table:
+    source
+    name: Partial
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    rows:
+             value  int  0  None  None
+end: Partial
 
-    table:
-        name: Overlay
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 value  int  0
-    end: Overlay
+table:
+    source
+    name: Overlay
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: Overlay
 
-    table:
-        name: `Overlay.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 value  Boolean
-    end: `Overlay.field.class`
+table:
+    source
+    name: `Overlay.field.class`
+    columns((class: class) (class: field))
+    rows:
+             value  Boolean
+end: `Overlay.field.class`
 
-    table:
-        name: `SplitOnly.field.class`
-        columns((class: class) (class: field))
-        rows:
-                 flag  Boolean
-    end: `SplitOnly.field.class`
+table:
+    source
+    name: `SplitOnly.field.class`
+    columns((class: class) (class: field))
+    rows:
+             flag  Boolean
+end: `SplitOnly.field.class`
 
-    table:
-        name: WrongSchema
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
-        rows:
-                 value  int  0  0  0
-    end: WrongSchema
+table:
+    source
+    name: WrongSchema
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    rows:
+             value  int  0  0  0
+end: WrongSchema
 
-    table:
-        name: `WrongSchema.field.class`
-        columns((class: class) (char: field))
-        rows:
-                 value  int
-    end: `WrongSchema.field.class`
+table:
+    source
+    name: `WrongSchema.field.class`
+    columns((class: class) (char: field))
+    rows:
+             value  int
+end: `WrongSchema.field.class`
 
-    table:
-        name: `WrongSchema.field.address-depth`
-        columns((class: class) (int: depth))
-        rows:
-                 value  0
-    end: `WrongSchema.field.address-depth`
+table:
+    source
+    name: `WrongSchema.field.address-depth`
+    columns((class: class) (int: depth))
+    rows:
+             value  0
+end: `WrongSchema.field.address-depth`
 
-    table:
-        name: `WrongSchema.field.const`
-        columns((class: class) (size_t: value))
-        rows:
-                 value  0
-    end: `WrongSchema.field.const`
+table:
+    source
+    name: `WrongSchema.field.const`
+    columns((class: class) (size_t: value))
+    rows:
+             value  0
+end: `WrongSchema.field.const`
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 Plain      c.struct
-                 Qualified  c.struct
-                 Partial    c.struct
-                 Overlay    c.struct
-                 SplitOnly  c.struct
-                 WrongSchema c.struct
-    end: `layout.backend`
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             Plain      c.struct
+             Qualified  c.struct
+             Partial    c.struct
+             Overlay    c.struct
+             SplitOnly  c.struct
+             WrongSchema c.struct
+end: `layout.backend`
 
-    table:
-        name: `class.reference-base`
-        columns((class: class) (int: value))
-        rows:
-                 Plain      1
-                 Qualified  1
-                 Partial    1
-                 Overlay    1
-                 SplitOnly  1
-                 WrongSchema 1
-    end: `class.reference-base`
-end: L4
+table:
+    source
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             Plain      1
+             Qualified  1
+             Partial    1
+             Overlay    1
+             SplitOnly  1
+             WrongSchema 1
+end: `class.reference-base`
 
 L1:
 ===
@@ -149,40 +162,38 @@ typedef struct WrongSchema {
 } WrongSchema;
 ===
 
-L2:
-    table:
-        name: layoutTable
-        columns((Plain: plain) (Qualified: qualified) (Partial: partial) (Overlay: overlay) (SplitOnly: split) (WrongSchema: wrong))
-        rows:
-                 Plain:
-                     value: 7
-                 Qualified:
-                     text: "ok"
-                 Partial:
-                     value: 5
-                 Overlay:
-                     value: None
-                 SplitOnly:
-                     flag: true
-                 WrongSchema:
-                     value: 6
-    end: layoutTable
+table:
+    name: layoutTable
+    columns((Plain: plain) (Qualified: qualified) (Partial: partial) (Overlay: overlay) (SplitOnly: split) (WrongSchema: wrong))
+    rows:
+             Plain:
+                 value: 7
+             Qualified:
+                 text: "ok"
+             Partial:
+                 value: 5
+             Overlay:
+                 value: None
+             SplitOnly:
+                 flag: true
+             WrongSchema:
+                 value: 6
+end: layoutTable
 
-    external:
-        fn: main () int
-            if: layoutTable\plain\value != 7
-                return: 1
-            if: c.strcmp(layoutTable\qualified\text, "ok") != 0
-                return: 2
-            if: layoutTable\partial\value != 5
-                return: 3
-            if: layoutTable\overlay\value != -1
-                return: 4
-            if: layoutTable\split\flag != 1
-                return: 5
-            if: layoutTable\wrong\value != 6
-                return: 6
-            return: 0
-        end: main
-    end: external
-end: L2
+external:
+    fn: main () int
+        if: layoutTable\plain\value != 7
+            return: 1
+        if: c.strcmp(layoutTable\qualified\text, "ok") != 0
+            return: 2
+        if: layoutTable\partial\value != 5
+            return: 3
+        if: layoutTable\overlay\value != -1
+            return: 4
+        if: layoutTable\split\flag != 1
+            return: 5
+        if: layoutTable\wrong\value != 6
+            return: 6
+        return: 0
+    end: main
+end: external

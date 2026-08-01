@@ -1,47 +1,46 @@
-L4:
-    table:
-        name: `receiver.positional-name`
-        columns((class: class) (int: marker) (size_t: index) (int: extra) (class: argument))
-        rows:
-                 @    7  1     9  name
-                 sub  8  0     9  name
-                 fm   9  0     9  name
-    end: `receiver.positional-name`
+table:
+    source
+    name: `receiver.positional-name`
+    columns((class: class) (int: marker) (size_t: index) (int: extra) (class: argument))
+    rows:
+             @    7  1     9  name
+             sub  8  0     9  name
+             fm   9  0     9  name
+end: `receiver.positional-name`
 
-    table:
-        name: `receiver.positional-name.index`
-        columns((class: class) (size_t: index))
-        rows:
-                 sub  0
-    end: `receiver.positional-name.index`
+table:
+    source
+    name: `receiver.positional-name.index`
+    columns((class: class) (size_t: index))
+    rows:
+             sub  0
+end: `receiver.positional-name.index`
 
-    table:
-        name: `receiver.positional-name.index`
-        columns((class: class) (int: index))
-        rows:
-                 fm  0
-    end: `receiver.positional-name.index`
-end: L4
+table:
+    source
+    name: `receiver.positional-name.index`
+    columns((class: class) (int: index))
+    rows:
+             fm  0
+end: `receiver.positional-name.index`
 
-L2:
-    fn: addOne (int: value) int
-        return: value + 1
-    end: addOne
+fn: addOne (int: value) int
+    return: value + 1
+end: addOne
 
-    sub: increment (@: int value)
-        value[0]: value[0] + 1
-    end: increment
+sub: increment (@: int value)
+    value[0]: value[0] + 1
+end: increment
 
-    fm: pair () (int: left; int: right)
-        return: (2 3)
-    end: pair
+fm: pair () (int: left; int: right)
+    return: (2 3)
+end: pair
 
-    external:
-        fn: main () int
-            int: value addOne(4)
-            pairReturn: result pair()
-            increment(@ value)
-            return: value != 6 || c.result.left != 2 || c.result.right != 3
-        end: main
-    end: external
-end: L2
+external:
+    fn: main () int
+        int: value addOne(4)
+        pairReturn: result pair()
+        increment(@ value)
+        return: value != 6 || c.result.left != 2 || c.result.right != 3
+    end: main
+end: external

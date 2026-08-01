@@ -1,209 +1,230 @@
-L4:
-    table:
-        name: `contextual.literal`
-        columns((class: class) (int: marker) (relation: value))
-        rows:
-                 None  1  `lm.test.contextual.direct.old.value`
-                 None  2  `lm.test.contextual.direct.value`
-                 true  3  `lm.test.contextual.default.value`
-    end: `contextual.literal`
+table:
+    source
+    name: `contextual.literal`
+    columns((class: class) (int: marker) (relation: value))
+    rows:
+             None  1  `lm.test.contextual.direct.old.value`
+             None  2  `lm.test.contextual.direct.value`
+             true  3  `lm.test.contextual.default.value`
+end: `contextual.literal`
 
-    table:
-        name: `contextual.literal.value`
-        columns((class: class) (class: value))
-        rows:
-                 OK  `lm.test.contextual.fallback.value`
-    end: `contextual.literal.value`
+table:
+    source
+    name: `contextual.literal.value`
+    columns((class: class) (class: value))
+    rows:
+             OK  `lm.test.contextual.fallback.value`
+end: `contextual.literal.value`
 
-    table:
-        name: `lm.test.contextual.literal.seed`
-        columns((class: class) (int: marker) (relation: value))
-        rows:
-                 false  7  `lm.test.contextual.joined.value`
-    end: `lm.test.contextual.literal.seed`
+table:
+    source
+    name: `lm.test.contextual.literal.seed`
+    columns((class: class) (int: marker) (relation: value))
+    rows:
+             false  7  `lm.test.contextual.joined.value`
+end: `lm.test.contextual.literal.seed`
 
-    join: (`lm.test.contextual.literal.seed`) `lm.test.contextual.literal.middle`
-        columns((class: class) (int: marker) (relation: value))
-        rows:
-    end: `lm.test.contextual.literal.middle`
+join: (`lm.test.contextual.literal.seed`) `lm.test.contextual.literal.middle`
+    columns((class: class) (int: marker) (relation: value))
+    rows:
+end: `lm.test.contextual.literal.middle`
 
-    join: (`lm.test.contextual.literal.middle`) `contextual.literal`
-        columns((class: class) (int: marker) (relation: value))
-        rows:
-    end: `contextual.literal`
+join: (`lm.test.contextual.literal.middle`) `contextual.literal`
+    columns((class: class) (int: marker) (relation: value))
+    rows:
+end: `contextual.literal`
 
-    table:
-        name: `contextual.literal`
-        columns((class: class) (int: marker) (relation: value))
-        rows:
-                 None   8   None
-                 false  9   None
-                 true   10  None
-    end: `contextual.literal`
+table:
+    source
+    name: `contextual.literal`
+    columns((class: class) (int: marker) (relation: value))
+    rows:
+             None   8   None
+             false  9   None
+             true   10  None
+end: `contextual.literal`
 
-    table:
-        name: Boolean
-        columns((class: class) (int8: `context literal`))
-        rows:
-                 OK  7
-                 OK  None
-    end: Boolean
+table:
+    source
+    name: Boolean
+    columns((class: class) (int8: `context literal`))
+    rows:
+             OK  7
+             OK  None
+end: Boolean
 
-    table:
-        name: double
-        columns((class: class) (double: value))
-        rows:
-                 false  8
-    end: double
+table:
+    source
+    name: double
+    columns((class: class) (double: value))
+    rows:
+             false  8
+end: double
 
-    table:
-        name: `lm.test.contextual.class.seed`
-        columns((class: class) (uint8: `context literal`))
-        rows:
-                 None  9
-    end: `lm.test.contextual.class.seed`
+table:
+    source
+    name: `lm.test.contextual.class.seed`
+    columns((class: class) (uint8: `context literal`))
+    rows:
+             None  9
+end: `lm.test.contextual.class.seed`
 
-    join: (`lm.test.contextual.class.seed`) uint8
-        columns((class: class) (uint8: `context literal`))
-        rows:
-    end: uint8
+join: (`lm.test.contextual.class.seed`) uint8
+    columns((class: class) (uint8: `context literal`))
+    rows:
+end: uint8
 
-    table:
-        name: uint8
-        columns((class: class) (uint8: `context literal`))
-        rows:
-                 None  None
-    end: uint8
+table:
+    source
+    name: uint8
+    columns((class: class) (uint8: `context literal`))
+    rows:
+             None  None
+end: uint8
 
-    table:
-        name: long
-        columns((class: class) (long: `context literal`))
-        rows:
-                 default  10
-    end: long
+table:
+    source
+    name: long
+    columns((class: class) (long: `context literal`))
+    rows:
+             default  10
+end: long
 
-    table:
-        name: long
-        columns((class: class) (int: marker) (long: `context literal`))
-        rows:
-                 default  19  1010
-    end: long
+table:
+    source
+    name: long
+    columns((class: class) (int: marker) (long: `context literal`))
+    rows:
+             default  19  1010
+end: long
 
-    table:
-        name: i16
-        columns((class: class) (int: marker) (i16: `context literal`))
-        rows:
-                 OK  11  11
-                 OK  12  None
-    end: i16
+table:
+    source
+    name: i16
+    columns((class: class) (int: marker) (i16: `context literal`))
+    rows:
+             OK  11  11
+             OK  12  None
+end: i16
 
-    table:
-        name: double
-        columns((class: class) (int: marker) (double: `context literal`))
-        rows:
-                 false  13  808
-    end: double
+table:
+    source
+    name: double
+    columns((class: class) (int: marker) (double: `context literal`))
+    rows:
+             false  13  808
+end: double
 
-    table:
-        name: `lm.test.contextual.class.wide.seed`
-        columns((class: class) (int: marker) (short: `context literal`))
-        rows:
-                 false  14  12
-    end: `lm.test.contextual.class.wide.seed`
+table:
+    source
+    name: `lm.test.contextual.class.wide.seed`
+    columns((class: class) (int: marker) (short: `context literal`))
+    rows:
+             false  14  12
+end: `lm.test.contextual.class.wide.seed`
 
-    join: (`lm.test.contextual.class.wide.seed`) `lm.test.contextual.class.wide.middle`
-        columns((class: class) (int: marker) (short: `context literal`))
-        rows:
-    end: `lm.test.contextual.class.wide.middle`
+join: (`lm.test.contextual.class.wide.seed`) `lm.test.contextual.class.wide.middle`
+    columns((class: class) (int: marker) (short: `context literal`))
+    rows:
+end: `lm.test.contextual.class.wide.middle`
 
-    join: (`lm.test.contextual.class.wide.middle`) short
-        columns((class: class) (int: marker) (short: `context literal`))
-        rows:
-    end: short
+join: (`lm.test.contextual.class.wide.middle`) short
+    columns((class: class) (int: marker) (short: `context literal`))
+    rows:
+end: short
 
-    table:
-        name: short
-        columns((class: class) (int: marker) (short: `context literal`))
-        rows:
-                 false  15  None
-    end: short
+table:
+    source
+    name: short
+    columns((class: class) (int: marker) (short: `context literal`))
+    rows:
+             false  15  None
+end: short
 
-    table:
-        name: u16
-        columns((class: class) (int: marker) (u16: `context literal`))
-        rows:
-                 default  16  13
-                 default  17  None
-    end: u16
+table:
+    source
+    name: u16
+    columns((class: class) (int: marker) (u16: `context literal`))
+    rows:
+             default  16  13
+             default  17  None
+end: u16
 
-    table:
-        name: u32
-        columns((class: class) (u32: `context literal`))
-        rows:
-                 default  14
-    end: u32
+table:
+    source
+    name: u32
+    columns((class: class) (u32: `context literal`))
+    rows:
+             default  14
+end: u32
 
-    table:
-        name: u32
-        columns((class: class) (int: marker) (u32: `context literal`))
-        rows:
-                 true  18  1010
-    end: u32
+table:
+    source
+    name: u32
+    columns((class: class) (int: marker) (u32: `context literal`))
+    rows:
+             true  18  1010
+end: u32
 
-    table:
-        name: `lm.test.contextual.direct.value`
-        columns((class: class) (@: char value))
-        rows:
-                 int  100
-                 int  101
-                 int  None
-    end: `lm.test.contextual.direct.value`
+table:
+    source
+    name: `lm.test.contextual.direct.value`
+    columns((class: class) (@: char value))
+    rows:
+             int  100
+             int  101
+             int  None
+end: `lm.test.contextual.direct.value`
 
-    table:
-        name: `lm.test.contextual.fallback.value`
-        columns((class: class) (class: value))
-        rows:
-                 int  202
-    end: `lm.test.contextual.fallback.value`
+table:
+    source
+    name: `lm.test.contextual.fallback.value`
+    columns((class: class) (class: value))
+    rows:
+             int  202
+end: `lm.test.contextual.fallback.value`
 
-    table:
-        name: `lm.test.contextual.target.seed`
-        columns((class: class) (int: marker) (@: char value))
-        rows:
-                 int  7  303
-    end: `lm.test.contextual.target.seed`
+table:
+    source
+    name: `lm.test.contextual.target.seed`
+    columns((class: class) (int: marker) (@: char value))
+    rows:
+             int  7  303
+end: `lm.test.contextual.target.seed`
 
-    join: (`lm.test.contextual.target.seed`) `lm.test.contextual.target.middle`
-        columns((class: class) (int: marker) (@: char value))
-        rows:
-    end: `lm.test.contextual.target.middle`
+join: (`lm.test.contextual.target.seed`) `lm.test.contextual.target.middle`
+    columns((class: class) (int: marker) (@: char value))
+    rows:
+end: `lm.test.contextual.target.middle`
 
-    join: (`lm.test.contextual.target.middle`) `lm.test.contextual.joined`
-        columns((class: class) (int: marker) (@: char value))
-        rows:
-    end: `lm.test.contextual.joined`
+join: (`lm.test.contextual.target.middle`) `lm.test.contextual.joined`
+    columns((class: class) (int: marker) (@: char value))
+    rows:
+end: `lm.test.contextual.joined`
 
-    table:
-        name: `lm.test.contextual.joined`
-        columns((class: class) (int: marker) (@: char value))
-        rows:
-                 int  8  None
-    end: `lm.test.contextual.joined`
+table:
+    source
+    name: `lm.test.contextual.joined`
+    columns((class: class) (int: marker) (@: char value))
+    rows:
+             int  8  None
+end: `lm.test.contextual.joined`
 
-    table:
-        name: `lm.test.contextual.default`
-        columns((class: class) (int: marker) (@: char value))
-        rows:
-                 default  9  404
-    end: `lm.test.contextual.default`
+table:
+    source
+    name: `lm.test.contextual.default`
+    columns((class: class) (int: marker) (@: char value))
+    rows:
+             default  9  404
+end: `lm.test.contextual.default`
 
-    table:
-        name: `lm.test.contextual.default`
-        columns((class: class) (int: marker) (@: char value))
-        rows:
-                 default  10  None
-    end: `lm.test.contextual.default`
-end: L4
+table:
+    source
+    name: `lm.test.contextual.default`
+    columns((class: class) (int: marker) (@: char value))
+    rows:
+             default  10  None
+end: `lm.test.contextual.default`
 
 external:
     fn: main () int

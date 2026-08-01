@@ -1,87 +1,95 @@
-L4:
-    table:
-        name: `operator.postfix`
-        columns((class: class) (@: char ansi_c) (binding: emitter))
-        rows:
-                 postinc  "++"  lm_trans_expr_emit_operator
-    end: `operator.postfix`
+table:
+    source
+    name: `operator.postfix`
+    columns((class: class) (@: char ansi_c) (binding: emitter))
+    rows:
+             postinc  "++"  lm_trans_expr_emit_operator
+end: `operator.postfix`
 
-    table:
-        name: `lm.test.spelling.prefix`
-        columns((class: class) (int: marker) (@: char ansi_c))
-        rows:
-                 `!`  11  "-"
-    end: `lm.test.spelling.prefix`
+table:
+    source
+    name: `lm.test.spelling.prefix`
+    columns((class: class) (int: marker) (@: char ansi_c))
+    rows:
+             `!`  11  "-"
+end: `lm.test.spelling.prefix`
 
-    table:
-        name: `lm.test.spelling.postfix`
-        columns((class: class) (@: char ansi_c))
-        rows:
-                 postinc  "--"
-    end: `lm.test.spelling.postfix`
+table:
+    source
+    name: `lm.test.spelling.postfix`
+    columns((class: class) (@: char ansi_c))
+    rows:
+             postinc  "--"
+end: `lm.test.spelling.postfix`
 
-    table:
-        name: `lm.test.spelling.infix`
-        columns((class: class) (@: char ansi_c))
-        rows:
-                 `+`  "*"
-                 `!=` "!="
-                 `||` "||"
-    end: `lm.test.spelling.infix`
+table:
+    source
+    name: `lm.test.spelling.infix`
+    columns((class: class) (@: char ansi_c))
+    rows:
+             `+`  "*"
+             `!=` "!="
+             `||` "||"
+end: `lm.test.spelling.infix`
 
-    table:
-        name: `lm.test.spelling.index`
-        columns((class: class) (@: char ansi_c))
-        rows:
-                 `[`  "[("
-                 `]`  ")]"
-    end: `lm.test.spelling.index`
+table:
+    source
+    name: `lm.test.spelling.index`
+    columns((class: class) (@: char ansi_c))
+    rows:
+             `[`  "[("
+             `]`  ")]"
+end: `lm.test.spelling.index`
 
-    table:
-        name: expr_spelling_binding
-        columns((class: class) (int: marker) (class: binding_table))
-        rows:
-                 `operator.prefix`  12  `lm.test.spelling.prefix.ansi_c`
-    end: expr_spelling_binding
+table:
+    source
+    name: expr_spelling_binding
+    columns((class: class) (int: marker) (class: binding_table))
+    rows:
+             `operator.prefix`  12  `lm.test.spelling.prefix.ansi_c`
+end: expr_spelling_binding
 
-    table:
-        name: `lm.test.expr_spelling_binding.seed`
-        columns((class: class) (class: binding_table) (int: marker))
-        rows:
-                 `operator.infix`  `lm.test.spelling.infix`  13
-    end: `lm.test.expr_spelling_binding.seed`
+table:
+    source
+    name: `lm.test.expr_spelling_binding.seed`
+    columns((class: class) (class: binding_table) (int: marker))
+    rows:
+             `operator.infix`  `lm.test.spelling.infix`  13
+end: `lm.test.expr_spelling_binding.seed`
 
-    join: (`lm.test.expr_spelling_binding.seed`) `lm.test.expr_spelling_binding.middle`
-        columns((class: class) (class: binding_table) (int: marker))
-        rows:
-    end: `lm.test.expr_spelling_binding.middle`
+join: (`lm.test.expr_spelling_binding.seed`) `lm.test.expr_spelling_binding.middle`
+    columns((class: class) (class: binding_table) (int: marker))
+    rows:
+end: `lm.test.expr_spelling_binding.middle`
 
-    join: (`lm.test.expr_spelling_binding.middle`) expr_spelling_binding
-        columns((class: class) (class: binding_table) (int: marker))
-        rows:
-    end: expr_spelling_binding
+join: (`lm.test.expr_spelling_binding.middle`) expr_spelling_binding
+    columns((class: class) (class: binding_table) (int: marker))
+    rows:
+end: expr_spelling_binding
 
-    table:
-        name: `expr_spelling_binding.binding_table`
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.postfix`  `lm.test.spelling.postfix`
-    end: `expr_spelling_binding.binding_table`
+table:
+    source
+    name: `expr_spelling_binding.binding_table`
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.postfix`  `lm.test.spelling.postfix`
+end: `expr_spelling_binding.binding_table`
 
-    table:
-        name: `expr_spelling_binding.binding_table`
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.postfix`  None
-    end: `expr_spelling_binding.binding_table`
+table:
+    source
+    name: `expr_spelling_binding.binding_table`
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.postfix`  None
+end: `expr_spelling_binding.binding_table`
 
-    table:
-        name: `expr_spelling_binding.binding_table`
-        columns((class: class) (@: char binding_table))
-        rows:
-                 `operator.index`  "lm.test.spelling.index"
-    end: `expr_spelling_binding.binding_table`
-end: L4
+table:
+    source
+    name: `expr_spelling_binding.binding_table`
+    columns((class: class) (@: char binding_table))
+    rows:
+             `operator.index`  "lm.test.spelling.index"
+end: `expr_spelling_binding.binding_table`
 
 external:
     fn: main () int

@@ -1,5 +1,6 @@
-L4:
+L2:
     table:
+        source
         name: namespace
         columns((class: class) (class: `receiver.type`))
         rows:
@@ -8,6 +9,7 @@ L4:
     end: namespace
 
     table:
+        source
         name: namespace
         columns((class: class) (relation: `receiver.type`))
         rows:
@@ -15,6 +17,7 @@ L4:
     end: namespace
 
     table:
+        source
         name: `lm.test.namespace.trailer.seed`
         columns((class: class) (class: `receiver.type`))
         rows:
@@ -27,6 +30,7 @@ L4:
     end: namespace
 
     table:
+        source
         name: namespace
         columns((class: class) (class: `receiver.type`))
         rows:
@@ -34,6 +38,7 @@ L4:
     end: namespace
 
     table:
+        source
         name: `receiver.trailer`
         columns((class: class) (binding: receiver))
         rows:
@@ -43,6 +48,7 @@ L4:
     end: `receiver.trailer`
 
     table:
+        source
         name: `receiver.trailer`
         columns((class: class) (class: receiver))
         rows:
@@ -50,6 +56,7 @@ L4:
     end: `receiver.trailer`
 
     table:
+        source
         name: `lm.test.receiver.trailer.seed`
         columns((class: class) (int: marker) (binding: trailer))
         rows:
@@ -67,12 +74,13 @@ L4:
     end: receiver
 
     table:
+        source
         name: receiver
         columns((class: class) (int: marker) (binding: trailer))
         rows:
                  LmTestJoinedTrailer  2  None
     end: receiver
-end: L4
+end: L2
 
 L2:
     external:

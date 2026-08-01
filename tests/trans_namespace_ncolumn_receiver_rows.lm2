@@ -1,84 +1,91 @@
-L4:
-    table:
-        name: namespace
-        columns((class: class) (class: `receiver.type`) (int: marker))
-        rows:
-                 default       `receiver.statement`  9
-                 LmWideDirect  `receiver.level`  10
-                 LmWideDirect  None              11
-                 LmWideDirectWins  `receiver.statement`  12
-    end: namespace
+table:
+    source
+    name: namespace
+    columns((class: class) (class: `receiver.type`) (int: marker))
+    rows:
+             default       `receiver.statement`  9
+             LmWideDirect  `receiver.level`  10
+             LmWideDirect  None              11
+             LmWideDirectWins  `receiver.statement`  12
+end: namespace
 
-    table:
-        name: namespace
-        columns((class: class) (class: `receiver.type`))
-        rows:
-                 LmWideDirectWins  `receiver.level`
-    end: namespace
+table:
+    source
+    name: namespace
+    columns((class: class) (class: `receiver.type`))
+    rows:
+             LmWideDirectWins  `receiver.level`
+end: namespace
 
-    table:
-        name: `namespace.receiver.type`
-        columns((class: class) (class: value))
-        rows:
-                 LmWideFlat  `receiver.level`
-    end: `namespace.receiver.type`
+table:
+    source
+    name: `namespace.receiver.type`
+    columns((class: class) (class: value))
+    rows:
+             LmWideFlat  `receiver.level`
+end: `namespace.receiver.type`
 
-    table:
-        name: namespace
-        columns((class: class) (relation: `receiver.type`) (int: marker))
-        rows:
-                 LmWideFallback  `receiver.level`  20
-    end: namespace
+table:
+    source
+    name: namespace
+    columns((class: class) (relation: `receiver.type`) (int: marker))
+    rows:
+             LmWideFallback  `receiver.level`  20
+end: namespace
 
-    table:
-        name: `namespace.receiver`
-        columns((class: class) (class: type) (int: marker))
-        rows:
-                 LmWideSplit  `receiver.level`  50
-    end: `namespace.receiver`
+table:
+    source
+    name: `namespace.receiver`
+    columns((class: class) (class: type) (int: marker))
+    rows:
+             LmWideSplit  `receiver.level`  50
+end: `namespace.receiver`
 
-    table:
-        name: `lm.test.namespace.ncolumn.seed`
-        columns((class: class) (class: `receiver.type`) (int: marker))
-        rows:
-                 LmWideJoined0  `receiver.level`  30
-                 LmWideJoined0  `receiver.level`  31
-                 LmWideJoined2  `receiver.level`  32
-    end: `lm.test.namespace.ncolumn.seed`
+table:
+    source
+    name: `lm.test.namespace.ncolumn.seed`
+    columns((class: class) (class: `receiver.type`) (int: marker))
+    rows:
+             LmWideJoined0  `receiver.level`  30
+             LmWideJoined0  `receiver.level`  31
+             LmWideJoined2  `receiver.level`  32
+end: `lm.test.namespace.ncolumn.seed`
 
-    join: (`lm.test.namespace.ncolumn.seed`) namespace
-        columns((class: class) (class: `receiver.type`) (int: marker))
-        rows:
-    end: namespace
+join: (`lm.test.namespace.ncolumn.seed`) namespace
+    columns((class: class) (class: `receiver.type`) (int: marker))
+    rows:
+end: namespace
 
-    table:
-        name: namespace
-        columns((class: class) (class: `receiver.type`) (int: marker))
-        rows:
-                 LmWideJoined0  None  40
-                 LmWideJoined2  None  41
-    end: namespace
+table:
+    source
+    name: namespace
+    columns((class: class) (class: `receiver.type`) (int: marker))
+    rows:
+             LmWideJoined0  None  40
+             LmWideJoined2  None  41
+end: namespace
 
-    table:
-        name: `receiver.level`
-        columns((class: class) (binding: receiver))
-        rows:
-                 LmWideDirect    lm_trans_emit_l1_frame
-                 LmWideFallback  lm_trans_emit_l1_frame
-                 LmWideJoined0   lm_trans_emit_l1_frame
-                 LmWideJoined2   lm_trans_emit_l1_frame
-                 LmWideDirectWins  lm_trans_emit_l1_frame
-                 LmWideSplit       lm_trans_emit_l1_frame
-                 LmWideFlat        lm_trans_emit_l1_frame
-    end: `receiver.level`
+table:
+    source
+    name: `receiver.level`
+    columns((class: class) (binding: receiver))
+    rows:
+             LmWideDirect    lm_trans_emit_l1_frame
+             LmWideFallback  lm_trans_emit_l1_frame
+             LmWideJoined0   lm_trans_emit_l1_frame
+             LmWideJoined2   lm_trans_emit_l1_frame
+             LmWideDirectWins  lm_trans_emit_l1_frame
+             LmWideSplit       lm_trans_emit_l1_frame
+             LmWideFlat        lm_trans_emit_l1_frame
+end: `receiver.level`
 
-    table:
-        name: `receiver.statement`
-        columns((class: class) (binding: receiver))
-        rows:
-                 default  lm_trans_statement_emit_assert
-    end: `receiver.statement`
-end: L4
+table:
+    source
+    name: `receiver.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+             default  lm_trans_statement_emit_assert
+end: `receiver.statement`
 
 LmWideDirect:
 ===

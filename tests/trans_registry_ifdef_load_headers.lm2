@@ -1,57 +1,54 @@
-L4:
-    table:
-        name: include
-        columns((class: class) (@: char target))
-        rows:
-                 stdio  "<stdio.h>"
-    end: include
+table:
+    source
+    name: include
+    columns((class: class) (@: char target))
+    rows:
+             stdio  "<stdio.h>"
+end: include
 
-    table:
-        name: ifdef
-        columns((class: class) (node: body))
-        rows:
-                 `defined(_WIN32)`
-                 L2:
-                     define: LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE 7
-                 end: L2
-                 default
-                 L2:
-                     define: LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE 3
-                 end: L2
-    end: ifdef
+table:
+    source
+    name: ifdef
+    columns((class: class) (node: body))
+    rows:
+             `defined(_WIN32)`
+             L2:
+                 define: LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE 7
+             end: L2
+             default
+             L2:
+                 define: LM_TEST_REGISTRY_IFDEF_LOAD_HEADERS_VALUE 3
+             end: L2
+end: ifdef
 
-    table:
-        name: `prelude.sequence`
-        columns((class: class) (int: value))
-        rows:
-                 lmTestPreludeBeforeGenerated  1
-    end: `prelude.sequence`
+table:
+    source
+    name: `prelude.sequence`
+    columns((class: class) (int: value))
+    rows:
+             lmTestPreludeBeforeGenerated  1
+end: `prelude.sequence`
 
-    table:
-        name: `lmTestPreludeBeforeGenerated.item`
-        columns((class: class) (size_t: index))
-        rows:
-                 include  0
-    end: `lmTestPreludeBeforeGenerated.item`
-end: L4
+table:
+    source
+    name: `lmTestPreludeBeforeGenerated.item`
+    columns((class: class) (size_t: index))
+    rows:
+             include  0
+end: `lmTestPreludeBeforeGenerated.item`
 
-L4: loadHeaders
+table:
+    source
+    name: `receiver.atom.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+             loadHeaders                       lm_trans_atom_statement_emit_sequence_prelude
+             lmTestPreludeAfterGenerated       lm_trans_atom_statement_emit_sequence_prelude
+end: `receiver.atom.statement`
 
-L4:
-    table:
-        name: `prelude.sequence`
-        columns((class: class) (int: value))
-        rows:
-                 lmTestPreludeAfterGenerated  1
-    end: `prelude.sequence`
+loadHeaders
 
-    table:
-        name: `lmTestPreludeAfterGenerated.item`
-        columns((class: class) (size_t: index))
-        rows:
-                 include  0
-    end: `lmTestPreludeAfterGenerated.item`
-end: L4
+import: "fixtures/registry_ifdef_load_headers_after.lm2"
 
 external:
     fn: main () int

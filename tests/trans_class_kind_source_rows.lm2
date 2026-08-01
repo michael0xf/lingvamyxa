@@ -1,143 +1,155 @@
-L4:
-    table:
-        name: class
-        columns((class: class) (class: kind))
-        rows:
-                 LmClassKindSourceDirect  opaqueReference
-                 LmClassKindSourceDirect  None
-                 default                  function
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+             LmClassKindSourceDirect  opaqueReference
+             LmClassKindSourceDirect  None
+             default                  function
+end: class
 
-    table:
-        name: class
-        columns((class: class) (@: char kind))
-        rows:
-                 LmClassKindSourceSchemaFallback  opaqueReference
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (@: char kind))
+    rows:
+             LmClassKindSourceSchemaFallback  opaqueReference
+end: class
 
-    table:
-        name: class
-        columns((class: class) (class: kind) (int: marker))
-        rows:
-                 LmClassKindWideDirect           opaqueReference  1
-                 LmClassKindWideLateNone         opaqueReference  2
-                 LmClassKindWideLateNone         None             3
-                 LmClassKindWidePhysicalOverlay  opaqueReference  4
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (class: kind) (int: marker))
+    rows:
+             LmClassKindWideDirect           opaqueReference  1
+             LmClassKindWideLateNone         opaqueReference  2
+             LmClassKindWideLateNone         None             3
+             LmClassKindWidePhysicalOverlay  opaqueReference  4
+end: class
 
-    table:
-        name: class
-        columns((class: class) (int: marker) (class: kind))
-        rows:
-                 LmClassKindWideReordered  5  opaqueReference
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (int: marker) (class: kind))
+    rows:
+             LmClassKindWideReordered  5  opaqueReference
+end: class
 
-    table:
-        name: `class.kind`
-        columns((class: class) (class: kind))
-        rows:
-                 LmClassKindWidePhysicalOverlay  opaqueReference
-                 LmClassKindWidePhysical         opaqueReference
-    end: `class.kind`
+table:
+    source
+    name: `class.kind`
+    columns((class: class) (class: kind))
+    rows:
+             LmClassKindWidePhysicalOverlay  opaqueReference
+             LmClassKindWidePhysical         opaqueReference
+end: `class.kind`
 
-    table:
-        name: `lm.test.class.kind.wide.seed`
-        columns((class: class) (class: kind) (int: marker))
-        rows:
-                 LmClassKindWideJoined  opaqueReference  6
-    end: `lm.test.class.kind.wide.seed`
+table:
+    source
+    name: `lm.test.class.kind.wide.seed`
+    columns((class: class) (class: kind) (int: marker))
+    rows:
+             LmClassKindWideJoined  opaqueReference  6
+end: `lm.test.class.kind.wide.seed`
 
-    join: (`lm.test.class.kind.wide.seed`) `lm.test.class.kind.wide.middle`
-        columns((class: class) (class: kind) (int: marker))
-        rows:
-    end: `lm.test.class.kind.wide.middle`
+join: (`lm.test.class.kind.wide.seed`) `lm.test.class.kind.wide.middle`
+    columns((class: class) (class: kind) (int: marker))
+    rows:
+end: `lm.test.class.kind.wide.middle`
 
-    join: (`lm.test.class.kind.wide.middle`) class
-        columns((class: class) (class: kind) (int: marker))
-        rows:
-    end: class
+join: (`lm.test.class.kind.wide.middle`) class
+    columns((class: class) (class: kind) (int: marker))
+    rows:
+end: class
 
-    table:
-        name: class
-        columns((class: class) (@: char kind) (int: marker))
-        rows:
-                 LmClassKindWideSchemaFallback  opaqueReference  7
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (@: char kind) (int: marker))
+    rows:
+             LmClassKindWideSchemaFallback  opaqueReference  7
+end: class
 
-    table:
-        name: `lm.test.class.kind.source.seed`
-        columns((class: class) (class: kind))
-        rows:
-                 LmClassKindSourceJoined  opaqueReference
-    end: `lm.test.class.kind.source.seed`
+table:
+    source
+    name: `lm.test.class.kind.source.seed`
+    columns((class: class) (class: kind))
+    rows:
+             LmClassKindSourceJoined  opaqueReference
+end: `lm.test.class.kind.source.seed`
 
-    join: (`lm.test.class.kind.source.seed`) class
-        columns((class: class) (class: kind))
-        rows:
-    end: class
+join: (`lm.test.class.kind.source.seed`) class
+    columns((class: class) (class: kind))
+    rows:
+end: class
 
-    table:
-        name: class
-        columns((class: class) (class: kind))
-        rows:
-                 LmClassKindSourceJoined  None
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+             LmClassKindSourceJoined  None
+end: class
 
-    table:
-        name: `class.kind`
-        columns((class: class) (class: kind))
-        rows:
-                 LmClassKindCompatDirect  opaqueReference
-                 LmClassKindCompatDirect  None
-    end: `class.kind`
+table:
+    source
+    name: `class.kind`
+    columns((class: class) (class: kind))
+    rows:
+             LmClassKindCompatDirect  opaqueReference
+             LmClassKindCompatDirect  None
+end: `class.kind`
 
-    table:
-        name: `class.kind`
-        columns((class: class) (@: char kind))
-        rows:
-                 LmClassKindCompatSchemaFallback  opaqueReference
-    end: `class.kind`
+table:
+    source
+    name: `class.kind`
+    columns((class: class) (@: char kind))
+    rows:
+             LmClassKindCompatSchemaFallback  opaqueReference
+end: `class.kind`
 
-    table:
-        name: `lm.test.class.kind.compat.seed`
-        columns((class: class) (class: kind))
-        rows:
-                 LmClassKindCompatJoined  opaqueReference
-    end: `lm.test.class.kind.compat.seed`
+table:
+    source
+    name: `lm.test.class.kind.compat.seed`
+    columns((class: class) (class: kind))
+    rows:
+             LmClassKindCompatJoined  opaqueReference
+end: `lm.test.class.kind.compat.seed`
 
-    join: (`lm.test.class.kind.compat.seed`) `class.kind`
-        columns((class: class) (class: kind))
-        rows:
-    end: `class.kind`
+join: (`lm.test.class.kind.compat.seed`) `class.kind`
+    columns((class: class) (class: kind))
+    rows:
+end: `class.kind`
 
-    table:
-        name: `class.kind`
-        columns((class: class) (class: kind))
-        rows:
-                 LmClassKindCompatJoined  None
-    end: `class.kind`
+table:
+    source
+    name: `class.kind`
+    columns((class: class) (class: kind))
+    rows:
+             LmClassKindCompatJoined  None
+end: `class.kind`
 
-    table:
-        name: `class.c.projection`
-        columns((class: class) (@: char spelling))
-        rows:
-                 LmClassKindSourceDirect          int
-                 LmClassKindSourceSchemaFallback  int
-                 LmClassKindSourceJoined          int
-                 LmClassKindCompatDirect          int
-                 LmClassKindCompatSchemaFallback  int
-                 LmClassKindCompatJoined          int
-                 LmClassKindWideDirect             int
-                 LmClassKindWideLateNone           int
-                 LmClassKindWideReordered          int
-                 LmClassKindWidePhysicalOverlay    int
-                 LmClassKindWidePhysical           int
-                 LmClassKindWideJoined             int
-                 LmClassKindWideSchemaFallback     int
-    end: `class.c.projection`
+table:
+    source
+    name: `class.c.projection`
+    columns((class: class) (@: char spelling))
+    rows:
+             LmClassKindSourceDirect          int
+             LmClassKindSourceSchemaFallback  int
+             LmClassKindSourceJoined          int
+             LmClassKindCompatDirect          int
+             LmClassKindCompatSchemaFallback  int
+             LmClassKindCompatJoined          int
+             LmClassKindWideDirect             int
+             LmClassKindWideLateNone           int
+             LmClassKindWideReordered          int
+             LmClassKindWidePhysicalOverlay    int
+             LmClassKindWidePhysical           int
+             LmClassKindWideJoined             int
+             LmClassKindWideSchemaFallback     int
+end: `class.c.projection`
 
-    sub: lm_test_class_kind_runtime_default (int: value)
-end: L4
+sub: lm_test_class_kind_runtime_default (int: value)
 
 prototype
 

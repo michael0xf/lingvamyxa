@@ -1,44 +1,46 @@
-L4:
-    table:
-        name: `receiver.function`
-        columns((class: class) (binding: receiver))
-        rows:
-                 fn  lm_trans_receiver_sub
-                 fn  lm_trans_receiver_fn
-                 fn  None
-    end: `receiver.function`
+table:
+    source
+    name: `receiver.function`
+    columns((class: class) (binding: receiver))
+    rows:
+             fn  lm_trans_receiver_sub
+             fn  lm_trans_receiver_fn
+             fn  None
+end: `receiver.function`
 
-    table:
-        name: `receiver.function`
-        columns((class: class) (class: receiver))
-        rows:
-                 sub  lm_trans_receiver_sub
-    end: `receiver.function`
+table:
+    source
+    name: `receiver.function`
+    columns((class: class) (class: receiver))
+    rows:
+             sub  lm_trans_receiver_sub
+end: `receiver.function`
 
-    table:
-        name: `lm.test.receiver.function.seed`
-        columns((class: class) (int: marker) (binding: function))
-        rows:
-                 callable  1  lm_trans_receiver_callable
-    end: `lm.test.receiver.function.seed`
+table:
+    source
+    name: `lm.test.receiver.function.seed`
+    columns((class: class) (int: marker) (binding: function))
+    rows:
+             callable  1  lm_trans_receiver_callable
+end: `lm.test.receiver.function.seed`
 
-    join: (`lm.test.receiver.function.seed`) `lm.test.receiver.function.middle`
-        columns((class: class) (int: marker) (binding: function))
-        rows:
-    end: `lm.test.receiver.function.middle`
+join: (`lm.test.receiver.function.seed`) `lm.test.receiver.function.middle`
+    columns((class: class) (int: marker) (binding: function))
+    rows:
+end: `lm.test.receiver.function.middle`
 
-    join: (`lm.test.receiver.function.middle`) receiver
-        columns((class: class) (int: marker) (binding: function))
-        rows:
-    end: receiver
+join: (`lm.test.receiver.function.middle`) receiver
+    columns((class: class) (int: marker) (binding: function))
+    rows:
+end: receiver
 
-    table:
-        name: receiver
-        columns((class: class) (int: marker) (binding: function))
-        rows:
-                 callable  2  None
-    end: receiver
-end: L4
+table:
+    source
+    name: receiver
+    columns((class: class) (int: marker) (binding: function))
+    rows:
+             callable  2  None
+end: receiver
 
 callable: Increment (int: value) int
 

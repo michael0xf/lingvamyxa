@@ -1,5 +1,6 @@
-L4:
+L2:
     table:
+        source
         name: `class.c.projection`
         columns((class: class) (@: char spelling))
         rows:
@@ -13,6 +14,7 @@ L4:
     end: `class.c.projection`
 
     table:
+        source
         name: `class.c.projection`
         columns((class: class) (class: spelling))
         rows:
@@ -20,6 +22,7 @@ L4:
     end: `class.c.projection`
 
     table:
+        source
         name: `lm.test.class.c.projection.seed`
         columns((class: class) (int: marker) (@: char `c.projection`))
         rows:
@@ -37,6 +40,7 @@ L4:
     end: class
 
     table:
+        source
         name: class
         columns((class: class) (int: marker) (@: char `c.projection`))
         rows:
@@ -44,6 +48,7 @@ L4:
     end: class
 
     table:
+        source
         name: `class.spelling`
         columns((class: class) (@: char spelling))
         rows:
@@ -51,6 +56,7 @@ L4:
     end: `class.spelling`
 
     table:
+        source
         name: `class.reference-base`
         columns((class: class) (int: value))
         rows:
@@ -58,6 +64,7 @@ L4:
     end: `class.reference-base`
 
     table:
+        source
         name: `class.kind`
         columns((class: class) (class: kind))
         rows:
@@ -65,12 +72,13 @@ L4:
     end: `class.kind`
 
     table:
+        source
         name: `class.semantic`
         columns((class: class) (@: char value))
         rows:
                  LmProjectionSemanticReference  opaqueHandle
     end: `class.semantic`
-end: L4
+end: L2
 
 L1:
 ===

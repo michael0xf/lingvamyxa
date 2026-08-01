@@ -1,46 +1,48 @@
-L4:
-    table:
-        name: `class.spelling`
-        columns((class: class) (@: char spelling))
-        rows:
-                 directType  short
-                 directType  int
-                 directType  None
-    end: `class.spelling`
+table:
+    source
+    name: `class.spelling`
+    columns((class: class) (@: char spelling))
+    rows:
+             directType  short
+             directType  int
+             directType  None
+end: `class.spelling`
 
-    table:
-        name: `class.spelling`
-        columns((class: class) (class: spelling))
-        rows:
-                 fallbackType  short
-    end: `class.spelling`
+table:
+    source
+    name: `class.spelling`
+    columns((class: class) (class: spelling))
+    rows:
+             fallbackType  short
+end: `class.spelling`
 
-    table:
-        name: `lm.test.class.spelling.seed`
-        columns((class: class) (int: marker) (@: char spelling))
-        rows:
-                 joinedType  7  long
-                 default     9  unsigned
-    end: `lm.test.class.spelling.seed`
+table:
+    source
+    name: `lm.test.class.spelling.seed`
+    columns((class: class) (int: marker) (@: char spelling))
+    rows:
+             joinedType  7  long
+             default     9  unsigned
+end: `lm.test.class.spelling.seed`
 
-    join: (`lm.test.class.spelling.seed`) `lm.test.class.spelling.middle`
-        columns((class: class) (int: marker) (@: char spelling))
-        rows:
-    end: `lm.test.class.spelling.middle`
+join: (`lm.test.class.spelling.seed`) `lm.test.class.spelling.middle`
+    columns((class: class) (int: marker) (@: char spelling))
+    rows:
+end: `lm.test.class.spelling.middle`
 
-    join: (`lm.test.class.spelling.middle`) class
-        columns((class: class) (int: marker) (@: char spelling))
-        rows:
-    end: class
+join: (`lm.test.class.spelling.middle`) class
+    columns((class: class) (int: marker) (@: char spelling))
+    rows:
+end: class
 
-    table:
-        name: class
-        columns((class: class) (int: marker) (@: char spelling))
-        rows:
-                 joinedType  8  None
-                 default    10  None
-    end: class
-end: L4
+table:
+    source
+    name: class
+    columns((class: class) (int: marker) (@: char spelling))
+    rows:
+             joinedType  8  None
+             default    10  None
+end: class
 
 external:
     fn: main () int

@@ -1,46 +1,48 @@
 import: "lm2/own.lm2"
 
-L4:
-    table:
-        name: `materialize.argument`
-        columns((class: class) (binding: materializer))
-        rows:
-                 `callable.zero-arg.value`  lm_trans_materialize_callable_descriptor_value
-                 `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
-                 `callable.zero-arg.value`  None
-    end: `materialize.argument`
+table:
+    source
+    name: `materialize.argument`
+    columns((class: class) (binding: materializer))
+    rows:
+             `callable.zero-arg.value`  lm_trans_materialize_callable_descriptor_value
+             `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
+             `callable.zero-arg.value`  None
+end: `materialize.argument`
 
-    table:
-        name: `materialize.argument`
-        columns((class: class) (class: materializer))
-        rows:
-                 `callable.descriptor.value`  lm_trans_materialize_callable_descriptor_value
-    end: `materialize.argument`
+table:
+    source
+    name: `materialize.argument`
+    columns((class: class) (class: materializer))
+    rows:
+             `callable.descriptor.value`  lm_trans_materialize_callable_descriptor_value
+end: `materialize.argument`
 
-    table:
-        name: `lm.test.materialize.argument.seed`
-        columns((class: class) (int: marker) (binding: argument))
-        rows:
-                 `array.value`  1  lm_trans_materialize_array_value
-    end: `lm.test.materialize.argument.seed`
+table:
+    source
+    name: `lm.test.materialize.argument.seed`
+    columns((class: class) (int: marker) (binding: argument))
+    rows:
+             `array.value`  1  lm_trans_materialize_array_value
+end: `lm.test.materialize.argument.seed`
 
-    join: (`lm.test.materialize.argument.seed`) `lm.test.materialize.argument.middle`
-        columns((class: class) (int: marker) (binding: argument))
-        rows:
-    end: `lm.test.materialize.argument.middle`
+join: (`lm.test.materialize.argument.seed`) `lm.test.materialize.argument.middle`
+    columns((class: class) (int: marker) (binding: argument))
+    rows:
+end: `lm.test.materialize.argument.middle`
 
-    join: (`lm.test.materialize.argument.middle`) materialize
-        columns((class: class) (int: marker) (binding: argument))
-        rows:
-    end: materialize
+join: (`lm.test.materialize.argument.middle`) materialize
+    columns((class: class) (int: marker) (binding: argument))
+    rows:
+end: materialize
 
-    table:
-        name: materialize
-        columns((class: class) (int: marker) (binding: argument))
-        rows:
-                 `array.value`  2  None
-    end: materialize
-end: L4
+table:
+    source
+    name: materialize
+    columns((class: class) (int: marker) (binding: argument))
+    rows:
+             `array.value`  2  None
+end: materialize
 
 callable: AddX (int: value) int
 

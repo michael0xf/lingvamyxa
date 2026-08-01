@@ -1,44 +1,46 @@
-L4:
-    table:
-        name: `receiver.statement`
-        columns((class: class) (binding: receiver))
-        rows:
-                 if  lm_trans_statement_emit_while
-                 if  lm_trans_statement_emit_if
-                 if  None
-    end: `receiver.statement`
+table:
+    source
+    name: `receiver.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+             if  lm_trans_statement_emit_while
+             if  lm_trans_statement_emit_if
+             if  None
+end: `receiver.statement`
 
-    table:
-        name: `receiver.statement`
-        columns((class: class) (class: receiver))
-        rows:
-                 while  lm_trans_statement_emit_while
-    end: `receiver.statement`
+table:
+    source
+    name: `receiver.statement`
+    columns((class: class) (class: receiver))
+    rows:
+             while  lm_trans_statement_emit_while
+end: `receiver.statement`
 
-    table:
-        name: `lm.test.receiver.statement.seed`
-        columns((class: class) (int: marker) (binding: statement))
-        rows:
-                 `return`  1  lm_trans_statement_emit_return
-    end: `lm.test.receiver.statement.seed`
+table:
+    source
+    name: `lm.test.receiver.statement.seed`
+    columns((class: class) (int: marker) (binding: statement))
+    rows:
+             `return`  1  lm_trans_statement_emit_return
+end: `lm.test.receiver.statement.seed`
 
-    join: (`lm.test.receiver.statement.seed`) `lm.test.receiver.statement.middle`
-        columns((class: class) (int: marker) (binding: statement))
-        rows:
-    end: `lm.test.receiver.statement.middle`
+join: (`lm.test.receiver.statement.seed`) `lm.test.receiver.statement.middle`
+    columns((class: class) (int: marker) (binding: statement))
+    rows:
+end: `lm.test.receiver.statement.middle`
 
-    join: (`lm.test.receiver.statement.middle`) receiver
-        columns((class: class) (int: marker) (binding: statement))
-        rows:
-    end: receiver
+join: (`lm.test.receiver.statement.middle`) receiver
+    columns((class: class) (int: marker) (binding: statement))
+    rows:
+end: receiver
 
-    table:
-        name: receiver
-        columns((class: class) (int: marker) (binding: statement))
-        rows:
-                 `return`  2  None
-    end: receiver
-end: L4
+table:
+    source
+    name: receiver
+    columns((class: class) (int: marker) (binding: statement))
+    rows:
+             `return`  2  None
+end: receiver
 
 external:
     fn: main () int

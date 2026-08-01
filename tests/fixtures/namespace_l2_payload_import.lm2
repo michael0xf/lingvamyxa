@@ -1,0 +1,5 @@
+external:
+    fn: lm_test_namespace_l2_payload_imported () int
+        return: 32
+    end: lm_test_namespace_l2_payload_imported
+end: external

@@ -1,60 +1,64 @@
-L4:
-    table:
-        name: `class.reference-base`
-        columns((class: class) (int: value))
-        rows:
-                 short  1
-                 short  0
-                 short  None
-    end: `class.reference-base`
+table:
+    source
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             short  1
+             short  0
+             short  None
+end: `class.reference-base`
 
-    table:
-        name: `class.reference-base`
-        columns((class: class) (class: value))
-        rows:
-                 long  int
-    end: `class.reference-base`
+table:
+    source
+    name: `class.reference-base`
+    columns((class: class) (class: value))
+    rows:
+             long  int
+end: `class.reference-base`
 
-    table:
-        name: `lm.test.class.reference-base.seed`
-        columns((class: class) (int: marker) (int: `reference-base`))
-        rows:
-                 float  7  1
-    end: `lm.test.class.reference-base.seed`
+table:
+    source
+    name: `lm.test.class.reference-base.seed`
+    columns((class: class) (int: marker) (int: `reference-base`))
+    rows:
+             float  7  1
+end: `lm.test.class.reference-base.seed`
 
-    join: (`lm.test.class.reference-base.seed`) `lm.test.class.reference-base.middle`
-        columns((class: class) (int: marker) (int: `reference-base`))
-        rows:
-    end: `lm.test.class.reference-base.middle`
+join: (`lm.test.class.reference-base.seed`) `lm.test.class.reference-base.middle`
+    columns((class: class) (int: marker) (int: `reference-base`))
+    rows:
+end: `lm.test.class.reference-base.middle`
 
-    join: (`lm.test.class.reference-base.middle`) class
-        columns((class: class) (int: marker) (int: `reference-base`))
-        rows:
-    end: class
+join: (`lm.test.class.reference-base.middle`) class
+    columns((class: class) (int: marker) (int: `reference-base`))
+    rows:
+end: class
 
-    table:
-        name: class
-        columns((class: class) (int: marker) (int: `reference-base`))
-        rows:
-                 float  8  None
-    end: class
+table:
+    source
+    name: class
+    columns((class: class) (int: marker) (int: `reference-base`))
+    rows:
+             float  8  None
+end: class
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmTestClassReferenceBase  c.struct
-    end: `layout.backend`
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestClassReferenceBase  c.struct
+end: `layout.backend`
 
-    table:
-        name: LmTestClassReferenceBase
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 direct    short  0
-                 fallback  long   1
-                 joined    float  2
-    end: LmTestClassReferenceBase
-end: L4
+table:
+    source
+    name: LmTestClassReferenceBase
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             direct    short  0
+             fallback  long   1
+             joined    float  2
+end: LmTestClassReferenceBase
 
 layout
 

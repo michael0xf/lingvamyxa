@@ -1,0 +1,81 @@
+table:
+    source
+    name: include
+    columns((class: class) (@: char target))
+    rows:
+             stddef  "<stddef.h>"
+end: include
+
+table:
+    source
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             LM_TEST_NAMESPACE_L2_OVERLAY  7
+end: `define.value`
+
+table:
+    source
+    name: `lm.test.namespace.l2.receiver.seed`
+    columns((class: class) (binding: receiver))
+    rows:
+             lmTestNamespaceL2  lm_trans_atom_statement_emit_sequence_prelude
+end: `lm.test.namespace.l2.receiver.seed`
+
+join: (`lm.test.namespace.l2.receiver.seed`) `lm.test.namespace.l2.receiver.middle`
+    columns((class: class) (binding: receiver))
+    rows:
+end: `lm.test.namespace.l2.receiver.middle`
+
+join: (`lm.test.namespace.l2.receiver.middle`) `receiver.atom.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+end: `receiver.atom.statement`
+
+table:
+    source
+    name: `lmTestNamespaceL2.item`
+    columns((class: class) (size_t: index))
+    rows:
+             include  0
+end: `lmTestNamespaceL2.item`
+
+table:
+    source
+    name: `lmTestNamespaceL2.item`
+    columns((class: class) (size_t: index))
+    rows:
+             define  1
+end: `lmTestNamespaceL2.item`
+
+table:
+    source
+    name: unit
+    columns((class: class) (class: backend) (node: payload))
+    rows:
+             lm_test_namespace_l2_payload_direct  c.static-unit
+             L2:
+                 external:
+                     fn: lm_test_namespace_l2_payload_direct () int
+                         return: 31
+                     end: lm_test_namespace_l2_payload_direct
+                 end: external
+             end: L2
+             lm_test_namespace_l2_payload_import  c.static-unit
+             import: "fixtures/namespace_l2_payload_import.lm2"
+end: unit
+
+lmTestNamespaceL2
+unit
+
+external:
+    fn: main () int
+        if: c.LM_TEST_NAMESPACE_L2_OVERLAY != 7
+            return: 1
+        if: c.lm_test_namespace_l2_payload_direct() != 31
+            return: 2
+        if: c.lm_test_namespace_l2_payload_imported() != 32
+            return: 3
+        return: 0
+    end: main
+end: external

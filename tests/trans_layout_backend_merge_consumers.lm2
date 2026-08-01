@@ -1,116 +1,127 @@
-L4:
-    table:
-        name: `forward.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmMergeCall  c.struct
-    end: `forward.backend`
+table:
+    source
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmMergeCall  c.struct
+end: `forward.backend`
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmMergeDirect  c.named-struct
-                 LmMergeDirect  c.struct
-                 LmMergeDirect  None
-    end: `layout.backend`
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmMergeDirect  c.named-struct
+             LmMergeDirect  c.struct
+             LmMergeDirect  None
+end: `layout.backend`
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: value))
-        rows:
-                 LmMergeCall  c.struct
-    end: `layout.backend`
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: value))
+    rows:
+             LmMergeCall  c.struct
+end: `layout.backend`
 
-    table:
-        name: `lm.test.layout.backend.merge.seed`
-        columns((class: class) (class: backend))
-        rows:
-                 LmMergeJoined  c.struct
-    end: `lm.test.layout.backend.merge.seed`
+table:
+    source
+    name: `lm.test.layout.backend.merge.seed`
+    columns((class: class) (class: backend))
+    rows:
+             LmMergeJoined  c.struct
+end: `lm.test.layout.backend.merge.seed`
 
-    join: (`lm.test.layout.backend.merge.seed`) `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-    end: `layout.backend`
+join: (`lm.test.layout.backend.merge.seed`) `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+end: `layout.backend`
 
-    table:
-        name: `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-                 LmMergeJoined  None
-    end: `layout.backend`
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmMergeJoined  None
+end: `layout.backend`
 
-    table:
-        name: layout
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-                 LmMergeWide  c.struct  1
-    end: layout
+table:
+    source
+    name: layout
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+             LmMergeWide  c.struct  1
+end: layout
 
-    table:
-        name: `lm.test.layout.backend.merge.wide.seed`
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-                 LmMergeWideJoined  c.struct  2
-    end: `lm.test.layout.backend.merge.wide.seed`
+table:
+    source
+    name: `lm.test.layout.backend.merge.wide.seed`
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+             LmMergeWideJoined  c.struct  2
+end: `lm.test.layout.backend.merge.wide.seed`
 
-    join: (`lm.test.layout.backend.merge.wide.seed`) `lm.test.layout.backend.merge.wide.middle`
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-    end: `lm.test.layout.backend.merge.wide.middle`
+join: (`lm.test.layout.backend.merge.wide.seed`) `lm.test.layout.backend.merge.wide.middle`
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+end: `lm.test.layout.backend.merge.wide.middle`
 
-    join: (`lm.test.layout.backend.merge.wide.middle`) layout
-        columns((class: class) (class: backend) (int: marker))
-        rows:
-    end: layout
+join: (`lm.test.layout.backend.merge.wide.middle`) layout
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+end: layout
 
-    table:
-        name: LmMergeDirect
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 direct_value  int  0
-    end: LmMergeDirect
+table:
+    source
+    name: LmMergeDirect
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             direct_value  int  0
+end: LmMergeDirect
 
-    table:
-        name: LmMergeJoined
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 joined_value  long  0
-    end: LmMergeJoined
+table:
+    source
+    name: LmMergeJoined
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             joined_value  long  0
+end: LmMergeJoined
 
-    table:
-        name: LmMergeCall
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 call_value  short  0
-    end: LmMergeCall
+table:
+    source
+    name: LmMergeCall
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             call_value  short  0
+end: LmMergeCall
 
-    table:
-        name: LmMergeWide
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 wide_value  int  0
-    end: LmMergeWide
+table:
+    source
+    name: LmMergeWide
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             wide_value  int  0
+end: LmMergeWide
 
-    table:
-        name: LmMergeWideJoined
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
-        rows:
-                 wide_joined_value  long  0
-    end: LmMergeWideJoined
+table:
+    source
+    name: LmMergeWideJoined
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             wide_joined_value  long  0
+end: LmMergeWideJoined
 
-    table:
-        name: `class.reference-base`
-        columns((class: class) (int: value))
-        rows:
-                 LmMergeDirect  1
-                 LmMergeJoined  1
-                 LmMergeCall    1
-                 LmMergeWide          1
-                 LmMergeWideJoined    1
-    end: `class.reference-base`
-end: L4
+table:
+    source
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmMergeDirect  1
+             LmMergeJoined  1
+             LmMergeCall    1
+             LmMergeWide          1
+             LmMergeWideJoined    1
+end: `class.reference-base`
 
 forward
 

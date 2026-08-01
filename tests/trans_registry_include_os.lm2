@@ -1,29 +1,29 @@
-L4:
-    table:
-        name: include
-        columns((class: class) (@: char target))
-        rows:
-                 stdio  "<stdio.h>"
-    end: include
+table:
+    source
+    name: include
+    columns((class: class) (@: char target))
+    rows:
+             stdio  "<stdio.h>"
+end: include
 
-    table:
-        name: os
-        columns((class: class) (node: body))
-        rows:
-                 win
-                 L2:
-                     fn: lm_test_registry_platform_value () int
-                         return: 7
-                     end: lm_test_registry_platform_value
-                 end: L2
-                 default
-                 L2:
-                     fn: lm_test_registry_platform_value () int
-                         return: 3
-                     end: lm_test_registry_platform_value
-                 end: L2
-    end: os
-end: L4
+table:
+    source
+    name: os
+    columns((class: class) (node: body))
+    rows:
+             win
+             L2:
+                 fn: lm_test_registry_platform_value () int
+                     return: 7
+                 end: lm_test_registry_platform_value
+             end: L2
+             default
+             L2:
+                 fn: lm_test_registry_platform_value () int
+                     return: 3
+                 end: lm_test_registry_platform_value
+             end: L2
+end: os
 
 include
 os

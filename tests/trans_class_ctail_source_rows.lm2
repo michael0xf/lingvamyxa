@@ -1,5 +1,6 @@
-L4:
+L2:
     table:
+        source
         name: `class.cTail`
         columns((class: class) (@: char spelling))
         rows:
@@ -8,6 +9,7 @@ L4:
     end: `class.cTail`
 
     table:
+        source
         name: `class.cTail`
         columns((class: class) (class: spelling))
         rows:
@@ -15,6 +17,7 @@ L4:
     end: `class.cTail`
 
     table:
+        source
         name: `lm.test.class.ctail.seed`
         columns((class: class) (int: marker) (@: char cTail))
         rows:
@@ -32,12 +35,13 @@ L4:
     end: class
 
     table:
+        source
         name: class
         columns((class: class) (int: marker) (@: char cTail))
         rows:
                  LmCTailJoined  8  None
     end: class
-end: L4
+end: L2
 
 L1:
 ===

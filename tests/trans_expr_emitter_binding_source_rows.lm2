@@ -1,178 +1,195 @@
-L4:
-    table:
-        name: `operator.postfix`
-        columns((class: class) (@: char ansi_c) (binding: emitter))
-        rows:
-                 postinc  "++"  lm_trans_expr_emit_operator
-    end: `operator.postfix`
+table:
+    source
+    name: `operator.postfix`
+    columns((class: class) (@: char ansi_c) (binding: emitter))
+    rows:
+             postinc  "++"  lm_trans_expr_emit_operator
+end: `operator.postfix`
 
-    table:
-        name: expr_emitter_binding
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.prefix`  `operator.infix.emitter`
-                 `operator.prefix`  `operator.prefix.emitter`
-                 `operator.prefix`  None
-    end: expr_emitter_binding
+table:
+    source
+    name: expr_emitter_binding
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.prefix`  `operator.infix.emitter`
+             `operator.prefix`  `operator.prefix.emitter`
+             `operator.prefix`  None
+end: expr_emitter_binding
 
-    table:
-        name: expr_emitter_binding
-        columns((class: class) (@: char binding_table))
-        rows:
-                 `operator.postfix`  `operator.postfix.emitter`
-    end: expr_emitter_binding
+table:
+    source
+    name: expr_emitter_binding
+    columns((class: class) (@: char binding_table))
+    rows:
+             `operator.postfix`  `operator.postfix.emitter`
+end: expr_emitter_binding
 
-    table:
-        name: `lm.test.expr_emitter_binding.seed`
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.infix`  `operator.infix.emitter`
-    end: `lm.test.expr_emitter_binding.seed`
+table:
+    source
+    name: `lm.test.expr_emitter_binding.seed`
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.infix`  `operator.infix.emitter`
+end: `lm.test.expr_emitter_binding.seed`
 
-    join: (`lm.test.expr_emitter_binding.seed`) expr_emitter_binding
-        columns((class: class) (class: binding_table))
-        rows:
-    end: expr_emitter_binding
+join: (`lm.test.expr_emitter_binding.seed`) expr_emitter_binding
+    columns((class: class) (class: binding_table))
+    rows:
+end: expr_emitter_binding
 
-    table:
-        name: expr_emitter_binding
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.infix`  None
-    end: expr_emitter_binding
+table:
+    source
+    name: expr_emitter_binding
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.infix`  None
+end: expr_emitter_binding
 
-    table:
-        name: `operator.prefix`
-        columns((class: class) (int: marker) (@: char ansi_c))
-        rows:
-                 lmTestMetaPrefix  11  "-"
-    end: `operator.prefix`
+table:
+    source
+    name: `operator.prefix`
+    columns((class: class) (int: marker) (@: char ansi_c))
+    rows:
+             lmTestMetaPrefix  11  "-"
+end: `operator.prefix`
 
-    table:
-        name: `operator.postfix.ansi_c`
-        columns((class: class) (@: char ansi_c))
-        rows:
-                 lmTestMetaPostfix  "++"
-    end: `operator.postfix.ansi_c`
+table:
+    source
+    name: `operator.postfix.ansi_c`
+    columns((class: class) (@: char ansi_c))
+    rows:
+             lmTestMetaPostfix  "++"
+end: `operator.postfix.ansi_c`
 
-    table:
-        name: `lm.test.meta.infix.spelling.seed`
-        columns((class: class) (int: marker) (@: char ansi_c))
-        rows:
-                 lmTestMetaInfix  12  "+"
-    end: `lm.test.meta.infix.spelling.seed`
+table:
+    source
+    name: `lm.test.meta.infix.spelling.seed`
+    columns((class: class) (int: marker) (@: char ansi_c))
+    rows:
+             lmTestMetaInfix  12  "+"
+end: `lm.test.meta.infix.spelling.seed`
 
-    join: (`lm.test.meta.infix.spelling.seed`) `lm.test.meta.infix.spelling.middle`
-        columns((class: class) (int: marker) (@: char ansi_c))
-        rows:
-    end: `lm.test.meta.infix.spelling.middle`
+join: (`lm.test.meta.infix.spelling.seed`) `lm.test.meta.infix.spelling.middle`
+    columns((class: class) (int: marker) (@: char ansi_c))
+    rows:
+end: `lm.test.meta.infix.spelling.middle`
 
-    join: (`lm.test.meta.infix.spelling.middle`) `operator.infix`
-        columns((class: class) (int: marker) (@: char ansi_c))
-        rows:
-    end: `operator.infix`
+join: (`lm.test.meta.infix.spelling.middle`) `operator.infix`
+    columns((class: class) (int: marker) (@: char ansi_c))
+    rows:
+end: `operator.infix`
 
-    table:
-        name: `lm.test.meta.prefix`
-        columns((class: class) (int: marker) (binding: emitter))
-        rows:
-                 `!`               21  lm_trans_expr_emit_operator
-                 lmTestMetaPrefix  22  lm_trans_expr_emit_operator
-    end: `lm.test.meta.prefix`
+table:
+    source
+    name: `lm.test.meta.prefix`
+    columns((class: class) (int: marker) (binding: emitter))
+    rows:
+             `!`               21  lm_trans_expr_emit_operator
+             lmTestMetaPrefix  22  lm_trans_expr_emit_operator
+end: `lm.test.meta.prefix`
 
-    table:
-        name: `lm.test.meta.postfix.emitter`
-        columns((class: class) (binding: emitter))
-        rows:
-                 postinc            lm_trans_expr_emit_operator
-                 lmTestMetaPostfix  lm_trans_expr_emit_operator
-    end: `lm.test.meta.postfix.emitter`
+table:
+    source
+    name: `lm.test.meta.postfix.emitter`
+    columns((class: class) (binding: emitter))
+    rows:
+             postinc            lm_trans_expr_emit_operator
+             lmTestMetaPostfix  lm_trans_expr_emit_operator
+end: `lm.test.meta.postfix.emitter`
 
-    table:
-        name: `lm.test.meta.infix.emitter.seed`
-        columns((class: class) (binding: emitter) (int: marker))
-        rows:
-                 `+`              lm_trans_expr_emit_operator  31
-                 lmTestMetaInfix  lm_trans_expr_emit_operator  32
-    end: `lm.test.meta.infix.emitter.seed`
+table:
+    source
+    name: `lm.test.meta.infix.emitter.seed`
+    columns((class: class) (binding: emitter) (int: marker))
+    rows:
+             `+`              lm_trans_expr_emit_operator  31
+             lmTestMetaInfix  lm_trans_expr_emit_operator  32
+end: `lm.test.meta.infix.emitter.seed`
 
-    join: (`lm.test.meta.infix.emitter.seed`) `lm.test.meta.infix.emitter.middle`
-        columns((class: class) (binding: emitter) (int: marker))
-        rows:
-    end: `lm.test.meta.infix.emitter.middle`
+join: (`lm.test.meta.infix.emitter.seed`) `lm.test.meta.infix.emitter.middle`
+    columns((class: class) (binding: emitter) (int: marker))
+    rows:
+end: `lm.test.meta.infix.emitter.middle`
 
-    join: (`lm.test.meta.infix.emitter.middle`) `lm.test.meta.infix`
-        columns((class: class) (binding: emitter) (int: marker))
-        rows:
-    end: `lm.test.meta.infix`
+join: (`lm.test.meta.infix.emitter.middle`) `lm.test.meta.infix`
+    columns((class: class) (binding: emitter) (int: marker))
+    rows:
+end: `lm.test.meta.infix`
 
-    table:
-        name: `lm.test.meta.prefix`
-        columns((class: class) (int: marker) (binding: emitter))
-        rows:
-                 lmTestMetaPrefix  23  None
-    end: `lm.test.meta.prefix`
+table:
+    source
+    name: `lm.test.meta.prefix`
+    columns((class: class) (int: marker) (binding: emitter))
+    rows:
+             lmTestMetaPrefix  23  None
+end: `lm.test.meta.prefix`
 
-    table:
-        name: `lm.test.meta.postfix.emitter`
-        columns((class: class) (@: char emitter))
-        rows:
-                 lmTestMetaPostfix  lm_trans_expr_emit_operator
-    end: `lm.test.meta.postfix.emitter`
+table:
+    source
+    name: `lm.test.meta.postfix.emitter`
+    columns((class: class) (@: char emitter))
+    rows:
+             lmTestMetaPostfix  lm_trans_expr_emit_operator
+end: `lm.test.meta.postfix.emitter`
 
-    table:
-        name: expr_emitter_binding
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.prefix`  `operator.infix.emitter`
-    end: expr_emitter_binding
+table:
+    source
+    name: expr_emitter_binding
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.prefix`  `operator.infix.emitter`
+end: expr_emitter_binding
 
-    table:
-        name: expr_emitter_binding
-        columns((class: class) (int: marker) (class: binding_table))
-        rows:
-                 `operator.prefix`  1  `lm.test.meta.prefix.emitter`
-    end: expr_emitter_binding
+table:
+    source
+    name: expr_emitter_binding
+    columns((class: class) (int: marker) (class: binding_table))
+    rows:
+             `operator.prefix`  1  `lm.test.meta.prefix.emitter`
+end: expr_emitter_binding
 
-    table:
-        name: expr_emitter_binding
-        columns((class: class) (class: binding_table) (int: marker))
-        rows:
-                 `operator.postfix`  `operator.infix.emitter`  2
-    end: expr_emitter_binding
+table:
+    source
+    name: expr_emitter_binding
+    columns((class: class) (class: binding_table) (int: marker))
+    rows:
+             `operator.postfix`  `operator.infix.emitter`  2
+end: expr_emitter_binding
 
-    table:
-        name: `expr_emitter_binding.binding_table`
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.postfix`  `lm.test.meta.postfix.emitter`
-                 `operator.infix`    `operator.prefix.emitter`
-    end: `expr_emitter_binding.binding_table`
+table:
+    source
+    name: `expr_emitter_binding.binding_table`
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.postfix`  `lm.test.meta.postfix.emitter`
+             `operator.infix`    `operator.prefix.emitter`
+end: `expr_emitter_binding.binding_table`
 
-    table:
-        name: `lm.test.expr_emitter_binding.wide.seed`
-        columns((class: class) (int: marker) (class: binding_table))
-        rows:
-                 `operator.infix`  3  `lm.test.meta.infix.emitter`
-    end: `lm.test.expr_emitter_binding.wide.seed`
+table:
+    source
+    name: `lm.test.expr_emitter_binding.wide.seed`
+    columns((class: class) (int: marker) (class: binding_table))
+    rows:
+             `operator.infix`  3  `lm.test.meta.infix.emitter`
+end: `lm.test.expr_emitter_binding.wide.seed`
 
-    join: (`lm.test.expr_emitter_binding.wide.seed`) `lm.test.expr_emitter_binding.wide.middle`
-        columns((class: class) (int: marker) (class: binding_table))
-        rows:
-    end: `lm.test.expr_emitter_binding.wide.middle`
+join: (`lm.test.expr_emitter_binding.wide.seed`) `lm.test.expr_emitter_binding.wide.middle`
+    columns((class: class) (int: marker) (class: binding_table))
+    rows:
+end: `lm.test.expr_emitter_binding.wide.middle`
 
-    join: (`lm.test.expr_emitter_binding.wide.middle`) expr_emitter_binding
-        columns((class: class) (int: marker) (class: binding_table))
-        rows:
-    end: expr_emitter_binding
+join: (`lm.test.expr_emitter_binding.wide.middle`) expr_emitter_binding
+    columns((class: class) (int: marker) (class: binding_table))
+    rows:
+end: expr_emitter_binding
 
-    table:
-        name: `expr_emitter_binding.binding_table`
-        columns((class: class) (class: binding_table))
-        rows:
-                 `operator.postfix`  None
-    end: `expr_emitter_binding.binding_table`
-end: L4
+table:
+    source
+    name: `expr_emitter_binding.binding_table`
+    columns((class: class) (class: binding_table))
+    rows:
+             `operator.postfix`  None
+end: `expr_emitter_binding.binding_table`
 
 external:
     fn: main () int

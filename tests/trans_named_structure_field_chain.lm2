@@ -1,5 +1,15 @@
-L4:
+L2:
 . table:
+. . source
+. . name: class
+. . columns((class: class) (class: kind))
+. . rows:
+. . . Leaf    layout
+. . . Branch  layout
+. end: class
+.
+. table:
+. . source
 . . name: Leaf
 . . columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
 . . rows:
@@ -7,12 +17,22 @@ L4:
 . end: Leaf
 .
 . table:
+. . source
 . . name: Branch
 . . columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
 . . rows:
 . . . leaf  Leaf  0  1
 . end: Branch
-end: L4
+.
+. table:
+. . source
+. . name: `layout.backend`
+. . columns((class: class) (class: backend))
+. . rows:
+. . . Leaf    c.struct
+. . . Branch  c.struct
+. end: `layout.backend`
+end: L2
 
 L1:
 ===
