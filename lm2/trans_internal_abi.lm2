@@ -176,11 +176,6 @@ fn: lm_trans_top_level_function_header (
     LmTransFunctionHeader: out
 ) int
 
-fn: lm_trans_l4_root_head_binding_resolve (
-    const: LmP0Text: head
-    LmTransL4HeadBinding: out
-) int
-
 table:
     name: `layout.backend`
     columns((class: class) (class: backend))
@@ -1221,11 +1216,6 @@ fn: lm_trans_emit_root_sequence (
     const: LmP0Node: root
     int: implicit_l2
     @: int emitted
-) int
-
-fn: lm_trans_l4_root_receiver_registry (
-    const: LmP0Frame: frame
-    int: allow_node_cells
 ) int
 
 fn: lm_trans_l4_payload_pointer_bindings_init () int

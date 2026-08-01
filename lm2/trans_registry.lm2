@@ -80,7 +80,6 @@ table:
              `fn.external`             relation
              `define.value`             relation
              `namespace.l4`             relation
-             `namespace.l4.root`        relation
              `namespace.l4.atom`        relation
              `namespace.l4.payload`     relation
              `prelude.sequence`         relation
@@ -688,13 +687,6 @@ table:
              callable `l4.frame`
              sub    `l4.frame`
 end: `namespace.l4`
-
-table:
-    name: `namespace.l4.root`
-    columns((class: class) (@: char L4))
-    rows:
-             L4        `l4.root`
-end: `namespace.l4.root`
 
 table:
     name: `namespace.l4.atom`

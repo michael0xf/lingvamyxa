@@ -612,13 +612,6 @@ return: actual != 0 && c.strcmp(actual, binding) = 0
 fn: lm_trans_end_frame_targets_l1_level_receiver (const: (LmP0Frame: frame)) int
 return: lm_trans_end_frame_targets_level_receiver_binding(frame, "lm_trans_emit_l1_frame")
 
-fn: lm_trans_top_level_emit_registry (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    if: item = 0
-        return: 1
-    c.LM_UNUSED(file)
-    c.LM_UNUSED(namespace_)
-return: 0
-
 fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmTransFormalParamList: params); const: (LmTransNamespace: namespace_); int: emit_void_when_empty) int
     size_t: index
 
@@ -1157,7 +1150,6 @@ return: lm_trans_emit_merge_named_structure_storage(file, item\frame, 0U, namesp
 
 fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem: out) int
     LmTransHeadBinding: binding
-    LmTransL4HeadBinding: l4_root_binding
     int: function_status
     int: statement_status
     int: level_status
@@ -1229,18 +1221,6 @@ fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem:
     if: statement_status != 0 || level_status != 0
         return: 0
 
-    l4_root_binding: lm_own_new_zero(c.sizeof(l4_root_binding[0]))
-    if: l4_root_binding = 0
-        return: 1
-    if: lm_trans_l4_root_head_binding_resolve(out\frame\head, l4_root_binding) != 0
-        lm_own_delete(l4_root_binding, 0)
-        return: 1
-    if: l4_root_binding\frame != 0
-        lm_own_delete(l4_root_binding, 0)
-        out\emit_before_functions: @lm_trans_top_level_emit_registry
-        return: 0
-    lm_own_delete(l4_root_binding, 0)
-
     if: lm_trans_frame_looks_top_level_storage_declaration(out\frame, 0)
         out\declare: @lm_trans_top_level_declare_storage_declaration
         out\emit_after_prototypes: @lm_trans_top_level_emit_static_declaration
@@ -1254,7 +1234,7 @@ fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem:
         out\emits_top_level: 1
         return: 0
 
-    c.fprintf(c.stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, registered level receiver, or registered L4 root receiver data\n")
+    c.fprintf(c.stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, or registered level receiver\n")
 return: 1
 
 fn: lm_trans_top_level_item_lowered_new (const: (LmP0Node: node)) LmTransTopLevelItem
@@ -4362,8 +4342,6 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
     const: LmP0Field: field
     const: LmP0Node: node
     FILE: prelude_file
-    LmTransL4HeadBinding: l4_root_binding
-    int: has_l4_root
     int: handled
 
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
@@ -4385,17 +4363,8 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                 c.fprintf(c.stderr, "trans error: root raw text must be inside L1\n")
                 return: 1
             if: node\kind != c.LM_P0_NODE_FRAME
-                c.fprintf(c.stderr, "trans error: root field must be L1, L2, L3, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n")
+                c.fprintf(c.stderr, "trans error: root field must be L1, L2, L3, os, ifdef, include, raw L1 text, or end: L1\n")
                 return: 1
-
-            l4_root_binding: lm_own_new_zero(c.sizeof(l4_root_binding[0]))
-            if: l4_root_binding = 0
-                return: 1
-            if: lm_trans_l4_root_head_binding_resolve(node\as\frame\head, l4_root_binding) != 0
-                lm_own_delete(l4_root_binding, 0)
-                return: 1
-            has_l4_root: l4_root_binding\frame != 0
-            lm_own_delete(l4_root_binding, 0)
 
             handled: 0
             if: lm_trans_frame_is_l1_level_receiver(node\as\frame)
@@ -4415,8 +4384,6 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                     return: 1
                 if: emitted != 0
                     emitted[0]: 1
-                handled: 1
-            if: handled = 0 && has_l4_root
                 handled: 1
             if: handled = 0 && lm_trans_text_equals(node\as\frame\head, "os")
                 if: lm_trans_emit_l1_os_frame(prelude_file, node\as\frame) != 0
@@ -4441,7 +4408,7 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                     emitted[0]: 1
                 handled: 1
             if: handled = 0
-                c.fprintf(c.stderr, "trans error: root field must be L1, L2, L3, registered L4 root receiver, os, ifdef, include, raw L1 text, or end: L1\n")
+                c.fprintf(c.stderr, "trans error: root field must be L1, L2, L3, os, ifdef, include, raw L1 text, or end: L1\n")
                 return: 1
         ---
         field: field\next

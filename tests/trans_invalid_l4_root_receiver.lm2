@@ -1,0 +1,14 @@
+L4:
+    table:
+        name: `lm.test.invalid.public-l4`
+        columns((class: class) (int: value))
+        rows:
+                 witness  1
+    end: `lm.test.invalid.public-l4`
+end: L4
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

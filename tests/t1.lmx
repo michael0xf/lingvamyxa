@@ -1,20 +1,30 @@
-﻿L4:
-    model: HelloConfig
-        vars:
-            Text: greeting owned
-            int: maxI
-            int: maxJ
-        ---
-        condition:
-            maxI > 0 && maxJ > 0
-        ---
-    ---
+﻿L2:
+    table:
+        source
+        name: HelloConfig
+        columns((class: class) (class: field_type) (class: owner) (char: default))
+        rows:
+                 greeting  Text  owned  "Hello World"
+                 maxI      int   value  3
+                 maxJ      int   value  3
+    end: HelloConfig
 
-    relation: entryPoint
-        Symbol: targetName
-        Symbol: implementationName
-    ---
-end: L4
+    table:
+        source
+        name: HelloConfig_rules
+        columns((class: class) (char: condition))
+        rows:
+                 positiveBounds  "maxI > 0 && maxJ > 0"
+    end: HelloConfig_rules
+
+    table:
+        source
+        name: entryPoint
+        columns((class: class) (Symbol: implementation))
+        rows:
+                 app  helloMain
+    end: entryPoint
+end: L2
 
 L5:
     behavior: HelloConfig

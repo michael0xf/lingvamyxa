@@ -2278,7 +2278,6 @@ sub: lm_trans_registry_destroy ()
     lm_trans_l4_payload_pointer_bindings_destroy()
     lm_trans_ptr_stack_delete(@ lm_trans_registry\binding_pointer_bindings)
     lm_trans_ptr_stack_delete(@ lm_trans_registry\l4_atom_pointer_bindings)
-    lm_trans_ptr_stack_delete(@ lm_trans_registry\l4_root_frame_pointer_bindings)
     lm_trans_ptr_stack_delete(@ lm_trans_registry\l4_frame_pointer_bindings)
     lm_own_delete(lm_trans_registry\l4_loader, 0)
     lm_trans_registry\l4_loader: 0
@@ -3252,32 +3251,27 @@ return: 0
 
 fn: lm_trans_l4_pointer_bindings_init () int
     LmOwnPtrStack: frame_bindings
-    LmOwnPtrStack: root_frame_bindings
     LmOwnPtrStack: atom_bindings
 
     if: lm_trans_registry = 0
         return: 1
-    if: lm_trans_registry\l4_frame_pointer_bindings != 0 || lm_trans_registry\l4_root_frame_pointer_bindings != 0 || lm_trans_registry\l4_atom_pointer_bindings != 0
-        if: lm_trans_registry\l4_frame_pointer_bindings != 0 && lm_trans_registry\l4_root_frame_pointer_bindings != 0 && lm_trans_registry\l4_atom_pointer_bindings != 0
+    if: lm_trans_registry\l4_frame_pointer_bindings != 0 || lm_trans_registry\l4_atom_pointer_bindings != 0
+        if: lm_trans_registry\l4_frame_pointer_bindings != 0 && lm_trans_registry\l4_atom_pointer_bindings != 0
             return: 0
         return: 1
 
     frame_bindings: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    root_frame_bindings: lm_trans_ptr_stack_new(lm_own_delete_plain)
     atom_bindings: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    if: frame_bindings = 0 || root_frame_bindings = 0 || atom_bindings = 0
+    if: frame_bindings = 0 || atom_bindings = 0
         lm_trans_ptr_stack_delete(@ frame_bindings)
-        lm_trans_ptr_stack_delete(@ root_frame_bindings)
         lm_trans_ptr_stack_delete(@ atom_bindings)
         return: 1
-    if: lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "join", "l4.frame", lm_trans_l4_receiver_join) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "callable", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "sub", "l4.frame", lm_trans_l4_receiver_sub_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(root_frame_bindings, "L4", "l4.root", lm_trans_l4_root_receiver_registry) != 0 || lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0
+    if: lm_trans_l4_frame_pointer_binding_push(frame_bindings, "table", "l4.frame", lm_trans_l4_receiver_table) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "join", "l4.frame", lm_trans_l4_receiver_join) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "row", "l4.frame", lm_trans_l4_receiver_row) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "fn", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "callable", "l4.frame", lm_trans_l4_receiver_fn_descriptor) != 0 || lm_trans_l4_frame_pointer_binding_push(frame_bindings, "sub", "l4.frame", lm_trans_l4_receiver_sub_descriptor) != 0 || lm_trans_l4_atom_pointer_binding_push(atom_bindings, "loadHeaders", "l4.atom", lm_trans_l4_atom_receiver_prelude_sequence) != 0
         lm_trans_ptr_stack_delete(@ frame_bindings)
-        lm_trans_ptr_stack_delete(@ root_frame_bindings)
         lm_trans_ptr_stack_delete(@ atom_bindings)
         return: 1
 
     lm_trans_registry\l4_frame_pointer_bindings: frame_bindings
-    lm_trans_registry\l4_root_frame_pointer_bindings: root_frame_bindings
     lm_trans_registry\l4_atom_pointer_bindings: atom_bindings
 return: 0
 
@@ -3350,14 +3344,6 @@ fn: lm_trans_l4_head_binding_resolve (const: (LmP0Text: head); LmTransL4HeadBind
     if: lm_trans_registry != 0
         bindings: lm_trans_registry\l4_frame_pointer_bindings
 return: lm_trans_l4_head_binding_resolve_from_pointer_table(head, "namespace.l4", bindings, out)
-
-fn: lm_trans_l4_root_head_binding_resolve (const: (LmP0Text: head); LmTransL4HeadBinding: out) int
-    const: LmOwnPtrStack: bindings
-
-    bindings: 0
-    if: lm_trans_registry != 0
-        bindings: lm_trans_registry\l4_root_frame_pointer_bindings
-return: lm_trans_l4_head_binding_resolve_from_pointer_table(head, "namespace.l4.root", bindings, out)
 
 fn: lm_trans_l4_atom_binding_resolve_from_pointer_table (const: (LmP0Text: atom); const: @(char namespace_table); const: (LmOwnPtrStack: bindings); LmTransL4AtomBinding: out) int
     const: LmTransL4AtomPointerBinding: binding
@@ -3440,74 +3426,6 @@ fn: lm_trans_registry_load_l4_atom (const: (LmP0Text: atom); int: allow_node_cel
         lm_own_delete(binding, 0)
         return: 0
     status: binding\atom(atom, allow_node_cells)
-    lm_own_delete(binding, 0)
-    if: status != 0
-        return: 1
-    if: out_loaded != 0
-        out_loaded[0]: 1
-return: 0
-
-fn: lm_trans_registry_load_l4_structure (const: (LmP0Structure: structure); int: allow_node_cells) int
-    const: LmP0Field: field
-    const: LmP0Node: node
-    int: loaded
-    int: handled
-
-    field: 0
-    if: structure != 0
-        field: structure\first_field
-    while: field != 0
-        node: field\value
-        if: lm_trans_node_is_ignored(node) = 0
-            handled: 0
-            if: node\kind = c.LM_P0_NODE_ATOM
-                if: lm_trans_registry_load_l4_atom(node\as\atom, allow_node_cells, @ loaded) != 0
-                    return: 1
-                if: loaded = 0
-                    c.fprintf(c.stderr, "trans L4 error: unknown L4 atom receiver\n")
-                    return: 1
-                handled: 1
-            ---
-            if: node\kind = c.LM_P0_NODE_FRAME
-                if: lm_trans_registry_load_l4_frame(node\as\frame, allow_node_cells, @ loaded) != 0
-                    return: 1
-                if: loaded = 0
-                    c.fprintf(c.stderr, "trans L4 error: unknown L4 receiver\n")
-                    return: 1
-                handled: 1
-            ---
-            if: handled = 0
-                c.fprintf(c.stderr, "trans L4 error: L4 body expects registered L4 atom or frame receivers\n")
-                return: 1
-        ---
-        field: field\next
-return: 0
-
-fn: lm_trans_l4_root_receiver_registry (const: (LmP0Frame: frame); int: allow_node_cells) int
-    if: frame = 0
-        return: 1
-    if: lm_trans_registry_load_l4_structure(frame\body, allow_node_cells) != 0
-        return: 1
-return: 0
-
-fn: lm_trans_registry_load_l4_root_frame (const: (LmP0Frame: frame); int: allow_node_cells; @: int out_loaded) int
-    LmTransL4HeadBinding: binding
-    int: status
-
-    if: out_loaded != 0
-        out_loaded[0]: 0
-    if: frame = 0
-        return: 1
-    binding: lm_own_new_zero(c.sizeof(binding[0]))
-    if: binding = 0
-        return: 1
-    if: lm_trans_l4_root_head_binding_resolve(frame\head, binding) != 0
-        lm_own_delete(binding, 0)
-        return: 1
-    if: binding\frame = 0
-        lm_own_delete(binding, 0)
-        return: 0
-    status: binding\frame(frame, allow_node_cells)
     lm_own_delete(binding, 0)
     if: status != 0
         return: 1
@@ -3834,7 +3752,7 @@ fn: lm_trans_registry_l4_runtime_init () int
         return: 1
 return: 0
 
-fn: lm_trans_registry_load_root (const: (LmP0Node: root); int: implicit_l4; int: allow_node_cells) int
+fn: lm_trans_registry_load_root (const: (LmP0Node: root); int: allow_node_cells) int
     const: LmP0Field: field
     const: LmP0Node: node
     int: loaded
@@ -3850,23 +3768,14 @@ fn: lm_trans_registry_load_root (const: (LmP0Node: root); int: implicit_l4; int:
         node: field\value
         if: lm_trans_node_is_ignored(node) = 0
             if: node\kind != c.LM_P0_NODE_FRAME
-                c.fprintf(c.stderr, "trans L4 error: root fields must be registered L4 root receiver frames, or registered L4 receiver frames in .lm4 files\n")
+                c.fprintf(c.stderr, "trans L4 error: .lm4 root fields must be registered L4 frame receivers\n")
                 return: 1
-            if: lm_trans_registry_load_l4_root_frame(node\as\frame, allow_node_cells, @ item_loaded) != 0
+            if: lm_trans_registry_load_l4_frame(node\as\frame, allow_node_cells, @ item_loaded) != 0
                 return: 1
-            if: item_loaded != 0
-                loaded: 1
-            else:
-                if: implicit_l4 != 0
-                    if: lm_trans_registry_load_l4_frame(node\as\frame, allow_node_cells, @ item_loaded) != 0
-                        return: 1
-                    if: item_loaded = 0
-                        c.fprintf(c.stderr, "trans L4 error: root fields must be registered L4 root receiver frames, or registered L4 receiver frames in .lm4 files\n")
-                        return: 1
-                    loaded: 1
-                else:
-                    c.fprintf(c.stderr, "trans L4 error: root fields must be registered L4 root receiver frames\n")
-                    return: 1
+            if: item_loaded = 0
+                c.fprintf(c.stderr, "trans L4 error: .lm4 root fields must be registered L4 frame receivers\n")
+                return: 1
+            loaded: 1
         ---
         field: field\next
     if: loaded = 0
@@ -4302,25 +4211,9 @@ fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: struct
 return: status
 
 fn: lm_trans_registry_load_inline_root (const: (LmP0Node: root); const: @(char source_path)) int
-    const: LmP0Field: field
-    const: LmP0Node: node
-    int: loaded
-
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         return: 1
-
-    if: lm_trans_registry_load_imports_from_structure(root\as\structure, source_path, 1) != 0
-        return: 1
-
-    field: root\as\structure\first_field
-    while: field != 0
-        node: field\value
-        if: node != 0 && lm_trans_node_is_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME
-            if: lm_trans_registry_load_l4_root_frame(node\as\frame, 1, @ loaded) != 0
-                return: 1
-        ---
-        field: field\next
-return: 0
+return: lm_trans_registry_load_imports_from_structure(root\as\structure, source_path, 1)
 
 fn: lm_trans_path_separator (char: ch) int
 return: ch = '/' || ch = '\\'
@@ -4454,7 +4347,7 @@ fn: lm_trans_registry_load_file_path_mode (const: @(char registry_path); int: re
     ---
 
     if: lm_trans_path_has_extension(registry_path, ".lm4") != 0
-        status: lm_trans_registry_load_root(lm_p0_document_root(document), 1, 1)
+        status: lm_trans_registry_load_root(lm_p0_document_root(document), 1)
     else:
         if: bootstrap_l2 != 0 && lm_trans_path_has_extension(registry_path, ".lm2") != 0
             status: lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(document), registry_path)
@@ -4503,8 +4396,6 @@ fn: lm_trans_registry_seed_l4_receivers () int
     if: lm_trans_registry_seed_l4_receiver("namespace.l4", "callable", "l4.frame") != 0
         return: 1
     if: lm_trans_registry_seed_l4_receiver("namespace.l4", "sub", "l4.frame") != 0
-        return: 1
-    if: lm_trans_registry_seed_l4_receiver("namespace.l4.root", "L4", "l4.root") != 0
         return: 1
 return: 0
 
@@ -4806,6 +4697,7 @@ external:
 
         if: argc < 0
             c.LM_UNUSED(c.lm_l4_load_table_join_root)
+            c.LM_UNUSED(c.lm_trans_registry_load_l4_atom)
             return: lm_l4_load_root(0, 0, 0, 0)
 
         if: argc != 3

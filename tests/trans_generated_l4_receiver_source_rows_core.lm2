@@ -12,9 +12,9 @@ int main(int argc, char **argv) {
 ===
 
 fn: lm_test_generated_l4_receiver_source_rows_core () int
-    const: [7]: @: char table_names
-    const: [7]: @: char keys
-    const: [7]: @: char payloads
+    const: [6]: @: char table_names
+    const: [6]: @: char keys
+    const: [6]: @: char payloads
     const: LmRegistryViewRow: view_row
     LmTransRegistryFact: fact
     const: LmTableDescriptor: descriptor
@@ -50,29 +50,26 @@ fn: lm_test_generated_l4_receiver_source_rows_core () int
     table_names[3]: "namespace.l4"
     table_names[4]: "namespace.l4"
     table_names[5]: "namespace.l4"
-    table_names[6]: "namespace.l4.root"
     keys[0]: "table"
     keys[1]: "join"
     keys[2]: "row"
     keys[3]: "fn"
     keys[4]: "callable"
     keys[5]: "sub"
-    keys[6]: "L4"
     payloads[0]: "l4.frame"
     payloads[1]: "l4.frame"
     payloads[2]: "l4.frame"
     payloads[3]: "l4.frame"
     payloads[4]: "l4.frame"
     payloads[5]: "l4.frame"
-    payloads[6]: "l4.root"
 
     status: lm_trans_registry_seed_l4_receivers()
-    if: status = 0 && (lm_trans_registry\loaded_fact_count != 7U || lm_registry_view_fact_count(lm_trans_registry\view) != 7U || lm_registry_view_source_table_count(lm_trans_registry\view) != 7U)
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != 6U || lm_registry_view_fact_count(lm_trans_registry\view) != 6U || lm_registry_view_source_table_count(lm_trans_registry\view) != 6U)
         status: 1
 
     first_namespace_descriptor: lm_registry_view_source_table_at(lm_trans_registry\view, 0U)
     i: 0U
-    while: status = 0 && i < 7U
+    while: status = 0 && i < 6U
         view_row: lm_registry_view_fact_at(lm_trans_registry\view, i)
         fact: 0
         if: view_row != 0
@@ -99,10 +96,7 @@ fn: lm_test_generated_l4_receiver_source_rows_core () int
         if: status != 0
             break
 
-        if: i < 6U
-            path_row_index: i
-        else:
-            path_row_index: i - 6U
+        path_row_index: i
         covered: 0
         path_key_cell: 0
         path_value_cell: lm_registry_view_source_path_cell_at_slice(lm_trans_registry\view, table_names[i], c.strlen(table_names[i]), path_row_index, 0, 0, @ path_key_cell, @ covered)

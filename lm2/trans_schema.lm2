@@ -488,15 +488,14 @@ table:
              loaded             int                   5              0
              l4_loader          LmL4Loader            6              0
              l4_frame_pointer_bindings LmOwnPtrStack  7              0
-             l4_root_frame_pointer_bindings LmOwnPtrStack 8          0
-             l4_atom_pointer_bindings LmOwnPtrStack   9              0
-             l4_payload_pointer_bindings LmOwnPtrStack 10            0
-             binding_pointer_bindings LmOwnPtrStack    11            0
-             view               LmRegistryView         12            0
-             view_mode          int                    13            0
-             predefined_paths   LmOwnPtrStack         14            0
-             predefined_descriptor_sites LmOwnPtrStack 15           0
-             early_l2_source_sites LmOwnPtrStack      16            0
+             l4_atom_pointer_bindings LmOwnPtrStack   8              0
+             l4_payload_pointer_bindings LmOwnPtrStack 9             0
+             binding_pointer_bindings LmOwnPtrStack    10            0
+             view               LmRegistryView         11            0
+             view_mode          int                    12            0
+             predefined_paths   LmOwnPtrStack         13            0
+             predefined_descriptor_sites LmOwnPtrStack 14           0
+             early_l2_source_sites LmOwnPtrStack      15            0
 end: LmTransRegistry
 
 table:
