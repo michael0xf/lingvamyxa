@@ -3405,6 +3405,11 @@ fn: lm_trans_emit_l4_payload_import_frame (FILE: output; const: (LmP0Frame: fram
                 return: 1
             lm_own_delete(candidate_name, 0)
 
+            if: lm_trans_path_has_extension(payload_path, ".lm4") != 0
+                c.fprintf(c.stderr, "trans L4 unit error: unit.payload import does not accept .lm4 modules: %s\n", payload_path)
+                lm_trans_text_ref_destroy(@ path_value)
+                return: 1
+
             document: 0
             status: lm_p0_parse_file(payload_path, @ document)
             if: status != 0

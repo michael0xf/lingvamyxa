@@ -419,44 +419,25 @@ In the default profile:
 
     `.lm2` means that the file root is consumed as an implicit L2 body.
     `.lm3` means that the file root is consumed as an implicit L3 body.
-    `.lm4` means that the file root is consumed as an implicit L4 registry/model body.
+    `.lm4` is not a source profile and is rejected.
     `.lm5` means that the file root is consumed as an implicit L5 service/message body.
 
-The explicit wrapper form remains valid for compatibility and for mixed `.lmx`
-files. A plain `.lmx` file may place explicit sibling level blocks next to each
-other, for example an `L4:` registry/model block followed by an `L2:` build or
-lowering block:
-
-    L4:
-        table:
-            ...
-    end: L4
-
-    L2:
-        ...
-    end: L2
-
-A translator source has no separate root `registry:` level alias. New
-registry/model dependencies are direct L2 `table:`/`join:` modules selected
-with `predef:`; `L4:` remains only as the explicit compatibility wrapper while
-those modules are migrated.
-
-A consumer that understands more than one explicit root level may consume the
-earlier model/registry blocks before lowering or executing the later procedural
-blocks. For example, an L2 translator may load sibling `L4:` tables from the
-same `.lmx` root before it lowers the sibling `L2:` block.
-
-But a `.lm2` file does not need that outer wrapper. The same rule applies to
-`.lm3`, `.lm4` and `.lm5`.
+Explicit wrappers remain available only for levels admitted by the active
+source profile. `L4:` is not an admitted compatibility wrapper and is rejected
+at the root. A translator source also has no separate root `registry:` level
+alias. Registry/model source is written directly on an L2 module surface with
+`table:` and `join:`; dependencies on such `.lm2` modules are selected with
+`predef:`. A `.lm2` file does not need an outer `L2:` wrapper, and a `.lm3` file
+does not need an outer `L3:` wrapper.
 
 The implicit root profile is deliberately attached to the source extension,
-not inferred from an arbitrary receiver name. For example, a root-level
-`table:` in a `.lm4` registry file is consumed as legacy L4 registry input
-because the file is `.lm4`. A root-level `table:` in a plain `.lmx` file is only
-ordinary Structure data unless it appears inside an explicit admitted level.
+not inferred from an arbitrary receiver name. A root-level `table:` in an
+`.lm2` module is direct L2 registry/model source. Renaming that module to
+`.lm4` does not select another implicit profile; the source is rejected. A
+root-level `table:` in a plain `.lmx` file is only ordinary Structure data
+unless it appears inside an explicit admitted level.
 
-L2 also admits an explicit top-level dependency receiver for migrating registry
-modules away from the implicit `.lm4` profile:
+L2 admits an explicit top-level dependency receiver for registry/model modules:
 
     predef:
         "model.lm2"
@@ -536,10 +517,12 @@ and a `.lm2` module is never heuristically classified by its contents. The
 and import deduplication, and accepts `.lm2` targets only. `predef` is excluded
 from the L3 profile as a low-level module-construction operation.
 
-An ordinary L2 `import:` does not accept the legacy implicit `.lm4` registry
-profile. Such a registry/model module must first be migrated to an `.lm2`
-module and selected explicitly with `predef:`. This keeps dependency loading
-inside the L2 receiver model instead of giving `import:` a hidden L4 side effect.
+There is no legacy implicit `.lm4` registry profile. `.lm4` is rejected as a
+source module and as an explicitly selected registry target. Registry/model
+source must be an `.lm2` module with direct `table:` and `join:` receivers and
+is selected explicitly with `predef:` when used as an L2 dependency. This keeps
+dependency loading inside the L2 receiver model instead of giving `import:` a
+hidden L4 side effect.
 
 The bootstrap parser registry follows the same source-table direction more
 strictly. Its automatic candidates and an explicit `LM_P0_REGISTRY` override
@@ -8979,9 +8962,11 @@ and join materializers used after bootstrap. This is a bootstrap entry point,
 not a second table model. The bootstrap file loader parses a selected exact
 path once per successful load and is used for the core module and
 translator-profile candidates. `.lm2` profile candidates are tried before
-plain `.lmx` compatibility candidates; legacy `.lm4` registry modules are not
-auto-discovered. An explicit registry path may still select one during the
-compatibility period. Ordinary L2 imports keep their normal loader semantics.
+plain `.lmx` compatibility candidates. `.lm4` registry modules are neither
+auto-discovered nor accepted through an explicit registry path. Registry/model
+source lives in direct L2 `table:`/`join:` modules; an L2 dependency selects
+such a module with `predef:`. Ordinary L2 imports keep their normal loader
+semantics.
 The core module itself contains only tables. Its path is loaded module state and
 is not recorded as an explicit `predef` path.
 

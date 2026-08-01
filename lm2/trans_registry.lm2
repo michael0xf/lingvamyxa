@@ -79,8 +79,6 @@ table:
              `fn.receiver`             relation
              `fn.external`             relation
              `define.value`             relation
-             `namespace.l4`             relation
-             `namespace.l4.atom`        relation
              `namespace.l4.payload`     relation
              `prelude.sequence`         relation
              `receiver.positional-name` relation
@@ -677,25 +675,6 @@ table:
 end: `receiver.expr`
 
 table:
-    name: `namespace.l4`
-    columns((class: class) (@: char L4))
-    rows:
-             table  `l4.frame`
-             join   `l4.frame`
-             row    `l4.frame`
-             fn     `l4.frame`
-             callable `l4.frame`
-             sub    `l4.frame`
-end: `namespace.l4`
-
-table:
-    name: `namespace.l4.atom`
-    columns((class: class) (@: char L4))
-    rows:
-             loadHeaders  `l4.atom`
-end: `namespace.l4.atom`
-
-table:
     name: `namespace.l4.payload`
     columns((class: class) (@: char L4))
     rows:
@@ -838,7 +817,6 @@ table:
              LmOwnPtrStack            1
              LmOwnValueStack          1
              LmL4Column               1
-             LmL4FrameReceiver        1
              LmL4Loader               1
              LmP0DashFenceStatus      1
              LmP0Diagnostic           1
@@ -906,14 +884,7 @@ table:
              LmTransIdentifierCard    1
              LmTransIdentifierRelation 1
              LmTransIdentifierTable   1
-             LmTransL4AtomBinding     1
-             LmTransL4AtomHandler     1
-             LmTransL4AtomPointerBinding 1
              LmTransL4CallableType    1
-             LmTransL4FrameHandler    1
-             LmTransL4FramePointerBinding 1
-             LmTransL4HeadBinding     1
-             LmTransL4LoadContext     1
              LmTransL4PayloadFrameHandler 1
              LmTransL4PayloadPointerBinding 1
              LmTransLayoutField       1

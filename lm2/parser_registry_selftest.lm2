@@ -44,15 +44,12 @@ fn: lm_p0_registry_source_tables_selftest () int
     const: LmTableCell: alpha_cell
     const: LmTableCell: gamma_cell
     const: LmTableCell: key_cell
-    const: LmTableCell: payload_cell
     const: LmTableCell: none_cell
     LmP0Text: bare_key
     LmP0Text: incompatible_source
     LmP0Text: incompatible_target
-    size_t: seed_count
     size_t: index
     size_t: synthetic_row_count
-    unsigned: seed_mask
     int: covered
     int: status
 
@@ -62,7 +59,7 @@ fn: lm_p0_registry_source_tables_selftest () int
         return: 1
 
     status: 0
-    if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U || lm_registry_view_source_table_count(lm_p0_registry\view) != 6U
+    if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U || lm_registry_view_source_table_count(lm_p0_registry\view) != 5U
         status: 1
 
     alpha: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, "alpha", 5U)
@@ -131,29 +128,6 @@ fn: lm_p0_registry_source_tables_selftest () int
     alpha_cell: lm_table_row_cell_at(alpha_row, 1U)
     gamma_cell: lm_table_row_cell_at(gamma_row, 1U)
     if: status = 0 && (alpha_row = 0 || gamma_row = 0 || gamma_row = alpha_row || gamma_row\source != alpha_row || alpha_cell = 0 || gamma_cell = 0 || alpha_cell\atom = 0 || gamma_cell\atom = 0 || alpha_cell\value = 0 || gamma_cell\value = 0 || gamma_cell = alpha_cell || alpha_cell\atom = gamma_cell\atom || alpha_cell\value = gamma_cell\value || gamma_cell\source != 0 || c.strcmp(alpha_cell\value, gamma_cell\value) != 0)
-        status: 1
-
-    seed_count: 0U
-    seed_mask: 0U
-    payload_cell: lm_p0_registry_source_path_cell_at("namespace.l4", seed_count, @ key_cell)
-    while: payload_cell != 0
-        if: key_cell = 0 || key_cell\value = 0 || payload_cell\value = 0 || c.strcmp(payload_cell\value, "l4.frame") != 0
-            status: 1
-        else:
-            if: c.strcmp(key_cell\value, "table") = 0
-                seed_mask: seed_mask | 1U
-            if: c.strcmp(key_cell\value, "join") = 0
-                seed_mask: seed_mask | 2U
-            if: c.strcmp(key_cell\value, "row") = 0
-                seed_mask: seed_mask | 4U
-            if: c.strcmp(key_cell\value, "fn") = 0
-                seed_mask: seed_mask | 8U
-            if: c.strcmp(key_cell\value, "callable") = 0
-                seed_mask: seed_mask | 16U
-        ---
-        seed_count: seed_count + 1U
-        payload_cell: lm_p0_registry_source_path_cell_at("namespace.l4", seed_count, @ key_cell)
-    if: seed_count != 5U || seed_mask != 31U
         status: 1
 
     if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U || lm_p0_registry_require_source_only("after selftest lookups") != 0
