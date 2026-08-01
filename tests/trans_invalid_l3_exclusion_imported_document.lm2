@@ -1,11 +1,12 @@
-L4:
+L2:
     table:
+        source
         name: `receiver.l3`
         columns((class: class) (int: marker) (int: exclude))
         rows:
                  `return`  7  1
     end: `receiver.l3`
-end: L4
+end: L2
 
 L2:
     import: "fixtures/l3_excluded_receiver.lm2"

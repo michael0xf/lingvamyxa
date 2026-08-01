@@ -1,0 +1,22 @@
+table:
+    source
+    name: os
+    columns((class: class) (node: body) (int: marker))
+    rows:
+             default
+             L2:
+                 fn: lm_test_invalid_os_default () int
+                     return: 0
+                 end: lm_test_invalid_os_default
+             end: L2
+             1
+             win
+             L2:
+                 fn: lm_test_invalid_os_win () int
+                     return: 0
+                 end: lm_test_invalid_os_win
+             end: L2
+             2
+end: os
+
+os

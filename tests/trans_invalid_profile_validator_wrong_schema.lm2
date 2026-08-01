@@ -1,11 +1,10 @@
-L4:
-    table:
-        name: `profile.validator`
-        columns((class: class) (class: binding))
-        rows:
-                 `c99.format-mismatch`  lm_trans_validate_c_printf_call
-    end: `profile.validator`
-end: L4
+table:
+    source
+    name: `profile.validator`
+    columns((class: class) (class: binding))
+    rows:
+             `c99.format-mismatch`  lm_trans_validate_c_printf_call
+end: `profile.validator`
 
 external:
     fn: main () int

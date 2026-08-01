@@ -1,0 +1,17 @@
+table:
+    source
+    name: `receiver.atom.statement`
+    columns((class: class) (binding: receiver))
+    rows:
+             loadHeaders  lm_trans_atom_statement_emit_sequence_prelude
+end: `receiver.atom.statement`
+
+table:
+    source
+    name: loadHeaders
+    columns((class: class) (size_t: item) (int: marker))
+    rows:
+             include  10  1
+end: loadHeaders
+
+loadHeaders

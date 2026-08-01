@@ -1,0 +1,10 @@
+table:
+    source
+    name: forward
+    columns((class: class) (class: backend) (int: marker))
+    rows:
+             LmTestForwardWideLatestUnsupported  c.struct  1
+             LmTestForwardWideLatestUnsupported  c.other   2
+end: forward
+
+forward

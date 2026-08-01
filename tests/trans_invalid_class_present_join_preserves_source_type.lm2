@@ -1,29 +1,30 @@
-L4:
-    table:
-        name: `lm.test.untyped-layout.seed`
-        columns((char: key) (class: backend))
-        rows:
-                 LmUntypedJoinedClass  c.struct
-    end: `lm.test.untyped-layout.seed`
+table:
+    source
+    name: `lm.test.untyped-layout.seed`
+    columns((char: key) (class: backend))
+    rows:
+             LmUntypedJoinedClass  c.struct
+end: `lm.test.untyped-layout.seed`
 
-    join: (`lm.test.untyped-layout.seed`) `layout.backend`
-        columns((class: class) (class: backend))
-        rows:
-    end: `layout.backend`
+join: (`lm.test.untyped-layout.seed`) `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+end: `layout.backend`
 
-    table:
-        name: `LmUntypedJoinedClass.field.class`
-        columns((char: field) (class: class))
-        rows:
-                 value  int
-    end: `LmUntypedJoinedClass.field.class`
+table:
+    source
+    name: `LmUntypedJoinedClass.field.class`
+    columns((char: field) (class: class))
+    rows:
+             value  int
+end: `LmUntypedJoinedClass.field.class`
 
-    table:
-        name: `LmUntypedJoinedClass.field.index`
-        columns((char: field) (size_t: index))
-        rows:
-                 value  0
-    end: `LmUntypedJoinedClass.field.index`
-end: L4
+table:
+    source
+    name: `LmUntypedJoinedClass.field.index`
+    columns((char: field) (size_t: index))
+    rows:
+             value  0
+end: `LmUntypedJoinedClass.field.index`
 
 layout
