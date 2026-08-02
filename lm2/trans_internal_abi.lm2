@@ -580,6 +580,7 @@ fn: lm_trans_emit_function_return_structure_once (
     FILE: file
     const: LmP0Text: function_name
     const: LmP0Node: return_node
+    const: LmTransNamespace: namespace_
 ) int
 
 fn: lm_trans_emit_function_params (

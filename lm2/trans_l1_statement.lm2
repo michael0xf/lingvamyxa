@@ -5595,12 +5595,46 @@ fn: lm_trans_emit_function_return_structure (
         field: field\next
 return: lm_trans_put(file, "};\n\n")
 
+fn: lm_trans_register_function_return_layout (
+    const: LmP0Text: owner
+    const: LmP0Node: return_node
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    LmTransL4CallableType: field_type
+    const: LmP0Text: field_name
+    const: LmP0Field: initializer
+    size_t: field_index
+
+    if: owner = 0 || return_node = 0 || return_node\kind != c.LM_P0_NODE_STRUCTURE
+        return: 1
+
+    field_type: lm_trans_expr_callable_type_new()
+    if: field_type = 0
+        return: 1
+    finally: lm_trans_expr_callable_type_delete(field_type)
+
+    field: return_node\as\structure\first_field
+    field_index: 0U
+    while: field != 0
+        if: lm_trans_node_is_ignored(field\value) = 0
+            if: field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_named_structure_field_info(field\value\as\frame, namespace_, field_type, @ field_name, @ initializer) = 0
+                return: 1
+            if: lm_trans_named_structure_push_field_relations(owner, field_name, field_type, field_index) != 0
+                return: 1
+            field_index: field_index + 1U
+        ---
+        field: field\next
+return: 0
+
 fn: lm_trans_emit_function_return_structure_once (
     FILE: file
     const: LmP0Text: function_name
     const: LmP0Node: return_node
+    const: LmTransNamespace: namespace_
 ) int
     @: char type_name
+    LmP0Text: type_name_text
     const: @: char stored_name
 
     type_name: lm_trans_function_return_struct_type_name_new(function_name)
@@ -5615,6 +5649,16 @@ fn: lm_trans_emit_function_return_structure_once (
     if: lm_trans_emit_function_return_structure(file, function_name, return_node) != 0
         lm_own_delete(type_name, 0)
         return: 1
+
+    type_name_text: lm_trans_text_from_cstr(type_name)
+    if: type_name_text = 0
+        lm_own_delete(type_name, 0)
+        return: 1
+    if: lm_trans_register_function_return_layout(type_name_text, return_node, namespace_) != 0
+        lm_trans_text_ref_destroy(@ type_name_text)
+        lm_own_delete(type_name, 0)
+        return: 1
+    lm_trans_text_ref_destroy(@ type_name_text)
 
     if: lm_own_ptr_stack_push(lm_trans_emitted_function_return_structs, type_name) != 0
         lm_own_delete(type_name, 0)
