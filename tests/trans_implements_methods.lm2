@@ -59,13 +59,13 @@ end: WideProtocol
 
 table:
     source
-    name: `lm.test.instanceof.wide.requirement.seed`
+    name: `lm.test.implements.wide.requirement.seed`
     columns((class: class) (class: `requires.method`) (int: marker))
     rows:
              wideJoined 1 5
-end: `lm.test.instanceof.wide.requirement.seed`
+end: `lm.test.implements.wide.requirement.seed`
 
-join: (`lm.test.instanceof.wide.requirement.seed`) WideProtocol
+join: (`lm.test.implements.wide.requirement.seed`) WideProtocol
     columns((class: class) (class: `requires.method`) (int: marker))
     rows:
 end: WideProtocol
@@ -189,13 +189,13 @@ end: User
 
 table:
     source
-    name: `lm.test.instanceof.user.seed`
+    name: `lm.test.implements.user.seed`
     columns((class: class) (binding: method) (int: marker))
     rows:
              serialize  lm_user_serialize  5
-end: `lm.test.instanceof.user.seed`
+end: `lm.test.implements.user.seed`
 
-join: (`lm.test.instanceof.user.seed`) User
+join: (`lm.test.implements.user.seed`) User
     columns((class: class) (binding: method) (int: marker))
     rows:
 end: User
@@ -283,34 +283,34 @@ end: LegacyPriorityOnly
 
 external:
     fn: main () int
-        assert: instanceof(User, Equatable) = 1
-        assert: instanceof(User, Serializable) = 1
-        assert: instanceof(User, FlatCallable) = 1
-        assert: instanceof(User, Hashable) = 1
-        assert: instanceof(Plain, Equatable) = 0
-        assert: instanceof(Plain, Stringable) = 1
-        assert: instanceof(Plain, Hashable) = 1
-        assert: instanceof(Plain, LegacyCallable) = 1
-        assert: instanceof(Plain, Serializable) = 0
-        assert: instanceof(`QuotedUser`, Equatable) = 1
-        assert: instanceof(User, WideProtocol) = 1
-        assert: instanceof(User, `WideProtocol`) = 1
-        assert: instanceof(NoWideJoin, WideProtocol) = 0
-        assert: instanceof(WideJoinedOnly, WideProtocol) = 0
-        assert: instanceof(User, NoneOnlyProtocol) = 0
-        assert: instanceof(User, NoneFallbackProtocol) = 1
-        assert: instanceof(Plain, NoneFallbackProtocol) = 0
-        assert: instanceof(User, LegacyMultiProtocol) = 1
-        assert: instanceof(NoWideJoin, LegacyMultiProtocol) = 0
-        assert: instanceof(LegacyAOnly, LegacyMultiProtocol) = 0
-        assert: instanceof(LegacyBOnly, LegacyMultiProtocol) = 0
-        assert: instanceof(User, PriorityProtocol) = 1
-        assert: instanceof(LegacyPriorityOnly, PriorityProtocol) = 0
-        assert: instanceof(User, PhysicalProtocol) = 1
-        assert: instanceof(User, MixedProtocol) = 1
-        assert: instanceof(MixedACOnly, MixedProtocol) = 0
-        assert: instanceof(User, User) = 1
-        assert: instanceof(User, Missing) = 0
+        assert: implements(User, Equatable) = 1
+        assert: implements(User, Serializable) = 1
+        assert: implements(User, FlatCallable) = 1
+        assert: implements(User, Hashable) = 1
+        assert: implements(Plain, Equatable) = 0
+        assert: implements(Plain, Stringable) = 1
+        assert: implements(Plain, Hashable) = 1
+        assert: implements(Plain, LegacyCallable) = 1
+        assert: implements(Plain, Serializable) = 0
+        assert: implements(`QuotedUser`, Equatable) = 1
+        assert: implements(User, WideProtocol) = 1
+        assert: implements(User, `WideProtocol`) = 1
+        assert: implements(NoWideJoin, WideProtocol) = 0
+        assert: implements(WideJoinedOnly, WideProtocol) = 0
+        assert: implements(User, NoneOnlyProtocol) = 0
+        assert: implements(User, NoneFallbackProtocol) = 1
+        assert: implements(Plain, NoneFallbackProtocol) = 0
+        assert: implements(User, LegacyMultiProtocol) = 1
+        assert: implements(NoWideJoin, LegacyMultiProtocol) = 0
+        assert: implements(LegacyAOnly, LegacyMultiProtocol) = 0
+        assert: implements(LegacyBOnly, LegacyMultiProtocol) = 0
+        assert: implements(User, PriorityProtocol) = 1
+        assert: implements(LegacyPriorityOnly, PriorityProtocol) = 0
+        assert: implements(User, PhysicalProtocol) = 1
+        assert: implements(User, MixedProtocol) = 1
+        assert: implements(MixedACOnly, MixedProtocol) = 0
+        assert: implements(User, User) = 1
+        assert: implements(User, Missing) = 0
         return: 0
     end: main
 end: external
