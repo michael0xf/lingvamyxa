@@ -65,14 +65,20 @@ The same source mechanism builds Structures. Different receivers and profiles
 consume those Structures as data, executable code, model descriptors, registry
 table rows, messages, service routes, build instructions or transport payloads.
 
-The high-level registry model is defined as tables. In that model, a
-`class` is a named registry form/table/entity, expressions ask for table cells,
-and validation/resolution turns generic Structures into concrete expressions or
-terminal lowering decisions. `class` is broader than an object class or record
-layout type: primitive values, storage layouts, operators, receivers, callable
-descriptors, validators, messages and implementation bindings may all be
-classes. The word `type` remains available only in narrower storage/lowering
-contexts such as L2 and ANSI C.
+The high-level registry is the active set of source tables, rows and derived
+facts exposed by a `RegistryView`; it is not one distinguished table. Within
+that registry, a `class` is a named registry form/table/entity/key. Expressions
+ask for table cells, and validation/resolution turns generic Structures into
+concrete expressions or terminal lowering decisions. `class` is broader than
+an object class or record layout type: primitive values, storage layouts,
+operators, receivers, callable descriptors, validators, messages and
+implementation bindings may all be classes. The word `type` remains available
+only in narrower storage/lowering contexts such as L2 and ANSI C.
+
+The source table whose literal name is `class` is a semantically special
+classification index, conventionally mapping a registry class/key to its
+`kind`. It is one table in the registry, not the registry itself, and it is not
+required to contain every registry class/key.
 
 In the high-level model, strict classification happens over registry source
 tables materialized by L2 module receivers.
@@ -80,11 +86,12 @@ Type checking and class resolution are logical resolution/checking processes
 over those tables. A SQL-like query is the reference mental model, but an
 implementation may use any equivalent algorithm that reads the same registry facts and
 produces the same selected cells, diagnostics and evidence. A table named `X`,
-when present, is the descriptor table for class/key `X`. The table named
-`class` is an index/classification table, not the sole source of class
-existence. Current in-memory registry rows, hash tables, binary indexes or
-future SQLite views are caches/materialized views of those tables, not a second
-semantic type system.
+when present, is the descriptor table for class/key `X`. The special table
+named `class`, the compatible `class.kind` relation and implementation
+membership views such as `class.present` may index or classify keys, but none
+of them is the sole source of registry-class existence. Current in-memory
+registry rows, hash tables, binary indexes or future SQLite views are
+caches/materialized views of those tables, not a second semantic type system.
 
 This is analytical typing. Lingvamyxa typing starts in the static
 interpretation/translation/compilation stages and continues at runtime through
@@ -680,9 +687,11 @@ This example should be read with five simple structural rules in mind:
 2. `head: tail` means that `head` consumes one argument Structure.
 
    The colon is a receiver-valence marker, not assignment syntax and not a
-   keyword-specific grammar. Forms such as `fn:`, `if:`, `model:`, `fact:`,
-   `int:` and `return:` share the same surface mechanism. Their meanings differ
-   because their receivers consume their argument Structures differently.
+   keyword-specific grammar. Registered forms such as `fn:`, `if:`, `int:` and
+   `return:`, and profile-defined forms such as a hypothetical `model:` or
+   `fact:`, share the same surface mechanism. Their meanings differ because
+   their receivers consume their argument Structures differently. Mentioning a
+   head here does not register it.
 
    Therefore omitting the colon changes the Structure:
 
@@ -1556,6 +1565,8 @@ Therefore:
     operator: ...
 
 all share the same structural rule. They differ only in the receiver that consumes the Structure and in the receiver signature that interprets its fields.
+`model:` and `operator:` in this structural list are illustrative
+profile-defined heads, not current core receivers.
 
 A form such as:
 
@@ -2899,7 +2910,8 @@ A semantic field name may still exist after receiver normalization. It is produc
 
 Explicit source-level naming is written as an ordinary Structure, not as `name = value`.
 
-Example source:
+Assume, only for this structural example, that a profile has registered a
+receiver named `model`. Example source:
 
 model:
     name: PlantBed
@@ -7278,44 +7290,74 @@ and L3 when the active profile admits them. Differences belong to profile
 constraints, available value types, memory model and lowering policy, not to a
 separate parser syntax.
 
-Operator summary:
+Current bootstrap receiver/operator summary:
 
-The left column below is an operator-family ordinal, not a subsection number.
+The following list contains exact spellings registered by the current L2
+translator. It is an implementation baseline, not a claim that every later
+profile family is already a core receiver.
 
-    0.  if / else                                         L2/L3
-    1.  match / default-pattern receivers                 L2/L3
-    2.  while                                             L2/L3
-    3.  until                                             L2/L3
-    4.  for                                               L2/L3
-    5.  each                                              L2/L3
-    6.  return                                            L2/L3 executable body; terminal executable close at definition level
-    7.  break                                             L2/L3 loop frame
-    8.  continue                                          L2/L3 loop frame
-    9.  finally                                           L2/L3 executable/scope frame cleanup
-    10. guard / fail / throws / failure labels / handlers L2/L3 recoverable failure flow
-    11. retry / retryable                                 L2/L3 retry frame
-    12. assert                                            L2/L3 diagnostic failure flow
-    12a. log / error                                      L2/L3 observation receivers
-    13. redo                                              L2/L3 loop frame
-    14. yield                                             L2/L3 iterator-profile fn
-    15. labelled break / labelled continue                L2/L3 labelled loop frame
-    16. merge / join                                      merge: L2/L3 structural merge; join: module table-source receiver
-    17. table / join / predef / import                    direct source materialization and module composition; predef/table-source are L2-only
-    18. class / relation / rule / query                   registry model and analytical resolution; safe queries may be L3
-    19. message / validate / execute / emit               message pipeline; protected runtime use is L3
-    20. model / union / descriptor                        structural descriptor receivers
-    21. operator / method / receiver                      operation tables and registered consumption
-    22. evidence / validator                              registry validation and resolution evidence
-    23. entry / provides / satisfies / conflict           registry composition and conflict policy
-    24. procedural / object / functional / logical        declared consumption modes
-    25. provider / codec / toLmx / fromLmx                lowering, provider selection and portable persistence
-    26. send / reply / await / schedule / thread          Message Thread runtime receivers
-    27. copy / move / borrow / own                        owner and message-boundary memory operations
-    28. watch / derive / reactive query                   reactive registry/message operations
-    29. service / route / HTTP adapter                    service and transport profile receivers
-    30. authenticate / verify / authorize / ticket        authentication and authorization receivers
+    level receivers:       L1, L2, L3
+    definition receivers:  fn, callable, fm, sub
+    control statements:    if, else, while, return, break, continue,
+                           synchronized, finally, assert
+    declarations/values:   const, (), [], None, OK, false, true
+    module/source:         table, import, predef, join, merge
+    L2 projection/build:   include, define, ifndef-default, os, ifdef,
+                           guard, extern_c, c.struct, c.union, c.enum
+    expression receivers:  cast: TargetClass expression
+                           implements(CandidateClass, RequiredClass)
+    modifier/trailers:     external; end, until
+    prelude atom consumers:
+                           include, define, os, ifdef, fn, layout, constant,
+                           alias, forward, prototype, guard, extern_c, unit
 
-Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
+`merge` consumes a named Structure. `join` composes source-table descriptors
+and rows in the active registry view. `predef` is explicitly excluded from L3;
+direct source materialization is an L2 module operation. The current bootstrap
+enforces this boundary incompletely: `receiver.l3.exclude` explicitly lists
+only `predef`; equivalent L3 gates for source `table`, `join` and the built-in
+named-layout fallback remain implementation work.
+
+The current expression operator tables register these exact families:
+
+    prefix:   ++, --, +, -, @, \, !, ~
+    postfix:  ++, --
+    infix:    +, -, *, /, %, =, !=, <, <=, >, >=, &&, ||,
+              &, |, ^, <<, >>, \
+    index:    [, ]
+    atoms:    ., None, OK, false, true
+
+Registry tables and profile vocabulary are not source operators merely because
+they have names. The current bootstrap consumes, among others:
+
+    class / class.kind / class.present
+        registry-key classification and membership relations;
+    method / requires.method
+        method-presence and structural-requirement relations used by
+        `implements`;
+    namespace / receiver.*
+        exact head-to-receiver registration and dispatch tables;
+    operator.prefix / operator.postfix / operator.infix / operator.index
+        expression spelling and emitter tables;
+    serialization.codec / profile.validator
+        codec and validation metadata tables.
+
+The former summary names `class`, `relation`, `rule`, `query`, `message`,
+`validate`, `execute`, `emit`, `model`, `union`, `descriptor`, `evidence`,
+`validator`, `entry`, `provides`, `satisfies`, `conflict`, `provider`, `codec`,
+`send`, `reply`, `await`, `schedule`, `thread`, `copy`, `move`, `borrow`, `own`,
+`watch`, `derive`, `service`, `route`, `authenticate`, `verify`, `authorize` and
+`ticket` describe registry keys, table patterns, runtime roles or proposed
+profile vocabulary. They are not current core receiver heads. The registered
+low-level spelling is `c.union:`, not a generic `union:` receiver. `toLmx` and
+`fromLmx` are registry operation-table names, not intrinsic bootstrap
+receivers. A profile may make any such term executable only by registering an
+exact receiver and its validation/lowering contract.
+
+The current bootstrap implements only unlabelled `break` and `continue`.
+Labelled control may be added as a profile extension by registering ordinary
+frames such as `outerLoop:` as control targets, but that mechanism is not part
+of the implemented summary above.
 
 19.1. `if` and `else`
 
@@ -8480,9 +8522,30 @@ RegistryView but may not materialize these source tables.
 
 19.18.1. Class
 
-In this section, `class` is the general word for a named registry form/table/key.
-When this wider meaning must be distinguished from an object-oriented class,
-this document may use the phrase `registry class`.
+`RegistryView` is the wider notion: it is the active view over all admitted
+registry source tables, joined rows and derived facts. In this section,
+`class` is the general word for a named form/table/entity/key inside that
+registry. When this wider meaning must be distinguished from an object-oriented
+class, this document uses the phrase `registry class`.
+
+There is no intrinsic `class:` declaration receiver in the current core. The
+source table whose exact name is `class` is instead a semantically special
+classification/index table. Its canonical two-column form is:
+
+    table:
+        source
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 Circle  layout
+                 int     primitive
+    end: class
+
+The first cell is a registry class/key and the `kind` cell classifies it. The
+compatible direct relation `class.kind` may carry the same classification
+facts. Implementations may additionally maintain a `class.present` membership
+view. These tables are useful indexes, but they are not the registry itself and
+they do not enumerate every registry class/key.
 
 The strongest source form for a class is a table with the same name:
 
@@ -8492,12 +8555,11 @@ The strongest source form for a class is a table with the same name:
         ...
     end: Circle
 
-This table is the descriptor table for class/key `Circle`. The `class` table is
-an index and classification table that may reference `Circle`, group it, attach
-kind information or make it discoverable. It is not a mandatory central list
-that alone creates the class. Conversely, a class/key may be referenced in the
-`class` table or in other relation tables before a dedicated descriptor table is
-introduced.
+This table is the descriptor table for class/key `Circle`. A registry key may
+also be introduced or referenced by another table name, row key, relation or
+class-typed cell before a dedicated descriptor table is introduced. Absence
+from the special `class` table therefore does not mean absence from the
+registry.
 
 This is wider than an object-oriented class and wider than a value/storage
 type. The following names may all be classes in this general sense:
@@ -9436,67 +9498,127 @@ This replaces the older wording where message validation and message execution
 were too close together.
 
 
-19.20. Structural Descriptor Operators
+19.20. Structural Descriptor Tables
 
-On a direct L2 module surface, descriptor receivers may materialize
-source rows. In L3, an admitted descriptor/message receiver creates only a
-transient candidate or evidence overlay; ordinary validation must accept it
-before it affects the active RegistryView. L3 never invokes the source-table
-materializer. Thread-local overlay lifetime is defined in section 19.28.2.1.
+There are no separate core `model:` or `class:` declaration receivers. On a
+direct L2 module surface, `table:` materializes descriptor source rows and the
+current built-in named-structure fallback may materialize the layout rows
+described below. By specification, L3 may query the resulting `RegistryView`
+but may not invoke the L2 source-table materializer. The current bootstrap
+enforces that boundary explicitly for `predef` but does not yet gate every
+source `table`, `join` or named-layout fallback path. Profile-defined transient
+L3 evidence overlays are a separate validation mechanism.
 
-19.20.1. Model Definitions
+19.20.1. Named L2 Structures and Layout Rows
 
-Structural model declarations describe registry table rows under the profile
-rule above.
-
-Example:
+In the current hosted C bootstrap profile, a direct-L2 named Structure whose
+body consists of admitted explicitly typed or type-inferable field declarations
+is consumed by the built-in fallback as a named layout declaration:
 
     Circle:
-        f64: radius
-        Point: center
+        double: radius
+        double: center_x
+        double: center_y
     end: Circle
 
-normalizes to rows such as:
+This is layout shorthand, not an abstract model declaration. It registers
+`Circle` as a layout/reference class, records a `c.struct` backend, records the
+field classes, indexes and address depths, and emits the corresponding C
+structure and storage.
 
-    class Circle
-    field[Circle][radius] = f64
-    field[Circle][center] = Point
+The same registry description can be written explicitly with source tables:
 
-No separate "slot" concept is required by the language. A source field may lower
-to a physical C field, a property accessor, a computed projection or another
-profile-defined representation.
+    table:
+        source
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 Circle  layout
+    end: class
 
-19.20.2. Normalized Model Descriptor
+    table:
+        source
+        name: Circle
+        columns((class: class)
+                (class: `field.class`)
+                (size_t: `field.index`)
+                (size_t: `field.address-depth`))
+        rows:
+                 radius    double  0  0
+                 center_x  double  1  0
+                 center_y  double  2  0
+    end: Circle
 
-A normalized descriptor is a table view over a source structure:
+    table:
+        source
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 Circle  c.struct
+    end: `layout.backend`
 
-    model name;
-    field names;
-    field declared classes;
-    default values;
-    validators;
-    ownership/lifetime policy;
-    lowering policy.
+    table:
+        source
+        name: `class.reference-base`
+        columns((class: class) (int: value))
+        rows:
+                 Circle  1
+    end: `class.reference-base`
 
-These rows are consumed by the resolver, validator, serializer, IDE and
-lowering profile.
+The named-structure shorthand currently materializes compatible generated
+relations such as `class.kind`, `class.present`, `layout.backend` and
+`Circle.field.*`. The explicit `class` table and the generated `class.kind`
+relation are compatible classification sources; neither is the whole registry.
+
+No separate "slot" entity is required. In the current implementation these
+rows lower to physical C fields and static storage. Property accessors,
+computed projections or representation-independent fields would require
+additional registry relations and consumers; they are not implied by the
+implemented layout shorthand.
+
+19.20.2. Normalized Layout Descriptor
+
+The current normalized layout view consists of concrete registry relations:
+
+    class or class.kind              class/key -> kind;
+    layout.backend                   class/key -> backend;
+    class.reference-base             class/key -> reference-base flag;
+    <Class>.field.class              field -> declared class;
+    <Class>.field.index              field -> stable source index;
+    <Class>.field.address-depth      field -> explicit address depth;
+    <Class>.field.const              optional const marker;
+    <Class>.field.array-count        optional array count;
+    <Class>.field.union              optional union-layout relation.
+
+The resolver and hosted C layout projection consume these rows. Defaults,
+validators, ownership policy and other semantic facets may be added as separate
+profile tables; they are not hidden fields of a core `model` object.
 
 19.20.3. Union and Variant Membership
 
-Union descriptors are relation tables:
+There is no generic core `union:` receiver. The implemented low-level L2 form
+is `c.union:`, and layout descriptors may use the concrete `field.union`
+relation. A higher-level variant profile may represent membership with an
+ordinary relation table, for example:
 
-    member[Shape][Circle] = true
-    member[Shape][Rectangle] = true
+    table:
+        source
+        name: member
+        columns((class: class) (class: member))
+        rows:
+                 Shape  Circle
+                 Shape  Rectangle
+    end: member
 
-Dispatch over a union is a table query. A generic operation over a union is
-complete only when the required operation has cells for all admitted variants,
-or when a profile defines a fallback cell.
+Such a `member` table is a registry pattern, not an intrinsic operator. A
+profile may validate completeness by querying whether the required operation
+has cells for all admitted variants or an explicit fallback.
 
 19.20.4. Generated Rows and Extension Policy
 
-Descriptors generate L2 source rows or validated transient L3 overlay rows.
-Extension is table insertion under the active receiver policy. Conflict policy
-is table policy:
+Descriptor consumers generate L2 source rows or profile-validated transient L3
+overlay rows. Extension is table insertion under the active receiver policy.
+Conflict policy is table policy:
 
     same key, same terminal value      -> duplicate, allowed or ignored;
     same key, different terminal value -> conflict unless an override table
@@ -9524,24 +9646,65 @@ Both cases select table cells.
 A receiver/operator is a registry entry that tells the resolver how to interpret
 a head/operator in a given context.
 
-Current bootstrap receivers such as:
+The current bootstrap makes this registration concrete with `namespace` rows
+that select a `receiver.type`, followed by tables such as
+`receiver.function`, `receiver.statement`, `receiver.expr`,
+`receiver.modifier` and `receiver.trailer`. Expression punctuation is selected
+through `operator.prefix`, `operator.postfix`, `operator.infix` and
+`operator.index`. The exact currently registered spellings are listed in
+section 19.0.
 
-    fn
-    fm
-    sub
-    if
-    while
-    return
-    synchronized
-    c.*
-    @
-    \
-    []
+These terminal handlers may still be implemented directly in L2/L1. Adding a
+name to prose does not register it: a new receiver requires namespace and
+receiver-table rows plus a resolvable handler binding.
 
-may still be implemented directly in L2/L1. In the high-level model they are
-operation table entries with terminal lowering rules.
+19.21.3. `implements`
 
-19.21.3. Generic Operations
+`implements` is a registered expression receiver with the form:
+
+    implements(CandidateClass, RequiredClass)
+
+Both arguments are single registry class/key atoms, not runtime object
+instances. The receiver performs a translation-time structural method query
+and emits the integer constant `1` or `0`.
+
+The current algorithm is:
+
+    1. If both keys are identical, return 1.
+    2. Read required method keys from the `requires.method` relation of
+       `RequiredClass`. For legacy descriptor shapes, use its ordinary row keys
+       only when no `requires.method` rows are visible.
+    3. For every required key, look for an active `method` row or ordinary row
+       of `CandidateClass`, including an admitted row from the `default` table.
+    4. Return 1 only when every required key is present. Return 0 when the
+       requirement set is empty or any required key is absent.
+
+For example:
+
+    table:
+        source
+        name: Equatable
+        columns((class: class) (class: `requires.method`))
+        rows:
+                 equals  1
+    end: Equatable
+
+    table:
+        source
+        name: User
+        columns((class: class) (binding: method))
+        rows:
+                 equals  lm_user_equals
+    end: User
+
+    assert: implements(User, Equatable) = 1
+
+This check does not require either key to occur in the special `class` table.
+The current bootstrap checks method-name presence only; signature, result,
+effect and ownership compatibility require additional relations and are not
+silently inferred by `implements`.
+
+19.21.4. Generic Operations
 
 A generic operation is an expression with unresolved table coordinates. It is
 not a separate language mechanism.
@@ -9556,7 +9719,7 @@ requires:
 
 The result class and implementation are read from the selected cell.
 
-19.21.4. Conditional Forms
+19.21.5. Conditional Forms
 
 Conditional forms are expressions with control-lowering cells.
 
@@ -9574,7 +9737,7 @@ information may be stored as rows in registry tables.
 
 Examples:
 
-    field[Circle][radius] = f64
+    Circle.field.class[radius] = double
     plus[u32][u32] = plus_u32_u32_l2
     equals[String][String] = string_equals
     validator[LightPassenger][Person] = check_weight
@@ -9820,9 +9983,12 @@ RegistryView policy.
 
 19.25.6. Codec and Persistence
 
-`toLmx` and `fromLmx` are operation tables. All language values, including
-primitive values and low-level handles admitted by a profile, should have
-explicit codec rows if they are serializable.
+`toLmx` and `fromLmx` are registry operation-table names, not intrinsic parser
+forms or currently registered bootstrap receivers. A profile that exposes them
+as callable operations must provide the corresponding operation, receiver and
+codec rows. All language values, including primitive values and low-level
+handles admitted by a profile, should have explicit codec rows if they are
+serializable.
 
 Persistent registry rows may be stored as LMX files, generated database rows
 or cached binary indexes. LMX remains the source form.
@@ -10406,9 +10572,13 @@ role hierarchy.
 
 This integrated model reduces to these rules:
 
-    class = named registry form/table/key;
+    registry / RegistryView = active set/view of source tables, rows and derived facts;
+    registry class = named form/table/entity/key inside that registry;
     table named X = descriptor/source table for class/key X when present;
-    table class = index/classification relation, not the only class source;
+    table class = special class-to-kind index/classification relation, not the
+                  registry and not an exhaustive list of registry classes;
+    class.kind = compatible direct classification relation;
+    class.present = implementation membership/materialized-view relation;
     class/table import = explicit table import/overlay with priority/conflict policy;
     table row/column/cell = relation;
     missing row/column/cell = no relation;
@@ -10566,10 +10736,19 @@ This declares `ppp` as an address-depth-3 slot with base type `int`. The spellin
 
 20.2.1. Registry Layout Classes and ANSI C `typedef struct` Projection
 
-L2 does not define types by writing an ordinary named Structure. A source form
-such as `Name:` is a Structure/frame for the active receiver/profile; it is not
-automatically a storage layout and must not be projected to `typedef struct`
-merely because its fields visually resemble C fields.
+At the parser level, a source form such as `Name:` is only a Structure/frame; it
+has no intrinsic layout meaning. An arbitrary named Structure therefore remains
+generic data for its active receiver/profile.
+
+The current translator does, however, have a built-in direct-L2 named-structure
+fallback consumer. It is selected by the shape of an otherwise unresolved
+non-reserved frame, not by a `namespace`/`receiver.*` registration. When that
+frame has a non-empty body consisting entirely of admitted explicitly typed or
+type-inferable field declarations, the fallback materializes the layout
+relations described in section 19.20.1 and the hosted C projection emits the
+corresponding `typedef struct` and storage. A named frame that does not satisfy
+that layout declaration shape is not converted merely because its name or
+indentation resembles C.
 
 Types/layouts are registry data. A layout class is described by tables, and
 a backend-specific projection may later print those facts as ANSI C declarations.
