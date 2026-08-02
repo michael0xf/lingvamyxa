@@ -5048,7 +5048,9 @@ fn: lm_trans_emit_current_return_type (FILE: file; const: (LmTransNamespace: nam
     if: ((namespace_ != 0) && namespace_\return_type_is_struct)
         if: (namespace_\return_type_name = 0)
             return: 1
-        return: lm_trans_emit_function_return_struct_type_name(file, namespace_\return_type_name)
+        if: lm_trans_emit_function_return_struct_type_name(file, namespace_\return_type_name) != 0
+            return: 1
+        return: lm_trans_put(file, " *")
     return_type_node: 0
     if: namespace_ != 0
         return_type_node: namespace_\return_type_node

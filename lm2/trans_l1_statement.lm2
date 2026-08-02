@@ -1377,6 +1377,26 @@ fn: lm_trans_return_name_text (unsigned: id; @: char buffer; size_t: buffer_size
     out_name\length: (cast: size_t written)
 return: 0
 
+fn: lm_trans_emit_fm_result_prologue (
+    FILE: file
+    const: LmP0Text: function_name
+    unsigned: indent
+) int
+    if: file = 0 || function_name = 0
+        return: 1
+    if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*lm_fm_result));\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_fm_result == 0) {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+return: 0
+
 fn: lm_trans_emit_typed_value_return_statement (
     FILE: file
     const: LmP0Field: return_fields
@@ -1616,10 +1636,7 @@ fn: lm_trans_emit_struct_value_return_statement (
     const: LmP0Structure: descriptor
     const: LmP0Structure: value
     @: LmTransStructReturnFieldValue values
-    LmP0Text: return_name
     LmP0Text: field_name
-    [64]: char return_name_storage
-    unsigned: return_id
     size_t: field_count
     size_t: index
 
@@ -1637,11 +1654,6 @@ fn: lm_trans_emit_struct_value_return_statement (
     if: field_count = 0U
         c.fprintf(c.stderr, "trans L2 error: fm return Structure must not be empty\n")
         return: 1
-
-    return_name: lm_trans_statement_text_new()
-    if: return_name = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ return_name)
 
     field_name: lm_trans_statement_text_new()
     if: field_name = 0
@@ -1662,21 +1674,16 @@ fn: lm_trans_emit_struct_value_return_statement (
             return: 1
         index: index + 1U
 
-    return_id: namespace_\next_return_id
-    namespace_\next_return_id: namespace_\next_return_id + 1U
-    if: lm_trans_return_name_text(return_id, return_name_storage, c.sizeof(return_name_storage), return_name) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_current_return_type(file, namespace_) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, return_name) != 0 || lm_trans_put(file, ";\n") != 0
-        return: 1
-
     index: 0U
     while: index < field_count
         if: lm_trans_struct_return_field_name_at(descriptor, index, field_name) = 0
             c.fprintf(c.stderr, "trans L2 error: fm return field must expose a binding name\n")
             return: 1
-        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, return_name) != 0 || lm_trans_put(file, ".") != 0 || lm_trans_emit_identifier(file, field_name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_expr_range(file, values[index]\first, values[index]\stop, namespace_) != 0 || lm_trans_put(file, ";\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_fm_result->") != 0 || lm_trans_emit_identifier(file, field_name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_expr_range(file, values[index]\first, values[index]\stop, namespace_) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
         index: index + 1U
 
-    if: lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_write_text(file, return_name) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+    if: lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return lm_fm_result;\n") != 0
         return: 1
 
     out_consumed[0]: 1
@@ -2698,7 +2705,7 @@ fn: lm_trans_emit_c_tagged_declaration (
     name_node: name_field\value
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
-    if: lm_trans_emit_name(file, frame\head) != 0
+    if: lm_trans_emit_type_head_only(file, frame\head) != 0
         return: 1
     if: lm_trans_put(file, " ") != 0
         return: 1
@@ -5549,7 +5556,7 @@ fn: lm_trans_emit_struct_field_with_qualifier (
         return: 1
     if: current_qualifier != 0 && lm_trans_put(file, current_qualifier) != 0
         return: 1
-    if: lm_trans_emit_name(file, frame\head) != 0
+    if: lm_trans_emit_type_head_only(file, frame\head) != 0
         return: 1
     if: lm_trans_put(file, " ") != 0
         return: 1

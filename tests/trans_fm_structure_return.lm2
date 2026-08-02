@@ -1,5 +1,23 @@
 L2:
+    L1:
+===
+static const void *lm_test_fm_result_source;
+
+static void lm_test_remember_fm_result(const void *value) {
+    lm_test_fm_result_source = value;
+}
+
+static int lm_test_is_fm_result(const void *value) {
+    return value == lm_test_fm_result_source;
+}
+===
+
+    User:
+        int: age 9
+    end: User
+
     fm: pair () (int: left; int: right)
+        c.lm_test_remember_fm_result(c.lm_fm_result)
         return: (1 2)
     end: pair
 
@@ -7,13 +25,23 @@ L2:
         return: (right: 5; left: 4)
     end: namedPair
 
+    fm: boxedUser () (User: value; int: marker)
+        return: (User 7)
+    end: boxedUser
+
     external:
         fn: main () int
             pairReturn: first
             namedPairReturn: second
+            pairReturn: again
+            boxedUserReturn: boxed
             first: pair()
+            if: c.lm_test_is_fm_result(first) = 0
+                return: 1
             second: namedPair()
-            return: c.first.left != 1 || c.first.right != 2 || c.second.left != 4 || c.second.right != 5
+            again: pair()
+            boxed: boxedUser()
+            return: first = again || first\left != 1 || first\right != 2 || second\left != 4 || second\right != 5 || again\left != 1 || again\right != 2 || boxed\value != User || boxed\value\age != 9 || boxed\marker != 7
         end: main
     end: external
 end: L2

@@ -2,8 +2,8 @@ L2:
     L1:
 ===
 static int call_pair_left(void) {
-    pairReturn value = pair();
-    return value.left;
+    pairReturn *value = pair();
+    return value->left;
 }
 ===
 

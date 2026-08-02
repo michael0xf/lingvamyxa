@@ -4532,11 +4532,12 @@ multiple-return form: the source result is one return Structure, and consumers
 may treat that Structure as one value or unpack/map it as a sequence of returned
 values where their receiver signature admits it. The explicit return Structure
 is also reference-only. It may be created in caller-provided owner-managed
-storage before the function body starts, or it may be another existing
-owner-managed Structure compatible with the return description. A translator
-may use a hidden output reference or eliminate unobservable physical field
-traffic, but it must preserve the reference-only result, Structure identity and
-the no-allocation-at-return rule of section 8.8.
+storage before the function body starts, created once in the callee prologue
+before the body starts, or it may be another existing owner-managed Structure
+compatible with the return description. A translator may use a hidden output
+reference or eliminate unobservable physical field traffic, but it must
+preserve the reference-only result, Structure identity and the
+no-allocation-at-return rule of section 8.8.
 
 Function definition is not function call syntax. The first compact `fn`/`sub`
 field must be the declared name as its own field. A spelling with no separator
@@ -5634,7 +5635,8 @@ must not allocate on the return path. Section 19.29 defines the owner ordering.
 
 For `fm`, positional or named return fields populate an already existing
 owner-managed result Structure. The caller may provide that Structure before
-entry. The return operation forwards its reference after the field updates; it
+entry, or the callee may create it once in its prologue before executing the
+body. The return operation forwards its reference after the field updates; it
 does not construct the result at the exit point.
 
 The `return:` receiver consumes its tail as the current function result and
@@ -5671,11 +5673,16 @@ storage passed through a hidden or explicit reference. That storage exists
 before the return statement is executed.
 
 variant 4:
+An `fm` callee creates its owner-managed result Structure once in the function
+prologue before executing the body. Every return path updates and forwards that
+same reference; the return operation performs no allocation or copy.
+
+variant 5:
 An `fm` return Structure may be optimized away when the translator can map its
 fields directly to the consuming context without changing observable Structure
 identity or the reference-only contract.
 
-variant 5:
+variant 6:
 Terminal return lowers as an ordinary body-level return followed by no further generated body statements. Source-level structural closure is resolved before lowering.
 
 These variants are implementation strategies only. No ANSI C variant may return
@@ -7344,6 +7351,10 @@ Return multi-field `fm` results through caller-provided owner-managed output
 storage created before function execution.
 
 variant 4:
+Create an `fm` result once in the callee prologue before body execution and
+return that exact owner-managed reference from every return path.
+
+variant 5:
 Elide unobservable result-field traffic while preserving Structure identity and
 the reference-only result contract.
 
@@ -10894,11 +10905,13 @@ bootstrap tools such as `parser`, `trans`, `make`, `finalize` and `buildCore`.
 The root Message Thread owns a root arena before an ordinary local Structure is
 materialized and destroys that arena when the program/thread terminates.
 
-The initial C99 implementation may allocate every ordinary local named or
-merge-produced Structure directly in this root arena. Therefore a function may
-return the exact pointer to a locally created Structure, and multiple returned
-references remain valid until root-arena destruction. Top-level static storage
-may remain module-owned, but it is still observed through Structure references.
+The initial C99 implementation may allocate every ordinary local named,
+merge-produced or `fm` result Structure directly in this root arena. An `fm`
+result is allocated once in the function prologue, before the body, rather than
+by a return operation. Therefore a function may return the exact pointer to a
+locally created Structure, and multiple returned references remain valid until
+root-arena destruction. Top-level static storage may remain module-owned, but
+it is still observed through Structure references.
 
 Consequently, a generated bootstrap executable that contains the Message Thread
 runtime depends on the owner runtime (`libown` in the current C99 build). This is

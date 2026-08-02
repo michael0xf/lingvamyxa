@@ -41,6 +41,6 @@ external:
         int: value addOne(4)
         pairReturn: result pair()
         increment(@ value)
-        return: value != 6 || c.result.left != 2 || c.result.right != 3
+        return: value != 6 || result\left != 2 || result\right != 3
     end: main
 end: external

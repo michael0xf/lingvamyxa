@@ -21,6 +21,6 @@ external:
         pairFromReturn: pair
         setTotal()
         pair: pairFrom()
-        return: parenParam(2) != 3 || namedDefault() != 7 || namedDefault(value: 8) != 12 || subTotal != 9 || c.pair.left != 6 || c.pair.right != 7
+        return: parenParam(2) != 3 || namedDefault() != 7 || namedDefault(value: 8) != 12 || subTotal != 9 || pair\left != 6 || pair\right != 7
     end: main
 end: external

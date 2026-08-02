@@ -2106,6 +2106,7 @@ static int lm_trans_array_formal_param_type_info(const LmTransFormalParam *param
 static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam *param, const LmP0Structure *value, const LmTransNamespace *namespace_, LmP0Text *out_name);
 static int lm_trans_materialize_array_value(FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
 static int lm_trans_return_name_text(unsigned id, char *buffer, size_t buffer_size, LmP0Text *out_name);
+static int lm_trans_emit_fm_result_prologue(FILE *file, const LmP0Text *function_name, unsigned indent);
 static int lm_trans_emit_typed_value_return_statement(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_, int *out_consumed);
 static int lm_trans_struct_return_field_name_at(const LmP0Structure *descriptor, size_t index, LmP0Text *out_name);
 static int lm_trans_struct_return_field_index(const LmP0Structure *descriptor, const LmP0Text *name, size_t *out_index);
@@ -15763,7 +15764,10 @@ static int lm_trans_emit_current_return_type(FILE *file, const LmTransNamespace 
         if (namespace_ -> return_type_name == 0) {
             return 1;
         }
-        return lm_trans_emit_function_return_struct_type_name(file, namespace_ -> return_type_name);
+        if (lm_trans_emit_function_return_struct_type_name(file, namespace_ -> return_type_name) != 0) {
+            return 1;
+        }
+        return lm_trans_put(file, " *");
     }
     return_type_node = 0;
     if (namespace_ != 0) {
@@ -17822,6 +17826,28 @@ static int lm_trans_return_name_text(unsigned id, char *buffer, size_t buffer_si
     return 0;
 }
 
+static int lm_trans_emit_fm_result_prologue(FILE *file, const LmP0Text *function_name, unsigned indent) {
+    if (file == 0 || function_name == 0) {
+        return 1;
+    }
+    if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*lm_fm_result));\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_fm_result == 0) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_emit_typed_value_return_statement(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_, int *out_consumed) {
     const LmP0Structure * structure_value;
     LmP0Text * return_name;
@@ -18150,10 +18176,7 @@ static int lm_trans_emit_struct_value_return_statement(FILE *file, const LmP0Fie
     const LmP0Structure * descriptor;
     const LmP0Structure * value;
     LmTransStructReturnFieldValue * *values;
-    LmP0Text * return_name;
     LmP0Text * field_name;
-    char return_name_storage[64];
-    unsigned return_id;
     size_t field_count;
     size_t index;
     if (out_consumed != 0) {
@@ -18172,34 +18195,24 @@ static int lm_trans_emit_struct_value_return_statement(FILE *file, const LmP0Fie
         fprintf(stderr, "trans L2 error: fm return Structure must not be empty\n");
         return 1;
     }
-    return_name = lm_trans_statement_text_new();
-    if (return_name == 0) {
-        return 1;
-    }
     field_name = lm_trans_statement_text_new();
     if (field_name == 0) {
-        {
-            int lm_return_0 = 1;
-            lm_trans_text_ref_destroy(&return_name);
-            return lm_return_0;
-        }
+        return 1;
     }
     values = lm_trans_struct_return_field_values_new(field_count);
     if (values == 0) {
         {
-            int lm_return_1 = 1;
+            int lm_return_0 = 1;
             lm_trans_text_ref_destroy(&field_name);
-            lm_trans_text_ref_destroy(&return_name);
-            return lm_return_1;
+            return lm_return_0;
         }
     }
     if (lm_trans_struct_return_collect_value_fields(descriptor, value, values, field_count) != 0) {
         {
-            int lm_return_2 = 1;
+            int lm_return_1 = 1;
             lm_trans_struct_return_field_values_delete(values, field_count);
             lm_trans_text_ref_destroy(&field_name);
-            lm_trans_text_ref_destroy(&return_name);
-            return lm_return_2;
+            return lm_return_1;
         }
     }
     index = 0U;
@@ -18207,65 +18220,49 @@ static int lm_trans_emit_struct_value_return_statement(FILE *file, const LmP0Fie
         if (values[index] -> present == 0) {
             fprintf(stderr, "trans L2 error: fm Structure return literal does not fill every return field\n");
             {
-                int lm_return_3 = 1;
+                int lm_return_2 = 1;
                 lm_trans_struct_return_field_values_delete(values, field_count);
                 lm_trans_text_ref_destroy(&field_name);
-                lm_trans_text_ref_destroy(&return_name);
-                return lm_return_3;
+                return lm_return_2;
             }
         }
         index = index + 1U;
-    }
-    return_id = namespace_ -> next_return_id;
-    namespace_->next_return_id = namespace_ -> next_return_id + 1U;
-    if (lm_trans_return_name_text(return_id, return_name_storage, sizeof(return_name_storage), return_name) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_current_return_type(file, namespace_) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, return_name) != 0 || lm_trans_put(file, ";\n") != 0) {
-        {
-            int lm_return_4 = 1;
-            lm_trans_struct_return_field_values_delete(values, field_count);
-            lm_trans_text_ref_destroy(&field_name);
-            lm_trans_text_ref_destroy(&return_name);
-            return lm_return_4;
-        }
     }
     index = 0U;
     while (index < field_count) {
         if (lm_trans_struct_return_field_name_at(descriptor, index, field_name) == 0) {
             fprintf(stderr, "trans L2 error: fm return field must expose a binding name\n");
             {
-                int lm_return_5 = 1;
+                int lm_return_3 = 1;
                 lm_trans_struct_return_field_values_delete(values, field_count);
                 lm_trans_text_ref_destroy(&field_name);
-                lm_trans_text_ref_destroy(&return_name);
-                return lm_return_5;
+                return lm_return_3;
             }
         }
-        if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, return_name) != 0 || lm_trans_put(file, ".") != 0 || lm_trans_emit_identifier(file, field_name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_expr_range(file, values[index] -> first, values[index] -> stop, namespace_) != 0 || lm_trans_put(file, ";\n") != 0) {
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_fm_result->") != 0 || lm_trans_emit_identifier(file, field_name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_expr_range(file, values[index] -> first, values[index] -> stop, namespace_) != 0 || lm_trans_put(file, ";\n") != 0) {
             {
-                int lm_return_6 = 1;
+                int lm_return_4 = 1;
                 lm_trans_struct_return_field_values_delete(values, field_count);
                 lm_trans_text_ref_destroy(&field_name);
-                lm_trans_text_ref_destroy(&return_name);
-                return lm_return_6;
+                return lm_return_4;
             }
         }
         index = index + 1U;
     }
-    if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_write_text(file, return_name) != 0 || lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+    if (lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return lm_fm_result;\n") != 0) {
         {
-            int lm_return_7 = 1;
+            int lm_return_5 = 1;
             lm_trans_struct_return_field_values_delete(values, field_count);
             lm_trans_text_ref_destroy(&field_name);
-            lm_trans_text_ref_destroy(&return_name);
-            return lm_return_7;
+            return lm_return_5;
         }
     }
     out_consumed[0] = 1;
     {
-        int lm_return_8 = 0;
+        int lm_return_6 = 0;
         lm_trans_struct_return_field_values_delete(values, field_count);
         lm_trans_text_ref_destroy(&field_name);
-        lm_trans_text_ref_destroy(&return_name);
-        return lm_return_8;
+        return lm_return_6;
     }
 }
 
@@ -19715,7 +19712,7 @@ static int lm_trans_emit_c_tagged_declaration(FILE *file, const LmP0Frame *frame
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
-    if (lm_trans_emit_name(file, frame -> head) != 0) {
+    if (lm_trans_emit_type_head_only(file, frame -> head) != 0) {
         return 1;
     }
     if (lm_trans_put(file, " ") != 0) {
@@ -23314,7 +23311,7 @@ static int lm_trans_emit_struct_field_with_qualifier(FILE *file, const LmP0Node 
     if (current_qualifier != 0 && lm_trans_put(file, current_qualifier) != 0) {
         return 1;
     }
-    if (lm_trans_emit_name(file, frame -> head) != 0) {
+    if (lm_trans_emit_type_head_only(file, frame -> head) != 0) {
         return 1;
     }
     if (lm_trans_put(file, " ") != 0) {
@@ -26829,6 +26826,11 @@ static const LmP0Frame * lm_trans_top_level_item_frame(const LmTransTopLevelItem
 static int lm_trans_top_level_declare_generated_return_class(LmTransNamespace *namespace_, const LmTransFunctionHeader *function) {
     char *return_type_name_storage;
     LmP0Text * return_type_name;
+    const LmP0Field * field;
+    LmTransL4CallableType * field_type;
+    const LmP0Text * field_name;
+    const LmP0Field * initializer;
+    size_t field_index;
     int status;
     if (function == 0 || function -> is_struct_return == 0) {
         return 0;
@@ -26843,6 +26845,39 @@ static int lm_trans_top_level_declare_generated_return_class(LmTransNamespace *n
         return 1;
     }
     status = lm_trans_namespace_declare_generated(namespace_, return_type_name, "class");
+    if (status == 0) {
+        status = lm_trans_registry_note_class_present(return_type_name) != 0 || lm_trans_registry_note_class_kind(return_type_name, "layout") != 0 || lm_trans_registry_note_class_reference_base(return_type_name) != 0 || lm_trans_registry_note_layout_backend(return_type_name, "c.struct") != 0;
+    }
+    field_type = 0;
+    if (status == 0) {
+        if (function -> return_node == 0 || function -> return_node -> kind != LM_P0_NODE_STRUCTURE) {
+            status = 1;
+        }
+        else {
+            field_type = lm_trans_expr_callable_type_new();
+            if (field_type == 0) {
+                status = 1;
+            }
+        }
+    }
+    field = 0;
+    if (status == 0) {
+        field = function -> return_node -> as -> structure -> first_field;
+    }
+    field_index = 0U;
+    while (status == 0 && field != 0) {
+        if (lm_trans_node_is_ignored(field -> value) == 0) {
+            if (field -> value == 0 || field -> value -> kind != LM_P0_NODE_FRAME || lm_trans_named_structure_field_info(field -> value -> as -> frame, namespace_, field_type, &field_name, &initializer) == 0) {
+                status = 1;
+            }
+            else {
+                status = lm_trans_named_structure_push_field_relations(return_type_name, field_name, field_type, field_index);
+                field_index = field_index + 1U;
+            }
+        }
+        field = field -> next;
+    }
+    lm_trans_expr_callable_type_delete(field_type);
     lm_trans_text_ref_destroy(&return_type_name);
     lm_own_delete(return_type_name_storage, 0);
     return status;
@@ -27764,7 +27799,7 @@ static int lm_trans_emit_function_prototype(FILE *file, const LmTransFunctionHea
             return 1;
         }
         if (function -> is_struct_return) {
-            if (lm_trans_emit_function_return_struct_type_name(file, function -> c_name) != 0 || lm_trans_put(file, " ") != 0) {
+            if (lm_trans_emit_function_return_struct_type_name(file, function -> c_name) != 0 || lm_trans_put(file, " *") != 0) {
                 lm_trans_text_ref_destroy(&raw_return_descriptor_name);
                 return 1;
             }
@@ -28291,7 +28326,7 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
             }
         }
         if (function -> is_struct_return) {
-            if (lm_trans_emit_function_return_struct_type_name(file, function -> c_name) != 0) {
+            if (lm_trans_emit_function_return_struct_type_name(file, function -> c_name) != 0 || lm_trans_put(file, " *") != 0) {
                 lm_trans_ptr_stack_delete(&hoisted_functions);
                 return 1;
             }
@@ -28475,6 +28510,9 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
     }
     if (function -> is_external && lm_trans_text_equals(function -> c_name, "main")) {
         status = lm_trans_emit_l5_main_root(file, 1U);
+    }
+    if (status == 0 && function -> is_struct_return) {
+        status = lm_trans_emit_fm_result_prologue(file, function -> c_name, 1U);
     }
     if (status == 0) {
         status = lm_trans_emit_statement_list(file, function -> body_start, 1U, namespace_);
