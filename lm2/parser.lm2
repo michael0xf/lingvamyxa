@@ -517,7 +517,6 @@ table:
              view     LmRegistryView
              loaded   int
              loading  int
-             registry_source_loader LmRegistrySourceLoader
 end: `LmP0Registry.field.class`
 
 table:
@@ -527,7 +526,6 @@ table:
              view     0
              loaded   1
              loading  2
-             registry_source_loader 3
 end: `LmP0Registry.field.index`
 
 table:
@@ -535,7 +533,6 @@ table:
     columns((class: class) (size_t: depth))
     rows:
              view     0
-             registry_source_loader 0
 end: `LmP0Registry.field.address-depth`
 
 table:
@@ -1289,10 +1286,8 @@ fn: lm_p0_registry_init () int
     if: (lm_p0_registry = 0)
         return: 1
     lm_p0_registry\view: lm_registry_view_new(0)
-    lm_p0_registry\registry_source_loader: lm_p0_registry_source_loader_new()
-    if: lm_p0_registry\view = 0 || lm_p0_registry\registry_source_loader = 0
+    if: lm_p0_registry\view = 0
         lm_registry_view_delete(lm_p0_registry\view)
-        lm_own_delete(lm_p0_registry\registry_source_loader, 0)
         lm_own_delete(lm_p0_registry, 0)
         lm_p0_registry: 0
         return: 1
@@ -1304,8 +1299,6 @@ sub: lm_p0_registry_destroy ()
         return
     lm_registry_view_delete(lm_p0_registry\view)
     lm_p0_registry\view: 0
-    lm_own_delete(lm_p0_registry\registry_source_loader, 0)
-    lm_p0_registry\registry_source_loader: 0
     lm_p0_registry\loaded: 0
     lm_p0_registry\loading: 0
     lm_own_delete(lm_p0_registry, 0)
@@ -5450,8 +5443,6 @@ fn: lm_p0_registry_source_loader_new () LmRegistrySourceLoader
     if: (loader = 0)
         return: 0
     loader\error_prefix: "parser"
-    loader\push_cell: 0
-    loader\note_key: 0
     loader\push_column_metadata: @ lm_p0_registry_source_push_column_metadata
     loader\push_table_row: @ lm_p0_registry_source_push_table_row
     loader\join_table: @ lm_p0_registry_source_join_table
@@ -5459,12 +5450,6 @@ fn: lm_p0_registry_source_loader_new () LmRegistrySourceLoader
     loader\positional_name_index: @ lm_p0_registry_source_positional_name_index
     return: loader
 end: lm_p0_registry_source_loader_new
-
-fn: lm_p0_registry_source_loader_get () const: LmRegistrySourceLoader
-    if: (lm_p0_registry != 0)
-        return: lm_p0_registry\registry_source_loader
-    return: 0
-end: lm_p0_registry_source_loader_get
 
 fn: lm_p0_path_has_extension (const: @(char path); const: @(char extension)) int
     size_t: path_length
@@ -5583,6 +5568,7 @@ fn: lm_p0_registry_load_default () int
     const: @: char registry_path
     LmP0Document: document
     const: LmP0Diagnostic: diagnostic
+    LmRegistrySourceLoader: loader
     int: override_enabled
     int: status
     size_t: i
@@ -5638,7 +5624,13 @@ fn: lm_p0_registry_load_default () int
         lm_p0_registry\loaded: 1
         lm_p0_registry\loading: 0
         return: 0
-    status: lm_registry_source_load_root(lm_p0_registry_source_loader_get(), 0, lm_p0_document_root(document))
+    loader: lm_p0_registry_source_loader_new()
+    if: loader = 0
+        lm_p0_document_destroy(document)
+        lm_p0_registry_destroy()
+        return: 1
+    status: lm_registry_source_load_root(loader, 0, lm_p0_document_root(document))
+    lm_own_delete(loader, 0)
     lm_p0_document_destroy(document)
     if: (status != 0)
         lm_p0_registry_destroy()

@@ -1,16 +1,6 @@
 L2:
     predef: "lm2/own_abi.lm2"
 
-    LmOwnPtrStack: lm_registry_source_seen_tables
-
-    fn: lm_registry_source_seen_tables_get () LmOwnPtrStack
-        return: lm_registry_source_seen_tables
-
-    sub: lm_registry_source_seen_tables_set (LmOwnPtrStack: seen_tables)
-        lm_registry_source_seen_tables: seen_tables
-    end: lm_registry_source_seen_tables_set
-
-
     fn: lm_registry_source_text_equals (const: (LmP0Text: text); const: @(char value)) int
         size_t: length
 
@@ -575,17 +565,13 @@ L2:
 
     fn: lm_registry_source_rows_from_frame (const: (LmRegistrySourceLoader: loader); @: void context; const: (LmP0Frame: frame); const: (LmP0Text: table_name); @: LmRegistrySourceColumn columns; size_t: column_count) int
         const: LmP0Field: field
-        const: LmP0Node: key_node
-        const: LmP0Node: cell_node
-        const: LmP0Text: key_atom
         const: @: LmP0Node row_cells
         size_t: field_index
         size_t: column_index
-        int: split_by_column
 
         if: frame = 0 || lm_registry_source_text_equals(lm_registry_source_frame_head(frame), "rows") = 0
             return: 0
-        if: loader = 0 || (loader\push_cell = 0 && loader\push_table_row = 0)
+        if: loader = 0 || loader\push_table_row = 0
             lm_registry_source_error(loader, "table row consumer is not configured")
             return: -1
         if: columns = 0 || column_count = 0U
@@ -602,36 +588,18 @@ L2:
             lm_registry_source_error(loader, "out of memory while reading table rows")
             return: -1
         field_index: 0U
-        key_node: 0
-        key_atom: 0
-        split_by_column: column_count != 2U
         field: lm_registry_source_frame_body(frame)\first_field
         while: field != 0
             if: field\value != 0 && lm_registry_source_node_is_ignored(field\value) = 0
                 column_index: field_index % column_count
                 row_cells[column_index]: field\value
                 if: column_index = 0U
-                    key_node: field\value
-                    if: key_node\kind != c.LM_P0_NODE_ATOM
+                    if: field\value\kind != c.LM_P0_NODE_ATOM || lm_registry_source_node_atom(field\value) = 0
                         lm_registry_source_error(loader, "table rows currently expect atom cells in the key column")
                         lm_own_delete(row_cells, 0)
                         return: -1
-                    key_atom: lm_registry_source_node_atom(key_node)
-                    if: key_atom = 0
-                        lm_registry_source_error(loader, "table rows currently expect atom cells in the key column")
-                        lm_own_delete(row_cells, 0)
-                        return: -1
-                    if: loader\note_key != 0 && c.loader->note_key(context, table_name, columns[0], key_atom) != 0
-                        lm_own_delete(row_cells, 0)
-                        return: -1
                     ---
-                if: column_index != 0U && loader\push_cell != 0
-                    cell_node: field\value
-                    if: key_node = 0 || key_atom = 0 || c.loader->push_cell(context, table_name, columns[column_index], split_by_column, key_atom, cell_node) != 0
-                        lm_own_delete(row_cells, 0)
-                        return: -1
-                    ---
-                if: column_index + 1U = column_count && loader\push_table_row != 0 && c.loader->push_table_row(context, table_name, columns, column_count, row_cells) != 0
+                if: column_index + 1U = column_count && c.loader->push_table_row(context, table_name, columns, column_count, row_cells) != 0
                     lm_own_delete(row_cells, 0)
                     return: -1
                 field_index: field_index + 1U
@@ -1005,14 +973,11 @@ L2:
 
     return: 0
 
-    fn: lm_registry_source_receiver_table (const: (LmRegistrySourceLoader: loader); @: void context; const: (LmP0Frame: frame)) int
-        LmOwnPtrStack: seen
+    fn: lm_registry_source_load_table_frame (const: (LmRegistrySourceLoader: loader); @: void context; const: (LmP0Frame: frame); LmOwnPtrStack: seen) int
         int: status
 
-        seen: lm_registry_source_seen_tables_get()
-        if: seen != 0 && lm_registry_source_check_table_frame_unique(loader, frame, seen) != 0
+        if: lm_registry_source_check_table_frame_unique(loader, frame, seen) != 0
             return: 1
-
         status: lm_registry_source_table_from_frame(loader, context, frame)
         if: status <= 0
             if: status = 0
@@ -1020,14 +985,11 @@ L2:
             return: 1
     return: 0
 
-    fn: lm_registry_source_receiver_join (const: (LmRegistrySourceLoader: loader); @: void context; const: (LmP0Frame: frame)) int
-        LmOwnPtrStack: seen
+    fn: lm_registry_source_load_join_frame (const: (LmRegistrySourceLoader: loader); @: void context; const: (LmP0Frame: frame); LmOwnPtrStack: seen) int
         int: status
 
-        seen: lm_registry_source_seen_tables_get()
-        if: seen != 0 && lm_registry_source_check_join_frame_unique(loader, frame, seen) != 0
+        if: lm_registry_source_check_join_frame_unique(loader, frame, seen) != 0
             return: 1
-
         status: lm_registry_source_join_from_frame(loader, context, frame)
         if: status <= 0
             if: status = 0
@@ -1040,7 +1002,6 @@ L2:
         const: LmP0Node: node
         const: LmP0Frame: frame
         LmOwnPtrStack: seen
-        LmOwnPtrStack: previous_seen
         int: loaded
         int: status
 
@@ -1053,8 +1014,6 @@ L2:
             lm_registry_source_error(loader, "cannot allocate table duplicate tracker")
             return: 1
         lm_own_ptr_stack_init: seen lm_own_delete_plain
-        previous_seen: lm_registry_source_seen_tables_get()
-        lm_registry_source_seen_tables_set: seen
         loaded: 0
         status: 0
 
@@ -1071,10 +1030,10 @@ L2:
                 continue
             frame: lm_registry_source_node_frame(node)
             if: lm_registry_source_text_equals(lm_registry_source_frame_head(frame), "table") != 0
-                status: lm_registry_source_receiver_table(loader, context, frame)
+                status: lm_registry_source_load_table_frame(loader, context, frame, seen)
             else:
                 if: lm_registry_source_text_equals(lm_registry_source_frame_head(frame), "join") != 0
-                    status: lm_registry_source_receiver_join(loader, context, frame)
+                    status: lm_registry_source_load_join_frame(loader, context, frame, seen)
                 else:
                     lm_registry_source_error(loader, "root fields must be table or join frames")
                     status: 1
@@ -1087,7 +1046,6 @@ L2:
             lm_registry_source_error(loader, "no rows loaded")
             status: 1
 
-        lm_registry_source_seen_tables_set: previous_seen
         lm_own_ptr_stack_destroy: seen
         lm_own_delete(seen, 0)
     return: status

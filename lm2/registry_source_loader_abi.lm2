@@ -12,9 +12,7 @@ table:
     name: functionPointerType
     columns((class: class) (int: value))
     rows:
-             LmRegistrySourcePushCell           1
              LmRegistrySourcePushTableRow       1
-             LmRegistrySourceNoteKey            1
              LmRegistrySourcePushColumnMetadata 1
              LmRegistrySourceJoinTable          1
              LmRegistrySourceFrameIndexRule     1
@@ -27,28 +25,12 @@ fn: LmRegistrySourceFrameIndexRule (
     @: size_t out_index
 ) int
 
-fn: LmRegistrySourcePushCell (
-    @: void context
-    const: LmP0Text: table_name
-    const: LmRegistrySourceColumn: column
-    int: split_by_column
-    const: LmP0Text: key_atom
-    const: LmP0Node: payload_node
-) int
-
 fn: LmRegistrySourcePushTableRow (
     @: void context
     const: LmP0Text: table_name
     @: LmRegistrySourceColumn columns
     size_t: column_count
     const: @: LmP0Node cells
-) int
-
-fn: LmRegistrySourceNoteKey (
-    @: void context
-    const: LmP0Text: table_name
-    const: LmRegistrySourceColumn: column
-    const: LmP0Text: key_atom
 ) int
 
 fn: LmRegistrySourcePushColumnMetadata (
@@ -64,34 +46,10 @@ fn: LmRegistrySourceJoinTable (
     const: LmP0Text: target_table
 ) int
 
-fn: lm_registry_source_table_from_frame (
-    const: LmRegistrySourceLoader: loader
-    @: void context
-    const: LmP0Frame: frame
-) int
-
-fn: lm_registry_source_join_from_frame (
-    const: LmRegistrySourceLoader: loader
-    @: void context
-    const: LmP0Frame: frame
-) int
-
 fn: lm_registry_source_load_root (
     const: LmRegistrySourceLoader: loader
     @: void context
     const: LmP0Node: root
-) int
-
-fn: lm_registry_source_receiver_table (
-    const: LmRegistrySourceLoader: loader
-    @: void context
-    const: LmP0Frame: frame
-) int
-
-fn: lm_registry_source_receiver_join (
-    const: LmRegistrySourceLoader: loader
-    @: void context
-    const: LmP0Frame: frame
 ) int
 
 table:
@@ -175,13 +133,11 @@ table:
     columns((class: class) (class: field))
     rows:
              error_prefix          char
-             push_cell             LmRegistrySourcePushCell
-             note_key              LmRegistrySourceNoteKey
              push_column_metadata  LmRegistrySourcePushColumnMetadata
+             push_table_row        LmRegistrySourcePushTableRow
              join_table            LmRegistrySourceJoinTable
              formal_param_unwrap_index LmRegistrySourceFrameIndexRule
              positional_name_index LmRegistrySourceFrameIndexRule
-             push_table_row       LmRegistrySourcePushTableRow
 end: `LmRegistrySourceLoader.field.class`
 
 table:
@@ -189,13 +145,11 @@ table:
     columns((class: class) (size_t: index))
     rows:
              error_prefix          0
-             push_cell             1
-             note_key              2
-             push_column_metadata  3
-             join_table            4
-             formal_param_unwrap_index 5
-             positional_name_index 6
-             push_table_row       7
+             push_column_metadata  1
+             push_table_row        2
+             join_table            3
+             formal_param_unwrap_index 4
+             positional_name_index 5
 end: `LmRegistrySourceLoader.field.index`
 
 table:
