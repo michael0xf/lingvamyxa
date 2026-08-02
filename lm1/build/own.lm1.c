@@ -5,6 +5,72 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+struct LmOwnArena;
+struct LmMessageThread;
+struct LmMessageThread *lm_message_thread_current(void);
+struct LmMessageThread *lm_message_thread_new(void);
+void lm_message_thread_delete(struct LmMessageThread *thread);
+struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);
+struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
+void *lm_message_thread_execution_context(struct LmMessageThread *thread);
+void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
+int lm_message_thread_begin_turn(struct LmMessageThread *thread);
+int lm_message_thread_end_turn(struct LmMessageThread *thread);
+void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
+void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_status(const struct LmMessageThread *thread);
+int lm_message_thread_is_running(const struct LmMessageThread *thread);
+size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
+size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
+void lm_own_arena_freeze(struct LmOwnArena *arena);
+void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
+void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
+struct LmMessageThreadExecutionContext {
+    jmp_buf diagnostic_root;
+    int diagnostic_code;
+    const char *diagnostic_label;
+    const char *diagnostic_file;
+    int diagnostic_line;
+    const char *diagnostic_expr;
+};
+typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
+#if defined(__GNUC__) || defined(__clang__)
+#define LM_LMX_UNUSED_ENTRY_HELPER __attribute__((unused))
+#else
+#define LM_LMX_UNUSED_ENTRY_HELPER
+#endif
+static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {
+    struct LmMessageThread *thread;
+    struct LmMessageThread *previous;
+    LmMessageThreadExecutionContext context = {0};
+    void *previous_context;
+    int status;
+    if (entry == 0) {
+        return 1;
+    }
+    thread = lm_message_thread_new();
+    if (thread == 0) {
+        return 1;
+    }
+    previous = lm_message_thread_set_current(thread);
+    previous_context = lm_message_thread_set_execution_context(thread, &context);
+    while (lm_message_thread_begin_turn(thread)) {
+        context.diagnostic_code = 0;
+        if (setjmp(context.diagnostic_root) == 0) {
+            lm_message_thread_request_stop(thread, entry(thread));
+        } else {
+            lm_message_thread_request_failure(thread, context.diagnostic_code == 0 ? 1 : context.diagnostic_code);
+        }
+        (void)lm_message_thread_end_turn(thread);
+    }
+    lm_message_thread_set_execution_context(thread, previous_context);
+    status = lm_message_thread_status(thread);
+    lm_message_thread_set_current(previous);
+    lm_message_thread_delete(thread);
+    return status;
+}
+#undef LM_LMX_UNUSED_ENTRY_HELPER
 #include <stddef.h>
 
 
@@ -277,10 +343,10 @@ int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count);
 int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
 void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void * lm_own_value_stack_top(const LmOwnValueStack *stack);
-static int lm_own_size_multiply(size_t left, size_t right, size_t *out);
-static int lm_own_global_allocation_descriptors_init(void);
-static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnPtrStack *descriptors, const void *address);
-static int lm_own_allocation_descriptor_push(LmOwnPtrStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level);
+static int lm_own_size_multiply(struct LmMessageThread *lm_lmx_message_thread, size_t left, size_t right, size_t *out);
+static int lm_own_global_allocation_descriptors_init(struct LmMessageThread *lm_lmx_message_thread);
+static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *descriptors, const void *address);
+static int lm_own_allocation_descriptor_push(struct LmMessageThread *lm_lmx_message_thread, LmOwnPtrStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level);
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
 const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
@@ -311,6 +377,7 @@ int lm_message_thread_collect(LmMessageThread *thread);
 int lm_message_thread_begin_turn(LmMessageThread *thread);
 int lm_message_thread_end_turn(LmMessageThread *thread);
 
+
 static LmOwnPtrStack * lm_own_global_allocation_descriptors;
 
 static int lm_own_global_allocation_descriptors_ready;
@@ -324,10 +391,14 @@ static int lm_message_thread_root_ready;
 static int lm_message_thread_root_cleanup_registered;
 
 void * lm_own_new_zero(size_t size) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return calloc(1U, size);
 }
 
 void * lm_own_resize(void *object, size_t size) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (size == 0U) {
         free(object);
         return 0;
@@ -336,6 +407,8 @@ void * lm_own_resize(void *object, size_t size) {
 }
 
 char * lm_own_copy_bytes(const char *source, size_t length) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     char *copy;
     if (length == (((size_t)-1))) {
         return 0;
@@ -352,6 +425,8 @@ char * lm_own_copy_bytes(const char *source, size_t length) {
 }
 
 void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (object != 0) {
         if (destroy_fields != 0) {
             destroy_fields(object);
@@ -361,10 +436,14 @@ void lm_own_delete(void *object, LmOwnDestroyFields destroy_fields) {
 }
 
 void lm_own_delete_plain(void *object) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     lm_own_delete(object, 0);
 }
 
 void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_item) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     size_t index;
     if (items != 0) {
         if (delete_item != 0) {
@@ -382,6 +461,8 @@ void lm_own_pointer_array_delete(void **items, size_t count, LmOwnDelete delete_
 }
 
 void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (stack != 0) {
         stack->items = 0;
         stack->count = 0U;
@@ -391,6 +472,8 @@ void lm_own_ptr_stack_init(LmOwnPtrStack *stack, LmOwnDelete delete_item) {
 }
 
 void lm_own_ptr_stack_destroy(LmOwnPtrStack *stack) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (stack != 0) {
         lm_own_pointer_array_delete(stack -> items, stack -> count, stack -> delete_item);
         stack->items = 0;
@@ -401,6 +484,8 @@ void lm_own_ptr_stack_destroy(LmOwnPtrStack *stack) {
 }
 
 int lm_own_ptr_stack_push(LmOwnPtrStack *stack, void *item) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void **items;
     size_t capacity;
     if (stack == 0) {
@@ -420,23 +505,27 @@ int lm_own_ptr_stack_push(LmOwnPtrStack *stack, void *item) {
         stack->items = items;
         stack->capacity = capacity;
     }
-    stack->items[stack->count] = item;
+    stack->items[stack -> count] = item;
     stack->count = stack -> count + 1U;
     return 0;
 }
 
 void * lm_own_ptr_stack_pop(LmOwnPtrStack *stack) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void *item;
     if (stack == 0 || stack -> count == 0U) {
         return 0;
     }
     stack->count = stack -> count - 1U;
     item = stack -> items[stack -> count];
-    stack->items[stack->count] = 0;
+    stack->items[stack -> count] = 0;
     return item;
 }
 
 void * lm_own_ptr_stack_at(const LmOwnPtrStack *stack, size_t index) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (stack == 0 || index >= stack -> count) {
         return 0;
     }
@@ -444,6 +533,8 @@ void * lm_own_ptr_stack_at(const LmOwnPtrStack *stack, size_t index) {
 }
 
 void * lm_own_ptr_stack_top(const LmOwnPtrStack *stack) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (stack == 0 || stack -> count == 0U) {
         return 0;
     }
@@ -451,6 +542,8 @@ void * lm_own_ptr_stack_top(const LmOwnPtrStack *stack) {
 }
 
 void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void *item;
     if (stack == 0) {
         return;
@@ -464,6 +557,8 @@ void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count) {
 }
 
 void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (stack != 0) {
         stack->items = 0;
         stack->count = 0U;
@@ -473,6 +568,8 @@ void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size) {
 }
 
 void lm_own_value_stack_destroy(LmOwnValueStack *stack) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (stack != 0) {
         free(stack -> items);
         stack->items = 0;
@@ -483,12 +580,16 @@ void lm_own_value_stack_destroy(LmOwnValueStack *stack) {
 }
 
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (stack != 0 && count < stack -> count) {
         stack->count = count;
     }
 }
 
 int lm_own_arena_init(LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (arena == 0) {
         return 1;
     }
@@ -516,6 +617,8 @@ int lm_own_arena_init(LmOwnArena *arena) {
 }
 
 void lm_own_arena_destroy(LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (arena != 0) {
         lm_own_ptr_stack_destroy(arena -> lazy_edges);
         lm_own_delete(arena -> lazy_edges, 0);
@@ -531,6 +634,8 @@ void lm_own_arena_destroy(LmOwnArena *arena) {
 }
 
 LmOwnArena * lm_own_arena_new(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     LmOwnArena * arena;
     arena = lm_own_new_zero(sizeof(arena[0]));
     if (arena == 0) {
@@ -544,6 +649,8 @@ LmOwnArena * lm_own_arena_new(void) {
 }
 
 void lm_own_arena_delete(LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (arena != 0) {
         lm_own_arena_destroy(arena);
         lm_own_delete(arena, 0);
@@ -551,24 +658,34 @@ void lm_own_arena_delete(LmOwnArena *arena) {
 }
 
 void lm_own_arena_freeze(LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (arena != 0) {
         arena->frozen = 1;
     }
 }
 
 int lm_own_arena_is_frozen(const LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return arena != 0 && arena -> frozen;
 }
 
 int lm_own_tree_cut(LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return lm_own_tree_cut_promote_lazy_edges(arena);
 }
 
 int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return lm_own_arena_promote_lazy_edges(arena);
 }
 
 int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     unsigned char *items;
     unsigned char *target;
     size_t capacity;
@@ -596,6 +713,8 @@ int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
 }
 
 int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     unsigned char *items;
     unsigned char *target;
     size_t capacity;
@@ -630,6 +749,8 @@ int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count) {
 }
 
 int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     unsigned char *source;
     if (stack == 0 || stack -> count == 0U || stack -> item_size == 0U) {
         return 1;
@@ -643,6 +764,8 @@ int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item) {
 }
 
 void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     unsigned char *item;
     if (stack == 0 || index >= stack -> count || stack -> item_size == 0U) {
         return 0;
@@ -652,6 +775,8 @@ void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index) {
 }
 
 void * lm_own_value_stack_top(const LmOwnValueStack *stack) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     unsigned char *item;
     if (stack == 0 || stack -> count == 0U || stack -> item_size == 0U) {
         return 0;
@@ -660,7 +785,8 @@ void * lm_own_value_stack_top(const LmOwnValueStack *stack) {
     return item;
 }
 
-static int lm_own_size_multiply(size_t left, size_t right, size_t *out) {
+static int lm_own_size_multiply(struct LmMessageThread *lm_lmx_message_thread, size_t left, size_t right, size_t *out) {
+    (void)lm_lmx_message_thread;
     if (out == 0) {
         return 1;
     }
@@ -671,7 +797,8 @@ static int lm_own_size_multiply(size_t left, size_t right, size_t *out) {
     return 0;
 }
 
-static int lm_own_global_allocation_descriptors_init(void) {
+static int lm_own_global_allocation_descriptors_init(struct LmMessageThread *lm_lmx_message_thread) {
+    (void)lm_lmx_message_thread;
     if (lm_own_global_allocation_descriptors_ready == 0) {
         lm_own_global_allocation_descriptors = lm_own_new_zero(sizeof(LmOwnPtrStack));
         if (lm_own_global_allocation_descriptors == 0) {
@@ -683,7 +810,8 @@ static int lm_own_global_allocation_descriptors_init(void) {
     return 0;
 }
 
-static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const LmOwnPtrStack *descriptors, const void *address) {
+static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *descriptors, const void *address) {
+    (void)lm_lmx_message_thread;
     const LmOwnAllocationDescriptor * descriptor;
     size_t index;
     if (descriptors == 0 || address == 0) {
@@ -700,7 +828,8 @@ static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(const
     return 0;
 }
 
-static int lm_own_allocation_descriptor_push(LmOwnPtrStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level) {
+static int lm_own_allocation_descriptor_push(struct LmMessageThread *lm_lmx_message_thread, LmOwnPtrStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level) {
+    (void)lm_lmx_message_thread;
     LmOwnAllocationDescriptor * descriptor;
     int status;
     if (descriptors == 0 || address == 0) {
@@ -725,22 +854,24 @@ static int lm_own_allocation_descriptor_push(LmOwnPtrStack *descriptors, void *a
 }
 
 void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void *object;
     size_t bytes;
-    if (lm_own_size_multiply(element_size, count, &bytes) != 0) {
+    if (lm_own_size_multiply(lm_lmx_message_thread, element_size, count, &bytes) != 0) {
         return 0;
     }
     if (bytes == 0U) {
         return 0;
     }
-    if (lm_own_global_allocation_descriptors_init() != 0) {
+    if (lm_own_global_allocation_descriptors_init(lm_lmx_message_thread) != 0) {
         return 0;
     }
     object = calloc(1U, bytes);
     if (object == 0) {
         return 0;
     }
-    if (lm_own_allocation_descriptor_push(lm_own_global_allocation_descriptors, object, 0, bytes, element_size, count, rank, level) != 0) {
+    if (lm_own_allocation_descriptor_push(lm_lmx_message_thread, lm_own_global_allocation_descriptors, object, 0, bytes, element_size, count, rank, level) != 0) {
         free(object);
         return 0;
     }
@@ -748,13 +879,17 @@ void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, siz
 }
 
 const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (lm_own_global_allocation_descriptors_ready == 0) {
         return 0;
     }
-    return lm_own_allocation_descriptor_find(lm_own_global_allocation_descriptors, address);
+    return lm_own_allocation_descriptor_find(lm_lmx_message_thread, lm_own_global_allocation_descriptors, address);
 }
 
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void *object;
     if (arena == 0 || arena -> frozen || arena -> allocations == 0 || arena -> allocation_descriptors == 0) {
         return 0;
@@ -767,7 +902,7 @@ void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size) {
         free(object);
         return 0;
     }
-    if (lm_own_allocation_descriptor_push(arena -> allocation_descriptors, object, arena, size, size, 1U, 0U, 0U) != 0) {
+    if (lm_own_allocation_descriptor_push(lm_lmx_message_thread, arena -> allocation_descriptors, object, arena, size, size, 1U, 0U, 0U) != 0) {
         lm_own_ptr_stack_pop(arena -> allocations);
         free(object);
         return 0;
@@ -776,12 +911,14 @@ void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size) {
 }
 
 void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void *object;
     size_t bytes;
     if (arena == 0 || arena -> frozen || arena -> allocations == 0 || arena -> allocation_descriptors == 0) {
         return 0;
     }
-    if (lm_own_size_multiply(element_size, count, &bytes) != 0) {
+    if (lm_own_size_multiply(lm_lmx_message_thread, element_size, count, &bytes) != 0) {
         return 0;
     }
     if (bytes == 0U) {
@@ -795,7 +932,7 @@ void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_
         free(object);
         return 0;
     }
-    if (lm_own_allocation_descriptor_push(arena -> allocation_descriptors, object, arena, bytes, element_size, count, rank, level) != 0) {
+    if (lm_own_allocation_descriptor_push(lm_lmx_message_thread, arena -> allocation_descriptors, object, arena, bytes, element_size, count, rank, level) != 0) {
         lm_own_ptr_stack_pop(arena -> allocations);
         free(object);
         return 0;
@@ -804,13 +941,17 @@ void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_
 }
 
 const LmOwnAllocationDescriptor * lm_own_arena_allocation_descriptor(const LmOwnArena *arena, const void *address) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (arena == 0 || arena -> allocation_descriptors == 0) {
         return 0;
     }
-    return lm_own_allocation_descriptor_find(arena -> allocation_descriptors, address);
+    return lm_own_allocation_descriptor_find(lm_lmx_message_thread, arena -> allocation_descriptors, address);
 }
 
 char * lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t length) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     char *copy;
     copy = lm_own_arena_new_zero(arena, length + 1U);
     if (copy == 0) {
@@ -824,6 +965,8 @@ char * lm_own_arena_copy_bytes(LmOwnArena *arena, const char *source, size_t len
 }
 
 int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     LmOwnLazyEdge * edge;
     int status;
     if (target == 0 || source == 0 || patch_slot == 0 || target -> frozen || target -> lazy_edges == 0) {
@@ -853,6 +996,8 @@ int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const voi
 }
 
 int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     LmOwnLazyEdge * edge;
     void *copy;
     size_t i;
@@ -885,6 +1030,8 @@ int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {
 }
 
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void **items;
     size_t descriptor_base;
     size_t descriptor_new_count;
@@ -1001,6 +1148,8 @@ int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
 }
 
 int lm_message_thread_init(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         return 1;
     }
@@ -1017,6 +1166,8 @@ int lm_message_thread_init(LmMessageThread *thread) {
 }
 
 void lm_message_thread_destroy(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread != 0) {
         if (lm_message_thread_current_value == thread) {
             lm_message_thread_current_value = 0;
@@ -1028,6 +1179,8 @@ void lm_message_thread_destroy(LmMessageThread *thread) {
 }
 
 LmMessageThread * lm_message_thread_new(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     LmMessageThread * thread;
     thread = lm_own_new_zero(sizeof(LmMessageThread));
     if (thread == 0) {
@@ -1041,6 +1194,8 @@ LmMessageThread * lm_message_thread_new(void) {
 }
 
 void lm_message_thread_delete(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread != 0) {
         lm_message_thread_destroy(thread);
         lm_own_delete(thread, 0);
@@ -1048,6 +1203,8 @@ void lm_message_thread_delete(LmMessageThread *thread) {
 }
 
 static void lm_message_thread_root_cleanup(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (lm_message_thread_root_ready) {
         lm_message_thread_destroy(lm_message_thread_root_storage);
         lm_own_delete(lm_message_thread_root_storage, 0);
@@ -1057,6 +1214,8 @@ static void lm_message_thread_root_cleanup(void) {
 }
 
 LmMessageThread * lm_message_thread_root(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (lm_message_thread_root_ready == 0) {
         lm_message_thread_root_storage = lm_own_new_zero(sizeof(LmMessageThread));
         if (lm_message_thread_root_storage == 0) {
@@ -1083,6 +1242,8 @@ LmMessageThread * lm_message_thread_root(void) {
 }
 
 LmMessageThread * lm_message_thread_current(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (lm_message_thread_current_value == 0) {
         return lm_message_thread_root();
     }
@@ -1090,6 +1251,8 @@ LmMessageThread * lm_message_thread_current(void) {
 }
 
 LmMessageThread * lm_message_thread_set_current(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     LmMessageThread * previous;
     previous = lm_message_thread_current_value;
     lm_message_thread_current_value = thread;
@@ -1097,10 +1260,14 @@ LmMessageThread * lm_message_thread_set_current(LmMessageThread *thread) {
 }
 
 int lm_message_thread_is_running(const LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return thread != 0 && thread -> state == LM_MESSAGE_THREAD_RUNNING;
 }
 
 int lm_message_thread_status(const LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         return 1;
     }
@@ -1108,6 +1275,8 @@ int lm_message_thread_status(const LmMessageThread *thread) {
 }
 
 LmOwnArena * lm_message_thread_owner(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         thread = lm_message_thread_current();
     }
@@ -1118,6 +1287,8 @@ LmOwnArena * lm_message_thread_owner(LmMessageThread *thread) {
 }
 
 void * lm_message_thread_execution_context(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         thread = lm_message_thread_current();
     }
@@ -1128,6 +1299,8 @@ void * lm_message_thread_execution_context(LmMessageThread *thread) {
 }
 
 void * lm_message_thread_set_execution_context(LmMessageThread *thread, void *context) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     void *previous;
     if (thread == 0) {
         thread = lm_message_thread_current();
@@ -1141,6 +1314,8 @@ void * lm_message_thread_set_execution_context(LmMessageThread *thread, void *co
 }
 
 size_t lm_message_thread_turn_count(const LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         return 0U;
     }
@@ -1148,6 +1323,8 @@ size_t lm_message_thread_turn_count(const LmMessageThread *thread) {
 }
 
 size_t lm_message_thread_collection_count(const LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         return 0U;
     }
@@ -1155,6 +1332,8 @@ size_t lm_message_thread_collection_count(const LmMessageThread *thread) {
 }
 
 void lm_message_thread_request_stop(LmMessageThread *thread, int status) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         thread = lm_message_thread_current();
     }
@@ -1165,6 +1344,8 @@ void lm_message_thread_request_stop(LmMessageThread *thread, int status) {
 }
 
 void lm_message_thread_request_failure(LmMessageThread *thread, int status) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         thread = lm_message_thread_current();
     }
@@ -1178,6 +1359,8 @@ void lm_message_thread_request_failure(LmMessageThread *thread, int status) {
 }
 
 int lm_message_thread_collect(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (thread == 0) {
         return 1;
     }
@@ -1196,6 +1379,8 @@ int lm_message_thread_collect(LmMessageThread *thread) {
 }
 
 int lm_message_thread_begin_turn(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (lm_message_thread_is_running(thread) == 0) {
         return 0;
     }
@@ -1204,6 +1389,8 @@ int lm_message_thread_begin_turn(LmMessageThread *thread) {
 }
 
 int lm_message_thread_end_turn(LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     int status;
     if (thread == 0) {
         return 1;

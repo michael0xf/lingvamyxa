@@ -5,7 +5,7 @@ L1:
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    return lm_test_generated_prelude_source_rows_core();
+    return lm_lmx_message_thread_run_entry(lm_test_generated_prelude_source_rows_core);
 }
 
 #define main lm_test_embedded_trans_main

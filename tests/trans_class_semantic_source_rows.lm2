@@ -64,10 +64,6 @@ layout
 
 L1:
 ===
-static int lm_test_semantic_direct(int value);
-static int lm_test_semantic_fallback(short *value);
-static int lm_test_semantic_joined(long *value);
-
 static int lm_test_class_semantic_source_rows(void) {
     short fallback_value = 8;
     long joined_value = 9;

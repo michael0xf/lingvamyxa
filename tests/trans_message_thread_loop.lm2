@@ -1,34 +1,22 @@
 L2:
     predef: "lm2/own_abi.lm2"
 
-    sub: lm_test_request_current_thread_stop (@: int continued)
-        stop: 23
-        continued[0]: continued[0] + 1
-        stop: 41
-    end: lm_test_request_current_thread_stop
-
     fn: lm_test_local_message_thread_loop () int
         @: void thread
-        @: void previous
-        int: continued 0
         int: status 0
 
         thread: lm_message_thread_new()
         if: thread = 0
             return: 1
 
-        previous: lm_message_thread_set_current(thread)
         while: lm_message_thread_begin_turn(thread)
             if: lm_message_thread_turn_count(thread) = 5U
-                lm_test_request_current_thread_stop(@ continued)
+                lm_message_thread_request_stop(thread, 23)
             if: lm_message_thread_end_turn(thread) != 0
                 status: 2
                 break
         ---
-        lm_message_thread_set_current(previous)
 
-        if: status = 0 && continued != 1
-            status: 3
         if: status = 0 && lm_message_thread_turn_count(thread) != 5U
             status: 4
         if: status = 0 && lm_message_thread_collection_count(thread) != 5U
@@ -78,11 +66,11 @@ L2:
             status: lm_test_collection_failure_status()
             if: status != 0
                 return: status
-            if: lm_message_thread_is_running(lm_message_thread_current()) = 0
+            if: lm_message_thread_is_running(c.lm_lmx_message_thread) = 0
                 return: 8
 
             stop: 0
-            if: lm_message_thread_is_running(lm_message_thread_current())
+            if: lm_message_thread_is_running(c.lm_lmx_message_thread)
                 return: 9
             return: 0
         end: main

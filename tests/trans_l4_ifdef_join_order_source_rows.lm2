@@ -34,9 +34,9 @@ L1:
 ===
 int main(void) {
 #if FEATURE_28
-    return lm_test_ifdef_join_order_value() != 81;
+    return lm_lmx_message_thread_run_entry(lm_test_ifdef_join_order_value) != 81;
 #else
-    return lm_test_ifdef_join_order_value() != 84;
+    return lm_lmx_message_thread_run_entry(lm_test_ifdef_join_order_value) != 84;
 #endif
 }
 ===

@@ -64,13 +64,13 @@ L1:
 ===
 int main(void) {
 #if defined(_WIN32)
-    return lm_test_ifdef_wide_source_value() != 71;
+    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 71;
 #elif defined(__APPLE__)
-    return lm_test_ifdef_wide_source_value() != 72;
+    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 72;
 #elif defined(__unix__)
-    return lm_test_ifdef_wide_source_value() != 73;
+    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 73;
 #else
-    return lm_test_ifdef_wide_source_value() != 74;
+    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 74;
 #endif
 }
 ===

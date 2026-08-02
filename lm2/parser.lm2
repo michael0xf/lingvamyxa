@@ -18,6 +18,28 @@ prototype
 unit
 
 predef: "lm2/own_abi.lm2"
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_p0_dash_fence_status_after_comment_trim 1
+             lm_p0_dump_append 1
+             lm_p0_dump_append_cstr 1
+             lm_p0_field_parse_loop_frame_delete_any 1
+             lm_p0_indent_stack_free_any 1
+             lm_p0_pending_mix_free_any 1
+             lm_p0_registry_source_formal_param_unwrap_index 1
+             lm_p0_registry_source_join_table 1
+             lm_p0_registry_source_positional_name_index 1
+             lm_p0_registry_source_push_column_metadata 1
+             lm_p0_registry_source_push_table_row 1
+             lm_p0_scan_brace_mark_unchecked 1
+             lm_p0_set_diagnostic 1
+             lm_p0_stack_free_any 1
+             lm_p0_trailer_role 1
+end: `fn.thread-context.none`
 predef: "lm2/parser_abi.lm2"
 predef: "lm2/registry_source_loader_abi.lm2"
 import: "lm2/table_descriptor.lm2"

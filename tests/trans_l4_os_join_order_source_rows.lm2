@@ -48,13 +48,13 @@ L1:
 ===
 int main(void) {
 #if defined(_WIN32)
-    return lm_test_os_join_order_value() != 81;
+    return lm_lmx_message_thread_run_entry(lm_test_os_join_order_value) != 81;
 #elif defined(__APPLE__)
-    return lm_test_os_join_order_value() != 82;
+    return lm_lmx_message_thread_run_entry(lm_test_os_join_order_value) != 82;
 #elif defined(__unix__)
-    return lm_test_os_join_order_value() != 83;
+    return lm_lmx_message_thread_run_entry(lm_test_os_join_order_value) != 83;
 #else
-    return lm_test_os_join_order_value() != 84;
+    return lm_lmx_message_thread_run_entry(lm_test_os_join_order_value) != 84;
 #endif
 }
 ===

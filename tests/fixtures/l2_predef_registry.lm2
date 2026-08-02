@@ -10,6 +10,15 @@ static void LmTestPredefCleanup(void *value) {
 ===
 
 table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             LmTestPredefCleanup   1
+             LmTestPredefFunction  1
+end: `fn.thread-context.none`
+
+table:
     name: `predefHeaders.item`
     columns((class: class) (size_t: index))
     rows:

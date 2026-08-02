@@ -1598,6 +1598,7 @@ fn: lm_trans_symbol_copy_signature (LmTransSymbol: target; const: (LmTransSymbol
     target\callable_returns_value: source\callable_returns_value
     target\callable_is_struct_return: source\callable_is_struct_return
     target\callable_is_external: source\callable_is_external
+    target\callable_has_thread_context: source\callable_has_thread_context
 return: 0
 
 fn: lm_trans_namespace_declare_compatible (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int

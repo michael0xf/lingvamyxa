@@ -1,5 +1,13 @@
 import: "lm2/own.lm2"
 
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             delete_factory 1
+end: `fn.thread-context.none`
+
 fn: delete_factory () LmOwnDelete
     return: c.free
 end: delete_factory

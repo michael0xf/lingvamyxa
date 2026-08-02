@@ -1,9 +1,24 @@
 L1:
 ===
 #ifdef LM_P0_REGISTRY_SELFTEST
-static int lm_p0_registry_source_tables_selftest(void);
+static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_message_thread);
 int main(void) {
-    return lm_p0_registry_source_tables_selftest();
+    struct LmMessageThread *thread = lm_message_thread_new();
+    struct LmMessageThread *previous;
+    int status = 1;
+    if (thread == 0) {
+        return 1;
+    }
+    previous = lm_message_thread_set_current(thread);
+    while (lm_message_thread_begin_turn(thread)) {
+        status = lm_p0_registry_source_tables_selftest(thread);
+        lm_message_thread_request_stop(thread, status);
+        lm_message_thread_end_turn(thread);
+    }
+    status = lm_message_thread_status(thread);
+    lm_message_thread_set_current(previous);
+    lm_message_thread_delete(thread);
+    return status;
 }
 #endif
 ===

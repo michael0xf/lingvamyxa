@@ -64,10 +64,6 @@ layout
 
 L1:
 ===
-static int lm_test_reference_direct(short *value);
-static int lm_test_reference_fallback(long *value);
-static int lm_test_reference_joined(float *value);
-
 static int lm_test_class_reference_base_source_rows(void) {
     short direct = 7;
     long fallback = 8;

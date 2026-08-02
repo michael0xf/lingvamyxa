@@ -103,12 +103,28 @@ fn: lm_trans_top_level_declare_function_body_named_structures (
     lm_trans_namespace_leave_scope(namespace_)
 return: status
 
+sub: lm_trans_function_apply_thread_context_profile (
+    const: LmTransNamespace: namespace_
+    LmTransFunctionHeader: function
+)
+    if: function = 0
+        return
+    if: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, function\name, "fn.thread-context.none", "class", "class", "value", "int") != 0
+        function\has_thread_context: 0
+    else:
+        if: lm_trans_registry_is_function_pointer_type_name(namespace_, function\name)
+            function\has_thread_context: lm_trans_function_pointer_type_has_managed_thread_context(namespace_, function\name)
+        ---
+    ---
+end: lm_trans_function_apply_thread_context_profile
+
 fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     int: status
 
     if: item = 0 || item\function = 0
         return: 1
 
+    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
     if: lm_trans_registry_note_class_kind(item\function\name, item\function\symbol_class) != 0
         return: 1
     if: lm_trans_namespace_declare(namespace_, item\function\name, item\function\symbol_class) != 0
@@ -146,11 +162,15 @@ fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_
     if: item = 0 || item\function = 0
         return: 1
 
+    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
     predefined_function: lm_trans_top_level_is_predefined_function_descriptor(namespace_, item)
     if: predefined_function
         if: item\function\is_sub = 0
             item\function\symbol_class: "function"
         item\function\is_external: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, item\function\name, "fn.external", "class", "class", "value", "int") != 0
+        if: item\function\is_external
+            item\function\has_thread_context: 0
+        ---
     else:
         if: lm_trans_registry_note_class_kind(item\function\name, item\function\symbol_class) != 0
             return: 1
@@ -638,6 +658,9 @@ fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader
     if: function = 0 || function\is_descriptor_only = 0
         return: 1
 
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+
     if: function\return_node = 0 || function\return_node\kind = c.LM_P0_NODE_STRUCTURE
         c.fprintf(c.stderr, "trans L2 error: descriptor-only fn expects a single return type\n")
         return: 1
@@ -666,7 +689,7 @@ fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader
         return: 1
     if: lm_trans_emit_type_node(file, function\return_node) != 0
         return: 1
-    if: lm_trans_put(file, " (*call)(void *env") != 0
+    if: lm_trans_put(file, " (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread") != 0
         return: 1
     if: lm_trans_formal_param_list_has_any(function\params) && lm_trans_put(file, ", ") != 0
         return: 1
@@ -797,11 +820,7 @@ fn: lm_trans_emit_raw_callable_return_suffix (FILE: file; const: (LmTransNamespa
 
     status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, descriptor_cstr, "callable return descriptor") != 0 || lm_trans_put(file, "))(") != 0
     if: status = 0
-        if: param_count = 0U
-            status: lm_trans_put(file, "void")
-        else:
-            status: lm_trans_emit_abi_params(file, params, param_count)
-    ---
+        status: lm_trans_emit_function_pointer_abi_params(file, namespace_, descriptor_name, params, param_count)
     if: status = 0
         status: lm_trans_put(file, ")")
 
@@ -816,6 +835,9 @@ fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader:
 
     if: function = 0 || function\is_descriptor_only
         return: 0
+
+    if: function\has_thread_context && lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
 
     raw_return_descriptor_name: lm_trans_text_ref_new_cstr("")
     if: raw_return_descriptor_name = 0
@@ -882,6 +904,7 @@ return: lm_trans_put(file, ");\n")
 fn: lm_trans_top_level_emit_function_prototype (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\function = 0
         return: 1
+    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
 return: lm_trans_emit_function_prototype(file, item\function, namespace_)
 
 fn: lm_trans_top_level_emit_function (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
@@ -890,6 +913,7 @@ fn: lm_trans_top_level_emit_function (FILE: file; LmTransNamespace: namespace_; 
     if: item = 0 || item\function = 0
         return: 1
 
+    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
     status: lm_trans_emit_function(file, item\function, namespace_)
     if: status != 0
         return: 1
@@ -1270,6 +1294,10 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         lm_trans_ptr_stack_delete(@ hoisted_functions)
         return: 1
 
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        lm_trans_ptr_stack_delete(@ hoisted_functions)
+        return: 1
+
     frame: function\frame
     state: 0
     raw_return: 0
@@ -1472,6 +1500,13 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         return: 1
 
     status: 0
+    if: is_message_thread_entry = 0
+        if: function\has_thread_context
+            status: lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "(void)lm_lmx_message_thread;\n") != 0
+        else:
+            status: lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "struct LmMessageThread *lm_lmx_message_thread = 0;\n") != 0 || lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "(void)lm_lmx_message_thread;\n") != 0
+        ---
+    ---
     if: is_message_thread_entry
         status: lm_trans_emit_message_thread_main_root(file, 1U)
         body_indent: 3U
@@ -1838,7 +1873,7 @@ fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: (LmP0Structure
             field: field\next
     ---
 
-    if: lm_trans_emit_l2_structure_prelude(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_after_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_functions(file, body, namespace_) != 0
+    if: lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0 || lm_trans_emit_l2_structure_prelude(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_after_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_functions(file, body, namespace_) != 0
         return: 1
 
     if: explicit_l2 != 0

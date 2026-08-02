@@ -10,7 +10,7 @@ static int lm_test_is_declared_closure(const void *value) {
     return value == lm_test_declared_closure;
 }
 
-#define LM_TEST_ROOT_OWNER() (lm_message_thread_owner(0))
+#define LM_TEST_ROOT_OWNER() (lm_message_thread_owner(lm_lmx_message_thread))
 #define LM_TEST_CLOSURE_ENV(value) ((value)->env)
 ===
 

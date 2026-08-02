@@ -1,8 +1,8 @@
 L2:
     L1:
 ===
-static int call_later(void) {
-    return later();
+static int call_later(struct LmMessageThread *thread) {
+    return later(thread);
 }
 ===
 
@@ -12,7 +12,7 @@ static int call_later(void) {
 
     external:
         fn: main () int
-            return: c.call_later() != 7
+            return: c.call_later(c.lm_lmx_message_thread) != 7
         end: main
     end: external
 end: L2

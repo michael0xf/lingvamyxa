@@ -4,6 +4,18 @@ predef: "table_descriptor_model.lm2"
 
 include: "<string.h>"
 
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_registry_view_row_delete_any 1
+             lm_table_cell_delete_any 1
+             lm_table_column_descriptor_delete_any 1
+             lm_table_descriptor_delete_any 1
+             lm_table_row_delete_any 1
+end: `fn.thread-context.none`
+
 fn: lm_table_descriptor_copy_slice (const: @(char data); size_t: length) @: char
     if: data = 0 && length != 0U
         return: 0

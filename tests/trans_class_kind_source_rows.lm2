@@ -149,6 +149,14 @@ table:
              LmClassKindWideSchemaFallback     int
 end: `class.c.projection`
 
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_class_kind_runtime_default  1
+end: `fn.thread-context.none`
+
 sub: lm_test_class_kind_runtime_default (int: value)
 
 prototype

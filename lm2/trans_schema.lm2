@@ -55,6 +55,30 @@ table:
 end: functionPointerType
 
 table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             LmTransExprSegmentMaterializer       1
+             LmTransCallLoweringHandler           1
+             LmTransExprFrameHandler              1
+             LmTransExprAtomEmitHandler           1
+             LmTransExprAtomStateHandler          1
+             LmTransExprPieceEmitHandler          1
+             LmTransExprJobHandler                1
+             LmTransStatementJobHandler           1
+             LmTransStatementFrameHandler         1
+             LmTransAtomStatementHandler          1
+             LmTransFunctionHeaderReceiver        1
+             LmTransTypeEmitReceiver              1
+             LmTransTypeStructureValueAllocReceiver 1
+             LmTransTypeStructureValueFillReceiver 1
+             LmTransTopLevelDeclareHandler        1
+             LmTransTopLevelEmitHandler           1
+             LmTransL4PayloadFrameHandler         1
+end: `fn.thread-context.managed`
+
+table:
     name: `define.value`
     columns((class: class) (@: char value))
     rows:
@@ -86,6 +110,43 @@ table:
              LmTransTopLevelEmitHandler                       callableDescriptor fn
              LmTransL4PayloadFrameHandler                     callableDescriptor fn
 end: fn
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_trans_callable_projection_cache_entry_delete_any 1
+             lm_trans_capture_delete_any 1
+             lm_trans_cleanup_delete_any 1
+             lm_trans_expr_job_destroy_call_args 1
+             lm_trans_expr_job_destroy_lowered_range 1
+             lm_trans_expr_job_destroy_name_text 1
+             lm_trans_expr_job_destroy_range 1
+             lm_trans_expr_job_delete_any 1
+             lm_trans_expr_lowered_range_destroy_any 1
+             lm_trans_expr_piece_delete_any 1
+             lm_trans_expr_segment_delete_any 1
+             lm_trans_function_emit_frame_delete_any 1
+             lm_trans_function_state_destroy_any 1
+             lm_trans_free_any 1
+             lm_trans_hoisted_function_delete_any 1
+             lm_trans_import_document_delete 1
+             lm_trans_loop_delete_any 1
+             lm_trans_namespace_destroy_any 1
+             lm_trans_pointer_binding_delete 1
+             lm_trans_ptr_stack_delete 1
+             lm_trans_statement_job_destroy_frame 1
+             lm_trans_statement_job_destroy_list 1
+             lm_trans_statement_job_destroy_node 1
+             lm_trans_statement_job_destroy_text 1
+             lm_trans_statement_job_delete_any 1
+             lm_trans_symbol_delete_any 1
+             lm_trans_symbol_destroy_fields_any 1
+             lm_trans_text_ref_destroy 1
+             lm_trans_text_ref_delete_any 1
+             lm_trans_text_ref_new_cstr 1
+end: `fn.thread-context.none`
 
 table:
     name: LmTransExprSegmentMaterializer
@@ -588,6 +649,7 @@ table:
              callable_returns_value   int                    18                      0                                0
              callable_is_struct_return int                   19                      0                                0
              callable_is_external     int                    20                      0                                0
+             callable_has_thread_context int                 21                      0                                0
 end: LmTransSymbol
 
 table:
@@ -854,6 +916,7 @@ table:
              has_env               int                    14                      0                                0
              is_callable_descriptor int                   15                      0                                0
              params                LmTransFormalParamList 16                      0                                0
+             has_thread_context    int                    17                      0                                0
 end: LmTransFunctionHeader
 
 table:

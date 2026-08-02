@@ -1618,6 +1618,7 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
     const: @: char class_kind
     int: is_sub
     int: is_external
+    int: has_thread_context
     int: status
 
     if: name = 0 || error_name = 0
@@ -1626,6 +1627,9 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
     class_kind: lm_trans_namespace_class_kind_value(namespace_, lm_trans_text_from_cstr(name))
     is_sub: class_kind != 0 && c.strcmp(class_kind, "procedure") = 0
     is_external: lm_trans_fn_is_external(namespace_, lm_trans_text_from_cstr(name))
+    has_thread_context: is_external = 0 && lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, lm_trans_text_from_cstr(name), "fn.thread-context.none", "class", "class", "value", "int") = 0
+    if: has_thread_context && lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
 
     param_capacity: 256U
     params: lm_trans_l4_abi_params_new(param_capacity)
@@ -1649,7 +1653,17 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
         status: 1
     if: status = 0 && is_external && lm_trans_put(file, ")") != 0
         status: 1
-    if: status = 0 && (lm_trans_put(file, "(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0)
+    if: status = 0 && lm_trans_put(file, "(") != 0
+        status: 1
+    if: status = 0 && has_thread_context
+        if: lm_trans_put(file, "struct LmMessageThread *lm_lmx_message_thread") != 0
+            status: 1
+        if: status = 0 && param_count != 0U && lm_trans_put(file, ", ") != 0
+            status: 1
+        ---
+    if: status = 0 && (has_thread_context = 0 || param_count != 0U) && lm_trans_emit_abi_params(file, params, param_count) != 0
+        status: 1
+    if: status = 0 && lm_trans_put(file, ");\n") != 0
         status: 1
 
     lm_trans_l4_abi_params_delete(params, param_capacity)
@@ -2060,7 +2074,7 @@ fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransName
     if: params = 0
         lm_trans_text_ref_destroy(@ name_text)
         return: 1
-    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0
+    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_function_pointer_abi_params(file, namespace_, name_text, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0
     lm_trans_l4_abi_params_delete(params, param_capacity)
     if: status = 0 && lm_trans_put(file, "#endif\n") != 0
         status: 1
@@ -2071,6 +2085,7 @@ return: status
 
 fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: (LmTransNamespace: namespace_); const: @(char type_name); const: @(char field_name); const: @(char error_name)) int
     @: LmTransAbiParam params
+    LmP0Text: type_text
     size_t: param_capacity
     size_t: param_count
     int: status
@@ -2082,7 +2097,12 @@ fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: (LmTransNam
     params: lm_trans_l4_abi_params_new(param_capacity)
     if: params = 0
         return: 1
-    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, type_name, error_name) != 0 || lm_trans_emit_abi_return_type(file, namespace_, type_name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field_name)) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_abi_params(file, params, param_count) != 0 || lm_trans_put(file, ")") != 0
+    type_text: lm_trans_text_from_cstr(type_name)
+    if: type_text = 0
+        lm_trans_l4_abi_params_delete(params, param_capacity)
+        return: 1
+    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, type_name, error_name) != 0 || lm_trans_emit_abi_return_type(file, namespace_, type_name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field_name)) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_function_pointer_abi_params(file, namespace_, type_text, params, param_count) != 0 || lm_trans_put(file, ")") != 0
+    lm_trans_text_ref_destroy(@ type_text)
     lm_trans_l4_abi_params_delete(params, param_capacity)
 return: status
 
