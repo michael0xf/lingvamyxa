@@ -7602,8 +7602,22 @@ explicitly below.
         `fromLmx(TargetClass, Text) -> TargetClass | Failure`, selected through
         method/codec tables rather than parser primitives.
 
-    27. send / reply / await / schedule / thread
-        NOT IMPLEMENTED as source receivers. Proposed contracts:
+    27. stop / exit / send / reply / await / schedule / thread
+        `stop:` is an IMPLEMENTED L2/L3 statement receiver. Its admitted forms
+        are `stop:` and `stop: Status`; the optional expression is evaluated at
+        the call site and converted to `int`, with omitted status meaning zero.
+        It requests cooperative termination of the current Message Thread only:
+        RUNNING becomes STOPPING, but `stop:` does not itself leave the current
+        fn/sub/block or skip its cleanup. The first accepted ordinary stop
+        request retains its status; a later fatal diagnostic/runtime failure may
+        override that ordinary stop status. The final turn runs local collection
+        and then becomes STOPPED.
+
+        `exit:` is NOT IMPLEMENTED. Proposed application-level contract: request
+        stop on every application Message Thread, wait until all of them are
+        STOPPED, then release application roots and return the selected process
+        status. `send`, `reply`, `await`, `schedule` and `thread:` are also NOT
+        IMPLEMENTED as source receivers. Proposed contracts:
         `send(Message) -> Future`; `reply(Value | Failure)`;
         `await(Future) -> Value | Failure`; `schedule(Message, Time)`; and
         `thread:` descriptor/body -> MessageThread.
@@ -7642,7 +7656,7 @@ profile family is already a core receiver.
 
     level receivers:       L1, L2, L3
     definition receivers:  fn, callable, fm, sub
-    control statements:    if, else, while, return, break, continue,
+    control statements:    if, else, while, return, stop, break, continue,
                            synchronized, finally, assert
     declarations/values:   const, (), [], None, OK, false, true
     module/source:         table, import, predef, join, merge
@@ -8018,6 +8032,15 @@ fn: factorial (int(n)) (int)
 return: n * factorial(n - 1)
 
 Before control leaves the current executable frame, all `finally` cleanups registered for the exited scopes are executed in reverse registration order.
+
+The current hosted bootstrap has one process-entry compatibility rule. A
+`return` in the generated external `main` evaluates its status exactly once,
+runs the generated cleanups for the active scopes, requests that the root
+Message Thread stop with that status, and transfers to the common end-turn
+boundary. It therefore ends the root loop without bypassing its final local
+collection pass. This special lowering applies only to the external process
+entry. A `return` in every nested or ordinary fn/sub retains the semantics
+above and does not stop a Message Thread. See section 19.28.2.2.
 
 19.8. `break`
 
@@ -10492,6 +10515,74 @@ validated registry-change message or another admitted persistence operation.
 Registry changes may invalidate affected cached rows or emit registry-change
 messages according to the reactive registry profile.
 
+19.28.2.2. Root Process, Turns and Cooperative Stop
+
+Message Thread is an L2/L3 runtime Structure family, not a source level. Every
+generated standalone process begins with one root Message Thread. Applications,
+tests and bootstrap tools use the same rule; a build utility is not exempt merely
+because another build stage launches it.
+
+The process entry runs in an unbounded turn loop. Its abstract shape is:
+
+    initialize the root Message Thread, root owner and ExecutionContext
+    while the Message Thread state admits begin-turn
+        reset turn-local diagnostic state
+        receive/check inbox work when a queue profile exists
+        execute one root-body or message-handler step
+        commit outgoing work when an outbox profile exists
+        complete required turn cleanup
+        run current-Message-Thread collection
+        if stop was requested, change STOPPING to STOPPED
+    restore the enclosing host execution context
+    return the retained Message Thread status
+
+The loop has no predetermined iteration count. It ends only after a cooperative
+stop request or a fatal diagnostic/runtime condition is converted into a
+failure-dominant stop request and the common end-turn boundary is completed.
+The current bootstrap uses the generated external `main` body as its root-body
+step. Inbox/outbox dispatch and source message operators are future runtime
+work; their absence does not replace the loop with a one-shot lifetime model.
+Until an inbox wait/scheduler is added, a root body which neither requests stop
+nor reaches a process-entry return begins another turn immediately and may
+therefore busy-loop by design.
+
+`stop:` requests termination of the current Message Thread:
+
+    stop:
+    stop: statusExpression
+
+An omitted status is zero. The optional expression is evaluated at the call
+site and converted to `int`. An accepted ordinary request changes RUNNING to
+STOPPING and records its status. Further ordinary stop requests are ignored, so
+the first accepted stop wins. A fatal diagnostic or collector/runtime failure
+is a different channel: it may replace the status recorded by an earlier
+ordinary stop with its nonzero failure status, even when that ordinary status
+was already nonzero.
+
+Stopping is cooperative. `stop:` does not perform a hidden return, long jump or
+scope exit. The current fn/sub/block continues normally and its explicit
+control flow and generated cleanup remain visible. A `stop:` executed by a
+nested function still targets the current Message Thread rather than merely
+that function, but the nested function continues until its own ordinary control
+flow leaves it. At end-turn, collection runs once, then STOPPING becomes
+STOPPED and the loop condition rejects another turn.
+
+For compatibility with existing standalone programs, a `return` in the
+generated external process entry is lowered as described in section 19.7:
+evaluate the status once, run active generated cleanup, request stop, and reach
+the common end-turn boundary. Returns in all other functions remain ordinary
+function returns.
+
+Application-wide `exit:` is deliberately separate and is NOT IMPLEMENTED. Its
+future coordinator must request stop on every application Message Thread,
+allow or drive each active turn to its stopping boundary, wait for every thread
+to reach STOPPED, release application roots, and only then return control to the
+host process. This is the point at which orderly shutdown of future N-thread
+message runtimes will be defined. Because the current state machine performs
+STOPPING -> STOPPED in `end_turn`, that coordinator/scheduler must also define
+how an idle externally stopped thread executes or synthesizes its final
+end-turn boundary before it is joined.
+
 19.28.3. Root State and Handler Frame
 
 Root state is durable state owned by the Message Thread.
@@ -10509,6 +10600,10 @@ cleanup before the owner is cut or reused. Cleanup must not destroy an arena tha
 is still reachable through a published return/reference root. A Structure
 return first publishes its exact existing reference according to section
 19.29.5; frame cleanup never copies, moves or rematerializes the returned object.
+
+`stop:` is not an immediate control exit. It changes Message Thread state and
+the current execution reaches cleanup through its ordinary visible control
+flow. The stopping safe point is the common end-turn boundary.
 
 19.28.5. Message Structure
 
@@ -10546,6 +10641,12 @@ A Message Thread processes messages through the standard pipeline:
     execute
     generate outgoing messages
     run local collection safe point
+
+This is the full queue-enabled turn profile. In the current hosted bootstrap,
+one turn consists of the root-body step followed by the same end-turn
+collection boundary. Queue dequeue, validation dispatch and outbox flushing
+will be inserted into this loop when the corresponding runtime/operators are
+implemented; they do not require a second process-lifetime mechanism.
 
 Dispatch is a registry query, not object magic.
 
@@ -10760,6 +10861,23 @@ A C99 runtime may represent a Message Thread as a structure containing:
 
 The source-level rule remains message isolation, even if the runtime maps many
 Message Threads onto fewer OS threads.
+
+The current `libown` bootstrap can allocate several independent
+`LmMessageThread` instances and drive them sequentially by rebinding the
+current instance. Each instance already has its own owner arena, state, status,
+execution-context pointer and turn/collection counters. This is the structural
+base for later N-thread execution and message exchange.
+
+It is not yet a concurrent OS-thread implementation. The current-instance
+binding and root initialization state are process-global rather than
+thread-local or scheduler-local, and the runtime frame/cleanup stack, queues,
+scheduler synchronization, host-thread mapping and inter-thread message
+transfer are not implemented.
+Before several Message Threads execute concurrently, current-instance lookup
+must become TLS- or scheduler-local, root initialization must be synchronized,
+and cross-thread stop/message delivery must use the selected queue and
+publication rules. These additions extend the per-instance model; they do not
+replace it.
 
 
 19.29. Ownership and Memory Operators
@@ -11239,10 +11357,11 @@ the owner graph; the existence of L2 low-level thread operations does not
 silently weaken the default Message Thread model.
 
 Every generated standalone bootstrap program currently begins as one root
-Message Thread. This includes `parser`, `trans`, `make`, `finalize` and
-`buildCore`. Therefore all such tools legitimately depend on the owner runtime.
-The fact that a tool is used during the build does not make it exempt from its
-own root Message Thread lifetime.
+Message Thread and runs its external process entry in that thread's turn loop.
+This includes `parser`, `trans`, `make`, `finalize` and `buildCore`. Therefore
+all such tools legitimately depend on the owner runtime. The fact that a tool
+is used during the build does not make it exempt from its own root Message
+Thread lifetime.
 
 
 19.29.7. Message Boundary
@@ -11535,10 +11654,21 @@ generated root runtime state owns a root arena before an ordinary dynamically
 materialized Structure is created, and destroys that arena when the program or
 root Message Thread terminates.
 
-Some current generated C helpers still use the historical internal identifier
-`LmL5Thread`. It names this root Message Thread bootstrap state; it does not
-reintroduce an L5 source level. Renaming that internal C helper family is an
-implementation cleanup and does not change the source memory model.
+The shared runtime type is `LmMessageThread`; no separate generated
+per-translation-unit thread helper remains. The current runtime Structure records:
+
+    root owner arena;
+    RUNNING / STOPPING / STOPPED state;
+    retained stop status;
+    turn and collection counters;
+    collector-failure state;
+    opaque current ExecutionContext pointer.
+
+The generated external `main` acquires the current/root instance, installs its
+diagnostic ExecutionContext, executes the unbounded turn loop described in
+section 19.28.2.2, restores the previous context, and returns the retained
+thread status. The root is the first ordinary Message Thread instance, not a
+second memory mechanism and not a source level.
 
 This rule applies to ordinary applications and to bootstrap tools alike:
 
@@ -11596,6 +11726,32 @@ The essential current arena API includes:
     int lm_own_tree_cut(LmOwnArena *arena);
     int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
 
+The essential current Message Thread ABI includes:
+
+    LmMessageThread *lm_message_thread_root(void);
+    LmMessageThread *lm_message_thread_current(void);
+    LmMessageThread *lm_message_thread_set_current(LmMessageThread *thread);
+    LmMessageThread *lm_message_thread_new(void);
+    void lm_message_thread_delete(LmMessageThread *thread);
+
+    int lm_message_thread_begin_turn(LmMessageThread *thread);
+    int lm_message_thread_end_turn(LmMessageThread *thread);
+    int lm_message_thread_collect(LmMessageThread *thread);
+
+    void lm_message_thread_request_stop(
+        LmMessageThread *thread,
+        int status);
+
+    void lm_message_thread_request_failure(
+        LmMessageThread *thread,
+        int status);
+
+`request_stop` implements first-ordinary-stop-wins. `request_failure` is the
+failure-dominant diagnostic/runtime channel and may replace an ordinary stop
+status while the thread is RUNNING or STOPPING. `end_turn` always reaches local
+collection and converts STOPPING to STOPPED. Status, owner, ExecutionContext
+and counter accessors are also exported by the bootstrap ABI.
+
 This is an implementation API, not source syntax. It may evolve without
 changing the source rules, provided ordinary Structure identity, lifetime and
 return behavior remain conforming.
@@ -11635,7 +11791,7 @@ and closure environments and descriptors in the root Message Thread arena.
 Conceptual generated form for an ordinary local Structure is:
 
     T *value = (T *)lm_own_arena_new_zero(
-        current_message_thread()->root_owner,
+        lm_message_thread_owner(0),
         sizeof(*value));
 
 The object is allocated once when its source operation materializes it. Local
@@ -11645,7 +11801,7 @@ does not allocate another `T`.
 Conceptual generated `fm` result form is:
 
     Result *lm_fm_result = (Result *)lm_own_arena_new_zero(
-        current_message_thread()->root_owner,
+        lm_message_thread_owner(0),
         sizeof(*lm_fm_result));
 
     if (lm_fm_result == 0) {
@@ -11991,7 +12147,7 @@ is not a hidden copy performed by `return`.
 
 Implementation status for this subsection:
 
-    `return`, unlabelled `break`, unlabelled `continue` and `assert`
+    `return`, `stop`, unlabelled `break`, unlabelled `continue` and `assert`
         have current bootstrap lowering;
 
     recoverable `guard` / `fail` / `throws` / handlers, `retryable` / `retry`,
@@ -12003,6 +12159,13 @@ The currently registered `guard:` is an unrelated module/prelude guard. It
 does not implement the recoverable-failure `guard` described below. References
 to the proposed operators in this subsection specify their required memory
 behavior if and when their receivers are added.
+
+Current `stop:` is a cooperative state transition rather than an immediate
+control transfer. It reaches collection when execution arrives at the common
+end-turn boundary. Ordinary stop requests retain the first accepted status;
+diagnostic and collector/runtime failures use the failure-dominant channel so
+that a preceding `stop: 0` cannot hide a later fatal condition in the same
+turn.
 
 The memory model has two related local mechanisms:
 
@@ -12029,6 +12192,7 @@ Local collection may run at these points:
     after `retry`;
     after `redo`;
     after an `assert` diagnostic exit;
+    after a requested `stop` reaches end-turn;
     after owner replacement;
     after owner removal;
     after local branch/subtree detachment;
@@ -12174,6 +12338,11 @@ The control operations relate to safe points as follows:
     `assert`
         exits through the diagnostic path and may abandon frames or the whole
         Message Thread;
+
+    `stop`
+        requests current-Message-Thread termination but does not itself leave
+        the current lexical scope; cleanup and collection occur through
+        ordinary control flow and the common end-turn boundary;
 
     Message Thread termination
         destroys the complete ordinary owner graph except for explicitly
@@ -12596,6 +12765,29 @@ root termination. That is a valid initial implementation. It must still
 preserve boundary ownership semantics when actual inter-Message-Thread
 transport is introduced.
 
+Concretely, the generated end-turn path calls `lm_message_thread_collect` once
+for every completed hosted-bootstrap turn, including the final stopping turn.
+That scheduled call increments the Message Thread's collection counter and
+invokes `lm_own_tree_cut(root_owner)`. At present `lm_own_tree_cut` performs
+lazy-owned-edge promotion. It does not yet discover and reclaim arbitrary
+unreachable objects or precise frame, handler, attempt and branch regions.
+Consequently this pass is normally a collection safe point/no-op for ordinary
+root-owned Structures, which remain allocated until Message Thread destruction.
+
+The next precise reclamation step is a turn/handler owner beneath the Message
+Thread root. Turn-local materialization may use that owner; references which
+must survive are materialized in a preselected surviving owner or preserve
+their existing region by retain/detach/reparent operations according to
+sections 19.29.5 and 19.29.14.8.
+After those edges are established, the non-surviving turn owner can be
+destroyed as one region. This refinement must not allocate, copy or promote an
+ordinary Structure merely because `return` publishes its reference.
+
+A failed collection records collector failure and uses the failure-dominant
+runtime request. It therefore cannot be hidden by an earlier successful
+`stop:` or process-entry `return: 0`; the stopping turn retains a nonzero
+failure status.
+
 
 19.29.14.10. Long Message Thread Computations and Supervisor Termination
 
@@ -12801,7 +12993,16 @@ The normative memory rules are:
 Current hosted-bootstrap implementation:
 
     `libown` and `LmOwnArena` exist;
-    generated standalone programs have a root Message Thread arena;
+    shared `LmMessageThread` runtime state and RUNNING / STOPPING / STOPPED
+        transitions exist;
+    generated standalone programs have a root Message Thread arena and execute
+        their external process entry in an unbounded turn loop;
+    `stop:` is an implemented L2/L3 cooperative current-thread receiver;
+    process-entry `return` requests root-loop stop after generated cleanup;
+    every completed turn, including the stopping turn, calls local collection;
+    ordinary stop is first-request-wins, while diagnostic/runtime collection
+        failures use a failure-dominant status channel;
+    multiple Message Thread instances can be allocated and driven sequentially;
     named and merge-produced Structures, `fm` result Structures, dynamic array
         storage/descriptors and closure environments/descriptors are
         root-arena managed;
@@ -12810,6 +13011,13 @@ Current hosted-bootstrap implementation:
     root-arena destruction releases ordinary generated Structure storage;
     partial-callable binder ownership and other remaining unscoped allocation
         paths still require separate owner integration;
+    current-instance binding is process-global rather than TLS/scheduler-local;
+    inbox/outbox queues, inter-thread messages, concurrent N-thread scheduling
+        and application-wide stop-and-wait `exit:` are not yet implemented;
+    a runtime frame/cleanup stack for unwinding through nested Message Thread
+        calls is not yet implemented;
+    current tree cutting promotes lazy-owned edges but does not reclaim general
+        unreachable root-arena objects;
     precise frame/handler/branch collection is not yet complete.
 
 Proposed but NOT IMPLEMENTED as generic source operations:
@@ -12823,6 +13031,7 @@ Proposed but NOT IMPLEMENTED as generic source operations:
     await;
     schedule;
     thread;
+    exit;
     general low-level freemem/thread/shared-block profile.
 
 Conceptual future runtime material in this section describes required semantics
@@ -13026,8 +13235,13 @@ This integrated model reduces to these rules:
     L2/L3 Structure return = executable-body control exit that forwards the exact
                 existing reference without allocation, copy or promotion;
     message-boundary reply = boundary wrapper from result/failure to ordinary message record;
-    Message Thread = minimal isolated LMX machine that receives, validates, executes
-                and sends messages;
+    Message Thread = minimal isolated LMX machine with an unbounded turn loop,
+                local owner graph and registry view; queue-enabled profiles receive,
+                validate, execute and send messages;
+    stop = implemented cooperative request to finish the current Message Thread
+                after its current turn boundary;
+    exit = proposed application coordinator which stops and joins all Message
+                Threads before host-process return;
     local RegistryView = overlay/import/cache over persistent registry sources,
                       not a full per-thread registry copy;
     memory/auth/service rules = table/evidence policies over the same pipeline.
