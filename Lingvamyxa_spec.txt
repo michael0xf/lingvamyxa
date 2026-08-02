@@ -1,22 +1,19 @@
-Lingvamyxa Language Structural Core Specification
-Part I: General Syntax and L0-L1-L2-L3 Core
+Lingvamyxa Language Specification
 
 Status
 
-Split draft extracted from Lingvamyxa_new.txt.
-
-This part contains the common structural description, source syntax, P0 grammar,
-receiver consumption rules and the L0/L1/L2/L3 execution-facing core. Sections
-or subsections that define L4/L5 registry tables, message runtime services or
-core authentication are moved to Part II.
+Unified draft. This document contains the structural core, the L2/L3 source
+profiles, registry and message operators, runtime services and authentication.
 
 0. Core Formula
 
 Lingvamyxa is based on the following model:
 
-    L0 binaries run.
-    L1 is an external bootstrap, implementation and lowering layer.
-    L2-L5 are Lingvamyxa levels.
+    L0 native artifacts run.
+    L1 is an external bootstrap, implementation and lowering stratum.
+    L2 and L3 are the only Lingvamyxa source levels.
+    L2 is the complete low-level language surface.
+    L3 is the protected subset of L2 without low-level operations.
     Source syntax builds Structures.
     Source traversal also builds MIX overlay intervals in parallel with
     Structures and arrays.
@@ -29,14 +26,18 @@ Lingvamyxa is based on the following model:
 
 The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver or subroutine consumes a Structure and assigns typed semantics to it.
 
-User describes the world. L4 stores relations, L3 stores computable
-structures, L5 stores proposed actions/messages. The analytical engine
-continuously classifies the active world enough to resolve, validate and
-execute current work.
+User describes the world. Registry source tables store relations, L3 Structures
+describe safe computations, and message Structures describe proposed actions.
+The analytical engine continuously classifies the active world enough to
+resolve, validate and execute current work.
 
-The L-levels define language strata. The analytical engine is not another
-source language level such as `L6`; it is an active interpretation, translation
-and runtime machine operating over existing strata, especially L3, L4 and L5.
+L0 and L1 remain necessary implementation strata, but neither is a Lingvamyxa
+source level. Registry/model tables, messages, services and Message Threads are
+ordinary families of Structures, receivers and runtime objects inside the
+L2/L3 language;
+they do not introduce further language levels. The analytical engine is not
+another source level. It operates over L2/L3 Structures, active RegistryViews
+and message queues.
 
 Canonical semantic pipeline:
 
@@ -64,7 +65,7 @@ The same source mechanism builds Structures. Different receivers and profiles
 consume those Structures as data, executable code, model descriptors, registry
 table rows, messages, service routes, build instructions or transport payloads.
 
-Part II defines the high-level registry model as tables. In that model, a
+The high-level registry model is defined as tables. In that model, a
 `class` is a named registry form/table/entity, expressions ask for table cells,
 and validation/resolution turns generic Structures into concrete expressions or
 terminal lowering decisions. `class` is broader than an object class or record
@@ -73,10 +74,11 @@ descriptors, validators, messages and implementation bindings may all be
 classes. The word `type` remains available only in narrower storage/lowering
 contexts such as L2 and ANSI C.
 
-In the high-level model, strict classification happens in L4 registry tables.
+In the high-level model, strict classification happens over registry source
+tables materialized by L2 module receivers.
 Type checking and class resolution are logical resolution/checking processes
 over those tables. A SQL-like query is the reference mental model, but an
-implementation may use any equivalent algorithm that reads the same L4 facts and
+implementation may use any equivalent algorithm that reads the same registry facts and
 produces the same selected cells, diagnostics and evidence. A table named `X`,
 when present, is the descriptor table for class/key `X`. The table named
 `class` is an index/classification table, not the sole source of class
@@ -86,16 +88,17 @@ semantic type system.
 
 This is analytical typing. Lingvamyxa typing starts in the static
 interpretation/translation/compilation stages and continues at runtime through
-active RegistryViews. The model is the L4 registry data itself, predominantly
-table data; SQLite or another database is a projection/materialization of L4,
-not a separate model that the language must later map to.
+active RegistryViews. The model is the registry data itself, predominantly
+table data; SQLite or another database is its projection/materialization, not a
+separate model that the language must later map to.
 
-Equivalently, L4 is the analytical layer of the language, not only compiler
-metadata. L3 expressions describe computation; L5 messages describe proposed
-actions, effects and runtime boundaries; L4 supplies knowledge, classification
-and derived decisions that both layers may query. Implementations may begin with
-table lookup, but L4 is intended to grow toward rule-based reasoning,
-unification, backtracking and resolution over facts and derived relations.
+Registry resolution is the analytical layer of the language, not only compiler
+metadata. L3 expressions describe computation; message Structures describe
+proposed actions, effects and runtime boundaries; registry tables supply
+knowledge, classification and derived decisions that both may query.
+Implementations may begin with table lookup, but the resolver is intended to
+grow toward rule-based reasoning, unification, backtracking and resolution over
+facts and derived relations.
 
 0.0.1.0. First, Lingvamyxa is a general structural data notation.
 
@@ -350,9 +353,9 @@ structural-array context, current top attributes and the full active mark
 chains, with fast access and without requiring large contiguous memory blocks.
 
 MIX overlay data is produced below or alongside the level receivers; it is not
-ordinary L5 execution by itself. However, L5 receivers may consume accepted
-MIX-derived intervals, annotations and structural evidence through the ordinary
-relation/table, query, registry, message and validation machinery.
+message execution by itself. Registry and message receivers admitted by L2 or
+L3 may consume accepted MIX-derived intervals, annotations and structural
+evidence through the ordinary relation/table, query and validation machinery.
 
 0.0.3.0. Thirdly, Lingvamyxa is a high-level programming language.
 
@@ -395,20 +398,20 @@ JSON may be supported as a legacy or interoperability adapter, but JSON is not
 the default payload model of the HTTP Lingvamyxa REST profile and does not
 define Lingvamyxa message semantics.
 
-0.1. Mixed L4/L5/L3 Smoke Example
+0.1. L2/L3 Registry and Message Smoke Example
 
 The following example defines no new syntax. It illustrates the core formula in
-one file: L4 consumes model/registry table descriptors, L5 consumes message,
-route, build and rule descriptors, and L3 consumes executable definitions and
-ordinary control receivers.
+two source profiles: direct L2 module receivers materialize registry, target and
+build descriptors; protected L3 receivers consume message descriptors,
+executable definitions and ordinary control forms.
 
 Short version of the "hello.lm3" file in the default executable script profile:
 
 print: "Hello World"
 
 In this profile, the file root is consumed as an L3 top-level executable body.
-The long `.lmx` version below spells out the surrounding model, registry, build
-target and explicit executable entry point.
+The longer multi-module version below spells out the registry, build target and
+explicit executable entry point.
 
 0.1.1. Source File Level Profiles
 
@@ -419,16 +422,16 @@ In the default profile:
 
     `.lm2` means that the file root is consumed as an implicit L2 body.
     `.lm3` means that the file root is consumed as an implicit L3 body.
-    `.lm4` is not a source profile and is rejected.
-    `.lm5` means that the file root is consumed as an implicit L5 service/message body.
+    `.lm4` and `.lm5` are legacy spellings, not source profiles, and are rejected.
 
 Explicit wrappers remain available only for levels admitted by the active
-source profile. `L4:` is not an admitted compatibility wrapper and is rejected
-at the root. A translator source also has no separate root `registry:` level
-alias. Registry/model source is written directly on an L2 module surface with
-`table:` and `join:`; dependencies on such `.lm2` modules are selected with
-`predef:`. A `.lm2` file does not need an outer `L2:` wrapper, and a `.lm3` file
-does not need an outer `L3:` wrapper.
+source profile. Only `L2:` and `L3:` are level receivers. The legacy `L4:` and
+`L5:` names are not registered as level receivers and are rejected wherever a
+level receiver is expected, whether root or nested. A translator source also
+has no separate root `registry:` level alias. Registry/model source is written
+directly on an L2 module surface with `table:` and `join:`; dependencies on
+such `.lm2` modules are selected with `predef:`. A `.lm2` file does not need an
+outer `L2:` wrapper, and a `.lm3` file does not need an outer `L3:` wrapper.
 
 The implicit root profile is deliberately attached to the source extension,
 not inferred from an arbitrary receiver name. A root-level `table:` in an
@@ -482,7 +485,7 @@ ordinary top-level lowering and before the module prelude is planned, its `.lm2`
 targets expose their declarative `table:` and `join:` surface in source order.
 Descriptor-only `fn:`/`callable:` metadata is hoisted in the same pass, after
 any preceding tables, so a prelude relation such as `functionPointerType` can
-refer to the descriptor without requiring an embedded L4 block. Functions with
+refer to the descriptor without requiring a separate registry wrapper. Functions with
 bodies are not materialized as descriptors by this early pass. Hoisting applies
 to descriptor frames directly in the target module surface; descriptors nested
 under conditional/wrapper receivers are materialized by their ordinary emission
@@ -517,29 +520,27 @@ and a `.lm2` module is never heuristically classified by its contents. The
 and import deduplication, and accepts `.lm2` targets only. `predef` is excluded
 from the L3 profile as a low-level module-construction operation.
 
-There is no legacy implicit `.lm4` registry profile. `.lm4` is rejected as a
-source module and as an explicitly selected registry target. Registry/model
-source must be an `.lm2` module with direct `table:` and `join:` receivers and
+There are no implicit `.lm4` or `.lm5` profiles. Both extensions and both
+legacy level wrappers are rejected. Registry/model source must be an `.lm2`
+module with direct `table:` and `join:` receivers and
 is selected explicitly with `predef:` when used as an L2 dependency. This keeps
 dependency loading inside the L2 receiver model instead of giving `import:` a
-hidden L4 side effect.
+hidden registry-loading side effect.
 
 The bootstrap parser registry follows the same source-table direction more
 strictly. Its automatic candidates and an explicit `LM_P0_REGISTRY` override
-accept `.lm2` modules only. Legacy `.lm4` and plain `.lmx` parser-registry
+accept `.lm2` modules only. Legacy `.lm4`/`.lm5` and plain `.lmx` parser-registry
 inputs are rejected; parser tables and joins are materialized from the selected
 `.lm2` module through the common table/join loader.
 
-Long version of the "hello.lmx" file:
+Long multi-module version:
 
-The `table:` receiver in the L4 part is illustrative registry input. The
-`fact:` and `behavior:` receivers in the L5 part are illustrative message-row
-receivers. Part II defines the general table/message model; this Part I example
-uses them only to show that the same structural syntax can be consumed as
-registry and message input.
+Registry/model source in `hello_model.lm2` uses direct L2 source tables. The
+`source` marker requests RegistryView materialization without generated C table
+storage:
 
-L4:
     table:
+        source
         name: HelloConfig
         columns: class     (field_type class)  (owner class)  (default char)
         rows:
@@ -549,6 +550,7 @@ L4:
     end: HelloConfig
 
     table:
+        source
         name: HelloConfig_rules
         columns: class           (condition char)
         rows:
@@ -556,6 +558,7 @@ L4:
     end: HelloConfig_rules
 
     table:
+        source
         name: entryPoint
         columns: class  (implementation Symbol)
         rows:
@@ -563,6 +566,7 @@ L4:
     end: entryPoint
 
     table:
+        source
         name: BUILD
         columns: class          (l2 binding)                 (win char)    (unix char)
         rows:
@@ -572,9 +576,10 @@ L4:
                  chdir          lm_build_platform_chdir      _chdir        chdir
                  include        None                         "<direct.h>"  "<unistd.h>"
     end: BUILD
-end: L4
 
-L5:
+Safe message and behavior descriptors in `hello.lm3` are ordinary L3 receiver
+forms, not a separate level:
+
     behavior: HelloConfig
         message: run helloMain
     ---
@@ -582,6 +587,9 @@ L5:
     fact: model HelloConfig
     fact: message HelloConfig run helloMain
     fact: entryPoint app helloMain
+
+The toolchain-facing target and build instructions remain low-level receivers
+in `hello_build.lm2`:
 
     target:
         app
@@ -592,9 +600,9 @@ L5:
     ---
 
     build: app
-end: L5
 
-L3:
+Executable definitions in `hello.lm3` continue on the protected L3 surface:
+
     fn: words () iterator(Text)
         yield: "Hello"
         yield: "World"
@@ -631,7 +639,6 @@ L3:
 
         System\out\println: "Done."
     end: helloMain
-end: L3
 
 Notes:
 
@@ -639,8 +646,8 @@ Notes:
     The `return:` at the source level of `fn: factorial (int(n)) (int)` is
     terminal return for that function definition. It appends the runtime return
     and closes the executable definition. The `sub: helloMain` definition is
-    closed explicitly by `end: helloMain`. The enclosing `L3` frame is closed by
-    `end: L3`.
+    closed explicitly by `end: helloMain`. The `.lm3` file root supplies the
+    implicit L3 frame.
 
     `fn: words () iterator(Text)` gives the `fn` receiver the fields
     `words`, `()`, `iterator(Text)` and the following `yield:` fields. The
@@ -746,7 +753,7 @@ semantic rules for Structures, Frames, source levels, short forms, bounded
 Structures, receivers, `end:`, `---` and terminal return forms are specified in the
 following sections.
 
-1. Levels
+1. Source Levels and Implementation Strata
 
 1.0. General Language Role and External Lexical Standards
 
@@ -758,13 +765,22 @@ A compact description is:
 
 More precisely:
 
-    * L1 supplies the external procedural, portable, implementation-facing substrate and may map to ANSI C / C99 in a hosted bootstrap profile.
-    * L2/lm2 exposes low-level typed storage, addresses, layouts and unsafe operations and is the first Lingvamyxa self-hosting infrastructure layer.
-    * L3 supplies ordinary algorithmic computation and executable definitions.
-    * L4 describes structural models, classes-as-tables, contracts, unions, constraints and registry descriptors.
-    * L5 describes messages, validators, expression executors, logical message generators, configuration, rules, build/query/startup receivers, L5 Threads and high-level dispatch.
+    * L0 is the native-artifact stratum and L1 is the external procedural,
+      portable lowering stratum; neither is a Lingvamyxa source level.
+    * L2/lm2 is the complete low-level Lingvamyxa surface. It exposes typed
+      storage, addresses, layouts, unsafe operations and module-construction
+      receivers, and is the first self-hosting infrastructure level.
+    * L3/lm3 is a protected subset of L2. It supplies safe algorithmic
+      computation, executable definitions, registry queries and admitted
+      message/service receivers, but never raw low-level operations.
+    * Models, classes-as-tables, contracts, unions, messages, validators,
+      services, rules and Message Threads are receiver/operator/runtime
+      families within L2/L3, not additional language levels.
 
-Lingvamyxa implementations may also act as service runtimes. The built-in HTTP Lingvamyxa REST profile provides a standard event/message transport between groups of L5 Threads and service instances. HTTP is the transport envelope; Lingvamyxa messages and Structures remain the semantic payload.
+Lingvamyxa implementations may also act as service runtimes. The built-in HTTP
+Lingvamyxa REST profile provides a standard event/message transport between
+groups of Message Threads and service instances. HTTP is the transport
+envelope; Lingvamyxa messages and Structures remain the semantic payload.
 
 The object-oriented side is structural, not class-magical. A model descriptor contributes field, class/type, default, constraint and layout table rows. Operations are selected by registry tables that map receiver/class and selector/expression shape to concrete implementations. A runtime object is a Structure or handle/reference to a Structure together with enough table information to resolve the expression being consumed.
 
@@ -776,7 +792,7 @@ by `return` receivers and terminal return, not by a separate assignment syntax.
 
 The logical side is represented by relation tables, rules and query receivers. Model, union, operator, method, message and validator descriptors may materialize registry rows. Generic dispatch, message validation, completeness checks and lowering may be expressed as table lookup over this registry model. This gives one uniform way to index, validate, derive and lower structural information.
 
-The source syntax itself does not hard-code object semantics, functional semantics or logic semantics. It builds generic Structures. The active level and the active receiver/operator registry determine which semantic domain consumes a Structure. The same surface form may describe a low-level storage declaration, a function definition, a model descriptor, a table row, a validator, a rule, a query, a message or a build configuration, depending on receiver consumption.
+The source syntax itself does not hard-code object semantics, functional semantics or logic semantics. It builds generic Structures. The active L2/L3 profile and receiver/operator registry determine which semantic domain consumes a Structure. The same surface form may describe a low-level storage declaration, a function definition, a model descriptor, a table row, a validator, a rule, a query, a message or a build configuration, depending on receiver consumption.
 
 Lingvamyxa deliberately reuses selected mature external lexical standards instead of redefining every atom. Numeric literals, character constants and text/string literals follow ANSI C / C99 spelling because L1 is ANSI C / C99 and many such literals can be copied directly into generated L1 code. Exact quoted identifiers use SQLite-compatible exact-name semantics because Lingvamyxa Structures may describe external relational schemas and because SQLite provides a simple exact quoted-name model.
 
@@ -789,9 +805,10 @@ The practical rule is:
 
 Consequently, an ANSI C numeric literal, character constant or string literal may often be preserved as text during L1 lowering, while its surrounding Lingvamyxa Structure is still parsed, typed and consumed by Lingvamyxa receivers. Likewise, an exact quoted identifier may preserve an external SQLite name without forcing that name into the narrower bare Lingvamyxa identifier grammar.
 
-1.1. L0
+1.1. L0 Native Artifacts
 
-L0 is a native binary artifact or machine-code artifact. It is the level actually executed by the CPU and operating system.
+L0 is the native binary or machine-code artifact stratum actually executed by
+the CPU and operating system. It is not a Lingvamyxa source level.
 
 Examples of L0 artifacts:
 
@@ -803,9 +820,13 @@ Examples of L0 artifacts:
     core.lm0.a
     core.lm0.lib
 
-1.2. L1
+1.2. L1 External Substrate
 
 L1 is an external bootstrap, implementation and lowering layer. It may host initial parsers, translators, runtime components and receivers. L1 has its own syntax and semantics and is not part of the Lingvamyxa source-semantic core described by this document.
+
+When a profile admits an embedded `L1:` raw text block, `L1` is a foreign
+substrate escape receiver. It does not become a third Lingvamyxa source level;
+only `L2` and `L3` are level receivers.
 
 The implementation source of Lingvamyxa is Lingvamyxa.
 
@@ -833,7 +854,7 @@ L2 machine through a selected external L1 substrate. In the hosted bootstrap
 profile described here, that substrate is ANSI C / C99. The external L1/C99
 substrate is not the VM of the language and is not its semantic parent.
 
-L3, L4 and L5 may be interpreted, validated, resolved or compiled by machinery
+L2 and L3 Structures may be translated, interpreted, validated or resolved by machinery
 written in Lingvamyxa itself. The external L1/C99 substrate only materializes
 that machinery on a host platform.
 
@@ -844,15 +865,21 @@ rules remain the same across platforms, while platform-specific differences are
 delegated below the Lingvamyxa semantic boundary to the selected multiplatform
 L1 toolchain: the C99 compiler, C runtime/library, linker and target ABI.
 
-The LMX levels L3, L4 and L5 are even more hermetic: they are bound to the L2
-semantics and to the L2-to-L1 projection contract, not to a particular operating
-system, ABI, binary format or CPU family.
+The L2/L3 language is even more hermetic: it is bound to the L2-to-L1
+projection contract, not to a particular operating system, ABI, binary format
+or CPU family.
 
 This document does not specify the L1 target language, physical calling convention, memory ownership rules or low-level runtime representation. Those belong to translator and runtime specifications.
 
 1.3. L2
 
-L2 is the low-level unsafe Lingvamyxa level. It is the low-level systems layer. It may expose memory, typed addresses, handles, layout-based storage and explicit low-level operations. Selected low-level L2 Thread primitives may be introduced later for operations over shared memory arrays or other implementation-facing data, but ordinary interactive, concurrent, UI and service programming belongs to the L5 Thread model.
+L2 is the complete low-level unsafe Lingvamyxa level. It is the systems and
+module-construction surface. It may expose memory, typed addresses, handles,
+layout-based storage, source-table materialization, build/toolchain receivers
+and explicit low-level operations. Selected low-level thread primitives may be
+introduced for shared-memory arrays or other implementation-facing data, but
+ordinary interactive, concurrent, UI and service programming uses the Message
+Thread model defined by the receiver families in section 19.
 
 L2 is compiled. It is not interpreted as ordinary Lingvamyxa runtime code and
 is not executed as a casual script. An implementation may simulate or inspect L2
@@ -861,74 +888,65 @@ L2 is lowering/compilation against an explicit low-level memory/layout model.
 
 1.4. L3
 
-L3 is the algorithmic and computational Lingvamyxa level. It supports safe top-level actions, computations and calls. L3 code may be interpreted by the core runtime or compiled through the lowering pipeline.
+L3 is the protected algorithmic and computational subset of L2. It supports
+safe top-level actions, computations, calls, registry queries and admitted
+message/service operations. L3 code may be interpreted by the core runtime or
+compiled through the lowering pipeline.
 
-L3 is not a monotonic superset of L2. It is smaller in the low-level direction:
-ordinary L3 does not expose L2 raw storage/address/parser operators such as
-address-depth declarations, raw loads, address-producing forms or layout-storage
-allocation unless a profile explicitly imports such unsafe capabilities. L2 may
-also use the algorithmic/control receivers listed in section 19, but L2 keeps
-the additional low-level operator surface described in section 20.
+L3 never exposes L2 raw storage/address/parser operators, address-depth
+declarations, raw loads, address-producing forms, layout-storage allocation,
+direct C calls, `predef`, source-table materialization or build/toolchain
+mutation. A profile may further reduce the L3 surface, but it may not import
+these low-level capabilities back into L3. L2 may use all safe algorithmic and
+control receivers listed in section 19 and additionally exposes the low-level
+surface described in section 20.
 
 Ordinary L3 has no raw pointer/address semantics. Arrays, text, objects and
 other aggregates are Structures or handles/references with metadata. Operations
 such as indexing must validate their semantic preconditions, including bounds
-checks for arrays and array-like containers, unless the source explicitly enters
-an unsafe lower-level profile.
+checks for arrays and array-like containers. Code requiring unsafe operations
+belongs to an L2 module and crosses into L3 only through a checked descriptor,
+handle or receiver contract.
 
-1.5. L4
+1.5. Receiver Families Are Not Levels
 
-L4 is the non-executive model level. It describes models, classes as registry
-tables/entities, protocols, contracts, constraints, relation signatures and
-registry metadata.
+Registry/model declarations and message/service/runtime forms are ordinary
+receivers and operators. Direct `table:` and `join:` source materialization is
+an L2 module operation. Safe descriptor lookup, validation, message dispatch,
+service handling and RegistryView queries may be admitted by L3. Their detailed
+receiver families are specified in section 19.
 
-L4 may update or check the compiler/runtime model. L4 does not perform ordinary runtime actions by default.
+The removed names L4 and L5 do not denote source profiles, implicit file
+profiles or semantic strata. The legacy extensions `.lm4`/`.lm5` and root
+receivers `L4:`/`L5:` are rejected rather than mapped silently to L2/L3.
 
-1.6. L5
+Historical specifications map as follows: the former L4 model/registry surface
+is now the source-table, registry, descriptor, evidence, composition and query
+families in sections 19.17 through 19.18 and 19.20 through 19.27. The former L5
+surface is now the message pipeline in section 19.19 and the Message Thread,
+service and authorization families in sections 19.28 through 19.32. These are
+ordinary shared receiver families: they are available to L2 and admitted by L3
+when their contracts contain no low-level operation.
 
-L5 is the level of messages, validators, expression executors, logical message
-generators, configuration, registry tables, build/run/query/startup receivers,
-L5 Threads and high-level dispatch.
+1.6. Level Receivers
 
-An L5 Thread is the ordinary source-semantic active unit for interactive, concurrent, event-driven and service-like Lingvamyxa programs. A service instance is a placement or bundling mode of one or more L5 Threads, not a separate later paradigm.
-
-L5 may attach message and operation handling to L4 structural models by adding
-registry table rows. L5 may also represent registry data as relation tables and
-rules. This draft keeps that message/table layer within L5 as source-semantic
-infrastructure, not as ordinary runtime I/O.
-
-L5 may consume accepted MIX-derived intervals, annotations and structural
-evidence as registry table rows through the ordinary registry/query/message
-machinery. MIX itself is produced by source traversal and structural overlay
-processing; it is not ordinary L5 execution merely because L5 can store or
-react to accepted MIX-derived rows.
-
-1.7. Level Receivers
-
-`L2`, `L3`, `L4` and `L5` are level receivers. A level receiver consumes its nested Structure and sets the active receiver/operator set for that body.
+`L2` and `L3` are the only level receivers. A level receiver consumes its
+nested Structure and sets the active receiver/operator set for that body.
 
 Example:
 
-L4:
+L3:
 . operator:
 . . if
-. . callableFrom: L5
-. . implementation: l5_if
-end: L4
+. . callableFrom: L2 L3
+. . implementation: safe_if
+end: L3
 
-Semantic normal form:
+The same safe operator descriptor may be consumed from L2 or L3. An operator
+whose contract exposes raw addresses, parser mutation, source-table
+materialization or other section 20 capabilities is L2-only.
 
-    L4(
-      operator(
-        if,
-        callableFrom L5,
-        implementation(l5_if)
-      )
-    )
-
-The receiver `L4` consumes its body as model and registry input.
-
-1.8. Startup and Entry Targets
+1.7. Startup and Entry Targets
 
 An entry point is not the first event in the physical life of a program. A
 binary loader, target runtime, C runtime, Lingvamyxa runtime, restored state,
@@ -936,7 +954,7 @@ registry data, build profile or service host may already exist before source
 level execution begins. The entry point is only the selected target to which
 control is handed after that environment is ready.
 
-Different Lingvamyxa levels use different default startup conventions:
+The two Lingvamyxa levels use different default startup conventions:
 
     L2
         L2 is compiled and close to L1 / ANSI C. For an executable artifact,
@@ -964,39 +982,25 @@ Different Lingvamyxa levels use different default startup conventions:
         also select a visible L3 function or subroutine as the executable
         target, but `main` is not a source-semantic requirement for L3.
 
-    L4
-        L4 is applied, validated and registered. It is not ordinary runtime
-        control flow. An L4 source body may describe models, classes, registry
-        patches, build profiles, constraints or registry table rows; applying
-        that body is descriptor consumption, not program execution from a first
-        statement.
+        Message and service profiles are L3 entry conventions, not another
+        level. A runtime may choose a visible `start` receiver, an `onStart`
+        handler, a service descriptor or an explicit message send instead of
+        consuming the file root linearly.
 
-    L5
-        L5 is the message, service and high-level table-driven dispatch layer.
-        Its startup model is closer to a selected message/callable target than
-        to a hard-coded `main`. A runtime or build profile may choose any
-        visible L5 startup target, such as a `start` receiver, an `onStart`
-        handler, a service descriptor, or an explicit message send.
+        Example conceptual target in an `.lm3` module:
 
-        Example conceptual target:
+        HelloWorld:
+        . start:
+        . . System\out\println: "Hello"
 
-        L5:
-        . HelloWorld:
-        . . start:
-        . . . System\out\println: "Hello"
-        end: L5
-
-        The startup target may be described as `HelloWorld\start` by the
-        runtime profile. The language does not require every L5 file to run
-        linearly from its first source item.
+        The runtime profile may select `HelloWorld\start`.
 
 The common rule is:
 
     startup = prepared environment + selected visible target
 
 The selected target may be the conventional C-compatible `main` at L2, the file
-root in an L3 script profile, descriptor application for L4, or an explicit
-message/callable target for L5.
+root in an L3 script profile, or an explicit L3 message/callable/service target.
 
 
 2. Value Ontology
@@ -1018,7 +1022,7 @@ primitive. That lowering choice is not a separate source-level kind.
 
 A Structure can contain fields. A field can be positional, named or derived during normalization from a receiver signature.
 
-At L3 and above, Structures are normally passed by reference/handle. They are not copied by value at every call unless a receiver explicitly defines copy semantics.
+At L3, Structures are normally passed by reference/handle. They are not copied by value at every call unless a receiver explicitly defines copy semantics.
 
 At L2, aggregate layouts do not have to be source-level value objects. They may be represented by typed addresses to storage, handles, layout structures or primitive representations according to the translator profile.
 
@@ -2458,7 +2462,7 @@ Conceptual normal form:
       )
     )
 
-The canonical source-level delimiter lines at level 1 delimit anonymous branch Structures. No source keyword `case` (not structural syntax) is involved.
+The canonical source-level delimiter lines at level 1 delimit anonymous branch Structures. No source keyword `case` is involved.
 
 A shorter positional `match` form may avoid anonymous branch Structures:
 
@@ -3275,9 +3279,9 @@ tokenization. P0 produces ordinary token fields and registered
 receiver/operator consumption works over those fields.
 
 For the ANSI C projection, arithmetic, comparison and boolean token sequences
-keep ANSI C precedence and associativity. Higher Lingvamyxa levels that lower
-to ANSI C use the same projection rule; they may add semantic checks around an
-expression, but they do not need to reorder primitive C-like expressions.
+keep ANSI C precedence and associativity. L2/L3 profiles that lower to ANSI C
+use the same projection rule; they may add semantic checks around an expression,
+but they do not need to reorder primitive C-like expressions.
 
 Backends that do not target ANSI C may define their own lowering for the same
 token Structures. Such a backend-specific rule belongs to that backend profile,
@@ -3385,9 +3389,8 @@ may produce the first row as a rank-1 array view.
 Bounds checking is level/profile dependent.
 
 L2 may allow unchecked raw pointer indexing under its explicit low-level memory
-model. Ordinary L3 and higher must use checked indexing for arrays and
-array-like containers unless the source explicitly enters an unsafe lower-level
-profile.
+model. L3 must use checked indexing for arrays and array-like containers.
+Unchecked or raw indexing belongs to L2; L3 cannot import or enter that profile.
 
 6.5.2. Views and Copies
 
@@ -3412,7 +3415,7 @@ result of elementwise arithmetic unless assigned into an existing output buffer
 
 A view is borrowed by default. To retain it beyond the owner lifetime, handler
 frame or message boundary, it must be copied into an owned array/branch according
-to the L5 memory model.
+to the Message Thread memory model in section 19.
 
 6.5.3. Shape
 
@@ -3727,7 +3730,7 @@ Registry profiles should keep these concerns in separate relations. For
 example, `class.category` may expose small `categoryFlag` facets over `uint8`
 such as value, numeric, integer, floating, reference, callable and descriptor;
 those `0` and `1` cells are ordinary facts, not a global nullable encoding for
-all `uint8` values. If an L4 table profile wants a typed cell spelling that does
+all `uint8` values. If a registry table profile wants a typed cell spelling that does
 not materialize a row, it declares that under `None.cell`; expression-level
 `None` values live separately under `None.value` or under a target class's own
 context-literal table. `class.semantic` describes the abstract value family,
@@ -3737,114 +3740,10 @@ spellings, and `serialization.codec` describes portable LMX persistence. A type
 may be semantically compatible even when a selected projection profile cannot
 lower it; that is a projection failure, not a parser fact.
 
-Contextual literals are ordinary L4 registry facts, not parser keywords. A
-contextual literal is a class/key whose concrete payload is selected by the
-expected target class supplied by a declaration, assignment target, call slot,
-operator slot, comparison peer or other consumer.
-
-To introduce a new contextual literal such as `None`, `true`, `false`, `OK` or
-a profile-defined name:
-
-    1. Declare the literal name as a `contextualLiteral` class/key. The usual
-       place is the `class` table:
-
-           table:
-               name: class
-               columns: class (kind class)
-               rows:
-                        None  contextualLiteral
-                        OK    contextualLiteral
-                        false contextualLiteral
-                        true  contextualLiteral
-           end: class
-
-    2. For each target value class that wants a class-local meaning, add rows to
-       that target class table. The conventional column descriptor is
-       `context literal` plus the target class:
-
-           table:
-               name: int8
-               columns: class  (`context literal` int8)
-               rows:
-           end: int8
-
-           join: (int8) Boolean
-               columns: class  (`context literal` int8)
-               rows:
-                        None  -1
-                        false 0
-                        true  1
-                        OK    1
-           end: Boolean
-
-       In this example `Boolean[None] = -1`, `Boolean[false] = 0`,
-       `Boolean[true] = 1` and `Boolean[OK] = 1`. The numeric cells are ordinary
-       payloads. They are not a global empty-cell encoding.
-
-    3. If the literal also has a fallback mapping, register it in
-       `contextual.literal.value`. The payload points to a value table keyed by
-       the expected target class:
-
-           table:
-               name: `contextual.literal.value`
-               columns: class (value relation)
-               rows:
-                        None  `None.value`
-                        OK    `OK.value`
-                        false `false.value`
-                        true  `true.value`
-           end: `contextual.literal.value`
-
-           table:
-               name: `None.value`
-               columns: class (value char)
-               rows:
-                        int     0
-                        int8    0
-                        Boolean -1
-           end: `None.value`
-
-       A class-local row in the expected target table is preferred. The fallback
-       path is used only when the consumer still has an expected class but the
-       class table does not define a more local contextual value.
-
-    4. If the literal may appear as an expression atom, bind it through the
-       active expression profile, for example `expr.atom`:
-
-           table:
-               name: `expr.atom`
-               columns: class (ansi_c char) (emitter binding)
-               rows:
-                        None  None  lm_trans_expr_emit_contextual_literal
-                        OK    OK    lm_trans_expr_emit_contextual_literal
-           end: `expr.atom`
-
-    5. If the literal may be used as a statement receiver for contextual
-       assignment, bind the receiver vocabulary as ordinary namespace data:
-
-           table:
-               name: namespace
-               columns: class (receiver.type relation)
-               rows:
-                        None `receiver.statement`
-                        OK   `receiver.statement`
-           end: namespace
-
-           table:
-               name: `receiver.statement`
-               columns: class (receiver binding)
-               rows:
-                        None lm_trans_statement_emit_contextual_literal_assignment
-                        OK   lm_trans_statement_emit_contextual_literal_assignment
-           end: `receiver.statement`
-
-With those rows, `None: target`, `Boolean: flag OK`, a call argument containing
-`None` and `if: value = None` all use the same table-driven path. The syntax
-supplies the surrounding consumer; the registry supplies the contextual value.
-Adding another name such as `Red` or `Maybe` is another set of rows, not a
-parser change. Empty source cells in tables remain a separate table-loading
-concern and should be declared through `None.cell` when a typed empty cell must
-not materialize a row.
+Contextual literals are registry facts rather than parser keywords. Their
+target-class lookup, fallback tables, expression bindings and
+statement-receiver bindings are specified once in section 19.18.2. Empty source
+cells remain a separate table-loading concern governed by `None.cell`.
 
 Formatted-output validation is likewise table data. A profile may use
 `printf.format` for recommended class-to-spelling projection and a separate
@@ -4045,7 +3944,7 @@ because raw clear is an effect/release operation, not a pure value.
 A `Unit` function may be callable as a statement-level receiver or namespace
 function if its descriptor allows that level and effect profile.
 
-6.6.6. L2 Universal L1 Adapter and L4 Wrappers
+6.6.6. L2 Universal L1 Adapter and Checked Registry Wrappers
 
 L1 / ANSI C symbols are not automatically high-level Lingvamyxa functions.
 
@@ -4055,15 +3954,15 @@ The level boundary is:
         may expose a universal adapter to the selected L1 / ANSI C profile.
         Raw C functions, raw pointers, raw storage, C headers and platform
         calls belong here. This adapter is governed by the L2/L1 build profile,
-        not by high-level L4 semantic wrapper descriptors.
+        not by high-level semantic wrapper descriptors.
 
-    L3 and above
+    L3
         may not call raw L1 / ANSI C symbols directly. They may call only
         Lingvamyxa receivers, functions, methods, wrappers, handles or
         capabilities whose registry entries define the needed contract.
 
-The L2 universal ANSI C adapter does not read high-level wrapper instructions
-from L4 in order to assign semantic meaning to raw L2 code. Its inputs are the
+The L2 universal ANSI C adapter does not read high-level registry wrapper
+instructions in order to assign semantic meaning to raw L2 code. Its inputs are the
 L2 source and the L2/L1 build profile:
 
     target compiler;
@@ -4076,10 +3975,10 @@ L2 source and the L2/L1 build profile:
     linker inputs;
     platform profile.
 
-The build profile itself may be described by an L4 build/configuration
-Structure. In that role, L4 is not assigning high-level meaning to C functions;
-it is supplying mechanical toolchain inputs that will be passed to the
-compiler/linker.
+The build profile itself may be described by a direct L2 build/configuration
+Structure. In that role the receiver supplies mechanical toolchain inputs that
+will be passed to the compiler/linker; it does not assign high-level meaning to
+C functions.
 
 This is intentionally close to an ordinary C compilation environment. The same
 L2 source should not acquire a different raw C meaning because a higher-level
@@ -4195,12 +4094,12 @@ Thus L2 may have many C-visible identifiers through headers, but the structural
 spelling of pointers, arrays, raw loads and field-follow remains Lingvamyxa
 syntax.
 
-L4 may still describe checked wrappers, high-level constants, numeric
+Registry descriptors may still describe checked wrappers, high-level constants, numeric
 backends, type mappings, ownership rules, borrow rules, effect rules,
-capability requirements and operator implementations for L3+ visibility. That
+capability requirements and operator implementations for L3 visibility. That
 is the same mechanism used for other receiver/operator registration.
 
-The L4 semantic wrapper layer does not declare every C function for L2. A
+The checked registry wrapper family does not declare every C function for L2. A
 selected L2 universal ANSI C adapter may discover or bind raw symbols from
 headers, toolchain metadata, build metadata or explicit L2 adapter syntax such
 as `c.name`. Those raw symbols remain L2-only unless a checked Lingvamyxa
@@ -4219,29 +4118,29 @@ The raw block body is governed by the raw text/block rules. A trailing
 the `L1` frame.
 
 No special mechanism for making C headers visible to mathematics is required.
-Mathematics and ordinary L3+ code see only accepted Lingvamyxa descriptors.
+Mathematics and ordinary L3 code see only accepted Lingvamyxa descriptors.
 
 Canonical rule:
 
     L2 source + L2/L1 build profile define raw L1 toolchain visibility;
-    L4 may provide that build profile as compiler/linker configuration data;
-    L4 wrappers define high-level contracts and visibility;
+    L2 build receivers provide compiler/linker configuration data;
+    checked registry wrappers define high-level contracts and visibility;
     registry validation accepts or rejects high-level descriptors;
-    accepted high-level descriptors enter the L3+ lexical/registry view;
+    accepted high-level descriptors enter the L3 lexical/registry view;
     expression/operator resolution uses accepted descriptors only.
 
-An L5 system message may also propose a candidate descriptor at runtime. Such a
-candidate is data, not authority. It may affect L3+ high-level descriptors only
+A system message may also propose a candidate descriptor at runtime. Such a
+candidate is data, not authority. It may affect L3 high-level descriptors only
 after ordinary registry validators accept it. It does not rewrite the raw L2
 translator.
 
 6.6.7. L2 Raw Adapter and Checked Wrapper Example
 
-A raw L1 function does not need an L4 semantic wrapper declaration merely to be
-used by an L2 universal adapter. L2 is the low-level adapter boundary. Headers,
-include paths and link inputs are build-profile data. They may be written in L4
-configuration syntax, but they are passed mechanically to the toolchain rather
-than used as high-level receiver/class policy.
+A raw L1 function does not need a checked semantic wrapper declaration merely
+to be used by an L2 universal adapter. L2 is the low-level adapter boundary. Headers,
+include paths and link inputs are direct L2 build-profile data. They are passed
+mechanically to the toolchain rather than used as high-level receiver/class
+policy.
 
 Using MPFR from L2 may therefore be as direct as ordinary C-profile use, if the
 L2/L1 build profile provides `mpfr.h` and the MPFR link inputs.
@@ -4251,37 +4150,32 @@ or L3 source.
 
 A safe value-producing wrapper may be registered separately.
 
-Example conceptual wrapper:
+Example conceptual descriptor on a direct `.lm2` module surface:
 
-L4:
-    externFn: Lingvamyxa\MPFR\sqrt
-        sourceLevel: L1
-        sourceName: mpfr_sqrt
-        header: `mpfr.h`
-        pkg: `PkgConfig::mpfr`
-        args:
-            real: x
-        ret:
-            real
-        backendShape:
-            destinationArg: 0
-            operandArg: 1
-            roundingArg: activeRealContext\rounding
-            statusReturn: int
-        effects:
-            pureWrapper
-        context:
-            activeRealContext
-        implementation:
-            Lingvamyxa\MPFR\raw\mpfr_sqrt
-        callableFrom:
-            L3
-            L4 expression
-            L5 expression
-    ---
-end: L4
+externFn: Lingvamyxa\MPFR\sqrt
+    sourceLevel: L1
+    sourceName: mpfr_sqrt
+    header: `mpfr.h`
+    pkg: `PkgConfig::mpfr`
+    args:
+        real: x
+    ret:
+        real
+    backendShape:
+        destinationArg: 0
+        operandArg: 1
+        roundingArg: activeRealContext\rounding
+        statusReturn: int
+    effects:
+        pureWrapper
+    context:
+        activeRealContext
+    implementation:
+        Lingvamyxa\MPFR\raw\mpfr_sqrt
+    callableFrom: L2 L3
+---
 
-This wrapper is the high-level descriptor. It is the thing that L3+ code calls.
+This wrapper is the high-level descriptor. It is the thing that L3 code calls.
 It defines the value result, ownership behavior, context use and effect profile.
 
 Expression use:
@@ -4344,10 +4238,10 @@ Allowed examples:
     a * b
 
 There is no blacklist of forbidden C names in this profile. The rule is simpler:
-raw L1 / ANSI C calls are not visible to L3+ expression profiles at all. They
+raw L1 / ANSI C calls are not visible to L3 expression profiles at all. They
 belong to the L2 universal adapter boundary.
 
-Effectful operations may be visible at L3+ only as checked Lingvamyxa receivers
+Effectful operations may be visible at L3 only as checked Lingvamyxa receivers
 or wrappers with declared effects, capabilities, ownership and failure behavior.
 Even then, they are statement-level or effect-profile calls, not pure
 expression/operator calls.
@@ -4358,13 +4252,13 @@ Required rule:
         -> L2 adapter only;
 
     no high-level wrapper descriptor
-        -> no L3+ visibility;
+        -> no L3 visibility;
 
     no capability
         -> no high-level call;
 
     unsafe or pointer-bearing wrapper
-        -> L2 only, or L3+ only through an explicitly checked handle/receiver;
+        -> L2 only, or L3 only through an explicitly checked handle/receiver;
 
     effectful descriptor
         -> not callable from pure expression profile.
@@ -4372,12 +4266,12 @@ Required rule:
 6.6.10. Pointer and Memory Rule
 
 An L1 function with raw pointer parameters or raw pointer return values is not a
-safe value-producing expression function and is not directly visible at L3+.
+safe value-producing expression function and is not directly visible at L3.
 
 At L2, the selected universal ANSI C adapter may call it according to the L2
 memory profile.
 
-At L3 and above, it must be wrapped by a Lingvamyxa descriptor that defines:
+At L3, it must be wrapped by a Lingvamyxa descriptor that defines:
 
     ownership;
     borrow duration;
@@ -4391,7 +4285,7 @@ At L3 and above, it must be wrapped by a Lingvamyxa descriptor that defines:
     capability requirements.
 
 Without such a wrapper, the function belongs to L2 adapter semantics only, not
-to ordinary L3+ expression or namespace syntax.
+to ordinary L3 expression or namespace syntax.
 
 6.6.11. Contexts for `real` and `decimal`
 
@@ -4471,7 +4365,7 @@ The minimal built-in mathematics profile should include:
     array elementwise arithmetic over supported numeric types;
     reduction over supported numeric arrays.
 
-Additional functions may be registered through ordinary L4 descriptors and
+Additional functions may be registered through ordinary registry descriptors and
 registry validation.
 
 The language core does not require every C library function to be visible.
@@ -4484,7 +4378,7 @@ The source-visible mathematical model is:
     explicit contexts;
     registry-controlled external bindings;
     safe expression profiles;
-    unsafe L2/L3 escape hatches when deliberately enabled.
+    explicit unsafe escape hatches confined to L2.
 
 7. `fn`, `sub` and Structural Closure
 
@@ -4887,7 +4781,7 @@ Keep this distinct from the two other deferred/result mechanisms:
         contains some bound or resolved information. Calling it later consumes
         the remaining arguments/computation.
 
-    L5 reply wrapping
+    message-boundary reply wrapping
         wraps any produced result, including a callable/residual Structure, as a
         reply ProposedMessage only when the message boundary supplies a reply
         target, future, continuation or correlation id.
@@ -4948,18 +4842,17 @@ facts that make this legal:
     callable.projection[AddX] = c.closure-struct
 
 The same operation may be written explicitly when the active profile admits the
-`partial` row in `callable.partial.form`. This profile switch is an L4 registry
-declaration, not an L2 statement table:
+`partial` row in `callable.partial.form`. This profile switch is direct L2
+registry source, not an L2 runtime statement table:
 
-    L4:
-        table:
-            name: `callable.partial.form`
-            columns: class (materializer binding)
-            rows:
-                     `call-frame` lm_trans_materialize_call_frame_partial
-                     partial      lm_trans_materialize_partial_callable
-        end: `callable.partial.form`
-    end: L4
+    table:
+        source
+        name: `callable.partial.form`
+        columns: class (materializer binding)
+        rows:
+                 `call-frame` lm_trans_materialize_call_frame_partial
+                 partial      lm_trans_materialize_partial_callable
+    end: `callable.partial.form`
 
     callAdd(partial(addBase, 4))
 
@@ -5073,13 +4966,13 @@ incompatible function.
 
 Example source:
 
-sub: l5_branch (boolean(condition)) on_true on_false
+sub: select_branch (boolean(condition)) on_true on_false
 return
 
 Strict conceptual form:
 
     sub(
-      name(l5_branch),
+      name(select_branch),
       args(
         boolean(condition),
         on_true,
@@ -5091,14 +4984,14 @@ Strict conceptual form:
 Explicit nested-source form:
 
 sub:
-    name: l5_branch
+    name: select_branch
     args:
         boolean: condition
         on_true
         on_false
     body:
         return
-end: l5_branch
+end: select_branch
 
 The receiver `sub` consumes its child Structures by receiver-defined semantic roles. The argument `condition` is a primitive/evaluated argument through the registered constructor `boolean`. The bare names `on_true` and `on_false` are structural arguments. No `Struct on_true` annotation is required.
 
@@ -5119,7 +5012,7 @@ A new binding may be introduced only if the same name is not already visible in 
 
 A local variable cannot reuse the name of a visible class. A local `fn` or `sub` cannot reuse the name of a visible variable, class, receiver, model or executable definition. Imports must not silently shadow visible names. Conflict resolution must be explicit through a future import/qualification rule.
 
-L5 message selectors are looked up through the receiver's message/operation
+Message selectors are looked up through the receiver's message/operation
 tables. A selector is not automatically a lexical binding unless it is also
 imported or registered as an ordinary receiver/generic operation. The
 implementation selected by a message table cell is a lexical executable binding
@@ -5718,9 +5611,11 @@ belong to the selected L1/runtime profile.
 9.1. Type and Model Information
 
 Type and model information is expressed by registered receivers and Structures.
-At L4/L5, those receivers may materialize registry table rows as defined by
-Part II. At L2/L3, they may instead lower directly to storage, address or
-function metadata used by the translator.
+On a direct L2 module surface, source-table receivers may materialize registry
+rows. L2 receivers may also lower Structures to storage, address and callable
+metadata. L2/L3 receivers may consume registry rows and produce safe callable
+or descriptor metadata; an L3 implementation may use hidden handles or storage,
+but L3 never exposes address operations.
 
 The structural core does not require a separate `field` receiver. In declaration context, a type or model constructor consumes a raw identifier token and creates a binding, field entry or registry table row.
 
@@ -5911,9 +5806,9 @@ required for the current core `if`/`else` statement pair.
 
 11.1. L3 Passing Model
 
-At L3 and above, explicit address syntax is usually unnecessary. Structures, arrays, text, objects and other non-primitive values are passed as references or handles by default.
+At L3, explicit address syntax is unavailable. Structures, arrays, text, objects and other non-primitive values are passed as references or handles by default.
 
-At L3 and above, ordinary names denote primitives, symbols, handles or Structures according to the active semantic environment. They are not raw L2 addresses to executable code.
+At L3, ordinary names denote primitives, symbols, handles or Structures according to the active semantic environment. They are not raw L2 addresses to executable code.
 
 11.2. L2 Address Values and Storage Allocation
 
@@ -6235,7 +6130,7 @@ At L1 lowering time, a receiver such as `print` receives typed values or typed r
 
 Function/subroutine address forms are strictly L2. A static L2 executable binding may be addressable through `@name` if the active L2 profile exposes it as storage or callable-address metadata.
 
-At L3 and above, calls are expressed as receiver Frames and resolved by the active receiver/operator registry, not by raw callable addresses. L5 message selectors and message-operation table entries are not automatically L2 callable addresses.
+At L3, calls are expressed as receiver Frames and resolved by the active receiver/operator registry, not by raw callable addresses. Message selectors and message-operation table entries are not automatically L2 callable addresses.
 
 ?
 The exact L2 memory profile must define primitive cell size, address arithmetic, alignment, storage duration, allocation failure, callable-address representation and which bindings are addressable through `@`.
@@ -6255,7 +6150,7 @@ Allow both forms: parser-level recognition for core operators and receiver-level
 
 12.1. Logical Model
 
-At L3 and above, an array is a Structure or handle/reference to a Structure. Text is also a Structure or handle/reference to a Structure.
+At L3, an array is a Structure or handle/reference to a Structure. Text is also a Structure or handle/reference to a Structure.
 
 The logical array model includes at least a length field and an indirect storage reference. It may also include capacity, encoding, element type and storage handle.
 
@@ -6281,7 +6176,7 @@ Example conceptual L2 meaning:
 
 subject to the actual L2 layout and address rules.
 
-At L3 and above, `[]` accesses an array Structure indirectly and performs bounds checking through the array metadata, at minimum the `len` field.
+At L3, `[]` accesses an array Structure indirectly and performs bounds checking through the array metadata, at minimum the `len` field.
 
 Example conceptual L3 meaning:
 
@@ -6300,7 +6195,7 @@ variant 1:
 L2 array access lowers to computed-address access with no automatic bounds check.
 
 variant 2:
-L3+ array access lowers to a length-plus-address or length-plus-handle Structure with generated bounds checks.
+L3 array access lowers to a length-plus-address or length-plus-handle Structure with generated bounds checks.
 
 variant 3:
 Dynamic arrays lower to runtime handles with accessor calls when layout is not statically known.
@@ -6317,7 +6212,7 @@ Structural traversal / dereference-like access uses backslash syntax:
 
 The backslash form is a built-in parser form. It exists so the translator can generate direct structural traversal through known Structures, typed addresses, handles and layouts. It is not a textual namespace separator and it is not equivalent to the L2 foreign/substrate qualified-symbol form such as `c.printf`.
 
-At L2, the left side is normally a typed address. At L3 and above, the left side may be a Structure, handle or reference according to the active semantic environment. In all cases, `\` implies an actual traversable source-semantic object, not a dotted or slash-separated external name.
+At L2, the left side is normally a typed address. At L3, the left side may be a Structure, handle or reference according to the active semantic environment. In all cases, `\` implies an actual traversable source-semantic object, not a dotted or slash-separated external name.
 
 The same `\` character also has a prefix L2 raw-load form, described in section 11.3. These forms are distinguished by position:
 
@@ -6400,7 +6295,7 @@ during lowering.
 This is declared head consumption, not automatic execution of every Structure in
 an argument list.
 
-At L2, update may lower to direct storage write according to the L2 memory model. At L3 and above, update is receiver-defined over variables, fields, handles and Structures.
+At L2, update may lower to direct storage write according to the L2 memory model. At L3, update is receiver-defined over variables, fields, handles and Structures.
 
 ?
 Binding, mutability, scope, initialization, reassignment and shadowing rules are not specified in full in this document. They require a dedicated execution-model specification.
@@ -6916,7 +6811,7 @@ that position. For example, a profile may reject `level0:` followed by sibling
 inner empty Frame is not an admitted argument. Those are receiver/profile
 diagnostics, not a separate P0 grammar category.
 
-This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or `case` (not structural syntax) as syntax. The standalone dash-fence line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
+This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or a built-in `case` form. The standalone dash-fence line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 
 Ordinary line arguments are whitespace-separated short-tail fields. A parser must not use receiver signatures to insert hidden nesting while parsing `line_arguments`.
 
@@ -7226,13 +7121,13 @@ Semantic outline:
     ***...                     column-0 raw file comment fence, 3..80 `*` characters; closing fence must have the same length; syntax inside is ignored
     ===...                     column-0 block string fence, 3..80 `=` characters; closing fence must have the same length
     end: name                  explicit named tail-cutter for a visible frame/entity/label block; not the only close mechanism
-    L2/L3/L4/L5                level receiver frames
+    L2/L3                      the only level receiver frames
     sub                        receiver that registers subroutine definitions
     fn                         receiver that registers function definitions
     return                     executable-body return receiver/operator; also terminal executable close at definition level
     operator                   receiver that registers receivers/operators
     if                         registered receiver, semantics depend on level
-    match                      registered receiver; no built-in `case` (not structural syntax) syntax
+    match                      registered receiver; no built-in `case` syntax
     merge                      registered L2/L3 structural receiver; ordered merge of Structure/table-producing parts
     join                       registered module table receiver; module table profiles materialize source-table rows, with no executable runtime projection
     while                      registered receiver, semantics depend on level
@@ -7244,10 +7139,10 @@ Semantic outline:
     table/relation/rule/query  receiver-defined registry/table Structures
     union                      receiver that registers a closed set of variants
     method                     receiver that registers a generic dispatch entry
-    message/operation          L5 receiver/profile entry that contributes message/operation table rows
+    message/operation          L2 source rows or validated transient L3 overlay rows
 
 
-18. Part I Remaining Open Points
+18. Remaining Open Points
 
 This section keeps only the remaining open points that affect common syntax,
 L2/L3 execution, expressions, arrays, text, field-follow, closure and ANSI C
@@ -7345,17 +7240,19 @@ variant 2:
 L2 indexing lowers to computed-address access under the L2 memory model.
 
 variant 3:
-L3+ indexing lowers to checked access through array metadata such as `len`.
+L3 indexing lowers to checked access through array metadata such as `len`.
 
 The language does not define C slot counting, hidden runtime addresses, hidden output addresses or C storage ownership rules. Those are translator/runtime design choices.
 ---ANSI C---
 
-19. L2 & L3 Operators
+19. L2 & L3 Operators and Receiver Families
 
 19.0. Scope of This Section
 
-This section defines the shared L2/L3 source-level receiver/operator set for
-executable and descriptor bodies. Most entries are control-flow receivers.
+This section defines the L2/L3 source-level receiver/operator families for
+executable, descriptor, registry, message and service bodies. The first entries
+are control-flow receivers; the later subsections integrate the former separate
+registry/message specification into the same two-level model.
 `merge` is the intentionally broader structural receiver in this list. L2 and
 L3 use the `merge` spelling for ordered Structure construction. Table profiles
 use the module receiver `join` to combine table descriptors and source rows in
@@ -7365,9 +7262,9 @@ listed in section 20.5, while richer L2 profiles and ordinary L3 profiles may
 admit the full set or profile-specific extensions.
 
 This shared list does not mean that L3 contains all L2 operators. L2 has an
-additional unsafe low-level operator/parser-form surface in section 20. L3 is
-smaller than L2 in that direction unless an explicit profile imports selected
-L2 capabilities.
+additional unsafe low-level operator/parser-form surface in section 20. L3 is a
+strict protected subset and no profile may import that low-level surface into
+L3.
 
 The control operators in this section are not raw low-level jumps. A translator
 may lower them to branches, labels, hidden control-result Structures,
@@ -7382,6 +7279,8 @@ constraints, available value types, memory model and lowering policy, not to a
 separate parser syntax.
 
 Operator summary:
+
+The left column below is an operator-family ordinal, not a subsection number.
 
     0.  if / else                                         L2/L3
     1.  match / default-pattern receivers                 L2/L3
@@ -7401,6 +7300,20 @@ Operator summary:
     14. yield                                             L2/L3 iterator-profile fn
     15. labelled break / labelled continue                L2/L3 labelled loop frame
     16. merge / join                                      merge: L2/L3 structural merge; join: module table-source receiver
+    17. table / join / predef / import                    direct source materialization and module composition; predef/table-source are L2-only
+    18. class / relation / rule / query                   registry model and analytical resolution; safe queries may be L3
+    19. message / validate / execute / emit               message pipeline; protected runtime use is L3
+    20. model / union / descriptor                        structural descriptor receivers
+    21. operator / method / receiver                      operation tables and registered consumption
+    22. evidence / validator                              registry validation and resolution evidence
+    23. entry / provides / satisfies / conflict           registry composition and conflict policy
+    24. procedural / object / functional / logical        declared consumption modes
+    25. provider / codec / toLmx / fromLmx                lowering, provider selection and portable persistence
+    26. send / reply / await / schedule / thread          Message Thread runtime receivers
+    27. copy / move / borrow / own                        owner and message-boundary memory operations
+    28. watch / derive / reactive query                   reactive registry/message operations
+    29. service / route / HTTP adapter                    service and transport profile receivers
+    30. authenticate / verify / authorize / ticket        authentication and authorization receivers
 
 Labels are written as ordinary colon frames such as `outerLoop:`. A profile may materialize such a frame as a local nullary executable binding, a labelled control/block target, or both. A bare line such as `outerLoop` in executable statement position may resolve through the ordinary namespace to that zero-argument label-block binding and consume/call it. Control-transfer receivers such as `break:` and `continue:` resolve their target to the labelled control/block role of the same visible binding. The parser does not need a separate label grammar category.
 
@@ -7460,7 +7373,7 @@ projection or profile validator may reject the resulting control flow.
 
 19.2. `match` and default-pattern receivers
 
-`match` selects one body from a set of positional pattern/body pairs or from anonymous branch Structures. `case` (not structural syntax) is not structural syntax.
+`match` selects one body from a set of positional pattern/body pairs or from anonymous branch Structures. `case` is not a structural keyword.
 
 Simple positional example:
 
@@ -7791,7 +7704,8 @@ Cleanups are executed in reverse registration order.
 
 A cleanup body is executed outside the registration operation. It is not executed at the point where `finally` is encountered, except when the frame exits immediately after registration.
 
-`finally` cleanups are part of the execution context model defined in Part II section 11.
+`finally` cleanups are part of the Message Thread execution-context model in
+section 19.28.
 
 !!!
 The exact semantics of a cleanup failure are not fixed. A final runtime specification must define what happens if a cleanup itself executes `fail`, `assert`, `return`, `break`, `continue`, `retry`, `redo` or another `finally` registration while cleanup processing is already active.
@@ -7897,10 +7811,10 @@ handler: ParseError
 
 
 variant 3:
-Represent handlers as L5 event/message handlers for failure events.
+Represent handlers as L3 event/message handlers for failure events.
 
 !!!
-The exact source syntax, placement, visibility and lifetime of failure handlers are not fixed. A final source specification must define whether handlers are lexical Structures, executable labels, L5 event handlers, caller-side receivers or a combination of these forms.
+The exact source syntax, placement, visibility and lifetime of failure handlers are not fixed. A final source specification must define whether handlers are lexical Structures, executable labels, L3 event/message handlers, caller-side receivers or a combination of these forms.
 !!!
 
 19.11.5. Failure propagation
@@ -7982,14 +7896,15 @@ If the condition is false, the current execution/checking phase fails with an `A
 
 `assert` is not caught by failure labels or failure handlers.
 
-Default L3 runtime semantics in the thread profile defined in Part II section 11:
+Default L3 runtime semantics in the Message Thread profile defined in section
+19.28:
 
     record AssertionViolation diagnostic;
     execute all active `finally` cleanups in the current thread ExecutionContext;
     transfer control to the thread diagnostic root;
     terminate the current thread/task by default after reporting the diagnostic.
 
-Default L4 model-time use, if exposed by a level profile:
+Default L2 registry/model-loading use, if exposed by a receiver profile:
 
     an assertion violation terminates the current model-loading or translation pass with a diagnostic error.
 
@@ -8021,7 +7936,7 @@ or profile-defined informational record.
 `error` records an error/diagnostic observation. It is not reserved parser
 syntax and it is not automatically equivalent to `fail`, `assert`, `return` or
 thread termination. If a profile wants an error observation to also fail,
-abort, throw, send an L5 failure message or terminate a task, that behavior must
+abort, throw, send a failure message or terminate a task, that behavior must
 be defined by that profile or by an explicit surrounding receiver.
 
 Both receivers use ordinary namespace resolution for non-literal tails. A bare
@@ -8140,40 +8055,40 @@ different semantic questions:
         `c.closure-struct` or another representation that can store an
         environment.
 
-The canonical set-style registry tables are registry data. When written in
-source, they are L4 frames:
+The canonical set-style registry tables are direct L2 registry source. In a
+`.lm2` module they are written without a level wrapper:
 
-    L4:
-        table:
-            name: `callable.partial`
-            columns: class  (value serial)
-        end: `callable.partial`
+    table:
+        source
+        name: `callable.partial`
+        columns: class  (value serial)
+    end: `callable.partial`
 
-        table:
-            name: `callable.capture`
-            columns: class  (value serial)
-        end: `callable.capture`
+    table:
+        source
+        name: `callable.capture`
+        columns: class  (value serial)
+    end: `callable.capture`
 
-        table:
-            name: `callable.projection`
-            columns: class  (value projection)
-            rows:
-                     AddX `c.closure-struct`
-        end: `callable.projection`
-    end: L4
+    table:
+        source
+        name: `callable.projection`
+        columns: class  (value projection)
+        rows:
+                 AddX `c.closure-struct`
+    end: `callable.projection`
 
 The active profile may also declare which surface forms are admitted for partial
 binding:
 
-    L4:
-        table:
-            name: `callable.partial.form`
-            columns: class (materializer binding)
-            rows:
-                     `call-frame` lm_trans_materialize_call_frame_partial
-                     partial      lm_trans_materialize_partial_callable
-        end: `callable.partial.form`
-    end: L4
+    table:
+        source
+        name: `callable.partial.form`
+        columns: class (materializer binding)
+        rows:
+                 `call-frame` lm_trans_materialize_call_frame_partial
+                 partial      lm_trans_materialize_partial_callable
+    end: `callable.partial.form`
 
 The `call-frame` row admits the existing compact callable-slot spelling:
 
@@ -8478,8 +8393,8 @@ a translation-time operation and cannot depend on the generated C target. A
 module-level `guard` may contain these declarations; `guard` is an
 idempotence/include boundary rather than an alternative branch selection.
 
-In an L4 registry/table profile, the receiver spelling `join` may materialize a
-new table descriptor from several table-producing sources:
+The L2 module receiver `join` materializes a new table descriptor from several
+table-producing sources:
 
     join: (sourceTable0 sourceTable1 ... sourceTableN) targetName
         tableFragment
@@ -8488,8 +8403,8 @@ new table descriptor from several table-producing sources:
 The bounded first argument is the ordered source-table list. Each source item is
 consumed in a table-producing context: it may name a table descriptor visible in
 the active registry view, be a table literal/fragment, or be a receiver/call
-whose declared result is compatible with an L4 table descriptor. The second
-argument is the target table name. The L4 table `join` receiver normalizes that
+whose declared result is compatible with a `TableDescriptor`. The second
+argument is the target table name. The `join` receiver normalizes that
 argument as its `name`, so the canonical explicit close is `end: targetName`;
 `end: join` remains the admitted receiver/head close alternative.
 
@@ -8498,7 +8413,7 @@ directly as table body fields such as `columns:` and `rows:`, or as an explicit
 nested `table:` descriptor. If an explicit nested `table:` contains `name:`, that
 name must match `targetName` after registry key normalization.
 
-Default L4 table join is ordered:
+Default table join is ordered:
 
     1. Resolve source tables from left to right in the active registry view.
     2. Determine the target table schema from the explicit body `columns:` when
@@ -8508,33 +8423,2023 @@ Default L4 table join is ordered:
     5. Append body rows after source rows.
     6. Preserve duplicate row keys and duplicate relation facts.
 
-L4 `join` does not silently override, remove or deduplicate registry rows. If the
+`join` does not silently override, remove or deduplicate registry rows. If the
 active registry lookup later uses last-visible-row, first-visible-row, relation
 set, or overlay semantics, that is the consuming registry policy, not a hidden
 side effect of `join`.
 
-Example:
+Example in an `.lm2` source module:
 
-L4:
-    join: (`Base.field.class` `Audit.field.class`) `Entity.field.class`
-        columns: class  (field class)
-        rows:
-                 flags  u32
-    end: `Entity.field.class`
-end: L4
+join: (`Base.field.class` `Audit.field.class`) `Entity.field.class`
+    columns: class  (field class)
+    rows:
+             flags  u32
+end: `Entity.field.class`
 
 Conceptual materialized descriptor:
 
-L4:
+table:
+    source
+    name: `Entity.field.class`
+    columns: class  (field class)
+    rows:
+             # rows from `Base.field.class`
+             # rows from `Audit.field.class`
+             flags  u32
+end: `Entity.field.class`
+
+
+The remaining subsections define the registry, message, service and runtime
+receiver families that were formerly described as separate language levels.
+They use only the L2/L3 profiles defined in section 1. A subsection may define
+supporting Structures such as RegistryView, Evidence, ExecutionPlan or Message
+Thread in addition to its source receiver spellings; those Structures are not
+new levels or parser mechanisms.
+
+Mechanism filter:
+
+    A profile term is not a new language mechanism merely because it has a
+    name. It remains profile vocabulary while it can be represented as an LMX
+    Structure, receiver consumption, registry row/cell, validator evidence,
+    ExecutionPlan payload or executor result/failure.
+
+    Provider, replayPolicy, freshness, confidence, calibration, budget, effect
+    fence, authority ticket, safeMode and decision-log rows therefore remain
+    profile vocabulary. A term becomes core semantics only when the existing
+    Structure / receiver / registry / validation / plan / execution pipeline
+    cannot represent it without changing that pipeline.
+
+19.18. Registry Table and Resolution Operators
+
+Unless an example says otherwise, registry `table:` and `join:` forms in
+sections 19.18 through 19.33 are direct L2 module receivers. New source should
+prefer the explicit first body atom `source`. Existing examples whose first
+unqualified scalar column is `class` use the equivalent canonical
+Registry-only projection defined in section 19.17. L3 may query the resulting
+RegistryView but may not materialize these source tables.
+
+19.18.1. Class
+
+In this section, `class` is the general word for a named registry form/table/key.
+When this wider meaning must be distinguished from an object-oriented class,
+this document may use the phrase `registry class`.
+
+The strongest source form for a class is a table with the same name:
+
     table:
-        name: `Entity.field.class`
-        columns: class  (field class)
+        source
+        name: Circle
+        ...
+    end: Circle
+
+This table is the descriptor table for class/key `Circle`. The `class` table is
+an index and classification table that may reference `Circle`, group it, attach
+kind information or make it discoverable. It is not a mandatory central list
+that alone creates the class. Conversely, a class/key may be referenced in the
+`class` table or in other relation tables before a dedicated descriptor table is
+introduced.
+
+This is wider than an object-oriented class and wider than a value/storage
+type. The following names may all be classes in this general sense:
+
+    decimal
+    u32
+    equals
+    plus
+    Array
+    Circle
+    Message
+    Validator
+    AuthTicket
+    None
+    FORBIDDEN
+    spelling
+    implementation
+    result
+
+A class is meaningful because tables contain rows that mention it or are owned
+by it. A concrete value class, such as `decimal`, usually has representation
+tables. An operation class, such as `Equals`, usually has implementation
+tables. A message class, validator class, evidence class or service route class
+may also be represented by tables.
+
+A class instance is any concrete Structure accepted by that registry form. It
+may be an object-like value, an operation-selection record, a validator record,
+a message, an evidence record, an authority ticket or a service descriptor.
+
+The language does not need a separate primary mechanism for interface, trait,
+generic constraint or overload set. These are class/table patterns. A
+traditional object class is one possible class profile, not the definition of
+the term.
+
+This is why a Lingvamyxa class is not a Java/C++/C# class as a base concept.
+It is not primarily a code container with hidden method lookup and inheritance.
+It is a registry form/table/key. A class may describe object-like values, but
+it may also describe operations such as `Equals`, validators, messages,
+evidence records, authority rows, routes or implementation-selection keys.
+Object-style classes are built from the same table mechanism rather than being
+the root of the mechanism.
+
+19.18.2. Relation Tables and Class/Table Import/Overlay
+
+Tables describe relations between classes. A binary operation may be visualized
+as a sparse matrix:
+
+    table equals
+
+              decimal          real             int
+    decimal   decimal_eq       decimal_real_eq  decimal_int_eq
+    real      real_decimal_eq  real_eq          real_int_eq
+    int       int_decimal_eq   int_real_eq      int_eq
+
+The selected cell is the terminal payload returned by table lookup for the
+current table and lookup keys. The table name and the keys that selected the
+cell are the access path; they are not required to be repeated inside the cell
+payload.
+
+A cell may be written in short form as a single atom such as `decimal_int_eq`,
+`decimal_int_add` or `int_eq`. A consuming profile normalizes such a short form
+to a terminal cell payload kind and payload. Optional result, effect, lifetime,
+authority, priority, cost and provenance metadata may be stored in side tables
+keyed by the payload class/key or by an implementation-generated cell id.
+
+The canonical source form for a relation table is a table Structure with an
+explicit name, column list and dense rows. `columns` is not a registry namespace
+item by itself. It is a field consumed by `table`.
+
+Within one registry source module, two `table` declarations with the same
+normalized name are an error. Later registry merge may combine different source
+modules through explicit import/overlay/conflict rules, but a single module must
+not contain two independent descriptor tables with the same name.
+
+Column syntax is generic:
+
+    atom
+        The atom is the column name.
+
+    anonymous Structure
+        The first atom is the column name. The remaining atoms are column
+        descriptors. Descriptors are ordinary class/key names and may be stored
+        as relation rows by the loader.
+
+For example:
+
+    columns: class (spelling char) (cost serial)
+
+means a row-key column named `class`, a column named `spelling` with descriptor
+`char`, and a column named `cost` with descriptor `serial`.
+
+Class/key spelling follows the ordinary identifier rule:
+
+    if the class/key name is a valid ordinary Lingvamyxa identifier, write it
+        bare;
+    if it contains operator characters, whitespace, punctuation, dots, arrows,
+        external spellings or any spelling that must round-trip exactly, write
+        it as an exact quoted identifier.
+
+For example:
+
+    u32
+    result
+    implementation
+    sqrt_ansi_c
+    `+`
+    `translator type-->spelling`
+    `implementation-->L2 lowering`
+
+The semantic class/key value of an exact quoted identifier is its payload after
+backtick unescaping; the backticks are not part of the class/key.
+
+By convention the first column is `class`; it carries the row class/key. Later
+column names are also classes. The cell under such a column is the value of
+that relation coordinate:
+
+    table:
+        name: `translator type-->spelling`
+        columns: class (spelling char)
         rows:
-                 # rows from `Base.field.class`
-                 # rows from `Audit.field.class`
-                 flags  u32
-    end: `Entity.field.class`
-end: L4
+            u8  "uint8_t"
+            u16 "uint16_t"
+            u32 "uint32_t"
+    end: `translator type-->spelling`
+
+This means:
+
+    `translator type-->spelling`[u8][spelling]  -> "uint8_t"
+    `translator type-->spelling`[u16][spelling] -> "uint16_t"
+
+Here `translator type-->spelling`, class, spelling, u8 and u16 are
+registry classes/keys. The strings `"uint8_t"` and `"uint16_t"` are terminal
+primitive payloads for the active L2/L1 lowering profile unless another table
+explicitly treats those spellings as registry classes.
+
+An empty table cell is interpreted through the declared class/domain of that
+cell. A table profile may define its typed empty-cell behavior through
+`None.cell`; expression-level `None` values are defined through `None.value` or
+through the target class's contextual-literal table. Primitive classes are still
+ordinary registry classes, not a separate Java-style type universe. A hosted
+bootstrap implementation uses `None`, not a separate semantic class of absence.
+
+Contextual literals are ordinary registry facts, not parser keywords. A
+contextual literal is a class/key whose concrete payload is selected by the
+expected target class supplied by a declaration, assignment target, call slot,
+operator slot, comparison peer or other consumer.
+
+To introduce a new contextual literal such as `None`, `true`, `false`, `OK` or
+a profile-defined name:
+
+    1. Declare the literal name as a `contextualLiteral` class/key. The usual
+       place is the `class` table:
+
+           table:
+               name: class
+               columns: class (kind class)
+               rows:
+                        None  contextualLiteral
+                        OK    contextualLiteral
+                        false contextualLiteral
+                        true  contextualLiteral
+           end: class
+
+    2. For each target value class that wants a class-local meaning, add rows to
+       that target class table. The conventional column descriptor is
+       `context literal` plus the target class:
+
+           table:
+               name: int8
+               columns: class  (`context literal` int8)
+               rows:
+           end: int8
+
+           join: (int8) Boolean
+               columns: class  (`context literal` int8)
+               rows:
+                        None  -1
+                        false 0
+                        true  1
+                        OK    1
+           end: Boolean
+
+       In this example `Boolean[None] = -1`, `Boolean[false] = 0`,
+       `Boolean[true] = 1` and `Boolean[OK] = 1`. The numeric cells are ordinary
+       payloads. They are not a global empty-cell encoding.
+
+    3. If the literal also has a fallback mapping, register it in
+       `contextual.literal.value`. The payload points to a value table keyed by
+       the expected target class:
+
+           table:
+               name: `contextual.literal.value`
+               columns: class (value relation)
+               rows:
+                        None  `None.value`
+                        OK    `OK.value`
+                        false `false.value`
+                        true  `true.value`
+           end: `contextual.literal.value`
+
+           table:
+               name: `None.value`
+               columns: class (value char)
+               rows:
+                        int     0
+                        int8    0
+                        Boolean -1
+           end: `None.value`
+
+       A class-local row in the expected target table is preferred. The fallback
+       path is used only when the consumer still has an expected class but the
+       class table does not define a more local contextual value.
+
+    4. If the literal may appear as an expression atom, bind it through the
+       active expression profile, for example `expr.atom`:
+
+           table:
+               name: `expr.atom`
+               columns: class (ansi_c char) (emitter binding)
+               rows:
+                        None  None  lm_trans_expr_emit_contextual_literal
+                        OK    OK    lm_trans_expr_emit_contextual_literal
+           end: `expr.atom`
+
+    5. If the literal may be used as a statement receiver for contextual
+       assignment, bind the receiver vocabulary as ordinary namespace data:
+
+           table:
+               name: namespace
+               columns: class (receiver.type relation)
+               rows:
+                        None `receiver.statement`
+                        OK   `receiver.statement`
+           end: namespace
+
+           table:
+               name: `receiver.statement`
+               columns: class (receiver binding)
+               rows:
+                        None lm_trans_statement_emit_contextual_literal_assignment
+                        OK   lm_trans_statement_emit_contextual_literal_assignment
+           end: `receiver.statement`
+
+With those rows, `None: target`, `Boolean: flag OK`, a call argument containing
+`None` and `if: value = None` all use the same table-driven path. The syntax
+supplies the surrounding consumer; the registry supplies the contextual value.
+Adding another name such as `Red` or `Maybe` is another set of rows, not a
+parser change. Empty source cells in tables remain a separate table-loading
+concern and should be declared through `None.cell` when a typed empty cell must
+not materialize a row.
+
+`FORBIDDEN` is the standard explicit prohibition class/value. It is different
+from `None`: `None` is the typed empty/contextual value selected by the active
+table profile, while `FORBIDDEN` means the relation is present and explicitly
+denied.
+
+Adding a new class does not require adding it to every table. Missing cells
+become the resolver's empty result after the full lookup path is exhausted.
+
+The same information may be viewed through another table, for example a
+class-centered view:
+
+    table decimal
+
+              decimal          real             int
+    plus      decimal_plus     decimal_real_add decimal_int_add
+    minus     decimal_minus    decimal_real_sub -
+    equals    decimal_eq       decimal_real_eq  decimal_int_eq
+
+These are not separate semantic systems. They are convenient table layouts over
+terminal relation rows.
+
+Classes and tables may import other classes or tables. Import here means
+explicit table extension/overlay, not hidden copying of code or method bodies. A
+lookup first checks the importing table/class, then the explicitly imported
+bases according to the declared priority policy.
+
+Example:
+
+    table:
+        source
+        name: appEquals
+        import:
+            numericEquals
+            textEquals
+        priority:
+            numericEquals: 20
+            textEquals: 10
+        String:
+            String: string_eq
+    end: appEquals
+
+Multiple imports are allowed only when the import order or priority is
+explicit. If two imported bases provide the same cell:
+
+    same cell, same payload      -> duplicate, allowed or ignored;
+    same cell, different payload -> conflict unless priority/override admits it;
+    missing cell                 -> continue lookup in lower-priority bases.
+
+The same rule applies to class descriptors. A class may import another class to
+reuse field rows, validator rows, operation rows, authority rows or any other
+registry relation rows. The imported rows remain table data; no source-level
+method body is copied merely because a class imports another class.
+
+Any finite graph can be decomposed into binary tables by introducing
+intermediate keys. For an n-ary expression, the registry may use signature keys,
+partial tables or chained binary relations. This is a storage/resolution
+technique; source syntax remains ordinary LMX expressions.
+
+19.18.3. Registry Source and MIX Definitions
+
+The source of registry rows is LMX itself. An L2 module may select one or more
+`.lm2` registry/model dependencies before translating a target module:
+
+    predef:
+        "core/classes.lm2"
+        "core/operators.lm2"
+        "service/messages.lm2"
+    end: predef
+
+Those files are parsed as L2 modules. Direct `table:` and `join:` receivers on
+their module surface materialize source rows in the active RegistryView. They
+may use MIX bounded
+forms `{...}` to mark groups, documentation regions, visual clusters or active
+sets. MIX marks are not a separate metadata language; they are bounded LMX forms
+whose result goes to the MIX overlay stream.
+
+Example sparse registry source:
+
+    table:
+        name: equals
+        columns: class (decimal char) (int char)
+        rows:
+            decimal decimal_eq decimal_int_eq
+            int     int_decimal_eq int_eq
+    end: equals
+
+The translator/resolver must be able to consume such LMX/MIX definitions and
+load registry tables during L2 module construction. An L3 runtime may query or
+receive a validated RegistryView overlay, but it does not gain `predef` or
+direct source-table materialization. A runtime that needs new persistent source
+tables requests that work through a checked L2 service boundary.
+
+19.18.4. Expression Resolution
+
+An L3 expression is first a Structure. Class resolution does not change the
+source tree. It selects table cells.
+
+Algorithmically, this is a logical query against the active RegistryView. The
+resolver asks relation tables for coordinates such as operation, receiver,
+argument classes, result class, validators, effects, authority and executable
+binding. A SQL-like query is the simplest way to describe the required result,
+but the implementation may use linear arrays, hash tables, SQLite, generated C
+arrays or another equivalent resolver. Those structures are
+cache/materialized-view forms of the registry source tables, not the semantic
+authority.
+
+For:
+
+    a + b
+
+the resolver performs:
+
+    op = plus
+    row = class(a)
+    column = class(b)
+    cell = plus[row][column]
+
+If the full lookup path returns `None`, the expression is invalid in that
+registry unless the consuming receiver/profile explicitly admits `None`. If the
+selected cell is `FORBIDDEN`, the expression is rejected with an explicit
+prohibition diagnostic. If exactly one non-None cell is selected, the expression
+becomes resolved. If a table profile admits multiple candidates, priority/cost
+tables must reduce them to one candidate or report ambiguity.
+
+For a generic expression, some coordinates are initially unknown:
+
+    sum: xs
+
+The resolver derives requirements from the expression body, for example:
+
+    length[class(xs)]
+    at[class(xs)][index_class]
+    plus[element_type][element_type]
+    zero[element_type]
+
+Generic resolution is the process of filling those table coordinates with
+concrete classes and terminal cells. There is no special generic syntax required
+by this model.
+
+19.18.5. Terminal Cell Payloads and Descriptors
+
+A terminal cell is the payload returned by a registry table lookup.
+
+The lookup path is separate from the payload. For example:
+
+    plus[decimal][int] = decimal_int_add
+
+The table `plus` and the lookup keys `decimal` and `int` are already known from
+the lookup context. They are not mandatory fields of the returned cell payload.
+The returned payload is `decimal_int_add`.
+
+In an implementation view this may be represented as:
+
+    CellKey(table_id, key_id*) -> CellPayload(kind, payload)
+
+The key tuple selects the cell. The payload says what the selected cell means.
+
+The minimal normalized terminal cell payload has two fields:
+
+    kind
+        The payload kind.
+
+    payload
+        The value, binding, expression, table key, validator target, message
+        target or diagnostic Structure carried by the cell.
+
+Mandatory payload kinds are:
+
+    primitive
+        A primitive/scalar value, literal result or terminal L2/L1 lowering
+        payload admitted by the active profile. In early bootstrap tables many
+        final cells are primitive lowering payloads such as `"uint32_t"`,
+        `"sqrt"` or `"=="`.
+
+    binding
+        A reference to an executable or lowerable binding, such as an L2/L3
+        function/subroutine target, an L1/C symbol, an inline primitive lowering
+        rule or a generated trampoline.
+
+    descriptor
+        A registry descriptor. In this draft the only mandatory descriptor form
+        is a class/key reference: the cell names another registry class/key and
+        the resolver may continue through tables selected by the consuming
+        profile. Structured descriptor records, callable descriptor payloads,
+        provider descriptor records and other descriptor forms are reserved for
+        later revisions. A descriptor is the semantic entity or materialized
+        semantic view selected by the cell: it may summarize registry rows,
+        inferred facts, profile data and validation evidence. It is not merely a
+        table-walking cursor. If the payload exists only to continue lookup
+        through another table coordinate, use `tableKey`.
+
+    expression
+        An L2/L3 expression Structure admitted by the selected profile.
+        The resolver or executor consumes that expression after substitution or
+        further resolution.
+
+    tableKey
+        An intermediate registry class/key used to continue n-ary or graph
+        resolution through another table. A `tableKey` is resolver navigation
+        state, not the final semantic descriptor selected for execution,
+        validation or projection.
+
+    validator
+        A validator target or validation expression that may produce acceptance,
+        rejection, diagnostic information or stronger evidence.
+
+    messageTarget
+        A message/action target selected for a validated message expression.
+
+    diagnostic
+        A rejection, missing relation, ambiguity, conflict or profile-defined
+        diagnostic Structure.
+
+    None
+        The standard empty result of resolution. Missing row, missing column or
+        missing cell normalize to the resolver's empty result after the full
+        lookup path is exhausted. In table source, an intentionally empty cell
+        is expressed through `None.cell`.
+
+    forbidden
+        Explicit prohibition. `FORBIDDEN` is not an empty value; it means the
+        relation exists and is denied.
+
+    conflict
+        An explicit conflict marker produced by registry loading or resolution.
+
+A short source spelling may normalize directly to a payload. Examples:
+
+    table:
+        name: plus
+        columns: class (int char) (u32 char)
+        rows:
+            decimal decimal_int_add None
+            u32     None            plus_u32_u32_l2
+    end: plus
+
+may normalize conceptually as:
+
+    plus[decimal][int] -> CellPayload(descriptor, decimal_int_add)
+    plus[u32][u32]     -> CellPayload(descriptor, plus_u32_u32_l2)
+
+A terminal cell payload is not required to be a heavy record in source form. The
+payload atom may itself be a registry class/key. That class/key may then be
+used as a key into additional descriptor tables:
+
+    table:
+        name: `plus cell-->result`
+        columns: class (result char)
+        rows:
+            decimal_int_add decimal
+            plus_u32_u32_l2 u32
+    end: `plus cell-->result`
+
+    table:
+        name: effects
+        columns: class (effect char)
+        rows:
+            decimal_int_add pure
+            plus_u32_u32_l2 pure
+    end: effects
+
+    table:
+        name: level
+        columns: class (level char)
+        rows:
+            decimal_int_add L2
+            plus_u32_u32_l2 L2
+    end: level
+
+    table:
+        name: `implementation-->L2 lowering`
+        columns: class (symbol char)
+        rows:
+            plus_u32_u32_l2 "+"
+    end: `implementation-->L2 lowering`
+
+    table:
+        name: cost
+        columns: class (cost serial)
+        rows:
+            decimal_int_add 10
+            plus_u32_u32_l2 1
+    end: cost
+
+Therefore optional cell descriptor information may be stored inline, derived
+from the table and lookup keys, or stored in side tables. Common optional
+descriptor rows are:
+
+    result
+        Result class, result model, result table key or result expression.
+
+    effects
+        Pure/effect/action policy: pure, read-only, mutates receiver, sends
+        message, filesystem write or profile-defined effect.
+
+    level / visibleFrom
+        The level or profile where the payload is callable or lowerable.
+
+    validators / evidence requirements
+        Additional validators or evidence that must hold before the payload may
+        be consumed.
+
+    lifetime / ownership
+        Primitive value, owned result, borrowed result, moved result, external
+        handle, arena-owned result or another profile-defined memory policy.
+
+    authority / capability
+        Required permission, ticket, verifier or capability for message/action
+        cells.
+
+    priority / cost
+        Deterministic ranking information used when a profile admits multiple
+        candidate cells.
+
+    conflict policy
+        Duplicate, override, replace, prefer, reject or profile-defined conflict
+        handling.
+
+    diagnostic policy
+        Diagnostic code, severity and message produced for missing, rejected,
+        ambiguous or conflicting cells.
+
+    source / provenance
+        File, line, receiver, generated origin, builtin origin or imported
+        registry origin for diagnostics and incremental rebuilds.
+
+Provider/device descriptor rows may also be attached to binding payloads:
+
+    providerOf
+        The provider/device/profile that executes or lowers the payload.
+
+    binding
+        The concrete L2/L1/device/service binding selected for the payload.
+
+    precision
+        exact, bounded, approximate, calibrated, drifting or another
+        profile-defined precision policy.
+
+    latency
+        inline, slow, async, remote, cycles-counted or another profile-defined
+        execution-time policy.
+
+    determinism
+        deterministic, calibrated-deterministic, noisy, sampled or another
+        profile-defined repeatability policy.
+
+    confidence
+        none, flags, probability, u8 score or another profile-defined confidence
+        representation.
+
+    calibration
+        none, required, valid, expired, source-specific or another
+        profile-defined calibration state.
+
+    fallback
+        Alternative cells or payloads when the selected provider is unavailable,
+        rejected by policy, too expensive, insufficiently precise or below
+        required confidence.
+
+A diagnostic payload may be written explicitly:
+
+    table:
+        source
+        name: plus
+        decimal:
+            String:
+                diagnostic:
+                    code: incompatibleOperands
+                    message: "plus(decimal, String) is not defined"
+                end: diagnostic
+    end: plus
+
+A graph or n-ary relation may use a `tableKey` payload to continue resolution:
+
+    multiply[Matrix][Matrix] -> MatrixMultiplySignature
+    MatrixMultiplySignature[leftCols][rightRows] -> matrix_mul_impl
+
+The current bootstrap may still contain hardcoded ANSI C lowering for L2/L1
+surface forms. Those hardcoded rules are terminal cell payloads that have not
+yet been moved into registry tables.
+
+
+19.19. Message Pipeline Operators
+
+19.19.1. Message
+
+A message is a proposed, possibly effectful/action-capable LMX expression
+candidate addressed to a receiver. It may become an action after validation,
+but it is not concrete before validation, is not a transport packet and is not
+executed on arrival.
+
+It may be a full LMX subtree or a very small LMX subset. The language does not
+bake in a fixed restriction such as "one command only" or "no explicit classes".
+Those restrictions are policy decisions of the receiving side.
+
+A message expression may be as large as the receiver profile admits. Because
+the expression field is ordinary LMX, a message may contain nested expressions,
+deferred Structures, local descriptors, validators, calls, control receivers,
+MIX marks and other message-producing forms. These forms are not trusted merely
+because they appear in the message. They become executable only after
+validation/merge has reconciled them with the receiver registry and produced a
+ConcreteExpression / ExecutionPlan.
+
+There is no separate Smalltalk-style selector syntax required by the message
+model. The selector/call/receiver shape is already an LMX Structure. If a
+profile wants selector-like dispatch, it reads that Structure through registry
+tables during validation/merge. Message richness therefore comes from LMX
+itself, not from a second message mini-language.
+
+"Effectful/action-oriented" does not mean that every message must mutate
+something. A query, read request or validation-only request may also be a
+message. The point is that a message is capable of becoming an action after
+validation and execution-plan construction.
+
+Example:
+
+    message:
+        from: user42
+        to: ArchiveService
+        expression:
+            save:
+                file: "report.lmx"
+                mode: overwrite
+    end: message
+
+The message is proposed source data. It may carry a local mini-model, expected
+result/effect descriptors, payload data, context, capability claims or
+implementation references. These are claims, not authority and not executable
+code. HTTP, queues, sockets and files are only transport/storage envelopes for
+such proposed expressions.
+
+19.19.1.1. Message Body, External Structures and MIX Cursors
+
+A message expression may contain its body inline, but it is not required to do
+so. A message may also carry references, cursors, ranges or capabilities that
+identify external LMX Structures, MIX documents, storage objects or streamable
+body regions.
+
+Inline body:
+
+    message carries the Structure.
+
+External body:
+
+    message carries a cursor/reference/range/capability to a Structure.
+
+Streamed body:
+
+    cursor operations produce chunks, positions or projected Structures on
+    demand.
+
+Such external body references are ordinary LMX values. They are claims until
+validation/merge admits them. A receiver may validate the cursor, authority,
+range, lifetime and access mode before reading or writing the referenced body.
+
+The referenced body may be read incrementally. The core message model does not
+require the whole body to be present in one transport packet or one contiguous
+memory block. A profile may provide cursor-based access, chunked reading,
+chunked writing, range queries, lazy body loading or stream-like traversal.
+
+Example of a short semantic record that names a larger body:
+
+    message:
+        to: ReportService
+        expression:
+            process:
+                body:
+                    cursor: reportStore\flightLog\segment42
+                    range: current
+                    mode: readStream
+    end: message
+
+MIX-aware storage may support multiple cursors over the same document/body.
+Cursors expose the current attribute table, Structure context, active MIX sets
+and payload-local marks at their current position. Concurrent cursor use is a
+runtime/storage profile concern; the language-level rule is that cursor
+operations are ordinary validated LMX operations and may produce result/failure
+messages like any other expression.
+
+Therefore a small message may name or authorize a large body without carrying
+that body inline. Transport envelopes carry enough LMX to identify the proposed
+operation and its body references; the body itself may reside in a document
+store, MO/ROM storage, local cache, service object, stream or another
+profile-defined source. On slow links, the message frame can remain short while
+the semantic operation stays full LMX: the receiver reads the body only as
+needed and only through validated cursor operations.
+
+The core message model does not define a separate canonical wire-schema layer
+with built-in binary/text negotiation, schema-version migration, unknown-field
+compatibility, backward/forward/full compatibility modes, compression or
+encryption semantics. A message is already an LMX expression candidate. If a
+message contains archived, compressed, encrypted or externally encoded payload,
+the source must say so through ordinary LMX receivers, descriptors and registry
+tables:
+
+    expression:
+        archive\read:
+            compressedPart
+
+    expression:
+        decrypt:
+            ticket
+            encryptedPart
+
+    expression:
+        migrate:
+            oldPayload
+            targetClass
+
+Compatibility, migration and unknown-field policy are validator/merge rules of
+the receiving side. Compression, decompression, encryption, decryption,
+serialization and parsing are ordinary operations selected by tables and
+executed only after validation admits them. Content negotiation, when needed, is
+ordinary LMX data and table resolution, not hidden transport magic.
+
+Authorization is likewise not a transport-header convention. It is the
+auth/evidence model defined by the registry and validation pipeline. Message Threads
+follow that model by default: capability claims inside a message become
+authority only after validation produces authority evidence.
+
+19.19.2. Validator / Merge
+
+The validator merges the incoming message with the receiver registry. Message
+validation is expression resolution plus receiver-context, authority,
+effect/lifetime and implementation checks.
+
+The validator/merge stage is intentionally split into sub-stages. The exact
+implementation may fuse them, but the semantic outputs are distinct:
+
+    intake
+        Input message bytes, Structure or in-memory value become an
+        IncomingMessageStructure.
+
+    receiver registry selection
+        The target receiver, service, thread or object selects the applicable
+        receiver-local registry tables and produces a ReceiverRegistryView.
+
+    name resolution
+        Names, selectors, operation heads and referenced registry keys are
+        resolved in the selected view. Output: ResolvedNames.
+
+    signature/class resolution
+        Argument shape, class coordinates, conversions and overload candidates
+        are checked by table lookup. Output: CandidateExpression.
+
+    validator/evidence
+        Validator cells run or are checked. They may accept, reject, emit
+        diagnostics or create evidence. Output: ValidationEvidence.
+
+    authority
+        Sender identity, verifier/ticket/capability policy and authority tables
+        are checked. Output: AuthorityEvidence.
+
+    effects/lifetime
+        Effect policy, ownership, borrowing, move/copy and lifetime rules are
+        selected. Output: EffectLifetimePlan.
+
+    concrete-cell substitution
+        Abstract or unresolved operation references are replaced with concrete
+        terminal cells. Output: ConcreteExpression.
+
+    execution-plan construction
+        The concrete expression, evidence and lifetime/effect plan are packaged
+        into the executable unit accepted by the executor. Output:
+        ExecutionPlan.
+
+The validator does not execute the expression.
+
+Algorithmically, Validator/Merge is the small table-walking driver of the
+semantic core. It does not hardcode what `plus`, `authority`, `validator`,
+`payload` or `messageTarget` mean. It hardcodes only the general mechanics:
+
+    lookup;
+    payload-kind dispatch;
+    evidence accumulation;
+    conflict/priority handling;
+    dependency cycle and termination rules;
+    diagnostic construction;
+    execution-plan assembly.
+
+Everything domain-specific is represented by registry tables and terminal cell
+payloads.
+
+For example:
+
+    save(file: "report.lmx", mode: overwrite)
+
+may validate into:
+
+    impl: archive_save
+    args:
+        file: Path("report.lmx")
+        mode: SaveMode.overwrite
+    effects:
+        filesystem_write
+
+Validation is therefore not just yes/no. It builds the concrete expression and
+execution plan that the executor is allowed to run.
+
+19.19.3. Expression Executor
+
+The executor consumes only an ExecutionPlan produced by validation/merge. That
+plan may carry a ConcreteExpression, selected terminal cells, evidence and
+effect/lifetime rules.
+
+It does not decide which implementation is meant. It runs the implementation
+already selected by validation:
+
+    ExecutionPlan -> ExecutionContext -> result / failure
+
+The result produced here is an execution result inside the current execution
+context. It is not yet a reply message merely because it exists. The consumer of
+that result is defined by the surrounding context:
+
+    local expression context        -> value consumed by the caller/expression;
+    local rule/generator context    -> value consumed by generation rules;
+    message request with reply target    -> value wrapped as a reply ProposedMessage;
+    message request with no reply target -> value may be discarded, logged or consumed
+                                      by profile-defined local rules.
+
+Therefore the message-boundary reply mechanism does not require a separate source-level
+`return`. The ordinary L3 `return` receiver exits the current executable body
+and produces the declared result value. If that executable body was run as the
+implementation of a message request with a reply target, the message boundary
+wrapper
+turns the produced result into a reply message automatically.
+
+The executor may run:
+
+    an L2/L3 lowered function;
+    a service handler;
+    a scheduled message task;
+    a built-in runtime operation;
+    a diagnostic/failure action.
+
+19.19.4. Logical Message Generator
+
+After execution, logical rules may produce new messages. The generator is also
+table-driven.
+
+Example rules:
+
+    emit[SaveResult.ok][NotifyService] -> notify_saved
+    emit[SaveResult.fail][LogService] -> log_error
+
+The generator creates new proposed messages:
+
+    message:
+        to: NotifyService
+        expression:
+            saved:
+                file: "report.lmx"
+    end: message
+
+Those messages must still pass validation at their receiving side. Generation
+does not bypass the message model.
+
+Execution may also emit messages directly. A validated expression executed by
+a Message Thread may produce an ordinary result value, diagnostic, state update and
+zero or more outgoing ProposedMessage records. Generated messages are not
+trusted merely because they were generated by an execution step. They enter the
+same validation/merge, scheduling and execution pipeline as external messages.
+
+19.19.5. Standard Message Pipeline
+
+The standard high-level pipeline is:
+
+    IncomingMessage
+        -> intake -> IncomingMessageStructure
+        -> receiver registry selection -> ReceiverRegistryView
+        -> name resolution -> ResolvedNames
+        -> signature/class resolution -> CandidateExpression
+        -> validator/evidence -> ValidationEvidence
+        -> authority -> AuthorityEvidence
+        -> effects/lifetime -> EffectLifetimePlan
+        -> concrete-cell substitution -> ConcreteExpression
+        -> execution-plan construction -> ExecutionPlan
+        -> Executor
+        -> Result / Failure
+        -> Boundary Result Consumer
+        -> Logical Message Generator
+        -> New IncomingMessage(s)
+
+This replaces the older wording where message validation and message execution
+were too close together.
+
+
+19.20. Structural Descriptor Operators
+
+On a direct L2 module surface, descriptor receivers may materialize
+source rows. In L3, an admitted descriptor/message receiver creates only a
+transient candidate or evidence overlay; ordinary validation must accept it
+before it affects the active RegistryView. L3 never invokes the source-table
+materializer. Thread-local overlay lifetime is defined in section 19.28.2.1.
+
+19.20.1. Model Definitions
+
+Structural model declarations describe registry table rows under the profile
+rule above.
+
+Example:
+
+    Circle:
+        f64: radius
+        Point: center
+    end: Circle
+
+normalizes to rows such as:
+
+    class Circle
+    field[Circle][radius] = f64
+    field[Circle][center] = Point
+
+No separate "slot" concept is required by the language. A source field may lower
+to a physical C field, a property accessor, a computed projection or another
+profile-defined representation.
+
+19.20.2. Normalized Model Descriptor
+
+A normalized descriptor is a table view over a source structure:
+
+    model name;
+    field names;
+    field declared classes;
+    default values;
+    validators;
+    ownership/lifetime policy;
+    lowering policy.
+
+These rows are consumed by the resolver, validator, serializer, IDE and
+lowering profile.
+
+19.20.3. Union and Variant Membership
+
+Union descriptors are relation tables:
+
+    member[Shape][Circle] = true
+    member[Shape][Rectangle] = true
+
+Dispatch over a union is a table query. A generic operation over a union is
+complete only when the required operation has cells for all admitted variants,
+or when a profile defines a fallback cell.
+
+19.20.4. Generated Rows and Extension Policy
+
+Descriptors generate L2 source rows or validated transient L3 overlay rows.
+Extension is table insertion under the active receiver policy. Conflict policy
+is table policy:
+
+    same key, same terminal value      -> duplicate, allowed or ignored;
+    same key, different terminal value -> conflict unless an override table
+                                         explicitly admits it;
+    missing row/column/cell            -> relation absent.
+
+
+19.21. Operation Tables, Operators and Receivers
+
+19.21.1. Operation Dispatch as Tables
+
+Message-operation dispatch is not object magic. It is a set of tables mapping
+receiver/class and selector/expression shape to concrete implementations.
+
+Example:
+
+    draw[Circle][Canvas] = draw_circle_on_canvas
+    draw[Button][Canvas] = draw_button_on_canvas
+
+An object may physically contain a class descriptor or may be statically known.
+Both cases select table cells.
+
+19.21.2. Receiver Registration
+
+A receiver/operator is a registry entry that tells the resolver how to interpret
+a head/operator in a given context.
+
+Current bootstrap receivers such as:
+
+    fn
+    fm
+    sub
+    if
+    while
+    return
+    synchronized
+    c.*
+    @
+    \
+    []
+
+may still be implemented directly in L2/L1. In the high-level model they are
+operation table entries with terminal lowering rules.
+
+19.21.3. Generic Operations
+
+A generic operation is an expression with unresolved table coordinates. It is
+not a separate language mechanism.
+
+Example:
+
+    x = y
+
+requires:
+
+    equals[class(x)][class(y)]
+
+The result class and implementation are read from the selected cell.
+
+19.21.4. Conditional Forms
+
+Conditional forms are expressions with control-lowering cells.
+
+In registry-resolution contexts, `if` may select descriptor/table rows. In L3
+message, configuration or startup contexts, it may select executable
+expressions. The syntax is the same; receiver consumption changes.
+
+
+19.22. Registry Evidence and Validation Operators
+
+19.22.1. Row Store Rule
+
+All descriptor, operation-dispatch, validation, message and authority
+information may be stored as rows in registry tables.
+
+Examples:
+
+    field[Circle][radius] = f64
+    plus[u32][u32] = plus_u32_u32_l2
+    equals[String][String] = string_equals
+    validator[LightPassenger][Person] = check_weight
+    accepts[ArchiveService][save] = save_message_validator
+    authority[user42][ArchiveService.save] = allowed
+
+19.22.2. Evidence
+
+Evidence is the current set of rows proving that an expression has been
+resolved, validated or authorized.
+
+Evidence may be compile-time or runtime. A validator creates evidence when it
+successfully resolves a message or value against the receiving registry.
+
+19.22.3. Validator Evidence
+
+A validator is an expression/table cell that checks data and may create more
+specific evidence rows:
+
+    validator[LightPassenger][Person] = check_weight
+    guarantee[LightPassenger][weight] = "<80"
+
+If validation succeeds, later expressions may use the stronger table coordinate
+`LightPassenger`.
+
+A validator is not required to be a boolean predicate. It may produce:
+
+    acceptance;
+    rejection;
+    diagnostic;
+    stronger evidence;
+    obligation for a later stage;
+    tableKey for continued resolution;
+    conflict/None/FORBIDDEN payload.
+
+Validator dependencies are ordinary registry graph dependencies. The
+Validator/Merge driver must therefore define cycle detection, memoization of
+evidence and termination/diagnostic rules, but it does not need custom
+semantics for each validator class.
+
+Projection validators are ordinary validators. For example, a hosted C99
+profile may expose `c99.ub.policy` rows for dangerous projection patterns and
+`profile.validator` rows for concrete checks such as formatted-output argument
+validation. These rows are profile vocabulary, not a separate hidden C static
+analyzer inside the language core.
+
+19.22.4. Evidence Lifetime
+
+Evidence is valid only while the rows and memory state that produced it remain
+valid. If a value mutates, moves across an owner boundary or loses authority,
+dependent evidence is invalidated.
+
+
+19.23. Entry Composition and Conflict Operators
+
+19.23.1. Entry as Table Bundle
+
+An entry such as `Button`, `Circle`, `ArchiveService` or `equals` is a bundle of
+table rows, not a class hierarchy node with hidden copied-code semantics.
+
+Composition means adding rows under one or more tables.
+
+19.23.2. Import / Provides / Satisfies
+
+`import`, `provides` or `satisfies` do not merge arbitrary implementations.
+They add relation rows:
+
+    provides[Array][Indexed] = true
+    provides[Array][Sized] = true
+
+The concrete model owns representation and primitive operations. External
+roles/contracts are derived views over those operations.
+
+19.23.3. Conflicts
+
+Conflicts are table conflicts. If two rows compete for the same key and no
+priority/override table resolves them, the resolver reports ambiguity.
+
+There is no implicit "last wins" rule.
+
+
+19.24. Consumption and Query Operators
+
+19.24.1. Procedural Consumption
+
+Procedural consumption runs a resolved expression in an execution context. It
+is the executor stage of the message pipeline when the expression originated in
+a message.
+
+19.24.2. Object/Event Consumption
+
+Object/event consumption is message validation plus execution against a target
+registry and state owner.
+
+19.24.3. Functional/Expression Consumption
+
+Functional consumption is resolution of expression cells without requiring a
+stateful receiver. If all selected cells are pure, the expression is pure.
+
+19.24.4. Logical Consumption
+
+Logical consumption derives new rows or new messages from existing rows and
+results. It belongs to the logical message generator.
+
+19.24.5. Query, Rules and Unification
+
+Rules are expressions over registry tables. A rule may introduce temporary
+variables, perform table lookup, rank candidates and emit rows. The same syntax
+can be used by the interpreter/resolver and by ordinary L3 code.
+
+
+19.25. Lowering, Provider and Codec Operators
+
+19.25.1. Pipeline
+
+The high-level pipeline is:
+
+    source LMX
+        -> P0 Structure
+        -> registry table loading
+        -> expression resolution
+        -> ExecutionPlan
+        -> execution or L1/L0 lowering
+
+The current bootstrap may merge some of these steps in ANSI C. That is an
+implementation stage, not the high-level model.
+
+19.25.2. File Extensions and Level Semantics
+
+`.lm2` modules may add registry/configuration rows and use low-level
+construction receivers. `.lm3` modules may describe safe messages, services,
+runtime policy, startup and query rules. The extensions select safety profiles,
+not separate registry or message levels.
+
+19.25.3. Arguments and Return Lowering
+
+Argument and return handling is table-driven:
+
+    parameter_shape[fn][...] -> lowering rule
+    return_shape[fm][...] -> result structure rule
+
+The source rule remains that Structures are data. A Structure is lowered as a
+call only when the resolver selects a function/procedure/receiver cell for it.
+
+19.25.4. ANSI C Projection
+
+ANSI C projection is a lowering table family. Cells may lower to:
+
+    C type name;
+    C function call;
+    inline C operator;
+    C struct field;
+    pointer access;
+    raw `c.*` surface.
+
+`c.*` is a permanent door to the ANSI C namespace/surface. It is not a normal
+Lingvamyxa namespace lookup. L2 registry-source tables intended for L3
+consumption should not use `c.*` spellings as registry classes/keys. Use a
+registry class/key such as `sqrt_ansi_c` or `plus_u32_u32_l2`, then map that
+class/key through an L2/L1
+lowering table to a primitive symbol or lowering payload such as `"sqrt"` or
+`"+"`.
+
+19.25.5. Provider and Device Profiles
+
+External libraries, native services, device boards and remote modules are
+provider profiles over registry bindings. They are not part of the source
+syntax and not semantic parents of the language.
+
+A provider may be:
+
+    CPU/L1 primitive lowering;
+    ANSI C library binding;
+    bundled bootstrap library such as GMP, MPFR, decNumber, PCRE2, SQLite,
+    yyjson, libcurl, CivetWeb, libsodium or another hosted library;
+    generated L2/L3 executable;
+    analog, photonic, routing, neural or ROM-backed device module;
+    remote service binding.
+
+The same source expression may resolve to different terminal cells in different
+RegistryViews. For example:
+
+    table:
+        name: sqrt
+        columns: class (result char) (implementation char)
+        rows:
+            BigFloat BigFloat sqrt_mpfr
+            fixedQ16 fixedQ16 sqrt_ana
+            f64      f64      sqrt_ansi_c
+    end: sqrt
+
+    table:
+        name: `implementation-->L2 lowering`
+        columns: class (symbol char)
+        rows:
+            sqrt_mpfr   "mpfr_sqrt"
+            sqrt_ana    "ana_sqrt"
+            sqrt_ansi_c "sqrt"
+    end: `implementation-->L2 lowering`
+
+    table:
+        name: providerOf
+        columns: class (provider char)
+        rows:
+            sqrt_mpfr MPFR
+            sqrt_ana ANA_SQRT
+            sqrt_ansi_c CPU_C_Libm
+    end: providerOf
+
+On a hosted bootstrap machine, `ANA_SQRT` may be simulated by an ANSI C wrapper
+around libm or MPFR. On another target, the same provider entry may lower to a
+physical analog board instruction. The source-level `sqrt` expression does not
+change; only the registry view and provider bindings change.
+
+The resolver/validator must treat provider selection as ordinary table
+resolution:
+
+    operation table chooses a semantic cell;
+    terminal cell payload names a binding;
+    provider side tables describe who/what executes that binding;
+    validator checks effects, authority, precision, latency, determinism,
+        confidence, calibration, lifetime and fallback policy;
+    ExecutionPlan fixes the selected binding so hot execution does not resolve
+        provider choice again.
+
+This discipline lets heavy hosted libraries act as earth-bootstrap surrogates
+for heterogeneous expansion boards without making those libraries part of the
+language. Examples:
+
+    MPFR / GMP / decNumber  -> high-precision math providers;
+    FFTW / BLAS / LAPACK    -> signal/matrix provider surrogates;
+    PCRE2                   -> pattern/matcher provider;
+    SQLite                  -> registry/storage provider;
+    yyjson                  -> external adapter provider;
+    libcurl / CivetWeb      -> transport/service envelope providers;
+    libsodium               -> crypto/auth provider.
+
+Direct `c.*` calls remain possible in L2/L1 substrate code, but ordinary L3
+semantics should go through registry cells and provider validation. Removing
+MPFR and installing an `ANA_LOGEXP` provider should not require rewriting the
+source expression; it should require changing provider rows, bindings and
+RegistryView policy.
+
+19.25.6. Codec and Persistence
+
+`toLmx` and `fromLmx` are operation tables. All language values, including
+primitive values and low-level handles admitted by a profile, should have
+explicit codec rows if they are serializable.
+
+Persistent registry rows may be stored as LMX files, generated database rows
+or cached binary indexes. LMX remains the source form.
+
+Portable persistence is structural LMX serialization, not memory imaging. A
+runtime may materialize structures in memory using whatever representation the
+selected L1 substrate provides, but a portable persistent form records admitted
+LMX Structures, registry rows, messages, evidence and Message Thread logical state
+through codec receivers such as `toLmx` and `fromLmx`. Raw process memory,
+allocator state, native handles, alignment, endian order and ABI layout are not
+portable LMX state unless a profile admits an explicit codec for them.
+
+Binary serialization, if introduced, is a profile-specific codec. Endian and
+binary layout belong to that codec profile, not to ordinary LMX source
+semantics.
+
+
+19.26. Registry and Message Operator Examples
+
+Examples in this section are illustrative. They must be read as registry table
+definitions plus expressions, not as special syntax.
+
+Example operator cell:
+
+    table:
+        name: equals
+        columns: class (u32 char) (decimal char)
+        rows:
+            u32     u32_eq None
+            decimal None decimal_eq
+    end: equals
+
+Example L3 conditional route:
+
+    route:
+        when:
+            equals[userRole][admin]: true
+        send:
+            to: AdminService
+            expression:
+                openPanel
+    end: route
+
+
+19.27. Registry and Message Open Points
+
+Open points for this integrated operator model:
+
+    exact optimized storage layout for CellKey -> CellPayload and optional side tables;
+    whether the first registry backend is hash tables, SQLite or both;
+    resolver ranking/ambiguity defaults;
+    how much of current L2 hardcoded lowering moves into registry tables first;
+    exact MIX bounded-form storage in overlay documents;
+    standard diagnostic format for failed table lookup.
+
+
+19.28. Message Thread and Runtime Operators
+
+19.28.1. Scope
+
+A Message Thread is a minimal LMX machine:
+
+    isolated state tree;
+    local registry view/cache;
+    message queue;
+    validator/merge stage;
+    executor;
+    logical message generator;
+    local memory owner.
+
+It is not necessarily an operating-system thread.
+
+19.28.2. Message Thread
+
+A Message Thread owns:
+
+    root state;
+    local arenas/owner tree;
+    current ExecutionContext;
+    inbox/outbox queues;
+    registry view;
+    validator and executor policy;
+    diagnostics/failure state.
+
+No raw mutable reference owned by one Message Thread may point directly into another
+Message Thread in the default profile.
+
+19.28.2.1. Message Thread Registry View and Cache
+
+A Message Thread does not own a complete global registry. It owns a local
+RegistryView and may own a RegistryCache.
+
+The RegistryView is an overlay/import/cache view over registry sources such as:
+
+    builtin/core tables;
+    module tables;
+    service tables;
+    device/profile tables;
+    imported base registry tables;
+    thread-local rows;
+    runtime evidence rows.
+
+Lookup, validation and execution-plan construction are performed against the
+current RegistryView. The view may cache selected cells, resolved names,
+validator evidence, authority evidence, lowered bindings and ExecutionPlans.
+The cache is an implementation optimization and does not define a separate
+namespace, class universe or type system. It is a materialized view of registry
+tables selected by import/overlay/profile policy.
+
+Persistent registry sources may live in LMX files, ROM/MO records, generated
+database rows, server-side registry storage or cached binary indexes. A small
+node is not required to keep all persistent rows in RAM. It may keep only the
+active view and the cache entries required by its current messages, services and
+handlers.
+
+Local transient rows and evidence may be added by the Message Thread according to
+the active profile. They are local overlays unless explicitly exported through a
+validated registry-change message or another admitted persistence operation.
+
+Registry changes may invalidate affected cached rows or emit registry-change
+messages according to the reactive registry profile.
+
+19.28.3. Root State and Handler Frame
+
+Root state is durable state owned by the Message Thread.
+
+A handler frame is created when a validated message is executed. It owns local
+temporary state, cleanup entries and diagnostic context.
+
+19.28.4. Cleanup and Control Exit
+
+Cleanup is local to the current handler/frame/thread owner. Control exits such
+as `return`, `fail`, `break`, `continue` and cancellation must run registered
+cleanup before the owner is cut or reused.
+
+19.28.5. Message Structure
+
+Message states:
+
+    IncomingMessage / ProposedMessage
+    CandidateMessage / CandidateExpression
+    ConcreteExpression / ExecutionPlan
+    ScheduledMessage
+    ExecutedMessage
+    FailedMessage
+
+`ConcreteMessage` or `CandidateMessage` may be used as an implementation name
+for a message after class/signature resolution but before all authority/effect
+validation has completed.
+
+19.28.6. Transfer Modes and Borrowed Payloads
+
+Across Message Thread boundaries, payloads cross by:
+
+    copy;
+    serialization;
+    whole-branch ownership transfer;
+    immutable/shared profile handle.
+
+A borrowed raw reference may not cross into another Message Thread as a raw mutable
+reference.
+
+19.28.7. Queue, Scheduling and Dispatch
+
+A Message Thread processes messages through the standard pipeline:
+
+    dequeue
+    validate/merge
+    execute
+    generate outgoing messages
+    run local collection safe point
+
+Dispatch is a registry query, not object magic.
+
+The execution step may produce result values, diagnostics, state updates and
+outgoing ProposedMessage records. Outgoing records re-enter the same message
+pipeline at their receiving side.
+
+Core message semantics are intentionally smaller than broker/runtime policy:
+
+    message = proposed, potentially executable/action-capable expression;
+    validation/merge -> ExecutionPlan;
+    execution -> result / failure;
+    boundary -> reply/failure message to caller, reply target or continuation.
+
+The core language does not require a broker-style acknowledgement, dead-letter
+queue, topic partition, consumer group, transport retry scheduler or supervision
+tree as generic message semantics. A message is considered semantically handled
+when execution produces its result or failure, just as a local function call is
+handled when it returns a value or failure. The boundary difference is only that a
+boundary may wrap that result or failure into an ordinary message record.
+
+Delivery, ordering, scheduling, supervision and observability policies are
+runtime/profile/library concerns around accepted message execution. Examples:
+
+    FIFO or priority ordering;
+    one message at a time or interleaving;
+    queue capacity and overflow policy;
+    transport retry after transport/runtime failure;
+    pause, resume or cancellation;
+    Message Thread restart or termination policy;
+    diagnostics, audit, trace, metrics and event history.
+
+Such policies may be described by registry tables and may themselves emit
+diagnostics or messages, but they are not the meaning of a source message. In
+particular, a semantic failure is normally returned to the sender, reply target
+or continuation as a failure message. If that target is absent, expired or
+unreachable, the situation belongs to runtime/delivery policy, not to the core
+message expression semantics.
+
+19.28.7.1. Autonomous / Constrained Message Profiles
+
+Some profiles need more than generic message execution. Autonomous, low-power,
+high-latency, degraded-link, safety-critical or heterogeneous-device systems
+may define domain message profiles with explicit tables for command lifecycle
+and physical limits.
+
+These features are not implied merely because a message is full LMX. A full LMX
+message can express algorithms, nested Structures and calls, but it does not by
+itself define command identity, freshness, physical units, safety budgets,
+idempotence, replay policy or degraded-mode behavior. Those are ordinary
+registry/message/profile relations consumed by validation/merge and execution.
+
+Typical profile rows include:
+
+    commandId / correlation / dedupKey
+        Identity rows used to recognize the same proposed operation again.
+
+    idempotent / duplicatePolicy / retryPolicy / replayPolicy
+        Whether repeated admission is allowed, rejected, coalesced, answered
+        from an earlier result, replayed from a decision log, or repaired by a
+        profile-defined recovery expression.
+
+    resource budgets
+        energy, memory, bandwidth, time, storage wear, heat, actuator cycles
+        or other profile-defined limits.
+
+    freshness
+        sampledAt, validUntil, staleAfter, calibrationValidUntil and related
+        evidence windows.
+
+    units and frames
+        physical units, coordinate frames, sensor frames, map frames and
+        conversion evidence.
+
+    uncertainty / evidence
+        confidence, errorBound, distribution, source, calibration, provenance
+        and validator-produced evidence.
+
+    plan mode
+        propose, validateOnly, execute, recordResult or another explicit
+        command lifecycle stage.
+
+    effect fences
+        mayRead, mayWrite, mayMove, mayTransmit, mayHeat, maySpendEnergy,
+        mayOverwrite, mayWakeDevice and similar effect bounds.
+
+    degradation
+        minimumMode, degradedMode, safeMode, fallbackProvider and
+        emergencyBinding.
+
+    decision log classes
+        observed, decided, executed, failed, repaired and replayed.
+
+    local-first conflict
+        localTruth, importedTruth, conflict, mergeEvidence and authoritySource.
+
+A semantic replay is different from a transport resend. A transport resend is a
+delivery/runtime policy around the envelope. A semantic replay is an ordinary
+validated LMX operation that reconstructs, repeats, repairs or answers an
+accepted command according to idempotence, evidence, authority, freshness and
+effect tables. It may use decision-log rows and previous result/failure
+messages, but it is still a proposed expression until validation/merge admits
+it.
+
+This does not introduce a second `retry` semantics. L3 already has
+`retryable` / `retry` as ordinary control receivers: `retryable` creates a
+restartable local execution frame, and `retry` re-enters the nearest or named
+retryable frame after the appropriate cleanups. An autonomous profile may use
+that L3 mechanism inside a concrete plan, for example with retryBudget,
+retryLimit, backoff, provider fallback or degraded-mode rows. Message replay is
+larger: it may construct or admit a new ProposedMessage or recovery expression
+from command identity and decision-log evidence. Transport retry is smaller:
+it resends an envelope without changing the source expression semantics.
+
+Likewise, a duplicate command is not handled by a hidden broker rule. The
+selected duplicatePolicy may reject it, return the previous result, merge it
+with an active operation, enqueue a repair expression, or allow another
+execution if the command is declared idempotent and the relevant evidence still
+holds.
+
+This keeps the boundary clean:
+
+    message-as-LMX
+        gives the executable proposed expression;
+
+    autonomous/constrained profile tables
+        give identity, budgets, freshness, uncertainty, replay/idempotence,
+        effect fences, degradation and decision-log policy;
+
+    validator/merge
+        turns the candidate plus profile rows into a concrete plan or a
+        diagnostic;
+
+    executor
+        runs only the concrete plan and records result/failure/evidence rows
+        according to the selected profile.
+
+19.28.8. Reply, Future, Failure and Continuation
+
+Replies and futures are message records. Failures crossing a Message Thread
+boundary are data messages, not hidden exceptions.
+
+A result crossing a Message Thread or service boundary is represented as a message.
+If a request contains a reply target, future, continuation or correlation id,
+the value returned by the executed expression is wrapped into a reply message
+addressed to that target. A failure is wrapped into a failure message. Reply
+and failure messages are ordinary message records and must pass the normal
+validation rules of the receiving side.
+
+This wrapping is automatic at the message boundary. It is not a second
+source-level `return` form. Keep the following meanings separate:
+
+    L3 executable return
+        `return` / `return: value` exits the current executable body and
+        produces the declared local execution result.
+
+    computational injection
+        a pure/monadic "return" notion, if a profile needs it, should be named
+        `pure`, `unit` or another profile-defined receiver. It injects a value
+        into a computational context; it is not the L3 control-exit receiver.
+
+    message-boundary reply wrapping
+        a produced result is wrapped as a reply ProposedMessage only when the
+        executing message boundary supplies a reply target, future,
+        continuation or correlation id.
+
+If a message has no reply target and no profile rule consumes the result, the
+result is not forced into a hidden reply. The profile may discard it, log it,
+use it for local generation rules, or report that the message kind must declare
+a result destination. The important rule is that crossing the boundary uses an
+ordinary message record, not a hidden call-stack return.
+
+A reply payload may itself be a Structure, callable descriptor, callable
+reference, residual executable or future/continuation record, if the receiving
+side admits that payload by its normal validation rules. The message boundary
+does not inspect such a value as "code to run" merely because it is callable. It
+wraps the produced result as data; the receiver decides later whether that data
+is executable, callable, storable, displayable or invalid.
+
+`async`, `await` and `yield`, if present, are scheduling expressions that create
+or consume message/continuation records. `yield` is the sequence-oriented lazy
+production protocol: it produces one value, records resume state and lets a
+consumer such as `next`, `each`, `awaitNext` or a message scheduler request a later
+step. This does not imply global non-strict evaluation for every expression.
+Deferred single values, futures and streams are ordinary descriptor/receiver
+profiles over the same message/continuation model.
+
+19.28.9. Determinism and Atomic Operations
+
+Default deterministic message-runtime profile:
+
+    one active handler per Message Thread;
+    no shared mutable raw references across Message Threads;
+    communication by messages;
+    explicit lower-level synchronization only in admitted L2 profiles;
+    L3 synchronization, when provided, uses checked Message Thread or
+    high-level coordination receivers.
+
+Atomic operations are low-level implementation operations, not a replacement for
+ordinary messages.
+
+19.28.10. ANSI C Lowering and Boundaries
+
+A C99 runtime may represent a Message Thread as a structure containing:
+
+    root state pointer;
+    queue;
+    registry view pointer;
+    current execution context;
+    owner/arena graph;
+    scheduler fields.
+
+The source-level rule remains message isolation, even if the runtime maps many
+Message Threads onto fewer OS threads.
+
+
+19.29. Ownership and Memory Operators
+
+19.29.1. Core Rule
+
+Memory is region/owner oriented. Message Threads own isolated arena graphs. No raw
+mutable reference crosses a Message Thread boundary in the default model.
+
+19.29.2. Branch Arenas and Owners
+
+An owner may be a branch, frame, handler, module state or Message Thread root.
+Borrowed values are valid only inside the owner/lifetime that produced them.
+
+Ownership policy is table data:
+
+    ownership[array_new] = returns_owned
+    ownership[array_at] = returns_borrowed
+    transfer[Message.payload] = copy
+
+19.29.3. Message Boundary
+
+An inter-thread message boundary is a memory boundary. A payload that must survive in the
+receiver is copied, serialized or transferred as a whole owned branch.
+
+19.29.4. Local Collection
+
+Collection is local to one Message Thread. It may run at message boundaries,
+control-exit safe points, retry points, diagnostics and thread termination. It
+does not stop other Message Threads.
+
+19.29.5. Immutable and Low-Level Resources
+
+Immutable/shared and externally managed resources are explicit low-level
+profile objects. They are not ordinary mutable message-runtime branches. L3 code sees typed
+handles, descriptors or messages.
+
+
+19.30. Reactive Registry and Query Receivers
+
+19.30.1. Reactive Layer
+
+Registry changes may produce events. Events are messages. Query receivers run
+inside Message Threads and consume registry tables through the same message pipeline.
+
+19.30.2. Agent Candidates
+
+An agent receiver may propose candidate rows or candidate messages. A validator
+must accept, reject or rank the candidate before it becomes effective.
+
+19.30.3. Boundaries and Bootstrap
+
+Reactive registry processing obeys Message Thread memory/message boundaries. A
+minimal bootstrap may implement only:
+
+    row inserted;
+    query receiver;
+    candidate row;
+    validation;
+    accepted row.
+
+
+19.31. HTTP, Service and Transport Operators
+
+19.31.1. Status
+
+HTTP Lingvamyxa REST is a built-in service transport profile. It is not the
+core execution model.
+
+19.31.2. Service Instance
+
+A service instance is a bundle of Message Threads connected by standard messages.
+The bundle is not a shared mutable heap.
+
+19.31.3. HTTP to Message
+
+HTTP request handling is:
+
+    HTTP request
+        -> route table lookup
+        -> IncomingMessage
+        -> receiver validator/merge
+        -> executor
+        -> result/failure message
+        -> HTTP response mapping
+
+Routes are registry rows. External HTTP data becomes an LMX message before
+service dispatch.
+
+19.31.4. Serialization, Client/Server and Service Boundaries
+
+Serialization adapters are codec operation tables. HTTP client/server adapters
+are services or hosted native adapters that inject messages into Message Threads.
+Service boundaries obey the same memory and authority rules as Message Thread
+boundaries, with stronger default isolation for remote input.
+
+
+19.32. Authentication and Authorization Operators
+
+19.32.1. Status
+
+Authentication and authorization are not a separate role system. They are
+registry tables, validators and evidence attached to a message flow.
+
+19.32.2. Primary Credential and Verifier
+
+A verifier is a protected table cell/value that can validate a primary
+credential without storing the credential itself.
+
+The default password verifier may use libsodium password hashing in the C99
+runtime profile.
+
+19.32.3. Default Installation Credential
+
+A fresh installation may have a system user name and an empty primary password.
+This is not global security policy. It is the default verifier table state. A
+user or administrator may replace it with a stronger verifier.
+
+19.32.4. Verifier Realms and Protected Objects
+
+Protected objects may have their own verifier realm:
+
+    protected module;
+    protected service;
+    protected archive;
+    protected directory;
+    protected administration operation.
+
+Password reset may reset an access verifier to an empty/default state. It does
+not recover separately encrypted content whose key depended on the old verifier.
+
+A protected object may require:
+
+    one verifier;
+    multiple verifiers for one user;
+    a quorum of users/sessions;
+    creator-parent tracking.
+
+Parent/creator rows do not grant content rights by themselves.
+
+19.32.5. Delegated Ticket
+
+After primary credential validation, the runtime may issue a delegated ticket
+for a module or service. The ticket is represented as table/evidence data:
+
+    ticket[user][module] = ticket_id
+    ticketAuthority[ticket_id][operation] = allowed
+    ticketExpiry[ticket_id] = time
+
+Changing or resetting the primary verifier invalidates dependent tickets by
+table policy.
+
+19.32.6. External Authentication Modules
+
+OAuth or OS-login modules are ordinary L3 modules that can obtain authority
+only through validator/evidence rows admitted by the receiver. They do not
+replace the core verifier table. They may request or receive delegated tickets
+after the primary policy allows it.
+
+19.32.7. Authentication Evidence Rows
+
+Authentication validation emits evidence:
+
+    authUser[flow] = user
+    authVerifier[flow] = verifierRealm
+    authTicket[flow] = ticketId
+    authority[flow][operation] = allowed
+    guarantee[flow] = sessionQuorumSatisfied
+
+Message validators may require these rows before producing a ConcreteExpression
+or ExecutionPlan.
+
+19.32.8. ANSI C / libsodium Runtime Sketch
+
+A C99 runtime profile may use libsodium for:
+
+    password hashing/verifier creation;
+    random ticket material;
+    constant-time comparisons;
+    secure memory helpers where the runtime owns the memory region.
+
+UI password entry is outside libsodium's control unless the UI layer is also
+implemented with memory handling that the runtime owns.
+
+19.32.9. Standard Statement
+
+Authentication is a validation/evidence layer over the message pipeline.
+
+    credential/verifier -> validator -> authority evidence -> message validation
+
+Authorization is table lookup over that evidence. It is not a separate global
+role hierarchy.
+
+
+19.33. Operator and Runtime Summary
+
+This integrated model reduces to these rules:
+
+    class = named registry form/table/key;
+    table named X = descriptor/source table for class/key X when present;
+    table class = index/classification relation, not the only class source;
+    class/table import = explicit table import/overlay with priority/conflict policy;
+    table row/column/cell = relation;
+    missing row/column/cell = no relation;
+    strict classification = registry data;
+    analytical typing = registry queries during static stages and message runtime;
+    analytical engine = active machine over L2/L3 Structures, RegistryViews and
+                  message queues, not another source level;
+    registry analysis = knowledge/classification/derived decisions queried by
+                  L2/L3 expressions and messages;
+    rules/unification/backtracking/resolution = admissible registry analysis
+                  mechanisms over facts and derived relations;
+    type/class resolution = logical query over the active registry view;
+    in-memory registry rows/indexes/caches/SQLite = materialized views, not semantics;
+    expression = Structure requiring table cells;
+    message = proposed possibly effectful/action-capable LMX expression candidate;
+    message expression = ordinary LMX admitted by receiver policy;
+    validation = staged merge from IncomingMessageStructure to ExecutionPlan;
+    executor = run only ExecutionPlans produced by validation/merge;
+    provider = registry-described executor/lowering backend, not language syntax;
+    autonomous/constrained profiles = explicit tables for budgets, freshness,
+                uncertainty, idempotence/replay, effect fences, degradation and
+                decision logs;
+    L3 retry/retryable = local execution-frame restart, not transport resend;
+    generator = create proposed messages from result/state/table rules;
+    L3 return = executable-body control exit producing local execution result;
+    message-boundary reply = boundary wrapper from result/failure to ordinary message record;
+    Message Thread = minimal isolated LMX machine that receives, validates, executes
+                and sends messages;
+    local RegistryView = overlay/import/cache over persistent registry sources,
+                      not a full per-thread registry copy;
+    memory/auth/service rules = table/evidence policies over the same pipeline.
 
 20. L2 Primitive, Address and Parser Operators
 
@@ -8551,9 +10456,9 @@ keeps `u32: x` simple while preventing an embedded record from silently becoming
 a copyable whole-Structure expression.
 
 This section is the L2-specific low-level operator/parser-form surface. It is
-not part of ordinary L3. In this sense L3 is smaller than L2: L3 keeps the safe
-algorithmic/control surface admitted by its profile, but does not inherit raw
-storage, address, layout-storage or parser forms from L2 by default.
+not part of L3. In this sense L3 is smaller than L2: L3 keeps the safe
+algorithmic/control surface admitted by its profile and never inherits raw
+storage, address, layout-storage or parser forms from L2.
 
 20.1. Pointer and Field Syntax Exclusions
 
@@ -8659,45 +10564,44 @@ The same short-tail whitespace rule applies to address-depth declarations:
 
 This declares `ppp` as an address-depth-3 slot with base type `int`. The spelling `@@@: int, ppp` is the same declaration with an explicit comma field separator. The spelling `@@@: int; ppp` is different: the semicolon terminates the `@@@:` short form after `int`, so `ppp` is no longer the binding-name field of that declaration. The following `ppp` is parsed as the next source item at the current level.
 
-20.2.1. L4 Layout Classes and ANSI C `typedef struct` Projection
+20.2.1. Registry Layout Classes and ANSI C `typedef struct` Projection
 
 L2 does not define types by writing an ordinary named Structure. A source form
 such as `Name:` is a Structure/frame for the active receiver/profile; it is not
 automatically a storage layout and must not be projected to `typedef struct`
 merely because its fields visually resemble C fields.
 
-Types/layouts are L4 registry data. A layout class is described by tables, and
+Types/layouts are registry data. A layout class is described by tables, and
 a backend-specific projection may later print those facts as ANSI C declarations.
 The source-semantic layer and the target projection are separate.
 
-Example L4 layout data:
+Example direct L2 layout source in an `.lm2` module:
 
-L4:
-    table:
-        name: LmTransSymbol
-        columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
-        rows:
-                 name   LmP0Text               0                       0
-                 kind   LmTransSymbolKind      1                       0
-                 depth  unsigned               2                       0
-    end: LmTransSymbol
-end: L4
+table:
+    source
+    name: LmTransSymbol
+    columns: class  (`field.class` class)  (`field.index` serial)  (`field.address-depth` serial)
+    rows:
+             name   LmP0Text               0                       0
+             kind   LmTransSymbolKind      1                       0
+             depth  unsigned               2                       0
+end: LmTransSymbol
 
 The table declaration `name: LmTransSymbol` is already enough to introduce the
 registry class/key `LmTransSymbol`. More generally, normalized class/key
-mentions inside L4 registry data are material for the L4 validator/resolver:
+mentions inside registry data are material for the registry validator/resolver:
 table names, row keys, column names, column descriptors and cells admitted by
 class-typed columns may all participate in the active registry universe. This
 does not mean that the low-level L2 bootstrap translator must eagerly collect
 and validate the complete class graph. It may keep only a small materialized
 visibility cache, while the full logical collection of class facts belongs to
-the LM4/L4 validator/resolver.
+the registry validator/resolver.
 
 A separate row in the table named `class` may classify a class as `layout`,
 attach imports or group it with other classes, but that index row is not
 required for class existence.
 
-One possible ANSI C projection of these L4 facts:
+One possible ANSI C projection of these registry facts:
 
 ---ANSI C---
 typedef struct LmTransSymbol LmTransSymbol;
@@ -8709,7 +10613,7 @@ struct LmTransSymbol {
 };
 ---ANSI C---
 
-The field rows are not executed. They are facts in the active L4 registry view:
+The field rows are not executed. They are facts in the active RegistryView:
 field `name` has class `LmP0Text`, field `kind` has class
 `LmTransSymbolKind`, field `depth` has class `unsigned`, and each field has a
 stable source order. A validator/resolver may use these facts for type checking,
@@ -8722,7 +10626,7 @@ class.
 Defining a Lingvamyxa class/layout and projecting that layout to ANSI C are two
 different tasks.
 
-The first task is source-semantic. L4 tables introduce classes, fields,
+The first task is source-semantic. Registry source tables introduce classes, fields,
 relations, callable descriptors, constants, variants and other model facts as
 ordinary Lingvamyxa registry data. This layer should stay maximally laconic and
 must not encode target-language syntax merely because the first backend is
@@ -8736,7 +10640,7 @@ tables for the class descriptor, fields, operation cells, result class,
 validator rows, effects, lifetimes and lowering bindings. An implementation may
 answer those queries from in-memory rows, hash tables, generated arrays, SQLite
 or another equivalent algorithm/index, but such structures are
-caches/materialized views of the L4 tables. The registry data is the model; a
+caches/materialized views of the source tables. The registry data is the model; a
 database backend is an access/projection layer over that model.
 
 `class` is the only source-semantic notion that answers "what kind of thing is
@@ -8961,10 +10865,10 @@ and ordered `join:` frames, routing them directly to the same L2 source-table
 and join materializers used after bootstrap. This is a bootstrap entry point,
 not a second table model. The bootstrap file loader parses a selected exact
 path once per successful load and is used for the core module and
-translator-profile candidates. `.lm2` profile candidates are tried before
-plain `.lmx` compatibility candidates. `.lm4` registry modules are neither
-auto-discovered nor accepted through an explicit registry path. Registry/model
-source lives in direct L2 `table:`/`join:` modules; an L2 dependency selects
+translator-profile candidates. Only `.lm2` registry-profile candidates are
+accepted; plain `.lmx` and legacy `.lm4`/`.lm5` candidates are rejected rather
+than used as compatibility fallbacks. Registry/model source lives in direct L2
+`table:`/`join:` modules; an L2 dependency selects
 such a module with `predef:`. Ordinary L2 imports keep their normal loader
 semantics.
 The core module itself contains only tables. Its path is loaded module state and
@@ -9010,8 +10914,8 @@ A bootstrap implementation may still lower these table Structures to a flat
 `row: table key payload` internal representation. That is a temporary storage
 shape over the same class/key spelling rule, not a different semantic model.
 
-An L4 table profile may also materialize a table descriptor through the
-table `join` receiver described in section 19.17:
+An L2 source-table profile may also materialize a table descriptor through the
+`join` receiver described in section 19.17:
 
     join: (BaseTable OverlayTable) TargetTable
         columns: class  (value char)
@@ -9019,7 +10923,7 @@ table `join` receiver described in section 19.17:
                  local  value
     end: TargetTable
 
-This is not an import directive and not parser syntax. It is ordinary L4
+This is not an import directive and not parser syntax. It is ordinary L2 module
 receiver consumption that produces the same kind of table descriptor as
 `table:`.
 
@@ -9339,13 +11243,12 @@ unless an L2 profile explicitly enables or redefines them:
     yield
     labelled break / labelled continue
 
-They may still exist in ordinary L3 profiles, higher levels or a richer L2
-profile.
+They may still exist in L3 or a richer L2 profile.
 
 This subsection describes the first/minimal L2 bootstrap control subset, not a
 level-order rule where L3 is wider than L2. L2 remains the wider low-level level
-because it also owns the unsafe forms in sections 20.1 through 20.4; ordinary L3
-does not expose those forms by default.
+because it also owns the unsafe forms in sections 20.1 through 20.4; L3 never
+exposes those forms.
 
 21. Structural Operation on a Local Copy of Namespace-Structure
 
