@@ -20,6 +20,7 @@ typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
+typedef struct LmMessageThread LmMessageThread;
 typedef struct LmP0Node LmP0Node;
 typedef struct LmP0Field LmP0Field;
 typedef struct LmP0Trailer LmP0Trailer;
@@ -58,6 +59,7 @@ typedef struct LmTransTypePointerSuffix LmTransTypePointerSuffix;
 
 
 typedef int LmOwnEdgeKind;
+typedef int LmMessageThreadState;
 typedef int LmP0NodeKind;
 typedef unsigned LmP0FrameFlags;
 typedef unsigned LmP0NodeFlags;
@@ -68,6 +70,10 @@ typedef unsigned LmP0TrailerFlags;
 #define LM_OWN_EDGE_OWNED 2
 #define LM_OWN_EDGE_LAZY_OWNED 3
 #define LM_OWN_EDGE_EXTERNAL 4
+#define LM_MESSAGE_THREAD_NEW 0
+#define LM_MESSAGE_THREAD_RUNNING 1
+#define LM_MESSAGE_THREAD_STOPPING 2
+#define LM_MESSAGE_THREAD_STOPPED 3
 #define LM_P0_NODE_STRUCTURE 1
 #define LM_P0_NODE_FRAME 2
 #define LM_P0_NODE_ATOM 3
@@ -122,6 +128,14 @@ struct LmOwnArena {
     LmOwnPtrStack * allocation_descriptors;
     LmOwnPtrStack * lazy_edges;
     int frozen;
+};
+struct LmMessageThread {
+    LmOwnArena * root_owner;
+    LmMessageThreadState state;
+    int stop_status;
+    size_t turn_count;
+    size_t collection_count;
+    int collector_failed;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -718,6 +732,17 @@ void (lm_own_arena_freeze)(LmOwnArena *arena);
 int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
 int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
+int (lm_message_thread_init)(LmMessageThread *thread);
+void (lm_message_thread_destroy)(LmMessageThread *thread);
+LmMessageThread * (lm_message_thread_root)(void);
+LmMessageThread * (lm_message_thread_current)(void);
+LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
+int (lm_message_thread_begin_turn)(LmMessageThread *thread);
+int (lm_message_thread_end_turn)(LmMessageThread *thread);
+int (lm_message_thread_collect)(LmMessageThread *thread);
+void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
+int (lm_message_thread_is_running)(const LmMessageThread *thread);
+int (lm_message_thread_status)(const LmMessageThread *thread);
 int (lm_p0_parse_string)(const char *source, LmP0Document **out_document);
 int (lm_p0_parse_bytes)(const char *source, size_t source_length, LmP0Document **out_document);
 int (lm_p0_parse_file)(const char *path, LmP0Document **out_document);
@@ -945,6 +970,20 @@ static int lm_trans_declare_registry_fn_descriptors(LmTransNamespace *namespace_
 static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(void);
 static void lm_trans_l4_payload_pointer_bindings_destroy(void);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

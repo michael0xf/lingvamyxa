@@ -18,15 +18,21 @@ typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
+typedef struct LmMessageThread LmMessageThread;
 
 
 typedef int LmOwnEdgeKind;
+typedef int LmMessageThreadState;
 
 
 #define LM_OWN_EDGE_BORROWED 1
 #define LM_OWN_EDGE_OWNED 2
 #define LM_OWN_EDGE_LAZY_OWNED 3
 #define LM_OWN_EDGE_EXTERNAL 4
+#define LM_MESSAGE_THREAD_NEW 0
+#define LM_MESSAGE_THREAD_RUNNING 1
+#define LM_MESSAGE_THREAD_STOPPING 2
+#define LM_MESSAGE_THREAD_STOPPED 3
 
 
 #include <stddef.h>
@@ -69,6 +75,14 @@ struct LmOwnArena {
     LmOwnPtrStack * allocation_descriptors;
     LmOwnPtrStack * lazy_edges;
     int frozen;
+};
+struct LmMessageThread {
+    LmOwnArena * root_owner;
+    LmMessageThreadState state;
+    int stop_status;
+    size_t turn_count;
+    size_t collection_count;
+    int collector_failed;
 };
 typedef struct LmBuildOptions {
     int full_build;
@@ -124,6 +138,31 @@ void (lm_own_arena_freeze)(LmOwnArena *arena);
 int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
 int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
+int (lm_message_thread_init)(LmMessageThread *thread);
+void (lm_message_thread_destroy)(LmMessageThread *thread);
+LmMessageThread * (lm_message_thread_root)(void);
+LmMessageThread * (lm_message_thread_current)(void);
+LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
+int (lm_message_thread_begin_turn)(LmMessageThread *thread);
+int (lm_message_thread_end_turn)(LmMessageThread *thread);
+int (lm_message_thread_collect)(LmMessageThread *thread);
+void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
+int (lm_message_thread_is_running)(const LmMessageThread *thread);
+int (lm_message_thread_status)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

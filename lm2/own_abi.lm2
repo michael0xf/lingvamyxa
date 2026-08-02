@@ -28,6 +28,7 @@ table:
     columns((class: class) (class: backend))
     rows:
              LmOwnEdgeKind  c.typedef
+             LmMessageThreadState c.typedef
 end: `alias.backend`
 
 table:
@@ -35,6 +36,7 @@ table:
     columns((class: class) (class: target))
     rows:
              LmOwnEdgeKind  int
+             LmMessageThreadState int
 end: `alias.target`
 
 table:
@@ -46,6 +48,7 @@ table:
              LmOwnAllocationDescriptor  c.struct
              LmOwnLazyEdge              c.struct
              LmOwnArena                 c.struct
+             LmMessageThread            c.struct
 end: `forward.backend`
 
 table:
@@ -56,6 +59,10 @@ table:
              LM_OWN_EDGE_OWNED       c.define
              LM_OWN_EDGE_LAZY_OWNED  c.define
              LM_OWN_EDGE_EXTERNAL    c.define
+             LM_MESSAGE_THREAD_NEW       c.define
+             LM_MESSAGE_THREAD_RUNNING   c.define
+             LM_MESSAGE_THREAD_STOPPING  c.define
+             LM_MESSAGE_THREAD_STOPPED   c.define
 end: `constant.backend`
 
 table:
@@ -66,6 +73,10 @@ table:
              LM_OWN_EDGE_OWNED       2
              LM_OWN_EDGE_LAZY_OWNED  3
              LM_OWN_EDGE_EXTERNAL    4
+             LM_MESSAGE_THREAD_NEW       0
+             LM_MESSAGE_THREAD_RUNNING   1
+             LM_MESSAGE_THREAD_STOPPING  2
+             LM_MESSAGE_THREAD_STOPPED   3
 end: `constant.value`
 
 table:
@@ -78,6 +89,7 @@ table:
              LmOwnAllocationDescriptor  c.struct
              LmOwnLazyEdge              c.struct
              LmOwnArena                 c.named-struct
+             LmMessageThread            c.named-struct
 end: `layout.backend`
 
 table:
@@ -90,6 +102,7 @@ table:
              LmOwnAllocationDescriptor  1
              LmOwnLazyEdge              1
              LmOwnArena                 1
+             LmMessageThread            1
 end: `class.reference-base`
 
 table:
@@ -275,6 +288,37 @@ table:
 end: `LmOwnArena.field.address-depth`
 
 table:
+    name: `LmMessageThread.field.class`
+    columns((class: class) (class: field))
+    rows:
+             root_owner        LmOwnArena
+             state             LmMessageThreadState
+             stop_status       int
+             turn_count        size_t
+             collection_count  size_t
+             collector_failed  int
+end: `LmMessageThread.field.class`
+
+table:
+    name: `LmMessageThread.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             root_owner        0
+             state             1
+             stop_status       2
+             turn_count        3
+             collection_count  4
+             collector_failed  5
+end: `LmMessageThread.field.index`
+
+table:
+    name: `LmMessageThread.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             root_owner  0
+end: `LmMessageThread.field.address-depth`
+
+table:
     name: `fn.external`
     columns((class: class) (int: value))
     rows:
@@ -316,6 +360,17 @@ table:
              lm_own_arena_is_frozen    1
              lm_own_tree_cut           1
              lm_own_tree_cut_promote_lazy_edges 1
+             lm_message_thread_init          1
+             lm_message_thread_destroy       1
+             lm_message_thread_root          1
+             lm_message_thread_current       1
+             lm_message_thread_set_current   1
+             lm_message_thread_begin_turn    1
+             lm_message_thread_end_turn      1
+             lm_message_thread_collect       1
+             lm_message_thread_request_stop  1
+             lm_message_thread_is_running    1
+             lm_message_thread_status        1
 end: `fn.external`
 
 fn: lm_own_new_zero (size_t: size) @: void
@@ -356,3 +411,14 @@ fn: lm_own_arena_freeze (LmOwnArena: arena) void
 fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
 fn: lm_own_tree_cut (LmOwnArena: arena) int
 fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
+fn: lm_message_thread_init (LmMessageThread: thread) int
+fn: lm_message_thread_destroy (LmMessageThread: thread) void
+fn: lm_message_thread_root () LmMessageThread
+fn: lm_message_thread_current () LmMessageThread
+fn: lm_message_thread_set_current (LmMessageThread: thread) LmMessageThread
+fn: lm_message_thread_begin_turn (LmMessageThread: thread) int
+fn: lm_message_thread_end_turn (LmMessageThread: thread) int
+fn: lm_message_thread_collect (LmMessageThread: thread) int
+fn: lm_message_thread_request_stop (LmMessageThread: thread; int: status) void
+fn: lm_message_thread_is_running (const: (LmMessageThread: thread)) int
+fn: lm_message_thread_status (const: (LmMessageThread: thread)) int

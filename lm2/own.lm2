@@ -688,3 +688,138 @@ external:
 
     return: 0
 end: external
+
+LmMessageThread: lm_message_thread_current_value
+LmMessageThread: lm_message_thread_root_storage
+int: lm_message_thread_root_ready
+int: lm_message_thread_root_cleanup_registered
+
+external:
+    fn: lm_message_thread_init (LmMessageThread: thread) int
+        if: thread = 0
+            return: 1
+
+        c.memset(thread, 0, c.sizeof(thread[0]))
+        thread\root_owner: lm_own_arena_new()
+        if: thread\root_owner = 0
+            thread\state: c.LM_MESSAGE_THREAD_STOPPED
+            thread\collector_failed: 1
+            thread\stop_status: 1
+            return: 1
+
+        thread\state: c.LM_MESSAGE_THREAD_RUNNING
+    return: 0
+end: external
+
+external:
+    sub: lm_message_thread_destroy (LmMessageThread: thread)
+        if: thread != 0
+            if: lm_message_thread_current_value = thread
+                lm_message_thread_current_value: 0
+            lm_own_arena_delete(thread\root_owner)
+            thread\root_owner: 0
+            thread\state: c.LM_MESSAGE_THREAD_STOPPED
+    end: lm_message_thread_destroy
+end: external
+
+sub: lm_message_thread_root_cleanup ()
+    if: lm_message_thread_root_ready
+        lm_message_thread_destroy(lm_message_thread_root_storage)
+        lm_own_delete(lm_message_thread_root_storage, 0)
+        lm_message_thread_root_storage: 0
+        lm_message_thread_root_ready: 0
+end: lm_message_thread_root_cleanup
+
+external:
+    fn: lm_message_thread_root () LmMessageThread
+        if: lm_message_thread_root_ready = 0
+            lm_message_thread_root_storage: lm_own_new_zero(c.sizeof(c.LmMessageThread))
+            if: lm_message_thread_root_storage = 0
+                return: 0
+            if: lm_message_thread_init(lm_message_thread_root_storage) != 0
+                lm_own_delete(lm_message_thread_root_storage, 0)
+                lm_message_thread_root_storage: 0
+                return: 0
+            lm_message_thread_root_ready: 1
+            if: lm_message_thread_root_cleanup_registered = 0
+                if: c.atexit(c.lm_message_thread_root_cleanup) != 0
+                    lm_message_thread_root_cleanup()
+                    return: 0
+                lm_message_thread_root_cleanup_registered: 1
+        ---
+
+        if: lm_message_thread_current_value = 0
+            lm_message_thread_current_value: lm_message_thread_root_storage
+    return: lm_message_thread_root_storage
+end: external
+
+external:
+    fn: lm_message_thread_current () LmMessageThread
+        if: lm_message_thread_current_value = 0
+            return: lm_message_thread_root()
+    return: lm_message_thread_current_value
+end: external
+
+external:
+    fn: lm_message_thread_set_current (LmMessageThread: thread) LmMessageThread
+        LmMessageThread: previous
+
+        previous: lm_message_thread_current_value
+        lm_message_thread_current_value: thread
+    return: previous
+end: external
+
+external:
+    fn: lm_message_thread_is_running (const: (LmMessageThread: thread)) int
+    return: thread != 0 && thread\state = c.LM_MESSAGE_THREAD_RUNNING
+end: external
+
+external:
+    fn: lm_message_thread_status (const: (LmMessageThread: thread)) int
+        if: thread = 0
+            return: 1
+    return: thread\stop_status
+end: external
+
+external:
+    sub: lm_message_thread_request_stop (LmMessageThread: thread; int: status)
+        if: thread = 0
+            thread: lm_message_thread_current()
+        if: thread != 0 && thread\state = c.LM_MESSAGE_THREAD_RUNNING
+            thread\stop_status: status
+            thread\state: c.LM_MESSAGE_THREAD_STOPPING
+    end: lm_message_thread_request_stop
+end: external
+
+external:
+    fn: lm_message_thread_collect (LmMessageThread: thread) int
+        if: thread = 0 || thread\root_owner = 0
+            return: 1
+
+        thread\collection_count: thread\collection_count + 1U
+        if: lm_own_tree_cut(thread\root_owner) != 0
+            thread\collector_failed: 1
+            lm_message_thread_request_stop(thread, 1)
+            return: 1
+    return: 0
+end: external
+
+external:
+    fn: lm_message_thread_begin_turn (LmMessageThread: thread) int
+        if: lm_message_thread_is_running(thread) = 0
+            return: 0
+        thread\turn_count: thread\turn_count + 1U
+    return: 1
+end: external
+
+external:
+    fn: lm_message_thread_end_turn (LmMessageThread: thread) int
+        int: status
+
+        if: thread = 0
+            return: 1
+        status: lm_message_thread_collect(thread)
+        if: thread\state = c.LM_MESSAGE_THREAD_STOPPING
+            thread\state: c.LM_MESSAGE_THREAD_STOPPED
+    return: status
+end: external
