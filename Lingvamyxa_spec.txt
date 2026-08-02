@@ -12,8 +12,8 @@ Lingvamyxa is based on the following model:
     L0 native artifacts run.
     L1 is an external bootstrap, implementation and lowering stratum.
     L2 and L3 are the only Lingvamyxa source levels.
-    L2 is the complete low-level language surface.
-    L3 is the protected subset of L2 without low-level operations.
+    L2 is the complete language surface, including low-level machine operations.
+    L3 is the high-level subset of L2 without low-level machine operations.
     Source syntax builds Structures.
     Source traversal also builds MIX overlay intervals in parallel with
     Structures and arrays.
@@ -26,8 +26,8 @@ Lingvamyxa is based on the following model:
 
 The language does not assign final meaning directly from surface syntax. Surface syntax builds generic Structures. A receiver or subroutine consumes a Structure and assigns typed semantics to it.
 
-User describes the world. Registry source tables store relations, L3 Structures
-describe safe computations, and message Structures describe proposed actions.
+User describes the world. Registry source tables store relations, L2/L3
+Structures describe computations, and message Structures describe proposed actions.
 The analytical engine continuously classifies the active world enough to
 resolve, validate and execute current work.
 
@@ -81,7 +81,7 @@ classification index, conventionally mapping a registry class/key to its
 required to contain every registry class/key.
 
 In the high-level model, strict classification happens over registry source
-tables materialized by L2 module receivers.
+tables materialized by L2 or L3 module receivers.
 Type checking and class resolution are logical resolution/checking processes
 over those tables. A SQL-like query is the reference mental model, but an
 implementation may use any equivalent algorithm that reads the same registry facts and
@@ -408,9 +408,9 @@ define Lingvamyxa message semantics.
 0.1. L2/L3 Registry and Message Smoke Example
 
 The following example defines no new syntax. It illustrates the core formula in
-two source profiles: direct L2 module receivers materialize registry, target and
-build descriptors; protected L3 receivers consume message descriptors,
-executable definitions and ordinary control forms.
+two source profiles: the L2 module uses registry, target and low-level build
+receivers; the high-level L3 module uses the same registry mechanism together
+with message descriptors, executable definitions and ordinary control forms.
 
 Short version of the "hello.lm3" file in the default executable script profile:
 
@@ -436,18 +436,20 @@ source profile. Only `L2:` and `L3:` are level receivers. The legacy `L4:` and
 `L5:` names are not registered as level receivers and are rejected wherever a
 level receiver is expected, whether root or nested. A translator source also
 has no separate root `registry:` level alias. Registry/model source is written
-directly on an L2 module surface with `table:` and `join:`; dependencies on
-such `.lm2` modules are selected with `predef:`. A `.lm2` file does not need an
-outer `L2:` wrapper, and a `.lm3` file does not need an outer `L3:` wrapper.
+directly on an L2 or L3 module surface with `table:` and `join:`; dependencies
+requiring hoisted declarations are selected with `predef:`. A `.lm2` file does
+not need an outer `L2:` wrapper, and a `.lm3` file does not need an outer `L3:`
+wrapper.
 
 The implicit root profile is deliberately attached to the source extension,
 not inferred from an arbitrary receiver name. A root-level `table:` in an
-`.lm2` module is direct L2 registry/model source. Renaming that module to
+`.lm2` module is direct L2 registry/model source; the same form in `.lm3` is
+direct L3 registry/model source. Renaming either module to
 `.lm4` does not select another implicit profile; the source is rejected. A
 root-level `table:` in a plain `.lmx` file is only ordinary Structure data
 unless it appears inside an explicit admitted level.
 
-L2 admits an explicit top-level dependency receiver for registry/model modules:
+L2 and L3 admit an explicit top-level dependency receiver for registry/model modules:
 
     predef:
         "model.lm2"
@@ -455,13 +457,18 @@ L2 admits an explicit top-level dependency receiver for registry/model modules:
     end: predef
 
 Before the module prelude is planned, direct `table:` and `join:` Frames on the
-current L2 module surface are materialized in source order. For an implicit
-`.lm2` module this is the file root; for a mixed or explicitly wrapped source it
-is the body of each explicit `L2:` Frame. The early scan does not descend into
-conditional, guard, function or other receiver bodies, and it does not scan an
-`L3:` surface. The ordinary declaration pass still validates each Frame and
-creates any runtime table binding, but it does not materialize a source site
-that the early pass already completed.
+current L2 or L3 module surface are materialized in source order. For an
+implicit `.lm2` or `.lm3` module this is the file root; for a mixed or
+explicitly wrapped source it is the body of each explicit `L2:` or `L3:` Frame.
+The early scan does not descend into conditional, guard, function or other
+receiver bodies. The ordinary declaration pass still validates each Frame and
+creates any requested runtime table binding, but it does not materialize a
+source site that the early pass already completed.
+
+The current local-source early prepass scans only implicit or explicit L2
+surfaces. Ordinary declaration can still materialize `table:`/`join:` on an
+explicit L3 surface. Hoisted implicit-`.lm3` handling and `.lm3` `predef`
+targets remain implementation work; this is not a semantic restriction of L3.
 
 A `table:` may put the bare atom `source` first in its direct body:
 
@@ -488,8 +495,9 @@ source later, the join remains deferred to the ordinary declaration pass. This
 preserves source order without giving ordinary imports hidden prelude behavior.
 
 `predef` has the path-list shape of `import`, but is a hoisted import. Before
-ordinary top-level lowering and before the module prelude is planned, its `.lm2`
-targets expose their declarative `table:` and `join:` surface in source order.
+ordinary top-level lowering and before the module prelude is planned, its
+selected module targets expose their declarative `table:` and `join:` surface
+in source order.
 Descriptor-only `fn:`/`callable:` metadata is hoisted in the same pass, after
 any preceding tables, so a prelude relation such as `functionPointerType` can
 refer to the descriptor without requiring a separate registry wrapper. Functions with
@@ -498,10 +506,9 @@ to descriptor frames directly in the target module surface; descriptors nested
 under conditional/wrapper receivers are materialized by their ordinary emission
 path. The ordinary pass suppresses rematerialization only for the exact source
 site already handled by the early pass.
-The same target modules are then declared in the importing L2 namespace and
-pass through the ordinary L2 prelude, prototype, storage and function emission
-phases exactly once. Thus `predef` does not mean "registry-only" or "do not
-translate".
+The same target modules are then declared in the importing namespace and pass
+through their ordinary level-specific declaration and emission phases exactly
+once. Thus `predef` does not mean "registry-only" or "do not translate".
 
 During that namespace declaration, a descriptor-only `fn:` directly on a
 `predef` target surface is projected as a predeclared executable function
@@ -522,17 +529,22 @@ ANSI C prototypes. This behavior is driven by the active `RegistryView`; it
 does not depend on a preceding legacy `.lm4` import.
 
 An ordinary `import:` does not acquire this early behavior by containing tables,
-and a `.lm2` module is never heuristically classified by its contents. The
-`predef` receiver is top-level-only, preserves normal relative-path resolution
-and import deduplication, and accepts `.lm2` targets only. `predef` is excluded
-from the L3 profile as a low-level module-construction operation.
+and a module is never heuristically classified by its contents. Semantically,
+the `predef` receiver is top-level-only, preserves normal relative-path
+resolution and import deduplication, and is available on L2 and L3 module
+surfaces. The selected module retains its own source profile; using `predef`
+does not make an L2-only machine operation available in L3.
+
+The current bootstrap accepts `.lm2` targets only and lists `predef` in
+`receiver.l3.exclude`. Admitting `.lm3` targets and the `predef` receiver on an
+L3 surface is implementation work under the high-level-subset model.
 
 There are no implicit `.lm4` or `.lm5` profiles. Both extensions and both
-legacy level wrappers are rejected. Registry/model source must be an `.lm2`
-module with direct `table:` and `join:` receivers and
-is selected explicitly with `predef:` when used as an L2 dependency. This keeps
-dependency loading inside the L2 receiver model instead of giving `import:` a
-hidden registry-loading side effect.
+legacy level wrappers are rejected. Registry/model source is written in `.lm2`
+or `.lm3` modules with direct `table:` and `join:` receivers and may be selected
+explicitly with `predef:` when hoisted dependency loading is required. This
+keeps dependency loading inside the receiver model instead of giving `import:`
+a hidden registry-loading side effect.
 
 The bootstrap parser registry follows the same source-table direction more
 strictly. Its automatic candidates and an explicit `LM_P0_REGISTRY` override
@@ -584,7 +596,7 @@ storage:
                  include        None                         "<direct.h>"  "<unistd.h>"
     end: BUILD
 
-Safe message and behavior descriptors in `hello.lm3` are ordinary L3 receiver
+Message and behavior descriptors in `hello.lm3` are ordinary L3 receiver
 forms, not a separate level:
 
     behavior: HelloConfig
@@ -608,7 +620,7 @@ in `hello_build.lm2`:
 
     build: app
 
-Executable definitions in `hello.lm3` continue on the protected L3 surface:
+Executable definitions in `hello.lm3` continue on the high-level L3 surface:
 
     fn: words () iterator(Text)
         yield: "Hello"
@@ -776,12 +788,13 @@ More precisely:
 
     * L0 is the native-artifact stratum and L1 is the external procedural,
       portable lowering stratum; neither is a Lingvamyxa source level.
-    * L2/lm2 is the complete low-level Lingvamyxa surface. It exposes typed
-      storage, addresses, layouts, unsafe operations and module-construction
-      receivers, and is the first self-hosting infrastructure level.
-    * L3/lm3 is a protected subset of L2. It supplies safe algorithmic
-      computation, executable definitions, registry queries and admitted
-      message/service receivers, but never raw low-level operations.
+    * L2/lm2 is the complete Lingvamyxa surface. It includes high-level
+      computation and registry mechanisms as well as typed storage, addresses,
+      physical layouts, unchecked access and other low-level machine operations,
+      and is the first self-hosting infrastructure level.
+    * L3/lm3 is the high-level subset of L2. It uses the same structural,
+      registry, source-table, module-composition and runtime mechanisms, but
+      excludes operations whose source semantics expose low-level machine state.
     * Models, classes-as-tables, contracts, unions, messages, validators,
       services, rules and Message Threads are receiver/operator/runtime
       families within L2/L3, not additional language levels.
@@ -882,48 +895,60 @@ This document does not specify the L1 target language, physical calling conventi
 
 1.3. L2
 
-L2 is the complete low-level unsafe Lingvamyxa level. It is the systems and
-module-construction surface. It may expose memory, typed addresses, handles,
-layout-based storage, source-table materialization, build/toolchain receivers
-and explicit low-level operations. Selected low-level thread primitives may be
-introduced for shared-memory arrays or other implementation-facing data, but
-ordinary interactive, concurrent, UI and service programming uses the Message
-Thread model defined by the receiver families in section 19.
+L2 is the complete Lingvamyxa level. It contains every high-level operation
+available in L3 and additionally exposes the low-level machine surface: raw
+storage and typed addresses, raw loads, physical layout/storage construction,
+unchecked access, direct foreign-substrate calls and low-level synchronization
+or atomic operations. Selected low-level thread primitives may be introduced
+for shared-memory arrays or other implementation-facing data, but ordinary
+interactive, concurrent, UI and service programming may use the Message Thread
+model defined by the receiver families in section 19.
 
-L2 is compiled. It is not interpreted as ordinary Lingvamyxa runtime code and
-is not executed as a casual script. An implementation may simulate or inspect L2
-for tooling, diagnostics or verification, but the source-semantic contract of
-L2 is lowering/compilation against an explicit low-level memory/layout model.
+Compilation, interpretation and mixed execution are backend/profile choices,
+not the distinction between L2 and L3. An L2 implementation that uses the
+machine surface must lower those operations against an explicit memory/layout
+model.
 
 1.4. L3
 
-L3 is the protected algorithmic and computational subset of L2. It supports
-safe top-level actions, computations, calls, registry queries and admitted
-message/service operations. L3 code may be interpreted by the core runtime or
-compiled through the lowering pipeline.
+L3 is the high-level algorithmic and computational subset of L2. It is not a
+sandbox, authority boundary or effect restriction. L3 code may modify ordinary
+state, materialize registry source tables, compose modules, send messages and
+use services when the corresponding high-level receivers exist. It may be
+interpreted by the core runtime, compiled through the lowering pipeline or use
+a mixed execution profile.
 
-L3 never exposes L2 raw storage/address/parser operators, address-depth
-declarations, raw loads, address-producing forms, layout-storage allocation,
-direct C calls, `predef`, source-table materialization or build/toolchain
-mutation. A profile may further reduce the L3 surface, but it may not import
-these low-level capabilities back into L3. L2 may use all safe algorithmic and
-control receivers listed in section 19 and additionally exposes the low-level
-surface described in section 20.
+L3 excludes only operations whose source semantics expose low-level machine
+facilities. This includes raw storage/address operators, address-depth
+declarations, raw loads and address-producing forms, physical layout/storage
+allocation, direct `c.*` or raw L1 calls, unchecked array access, low-level
+synchronization/atomic operations, and parser-internal forms only when they
+expose raw storage, addresses, unchecked indexing or target-layout state. A
+profile may impose additional validation, authority, purity or effect rules,
+but those rules are orthogonal to the L2/L3 level distinction.
 
 Ordinary L3 has no raw pointer/address semantics. Arrays, text, objects and
-other aggregates are Structures or handles/references with metadata. Operations
-such as indexing must validate their semantic preconditions, including bounds
-checks for arrays and array-like containers. Code requiring unsafe operations
-belongs to an L2 module and crosses into L3 only through a checked descriptor,
-handle or receiver contract.
+other aggregates are Structures or handles/references with metadata. Indexing
+arrays and array-like containers must check bounds automatically. Code that
+needs unchecked access or another machine operation belongs to L2; a
+high-level descriptor or handle that hides the raw representation may be used
+from both L2 and L3.
+
+The current bootstrap does not yet enforce this boundary consistently. Its
+`receiver.l3.exclude` table excludes `predef`, which is not a machine
+operation, while several physical layout and raw expression paths still need
+explicit L3 gates. Alignment work is therefore to admit `predef` in L3, add
+implicit-L3/local-early-prepass parity for `table` and `join`, and exclude or
+replace the concrete raw address/load, unchecked-index and physical
+`c.struct`/`c.union`/`c.enum` projections.
 
 1.5. Receiver Families Are Not Levels
 
-Registry/model declarations and message/service/runtime forms are ordinary
-receivers and operators. Direct `table:` and `join:` source materialization is
-an L2 module operation. Safe descriptor lookup, validation, message dispatch,
-service handling and RegistryView queries may be admitted by L3. Their detailed
-receiver families are specified in section 19.
+Registry/model declarations, direct `table:` and `join:` source
+materialization, descriptor lookup, validation, message dispatch, service
+handling and RegistryView queries are ordinary shared L2/L3 receiver families.
+Only a concrete receiver whose semantics expose a low-level machine operation
+is L2-only. Their detailed receiver families are specified in section 19.
 
 The removed names L4 and L5 do not denote source profiles, implicit file
 profiles or semantic strata. The legacy extensions `.lm4`/`.lm5` and root
@@ -934,8 +959,8 @@ is now the source-table, registry, descriptor, evidence, composition and query
 families in sections 19.17 through 19.18 and 19.20 through 19.27. The former L5
 surface is now the message pipeline in section 19.19 and the Message Thread,
 service and authorization families in sections 19.28 through 19.32. These are
-ordinary shared receiver families: they are available to L2 and admitted by L3
-when their contracts contain no low-level operation.
+ordinary shared receiver families: they are available in both L2 and L3 unless
+a concrete operation exposes the low-level machine surface.
 
 1.6. Level Receivers
 
@@ -948,12 +973,13 @@ L3:
 . operator:
 . . if
 . . callableFrom: L2 L3
-. . implementation: safe_if
+. . implementation: lmx_if
 end: L3
 
-The same safe operator descriptor may be consumed from L2 or L3. An operator
-whose contract exposes raw addresses, parser mutation, source-table
-materialization or other section 20 capabilities is L2-only.
+The same high-level operator descriptor may be consumed from L2 or L3. An
+operator whose contract exposes raw addresses, raw loads, physical storage,
+unchecked access or other section 20 machine facilities is L2-only. Registry
+and source-table materialization are not such facilities.
 
 1.7. Startup and Entry Targets
 
@@ -4106,15 +4132,16 @@ Thus L2 may have many C-visible identifiers through headers, but the structural
 spelling of pointers, arrays, raw loads and field-follow remains Lingvamyxa
 syntax.
 
-Registry descriptors may still describe checked wrappers, high-level constants, numeric
-backends, type mappings, ownership rules, borrow rules, effect rules,
-capability requirements and operator implementations for L3 visibility. That
-is the same mechanism used for other receiver/operator registration.
+Registry descriptors may describe high-level wrappers, constants, numeric
+backends, type mappings, ownership rules, borrow rules, effect rules and
+operator implementations. Optional authorization profiles may add capability
+requirements. This is the same mechanism used for other receiver/operator
+registration in L2 and L3.
 
-The checked registry wrapper family does not declare every C function for L2. A
+The high-level registry wrapper family does not declare every C function for L2. A
 selected L2 universal ANSI C adapter may discover or bind raw symbols from
 headers, toolchain metadata, build metadata or explicit L2 adapter syntax such
-as `c.name`. Those raw symbols remain L2-only unless a checked Lingvamyxa
+as `c.name`. Those raw symbols remain L2-only unless a high-level Lingvamyxa
 wrapper is registered.
 
 When structural L2 spelling is not enough, a source may use an explicit raw L1
@@ -4130,21 +4157,22 @@ The raw block body is governed by the raw text/block rules. A trailing
 the `L1` frame.
 
 No special mechanism for making C headers visible to mathematics is required.
-Mathematics and ordinary L3 code see only accepted Lingvamyxa descriptors.
+Mathematics and ordinary L3 code see high-level Lingvamyxa descriptors rather
+than raw foreign-substrate symbols.
 
 Canonical rule:
 
     L2 source + L2/L1 build profile define raw L1 toolchain visibility;
     L2 build receivers provide compiler/linker configuration data;
-    checked registry wrappers define high-level contracts and visibility;
-    registry validation accepts or rejects high-level descriptors;
-    accepted high-level descriptors enter the L3 lexical/registry view;
-    expression/operator resolution uses accepted descriptors only.
+    high-level registry wrappers define contracts and visibility;
+    optional registry profiles validate high-level descriptors;
+    registered high-level descriptors enter L2/L3 lexical/registry views;
+    expression/operator resolution uses the descriptors visible in its profile.
 
-A system message may also propose a candidate descriptor at runtime. Such a
-candidate is data, not authority. It may affect L3 high-level descriptors only
-after ordinary registry validators accept it. It does not rewrite the raw L2
-translator.
+A system message may also propose a candidate descriptor at runtime. Whether a
+registry profile validates such a candidate before insertion is a registry or
+authorization policy, not a property of L3. A high-level descriptor does not
+by itself rewrite raw L2 translator machinery.
 
 6.6.7. L2 Raw Adapter and Checked Wrapper Example
 
@@ -4160,7 +4188,7 @@ L2/L1 build profile provides `mpfr.h` and the MPFR link inputs.
 This does not make `mpfr_sqrt` callable from ordinary expression/operator consumption
 or L3 source.
 
-A safe value-producing wrapper may be registered separately.
+A high-level value-producing wrapper may be registered separately.
 
 Example conceptual descriptor on a direct `.lm2` module surface:
 
@@ -4204,10 +4232,10 @@ Conceptual lowering:
 
 6.6.8. Namespace Calls Outside Pure Expressions
 
-Checked external wrappers may also be called through ordinary structural path
+High-level external wrappers may also be called through ordinary structural path
 receiver/call syntax when their descriptors allow it.
 
-Example safe namespace call:
+Example high-level namespace call:
 
     Lingvamyxa\MPFR\sqrt: x
 
@@ -4253,10 +4281,10 @@ There is no blacklist of forbidden C names in this profile. The rule is simpler:
 raw L1 / ANSI C calls are not visible to L3 expression profiles at all. They
 belong to the L2 universal adapter boundary.
 
-Effectful operations may be visible at L3 only as checked Lingvamyxa receivers
-or wrappers with declared effects, capabilities, ownership and failure behavior.
-Even then, they are statement-level or effect-profile calls, not pure
-expression/operator calls.
+Effectful operations may be visible in both L2 and L3 as high-level Lingvamyxa
+receivers or wrappers. Declared effects determine whether they are available in
+a pure-expression profile; optional capability checks belong to an
+authorization profile, not to the L3 level.
 
 Required rule:
 
@@ -4264,13 +4292,10 @@ Required rule:
         -> L2 adapter only;
 
     no high-level wrapper descriptor
-        -> no L3 visibility;
+        -> no high-level L3 operation;
 
-    no capability
-        -> no high-level call;
-
-    unsafe or pointer-bearing wrapper
-        -> L2 only, or L3 only through an explicitly checked handle/receiver;
+    raw pointer-bearing interface
+        -> L2 only; a separate high-level handle/receiver may be L2/L3;
 
     effectful descriptor
         -> not callable from pure expression profile.
@@ -4278,12 +4303,13 @@ Required rule:
 6.6.10. Pointer and Memory Rule
 
 An L1 function with raw pointer parameters or raw pointer return values is not a
-safe value-producing expression function and is not directly visible at L3.
+high-level value-producing expression function and is not directly visible at L3.
 
 At L2, the selected universal ANSI C adapter may call it according to the L2
 memory profile.
 
-At L3, it must be wrapped by a Lingvamyxa descriptor that defines:
+At L3, it must be wrapped by a Lingvamyxa descriptor that hides the raw
+representation and defines at least:
 
     ownership;
     borrow duration;
@@ -4291,10 +4317,11 @@ At L3, it must be wrapped by a Lingvamyxa descriptor that defines:
     bounds;
     element type;
     mutation effects;
-    thread safety;
     failure behavior;
-    visibility;
-    capability requirements.
+    high-level result and effects.
+
+Threading, visibility and capability fields may be required by selected
+runtime, provider or authorization profiles, but are not intrinsic L3 gates.
 
 Without such a wrapper, the function belongs to L2 adapter semantics only, not
 to ordinary L3 expression or namespace syntax.
@@ -4389,8 +4416,8 @@ The source-visible mathematical model is:
     typed function descriptors;
     explicit contexts;
     registry-controlled external bindings;
-    safe expression profiles;
-    explicit unsafe escape hatches confined to L2.
+    high-level expression profiles;
+    explicit low-level machine operations confined to L2.
 
 7. `fn`, `sub` and Structural Closure
 
@@ -5623,9 +5650,10 @@ belong to the selected L1/runtime profile.
 9.1. Type and Model Information
 
 Type and model information is expressed by registered receivers and Structures.
-On a direct L2 module surface, source-table receivers may materialize registry
-rows. L2 receivers may also lower Structures to storage, address and callable
-metadata. L2/L3 receivers may consume registry rows and produce safe callable
+On a direct L2 or L3 module surface, source-table receivers may materialize
+registry rows. L2 receivers may additionally lower Structures to physical
+storage, address and callable
+metadata. L2/L3 receivers may consume registry rows and produce high-level callable
 or descriptor metadata; an L3 implementation may use hidden handles or storage,
 but L3 never exposes address operations.
 
@@ -7137,10 +7165,10 @@ Semantic outline:
     sub                        receiver that registers subroutine definitions
     fn                         receiver that registers function definitions
     return                     executable-body return receiver/operator; also terminal executable close at definition level
-    operator                   receiver that registers receivers/operators
+    operator                   proposed declaration receiver; current bootstrap uses operator.* source tables directly
     if                         registered receiver, semantics depend on level
-    match                      registered receiver; no built-in `case` syntax
-    merge                      registered L2/L3 structural receiver; ordered merge of Structure/table-producing parts
+    match                      proposed receiver; not registered by the current bootstrap; no built-in `case` syntax
+    merge                      registered head; current handler performs physical named-layout/C-storage merge, not generic high-level Structure merge
     join                       registered module table receiver; module table profiles materialize source-table rows, with no executable runtime projection
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
@@ -7148,10 +7176,12 @@ Semantic outline:
     []                         head receiver spelling for array/storage forms; postfix `target[...]` is index/access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
-    table/relation/rule/query  receiver-defined registry/table Structures
-    union                      receiver that registers a closed set of variants
-    method                     receiver that registers a generic dispatch entry
-    message/operation          L2 source rows or validated transient L3 overlay rows
+    table                      registered receiver; source materialization exists, high-level L3 non-source table values remain implementation work
+    relation/rule/query        registry/table vocabulary; no current generic receiver heads
+    c.union                    registered L2 physical-layout receiver; generic union is not registered
+    method/requires.method     registry relations consumed by implements, not receiver heads
+    implements                 registered expression receiver for structural method compatibility
+    message/operation          source rows or transient overlay rows in L2/L3; no current generic receiver heads
 
 
 18. Remaining Open Points
@@ -7274,9 +7304,9 @@ listed in section 20.5, while richer L2 profiles and ordinary L3 profiles may
 admit the full set or profile-specific extensions.
 
 This shared list does not mean that L3 contains all L2 operators. L2 has an
-additional unsafe low-level operator/parser-form surface in section 20. L3 is a
-strict protected subset and no profile may import that low-level surface into
-L3.
+additional low-level machine operator/parser-form surface in section 20. L3 is
+the high-level subset and cannot use that machine surface. This is an
+abstraction boundary, not a sandbox or authority boundary.
 
 The control operators in this section are not raw low-level jumps. A translator
 may lower them to branches, labels, hidden control-result Structures,
@@ -7290,6 +7320,220 @@ and L3 when the active profile admits them. Differences belong to profile
 constraints, available value types, memory model and lowering policy, not to a
 separate parser syntax.
 
+Operator summary:
+
+The left column below is a historical item label, not a subsection number.
+Status words refer to the current bootstrap:
+
+    IMPLEMENTED       the exact spelling and stated semantic contract exist;
+    REGISTERED ONLY   the spelling resolves, but the stated contract is absent
+                      or has different semantics;
+    TABLE/DATA        a registry key, relation or Structure, not an operator;
+    NOT IMPLEMENTED   the following text proposes a concrete source contract.
+
+Later subsection headings describe the full design families. They do not imply
+that a source receiver exists; registration and contract status are stated
+explicitly below.
+
+    0.  if / else
+        IMPLEMENTED statement receivers; L2/L3.
+
+    1.  match / default-pattern receivers
+        NOT IMPLEMENTED. Proposed: register `match:` as a statement/expression
+        receiver consuming ordered pattern/body pairs; `default` remains an
+        ordinary pattern atom.
+
+    2.  while
+        IMPLEMENTED statement receiver; L2/L3.
+
+    3.  until
+        REGISTERED ONLY as a generic trailer. The post-condition loop contract
+        in section 19.4 is NOT IMPLEMENTED. Proposed: give the trailer a
+        loop-closing lowering that re-enters the closed frame while false.
+
+    4.  for
+        NOT IMPLEMENTED. Proposed: register a statement receiver consuming
+        initialization, condition, step and body Structures.
+
+    5.  each
+        NOT IMPLEMENTED. Proposed: register a statement receiver over an array
+        or iterator descriptor; L3 array traversal uses checked access.
+
+    6.  return
+        IMPLEMENTED L2/L3 executable-body receiver; terminal executable close
+        is also implemented at definition level.
+
+    7.  break
+        IMPLEMENTED for the nearest loop frame; L2/L3.
+
+    8.  continue
+        IMPLEMENTED for the nearest loop frame; L2/L3.
+
+    9.  finally
+        IMPLEMENTED executable/scope cleanup receiver; L2/L3.
+
+    10. guard / fail / throws / failure labels / handlers
+        NOT IMPLEMENTED as recoverable failure flow. The registered `guard:` is
+        an unrelated module/prelude guard. Proposed: register distinct
+        failure-flow `guard:`, `fail:`, `throws:` and handler receivers producing
+        and consuming a Failure Structure; do not overload the module guard.
+
+    11. retry / retryable
+        NOT IMPLEMENTED. Proposed: register retry-frame and retry-transfer
+        statement receivers with explicit cleanup semantics.
+
+    12. assert
+        IMPLEMENTED diagnostic statement receiver; L2/L3.
+
+    12a. log / error
+        NOT IMPLEMENTED as source receivers. Proposed: register observation
+        statement receivers whose handlers are selected by an observation table.
+
+    13. redo
+        NOT IMPLEMENTED. Proposed: register a loop-frame transfer that repeats
+        the current body without advancing its source.
+
+    14. yield
+        NOT IMPLEMENTED. Proposed: register a function-body receiver that emits
+        an iterator value and persists the resume state in the iterator Structure.
+
+    15. labelled break / labelled continue
+        NOT IMPLEMENTED; current `break` and `continue` are unlabelled. Proposed:
+        add a control-label table and resolve the optional target through it.
+
+    16. merge / join
+        `merge:` is REGISTERED ONLY for the contract below: its current handler
+        performs physical named-layout/C-storage merging. The ordered high-level
+        Structure merge specified in section 19.17 is NOT IMPLEMENTED. Proposed:
+        split descriptor/Structure merge (L2/L3) from physical layout projection
+        (L2-only). `join:` source-table composition is IMPLEMENTED.
+
+    17. table / source / import / predef
+        `table: source`/RegistryView materialization is IMPLEMENTED; `source` is
+        a table-body marker, not a receiver, and this operation is semantically
+        shared by L2/L3. A non-source `table:` currently lowers to static C row
+        types/storage, so the high-level checked L3 table-value representation is
+        NOT IMPLEMENTED. Proposed: split it from the L2 physical projection.
+        `import:` is an IMPLEMENTED ordinary module import. `predef:` is an
+        IMPLEMENTED hoisted import, but the current bootstrap excludes it from
+        L3. Proposed: admit `predef:` on L3 surfaces too; a selected dependency
+        retains its own level and does not add L2-only machine operators to L3.
+        The local-source early prepass currently scans only L2 surfaces;
+        ordinary declaration can still materialize table/join on an explicit L3
+        surface. Hoisted implicit-`.lm3` handling remains implementation work.
+
+    18. cast / implements
+        `implements(CandidateClass, RequiredClass)` is an IMPLEMENTED L2/L3
+        expression receiver returning `0` or `1` from `requires.method` and
+        `method` rows. It currently checks method-name presence. Proposed
+        extension: compare parameter, result, effect and ownership relations.
+        `cast:` is REGISTERED ONLY for high-level conversion semantics: its
+        current emitter lowers directly to a target-language C cast. Proposed:
+        add method/codec-selected high-level conversion for L2/L3 and restrict
+        raw representation/address casts to L2; the current L3 gate is missing.
+
+    19. class / relation / rule / query
+        `class` is TABLE/DATA: the special classification table, not the whole
+        registry and not a `class:` receiver. A relation is an N-column source
+        table, not a separate receiver. Keep both table-based; optional
+        `class:`/`relation:` sugar, if added, must lower directly to
+        `table: source`. `rule:` and an expression `query(...)` are NOT
+        IMPLEMENTED. Proposed: register `rule:` as a statement receiver that
+        materializes a named resolver rule, and `query(Table, coordinates...)`
+        as an expression receiver returning matching rows, `None`, or an
+        explicit ambiguity result.
+
+    20. message / validate / execute / emit
+        NOT IMPLEMENTED as source operators. A message is currently TABLE/DATA,
+        an ordinary ProposedMessage Structure. Proposed: register expression
+        receivers `validate(Message, RegistryView) -> ExecutionPlan | Failure`
+        and `execute(ExecutionPlan) -> Result | Failure`, plus an `emit:`
+        statement receiver that appends a proposed message to the current
+        Message Thread output. These operations belong to L2/L3.
+
+    21. model / descriptor / union / c.union
+        `model` and `descriptor` are TABLE/DATA; there are no generic declaration
+        receivers, and none is required: represent them with descriptor source
+        tables. High-level `union:` is NOT IMPLEMENTED. Proposed: lower its member
+        declarations to a source relation without choosing physical storage. The
+        physical `c.union:` machine-layout receiver is IMPLEMENTED, but its
+        required L3 exclusion is not yet enforced. `field.union` is a TABLE/DATA
+        layout relation.
+
+    22. operator / receiver / method
+        There are no `operator:`, `receiver:` or `method:` declaration receivers.
+        The `operator.*`, `namespace`, `receiver.*`, `method` and
+        `requires.method` tables are IMPLEMENTED. Proposed declarative sugar:
+        `operator:` inserts spelling/emitter rows;
+        `receiver(Head, Kind, Handler)` inserts namespace and receiver-kind rows;
+        `method(Class, Name, Signature, Implementation)` inserts
+        method/signature/binding rows.
+
+    23. evidence / validator
+        TABLE/DATA, not source operators. `profile.validator` lookup exists, but
+        the generic validation pipeline is NOT IMPLEMENTED. Proposed: the
+        `validate` operation from item 20 returns an ExecutionPlan containing
+        validation/authority evidence, or Failure; no separate `evidence:`
+        receiver is required.
+
+    24. entry / provides / satisfies / conflict
+        TABLE/DATA or proposed registry relations, not registered receivers.
+        Proposed: represent an entry as a table-row bundle keyed by its name;
+        store `provides[Candidate][Requirement] = true`; use the implemented
+        `implements` operation for method compatibility instead of a duplicate
+        `satisfies` operator; represent conflicts as resolver results containing
+        the competing cells. No intrinsic `entry:` or `conflict:` operator is
+        required.
+
+    25. procedural / object / functional / logical
+        Consumption modes, not operator spellings. Proposed representation:
+        `consumption.mode[Receiver] = procedural | object | functional | logical`.
+        Concrete actions remain calls or the `validate`, `execute`, `query` and
+        `derive` operations described in this list.
+
+    26. provider / codec / toLmx / fromLmx
+        `provider` is TABLE/DATA and generic provider selection is not yet
+        implemented. Proposed: select `provider.binding[Operation][Provider]`
+        through ordinary registry resolution and optional priority rows.
+        `serialization.codec` lookup is IMPLEMENTED. `toLmx` and `fromLmx` are
+        NOT IMPLEMENTED as source operations; only internal table serialization
+        helpers currently exist. Proposed generic methods:
+        `toLmx(Value) -> Text | Failure` and
+        `fromLmx(TargetClass, Text) -> TargetClass | Failure`, selected through
+        method/codec tables rather than parser primitives.
+
+    27. send / reply / await / schedule / thread
+        NOT IMPLEMENTED as source receivers. Proposed contracts:
+        `send(Message) -> Future`; `reply(Value | Failure)`;
+        `await(Future) -> Value | Failure`; `schedule(Message, Time)`; and
+        `thread:` descriptor/body -> MessageThread.
+
+    28. copy / move / borrow / own
+        NOT IMPLEMENTED as source operators; only lower-level ownership/runtime
+        helpers exist. Proposed: resolve generic operation methods through
+        `ownership.operation[Class][copy|move|borrow|own]` plus signature/effect
+        rows. High-level copy/move/borrow operations may be L2/L3; raw allocator,
+        address and storage operations remain L2-only.
+
+    29. watch / derive
+        NOT IMPLEMENTED. Proposed: `watch(Query, Handler) -> Subscription` and
+        `derive(Query, Rule) -> candidate rows/messages`. `reactive` is a
+        profile/mode value, not a separate operator.
+
+    30. service / route / HTTP adapter
+        NOT IMPLEMENTED as source receivers. Proposed: `service:` materializes a
+        service descriptor and `route(Method, Path, Handler)` inserts a route
+        row. HTTP remains a provider/transport adapter selected through
+        `service.adapter` and `serialization.codec`, not a core operator.
+
+    31. authenticate / verify / authorize / ticket
+        NOT IMPLEMENTED as source receivers. Proposed expressions:
+        `authenticate(Credential, Verifier) -> AuthEvidence | Failure`,
+        `verify(Claim, Verifier) -> Evidence | Failure`, and
+        `authorize(Evidence, Operation) -> Allowed | Failure`. Ticket creation
+        and revocation operate on explicit Ticket Structures; `ticket` itself
+        is not an operator.
+
 Current bootstrap receiver/operator summary:
 
 The following list contains exact spellings registered by the current L2
@@ -7302,8 +7546,9 @@ profile family is already a core receiver.
                            synchronized, finally, assert
     declarations/values:   const, (), [], None, OK, false, true
     module/source:         table, import, predef, join, merge
-    L2 projection/build:   include, define, ifndef-default, os, ifdef,
-                           guard, extern_c, c.struct, c.union, c.enum
+    machine/build receivers (intended L2-only; current L3 gates incomplete):
+                           include, define, ifndef-default, os, ifdef, guard,
+                           extern_c, c.struct, c.union, c.enum
     expression receivers:  cast: TargetClass expression
                            implements(CandidateClass, RequiredClass)
     modifier/trailers:     external; end, until
@@ -7311,12 +7556,18 @@ profile family is already a core receiver.
                            include, define, os, ifdef, fn, layout, constant,
                            alias, forward, prototype, guard, extern_c, unit
 
-`merge` consumes a named Structure. `join` composes source-table descriptors
-and rows in the active registry view. `predef` is explicitly excluded from L3;
-direct source materialization is an L2 module operation. The current bootstrap
-enforces this boundary incompletely: `receiver.l3.exclude` explicitly lists
-only `predef`; equivalent L3 gates for source `table`, `join` and the built-in
-named-layout fallback remain implementation work.
+The current `merge` handler consumes a named layout Structure and emits its
+physical layout/storage projection; it does not yet implement the generic
+high-level merge contract. `join` composes source-table descriptors and rows in
+the active registry view. Generic source-table materialization is a shared
+L2/L3 operation. The current bootstrap still lists `predef` in
+`receiver.l3.exclude`. Its local-source early prepass scans only implicit or
+explicit L2 surfaces, although ordinary declaration can still materialize
+table/join on an explicit L3 surface. Hoisted implicit-`.lm3` handling and
+`.lm3` predef targets remain implementation work. These are implementation
+gaps, not intended level restrictions. The built-in named-layout fallback must
+be split by effect: generic descriptor/source rows are L2/L3, while physical C
+layout and storage projection is L2-only.
 
 The current expression operator tables register these exact families:
 
@@ -7342,17 +7593,14 @@ they have names. The current bootstrap consumes, among others:
     serialization.codec / profile.validator
         codec and validation metadata tables.
 
-The former summary names `class`, `relation`, `rule`, `query`, `message`,
-`validate`, `execute`, `emit`, `model`, `union`, `descriptor`, `evidence`,
-`validator`, `entry`, `provides`, `satisfies`, `conflict`, `provider`, `codec`,
-`send`, `reply`, `await`, `schedule`, `thread`, `copy`, `move`, `borrow`, `own`,
-`watch`, `derive`, `service`, `route`, `authenticate`, `verify`, `authorize` and
-`ticket` describe registry keys, table patterns, runtime roles or proposed
-profile vocabulary. They are not current core receiver heads. The registered
-low-level spelling is `c.union:`, not a generic `union:` receiver. `toLmx` and
-`fromLmx` are registry operation-table names, not intrinsic bootstrap
-receivers. A profile may make any such term executable only by registering an
-exact receiver and its validation/lowering contract.
+Items marked TABLE/DATA above describe registry keys, table patterns, result
+Structures, runtime roles or proposed profile vocabulary. They do not become
+operators merely because they have names. The registered low-level spelling is
+`c.union:`, not a generic `union:` receiver. `toLmx` currently appears only in
+internal table-serialization helper names and `fromLmx` is absent; neither is a
+registered operation-table method yet. A profile makes a proposed term
+executable only by registering an exact receiver and its validation/lowering
+contract.
 
 The current bootstrap implements only unlabelled `break` and `continue`.
 Labelled control may be added as a profile extension by registering ordinary
@@ -8097,8 +8345,8 @@ different semantic questions:
         `c.closure-struct` or another representation that can store an
         environment.
 
-The canonical set-style registry tables are direct L2 registry source. In a
-`.lm2` module they are written without a level wrapper:
+The canonical set-style registry tables are direct L2/L3 registry source. In an
+`.lm2` or `.lm3` module they are written without a level wrapper:
 
     table:
         source
@@ -8359,6 +8607,11 @@ preprocessor include and not runtime mutation of its source operands. The parser
 builds an ordinary `merge:` Frame; the active receiver/operator namespace gives
 that Frame structural-merge semantics.
 
+This is the target contract. The current registered handler instead performs
+physical named-layout/C-storage merging. Implementing the generic high-level
+field-stream merge and separating it from the L2 physical projection remain
+work.
+
 Semantic form:
 
     merge(part0, part1, ..., partN)
@@ -8416,17 +8669,20 @@ evaluate the `merge` result before validating the final descriptor.
 
 Table profile:
 
-In an L2 table profile, `table:` and `join:` are ordinary module receiver Frames
-whose bodies are valid LMX Structures. Both materialize a `TableDescriptor` and
-rows in the active `RegistryView`. For `table`, an unqualified scalar leading
+In an L2 or L3 table profile, `table:` and `join:` are ordinary module receiver
+Frames whose bodies are valid LMX Structures. Both materialize a
+`TableDescriptor` and rows in the active `RegistryView`. For `table`, an
+unqualified scalar leading
 column named `class` selects the Registry-only projection with no duplicate C
 storage. A first direct body atom `source` selects the same source-only
 projection explicitly, independently of the leading column's name. The
 declared type of the key column remains part of the table schema and typed
 compatibility checks; it does not select the projection. Without the explicit
 marker, other leading column names select runtime tables: they materialize the
-same source descriptor and may additionally lower to static ANSI C row/storage
-structures. `join` is always source-table-only, independently of its schema;
+same source descriptor. An L2 consumer may additionally lower such a table to
+static ANSI C row/storage structures. An L3 consumer must keep a high-level
+table representation with checked access and may not expose physical layout or
+unchecked storage. `join` is always source-table-only, independently of its schema;
 it does not additionally emit an ANSI C Structure or table value. A
 Registry-projected `table`, and every `join`, is a module declaration and is not
 admitted inside an executable function body. Neither is admitted in
@@ -8435,7 +8691,12 @@ a translation-time operation and cannot depend on the generated C target. A
 module-level `guard` may contain these declarations; `guard` is an
 idempotence/include boundary rather than an alternative branch selection.
 
-The L2 module receiver `join` materializes a new table descriptor from several
+The current bootstrap has not yet implemented the high-level L3 representation
+for a non-source runtime table: its existing handler emits a C row type and
+static storage. Splitting that representation from the L2 physical projection
+is implementation work.
+
+The L2/L3 module receiver `join` materializes a new table descriptor from several
 table-producing sources:
 
     join: (sourceTable0 sourceTable1 ... sourceTableN) targetName
@@ -8470,7 +8731,7 @@ active registry lookup later uses last-visible-row, first-visible-row, relation
 set, or overlay semantics, that is the consuming registry policy, not a hidden
 side effect of `join`.
 
-Example in an `.lm2` source module:
+Example in an `.lm2` or `.lm3` source module:
 
 join: (`Base.field.class` `Audit.field.class`) `Entity.field.class`
     columns: class  (field class)
@@ -8514,11 +8775,11 @@ Mechanism filter:
 19.18. Registry Table and Resolution Operators
 
 Unless an example says otherwise, registry `table:` and `join:` forms in
-sections 19.18 through 19.33 are direct L2 module receivers. New source should
+sections 19.18 through 19.33 are direct L2/L3 module receivers. New source should
 prefer the explicit first body atom `source`. Existing examples whose first
 unqualified scalar column is `class` use the equivalent canonical
-Registry-only projection defined in section 19.17. L3 may query the resulting
-RegistryView but may not materialize these source tables.
+Registry-only projection defined in section 19.17. Both levels may materialize
+and query the resulting RegistryView.
 
 19.18.1. Class
 
@@ -8871,8 +9132,8 @@ technique; source syntax remains ordinary LMX expressions.
 
 19.18.3. Registry Source and MIX Definitions
 
-The source of registry rows is LMX itself. An L2 module may select one or more
-`.lm2` registry/model dependencies before translating a target module:
+The source of registry rows is LMX itself. An L2 or L3 module may select one or
+more registry/model dependencies before translating a target module:
 
     predef:
         "core/classes.lm2"
@@ -8880,10 +9141,12 @@ The source of registry rows is LMX itself. An L2 module may select one or more
         "service/messages.lm2"
     end: predef
 
-Those files are parsed as L2 modules. Direct `table:` and `join:` receivers on
-their module surface materialize source rows in the active RegistryView. They
-may use MIX bounded
-forms `{...}` to mark groups, documentation regions, visual clusters or active
+The example files are parsed as L2 modules because of their extensions. In the
+specified extension, an admitted `.lm3` dependency retains its L3 profile; the
+current bootstrap still accepts only `.lm2` `predef` targets. Direct `table:`
+and `join:` receivers on either module surface materialize source rows in the
+active RegistryView. They may use MIX bounded forms `{...}` to mark groups,
+documentation regions, visual clusters or active
 sets. MIX marks are not a separate metadata language; they are bounded LMX forms
 whose result goes to the MIX overlay stream.
 
@@ -8898,10 +9161,10 @@ Example sparse registry source:
     end: equals
 
 The translator/resolver must be able to consume such LMX/MIX definitions and
-load registry tables during L2 module construction. An L3 runtime may query or
-receive a validated RegistryView overlay, but it does not gain `predef` or
-direct source-table materialization. A runtime that needs new persistent source
-tables requests that work through a checked L2 service boundary.
+load registry tables during L2 or L3 module construction. Both levels may
+materialize source tables, use `predef` and create RegistryView overlays. A
+selected persistence profile may separately control when an overlay is written
+to a durable store; that policy is not an L2/L3 boundary.
 
 19.18.4. Expression Resolution
 
@@ -9501,13 +9764,15 @@ were too close together.
 19.20. Structural Descriptor Tables
 
 There are no separate core `model:` or `class:` declaration receivers. On a
-direct L2 module surface, `table:` materializes descriptor source rows and the
-current built-in named-structure fallback may materialize the layout rows
-described below. By specification, L3 may query the resulting `RegistryView`
-but may not invoke the L2 source-table materializer. The current bootstrap
-enforces that boundary explicitly for `predef` but does not yet gate every
-source `table`, `join` or named-layout fallback path. Profile-defined transient
-L3 evidence overlays are a separate validation mechanism.
+direct L2 or L3 module surface, `table:` materializes descriptor source rows.
+The current built-in named-structure fallback combines two effects that must be
+distinguished: generating generic descriptor/source rows is an L2/L3 operation,
+while selecting a physical C layout and emitting storage is L2-only. The
+current bootstrap still excludes `predef` from L3, and its local-source early
+prepass scans only L2 surfaces. Ordinary declaration may nevertheless
+materialize table/join on an explicit L3 surface. Hoisted implicit-`.lm3`
+handling remains an implementation gap. Profile-defined transient evidence
+overlays use the same table machinery and may be produced at either level.
 
 19.20.1. Named L2 Structures and Layout Rows
 
@@ -9616,8 +9881,8 @@ has cells for all admitted variants or an explicit fallback.
 
 19.20.4. Generated Rows and Extension Policy
 
-Descriptor consumers generate L2 source rows or profile-validated transient L3
-overlay rows. Extension is table insertion under the active receiver policy.
+Descriptor consumers generate source rows or profile-defined transient overlay
+rows in L2 or L3. Extension is table insertion under the active receiver policy.
 Conflict policy is table policy:
 
     same key, same terminal value      -> duplicate, allowed or ignored;
@@ -9802,14 +10067,18 @@ Composition means adding rows under one or more tables.
 
 19.23.2. Import / Provides / Satisfies
 
-`import`, `provides` or `satisfies` do not merge arbitrary implementations.
-They add relation rows:
+The registered `import:` receiver composes a module. `provides` and `satisfies`
+are relation names, not registered receivers, and do not merge arbitrary
+implementations. They may be represented by rows:
 
     provides[Array][Indexed] = true
     provides[Array][Sized] = true
 
 The concrete model owns representation and primitive operations. External
-roles/contracts are derived views over those operations.
+roles/contracts are derived views over those operations. Current structural
+method compatibility is computed by the registered `implements` expression;
+a stored `satisfies` row, if used by a profile, is a materialized result or an
+additional declared relation rather than a second compatibility operator.
 
 19.23.3. Conflicts
 
@@ -9867,10 +10136,11 @@ implementation stage, not the high-level model.
 
 19.25.2. File Extensions and Level Semantics
 
-`.lm2` modules may add registry/configuration rows and use low-level
-construction receivers. `.lm3` modules may describe safe messages, services,
-runtime policy, startup and query rules. The extensions select safety profiles,
-not separate registry or message levels.
+Both `.lm2` and `.lm3` modules may add registry/configuration rows and describe
+messages, services, runtime policy, startup and query rules. `.lm2` additionally
+admits the low-level machine operations defined in section 20. The extensions
+select operation surfaces, not safety profiles or separate registry/message
+levels.
 
 19.25.3. Arguments and Return Lowering
 
@@ -9894,7 +10164,7 @@ ANSI C projection is a lowering table family. Cells may lower to:
     raw `c.*` surface.
 
 `c.*` is a permanent door to the ANSI C namespace/surface. It is not a normal
-Lingvamyxa namespace lookup. L2 registry-source tables intended for L3
+Lingvamyxa namespace lookup. Registry-source tables intended for high-level
 consumption should not use `c.*` spellings as registry classes/keys. Use a
 registry class/key such as `sqrt_ansi_c` or `plus_u32_u32_l2`, then map that
 class/key through an L2/L1
@@ -9975,20 +10245,22 @@ language. Examples:
     libcurl / CivetWeb      -> transport/service envelope providers;
     libsodium               -> crypto/auth provider.
 
-Direct `c.*` calls remain possible in L2/L1 substrate code, but ordinary L3
-semantics should go through registry cells and provider validation. Removing
-MPFR and installing an `ANA_LOGEXP` provider should not require rewriting the
-source expression; it should require changing provider rows, bindings and
-RegistryView policy.
+Direct `c.*` calls remain possible in L2/L1 substrate code, while ordinary
+high-level L2/L3 semantics use registered high-level registry cells. A selected
+provider profile may additionally validate those cells. Removing MPFR and
+installing an `ANA_LOGEXP` provider should not require rewriting the source
+expression; it should require changing provider rows, bindings and RegistryView
+policy.
 
 19.25.6. Codec and Persistence
 
-`toLmx` and `fromLmx` are registry operation-table names, not intrinsic parser
-forms or currently registered bootstrap receivers. A profile that exposes them
-as callable operations must provide the corresponding operation, receiver and
-codec rows. All language values, including primitive values and low-level
-handles admitted by a profile, should have explicit codec rows if they are
-serializable.
+`toLmx` and `fromLmx` are proposed standard method keys, not intrinsic parser
+forms, current registry operation rows or registered bootstrap receivers. The
+current code has internal table-to-LMX serialization helpers but no generic
+`fromLmx` operation. A profile that exposes either callable operation must
+provide the corresponding method, receiver and codec rows. All serializable
+language values, including primitive values and low-level handles, should have
+explicit codec rows.
 
 Persistent registry rows may be stored as LMX files, generated database rows
 or cached binary indexes. LMX remains the source form.
@@ -9997,7 +10269,7 @@ Portable persistence is structural LMX serialization, not memory imaging. A
 runtime may materialize structures in memory using whatever representation the
 selected L1 substrate provides, but a portable persistent form records admitted
 LMX Structures, registry rows, messages, evidence and Message Thread logical state
-through codec receivers such as `toLmx` and `fromLmx`. Raw process memory,
+through proposed codec methods such as `toLmx` and `fromLmx`. Raw process memory,
 allocator state, native handles, alignment, endian order and ABI layout are not
 portable LMX state unless a profile admits an explicit codec for them.
 
@@ -10528,10 +10800,10 @@ table policy.
 
 19.32.6. External Authentication Modules
 
-OAuth or OS-login modules are ordinary L3 modules that can obtain authority
-only through validator/evidence rows admitted by the receiver. They do not
-replace the core verifier table. They may request or receive delegated tickets
-after the primary policy allows it.
+OAuth or OS-login modules are ordinary L2/L3 modules. How they obtain authority
+is defined by the selected authentication/authorization profile, not by their
+source level. They do not replace the core verifier table. They may request or
+receive delegated tickets after the primary policy allows it.
 
 19.32.7. Authentication Evidence Rows
 
@@ -10625,10 +10897,12 @@ values are storage/layout objects and are normally reached by address. This
 keeps `u32: x` simple while preventing an embedded record from silently becoming
 a copyable whole-Structure expression.
 
-This section is the L2-specific low-level operator/parser-form surface. It is
-not part of L3. In this sense L3 is smaller than L2: L3 keeps the safe
-algorithmic/control surface admitted by its profile and never inherits raw
-storage, address, layout-storage or parser forms from L2.
+This section is the L2-specific low-level machine operator/parser-form surface.
+It is not part of L3. In this sense L3 is smaller than L2: L3 keeps the
+high-level algorithmic/control, registry and runtime surface and excludes raw
+storage, address, physical layout-storage and unchecked access. A parser form
+from this section is L2-only only when its source semantics expose such machine
+state; parser involvement by itself is not a level boundary.
 
 20.1. Pointer and Field Syntax Exclusions
 
@@ -11046,10 +11320,12 @@ not a second table model. The bootstrap file loader parses a selected exact
 path once per successful load and is used for the core module and
 translator-profile candidates. Only `.lm2` registry-profile candidates are
 accepted; plain `.lmx` and legacy `.lm4`/`.lm5` candidates are rejected rather
-than used as compatibility fallbacks. Registry/model source lives in direct L2
-`table:`/`join:` modules; an L2 dependency selects
-such a module with `predef:`. Ordinary L2 imports keep their normal loader
-semantics.
+than used as compatibility fallbacks. Registry/model source lives in direct
+L2/L3 `table:`/`join:` modules; a dependency selects such a module with
+`predef:` when hoisting is required. Ordinary imports keep their normal loader
+semantics. The restricted bootstrap loader currently accepts only `.lm2`
+profile candidates; L3 module support in that earliest path is implementation
+work.
 The core module itself contains only tables. Its path is loaded module state and
 is not recorded as an explicit `predef` path.
 
@@ -11058,17 +11334,18 @@ names a relation column. A two-column table materializes the relation directly
 under `name`; an N-column table with N > 2 materializes each non-key column as
 `name.column`, for example `BUILD.l2`, `BUILD.win` and `BUILD.unix`.
 
-In L2, an unqualified scalar leading column named `class` selects the canonical
-Registry-only projection for `table`. The first direct body atom `source`
+In L2 or L3, an unqualified scalar leading column named `class` selects the
+canonical Registry-only projection for `table`. The first direct body atom `source`
 selects that projection explicitly for any valid table schema. Such a table
 materializes a `TableDescriptor` and its rows in the active `RegistryView`, but
 does not also create a static C row type, array, or variable. The key column's
 declared type is retained in the descriptor and controls typed compatibility
 and fallback; it is not part of projection selection. These rules are
-independent of the source path or `predef`. Without the explicit marker, an L2
-table whose leading column has another name keeps the runtime projection: it
-still materializes its source descriptor and additionally creates the static C
-storage visible as the table value. Every `join`, including one with a
+independent of the source path or `predef`. Without the explicit marker, a
+table whose leading column has another name keeps the runtime projection and
+still materializes its source descriptor. An L2 consumer may additionally
+create static C storage visible as the table value; an L3 consumer uses a
+high-level representation with checked access. Every `join`, including one with a
 non-Registry schema, is instead an unconditional source-table module
 declaration: it appends source/direct rows in the active `RegistryView` and
 emits no runtime C Structure or table value. Registry-projected tables and all
@@ -11093,7 +11370,7 @@ A bootstrap implementation may still lower these table Structures to a flat
 `row: table key payload` internal representation. That is a temporary storage
 shape over the same class/key spelling rule, not a different semantic model.
 
-An L2 source-table profile may also materialize a table descriptor through the
+An L2/L3 source-table profile may also materialize a table descriptor through the
 `join` receiver described in section 19.17:
 
     join: (BaseTable OverlayTable) TargetTable
@@ -11102,8 +11379,8 @@ An L2 source-table profile may also materialize a table descriptor through the
                  local  value
     end: TargetTable
 
-This is not an import directive and not parser syntax. It is ordinary L2 module
-receiver consumption that produces the same kind of table descriptor as
+This is not an import directive and not parser syntax. It is ordinary L2/L3
+module receiver consumption that produces the same kind of table descriptor as
 `table:`.
 
 L2 `fn` and `sub` definitions lower to `static` ANSI C functions by default.
@@ -11426,7 +11703,7 @@ They may still exist in L3 or a richer L2 profile.
 
 This subsection describes the first/minimal L2 bootstrap control subset, not a
 level-order rule where L3 is wider than L2. L2 remains the wider low-level level
-because it also owns the unsafe forms in sections 20.1 through 20.4; L3 never
+because it also owns the machine forms in sections 20.1 through 20.4; L3 never
 exposes those forms.
 
 21. Structural Operation on a Local Copy of Namespace-Structure
