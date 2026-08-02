@@ -43,7 +43,7 @@ Canonical semantic pipeline:
 
     source text
         -> core structural parse
-        -> generic Structure values
+        -> generic owner-managed Structure references
         -> receiver/operator/subroutine consumption
         -> resolved semantic Structures or table-cell decisions
         -> interpretation or lowering
@@ -891,7 +891,11 @@ The L2/L3 language is even more hermetic: it is bound to the L2-to-L1
 projection contract, not to a particular operating system, ABI, binary format
 or CPU family.
 
-This document does not specify the L1 target language, physical calling convention, memory ownership rules or low-level runtime representation. Those belong to translator and runtime specifications.
+This document does not prescribe one L1 target language, physical calling
+convention or binary representation. Those belong to translator and runtime
+profiles. It does specify the source-visible ownership invariant: ordinary
+Structures are reference-only owner-managed objects with stable identity, and
+their lifetime follows the Message Thread owner/arena model in section 19.29.
 
 1.3. L2
 
@@ -1040,14 +1044,18 @@ root in an L3 script profile, or an explicit L3 message/callable/service target.
 
 2. Value Ontology
 
-The minimal core has two classes of values:
+The minimal core has two source-semantic classes of values:
 
-    1. primitive/scalar/reference/handle values
-    2. Structure / Frame values
+    1. primitive/scalar and explicit L2 machine values;
+    2. references/handles to owner-managed Structures.
 
-Primitive/scalar/reference/handle values include numbers, booleans, atoms, symbols, enum-like values, handles, references, typed addresses and L2-level callable references.
+Primitive/scalar and explicit machine values include numbers, booleans, atoms,
+symbols, enum-like values, typed addresses and L2-level callable references.
 
-All non-primitive values are Structures or handles/references to Structures. This includes arrays, text, objects, call frames, bodies, configurations, expressions, model fragments and executable/callable descriptors.
+Every non-primitive ordinary value is a reference/handle to a Structure. This
+includes arrays, text, objects, call Frames, bodies, configurations, expressions,
+model fragments and executable/callable descriptors. A Frame is a Structure
+shape, not a third value category and not an aggregate passed by value.
 
 At source-semantic level, executable definitions are ordinary values bound in
 the active lexical namespace view. A translator may lower such a value to any
@@ -1057,9 +1065,16 @@ primitive. That lowering choice is not a separate source-level kind.
 
 A Structure can contain fields. A field can be positional, named or derived during normalization from a receiver signature.
 
-At L3, Structures are normally passed by reference/handle. They are not copied by value at every call unless a receiver explicitly defines copy semantics.
+At both L2 and L3, ordinary Structures are always passed by reference/handle.
+An explicit copy/serialization receiver may construct another owner-managed
+Structure, but this is an operation with its own ownership contract, not
+pass-by-value.
 
-At L2, aggregate layouts do not have to be source-level value objects. They may be represented by typed addresses to storage, handles, layout structures or primitive representations according to the translator profile.
+At L2, explicit aggregate layouts such as `c.struct` and explicit
+`stack`/`heap`/`static` storage are machine layouts and typed address values. They
+are not ordinary Structure values. A backend may project an ordinary Structure
+layout to C storage internally, but every source-level ordinary Structure
+expression still produces only its reference/handle.
 
 There is no fundamental keyword `Struct` in the minimal source syntax.
 
@@ -4437,13 +4452,15 @@ Conceptual L1 shape:
 
     lm_status lm_receiver_fn(LmStructure *structure, LmContext *context);
 
-The exact C names are implementation details. The important rule is that `fn` receives one Structure value, not several primitive parser arguments.
+The exact C names are implementation details. The important rule is that the
+definition receiver receives one Structure reference, not several primitive
+parser arguments.
 
 7.2. Function Definition Form
 
 Example source:
 
-fn: myFunc (int(i), int(j, 1), p1, p2) (int(r1), int(r2))
+fm: myFunc (int(i), int(j, 1), p1, p2) (int(r1), int(r2))
     print: i
     print: j
     p1()
@@ -4452,7 +4469,7 @@ return: r1 r2
 
 Strict conceptual form:
 
-    fn(
+    fm(
       name(myFunc),
       args(
         int(i),
@@ -4475,7 +4492,7 @@ Strict conceptual form:
 
 Explicit nested-source form:
 
-fn:
+fm:
     name: myFunc
     args:
         int: i
@@ -4503,20 +4520,23 @@ The `fn`/`fm` frame's logical argument Structure is not the same thing as the fo
     body -> fields 3..end as the statement Structure consumed by fn/sub
 
 The `fn` receiver returns one source-level value. The difference between `fn`
-and `fm` is not primitive versus non-primitive. A single `fn` value may be
-lowered by the active translator as a primitive, pointer, reference, handle or
-another single-value representation. A pointer/reference/handle to a Structure
-is still one returned value; it is not a multiple return.
+and `fm` is not primitive versus non-primitive. A primitive `fn` result may use
+the profile's direct primitive representation. An ordinary Structure result is
+always a reference/handle to an existing owner-managed Structure. It is never a
+copyable aggregate value. A reference/handle to a Structure is still one
+returned value; it is not a multiple return.
 
 The `fm` receiver uses the same field order, but field 2 is a return-description
 Structure. That Structure explicitly declares the returned fields. `fm` is the
 multiple-return form: the source result is one return Structure, and consumers
 may treat that Structure as one value or unpack/map it as a sequence of returned
 values where their receiver signature admits it. The explicit return Structure
-also gives the translator an optimization surface: it may lower the same source
-result as a C struct returned by value, a hidden output pointer, direct scalar
-returns, register-like internal convention, arena handle or another
-profile-defined representation.
+is also reference-only. It may be created in caller-provided owner-managed
+storage before the function body starts, or it may be another existing
+owner-managed Structure compatible with the return description. A translator
+may use a hidden output reference or eliminate unobservable physical field
+traffic, but it must preserve the reference-only result, Structure identity and
+the no-allocation-at-return rule of section 8.8.
 
 Function definition is not function call syntax. The first compact `fn`/`sub`
 field must be the declared name as its own field. A spelling with no separator
@@ -5372,7 +5392,7 @@ The core return forms are:
 
 Inside an executable body, `return` exits the current executable body.
 
-For an `fn`, the core profile requires a value-bearing return form. `return: value` evaluates or consumes `value` as one logical value compatible with the declared return model and exits the current executable body. If the function return model is structural, the tail of `return:` is consumed as one return Structure. Whitespace-separated short-tail fields may be mapped positionally to the return Structure by the `return` receiver signature.
+For an `fn`, the core profile requires a value-bearing return form. `return: value` evaluates or consumes `value` as one logical value compatible with the declared return model and exits the current executable body. If the function return model is structural, `value` denotes one compatible Structure reference. Whitespace-separated short-tail fields admitted by an `fm` signature populate its already existing return Structure before the control exit; they do not create an aggregate value or allocate a Structure in the `return` operation.
 
 For a `sub`, `return` without tail exits without producing a normal return value.
 
@@ -5496,7 +5516,7 @@ Here the indented `return: -x` line is runtime control inside the `if` body. It 
 
 Terminal value return may use values prepared in named return variables:
 
-fn: `estimate harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
+fm: `estimate harvest` (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     harvest: bed\area
     redApples: 0
     greenApples: 0
@@ -5521,9 +5541,15 @@ fm: `estimate harvest` (PlantBed(bed))
     greenApples: 0
 return: harvest redApples greenApples
 
-The terminal `return:` returns the current values of the declared return variables and closes the function definition.
+The named return variables denote fields of the already existing return
+Structure. The terminal `return:` finishes their updates, forwards that
+Structure reference and closes the function definition. It does not allocate or
+copy the return Structure.
 
-An `fm` return-description Structure with several fields defines one return Structure. Updating several declared return fields and returning one Structure-compatible value are source-semantically equivalent when the produced Structure matches the declared return Structure.
+An `fm` return-description Structure with several fields defines one
+owner-managed return Structure. Updating its declared fields and returning an
+existing compatible Structure reference are source-semantically equivalent when
+the produced Structure matches the declared return description.
 
 Example positional structural return:
 
@@ -5535,7 +5561,9 @@ fm: `split harvest` (PlantBed(bed))
     )
 return: bed\area 0 0
 
-Here the `return:` tail is one logical return Structure with three fields consumed by the return signature.
+Here the `return:` tail supplies three field values consumed by the return
+signature. The values are installed in the already existing return Structure;
+the `return` control operation then forwards its reference.
 
 8.6. Function Name Binding Update
 
@@ -5571,9 +5599,9 @@ rather than relying on a value left in a local binding at structural close.
 8.8. Return Source Semantics
 
 At the source-semantic level, every `fn` has one logical single-value return.
-That value may be lowered as a primitive, pointer, reference, handle or another
-single-value representation by the active translator. A pointer/reference/handle
-to a Structure is still one value returned by `fn`.
+Primitive results may use a direct primitive representation. Every ordinary
+Structure result uses a reference/handle representation. A Structure is never
+passed or returned as an aggregate value and is never implicitly copied.
 
 At the source-semantic level, `fm` has one logical return Structure. The
 return-description Structure explicitly declares the returned fields. This is
@@ -5583,9 +5611,42 @@ receiver signature admits it. The field types themselves do not define the
 `fn`/`fm` boundary; the boundary is whether the source return is one value or an
 explicit return Structure.
 
-The `return:` receiver consumes its tail as the current function result and exits. For a `sub` or no-value label/procedure executable, a bare `return` exits without producing a value. Terminal return additionally closes the current executable definition in source structure when the active executable receiver admits that return form in a trailer position.
+For a Structure result, `return: expression` forwards the exact compatible
+reference produced by `expression`. Return lowering must not allocate, clone,
+copy, materialize or promote the referenced Structure, and it must not change
+the Structure address or identity. The local binding that contains the reference
+may cease to exist; the referenced Structure belongs to its owner, not to that
+local reference slot.
 
-Physical return strategy, storage ownership and low-level runtime representation are translator/runtime implementation details. They are not part of the source-semantic core.
+Evaluating `expression` may itself execute an explicit Structure constructor
+whose declared semantics allocate a new owner-managed object. That allocation
+belongs to the constructor and produces the reference which `return` forwards.
+The `return` receiver must not add another result object, copy or promotion.
+
+No ordinary Structure return is invalid merely because the reference was bound
+or the Structure was created lexically inside the function. Ordinary local
+Structures are owner-managed reference objects from the moment they are
+materialized; they are not C automatic aggregate values. Before an owner that
+contains a returned reference is cut, the runtime publishes that reference to
+the caller/continuation and retains, detaches or reparents its already existing
+owner region as required. These owner-graph operations preserve the address and
+must not allocate on the return path. Section 19.29 defines the owner ordering.
+
+For `fm`, positional or named return fields populate an already existing
+owner-managed result Structure. The caller may provide that Structure before
+entry. The return operation forwards its reference after the field updates; it
+does not construct the result at the exit point.
+
+The `return:` receiver consumes its tail as the current function result and
+exits. For a `sub` or no-value label/procedure executable, a bare `return` exits
+without producing a value. Terminal return additionally closes the current
+executable definition in source structure when the active executable receiver
+admits that return form in a trailer position.
+
+Primitive ABI details and the physical representation of a reference/handle are
+translator/runtime implementation details. The reference-only Structure rule,
+stable identity and absence of allocation/copy at `return` are source-semantic
+requirements and are not implementation options.
 
 The error mechanism is not specified by this document. A function may represent an erroneous result as one of the values allowed by its declared return type unless a later error-system specification defines a separate convention.
 
@@ -5597,25 +5658,32 @@ The general error/status system is not specified in this document. It may be def
 Possible return-lowering variants for an ANSI C implementation:
 
 variant 1:
-A single-value `fn` return lowers to the active profile's chosen single-value C representation.
+A primitive `fn` return lowers to the active profile's chosen primitive C
+representation.
 
 variant 2:
-An `fm` multi-field source return lowers to a caller-provided output Structure passed through a hidden or explicit implementation-level address.
+An ordinary Structure `fn` return lowers to the exact existing Structure pointer
+or handle produced by the return expression.
 
 variant 3:
-A small `fm` return Structure lowers to a C struct returned by value if the translator/runtime profile allows it.
+An `fm` multi-field source result uses caller-provided owner-managed output
+storage passed through a hidden or explicit reference. That storage exists
+before the return statement is executed.
 
 variant 4:
-A structural return lowers to a handle/address allocated or managed by a runtime arena, heap, region or other implementation-owned storage.
-
-variant 4b:
 An `fm` return Structure may be optimized away when the translator can map its
-fields directly to the consuming context without changing source semantics.
+fields directly to the consuming context without changing observable Structure
+identity or the reference-only contract.
 
 variant 5:
 Terminal return lowers as an ordinary body-level return followed by no further generated body statements. Source-level structural closure is resolved before lowering.
 
-These variants are implementation strategies only. The language-level rule remains that `return: value` returns the declared single value from an `fn` or the declared return Structure from an `fm`, bare `return` exits a no-value executable when admitted, and terminal return also closes the current executable definition.
+These variants are implementation strategies only. No ANSI C variant may return
+an ordinary Structure as a C aggregate value or allocate/copy/materialize it in
+the return path. The language-level rule remains that `return: value` returns the
+declared single value from an `fn` or the reference to the declared return
+Structure from an `fm`, bare `return` exits a no-value executable when admitted,
+and terminal return also closes the current executable definition.
 ---ANSI C---
 
 9. Type and Model Forms
@@ -5699,22 +5767,23 @@ resolved by the active semantic profile. In this profile:
     const       qualifies the introduced storage/value as immutable
     char        selects ANSI C compatible character storage semantics
     String      selects the Lingvamyxa immutable string value/reference model
-    ()          introduces a named Structure-like aggregate
+    ()          introduces a named owner-managed Structure reference by default
     []          introduces a named array-like aggregate
 
 Therefore the examples mean:
 
     const: char: (): s "hello" "world!"
-        `s` is an immutable char aggregate whose fields are character storage
-        compatible with ANSI C.
+        Under the explicit L2 character-storage profile, `s` is an immutable raw
+        char aggregate/address whose fields are compatible with ANSI C storage.
+        This machine projection is not an ordinary Structure value.
 
     const: char: []: s "hello" "world!"
         `s` is an immutable array of references/pointers to character storage
         fragments compatible with ANSI C string storage.
 
     const: String: (): s "hello" "world!"
-        `s` is an immutable Structure whose fields are references to immutable
-        Lingvamyxa String values.
+        `s` is a reference to an immutable owner-managed Structure whose fields
+        are references to immutable Lingvamyxa String values.
 
     const: String: []: s "hello" "world!"
         `s` is an immutable array of references to immutable Lingvamyxa String
@@ -6024,10 +6093,11 @@ reference/layout cases:
 
 Typed lookup is required when the translator needs the result type before L1
 compilation. Examples include a field-chain used as a callable head, such as
-`binding\handler(...)`; a local named structure escaping through `return:
-User`; and inferred named-structure fields whose class is derived from an
-existing binding. In those cases the translator consults namespace and registry
-facts such as `variable.type` and `<Class>.field.class`.
+`binding\handler(...)`; forwarding a named Structure reference through
+`return: user`; and inferred named-structure fields whose class is derived from
+an existing binding. In those cases the translator consults namespace and
+registry facts such as `variable.type` and `<Class>.field.class`. The lookup does
+not authorize a return-time copy: the same reference is returned.
 
 11.3. Address-of, Raw Load and Callable References
 
@@ -6172,9 +6242,13 @@ Function/subroutine address forms are strictly L2. A static L2 executable bindin
 
 At L3, calls are expressed as receiver Frames and resolved by the active receiver/operator registry, not by raw callable addresses. Message selectors and message-operation table entries are not automatically L2 callable addresses.
 
-?
-The exact L2 memory profile must define primitive cell size, address arithmetic, alignment, storage duration, allocation failure, callable-address representation and which bindings are addressable through `@`.
-?
+The exact L2 memory profile must define primitive cell size, address arithmetic,
+alignment, raw storage duration, allocation failure, callable-address
+representation and which bindings are addressable through `@`. These choices
+apply to explicit L2 machine storage such as `stack:`, `c.struct:` and raw
+addresses. Ordinary Lingvamyxa Structures are reference-only owner-managed
+objects governed by section 19.29, even when their layout is projected to an
+ANSI C struct behind the L1/L2 boundary.
 
 variant 1:
 Treat `@ⁿ`, prefix `@`, prefix `\`, field-follow `\field` and `[]` as built-in L2 parser forms.
@@ -6343,7 +6417,11 @@ Binding, mutability, scope, initialization, reassignment and shadowing rules are
 
 14.2. Return Structures
 
-A function return value is one logical source-level value. That value may be primitive or structural. If the return value is structural, updating its declared fields and returning one Structure-compatible value are source-semantically equivalent under the receiver-defined return signature.
+A function return value is one logical source-level value. That value may be
+primitive or structural. A structural value is always an owner-managed Structure
+reference. If the return is structural, updating the fields of its existing
+return Structure and returning one compatible Structure reference are
+source-semantically equivalent under the receiver-defined return signature.
 
 A function may return a Structure with ordered and/or semantic named fields.
 
@@ -6351,7 +6429,7 @@ Example return signature:
 
     (f32 harvest, f32 redApples, f32 greenApples)
 
-Canonical structural return:
+Canonical positional structural return into an existing `fm` result Structure:
 
     return: bed\area 0 0
 
@@ -6362,7 +6440,11 @@ Named return variables may also be updated before an explicit terminal value ret
     greenApples: 0
     return: harvest redApples greenApples
 
-The canonical return mechanism for an `fn` is `return: value`. In a valid terminal trailer position, `return: value` also closes the `fn` source frame. Named return variables are ordinary typed bindings whose current values may be returned explicitly.
+The canonical return mechanism for an `fn` is `return: value`. In a valid
+terminal trailer position, `return: value` also closes the `fn` source frame.
+Named return variables are typed fields/bindings of an already existing result
+Structure. The field updates occur before the return control exit; return itself
+only forwards the result reference.
 
 14.3. Destructuring
 
@@ -7086,7 +7168,7 @@ print: Hello World
 
 Source:
 
-fn: estimateHarvest (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
+fm: estimateHarvest (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     if: bed\crop = Apples
         return: bed\area * 1.7 bed\area * 1.7 bed\area * 1.1
 return: bed\area 0 0
@@ -7104,7 +7186,7 @@ Semantic outline:
 
 Source:
 
-fn: estimateHarvest (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
+fm: estimateHarvest (PlantBed(bed)) (f32(harvest), f32(redApples), f32(greenApples))
     harvest: bed\area
     redApples: 0
     greenApples: 0
@@ -7168,11 +7250,11 @@ Semantic outline:
     operator                   proposed declaration receiver; current bootstrap uses operator.* source tables directly
     if                         registered receiver, semantics depend on level
     match                      proposed receiver; not registered by the current bootstrap; no built-in `case` syntax
-    merge                      registered head; current handler performs physical named-layout/C-storage merge, not generic high-level Structure merge
+    merge                      registered head; current handler performs named-layout projection and owner-managed instance merge, not yet generic high-level Structure merge
     join                       registered module table receiver; module table profiles materialize source-table rows, with no executable runtime projection
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
-    ()                         head receiver spelling for Structure-like variable/aggregate forms
+    ()                         head receiver spelling for ordinary owner-managed Structure-reference forms; explicit L2 storage profiles may assign raw aggregate semantics
     []                         head receiver spelling for array/storage forms; postfix `target[...]` is index/access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
@@ -7254,13 +7336,20 @@ variant 1:
 Return a single primitive as a direct C primitive value.
 
 variant 2:
-Return multi-field results through caller-provided output storage.
+Return an ordinary Structure as the exact existing C pointer/handle that denotes
+it.
 
 variant 3:
-Return small Structures by value where the implementation profile allows it.
+Return multi-field `fm` results through caller-provided owner-managed output
+storage created before function execution.
 
 variant 4:
-Return handles/addresses to runtime-managed Structures for dynamic or large results.
+Elide unobservable result-field traffic while preserving Structure identity and
+the reference-only result contract.
+
+No variant may allocate, copy, materialize or promote an ordinary Structure in
+the `return` path, and no ordinary Structure may be returned as a C aggregate
+value.
 
 Destructuring lowering:
 
@@ -7556,9 +7645,10 @@ profile family is already a core receiver.
                            include, define, os, ifdef, fn, layout, constant,
                            alias, forward, prototype, guard, extern_c, unit
 
-The current `merge` handler consumes a named layout Structure and emits its
-physical layout/storage projection; it does not yet implement the generic
-high-level merge contract. `join` composes source-table descriptors and rows in
+The current `merge` handler consumes a named layout Structure, emits its physical
+layout projection and materializes an owner-managed instance (module-owned at
+top level, root-arena-owned for the current local bootstrap path). It does not
+yet implement the generic high-level merge contract. `join` composes source-table descriptors and rows in
 the active registry view. Generic source-table materialization is a shared
 L2/L3 operation. The current bootstrap still lists `predef` in
 `receiver.l3.exclude`. Its local-source early prepass scans only implicit or
@@ -7896,7 +7986,9 @@ Runtime forms inside an executable body:
     return
     return: value
 
-For an `fn`, `return: value` consumes a compatible primitive or Structure value and exits. A bare `return` is not a valid `fn` return in the core profile.
+For an `fn`, `return: value` consumes a compatible primitive or Structure
+reference and exits. For a Structure result it forwards the exact reference
+under section 8.8. A bare `return` is not a valid `fn` return in the core profile.
 
 For a `sub`, `return` exits the `sub` body. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
@@ -8607,8 +8699,10 @@ preprocessor include and not runtime mutation of its source operands. The parser
 builds an ordinary `merge:` Frame; the active receiver/operator namespace gives
 that Frame structural-merge semantics.
 
-This is the target contract. The current registered handler instead performs
-physical named-layout/C-storage merging. Implementing the generic high-level
+This is the target contract. The current registered handler instead performs a
+physical named-layout projection and materializes an owner-managed Structure
+instance. Local instances use the current Message Thread owner arena; they are
+not automatic C aggregate values. Implementing the generic high-level
 field-stream merge and separating it from the L2 physical projection remain
 work.
 
@@ -9788,8 +9882,11 @@ is consumed by the built-in fallback as a named layout declaration:
 
 This is layout shorthand, not an abstract model declaration. It registers
 `Circle` as a layout/reference class, records a `c.struct` backend, records the
-field classes, indexes and address depths, and emits the corresponding C
-structure and storage.
+field classes, indexes and address depths, and emits the corresponding C layout
+declaration. An ordinary instance is still a Structure reference: a top-level
+instance may use module-owned storage, while a local instance is allocated in
+the current Message Thread owner arena and bound through a pointer. It is never
+an automatic C aggregate local.
 
 The same registry description can be written explicitly with source tables:
 
@@ -9835,11 +9932,12 @@ relations such as `class.kind`, `class.present`, `layout.backend` and
 `Circle.field.*`. The explicit `class` table and the generated `class.kind`
 relation are compatible classification sources; neither is the whole registry.
 
-No separate "slot" entity is required. In the current implementation these
-rows lower to physical C fields and static storage. Property accessors,
-computed projections or representation-independent fields would require
-additional registry relations and consumers; they are not implied by the
-implemented layout shorthand.
+No separate "slot" entity is required. In the current implementation these rows
+lower to physical C fields. Top-level materialization may use module-owned static
+storage; local ordinary materialization uses owner-arena storage and a Structure
+reference. Property accessors, computed projections or
+representation-independent fields would require additional registry relations
+and consumers; they are not implied by the implemented layout shorthand.
 
 19.20.2. Normalized Layout Descriptor
 
@@ -10388,13 +10486,18 @@ messages according to the reactive registry profile.
 Root state is durable state owned by the Message Thread.
 
 A handler frame is created when a validated message is executed. It owns local
-temporary state, cleanup entries and diagnostic context.
+temporary state, cleanup entries and diagnostic context. Its ordinary Structure
+bindings are reference slots. A Structure referent may belong to the thread root,
+continuation or a detachable branch owner rather than to the handler frame.
 
 19.28.4. Cleanup and Control Exit
 
 Cleanup is local to the current handler/frame/thread owner. Control exits such
 as `return`, `fail`, `break`, `continue` and cancellation must run registered
-cleanup before the owner is cut or reused.
+cleanup before the owner is cut or reused. Cleanup must not destroy an arena that
+is still reachable through a published return/reference root. A Structure
+return first publishes its exact existing reference according to section
+19.29.4; frame cleanup never copies, moves or rematerializes the returned object.
 
 19.28.5. Message Structure
 
@@ -10650,38 +10753,172 @@ Message Threads onto fewer OS threads.
 
 19.29. Ownership and Memory Operators
 
-19.29.1. Core Rule
+19.29.1. Core Rule and Structure Representation
 
-Memory is region/owner oriented. Message Threads own isolated arena graphs. No raw
-mutable reference crosses a Message Thread boundary in the default model.
+Memory is region/owner oriented. It is not specified as one global
+garbage-collected heap and it is not a per-variable ownership calculus. Each
+Message Thread owns an isolated graph of owners and arenas.
 
-19.29.2. Branch Arenas and Owners
+Every ordinary Lingvamyxa Structure is a reference/handle to an owner-managed
+object. An ordinary Structure is never a local aggregate value, is never passed
+or returned as a C aggregate value and is never implicitly copied. A local
+Structure binding is a local reference slot; it is not the storage of the
+Structure itself.
 
-An owner may be a branch, frame, handler, module state or Message Thread root.
-Borrowed values are valid only inside the owner/lifetime that produced them.
+Primitive values may use direct value representations. Explicit L2 machine
+storage such as `stack:`, `c.struct:`, `c.union:` and raw address operations is a
+separate low-level facility. Such storage does not turn an ordinary Structure
+into a valued local object.
 
-Ownership policy is table data:
+19.29.2. Owners, Branches and Arenas
+
+An owner is responsible for a memory region and for the lifetime of the objects
+in that region. An owner may be:
+
+    a Structure branch;
+    an executable frame;
+    a handler, retry attempt or transaction;
+    module state;
+    a continuation;
+    a Message Thread root.
+
+A branch owner may own one arena containing the branch and its heap children.
+Children are normally allocated in the nearest suitable owning arena. Leaf
+Structures need not own separate arenas. Destroying an owner arena destroys the
+whole region as one unit.
+
+Lexical scope and ownership scope are distinct. A Structure created inside a
+function is not thereby stack-valued or frame-owned. It may be allocated in a
+thread-root, caller, continuation or detachable branch arena whose lifetime
+covers every published reference to it.
+
+19.29.3. Ownership Edges
+
+The standard ownership edge kinds are:
+
+    OWNED       the target region is owned through this edge;
+    BORROWED    the edge does not extend the target owner lifetime;
+    LAZY_OWNED  an explicit deferred owner-copy edge;
+    EXTERNAL    lifetime is controlled by an explicit external resource profile.
+
+Borrowed values are valid only while the owner/lifetime that produced them is
+valid. An explicit owner-copy, serialization or message transfer operation may
+allocate or copy according to its own contract. Those operations are not an
+implicit part of `return`.
+
+Ownership policy is registry table data, for example:
 
     ownership[array_new] = returns_owned
     ownership[array_at] = returns_borrowed
     transfer[Message.payload] = copy
 
-19.29.3. Message Boundary
+19.29.4. Return and Owner Lifetime
 
-An inter-thread message boundary is a memory boundary. A payload that must survive in the
-receiver is copied, serialized or transferred as a whole owned branch.
+For an ordinary Structure result, `return` publishes the exact reference already
+produced by its expression. It must not allocate, clone, copy, materialize,
+owner-copy or lazy-promote the Structure, and it must not change its address or
+identity.
 
-19.29.4. Local Collection
+An explicit constructor inside the return expression may allocate according to
+the constructor's own ownership contract. Semantically it completes first and
+produces one reference; `return` then publishes that same reference without a
+second allocation or copy.
 
-Collection is local to one Message Thread. It may run at message boundaries,
-control-exit safe points, retry points, diagnostics and thread termination. It
-does not stop other Message Threads.
+Every well-typed ordinary Structure may be returned. In particular, a Structure
+is not rejected merely because it was created or named inside the returning
+function. The implementation must choose an owner at materialization time that
+can survive the return, or make its existing owner region detachable/retainable
+without copying the Structure.
 
-19.29.5. Immutable and Low-Level Resources
+The required abstract order for a Structure return is:
+
+    1. evaluate the return expression and obtain its existing reference;
+    2. publish that reference as the caller/continuation result edge or root;
+    3. retain, detach or reparent its existing owner region when required;
+    4. mark exited frame/branch owners and update the local owner graph;
+    5. run an optional local collection pass;
+    6. release only owner regions that no surviving edge/root needs.
+
+Steps 2 and 3 are owner-graph updates, not object materialization. A profile that
+uses frame or branch owners must reserve the required edge/transfer metadata
+before the return path, or implement those updates without allocation.
+
+A local reference slot dies with its frame; the referenced object does not die
+when its owner survives. A raw address into explicit L2 `stack:` storage remains
+a raw low-level address and is not an ordinary Structure return. Its escape and
+lifetime are governed by the explicit L2 machine/ABI profile.
+
+19.29.5. Message Boundary
+
+An inter-Message-Thread boundary is a memory boundary. No raw mutable reference
+crosses that boundary in the default model. A payload that must survive in the
+receiver is copied, serialized or transferred as a whole owned branch. Whole
+branch transfer changes ownership without changing the objects inside the
+branch; sender-side references become invalid according to the transfer
+contract.
+
+19.29.6. Thread-Local Collection and Owner-Tree Cutting
+
+Collection is local to one Message Thread. It does not stop other Message
+Threads, scan foreign arena graphs or require a global heap lock. Its unit of
+collection is an owner region, for example:
+
+    frame arena;
+    handler or retry-attempt arena;
+    transaction arena;
+    detachable branch arena;
+    whole Message Thread arena graph.
+
+Local collection may run after normal frame/handler completion, `return`,
+`break`, `continue`, `fail`, `retry`, `redo`, diagnostic exit, owner replacement,
+branch detachment, a message boundary or Message Thread termination. A control
+operator does not free memory by itself; it creates a safe point when it changes
+owner lifetime.
+
+A local pass may cut unreachable branches, release abandoned owner regions,
+retain/pin a source owner, detach a surviving branch root, process explicit lazy
+owner-copy edges and destroy the whole Message Thread arena graph. Processing a
+`LAZY_OWNED` edge may copy because that edge represents an explicit ownership
+operation. It must not be introduced as an implicit implementation of
+Structure `return`.
+
+Actual release may be immediate, batched at a handler/message boundary or
+deferred until the Message Thread is destroyed. Retaining all ordinary
+Structure memory until thread destruction is a valid coarse implementation of
+the owner model; it is not a different global-GC model.
+
+19.29.7. Hosted C99 Bootstrap Profile
+
+Every generated standalone program starts as one root Message Thread, including
+bootstrap tools such as `parser`, `trans`, `make`, `finalize` and `buildCore`.
+The root Message Thread owns a root arena before an ordinary local Structure is
+materialized and destroys that arena when the program/thread terminates.
+
+The initial C99 implementation may allocate every ordinary local named or
+merge-produced Structure directly in this root arena. Therefore a function may
+return the exact pointer to a locally created Structure, and multiple returned
+references remain valid until root-arena destruction. Top-level static storage
+may remain module-owned, but it is still observed through Structure references.
+
+Consequently, a generated bootstrap executable that contains the Message Thread
+runtime depends on the owner runtime (`libown` in the current C99 build). This is
+a normal runtime dependency, including for the `make` utility. Bootstrap build
+stages must build/link the owner runtime before such executables; splitting the
+self-build into ordered stages is an implementation technique, not a change to
+the memory semantics.
+
+The root-only arena is the first complete lifetime implementation, not the final
+reclamation granularity. Later profiles may add frame, handler and detachable
+branch owners so non-escaping regions can be reclaimed at earlier safe points
+without changing return identity.
+
+19.29.8. Immutable and Low-Level Resources
 
 Immutable/shared and externally managed resources are explicit low-level
-profile objects. They are not ordinary mutable message-runtime branches. L3 code sees typed
-handles, descriptors or messages.
+profile objects. They are not ordinary mutable Message Thread branches. L3 code
+sees typed handles, descriptors or messages. L2 may expose raw storage, external
+lifetimes, explicit allocators and synchronization, but those facilities do not
+weaken the ordinary Structure reference/owner contract.
 
 
 19.30. Reactive Registry and Query Receivers
@@ -10875,7 +11112,10 @@ This integrated model reduces to these rules:
                 decision logs;
     L3 retry/retryable = local execution-frame restart, not transport resend;
     generator = create proposed messages from result/state/table rules;
-    L3 return = executable-body control exit producing local execution result;
+    Structure = stable reference/handle to an owner-managed object, never an
+                implicitly copied aggregate value;
+    L2/L3 Structure return = executable-body control exit that forwards the exact
+                existing reference without allocation, copy or promotion;
     message-boundary reply = boundary wrapper from result/failure to ordinary message record;
     Message Thread = minimal isolated LMX machine that receives, validates, executes
                 and sends messages;
@@ -10889,13 +11129,18 @@ This integrated model reduces to these rules:
 
 This section defines the minimal L2 operator/parser-form set.
 
-L2 has primitive values, typed address values and Structures/descriptors. Aggregate model names denote layouts or descriptors. Storage and allocation forms produce typed address values. Receiver signatures and parser profiles assign final semantics to the Structures built from source syntax.
+L2 has primitive values, explicit typed address values and references/handles to
+owner-managed Structures/descriptors. Explicit machine aggregate names denote
+layouts, and explicit storage/allocation forms produce typed address values.
+Receiver signatures and parser profiles assign final semantics to the Structures
+built from source syntax.
 
-The minimal L2 profile therefore has no separate source syntax for C-style
-direct aggregate value access. Primitive/scalar values may be direct; aggregate
-values are storage/layout objects and are normally reached by address. This
-keeps `u32: x` simple while preventing an embedded record from silently becoming
-a copyable whole-Structure expression.
+The minimal L2 profile therefore has no ordinary Structure syntax for C-style
+direct aggregate value access. Primitive/scalar values may be direct. Explicit
+machine aggregate storage is reached by typed address, while every ordinary
+Structure expression yields only a reference/handle to its owner-managed
+referent. This keeps `u32: x` simple and prevents an embedded record from
+silently becoming a copyable whole-Structure expression.
 
 This section is the L2-specific low-level machine operator/parser-form surface.
 It is not part of L3. In this sense L3 is smaller than L2: L3 keeps the
@@ -10965,6 +11210,11 @@ Meanings:
     pp      address-depth-2 slot to base type `int`
     ppp     address-depth-3 slot to base type `int`
 
+These `stack`/`heap`/`static` forms are explicit L2 machine-storage operations,
+not ordinary Structure constructors. They receive no implicit owner promotion or
+copy when returned. Ordinary Structure construction instead follows the
+Message Thread owner/arena rules in section 19.29.
+
 The first ANSI C bootstrap projection accepts an explicit element type:
 
     []: int values 3 1 2 3
@@ -11020,7 +11270,11 @@ non-reserved frame, not by a `namespace`/`receiver.*` registration. When that
 frame has a non-empty body consisting entirely of admitted explicitly typed or
 type-inferable field declarations, the fallback materializes the layout
 relations described in section 19.20.1 and the hosted C projection emits the
-corresponding `typedef struct` and storage. A named frame that does not satisfy
+corresponding `typedef struct` layout. Ordinary instance construction separately
+allocates in the current Message Thread owner arena and binds a pointer/reference;
+top-level module instances may use module-owned static backing. Local ordinary
+Structures never receive automatic C aggregate backing. Raw `stack:`, `static:`
+or direct `c.struct:` backing requires an explicit L2 machine-storage form. A named frame that does not satisfy
 that layout declaration shape is not converted merely because its name or
 indentation resembles C.
 
@@ -11603,7 +11857,10 @@ Value runtime form inside a body:
 
     return: value
 
-For an `fn`, `return: value` consumes a compatible primitive or Structure value and exits. A bare `return` is not a valid `fn` return in the core profile.
+For an `fn`, `return: value` consumes a compatible primitive or Structure
+reference and exits. For a Structure result it forwards the exact reference
+under sections 8.8 and 19.29.4. A bare `return` is not a valid `fn` return in the
+core profile.
 
 For a `sub`, `return` exits without producing a normal return value. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
 
@@ -11679,7 +11936,9 @@ monitor as a cleanup entry. Ordinary `return`, `break` and `continue` transfers
 emit the required `lm_synchronized_leave(...)` calls before leaving the protected
 region. A value-return inside `synchronized` is lowered through a temporary of
 the current function return type, then the active monitors are released, then
-the temporary is returned.
+the temporary is returned. For a Structure result this temporary is only a
+reference/handle slot: it preserves the exact referent and introduces no
+allocation, aggregate copy, promotion or owner migration.
 
 Diagnostic failure across a synchronized boundary belongs to the wider
 runtime/translator cleanup rules.
