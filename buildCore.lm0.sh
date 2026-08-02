@@ -59,8 +59,8 @@ fi
 "$LM_RANLIB" build/lm0/libown.lm0.a
 
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "$trans_source" build/lm0/libparser.lm0.a build/lm0/libown.lm0.a -o build/lm0/trans.lm0
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$make_source" -o build/lm0/make.lm0
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$finalize_source" -o build/lm0/finalize.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$make_source" build/lm0/libown.lm0.a -o build/lm0/make.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$finalize_source" build/lm0/libown.lm0.a -o build/lm0/finalize.lm0
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "$build_core_source" build/lm0/libown.lm0.a -o build/lm0/buildCore.lm0
 
 echo "built build/lm0 bootstrap tools"

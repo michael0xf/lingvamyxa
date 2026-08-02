@@ -125,7 +125,7 @@ set(LM2_TO_LM1_REGISTRY_DEPS
 
 # ---- Generated L1 ownership helper ----
 
-if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0 OR BUILD_VCPKG_FETCH_LM0 OR BUILD_BUILD_CORE_LM0)
+if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0 OR BUILD_VCPKG_FETCH_LM0 OR BUILD_BUILD_CORE_LM0 OR BUILD_MAKE_LM0)
     add_library(own.lm1 STATIC
         "${LM1_GENERATED_OWN_C}"
     )
@@ -299,6 +299,10 @@ endif()
 if (BUILD_MAKE_LM0)
     add_executable(make.lm0
         "${LM1_GENERATED_MAKE_C}"
+    )
+
+    target_link_libraries(make.lm0 PRIVATE
+        own.lm1
     )
 endif()
 

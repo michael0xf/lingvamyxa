@@ -1,3 +1,32 @@
+L1:
+===
+static unsigned lm_test_direct_new_zero_calls;
+static const void *lm_test_return_source;
+
+void *lm_test_tracked_new_zero(size_t size) {
+    ++lm_test_direct_new_zero_calls;
+    return calloc(1U, size);
+}
+
+#define lm_own_new_zero(size) lm_test_tracked_new_zero(size)
+
+static void lm_test_reset_direct_allocations(void) {
+    lm_test_direct_new_zero_calls = 0U;
+}
+
+static unsigned lm_test_direct_allocations(void) {
+    return lm_test_direct_new_zero_calls;
+}
+
+static void lm_test_remember_return_source(const void *source) {
+    lm_test_return_source = source;
+}
+
+static int lm_test_is_return_source(const void *value) {
+    return value == lm_test_return_source;
+}
+===
+
 predef: "lm2/own_abi.lm2"
 include
 alias
@@ -10,15 +39,28 @@ prototype
 fn: make_user (int: age) User
     User:
         age: age
+    c.lm_test_remember_return_source(User)
+    c.lm_test_reset_direct_allocations()
 return: User
+
+fn: identity (User: user) User
+    c.lm_test_reset_direct_allocations()
+return: user
 
 external:
     fn: main () int
-        User: user make_user(41)
-        if: user = 0
+        User: first make_user(41)
+        if: first = 0 || c.lm_test_is_return_source(first) = 0 || c.lm_test_direct_allocations() != 0U
             return: 1
-        if: user\age != 41
+        User: second make_user(42)
+        if: second = 0 || c.lm_test_is_return_source(second) = 0 || c.lm_test_direct_allocations() != 0U
             return: 2
+        if: first = second || first\age != 41 || second\age != 42
+            return: 3
+
+        User: same identity(first)
+        if: same != first || c.lm_test_direct_allocations() != 0U
+            return: 4
         return: 0
     end: main
 end: external

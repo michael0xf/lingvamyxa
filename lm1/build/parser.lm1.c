@@ -398,6 +398,8 @@ int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
 void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
 void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
 void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
+LmOwnArena * (lm_own_arena_new)(void);
+void (lm_own_arena_delete)(LmOwnArena *arena);
 int (lm_own_arena_init)(LmOwnArena *arena);
 void (lm_own_arena_destroy)(LmOwnArena *arena);
 void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
@@ -431,6 +433,8 @@ const char * (lm_p0_node_kind_class_name)(LmP0NodeKind kind);
 char * (lm_p0_dump_alloc)(const LmP0Document *document);
 void (lm_p0_free)(void *ptr);
 static int lm_registry_source_load_root(const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
+
 
 
 

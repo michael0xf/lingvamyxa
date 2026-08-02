@@ -109,6 +109,8 @@ int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
 void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
 void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
 void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
+LmOwnArena * (lm_own_arena_new)(void);
+void (lm_own_arena_delete)(LmOwnArena *arena);
 int (lm_own_arena_init)(LmOwnArena *arena);
 void (lm_own_arena_destroy)(LmOwnArena *arena);
 void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
@@ -122,6 +124,8 @@ void (lm_own_arena_freeze)(LmOwnArena *arena);
 int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
 int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
+
+
 
 
 
@@ -648,6 +652,10 @@ int main(int argc, char **argv);
 
 
 
+struct LmOwnArena;
+struct LmOwnArena *lm_own_arena_new(void);
+void lm_own_arena_delete(struct LmOwnArena *arena);
+void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
 typedef struct LmL5ExecutionContext LmL5ExecutionContext;
 typedef struct LmL5Thread LmL5Thread;
 struct LmL5ExecutionContext {
@@ -661,10 +669,32 @@ struct LmL5ExecutionContext {
 struct LmL5Thread {
     LmL5ExecutionContext main_context;
     LmL5ExecutionContext *current;
+    struct LmOwnArena *root_owner;
 };
 static LmL5Thread lm_l5_main_thread_storage;
+static int lm_l5_main_thread_owner_cleanup_registered;
+static void lm_l5_main_thread_owner_destroy(void) {
+    if (lm_l5_main_thread_storage.root_owner != 0) {
+        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);
+        lm_l5_main_thread_storage.root_owner = 0;
+    }
+}
 static inline LmL5Thread *lm_l5_main_thread(void) {
-    return &lm_l5_main_thread_storage;
+    LmL5Thread *thread = &lm_l5_main_thread_storage;
+    if (thread->root_owner == 0) {
+        thread->root_owner = lm_own_arena_new();
+        if (thread->root_owner == 0) {
+            abort();
+        }
+        if (!lm_l5_main_thread_owner_cleanup_registered) {
+            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {
+                lm_l5_main_thread_owner_destroy();
+                abort();
+            }
+            lm_l5_main_thread_owner_cleanup_registered = 1;
+        }
+    }
+    return thread;
 }
 static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
@@ -1040,11 +1070,11 @@ static int lm_build_compile_trans(char *make_tool, char *output_dir, char *parse
 
 static int lm_build_compile_generated_tools(char *make_tool, char *output_dir, char *parser_library, char *own_library) {
     char command[4096];
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" -o \"%s/make.lm0%s\"", output_dir, lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" \"%s\" -o \"%s/make.lm0%s\"", own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" -o \"%s/finalize.lm0%s\"", output_dir, lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" \"%s\" -o \"%s/finalize.lm0%s\"", own_library, output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
         return 1;
     }

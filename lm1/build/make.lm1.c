@@ -50,6 +50,10 @@ static int lm_make_copy_file(char *source_path, char *output_path);
 static void lm_make_print_usage(void);
 int main(int argc, char **argv);
 
+struct LmOwnArena;
+struct LmOwnArena *lm_own_arena_new(void);
+void lm_own_arena_delete(struct LmOwnArena *arena);
+void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
 typedef struct LmL5ExecutionContext LmL5ExecutionContext;
 typedef struct LmL5Thread LmL5Thread;
 struct LmL5ExecutionContext {
@@ -63,10 +67,32 @@ struct LmL5ExecutionContext {
 struct LmL5Thread {
     LmL5ExecutionContext main_context;
     LmL5ExecutionContext *current;
+    struct LmOwnArena *root_owner;
 };
 static LmL5Thread lm_l5_main_thread_storage;
+static int lm_l5_main_thread_owner_cleanup_registered;
+static void lm_l5_main_thread_owner_destroy(void) {
+    if (lm_l5_main_thread_storage.root_owner != 0) {
+        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);
+        lm_l5_main_thread_storage.root_owner = 0;
+    }
+}
 static inline LmL5Thread *lm_l5_main_thread(void) {
-    return &lm_l5_main_thread_storage;
+    LmL5Thread *thread = &lm_l5_main_thread_storage;
+    if (thread->root_owner == 0) {
+        thread->root_owner = lm_own_arena_new();
+        if (thread->root_owner == 0) {
+            abort();
+        }
+        if (!lm_l5_main_thread_owner_cleanup_registered) {
+            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {
+                lm_l5_main_thread_owner_destroy();
+                abort();
+            }
+            lm_l5_main_thread_owner_cleanup_registered = 1;
+        }
+    }
+    return thread;
 }
 static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
     if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {

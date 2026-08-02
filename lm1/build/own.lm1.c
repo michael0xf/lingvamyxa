@@ -102,6 +102,8 @@ int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
 void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
 void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
 void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
+LmOwnArena * (lm_own_arena_new)(void);
+void (lm_own_arena_delete)(LmOwnArena *arena);
 int (lm_own_arena_init)(LmOwnArena *arena);
 void (lm_own_arena_destroy)(LmOwnArena *arena);
 void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
@@ -115,6 +117,8 @@ void (lm_own_arena_freeze)(LmOwnArena *arena);
 int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
 int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
+
+
 
 
 
@@ -206,6 +210,8 @@ void lm_own_value_stack_destroy(LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
 int lm_own_arena_init(LmOwnArena *arena);
 void lm_own_arena_destroy(LmOwnArena *arena);
+LmOwnArena * lm_own_arena_new(void);
+void lm_own_arena_delete(LmOwnArena *arena);
 void lm_own_arena_freeze(LmOwnArena *arena);
 int lm_own_arena_is_frozen(const LmOwnArena *arena);
 int lm_own_tree_cut(LmOwnArena *arena);
@@ -437,6 +443,26 @@ void lm_own_arena_destroy(LmOwnArena *arena) {
         arena->allocation_descriptors = 0;
         arena->allocations = 0;
         arena->frozen = 0;
+    }
+}
+
+LmOwnArena * lm_own_arena_new(void) {
+    LmOwnArena * arena;
+    arena = lm_own_new_zero(sizeof(arena[0]));
+    if (arena == 0) {
+        return 0;
+    }
+    if (lm_own_arena_init(arena) != 0) {
+        lm_own_delete(arena, 0);
+        return 0;
+    }
+    return arena;
+}
+
+void lm_own_arena_delete(LmOwnArena *arena) {
+    if (arena != 0) {
+        lm_own_arena_destroy(arena);
+        lm_own_delete(arena, 0);
     }
 }
 

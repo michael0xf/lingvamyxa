@@ -238,6 +238,27 @@ external:
 end: external
 
 external:
+    fn: lm_own_arena_new () LmOwnArena
+        LmOwnArena: arena
+
+        arena: lm_own_new_zero(c.sizeof(arena[0]))
+        if: arena = 0
+            return: 0
+        if: lm_own_arena_init(arena) != 0
+            lm_own_delete(arena, 0)
+            return: 0
+    return: arena
+end: external
+
+external:
+    sub: lm_own_arena_delete (LmOwnArena: arena)
+        if: arena != 0
+            lm_own_arena_destroy(arena)
+            lm_own_delete(arena, 0)
+    end: lm_own_arena_delete
+end: external
+
+external:
     sub: lm_own_arena_freeze (LmOwnArena: arena)
         if: arena != 0
             arena\frozen: 1

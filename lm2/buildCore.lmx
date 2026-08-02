@@ -852,15 +852,15 @@ L2:
     
         c.snprintf:
             command c.sizeof(command)
-            "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" -o \"%s/make.lm0%s\""
-            output_dir lm_build_exe_suffix()
+            "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" \"%s\" -o \"%s/make.lm0%s\""
+            own_library output_dir lm_build_exe_suffix()
         if: lm_build_make(make_tool, "link", command) != 0
             return: 1
     
         c.snprintf:
             command c.sizeof(command)
-            "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" -o \"%s/finalize.lm0%s\""
-            output_dir lm_build_exe_suffix()
+            "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" \"%s\" -o \"%s/finalize.lm0%s\""
+            own_library output_dir lm_build_exe_suffix()
         if: lm_build_make(make_tool, "link", command) != 0
             return: 1
     
